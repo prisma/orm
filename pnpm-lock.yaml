@@ -169,9 +169,21 @@ importers:
       '@codingame/monaco-vscode-theme-service-override':
         specifier: ^25.1.2
         version: 25.1.2
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       monaco-editor:
         specifier: ^0.56.0
         version: 0.56.0
@@ -227,9 +239,21 @@ importers:
 
   apps/telemetry-backend:
     dependencies:
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       arktype:
         specifier: 'catalog:'
         version: 2.2.10
@@ -285,9 +309,21 @@ importers:
       '@prisma/orm-better-auth':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-better-auth
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       better-auth:
         specifier: 1.7.27
         version: 1.7.27(@prisma/client@7.10.1(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3))(typescript@5.9.3))(mongodb@7.5.0(socks@2.8.9))(mysql2@3.15.3)(next@16.4.6(@types/node@26.1.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(pg@8.22.0)(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vitest@5.0.0-rc.2)
@@ -349,12 +385,30 @@ importers:
 
   examples/bundle-size:
     dependencies:
+      '@prisma/orm-family-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-mongo
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-mongo':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-mongo
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-mongo
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       mongodb:
         specifier: 'catalog:'
         version: 7.5.0(socks@2.8.9)
@@ -410,9 +464,21 @@ importers:
 
   examples/mongo-blog-leaderboard:
     dependencies:
+      '@prisma/orm-family-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-mongo
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-mongo':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-mongo
+      '@prisma/orm-target-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-mongo
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       mongodb:
         specifier: 'catalog:'
         version: 7.5.0(socks@2.8.9)
@@ -450,9 +516,21 @@ importers:
       '@prisma/orm-extension-middleware-cache':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-extension-middleware-cache
+      '@prisma/orm-family-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-mongo
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-mongo':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-mongo
+      '@prisma/orm-target-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-mongo
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       mongodb:
         specifier: 'catalog:'
         version: 7.5.0(socks@2.8.9)
@@ -508,9 +586,21 @@ importers:
 
   examples/multi-extension-monorepo:
     dependencies:
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
     devDependencies:
       '@prisma/cli-engine':
         specifier: 0.10.4
@@ -539,9 +629,21 @@ importers:
       '@prisma/orm-extension-paradedb':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-extension-paradedb
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       arktype:
         specifier: ^2.2.9
         version: 2.2.10
@@ -582,9 +684,21 @@ importers:
 
   examples/prisma-8-cloudflare-worker:
     dependencies:
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       arktype:
         specifier: 'catalog:'
         version: 2.2.10
@@ -637,9 +751,21 @@ importers:
       '@prisma/orm-extension-pgvector':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-extension-pgvector
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       arktype:
         specifier: ^2.2.9
         version: 2.2.10
@@ -716,9 +842,27 @@ importers:
 
   examples/prisma-8-demo-mariadb:
     dependencies:
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-mariadb':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-mariadb
+      '@prisma/orm-mysql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-mysql
+      '@prisma/orm-target-mariadb':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-mariadb
+      '@prisma/orm-target-mysql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-mysql
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
     devDependencies:
       '@prisma/cli-engine':
         specifier: 0.10.4
@@ -741,9 +885,21 @@ importers:
 
   examples/prisma-8-demo-mysql:
     dependencies:
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-mysql':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-mysql
+      '@prisma/orm-target-mysql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-mysql
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
     devDependencies:
       '@prisma/cli-engine':
         specifier: 0.10.4
@@ -766,9 +922,21 @@ importers:
 
   examples/prisma-8-demo-sqlite:
     dependencies:
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-sqlite':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-sqlite
+      '@prisma/orm-target-sqlite':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-sqlite
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       arktype:
         specifier: ^2.2.9
         version: 2.2.10
@@ -803,9 +971,21 @@ importers:
       '@prisma/orm-extension-postgis':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-extension-postgis
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       arktype:
         specifier: ^2.2.9
         version: 2.2.10
@@ -876,12 +1056,24 @@ importers:
       '@prisma/client':
         specifier: 7.10.1
         version: 7.10.1(prisma@test+prisma-bin)(typescript@5.9.3)
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres
       '@prisma/orm-postgres-contrib':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres-contrib
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -925,9 +1117,21 @@ importers:
 
   examples/react-router-demo:
     dependencies:
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       '@react-router/node':
         specifier: ^8.5.1
         version: 8.5.1(react-router@8.5.2(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(typescript@5.9.3)
@@ -1007,9 +1211,21 @@ importers:
       '@prisma/orm-extension-middleware-cache':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-extension-middleware-cache
+      '@prisma/orm-family-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-mongo
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-mongo':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-mongo
+      '@prisma/orm-target-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-mongo
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       '@radix-ui/react-dropdown-menu':
         specifier: ^2.1.25
         version: 2.2.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -1104,9 +1320,21 @@ importers:
       '@prisma/orm-extension-supabase':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-extension-supabase
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-toolchain
       jose:
         specifier: ^6
         version: 6.2.8
@@ -5664,12 +5892,6 @@ importers:
 
   packages/9-public/@prisma/orm-extension-arktype-json:
     dependencies:
-      '@prisma/orm-family-sql':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-family-sql
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
@@ -5680,6 +5902,12 @@ importers:
       '@internal/extension-arktype-json':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-extensions/arktype-json
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
       '@prisma/orm-target-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../orm-target-postgres
@@ -5697,14 +5925,13 @@ importers:
         version: 5.9.3
 
   packages/9-public/@prisma/orm-extension-middleware-cache:
-    dependencies:
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
     devDependencies:
       '@internal/middleware-cache':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-extensions/middleware-cache
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -5720,6 +5947,13 @@ importers:
 
   packages/9-public/@prisma/orm-extension-paradedb:
     dependencies:
+      arktype:
+        specifier: ^2.2.9
+        version: 2.2.10
+    devDependencies:
+      '@internal/extension-paradedb':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../3-extensions/paradedb
       '@prisma/orm-family-sql':
         specifier: workspace:8.0.0-rc.25
         version: link:../orm-family-sql
@@ -5732,13 +5966,6 @@ importers:
       '@prisma/orm-toolchain':
         specifier: workspace:8.0.0-rc.25
         version: link:../orm-toolchain
-      arktype:
-        specifier: ^2.2.9
-        version: 2.2.10
-    devDependencies:
-      '@internal/extension-paradedb':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../../../3-extensions/paradedb
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -5754,15 +5981,6 @@ importers:
 
   packages/9-public/@prisma/orm-extension-pgvector:
     dependencies:
-      '@prisma/orm-family-sql':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-family-sql
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
@@ -5773,9 +5991,18 @@ importers:
       '@internal/extension-pgvector':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-extensions/pgvector
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
       '@prisma/orm-target-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -5791,15 +6018,6 @@ importers:
 
   packages/9-public/@prisma/orm-extension-postgis:
     dependencies:
-      '@prisma/orm-family-sql':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-family-sql
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
@@ -5810,9 +6028,18 @@ importers:
       '@internal/extension-postgis':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-extensions/postgis
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
       '@prisma/orm-target-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -5828,18 +6055,6 @@ importers:
 
   packages/9-public/@prisma/orm-extension-supabase:
     dependencies:
-      '@prisma/orm-family-sql':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-family-sql
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-postgres':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-postgres
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
@@ -5862,9 +6077,21 @@ importers:
       '@internal/extension-supabase':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-extensions/supabase
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
+      '@prisma/orm-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-postgres
       '@prisma/orm-target-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -5880,12 +6107,6 @@ importers:
 
   packages/9-public/@prisma/orm-family-mongo:
     dependencies:
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
       arktype:
         specifier: 'catalog:'
         version: 2.2.10
@@ -5944,6 +6165,12 @@ importers:
       '@internal/mongo-wire':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../2-mongo-family/6-transport/mongo-wire
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -5959,12 +6186,6 @@ importers:
 
   packages/9-public/@prisma/orm-family-sql:
     dependencies:
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
@@ -6023,6 +6244,12 @@ importers:
       '@internal/sql-schema-ir':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../2-sql-family/1-core/schema-ir
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -6117,6 +6344,16 @@ importers:
 
   packages/9-public/@prisma/orm-mariadb:
     dependencies:
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
+      temporal-polyfill:
+        specifier: ^1.0.8
+        version: 1.0.8
+    devDependencies:
+      '@internal/mariadb':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../3-targets/mysql/2-mariadb/9-facade
       '@prisma/orm-family-sql':
         specifier: workspace:8.0.0-rc.25
         version: link:../orm-family-sql
@@ -6135,16 +6372,6 @@ importers:
       '@prisma/orm-toolchain':
         specifier: workspace:8.0.0-rc.25
         version: link:../orm-toolchain
-      pathe:
-        specifier: ^2.0.3
-        version: 2.0.3
-      temporal-polyfill:
-        specifier: ^1.0.8
-        version: 1.0.8
-    devDependencies:
-      '@internal/mariadb':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../../../3-targets/mysql/2-mariadb/9-facade
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -6160,18 +6387,6 @@ importers:
 
   packages/9-public/@prisma/orm-mongo:
     dependencies:
-      '@prisma/orm-family-mongo':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-family-mongo
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-target-mongo':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-target-mongo
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
       mongodb:
         specifier: ^7.0.0
         version: 7.5.0(socks@2.8.9)
@@ -6194,6 +6409,18 @@ importers:
       '@internal/mongo':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-targets/mongo/9-facade
+      '@prisma/orm-family-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-family-mongo
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
+      '@prisma/orm-target-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-target-mongo
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -6209,18 +6436,6 @@ importers:
 
   packages/9-public/@prisma/orm-mysql:
     dependencies:
-      '@prisma/orm-family-sql':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-family-sql
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-target-mysql':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-target-mysql
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
       arktype:
         specifier: 'catalog:'
         version: 2.2.10
@@ -6237,6 +6452,18 @@ importers:
       '@internal/mysql':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-targets/mysql/1-mysql/9-facade
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
+      '@prisma/orm-target-mysql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-target-mysql
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -6252,18 +6479,6 @@ importers:
 
   packages/9-public/@prisma/orm-postgres:
     dependencies:
-      '@prisma/orm-family-sql':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-family-sql
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-target-postgres':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-target-postgres
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.2
@@ -6295,6 +6510,18 @@ importers:
       '@internal/postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-targets/postgres/9-facade
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -6309,23 +6536,22 @@ importers:
         version: 5.9.3
 
   packages/9-public/@prisma/orm-postgres-contrib:
-    dependencies:
+    devDependencies:
+      '@internal/extension-citext':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../3-extensions/citext
       '@prisma/orm-family-sql':
         specifier: workspace:8.0.0-rc.25
         version: link:../orm-family-sql
       '@prisma/orm-framework':
         specifier: workspace:8.0.0-rc.25
         version: link:../orm-framework
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
-    devDependencies:
-      '@internal/extension-citext':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../../../3-extensions/citext
       '@prisma/orm-target-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -6341,18 +6567,6 @@ importers:
 
   packages/9-public/@prisma/orm-sqlite:
     dependencies:
-      '@prisma/orm-family-sql':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-family-sql
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-target-sqlite':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-target-sqlite
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
       arktype:
         specifier: 'catalog:'
         version: 2.2.10
@@ -6372,6 +6586,18 @@ importers:
       '@internal/sqlite':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-targets/sqlite/9-facade
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
+      '@prisma/orm-target-sqlite':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-target-sqlite
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -6387,15 +6613,6 @@ importers:
 
   packages/9-public/@prisma/orm-target-mariadb:
     dependencies:
-      '@prisma/orm-family-sql':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-family-sql
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-target-mysql':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-target-mysql
       temporal-polyfill:
         specifier: ^1.0.8
         version: 1.0.8
@@ -6409,6 +6626,15 @@ importers:
       '@internal/target-mariadb':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-targets/mysql/2-mariadb/1-target
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
+      '@prisma/orm-target-mysql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-target-mysql
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -6424,15 +6650,6 @@ importers:
 
   packages/9-public/@prisma/orm-target-mongo:
     dependencies:
-      '@prisma/orm-family-mongo':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-family-mongo
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
       arktype:
         specifier: 'catalog:'
         version: 2.2.10
@@ -6458,6 +6675,15 @@ importers:
       '@internal/target-mongo':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-targets/mongo/1-target
+      '@prisma/orm-family-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-family-mongo
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../test/utils
@@ -6479,15 +6705,6 @@ importers:
 
   packages/9-public/@prisma/orm-target-mysql:
     dependencies:
-      '@prisma/orm-family-sql':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-family-sql
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
       '@standard-schema/spec':
         specifier: 1.1.0
         version: 1.1.0
@@ -6513,6 +6730,15 @@ importers:
       '@internal/target-mysql':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-targets/mysql/1-mysql/1-target
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../test/utils
@@ -6534,15 +6760,6 @@ importers:
 
   packages/9-public/@prisma/orm-target-postgres:
     dependencies:
-      '@prisma/orm-family-sql':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-family-sql
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
@@ -6586,6 +6803,15 @@ importers:
       '@internal/target-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-targets/postgres/1-target
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../test/utils
@@ -6607,15 +6833,6 @@ importers:
 
   packages/9-public/@prisma/orm-target-sqlite:
     dependencies:
-      '@prisma/orm-family-sql':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-family-sql
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
-      '@prisma/orm-toolchain':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-toolchain
       '@standard-schema/spec':
         specifier: 1.1.0
         version: 1.1.0
@@ -6641,6 +6858,15 @@ importers:
       '@internal/target-sqlite':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../3-targets/sqlite/1-target
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-toolchain
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../test/utils
@@ -6665,9 +6891,6 @@ importers:
       '@prisma/cli-engine':
         specifier: 0.10.4
         version: 0.10.4(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
-      '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-framework
       '@vercel/detect-agent':
         specifier: ^1.2.4
         version: 1.2.4
@@ -6750,6 +6973,9 @@ importers:
       '@internal/vite-plugin-contract-emit':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../1-framework/3-tooling/vite-plugin-contract-emit
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../orm-framework
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
@@ -6777,6 +7003,15 @@ importers:
       '@prisma/orm-extension-postgis':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../packages/9-public/@prisma/orm-extension-postgis
+      '@prisma/orm-family-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../packages/9-public/@prisma/orm-family-mongo
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-mongo':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../packages/9-public/@prisma/orm-mongo
@@ -6789,6 +7024,18 @@ importers:
       '@prisma/orm-sqlite':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../packages/9-public/@prisma/orm-sqlite
+      '@prisma/orm-target-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../packages/9-public/@prisma/orm-target-mongo
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-target-sqlite':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../packages/9-public/@prisma/orm-target-sqlite
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../packages/9-public/@prisma/orm-toolchain
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.25
         version: link:../../utils
@@ -6832,9 +7079,21 @@ importers:
       '@prisma/orm-extension-pgvector':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../packages/9-public/@prisma/orm-extension-pgvector
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../packages/9-public/@prisma/orm-toolchain
       arktype:
         specifier: 'catalog:'
         version: 2.2.10
@@ -6844,9 +7103,21 @@ importers:
       '@prisma/cli-engine':
         specifier: 0.10.4
         version: 0.10.4(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-sqlite':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../../packages/9-public/@prisma/orm-sqlite
+      '@prisma/orm-target-sqlite':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-target-sqlite
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-toolchain
 
   test/integration:
     dependencies:
@@ -7112,15 +7383,30 @@ importers:
       '@prisma/orm-extension-pgvector':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../packages/9-public/@prisma/orm-extension-pgvector
+      '@prisma/orm-family-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../packages/9-public/@prisma/orm-family-mongo
       '@prisma/orm-family-sql':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-mongo':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../packages/9-public/@prisma/orm-mongo
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../packages/9-public/@prisma/orm-target-mongo
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../packages/9-public/@prisma/orm-target-postgres
+      '@prisma/orm-toolchain':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../packages/9-public/@prisma/orm-toolchain
 
   test/integration/test/fixtures/cli/cli-e2e-test-app:
     dependencies:
@@ -7178,12 +7464,27 @@ importers:
       '@prisma/orm-extension-pgvector':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../../packages/9-public/@prisma/orm-extension-pgvector
+      '@prisma/orm-family-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-family-mongo
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-mongo':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../../packages/9-public/@prisma/orm-mongo
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-target-mongo
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-target-postgres
       '@prisma/orm-toolchain':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../../packages/9-public/@prisma/orm-toolchain
@@ -7253,12 +7554,27 @@ importers:
       '@prisma/orm-extension-pgvector':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../../packages/9-public/@prisma/orm-extension-pgvector
+      '@prisma/orm-family-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-family-mongo
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-mongo':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../../packages/9-public/@prisma/orm-mongo
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-target-mongo
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-target-postgres
       '@prisma/orm-toolchain':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../../packages/9-public/@prisma/orm-toolchain
@@ -7292,12 +7608,27 @@ importers:
       '@prisma/orm-extension-pgvector':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../../packages/9-public/@prisma/orm-extension-pgvector
+      '@prisma/orm-family-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-family-mongo
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-family-sql
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-mongo':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../../packages/9-public/@prisma/orm-mongo
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../../packages/9-public/@prisma/orm-postgres
+      '@prisma/orm-target-mongo':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-target-mongo
+      '@prisma/orm-target-postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../../../../packages/9-public/@prisma/orm-target-postgres
       '@prisma/orm-toolchain':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../../../packages/9-public/@prisma/orm-toolchain
@@ -7307,6 +7638,9 @@ importers:
 
   test/prisma-bin:
     dependencies:
+      '@prisma/orm-framework':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../packages/9-public/@prisma/orm-framework
       '@prisma/orm-toolchain':
         specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-toolchain

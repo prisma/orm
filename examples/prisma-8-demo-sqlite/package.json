@@ -16,7 +16,11 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
     "@prisma/orm-sqlite": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "arktype": "^2.2.9",
     "dotenv": "^17.4.2"
   },
