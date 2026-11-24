@@ -69,7 +69,7 @@ describe('Journeys (MongoDB): stored-name refusal routes', {
         planningFailure({
           summary:
             'Cannot rename field "x" to "y" in collection "users": the documents already hold field "y"',
-          why: 'The stored name of field "User.a" changes from "x" to "y", and the documents already hold field "y", the stored name of field "User.b". Without the rename the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first remove field "User.b", or keep it and change its field name to a name nothing uses, such as "prisma_swap_y", and plan and apply that; then make this change and plan again.',
+          why: 'The stored name of field "User.a" changes from "x" to "y", and the documents already hold field "y", the stored name of field "User.b". Without the rename the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first remove field "User.b", or keep it and change its stored name (@map) to a name nothing uses, such as "prisma_swap_y", and plan and apply that; then make this change and plan again.',
         }),
       );
       await useSchema(journey, usersPsl('  a  String? @map("x")'), 'T1.04');

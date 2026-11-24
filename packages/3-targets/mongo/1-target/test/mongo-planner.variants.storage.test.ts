@@ -123,7 +123,7 @@ describe('MongoMigrationPlanner, a variant sharing its collection with another r
       {
         kind: 'unsupportedOperation',
         summary:
-          'Cannot delete the documents of variant "Bug": model "Note" is stored in collection "tasks" and its documents can hold type "bug"',
+          'Cannot delete the documents of variant "Bug": the documents of model "Note" in collection "tasks" can hold type "bug"',
         why: SHARED_WHY(
           'deleting the documents with that value would delete the documents',
           'keep variant "Bug" in the contract',
@@ -146,7 +146,7 @@ describe('MongoMigrationPlanner, a variant sharing its collection with another r
       {
         kind: 'statementRefused',
         summary:
-          'Cannot convert variant "Bug": model "Note" is stored in collection "tasks" and its documents can hold type "bug"',
+          'Cannot convert variant "Bug": the documents of model "Note" in collection "tasks" can hold type "bug"',
         why: SHARED_WHY(
           'replacing the value would replace it in the documents',
           'carry out the change yourself, with a filter that selects only their documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh',

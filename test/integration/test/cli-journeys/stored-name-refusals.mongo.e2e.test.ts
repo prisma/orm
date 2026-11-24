@@ -3,7 +3,7 @@
  * end, and the documents found under the right names afterwards.
  *
  * - R1: two collections that swap names, through names nothing uses (both commands).
- * - R2: two fields that swap stored names, through field names nothing uses (both commands).
+ * - R2: two fields that swap stored names, through stored names nothing uses (both commands).
  * - R3: a collection rename onto the collection of a removed model: the model is removed first (both commands).
  * - R4: a chain between a collection rename and a model rename statement, in both directions (migration plan).
  * - R5: an enum value chain, through a value no member stores (both commands).
@@ -131,7 +131,7 @@ describe('Journeys (MongoDB): stored-name refusals and their routes', {
   );
 
   it.each(COMMANDS)(
-    'R2: two fields that swap stored names are refused, and swap through field names nothing uses (%s)',
+    'R2: two fields that swap stored names are refused, and swap through stored names nothing uses (%s)',
     async (command) => {
       const journey = project(`r2_${id(command)}`);
       await begin(journey, command, userFieldsPsl('x', 'y'), 'R2.01');
@@ -141,7 +141,7 @@ describe('Journeys (MongoDB): stored-name refusals and their routes', {
         planningFailure({
           summary:
             'Cannot rename field "x" to "y" in collection "users": field "y" is renamed in the same plan',
-          why: 'The stored name of field "User.a" changes from "x" to "y", and the stored name of field "User.b" changes from "y" to "x". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first give field "User.a" the field name "prisma_swap_y" and field "User.b" the field name "prisma_swap_x", field names nothing uses, and plan and apply that; then give field "User.a" the field name "y" and field "User.b" the field name "x", and plan again.',
+          why: 'The stored name of field "User.a" changes from "x" to "y", and the stored name of field "User.b" changes from "y" to "x". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first give field "User.a" the stored name (@map) "prisma_swap_y" and field "User.b" the stored name (@map) "prisma_swap_x", stored names nothing uses, and plan and apply that; then give field "User.a" the stored name (@map) "y" and field "User.b" the stored name (@map) "x", and plan again.',
         }),
       );
       await useSchema(journey, userFieldsPsl('prisma_swap_y', 'prisma_swap_x'), 'R2.04');

@@ -353,9 +353,7 @@ export function planStatements(input: {
       : fieldRenamesConflict(
           fieldChanges,
           planning,
-          (model) =>
-            isRootModel(planning.fromContract, model) &&
-            destinationModelOf(model, pairing) === undefined,
+          (root) => destinationModelOf(root, pairing) === undefined,
         );
   if (fieldConflict !== undefined) return notOk([fieldConflict]);
 
@@ -925,9 +923,21 @@ export function destinationModelOf(
 }
 
 /**
+ * Whether the destination keeps origin model `model`, wherever it stores it: the test of which other
+ * models' documents an operation that selects documents by a discriminator value (a variant delete
+ * or a discriminator replacement) could reach. A model that moves out of a collection leaves its
+ * documents in it, so it counts there; a model the destination removes does not. Renames and value
+ * replacements use `sharesCollectionInDestination` instead, since they rewrite the documents as the
+ * models that stay read them.
+ */
+export function keepsDocumentsOf(model: ModelCoordinate, match: ModelMatchInput): boolean {
+  return destinationModelOf(model, match) !== undefined;
+}
+
+/**
  * Whether the destination stores origin model `model`'s pair in `collection`, the collection the
- * origin stores it in after the plan's renames: the one test of which other models share a
- * collection's documents after the plan. A model the destination removes, or stores elsewhere,
+ * origin stores it in after the plan's renames: the test of which other models share a collection's
+ * documents for a field or key rename and a stored value replacement. A model the destination removes, or stores elsewhere,
  * does not share them, since the models that remain read the documents they read before.
  * `rewriteRefusals` asks the same question of the destination contract directly.
  */

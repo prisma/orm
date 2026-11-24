@@ -33,6 +33,7 @@ import {
 } from './mongo-rewrite-refusals';
 import {
   destinationModelOf,
+  keepsDocumentsOf,
   type ModelMatchInput,
   modelAt,
   sharesCollectionInDestination,
@@ -302,13 +303,20 @@ function sharedCollectionRefusal(
     { field: change.originField, value: change.from },
     undefined,
   ).filter((name) =>
-    sharesCollectionInDestination(
+    keepsDocumentsOf(
       { namespaceId: change.model.namespaceId, model: name },
-      input.collectionAfterRenames(originCollection),
       matchInputOf(fromContract, input),
     ),
   );
   if (others.length === 0) return undefined;
+  const moving = others.filter(
+    (name) =>
+      !sharesCollectionInDestination(
+        { namespaceId: change.model.namespaceId, model: name },
+        input.collectionAfterRenames(originCollection),
+        matchInputOf(fromContract, input),
+      ),
+  );
   const named = others.map(quoted).join(', ');
   const effect =
     change.to === undefined
@@ -317,8 +325,8 @@ function sharedCollectionRefusal(
   return refusedChange(
     change,
     label,
-    `model ${named} ${others.length === 1 ? 'is' : 'are'} stored in collection ${quoted(change.collection)} and its documents can hold ${change.originField} ${quoted(change.from)}`,
-    `${sharedCollectionWhy(change.collection, others, effect)} To change only the documents of ${variantText(change.model)}, ${change.statement === undefined ? `move the models to separate collections, or keep ${change.to === undefined ? variantText(change.model) : `the discriminator value ${quoted(change.from)}`} in the contract` : SEPARATE_THE_MODELS}.`,
+    `the documents of model ${named} in collection ${quoted(change.collection)} can hold ${change.originField} ${quoted(change.from)}`,
+    `${sharedCollectionWhy(change.collection, others, effect)} ${moving.length > 0 ? `A model that moves out of collection ${quoted(change.collection)} leaves its documents in it, so the documents of model ${moving.map(quoted).join(', ')} stay there: change only the documents of ${variantText(change.model)} after they are moved, with a hand-written migration under migration plan or by hand under db update, and plan this change again; or ` : `To change only the documents of ${variantText(change.model)}, `}${change.statement === undefined ? `${moving.length > 0 ? '' : 'move the models to separate collections, or '}keep ${change.to === undefined ? variantText(change.model) : `the discriminator value ${quoted(change.from)}`} in the contract` : moving.length > 0 ? 'carry out the change yourself, with a filter that selects only its documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh' : SEPARATE_THE_MODELS}.`,
   );
 }
 

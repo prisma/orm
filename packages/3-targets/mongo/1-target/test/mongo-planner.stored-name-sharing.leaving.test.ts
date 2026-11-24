@@ -96,7 +96,7 @@ describe('MongoMigrationPlanner, a field rename onto the stored name of a field 
           kind: 'unsupportedOperation',
           summary:
             'Cannot rename field "name" to "nick" in collection "people": the documents already hold field "nick"',
-          why: 'The stored name of field "User.name" changes from "name" to "nick", and the documents already hold field "nick", the stored name of field "Admin.nick". Without the rename the plan would read the values of field "nick" as values of field "User.name". Make the change in two plans: first keep model "Admin" and remove field "Admin.nick", or keep it and change its field name to a name nothing uses, such as "prisma_swap_nick", and plan and apply that, which frees the name in the documents; then make this change and plan again. Removing model "Admin" does not free the name: it plans nothing, and its key stays in the documents. Or keep the stored name "name" of field "User.name" in the contract.',
+          why: 'The stored name of field "User.name" changes from "name" to "nick", and the documents already hold field "nick", the stored name of field "Admin.nick". Without the rename the plan would read the values of field "nick" as values of field "User.name". Make the change in two plans: first keep model "Admin" and remove field "Admin.nick", or keep it and change its stored name (@map) to a name nothing uses, such as "prisma_swap_nick", and plan and apply that, which frees the name in the documents; then make this change and plan again. Removing model "Admin" does not free the name: it plans nothing, and its key stays in the documents. Or keep the stored name "name" of field "User.name" in the contract.',
         },
       ],
     });
@@ -204,7 +204,7 @@ describe('MongoMigrationPlanner, a variant rewrite in a collection whose other r
           {
             kind: 'unsupportedOperation',
             summary:
-              'Cannot delete the documents of variant "Bug": model "Admin" is stored in collection "tasks" and its documents can hold type "bug"',
+              'Cannot delete the documents of variant "Bug": the documents of model "Admin" in collection "tasks" can hold type "bug"',
             why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so deleting the documents with that value would delete the documents of "Admin" too. To change only the documents of variant "Bug", move the models to separate collections, or keep variant "Bug" in the contract.',
           },
         ],
@@ -244,11 +244,152 @@ describe('MongoMigrationPlanner, a variant rewrite in a collection whose other r
           {
             kind: 'statementRefused',
             summary:
-              'Cannot convert variant "Bug": model "Admin" is stored in collection "tasks" and its documents can hold type "bug"',
+              'Cannot convert variant "Bug": the documents of model "Admin" in collection "tasks" can hold type "bug"',
             why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so replacing the value would replace it in the documents of "Admin" too. To change only the documents of variant "Bug", move the models to separate collections, or carry out the change yourself, with a filter that selects only their documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.',
             refusedStatement: convert[0],
           },
         ],
+      },
+    });
+  });
+
+  it('refuses the delete and the replacement when the other root model moves to a collection of its own, since its documents stay', () => {
+    const moved = (variants: Readonly<Record<string, string>>, defect: boolean) =>
+      contract(
+        'to',
+        {
+          Admin: { collection: 'admins', fields: ['_id', 'type'] },
+          Task: task(variants),
+          ...(defect ? { Bug: { collection: 'tasks', fields: ['sev'], base: 'Task' } } : {}),
+          Feat: { collection: 'tasks', fields: ['area'], base: 'Task' },
+        },
+        { tasks: {}, admins: {} },
+      );
+    const convert = [
+      { kind: 'convert', entity: 'model', model: { namespaceId: NS, model: 'Bug' } } as const,
+    ];
+    expect({
+      deleted: plan({ from, to: moved({ Feat: 'feat' }, false), schema: tasks }),
+      converted: plan({
+        from,
+        to: moved({ Bug: 'defect', Feat: 'feat' }, true),
+        schema: tasks,
+        statements: convert,
+      }),
+    }).toEqual({
+      deleted: {
+        kind: 'failure',
+        conflicts: [
+          {
+            kind: 'unsupportedOperation',
+            summary:
+              'Cannot delete the documents of variant "Bug": the documents of model "Admin" in collection "tasks" can hold type "bug"',
+            why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so deleting the documents with that value would delete the documents of "Admin" too. A model that moves out of collection "tasks" leaves its documents in it, so the documents of model "Admin" stay there: change only the documents of variant "Bug" after they are moved, with a hand-written migration under migration plan or by hand under db update, and plan this change again; or keep variant "Bug" in the contract.',
+          },
+        ],
+      },
+      converted: {
+        kind: 'failure',
+        conflicts: [
+          {
+            kind: 'statementRefused',
+            summary:
+              'Cannot convert variant "Bug": the documents of model "Admin" in collection "tasks" can hold type "bug"',
+            why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so replacing the value would replace it in the documents of "Admin" too. A model that moves out of collection "tasks" leaves its documents in it, so the documents of model "Admin" stay there: change only the documents of variant "Bug" after they are moved, with a hand-written migration under migration plan or by hand under db update, and plan this change again; or carry out the change yourself, with a filter that selects only its documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.',
+            refusedStatement: convert[0],
+          },
+        ],
+      },
+    });
+  });
+});
+
+describe('MongoMigrationPlanner, a field rename onto the stored name of a variant field whose root model the destination removes', () => {
+  const from = contract(
+    'from',
+    {
+      Admin: {
+        collection: 'people',
+        fields: ['_id', 'kind'],
+        discriminator: 'kind',
+        variants: { Boss: 'boss' },
+      },
+      Boss: { collection: 'people', fields: ['nick'], base: 'Admin' },
+      User: { collection: 'people', fields: ['_id', 'name'] },
+    },
+    { people: {} },
+  );
+  const to = contract(
+    'to',
+    { User: { collection: 'people', fields: ['_id', 'name'], storedAs: { name: 'nick' } } },
+    { people: {} },
+  );
+
+  it('is refused, naming the root model whose removal does not free the name', () => {
+    expect(plan({ from, to, schema: live })).toEqual({
+      kind: 'failure',
+      conflicts: [
+        {
+          kind: 'unsupportedOperation',
+          summary:
+            'Cannot rename field "name" to "nick" in collection "people": the documents already hold field "nick"',
+          why: 'The stored name of field "User.name" changes from "name" to "nick", and the documents already hold field "nick", the stored name of field "Boss.nick". Without the rename the plan would read the values of field "nick" as values of field "User.name". Make the change in two plans: first keep model "Admin" and remove field "Boss.nick", or keep it and change its stored name (@map) to a name nothing uses, such as "prisma_swap_nick", and plan and apply that, which frees the name in the documents; then make this change and plan again. Removing model "Admin" does not free the name: it plans nothing, and its key stays in the documents. Or keep the stored name "name" of field "User.name" in the contract.',
+        },
+      ],
+    });
+  });
+
+  it('follows the route: keeping the root model and removing the field unsets the key and asks, and then the rename is planned', () => {
+    const step = contract(
+      'step',
+      {
+        Admin: {
+          collection: 'people',
+          fields: ['_id', 'kind'],
+          discriminator: 'kind',
+          variants: { Boss: 'boss' },
+        },
+        Boss: { collection: 'people', fields: [], base: 'Admin' },
+        User: { collection: 'people', fields: ['_id', 'name'] },
+      },
+      { people: {} },
+    );
+    const final = contract(
+      'final',
+      {
+        Admin: {
+          collection: 'people',
+          fields: ['_id', 'kind'],
+          discriminator: 'kind',
+          variants: { Boss: 'boss' },
+        },
+        Boss: { collection: 'people', fields: [], base: 'Admin' },
+        User: { collection: 'people', fields: ['_id', 'name'], storedAs: { name: 'nick' } },
+      },
+      { people: {} },
+    );
+    expect({
+      first: planned(plan({ from, to: step, schema: live })),
+      second: planned(plan({ from: step, to: final, schema: live })),
+    }).toEqual({
+      first: {
+        labels: ['Remove field nick from collection people in documents whose kind is "boss"'],
+        classes: ['destructive'],
+        applied: [],
+        dataLoss: [
+          {
+            operationIndex: 0,
+            subject: { kind: 'field', namespaceId: NS, model: 'Boss', field: 'nick' },
+            loss: 'drop',
+            label: 'Remove field nick from collection people in documents whose kind is "boss"',
+          },
+        ],
+      },
+      second: {
+        labels: ['Rename field name to nick in collection people'],
+        classes: ['widening'],
+        applied: [],
+        dataLoss: [],
       },
     });
   });

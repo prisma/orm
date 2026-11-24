@@ -16,7 +16,7 @@ import {
   selectedVariantOf,
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
-import { modelCoordinates, sameModel } from './mongo-model-coordinates';
+import { modelCoordinates, rootModelOf, sameModel } from './mongo-model-coordinates';
 import {
   capitalized,
   fieldDisplayName,
@@ -45,9 +45,14 @@ export interface FieldChange {
   readonly to: string;
 }
 
+/** A route's noun for a stored name, with the attribute that sets it, so the route is not read as renaming the field: "stored name (`@map`)". */
+function nounWithMap(noun: 'collection' | 'stored name' | 'key'): string {
+  return noun === 'collection' ? noun : `${noun} (@map)`;
+}
+
 /** The noun a route gives the names it moves through at `place`. */
-function routeNoun(place: RenamedNameKind): 'field name' | 'key' {
-  return place.kind === 'document' ? 'field name' : 'key';
+function routeNoun(place: RenamedNameKind): 'stored name' | 'key' {
+  return place.kind === 'document' ? 'stored name' : 'key';
 }
 
 /** The noun for a name stored at `place`, as labels and routes use it. */
@@ -106,12 +111,12 @@ interface RouteMove {
  * object to a name nothing uses, then a plan that moves it to its final name.
  */
 function temporaryNamesRoute(
-  noun: 'collection' | 'field name' | 'key',
+  noun: 'collection' | 'stored name' | 'key',
   moves: readonly RouteMove[],
   withStatements: boolean,
 ): string {
   const give = (name: (move: RouteMove) => string) =>
-    joinedList(moves.map((move) => `${move.objects} the ${noun} "${name(move)}"`));
+    joinedList(moves.map((move) => `${move.objects} the ${nounWithMap(noun)} "${name(move)}"`));
   return `Make the change in two plans: first give ${give(({ through }) => through)}, ${noun}s nothing uses, and plan and apply that${withStatements ? ' with the same statements' : ''}; then give ${give(({ to }) => to)}, and plan again${withStatements ? ' without them' : ''}.`;
 }
 
@@ -145,7 +150,7 @@ function linkedChanges<TChange>(
 
 /** How the first of two plans frees a name: it removes what the origin stores there, or gives it a name nothing uses. */
 function freeName(
-  noun: 'collection' | 'field name' | 'key',
+  noun: 'collection' | 'stored name' | 'key',
   held: string,
   holders: { readonly text: string; readonly count: number },
   unusedName: string,
@@ -154,7 +159,7 @@ function freeName(
     return `remove ${noun} "${held}" or give it a name nothing uses, such as "${unusedName}"`;
   }
   const [them, their] = holders.count === 1 ? ['it', 'its'] : ['them', 'their'];
-  return `remove ${holders.text}, or keep ${them} and change ${their} ${noun} to a name nothing uses, such as "${unusedName}"`;
+  return `remove ${holders.text}, or keep ${them} and change ${their} ${nounWithMap(noun)} to a name nothing uses, such as "${unusedName}"`;
 }
 
 interface Contracts {
@@ -503,7 +508,7 @@ function fieldRenameConflict(
   change: FieldChange,
   changes: readonly FieldChange[],
   contracts: Contracts,
-  removes: (model: ModelCoordinate) => boolean,
+  removes: (root: ModelCoordinate) => boolean,
 ): MigrationPlannerConflict | undefined {
   const noun = nounOf(change.nameKind);
   const label = `Cannot rename ${noun} "${change.from}" to "${change.to}" ${whereText(change)}`;
@@ -525,7 +530,7 @@ function fieldRenameConflict(
   const holders = originFieldsStoring(contracts.fromContract, change.rename.from, change.to);
   const relationHolders = holders.filter((holder) => holder.kind === 'relation');
   const removedModels = holders
-    .map(({ coordinate }) => ({ namespaceId: coordinate.namespaceId, model: coordinate.model }))
+    .map(({ coordinate }) => rootModelOf(contracts.fromContract, coordinate))
     .filter(
       (model, index, all) =>
         removes(model) && all.findIndex((other) => sameModel(other, model)) === index,
@@ -567,7 +572,7 @@ function fieldRenameConflict(
 export function fieldRenamesConflict(
   changes: readonly FieldChange[],
   contracts: Contracts,
-  removes: (model: ModelCoordinate) => boolean,
+  removes: (root: ModelCoordinate) => boolean,
 ): MigrationPlannerConflict | undefined {
   for (const change of changes) {
     if (change.rename.statement !== undefined) continue;

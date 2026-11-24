@@ -29,3 +29,16 @@ export function documentCollectionOf(
     ? collectionOfModel(contract.domain, model)
     : undefined;
 }
+
+/** The root model of `model`: itself for a root model, else the root its bases lead to. */
+export function rootModelOf(contract: ContractWithDomain, model: ModelCoordinate): ModelCoordinate {
+  const models = mongoModelsOf(contract.domain, model.namespaceId);
+  const seen = new Set<string>();
+  let current = model.model;
+  for (let base = models[current]?.base; base !== undefined; base = models[current]?.base) {
+    if (seen.has(current)) break;
+    seen.add(current);
+    current = base.model;
+  }
+  return { namespaceId: model.namespaceId, model: current };
+}
