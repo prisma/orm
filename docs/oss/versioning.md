@@ -60,6 +60,8 @@ The npm registry exposes Prisma 8 under these dist-tags:
 
 The `pr` dist-tag was used historically to publish per-PR previews; PR previews now go through [`pkg.pr.new`](https://pkg.pr.new) ([`.github/workflows/preview-publish.yml`](../../.github/workflows/preview-publish.yml)) instead. The legacy `pr` tag is left as-is on the registry.
 
+A `pkg.pr.new` preview rewrites a package's dependencies on its siblings to the previews' own addresses, but not its peer dependencies, and every package of ours names its siblings as peers ([ADR 329](../architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)). So install the preview of a package together with the previews of every package it names as a peer, each by its preview address: the preview of `@prisma/orm-postgres` with those of `@prisma/orm-framework`, `@prisma/orm-family-sql`, `@prisma/orm-target-postgres` and `@prisma/orm-toolchain`. A preview installed alone gets the released versions of those packages from the registry, and tests the pull request's change on top of old code.
+
 ## Who can publish
 
 Publishing requires:
