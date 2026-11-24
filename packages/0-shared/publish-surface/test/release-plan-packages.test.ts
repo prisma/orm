@@ -68,6 +68,7 @@ describe('the plan for the published packages', () => {
       everGa: new Set(),
       bump: [],
       dev: undefined,
+      lastReleaseCandidate: undefined,
     });
 
     for (const [name, planned] of Object.entries(plan)) {
@@ -93,6 +94,7 @@ describe('the plan for the published packages', () => {
       everGa: new Set(),
       bump: [],
       dev: undefined,
+      lastReleaseCandidate: undefined,
     });
 
     expect(planTable(plan)).toEqual(planTable.parse(AT_8_0_0));
@@ -109,6 +111,7 @@ describe('the plan for the published packages', () => {
       everGa: graph.gaPackages(),
       bump: [],
       dev: undefined,
+      lastReleaseCandidate: undefined,
     });
 
     expect(planTable(plan)).toEqual(planTable.parse(AT_8_1_0));

@@ -77,7 +77,7 @@ describe('the declared level of each published package', () => {
       pgvector: kinds['@prisma/orm-extension-pgvector'],
     }).toEqual({
       'better-auth': 'library-integration',
-      postgres: 'facade',
+      postgres: 'target-package',
       framework: 'platform',
       pgvector: 'extension',
     });

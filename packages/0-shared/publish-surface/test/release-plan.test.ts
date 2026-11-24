@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   type DeclaredLevel,
-  firstVersionAfterReleaseCandidates,
+  firstVersionOfMinor,
   formatVersion,
   type PackageKind,
   parseVersion,
@@ -21,12 +21,12 @@ const graph: Record<string, { level: DeclaredLevel; kind: PackageKind; uses: str
   framework: { level: 'ga', kind: 'platform', uses: [] },
   family: { level: 'ga', kind: 'platform', uses: ['framework'] },
   target: { level: 'ga', kind: 'platform', uses: ['family', 'framework'] },
-  postgres: { level: 'ga', kind: 'facade', uses: ['family', 'framework', 'target'] },
+  postgres: { level: 'ga', kind: 'target-package', uses: ['family', 'framework', 'target'] },
   pgvector: { level: 'ga', kind: 'extension', uses: ['framework', 'target'] },
-  mongo: { level: 'preview', kind: 'facade', uses: ['framework'] },
+  mongo: { level: 'preview', kind: 'target-package', uses: ['framework'] },
   'target-mysql': { level: 'ea', kind: 'platform', uses: ['framework'] },
-  mysql: { level: 'ea', kind: 'facade', uses: ['framework', 'target-mysql'] },
-  mariadb: { level: 'ea', kind: 'facade', uses: ['mysql', 'target-mysql'] },
+  mysql: { level: 'ea', kind: 'target-package', uses: ['framework', 'target-mysql'] },
+  mariadb: { level: 'ea', kind: 'target-package', uses: ['mysql', 'target-mysql'] },
   supabase: { level: 'preview', kind: 'extension', uses: ['postgres'] },
   'better-auth': { level: 'preview', kind: 'library-integration', uses: ['framework'] },
   paradedb: { level: { firstVersion: '0.1.0' }, kind: 'extension', uses: ['framework'] },
@@ -47,6 +47,10 @@ const AT_8_1 = {
   paradedb: '0.1.0',
 };
 
+const AT_8_0: Record<string, string> = Object.fromEntries(
+  Object.entries(AT_8_1).map(([name, version]) => [name, version.replace(/^8\.1\./, '8.0.')]),
+);
+
 const GA = new Set(['framework', 'family', 'target', 'postgres', 'pgvector']);
 
 function input(
@@ -66,6 +70,7 @@ function input(
     everGa: GA,
     bump: [],
     dev: undefined,
+    lastReleaseCandidate: undefined,
     ...rest,
   };
 }
@@ -252,24 +257,6 @@ describe('planRelease', () => {
     );
   });
 
-  it('moves a GA package below GA at a new major', () => {
-    const plan = planRelease(
-      input({
-        release: { major: 9, minor: 0 },
-        levelChanges: Object.fromEntries(
-          Object.entries(graph)
-            .filter(([, entry]) => typeof entry.level === 'string')
-            .map(([name]) => [name, 'rc']),
-        ),
-      }),
-    );
-
-    expect({ framework: line(plan, 'framework'), mongo: line(plan, 'mongo') }).toEqual({
-      framework: '9.0.0-rc.0 rc',
-      mongo: '9.0.0-rc.0 latest framework ~9.0.0-rc.0',
-    });
-  });
-
   describe('refuses', () => {
     it.each([
       [
@@ -353,14 +340,53 @@ describe('planRelease', () => {
     });
   });
 
-  it('lets a level go down at a new minor, tagging the release with its level once the package has been GA', () => {
+  it('lets a package that has never been GA go down at a new minor', () => {
     const plan = planRelease(
-      input({ release: { major: 8, minor: 2 }, levelChanges: { postgres: 'preview' } }),
+      input({ release: { major: 8, minor: 2 }, levelChanges: { mongo: 'ea' } }),
     );
 
-    expect(line(plan, 'postgres')).toBe(
-      '8.2.0-preview.0 preview family ~8.2.0 framework ~8.2.0 target ~8.2.0',
+    expect(line(plan, 'mongo')).toBe('8.2.0-ea.0 latest framework ~8.2.0');
+  });
+
+  it.each([
+    ['at a new minor', { major: 8, minor: 2 }],
+    ['at a new major', { major: 9, minor: 0 }],
+    ['within the minor', { major: 8, minor: 1 }],
+  ])('refuses to move a GA package below GA %s, saying it is not decided', (_case, release) => {
+    expect(() => planRelease(input({ release, levelChanges: { postgres: 'preview' } }))).toThrow(
+      /postgres.*not decided/,
     );
+  });
+
+  it('moves a package up to rc within 8.0 above the last release candidate', () => {
+    const plan = planRelease(
+      input({
+        release: { major: 8, minor: 0 },
+        current: { ...AT_8_0, mongo: '8.0.0-preview.2' },
+        levelChanges: { mongo: 'rc' },
+        lastReleaseCandidate: 26,
+      }),
+    );
+
+    expect({
+      mongo: line(plan, 'mongo'),
+      mariadbOnMysql: plan['mariadb']?.ranges['mysql'],
+    }).toEqual({
+      mongo: '8.0.0-rc.27 latest framework ~8.0.0',
+      mariadbOnMysql: '~8.0.0-ea.0',
+    });
+  });
+
+  it('refuses to move a package up to rc within 8.0 when the last release candidate is not known', () => {
+    expect(() =>
+      planRelease(
+        input({
+          release: { major: 8, minor: 0 },
+          current: { ...AT_8_0, mongo: '8.0.0-preview.2' },
+          levelChanges: { mongo: 'rc' },
+        }),
+      ),
+    ).toThrow(/last 8\.0\.0 release candidate/);
   });
 
   it.each([
@@ -405,20 +431,80 @@ describe('planRelease', () => {
   });
 });
 
-describe('firstVersionAfterReleaseCandidates', () => {
+describe('firstVersionOfMinor', () => {
   it.each([
-    ['ga', '8.0.0'],
-    ['preview', '8.0.0-preview.0'],
-    ['ea', '8.0.0-ea.0'],
-    ['rc', '8.0.0-rc.27'],
-  ] as const)('numbers a %s package', (level, expected) => {
-    expect(
-      firstVersionAfterReleaseCandidates(
-        { major: 8, minor: 0 },
-        level,
-        parseVersion('8.0.0-rc.26'),
-      ),
-    ).toBe(expected);
+    ['ga', { major: 8, minor: 0 }, '8.0.0'],
+    ['preview', { major: 8, minor: 0 }, '8.0.0-preview.0'],
+    ['ea', { major: 8, minor: 0 }, '8.0.0-ea.0'],
+    ['rc', { major: 8, minor: 0 }, '8.0.0-rc.27'],
+    ['rc', { major: 8, minor: 3 }, '8.3.0-rc.0'],
+    ['preview', { major: 8, minor: 3 }, '8.3.0-preview.0'],
+  ] as const)('gives a %s package at %o its first version %s', (level, release, expected) => {
+    expect(firstVersionOfMinor(release, level, 26)).toBe(expected);
+  });
+});
+
+/** Whether a tilde or caret range admits a version, with Semantic Versioning's rule for pre-releases. */
+function admits(range: string, version: string): boolean {
+  const base = parseVersion(range.slice(1));
+  const v = parseVersion(version);
+  const order = (a: typeof v, b: typeof v): number =>
+    a.major - b.major ||
+    a.minor - b.minor ||
+    a.patch - b.patch ||
+    (a.level === undefined ? 1 : 0) - (b.level === undefined ? 1 : 0) ||
+    (a.level !== undefined && b.level !== undefined
+      ? ['ea', 'preview', 'rc'].indexOf(a.level.name) -
+          ['ea', 'preview', 'rc'].indexOf(b.level.name) || a.level.counter - b.level.counter
+      : 0);
+  if (
+    v.level !== undefined &&
+    (base.level === undefined ||
+      v.major !== base.major ||
+      v.minor !== base.minor ||
+      v.patch !== base.patch)
+  ) {
+    return false;
+  }
+  if (order(v, base) < 0) return false;
+  return range.startsWith('~')
+    ? v.major === base.major && v.minor === base.minor
+    : v.major === base.major;
+}
+
+describe('every range the plan writes admits the version the plan gives the package it names', () => {
+  const plans = {
+    'the first release with levels': input({
+      release: { major: 8, minor: 0 },
+      everGa: new Set(),
+      current: Object.fromEntries(Object.keys(graph).map((name) => [name, '8.0.0-rc.26'])),
+      levelChanges: { mongo: 'rc' },
+    }),
+    '8.1': input({}),
+    'a fix within 8.1': input({ bump: ['framework', 'mongo', 'mysql'] }),
+    'levels going up within 8.1': input({
+      levelChanges: { mongo: 'rc', mysql: 'preview', 'target-mysql': 'preview' },
+    }),
+    'a move up to rc within 8.0': input({
+      release: { major: 8, minor: 0 },
+      current: { ...AT_8_0, mongo: '8.0.0-preview.2' },
+      levelChanges: { mongo: 'rc' },
+      lastReleaseCandidate: 26,
+    }),
+    '8.2 with a level going down': input({
+      release: { major: 8, minor: 2 },
+      levelChanges: { mongo: 'ea' },
+    }),
+  };
+
+  it.each(Object.entries(plans))('%s', (_case, given) => {
+    const plan = planRelease(given);
+    const refused = Object.entries(plan).flatMap(([user, planned]) =>
+      Object.entries(planned.ranges)
+        .filter(([named, range]) => !admits(range, plan[named]?.version ?? ''))
+        .map(([named, range]) => `${user} writes ${range} on ${named} at ${plan[named]?.version}`),
+    );
+    expect(refused).toEqual([]);
   });
 });
 
@@ -471,7 +557,7 @@ describe('planInputFor', () => {
     ]);
     const kinds = {
       '@prisma/orm-framework': 'platform',
-      '@prisma/orm-postgres': 'facade',
+      '@prisma/orm-postgres': 'target-package',
     } as const;
 
     expect(
@@ -488,6 +574,7 @@ describe('planInputFor', () => {
         levels,
         kinds,
         everGa: new Set(),
+        lastReleaseCandidate: undefined,
       }),
     ).toEqual({
       release: { major: 8, minor: 1 },
@@ -499,6 +586,7 @@ describe('planInputFor', () => {
       levels,
       kinds,
       everGa: new Set(),
+      lastReleaseCandidate: undefined,
       bump: [],
     });
   });

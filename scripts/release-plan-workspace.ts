@@ -5,7 +5,11 @@
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { packageKinds, packageLevels } from '../packages/0-shared/publish-surface/src/levels.ts';
+import {
+  lastReleaseCandidate,
+  packageKinds,
+  packageLevels,
+} from '../packages/0-shared/publish-surface/src/levels.ts';
 import {
   type DeclaredLevel,
   isNumberedOnItsOwn,
@@ -95,6 +99,7 @@ function planFrom(
       levels: packageLevels,
       kinds: packageKinds(publicShells),
       everGa,
+      lastReleaseCandidate,
     }),
   );
 }

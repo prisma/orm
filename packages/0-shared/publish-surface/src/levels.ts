@@ -37,15 +37,27 @@ export const packageLevels: ReadonlyMap<string, DeclaredLevel> = new Map<string,
 ]);
 
 /**
- * The kind of every published package: the shell map's `kind` for each shell, and a library
- * integration for `@prisma/orm-better-auth`, which is not a shell. A facade or platform package
- * writes a tilde on the packages it names; an extension or library integration a caret.
+ * The `N` of the last `8.0.0-rc.N`, once `8.0.0` has been released; until then the plan reads it
+ * from the manifests, which all hold it. Within release `8.0`, a package at `rc` continues above it.
+ */
+export const lastReleaseCandidate: number | undefined = undefined;
+
+/**
+ * The kind of every published package: the shell map's `kind` for each shell, with the shell map's
+ * `facade` as a target package, and a library integration for `@prisma/orm-better-auth`, which is
+ * not a shell. A target package or platform package writes a tilde on the packages it names; an
+ * extension or library integration a caret on a GA one.
  */
 export function packageKinds(
   shells: ReadonlyMap<string, { readonly kind: 'platform' | 'facade' | 'extension' }>,
 ): Readonly<Record<string, PackageKind>> {
   return {
-    ...Object.fromEntries([...shells].map(([name, shell]) => [name, shell.kind])),
+    ...Object.fromEntries(
+      [...shells].map(([name, shell]) => [
+        name,
+        shell.kind === 'facade' ? 'target-package' : shell.kind,
+      ]),
+    ),
     '@prisma/orm-better-auth': 'library-integration',
   };
 }
