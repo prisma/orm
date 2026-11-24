@@ -526,3 +526,77 @@ describe('init --skip-install with a required version written with a v prefix', 
     timeouts.coldTransformImport,
   );
 });
+
+describe('a required peer that is not a Prisma ORM package', () => {
+  function targetNaming(peers: Record<string, string>): void {
+    writeProjectFile(
+      'node_modules/@prisma/orm-postgres/package.json',
+      JSON.stringify({
+        name: '@prisma/orm-postgres',
+        version: VERSION,
+        peerDependencies: { '@prisma/orm-framework': VERSION, pg: '^8.22.0', ...peers },
+      }),
+    );
+    installed('@prisma/orm-framework');
+    installed('pg');
+  }
+
+  function installedAt(name: string, version: string): void {
+    writeProjectFile(`node_modules/${name}/package.json`, JSON.stringify({ name, version }));
+  }
+
+  it(
+    'under --skip-install, says to change a line that lists another exact version than the one required',
+    async () => {
+      targetNaming({ 'left-pad': '1.3.0' });
+      installedAt('left-pad', '1.2.0');
+      writeManifest({
+        '@prisma/orm-postgres': VERSION,
+        '@prisma/orm-framework': VERSION,
+        pg: '^8.22.0',
+        'left-pad': '1.2.0',
+      });
+
+      const run = await (await harness()).run([...POSTGRES, '--skip-install'], { cwd: projectDir });
+
+      expect(existsSync(join(projectDir, 'prisma.config.ts'))).toBe(false);
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
+          meta: {
+            packages: [{ name: 'left-pad', found: '1.2.0', required: '1.3.0', listed: '1.2.0' }],
+          },
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label:
+                'Change the line for left-pad in package.json from 1.2.0 to 1.3.0 and run `pnpm install`, then run `prisma orm init` again.',
+            }),
+          ]),
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'leaves a line the project lists alone when the requirement is a range',
+    async () => {
+      targetNaming({ 'temporal-polyfill': '^1.0.8' });
+      installedAt('temporal-polyfill', '1.0.0');
+      writeManifest({
+        '@prisma/orm-postgres': VERSION,
+        '@prisma/orm-framework': VERSION,
+        pg: '^8.22.0',
+        'temporal-polyfill': '1.0.0',
+      });
+
+      const run = await (await harness()).run([...POSTGRES, '--skip-install'], { cwd: projectDir });
+
+      expect({
+        wrote: existsSync(join(projectDir, 'prisma.config.ts')),
+        code: Reflect.get(envelopeOf(run)?.error ?? {}, 'code'),
+      }).toEqual({ wrote: true, code: undefined });
+    },
+    timeouts.coldTransformImport,
+  );
+});

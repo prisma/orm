@@ -288,13 +288,17 @@ export async function resolveRequiredPeers(ctx: {
         continue;
       }
       const installed = ctx.installedVersion(name);
-      if (!isPrismaOrmPackage(name) || lineStandsFor(listed, range, installed)) {
+      const ours = isPrismaOrmPackage(name);
+      if (
+        (!ours && exactVersionOf(range) === undefined) ||
+        lineStandsFor(listed, range, installed)
+      ) {
         outcomes.set(name, 'already-listed');
         continue;
       }
       outcomes.set(name, 'left-at-another-version');
       warnings.push(
-        `package.json lists ${name} at ${listed}${installed === undefined ? '' : `, installed at ${installed}`}, but ${by} needs ${range}; init left it as it is. Install ${name}@${range} so every Prisma ORM package is at one version.`,
+        `package.json lists ${name} at ${listed}${installed === undefined ? '' : `, installed at ${installed}`}, but ${by} needs ${range}; init left it as it is. ${ours ? `Install ${name}@${range} so every Prisma ORM package is at one version.` : `Change the line to ${exactVersionOf(range)} and install.`}`,
       );
     }
     if (ctx.install === undefined || toInstall.length === 0) break;
