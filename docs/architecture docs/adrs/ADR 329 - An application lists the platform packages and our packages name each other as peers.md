@@ -61,7 +61,7 @@ The arrangement also makes it possible to release a package without the others, 
 
 ## Consequences
 
-- **The package manager checks the combination.** When the application's list and a package's peers disagree, npm refuses the install, and pnpm, Yarn and Bun report the mismatch. The user corrects their list.
+- **The package manager checks the combination.** When the application's list and a package's peers disagree, the package manager reports it. npm refuses the install when the packages that disagree are ones the application lists itself; pnpm, Yarn and Bun install and print a warning. A warning is easy to miss, so an install that succeeds does not prove the versions match: the user reads the peer warnings and corrects their list.
 - **An application's `package.json` is longer.** Five lines for PostgreSQL where one would do if the target package brought the rest. `prisma orm init` writes them, and the upgrade instructions add them to an existing application.
 - **Every package manager needs the full list.** Yarn installs no peer dependencies. An application under Yarn that lists only the target package cannot load. npm and pnpm install a missing peer by themselves, which hides the gap until the project moves to another package manager. This is why `init` writes every name.
 - **A package that carries its own toolchain lists the framework too.** The `prisma` command-line tool and Prisma Composer each carry their own copy of `@prisma/orm-toolchain`. The toolchain names the framework as a peer, so each of them lists `@prisma/orm-framework` beside it.
