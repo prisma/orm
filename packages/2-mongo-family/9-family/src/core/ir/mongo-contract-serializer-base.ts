@@ -30,6 +30,34 @@ import type { JsonObject } from '@internal/utils/json';
 import { structuredError } from '@internal/utils/structured-error';
 import { type as arktypeType, type Type } from 'arktype';
 
+/** One version of the `contract.json` format: its parser and its printer. The in-memory contract is the same for every version. */
+interface MongoContractFormat<TContract> {
+  parse(document: unknown): TContract;
+  print(contract: TContract): JsonObject;
+}
+
+/**
+ * A `contract.json` written before to-one relations recorded `nullable` (rc.9 and earlier)
+ * loads with the flag derived from the model: nullable when any local field is nullable or is
+ * not declared.
+ */
+function withMongoToOneRelationNullability(contract: MongoContract): MongoContract {
+  const domain = withDerivedToOneRelationNullability(contract.domain, ({ model, relation }) => {
+    const { ownsForeignKey, fields } = resolveMongoToOneRelationFields(
+      blindCast<
+        ContractModel<MongoModelStorage>,
+        'the contract schema validated every model of a MongoDB contract'
+      >(model),
+      relation,
+    );
+    return {
+      ownsReference: ownsForeignKey,
+      localFieldNullability: fields.map((field) => field.nullable),
+    };
+  });
+  return { ...contract, domain };
+}
+
 /**
  * Mongo family `ContractSerializer` abstract base. Owns the family-shared
  * deserialization pipeline:
@@ -53,34 +81,6 @@ import { type as arktypeType, type Type } from 'arktype';
  * so the value can be `JSON.stringify`'d directly. Targets that need
  * on-the-way-out canonicalization override `printContractV1`.
  */
-/**
- * A `contract.json` written before to-one relations recorded `nullable` (rc.9 and earlier)
- * loads with the flag derived from the model: nullable when any local field is nullable or is
- * not declared.
- */
-/** One version of the `contract.json` format: its parser and its printer. The in-memory contract is the same for every version. */
-interface MongoContractFormat<TContract> {
-  parse(document: unknown): TContract;
-  print(contract: TContract): JsonObject;
-}
-
-function withMongoToOneRelationNullability(contract: MongoContract): MongoContract {
-  const domain = withDerivedToOneRelationNullability(contract.domain, ({ model, relation }) => {
-    const { ownsForeignKey, fields } = resolveMongoToOneRelationFields(
-      blindCast<
-        ContractModel<MongoModelStorage>,
-        'the contract schema validated every model of a MongoDB contract'
-      >(model),
-      relation,
-    );
-    return {
-      ownsReference: ownsForeignKey,
-      localFieldNullability: fields.map((field) => field.nullable),
-    };
-  });
-  return { ...contract, domain };
-}
-
 export abstract class MongoContractSerializerBase<TContract>
   implements ContractSerializer<TContract>
 {

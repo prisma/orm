@@ -1,4 +1,3 @@
-import { formatVersionFailure } from './caught-errors';
 /**
  * Policy core of `migration check`: per-space explicit graph checks, aggregate-integrity loading, and single-target resolution.
  */
@@ -57,6 +56,7 @@ import {
   resolveTargetPathAcrossSpaces,
 } from '../../utils/migration-path-target';
 import { chooseAction, runCommandAction } from '../../utils/next-actions';
+import { formatVersionFailure } from './caught-errors';
 import { mapContractAtError } from './contract-at-errors';
 
 function migrationPathRelative(cwd: string, dirPath: string): string {

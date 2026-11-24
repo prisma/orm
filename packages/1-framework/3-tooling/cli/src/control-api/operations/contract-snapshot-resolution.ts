@@ -1,10 +1,10 @@
-import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
 /**
  * Resolves a user-supplied contract reference to an on-disk contract JSON (snapshot store or emitted contract), shared by db sign and db update --to.
  */
 
 import { readFile } from 'node:fs/promises';
 import type { PrismaConfig } from '@internal/config/config-types';
+import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
 import {
   contractSnapshotDir,
   readContractSnapshotJson,
