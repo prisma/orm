@@ -98,6 +98,7 @@ Rules:
 - **No framework code runs in `/init`.** Types are fine. The CLI that loads it may be a different installed copy of the framework from the one your package depends on, and two copies in one process do not recognise each other's values.
 - **The connection string is `DATABASE_URL`.** `prisma.config.ts`, `db.ts` and `--probe-db` read it, and `dotenv` is installed with your package, so `db.ts` may import `dotenv/config`. `--probe-db` reads it from the shell's environment, not from `.env`.
 - **Drivers.** `init` reads `peerPackages` only after your package is installed. The first install is your package and `dotenv`; the package manager handles your package's required peers its own way, and a configuration that refuses a package without its peers makes that install fail, which `init` reports. Declare your driver as a required peer dependency, and list it in `peerPackages` so `init` declares it in the application.
+- **`/init` loads without the driver.** For a package that is not in the CLI's list, the driver is installed after `/init` is loaded, so import the driver inside `probe`, when it runs, and report `driver-missing` if that import fails.
 - **The probe** resolves to the server's version, `driver-missing`, `driver-failed`, or `version-unreadable` once connected, and rejects only when it cannot connect. Bound its connect and query with your driver's own timeouts. `init` aborts `signal` after 60 seconds; close your client when it fires.
 
 ## Package rules
