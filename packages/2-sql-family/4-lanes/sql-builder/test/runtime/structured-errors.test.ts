@@ -86,15 +86,15 @@ describe('sql() builder structured error codes', () => {
         distinctOn(...args: string[]): unknown;
       };
 
-    it('raises ORM.COLUMN_AMBIGUOUS in select, with the select call that names a table as its fix', () => {
+    it('raises ORM.COLUMN_AMBIGUOUS in select, with a fix that lists the tables and leaves the choice to the user', () => {
       expect(capture(() => joined().select('id' as never))).toMatchObject({
         ...sharedId,
         message: 'Column "id" is in more than one joined table (users, posts, profiles)',
-        fix: "Name the table the column comes from: select('id', (f) => f.users.id)",
+        fix: "Name the table the column comes from (users, posts or profiles): select('id', (f) => f.<table>.id)",
       });
     });
 
-    it('raises ORM.COLUMN_AMBIGUOUS in orderBy, groupBy and distinctOn, with a callback as its fix', () => {
+    it('raises ORM.COLUMN_AMBIGUOUS in orderBy, groupBy and distinctOn, with a callback over a placeholder table as its fix', () => {
       expect({
         orderBy: capture(() => selected().orderBy('id')),
         groupBy: capture(() => selected().groupBy('id')),
@@ -104,20 +104,47 @@ describe('sql() builder structured error codes', () => {
           ...sharedId,
           message:
             'Column "id" in orderBy is in more than one joined table (users, posts, profiles)',
-          fix: 'Name the table the column comes from: orderBy((f) => f.users.id)',
+          fix: 'Name the table the column comes from (users, posts or profiles): orderBy((f) => f.<table>.id)',
         },
         groupBy: {
           ...sharedId,
           message:
             'Column "id" in groupBy is in more than one joined table (users, posts, profiles)',
-          fix: 'Name the table the column comes from: groupBy((f) => f.users.id)',
+          fix: 'Name the table the column comes from (users, posts or profiles): groupBy((f) => f.<table>.id)',
         },
         distinctOn: {
           ...sharedId,
           message:
             'Column "id" in distinctOn is in more than one joined table (users, posts, profiles)',
-          fix: 'Name the table the column comes from: distinctOn((f) => f.users.id)',
+          fix: 'Name the table the column comes from (users, posts or profiles): distinctOn((f) => f.<table>.id)',
         },
+      });
+    });
+    it('inside a lateral subquery, the fix does not name a parent table as the answer', () => {
+      const d = db();
+      const error = capture(() =>
+        joined().lateralJoin('profile', (lateral) =>
+          lateral.from(d.public.profiles).select('id' as never),
+        ),
+      );
+      expect(error).toMatchObject({
+        ...sharedId,
+        fix: "Name the table the column comes from (users, posts or profiles): select('id', (f) => f.<table>.id)",
+      });
+    });
+
+    it('quotes the table placeholder when an alias is not a JavaScript identifier', () => {
+      const d = db();
+      const error = capture(() =>
+        d.public.users
+          .as('u-1')
+          .innerJoin(d.public.users.as('u-2'), (f, fns) => fns.eq(f['u-1'].id, f['u-2'].id))
+          .select('email' as never),
+      );
+      expect(error).toMatchObject({
+        code: 'ORM.COLUMN_AMBIGUOUS',
+        meta: { column: 'email', candidates: ['u-1', 'u-2'] },
+        fix: "Name the table the column comes from (u-1 or u-2): select('email', (f) => f['<table>'].email)",
       });
     });
   });

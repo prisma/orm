@@ -321,25 +321,43 @@ function columnScopeError(
   const tables = Object.entries(scope.namespaces)
     .filter(([, fields]) => Object.hasOwn(fields, column))
     .map(([table]) => table);
-  const [firstTable] = tables;
-  if (firstTable === undefined || tables.length < 2) {
+  if (tables.length < 2) {
     const where = method === undefined ? '' : ` for ${method}`;
     return structuredError('ORM.COLUMN_UNKNOWN', `Column "${column}" not found in scope${where}`, {
       meta: { column },
     });
   }
   const where = method === undefined ? '' : ` in ${method}`;
-  const tableRead = `(f) => f.${firstTable}.${column}`;
+  const tablePlaceholder = tables.every(isIdentifier) ? '.<table>' : "['<table>']";
+  const tableRead = `(f) => f${tablePlaceholder}${propertyAccess(column)}`;
   const suggestion =
-    method === undefined ? `select('${column}', ${tableRead})` : `${method}(${tableRead})`;
+    method === undefined
+      ? `select(${stringLiteral(column)}, ${tableRead})`
+      : `${method}(${tableRead})`;
   return structuredError(
     'ORM.COLUMN_AMBIGUOUS',
     `Column "${column}"${where} is in more than one joined table (${tables.join(', ')})`,
     {
-      fix: `Name the table the column comes from: ${suggestion}`,
+      fix: `Name the table the column comes from (${listOfAlternatives(tables)}): ${suggestion}`,
       meta: { column, candidates: tables },
     },
   );
+}
+
+function isIdentifier(name: string): boolean {
+  return /^[A-Za-z_$][\w$]*$/.test(name);
+}
+
+function stringLiteral(value: string): string {
+  return `'${value.replace(/['\\]/g, '\\$&')}'`;
+}
+
+function propertyAccess(name: string): string {
+  return isIdentifier(name) ? `.${name}` : `[${stringLiteral(name)}]`;
+}
+
+function listOfAlternatives(names: readonly string[]): string {
+  return `${names.slice(0, -1).join(', ')} or ${names.at(-1)}`;
 }
 
 function scopeColumnNames(scope: Scope): ReadonlySet<string> {
