@@ -530,13 +530,13 @@
 ./adapter/runtime: export default = const postgresRuntimeAdapterDescriptor: SqlRuntimeAdapterDescriptor<'postgres', SqlRuntimeAdapter>
 ./adapter/runtime: interface SqlRuntimeAdapter extends RuntimeAdapterInstance<'sql', 'postgres'>, Adapter<AnyQueryAst, PostgresContract, PostgresLoweredStatement>
 ./adapter/sql-renderer: function renderLoweredSql(ast: AnyQueryAst, contract: PostgresContract, codecDescriptorRegistry: PostgresCodecDescriptorRegistry, dataTypeLookup: DataTypeLookup, capabilities: CapabilityMatrix): { readonly sql: string; readonly params: readonly LoweredParam[]; }
-./adapter/types: export BinaryExpr from @prisma/orm-family-sql/relational-core/ast
-./adapter/types: export ColumnRef from @prisma/orm-family-sql/relational-core/ast
-./adapter/types: export Direction from @prisma/orm-family-sql/relational-core/ast
-./adapter/types: export ParamRef from @prisma/orm-family-sql/relational-core/ast
-./adapter/types: export SelectAst from @prisma/orm-family-sql/relational-core/ast
-./adapter/types: export StorageColumn from @prisma/orm-family-sql/contract/types
-./adapter/types: export StorageTable from @prisma/orm-family-sql/contract/types
+./adapter/types: export type BinaryExpr from @prisma/orm-family-sql/relational-core/ast
+./adapter/types: export type ColumnRef from @prisma/orm-family-sql/relational-core/ast
+./adapter/types: export type Direction from @prisma/orm-family-sql/relational-core/ast
+./adapter/types: export type ParamRef from @prisma/orm-family-sql/relational-core/ast
+./adapter/types: export type SelectAst from @prisma/orm-family-sql/relational-core/ast
+./adapter/types: export type StorageColumn from @prisma/orm-family-sql/contract/types
+./adapter/types: export type StorageTable from @prisma/orm-family-sql/contract/types
 ./adapter/types: interface OrderClause
 ./adapter/types: interface OrderClause, readonly required property dir: Direction
 ./adapter/types: interface OrderClause, readonly required property expr: ColumnRef
@@ -591,13 +591,13 @@
 ./adapter: const timestamptzJsDateColumn: { readonly codecId: "pg/timestamptz-date@1"; }
 ./adapter: const timestamptzStringColumn: { readonly codecId: "pg/timestamptz-string@1"; }
 ./adapter: const timestamptzTemporalColumn: { readonly codecId: "pg/timestamptz-temporal@1"; }
-./adapter: export BinaryExpr from @prisma/orm-family-sql/relational-core/ast
-./adapter: export ColumnRef from @prisma/orm-family-sql/relational-core/ast
-./adapter: export Direction from @prisma/orm-family-sql/relational-core/ast
-./adapter: export ParamRef from @prisma/orm-family-sql/relational-core/ast
-./adapter: export SelectAst from @prisma/orm-family-sql/relational-core/ast
-./adapter: export StorageColumn from @prisma/orm-family-sql/contract/types
-./adapter: export StorageTable from @prisma/orm-family-sql/contract/types
+./adapter: export type BinaryExpr from @prisma/orm-family-sql/relational-core/ast
+./adapter: export type ColumnRef from @prisma/orm-family-sql/relational-core/ast
+./adapter: export type Direction from @prisma/orm-family-sql/relational-core/ast
+./adapter: export type ParamRef from @prisma/orm-family-sql/relational-core/ast
+./adapter: export type SelectAst from @prisma/orm-family-sql/relational-core/ast
+./adapter: export type StorageColumn from @prisma/orm-family-sql/contract/types
+./adapter: export type StorageTable from @prisma/orm-family-sql/contract/types
 ./adapter: function bitColumn<const Length extends number>(length: Length): ColumnTypeDescriptor<typeof PG_BIT_CODEC_ID> & { readonly typeParams: { readonly length: Length; }; }
 ./adapter: function charColumn<const Length extends number>(length: Length): ColumnTypeDescriptor<typeof SQL_CHAR_CODEC_ID> & { readonly typeParams: { readonly length: Length; }; }
 ./adapter: function createPostgresAdapter(options?: PostgresAdapterOptions): Readonly<PostgresAdapterImpl>
@@ -655,7 +655,7 @@
 ./driver/runtime: type PostgresBinding = { readonly kind: 'pgClient'; readonly client: Client; readonly ownedByDriver: boolean; } | { readonly kind: 'pgPool'; readonly pool: Pool; readonly ownedByDriver: boolean; } | { readonly kind: 'url'; readonly url: string; }
 ./driver/runtime: type PostgresDriverCreateOptions = Omit<PostgresDriverOptions, 'connect'>
 ./driver/runtime: type PostgresRuntimeDriver = RuntimeDriverInstance<'sql', 'postgres'> & SqlDriver<PostgresBinding>
-./driver/runtime: type QueryResult<T extends QueryResultRow = QueryResultRow> = QueryResult<T>
+./driver/runtime: type QueryResult<T extends QueryResultRow = QueryResultRow> = @types/pg.QueryResult<T>
 ./driver: class PostgresControlDriver implements SqlControlDriverInstance<'postgres'>
 ./driver: class PostgresControlDriver, constructor(client: Client)
 ./driver: class PostgresControlDriver, readonly required property familyId: "sql"
@@ -669,7 +669,7 @@
 ./driver: type PostgresBinding = { readonly kind: 'pgClient'; readonly client: Client; readonly ownedByDriver: boolean; } | { readonly kind: 'pgPool'; readonly pool: Pool; readonly ownedByDriver: boolean; } | { readonly kind: 'url'; readonly url: string; }
 ./driver: type PostgresDriverCreateOptions = Omit<PostgresDriverOptions, 'connect'>
 ./driver: type PostgresRuntimeDriver = RuntimeDriverInstance<'sql', 'postgres'> & SqlDriver<PostgresBinding>
-./driver: type QueryResult<T extends QueryResultRow = QueryResultRow> = QueryResult<T>
+./driver: type QueryResult<T extends QueryResultRow = QueryResultRow> = @types/pg.QueryResult<T>
 ./target/aggregates: const postgresAggregateDescriptors: readonly [{ readonly operation: "count"; readonly input: { readonly kind: "any"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/int8number@1"; }; readonly nullable: false; readonly emptyResultWire: "0"; }, { readonly operation: "countBigInt"; readonly input: { readonly kind: "any"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/int8@1"; }; readonly nullable: false; readonly emptyResultWire: "0"; readonly lower: SqlAggregateLowering; }, ...({ readonly lower: SqlAggregateLowering; readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/int2@1" | "pg/int4@1" | "pg/int8@1" | "pg/int8number@1" | "pg/int@1" | "pg/unboundedint@1" | "sql/int@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/float8@1"; }; readonly nullable: true; } | { readonly lower: SqlAggregateLowering; readonly operation: "avgDecimal"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/int2@1" | "pg/int4@1" | "pg/int8@1" | "pg/int8number@1" | "pg/int@1" | "pg/numeric@1" | "pg/unboundedint@1" | "sql/int@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/numeric@1"; }; readonly nullable: true; } | { readonly lower: SqlAggregateLowering; readonly operation: "sumBigInt"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/int2@1" | "pg/int4@1" | "pg/int@1" | "sql/int@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/int8@1"; }; readonly nullable: true; } | { readonly lower: SqlAggregateLowering; readonly operation: "sumBigInt"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/int8@1" | "pg/int8number@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/unboundedint@1"; }; readonly nullable: true; } | { readonly lower: SqlAggregateLowering; readonly operation: "sumBigInt"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/unboundedint@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/unboundedint@1"; }; readonly nullable: true; } | { readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/float4@1" | "pg/float8@1" | "pg/float@1" | "sql/float@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/float8@1"; }; readonly nullable: true; } | { readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/interval-string@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval-string@1"; }; readonly nullable: true; } | { readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly nullable: true; } | { readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/numeric@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/numeric@1"; }; readonly nullable: true; } | { readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/time-string@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly nullable: true; } | { readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/time-temporal@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly nullable: true; } | { readonly operation: "max"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/date-string@1" | "pg/date-temporal@1" | "pg/enum@1" | "pg/inet@1" | "pg/interval-string@1" | "pg/interval@1" | "pg/money@1" | "pg/oid@1" | "pg/text-array@1" | "pg/time-string@1" | "pg/time-temporal@1" | "pg/timestamp-date@1" | "pg/timestamp-instant@1" | "pg/timestamp-string@1" | "pg/timestamp-temporal@1" | "pg/timestamptz-date@1" | "pg/timestamptz-string@1" | "pg/timestamptz-temporal@1" | "pg/timetz@1"; }; readonly output: { readonly kind: "self"; }; readonly nullable: true; } | { readonly operation: "max"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/varchar@1" | "sql/varchar@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/text@1"; }; readonly nullable: true; } | { readonly operation: "max"; readonly input: { readonly kind: "trait"; readonly trait: "numeric"; }; readonly output: { readonly kind: "self"; }; readonly nullable: true; } | { readonly operation: "max"; readonly input: { readonly kind: "trait"; readonly trait: "textual"; }; readonly output: { readonly kind: "self"; }; readonly nullable: true; } | { readonly operation: "min"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/date-string@1" | "pg/date-temporal@1" | "pg/enum@1" | "pg/inet@1" | "pg/interval-string@1" | "pg/interval@1" | "pg/money@1" | "pg/oid@1" | "pg/text-array@1" | "pg/time-string@1" | "pg/time-temporal@1" | "pg/timestamp-date@1" | "pg/timestamp-instant@1" | "pg/timestamp-string@1" | "pg/timestamp-temporal@1" | "pg/timestamptz-date@1" | "pg/timestamptz-string@1" | "pg/timestamptz-temporal@1" | "pg/timetz@1"; }; readonly output: { readonly kind: "self"; }; readonly nullable: true; } | { readonly operation: "min"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/varchar@1" | "sql/varchar@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/text@1"; }; readonly nullable: true; } | { readonly operation: "min"; readonly input: { readonly kind: "trait"; readonly trait: "numeric"; }; readonly output: { readonly kind: "self"; }; readonly nullable: true; } | { readonly operation: "min"; readonly input: { readonly kind: "trait"; readonly trait: "textual"; }; readonly output: { readonly kind: "self"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/float4@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/float4@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/float8@1" | "pg/float@1" | "sql/float@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/float8@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/int2@1" | "pg/int4@1" | "pg/int8@1" | "pg/int8number@1" | "pg/int@1" | "sql/int@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/int8number@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/interval-string@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval-string@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/money@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/money@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/numeric@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/numeric@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/time-string@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/time-temporal@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/unboundedint@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/unboundedint@1"; }; readonly nullable: true; })[]]
 ./target/codec-descriptor: abstract class PostgresCodecDescriptor<P = void> extends CodecDescriptorImpl<P> implements AnyPostgresCodecDescriptor
 ./target/codec-descriptor: class PostgresCodecDescriptor, abstract protected required method jsonProjection(expression: ProjectionExpr, params: P): ProjectionExpr
@@ -742,7 +742,7 @@
 ./target/codec-ids: export SQL_RAW_CODEC_ID from @prisma/orm-family-sql/relational-core/ast
 ./target/codec-ids: export SQL_TEXT_CODEC_ID from @prisma/orm-family-sql/relational-core/ast
 ./target/codec-ids: export SQL_VARCHAR_CODEC_ID from @prisma/orm-family-sql/relational-core/ast
-./target/codec-types: export JsonValue from @prisma/orm-framework/contract/types
+./target/codec-types: export type JsonValue from @prisma/orm-framework/contract/types
 ./target/codec-types: interface ParameterizedOutputTypesForTypeParams extends ParameterizedOutputTypesFunction
 ./target/codec-types: interface ParameterizedOutputTypesForTypeParams, readonly required property outputTypes: OutputTypeMap<this['typeParams']>
 ./target/codec-types: interface PgInterval
@@ -1419,7 +1419,7 @@
 ./target/issue-planner: function planIssues(options: IssuePlannerOptions): Result<IssuePlannerValue, readonly SqlPlannerConflict[]>
 ./target/marker-lock: const MARKER_LOCK_KEY = "prisma_8.contract.marker"
 ./target/marker-lock: const MARKER_LOCK_SQL = "select pg_advisory_xact_lock(hashtext($1))"
-./target/migration: abstract class Migration<Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends Migration<PostgresPlanTargetDetails, 'postgres', Start, End>
+./target/migration: abstract class Migration<Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends @prisma/orm-family-sql.Migration<PostgresPlanTargetDetails, 'postgres', Start, End>
 ./target/migration: class Migration, constructor(stack?: ControlStack<'sql', 'postgres'>)
 ./target/migration: class Migration, protected readonly required property controlAdapter: SqlControlAdapter<'postgres'> | undefined
 ./target/migration: class Migration, protected required method addCheckConstraint(options: { readonly schema: string; readonly table: string; readonly constraint: string; readonly expression: SqlTextInput; }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>>
@@ -2371,7 +2371,7 @@
 ./target/types: type RenderedRlsPolicyLiteral = AbsentKeysOmittable<PostgresRlsPolicyInput>
 ./target/types: type RlsPolicyOperation = 'all' | 'delete' | 'insert' | 'select' | 'update'
 ./target/types: type SerializedRlsPolicy = { readonly name: string; readonly prefix?: string | undefined; readonly tableName: string; readonly namespaceId: string; readonly operation: RlsPolicyOperation; readonly roles: readonly string[]; readonly using?: string | undefined; readonly withCheck?: string | undefined; readonly permissive: boolean; }
-./target: abstract class Migration<Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends Migration<PostgresPlanTargetDetails, 'postgres', Start, End>
+./target: abstract class Migration<Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends @prisma/orm-family-sql.Migration<PostgresPlanTargetDetails, 'postgres', Start, End>
 ./target: abstract class PostgresCodecDescriptor<P = void> extends CodecDescriptorImpl<P> implements AnyPostgresCodecDescriptor
 ./target: abstract class PostgresDdlNode extends DdlNode
 ./target: augments @prisma/orm-family-sql/relational-core/collection-methods interface CollectionMethodRegistry
@@ -3723,7 +3723,6 @@
 ./target: const timestamptzJsDate: (opts?: ColOpts) => ColumnDescriptor
 ./target: const toTsquery: TsqueryParser
 ./target: const websearchToTsquery: TsqueryParser
-./target: export JsonValue from @prisma/orm-framework/contract/types
 ./target: export MigrationCLI from @prisma/orm-toolchain/cli/migration-cli
 ./target: export SQL_CHAR_CODEC_ID from @prisma/orm-family-sql/relational-core/ast
 ./target: export SQL_FLOAT_CODEC_ID from @prisma/orm-family-sql/relational-core/ast
@@ -3739,6 +3738,7 @@
 ./target: export placeholder from @prisma/orm-framework/errors/migration
 ./target: export primaryKey from @prisma/orm-family-sql/relational-core/contract-free
 ./target: export sql from @prisma/orm-family-sql/contract/sql-expression
+./target: export type JsonValue from @prisma/orm-framework/contract/types
 ./target: export unique from @prisma/orm-family-sql/relational-core/contract-free
 ./target: function addColumnAction(column: DdlColumn): AddColumnAction
 ./target: function addConstraintAction(constraint: DdlTableConstraint): AddConstraintAction

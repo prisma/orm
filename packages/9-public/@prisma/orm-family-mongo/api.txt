@@ -390,19 +390,19 @@
 ./contract-psl: interface PairedMongoBackRelation, readonly required property fieldName: string
 ./contract-psl: interface PairedMongoBackRelation, readonly required property modelName: string
 ./contract-psl: interface PairedMongoBackRelation, readonly required property relation: ContractReferenceRelation
-./contract-ts/config-types: export ContractConfig from @prisma/orm-framework/config/config-types
+./contract-ts/config-types: export type ContractConfig from @prisma/orm-framework/config/config-types
 ./contract-ts/config-types: function typescriptContract(contract: Contract, output?: string, options?: TypeScriptContractSpecifierOptions): ContractConfig
 ./contract-ts/config-types: function typescriptContractFromPath(contractPath: string, output?: string, options?: TypeScriptContractSpecifierOptions): ContractConfig
 ./contract-ts/contract-builder: const field: { readonly scalar: typeof scalarField; readonly valueObject: <const ValueObject extends ValueObjectNameInput>(valueObjectName: ValueObject) => FieldBuilder<{ readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: typeof UNBOUND_NAMESPACE_ID; readonly entityKind: "valueObject"; readonly entityName: NormalizeValueObjectName<ValueObject>; }, false, false, undefined, undefined, undefined>; readonly namedType: <const Handle extends EnumTypeHandle>(handle: Handle) => FieldBuilder<{ readonly kind: "scalar"; readonly codecId: Handle["codecId"]; }, false, false, Handle, undefined, undefined>; }
 ./contract-ts/contract-builder: const rel: { readonly belongsTo: typeof belongsTo; readonly hasMany: typeof hasMany; readonly hasOne: typeof hasOne; }
-./contract-ts/contract-builder: export BoundEnumType from @prisma/orm-framework/contract-authoring
-./contract-ts/contract-builder: export CodecTypeMap from @prisma/orm-framework/contract-authoring
-./contract-ts/contract-builder: export EnumMember from @prisma/orm-framework/contract-authoring
-./contract-ts/contract-builder: export EnumTypeHandle from @prisma/orm-framework/contract-authoring
 ./contract-ts/contract-builder: export bindEnumType from @prisma/orm-framework/contract-authoring
 ./contract-ts/contract-builder: export enumType from @prisma/orm-framework/contract-authoring
 ./contract-ts/contract-builder: export isEnumTypeHandle from @prisma/orm-framework/contract-authoring
 ./contract-ts/contract-builder: export member from @prisma/orm-framework/contract-authoring
+./contract-ts/contract-builder: export type BoundEnumType from @prisma/orm-framework/contract-authoring
+./contract-ts/contract-builder: export type CodecTypeMap from @prisma/orm-framework/contract-authoring
+./contract-ts/contract-builder: export type EnumMember from @prisma/orm-framework/contract-authoring
+./contract-ts/contract-builder: export type EnumTypeHandle from @prisma/orm-framework/contract-authoring
 ./contract-ts/contract-builder: function buildBoundContract<const F extends FamilyPackRef<string>, const T extends TargetPackRef<string, string>, const Definition extends BoundDefinitionInput<Record<string, AnyModelBuilder>, Record<string, AnyValueObjectBuilder>, Record<string, ExtensionPackRef<string, string>> | undefined, Record<string, ModelNameInput> | undefined>, const Built extends { readonly models?: Record<string, AnyModelBuilder>; readonly valueObjects?: Record<string, AnyValueObjectBuilder>; readonly roots?: Record<string, ModelNameInput> | undefined; }>(family: F, target: T, definition: Definition, factory: (helpers: ContractAuthoringHelpers<F, T, NonNullable<Definition['extensions']>>) => Built): MongoContractResult<WithFamilyTarget<Definition & Built, F, T>>
 ./contract-ts/contract-builder: function buildBoundContract<const F extends FamilyPackRef<string>, const T extends TargetPackRef<string, string>, const Definition extends BoundDefinitionInput<Record<string, AnyModelBuilder>, Record<string, AnyValueObjectBuilder>, Record<string, ExtensionPackRef<string, string>> | undefined, Record<string, ModelNameInput> | undefined>>(family: F, target: T, definition: Definition, factory?: undefined): MongoContractResult<WithFamilyTarget<Definition, F, T>>
 ./contract-ts/contract-builder: function buildMongoContractFromDefinition(definition: ContractDefinition, codecLookup: CodecLookupWithDescriptors, dataTypes: DataTypeSupport): Result<BuiltContract, BuildFailure>
@@ -537,15 +537,15 @@
 ./contract-ts/contract-builder: type RestatedFieldDifference = 'many' | 'nullable' | 'storedName' | 'type'
 ./contract-ts: const field: { readonly scalar: typeof scalarField; readonly valueObject: <const ValueObject extends ValueObjectNameInput>(valueObjectName: ValueObject) => FieldBuilder<{ readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: typeof UNBOUND_NAMESPACE_ID; readonly entityKind: "valueObject"; readonly entityName: NormalizeValueObjectName<ValueObject>; }, false, false, undefined, undefined, undefined>; readonly namedType: <const Handle extends EnumTypeHandle>(handle: Handle) => FieldBuilder<{ readonly kind: "scalar"; readonly codecId: Handle["codecId"]; }, false, false, Handle, undefined, undefined>; }
 ./contract-ts: const rel: { readonly belongsTo: typeof belongsTo; readonly hasMany: typeof hasMany; readonly hasOne: typeof hasOne; }
-./contract-ts: export BoundEnumType from @prisma/orm-framework/contract-authoring
-./contract-ts: export CodecTypeMap from @prisma/orm-framework/contract-authoring
-./contract-ts: export ContractConfig from @prisma/orm-framework/config/config-types
-./contract-ts: export EnumMember from @prisma/orm-framework/contract-authoring
-./contract-ts: export EnumTypeHandle from @prisma/orm-framework/contract-authoring
 ./contract-ts: export bindEnumType from @prisma/orm-framework/contract-authoring
 ./contract-ts: export enumType from @prisma/orm-framework/contract-authoring
 ./contract-ts: export isEnumTypeHandle from @prisma/orm-framework/contract-authoring
 ./contract-ts: export member from @prisma/orm-framework/contract-authoring
+./contract-ts: export type BoundEnumType from @prisma/orm-framework/contract-authoring
+./contract-ts: export type CodecTypeMap from @prisma/orm-framework/contract-authoring
+./contract-ts: export type ContractConfig from @prisma/orm-framework/config/config-types
+./contract-ts: export type EnumMember from @prisma/orm-framework/contract-authoring
+./contract-ts: export type EnumTypeHandle from @prisma/orm-framework/contract-authoring
 ./contract-ts: function buildBoundContract<const F extends FamilyPackRef<string>, const T extends TargetPackRef<string, string>, const Definition extends BoundDefinitionInput<Record<string, AnyModelBuilder>, Record<string, AnyValueObjectBuilder>, Record<string, ExtensionPackRef<string, string>> | undefined, Record<string, ModelNameInput> | undefined>, const Built extends { readonly models?: Record<string, AnyModelBuilder>; readonly valueObjects?: Record<string, AnyValueObjectBuilder>; readonly roots?: Record<string, ModelNameInput> | undefined; }>(family: F, target: T, definition: Definition, factory: (helpers: ContractAuthoringHelpers<F, T, NonNullable<Definition['extensions']>>) => Built): MongoContractResult<WithFamilyTarget<Definition & Built, F, T>>
 ./contract-ts: function buildBoundContract<const F extends FamilyPackRef<string>, const T extends TargetPackRef<string, string>, const Definition extends BoundDefinitionInput<Record<string, AnyModelBuilder>, Record<string, AnyValueObjectBuilder>, Record<string, ExtensionPackRef<string, string>> | undefined, Record<string, ModelNameInput> | undefined>>(family: F, target: T, definition: Definition, factory?: undefined): MongoContractResult<WithFamilyTarget<Definition, F, T>>
 ./contract-ts: function buildMongoContractFromDefinition(definition: ContractDefinition, codecLookup: CodecLookupWithDescriptors, dataTypes: DataTypeSupport): Result<BuiltContract, BuildFailure>
@@ -818,10 +818,10 @@
 ./contract: const defaultMongoDomainNamespaceId: "__unbound__"
 ./contract: const defaultMongoStorageNamespaceId: "__unbound__"
 ./contract: export RelationKeys from @prisma/orm-framework/components/runtime
-./contract: export RelationNamesOf from @prisma/orm-framework/components/runtime
-./contract: export Scalars from @prisma/orm-framework/components/runtime
-./contract: export Shape from @prisma/orm-framework/components/runtime
-./contract: export ShapeSpec from @prisma/orm-framework/components/runtime
+./contract: export type RelationNamesOf from @prisma/orm-framework/components/runtime
+./contract: export type Scalars from @prisma/orm-framework/components/runtime
+./contract: export type Shape from @prisma/orm-framework/components/runtime
+./contract: export type ShapeSpec from @prisma/orm-framework/components/runtime
 ./contract: function applyPolymorphicScopeToMongoIndex(index: MongoIndex, scope: PolymorphicIndexScope): ApplyScopeResult
 ./contract: function buildMongoContractView<TContract extends MongoContract>(contract: TContract): MongoContractView<TContract>
 ./contract: function buildMongoNamespace(input: MongoNamespaceCollectionsInput): MongoNamespace
@@ -1123,7 +1123,7 @@
 ./family/ir: class MongoSchemaVerifierBase, required method verifySchema(options: SchemaVerifyOptions<TContract, TSchema>): SchemaVerifyResult
 ./family/ir: const MongoContractView: { from<TContract extends MongoContract>(contract: TContract): MongoContractView<TContract>; fromJson<TContract extends MongoContract = MongoContract>(json: unknown): MongoContractView<TContract>; }
 ./family/ir: type MongoContractView<TContract extends MongoContract = MongoContract> = MongoContractView<TContract>
-./family/migration: abstract class Migration<Start extends MongoContract = MongoContract, End extends MongoContract = MongoContract> extends Migration<AnyMongoMigrationOperation, string, string, Start, End>
+./family/migration: abstract class Migration<Start extends MongoContract = MongoContract, End extends MongoContract = MongoContract> extends @prisma/orm-toolchain.Migration<AnyMongoMigrationOperation, string, string, Start, End>
 ./family/migration: class Migration, readonly required property get endContract(): MongoContractView<End>
 ./family/migration: class Migration, readonly required property get startContract(): MongoContractView<Start> | null
 ./family/migration: class Migration, readonly required property targetId: "mongo"
@@ -1140,7 +1140,7 @@
 ./family/schema-verify: interface VerifyMongoSchemaOptions, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'mongo', string>>
 ./family/schema-verify: interface VerifyMongoSchemaOptions, readonly required property schema: MongoSchemaIR
 ./family/schema-verify: interface VerifyMongoSchemaOptions, readonly required property strict: boolean
-./family: abstract class Migration<Start extends MongoContract = MongoContract, End extends MongoContract = MongoContract> extends Migration<AnyMongoMigrationOperation, string, string, Start, End>
+./family: abstract class Migration<Start extends MongoContract = MongoContract, End extends MongoContract = MongoContract> extends @prisma/orm-toolchain.Migration<AnyMongoMigrationOperation, string, string, Start, End>
 ./family: abstract class MongoContractSerializerBase<TContract> implements ContractSerializer<TContract>
 ./family: abstract class MongoSchemaVerifierBase<TContract extends { readonly storage: MongoStorage; readonly defaultControlPolicy?: ControlPolicy; }, TSchema> implements SchemaVerifier<TContract, TSchema>
 ./family: class Migration, readonly required property get endContract(): MongoContractView<End>
@@ -1239,7 +1239,7 @@
 ./lowering: interface MongoQueryable, required method execute<Row>(wireCommand: AnyMongoDmlWireCommand): AsyncIterable<Row>
 ./lowering: interface MongoQueryable, required method run(wireCommand: AnyMongoDdlWireCommand): Promise<void>
 ./lowering: type MongoLoweredDraft = { readonly kind: 'aggregate'; readonly collection: string; readonly pipeline: ReadonlyArray<Record<string, unknown>>; } | { readonly kind: 'deleteMany'; readonly collection: string; readonly filter: Record<string, unknown>; } | { readonly kind: 'deleteOne'; readonly collection: string; readonly filter: Record<string, unknown>; } | { readonly kind: 'findOneAndDelete'; readonly collection: string; readonly filter: Record<string, unknown>; readonly sort: Record<string, -1 | 1> | undefined; } | { readonly kind: 'findOneAndUpdate'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly upsert: boolean | undefined; readonly sort: Record<string, -1 | 1> | undefined; readonly returnDocument: 'after' | 'before' | undefined; } | { readonly kind: 'insertMany'; readonly collection: string; readonly documents: ReadonlyArray<Record<string, unknown>>; } | { readonly kind: 'insertOne'; readonly collection: string; readonly document: Record<string, unknown>; } | { readonly kind: 'rawAggregate'; readonly collection: string; readonly pipeline: ReadonlyArray<Record<string, unknown>>; } | { readonly kind: 'rawDeleteMany'; readonly collection: string; readonly filter: Record<string, unknown>; } | { readonly kind: 'rawDeleteOne'; readonly collection: string; readonly filter: Record<string, unknown>; } | { readonly kind: 'rawFindOneAndDelete'; readonly collection: string; readonly filter: Record<string, unknown>; readonly sort: Record<string, -1 | 1> | undefined; } | { readonly kind: 'rawFindOneAndUpdate'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly upsert: boolean; readonly sort: Record<string, -1 | 1> | undefined; readonly returnDocument: 'after' | 'before' | undefined; } | { readonly kind: 'rawInsertMany'; readonly collection: string; readonly documents: ReadonlyArray<Record<string, unknown>>; } | { readonly kind: 'rawInsertOne'; readonly collection: string; readonly document: Record<string, unknown>; } | { readonly kind: 'rawUpdateMany'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly bypassDocumentValidation: boolean; } | { readonly kind: 'rawUpdateOne'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; } | { readonly kind: 'updateMany'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly upsert: boolean | undefined; } | { readonly kind: 'updateOne'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly upsert: boolean | undefined; }
-./orm: export SimplifyDeep from @prisma/orm-framework/utils/simplify-deep
+./orm: export type SimplifyDeep from @prisma/orm-framework/utils/simplify-deep
 ./orm: function compileMongoQuery(collection: string, state: MongoCollectionState, storageHash: string, model: ContractModel<MongoModelStorage>, storage: Pick<StorageBase, 'namespaces'>): MongoQueryPlan<Record<string, unknown>>
 ./orm: function createFieldAccessor<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>, ModelName extends string & keyof MongoModelsMap<TContract>, TCodecTypes extends Record<string, { output: unknown; }> = ExtractMongoCodecTypes<TContract>>(): FieldAccessor<TContract, ModelName, TCodecTypes>
 ./orm: function createMongoCollection<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>, ModelName extends string & keyof MongoModelsMap<TContract>>(ctx: MongoCollectionContext<TContract>, modelName: ModelName): MongoCollection<TContract, ModelName>
@@ -1340,7 +1340,7 @@
 ./query-ast/control: class CollModCommand, readonly required property collection: string
 ./query-ast/control: class CollModCommand, readonly required property kind: "collMod"
 ./query-ast/control: class CollModCommand, required method accept<R>(visitor: MongoDdlCommandVisitor<R>): R
-./query-ast/control: class CreateCollectionCommand extends MongoAstNode implements CreateCollectionOptions
+./query-ast/control: class CreateCollectionCommand extends MongoAstNode implements mongodb.CreateCollectionOptions
 ./query-ast/control: class CreateCollectionCommand, constructor(collection: string, options?: CreateCollectionOptions)
 ./query-ast/control: class CreateCollectionCommand, readonly optional property capped?: boolean
 ./query-ast/control: class CreateCollectionCommand, readonly optional property changeStreamPreAndPostImages?: { enabled: boolean; }
@@ -2175,7 +2175,7 @@
 ./query-ast: class CollModCommand, readonly required property collection: string
 ./query-ast: class CollModCommand, readonly required property kind: "collMod"
 ./query-ast: class CollModCommand, required method accept<R>(visitor: MongoDdlCommandVisitor<R>): R
-./query-ast: class CreateCollectionCommand extends MongoAstNode implements CreateCollectionOptions
+./query-ast: class CreateCollectionCommand extends MongoAstNode implements mongodb.CreateCollectionOptions
 ./query-ast: class CreateCollectionCommand, constructor(collection: string, options?: CreateCollectionOptions)
 ./query-ast: class CreateCollectionCommand, readonly optional property capped?: boolean
 ./query-ast: class CreateCollectionCommand, readonly optional property changeStreamPreAndPostImages?: { enabled: boolean; }
@@ -3136,7 +3136,7 @@
 ./runtime: class MongoPreparedParamRef, readonly required property name: string
 ./runtime: class MongoPreparedParamRef, readonly required property nullable: Nullable
 ./runtime: class MongoPreparedParamRef<CodecId extends string = string, Nullable extends boolean = boolean>
-./runtime: export RuntimeTargetInstance from @prisma/orm-framework/components/execution
+./runtime: export type RuntimeTargetInstance from @prisma/orm-framework/components/execution
 ./runtime: function createMongoExecutionContext<TContract extends MongoContract = MongoContract, TTargetId extends string = 'mongo'>(options: { readonly contract: TContract; readonly stack: MongoExecutionStack<TTargetId>; }): MongoExecutionContext<TContract>
 ./runtime: function createMongoExecutionStack<TTargetId extends string = 'mongo'>(options: MongoExecutionStackOptions<TTargetId> & { readonly driver: MongoExecutionStackWithDriver<TTargetId>['driver']; }): MongoExecutionStackWithDriver<TTargetId>
 ./runtime: function createMongoExecutionStack<TTargetId extends string = 'mongo'>(options: MongoExecutionStackOptions<TTargetId>): MongoExecutionStack<TTargetId>
@@ -3308,10 +3308,10 @@
 ./schema-ir: interface MongoSchemaVisitor, required method validator(node: MongoSchemaValidator): R
 ./schema-ir: interface MongoSchemaVisitor<R>
 ./schema-ir: type AnyMongoSchemaNode = MongoSchemaCollection | MongoSchemaCollectionOptions | MongoSchemaIR | MongoSchemaIndex | MongoSchemaValidator
-./value/mongodb-types: export CollationOptions from mongodb
-./value/mongodb-types: export CreateCollectionOptions from mongodb
-./value/mongodb-types: export CreateIndexesOptions from mongodb
-./value/mongodb-types: export IndexSpecification from mongodb
+./value/mongodb-types: export type CollationOptions from mongodb
+./value/mongodb-types: export type CreateCollectionOptions from mongodb
+./value/mongodb-types: export type CreateIndexesOptions from mongodb
+./value/mongodb-types: export type IndexSpecification from mongodb
 ./value: class MongoParamRef
 ./value: class MongoParamRef, constructor(value: unknown, options?: MongoParamRefOptions)
 ./value: class MongoParamRef, readonly required property codecId: string | undefined
@@ -3354,7 +3354,7 @@
 ./wire: class CollModWireCommand, readonly optional property validationLevel?: 'moderate' | 'strict'
 ./wire: class CollModWireCommand, readonly optional property validator?: Record<string, unknown>
 ./wire: class CollModWireCommand, readonly required property kind: "collMod"
-./wire: class CreateCollectionWireCommand extends MongoWireCommand implements CreateCollectionOptions
+./wire: class CreateCollectionWireCommand extends MongoWireCommand implements mongodb.CreateCollectionOptions
 ./wire: class CreateCollectionWireCommand, constructor(collection: string, options: CreateCollectionOptions)
 ./wire: class CreateCollectionWireCommand, readonly optional property capped?: boolean
 ./wire: class CreateCollectionWireCommand, readonly optional property changeStreamPreAndPostImages?: { enabled: boolean; }

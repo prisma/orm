@@ -1231,7 +1231,7 @@
 ./target/marker-lock: function releaseMarkerLock(driver: SqlControlDriverInstance<string>): Promise<void>
 ./target/marker-lock: function withMarkerLock<T>(driver: SqlControlDriverInstance<string>, work: () => Promise<T>, succeeded?: (result: T) => boolean): Promise<T>
 ./target/migration: abstract class Migration<Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends MysqlMigrationBase<'mysql', Start, End>
-./target/migration: abstract class MysqlMigrationBase<TargetId extends string, Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends Migration<MysqlPlanTargetDetails, TargetId, Start, End>
+./target/migration: abstract class MysqlMigrationBase<TargetId extends string, Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends @prisma/orm-family-sql.Migration<MysqlPlanTargetDetails, TargetId, Start, End>
 ./target/migration: class AddColumnCall extends MysqlOpFactoryCallNode
 ./target/migration: class AddColumnCall, constructor(tableName: string, column: DdlColumn)
 ./target/migration: class AddColumnCall, readonly required property column: DdlColumn
@@ -1419,7 +1419,7 @@
 ./target: abstract class Migration<Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends MysqlMigrationBase<'mysql', Start, End>
 ./target: abstract class MysqlCodecDescriptor<P = void> extends CodecDescriptorImpl<P> implements AnyMysqlCodecDescriptor
 ./target: abstract class MysqlDdlNode extends DdlNode
-./target: abstract class MysqlMigrationBase<TargetId extends string, Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends Migration<MysqlPlanTargetDetails, TargetId, Start, End>
+./target: abstract class MysqlMigrationBase<TargetId extends string, Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends @prisma/orm-family-sql.Migration<MysqlPlanTargetDetails, TargetId, Start, End>
 ./target: class AddColumnCall extends MysqlOpFactoryCallNode
 ./target: class AddColumnCall, constructor(tableName: string, column: DdlColumn)
 ./target: class AddColumnCall, readonly required property column: DdlColumn

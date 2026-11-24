@@ -1221,9 +1221,9 @@
 ./contract-psl/provider: interface PrismaContractOptions, readonly optional property output?: string
 ./contract-psl/provider: interface PrismaContractOptions, readonly required property createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase
 ./contract-psl/provider: interface PrismaContractOptions, readonly required property target: TargetPackRef<'sql', string>
-./contract-psl: export ControlMutationDefaults from @prisma/orm-framework/components/control
-./contract-psl: export DefaultFunctionLoweringContext from @prisma/orm-framework/components/control
-./contract-psl: export MutationDefaultGeneratorDescriptor from @prisma/orm-framework/components/control
+./contract-psl: export type ControlMutationDefaults from @prisma/orm-framework/components/control
+./contract-psl: export type DefaultFunctionLoweringContext from @prisma/orm-framework/components/control
+./contract-psl: export type MutationDefaultGeneratorDescriptor from @prisma/orm-framework/components/control
 ./contract-psl: function interpretPslDocumentToSqlContract(input: InterpretPslDocumentToSqlContractInput): Result<Contract, ContractSourceDiagnostics>
 ./contract-psl: interface InterpretPslDocumentToSqlContractInput
 ./contract-psl: interface InterpretPslDocumentToSqlContractInput, readonly optional property authoringContributions?: AuthoringContributions
@@ -1245,7 +1245,7 @@
 ./contract-psl: interface InterpretPslDocumentToSqlContractInput, readonly required property sources: PslSources
 ./contract-psl: interface InterpretPslDocumentToSqlContractInput, readonly required property symbolTable: SymbolTable
 ./contract-psl: interface InterpretPslDocumentToSqlContractInput, readonly required property target: TargetPackRef<'sql', string>
-./contract-ts/config-types: export ContractConfig from @prisma/orm-framework/config/config-types
+./contract-ts/config-types: export type ContractConfig from @prisma/orm-framework/config/config-types
 ./contract-ts/config-types: function emptyContract(options: { readonly output?: string; readonly target: TargetPackRef<'sql', string>; readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase; readonly defaultControlPolicy?: ControlPolicy; }): ContractConfig
 ./contract-ts/config-types: function refuseOtherTargetOnLoad(config: ContractConfig, expected: ConfigTarget): ContractConfig
 ./contract-ts/config-types: function typescriptContract(contract: Contract, output?: string, options?: TypeScriptContractSpecifierOptions): ContractConfig
@@ -1305,14 +1305,14 @@
 ./contract-ts/contract-builder: const rel: { belongsTo: typeof belongsTo; hasMany: typeof hasMany; hasOne: typeof hasOne; manyToMany: typeof manyToMany; }
 ./contract-ts/contract-builder: const unbound: unique symbol
 ./contract-ts/contract-builder: deprecated: class ScalarFieldBuilder, required method defaultSql(expression: string): ScalarFieldBuilder<WithColumnDefault<State>>
-./contract-ts/contract-builder: export BoundEnumType from @prisma/orm-framework/contract-authoring
-./contract-ts/contract-builder: export CodecInput from @prisma/orm-framework/contract-authoring
-./contract-ts/contract-builder: export CodecTypeMap from @prisma/orm-framework/contract-authoring
-./contract-ts/contract-builder: export EnumMember from @prisma/orm-framework/contract-authoring
-./contract-ts/contract-builder: export EnumTypeHandle from @prisma/orm-framework/contract-authoring
 ./contract-ts/contract-builder: export bindEnumType from @prisma/orm-framework/contract-authoring
 ./contract-ts/contract-builder: export enumType from @prisma/orm-framework/contract-authoring
 ./contract-ts/contract-builder: export member from @prisma/orm-framework/contract-authoring
+./contract-ts/contract-builder: export type BoundEnumType from @prisma/orm-framework/contract-authoring
+./contract-ts/contract-builder: export type CodecInput from @prisma/orm-framework/contract-authoring
+./contract-ts/contract-builder: export type CodecTypeMap from @prisma/orm-framework/contract-authoring
+./contract-ts/contract-builder: export type EnumMember from @prisma/orm-framework/contract-authoring
+./contract-ts/contract-builder: export type EnumTypeHandle from @prisma/orm-framework/contract-authoring
 ./contract-ts/contract-builder: function applySqlSpecifierControlPolicy(contract: Contract, defaultControlPolicy: ControlPolicy | undefined, createNamespace: SqlNamespaceFactory): Contract
 ./contract-ts/contract-builder: function autoincrement(): ColumnDefault
 ./contract-ts/contract-builder: function buildBoundContract<const F extends FamilyPackRef<string>, const T extends TargetPackRef<'sql', string>, const Definition extends BoundDefinitionInput<Record<string, AuthoredStorageTypeInstance>, Record<string, ModelLike>, Record<string, ExtensionPackRef<'sql', string>> | undefined, ContractInput['naming'] | undefined, string | undefined, ForeignKeyDefaultsState | undefined, readonly string[] | undefined>, const Built extends { readonly databaseTypes?: Record<string, AuthoredStorageTypeInstance>; readonly models?: Record<string, ModelLike>; readonly enums?: Record<string, EnumTypeHandle>; readonly entities?: readonly PackEntityHandle[]; }>(family: F, target: T, definition: Definition, factory: (helpers: ComposedAuthoringHelpers<F, T, NonNullable<Definition['extensions']>>) => Built): SqlContractResult<WithFamilyTarget<Definition & Built, F, T>>
@@ -1528,15 +1528,15 @@
 ./contract-ts: const rel: { belongsTo: typeof belongsTo; hasMany: typeof hasMany; hasOne: typeof hasOne; manyToMany: typeof manyToMany; }
 ./contract-ts: const unbound: unique symbol
 ./contract-ts: deprecated: class ScalarFieldBuilder, required method defaultSql(expression: string): ScalarFieldBuilder<WithColumnDefault<State>>
-./contract-ts: export BoundEnumType from @prisma/orm-framework/contract-authoring
-./contract-ts: export CodecInput from @prisma/orm-framework/contract-authoring
-./contract-ts: export CodecTypeMap from @prisma/orm-framework/contract-authoring
-./contract-ts: export ContractConfig from @prisma/orm-framework/config/config-types
-./contract-ts: export EnumMember from @prisma/orm-framework/contract-authoring
-./contract-ts: export EnumTypeHandle from @prisma/orm-framework/contract-authoring
 ./contract-ts: export bindEnumType from @prisma/orm-framework/contract-authoring
 ./contract-ts: export enumType from @prisma/orm-framework/contract-authoring
 ./contract-ts: export member from @prisma/orm-framework/contract-authoring
+./contract-ts: export type BoundEnumType from @prisma/orm-framework/contract-authoring
+./contract-ts: export type CodecInput from @prisma/orm-framework/contract-authoring
+./contract-ts: export type CodecTypeMap from @prisma/orm-framework/contract-authoring
+./contract-ts: export type ContractConfig from @prisma/orm-framework/config/config-types
+./contract-ts: export type EnumMember from @prisma/orm-framework/contract-authoring
+./contract-ts: export type EnumTypeHandle from @prisma/orm-framework/contract-authoring
 ./contract-ts: function applySqlSpecifierControlPolicy(contract: Contract, defaultControlPolicy: ControlPolicy | undefined, createNamespace: SqlNamespaceFactory): Contract
 ./contract-ts: function autoincrement(): ColumnDefault
 ./contract-ts: function buildBoundContract<const F extends FamilyPackRef<string>, const T extends TargetPackRef<'sql', string>, const Definition extends BoundDefinitionInput<Record<string, AuthoredStorageTypeInstance>, Record<string, ModelLike>, Record<string, ExtensionPackRef<'sql', string>> | undefined, ContractInput['naming'] | undefined, string | undefined, ForeignKeyDefaultsState | undefined, readonly string[] | undefined>, const Built extends { readonly databaseTypes?: Record<string, AuthoredStorageTypeInstance>; readonly models?: Record<string, ModelLike>; readonly enums?: Record<string, EnumTypeHandle>; readonly entities?: readonly PackEntityHandle[]; }>(family: F, target: T, definition: Definition, factory: (helpers: ComposedAuthoringHelpers<F, T, NonNullable<Definition['extensions']>>) => Built): SqlContractResult<WithFamilyTarget<Definition & Built, F, T>>
@@ -2025,10 +2025,10 @@
 ./contract/types: const DEFAULT_FK_CONSTRAINT = true
 ./contract/types: const DEFAULT_FK_INDEX = true
 ./contract/types: export RelationKeys from @prisma/orm-framework/components/runtime
-./contract/types: export RelationNamesOf from @prisma/orm-framework/components/runtime
-./contract/types: export Scalars from @prisma/orm-framework/components/runtime
-./contract/types: export Shape from @prisma/orm-framework/components/runtime
-./contract/types: export ShapeSpec from @prisma/orm-framework/components/runtime
+./contract/types: export type RelationNamesOf from @prisma/orm-framework/components/runtime
+./contract/types: export type Scalars from @prisma/orm-framework/components/runtime
+./contract/types: export type Shape from @prisma/orm-framework/components/runtime
+./contract/types: export type ShapeSpec from @prisma/orm-framework/components/runtime
 ./contract/types: function applyFkDefaults(fk: { constraint?: boolean | undefined; index?: boolean | string | undefined; }, overrideDefaults?: { constraint?: boolean | undefined; index?: boolean | undefined; }): { constraint: boolean; index: boolean | string; }
 ./contract/types: function checkConstraintInputFromSerialized(flat: SerializedCheckConstraint): CheckConstraintInput
 ./contract/types: function indexInputFromSerialized(flat: SerializedIndex): IndexInput
@@ -2139,7 +2139,7 @@
 ./contract/types: type SqlModelFieldStorage = { readonly column: string; readonly codecId?: string; readonly nullable?: boolean; }
 ./contract/types: type SqlModelStorage = { readonly table: string; readonly namespaceId: string; readonly fields: Record<string, SqlModelFieldStorage>; }
 ./contract/types: type SqlNamespaceEntries = Readonly<Record<string, Readonly<Record<string, unknown>>>> & { readonly table?: Readonly<Record<string, StorageTable>>; readonly valueSet?: Readonly<Record<string, StorageValueSet>>; readonly valueObject?: Readonly<Record<string, StorageValueObject>>; }
-./contract/types: type SqlNamespaceFactory = (input: SqlNamespaceInput) => Namespace
+./contract/types: type SqlNamespaceFactory = (input: SqlNamespaceInput) => @prisma/orm-framework.Namespace
 ./contract/types: type SqlQueryOperationTypes<_CT extends Record<string, { readonly input: unknown; readonly output: unknown; }>, T extends Record<string, QueryOperationTypeEntry>> = T
 ./contract/types: type SqlStorageTypeEntry = StorageTypeInstance | StorageTypeInstanceInput
 ./contract/types: type StorageColumnInput = { readonly dataType: string; readonly codecId: string; readonly nullable: boolean; readonly typeParams?: Record<string, unknown>; readonly default?: ColumnDefault; readonly control?: ControlPolicy; readonly valueSet?: ValueSetRef; readonly many?: StorageColumnMultiplicity; }
@@ -2306,10 +2306,10 @@
 ./contract: const valueObjectEntityKind: EntityKindDescriptor<StorageValueObjectInput, StorageValueObject>
 ./contract: const valueSetEntityKind: EntityKindDescriptor<StorageValueSetInput, StorageValueSet>
 ./contract: export RelationKeys from @prisma/orm-framework/components/runtime
-./contract: export RelationNamesOf from @prisma/orm-framework/components/runtime
-./contract: export Scalars from @prisma/orm-framework/components/runtime
-./contract: export Shape from @prisma/orm-framework/components/runtime
-./contract: export ShapeSpec from @prisma/orm-framework/components/runtime
+./contract: export type RelationNamesOf from @prisma/orm-framework/components/runtime
+./contract: export type Scalars from @prisma/orm-framework/components/runtime
+./contract: export type Shape from @prisma/orm-framework/components/runtime
+./contract: export type ShapeSpec from @prisma/orm-framework/components/runtime
 ./contract: function accessMethodOf(entry: IndexTypeEntry): string
 ./contract: function applyFkDefaults(fk: { constraint?: boolean | undefined; index?: boolean | string | undefined; }, overrideDefaults?: { constraint?: boolean | undefined; index?: boolean | undefined; }): { constraint: boolean; index: boolean | string; }
 ./contract: function assertNothingCastsFromSqlExpression(declaredDataTypes: ReadonlyArray<{ readonly type: DataType; readonly contributedBy: string; }>): void
@@ -2638,7 +2638,7 @@
 ./contract: type SqlModelFieldStorage = { readonly column: string; readonly codecId?: string; readonly nullable?: boolean; }
 ./contract: type SqlModelStorage = { readonly table: string; readonly namespaceId: string; readonly fields: Record<string, SqlModelFieldStorage>; }
 ./contract: type SqlNamespaceEntries = Readonly<Record<string, Readonly<Record<string, unknown>>>> & { readonly table?: Readonly<Record<string, StorageTable>>; readonly valueSet?: Readonly<Record<string, StorageValueSet>>; readonly valueObject?: Readonly<Record<string, StorageValueObject>>; }
-./contract: type SqlNamespaceFactory = (input: SqlNamespaceInput) => Namespace
+./contract: type SqlNamespaceFactory = (input: SqlNamespaceInput) => @prisma/orm-framework.Namespace
 ./contract: type SqlQueryOperationTypes<_CT extends Record<string, { readonly input: unknown; readonly output: unknown; }>, T extends Record<string, QueryOperationTypeEntry>> = T
 ./contract: type SqlRawTypeParams = { readonly sql: string; }
 ./contract: type SqlSchemaQualifiedView<TContract extends Contract<SqlStorage>> = TContract & { readonly namespace: NamespacedEntities<TContract['storage'], SqlBuiltinKind>; }
@@ -2728,16 +2728,16 @@
 ./family/control: const NO_RENAMED_ORIGINS: WorkingSchemaOrigins
 ./family/control: const TABLE_NAME_CASE_CHANGED_CODE = "MIGRATION.TABLE_NAME_CASE_CHANGED"
 ./family/control: const exactName: SameName
-./family/control: export MigrationOperationClass from @prisma/orm-framework/components/control
-./family/control: export MigrationOperationPolicy from @prisma/orm-framework/components/control
-./family/control: export MigrationPlan from @prisma/orm-framework/components/control
-./family/control: export MigrationPlanOperation from @prisma/orm-framework/components/control
-./family/control: export MigrationPlanner from @prisma/orm-framework/components/control
-./family/control: export MigrationPlannerConflict from @prisma/orm-framework/components/control
-./family/control: export MigrationPlannerResult from @prisma/orm-framework/components/control
-./family/control: export TargetMigrationsCapability from @prisma/orm-framework/components/control
 ./family/control: export assembleAuthoringContributions from @prisma/orm-framework/components/control
 ./family/control: export default = const _default: SqlFamilyDescriptor
+./family/control: export type MigrationOperationClass from @prisma/orm-framework/components/control
+./family/control: export type MigrationOperationPolicy from @prisma/orm-framework/components/control
+./family/control: export type MigrationPlan from @prisma/orm-framework/components/control
+./family/control: export type MigrationPlanOperation from @prisma/orm-framework/components/control
+./family/control: export type MigrationPlanner from @prisma/orm-framework/components/control
+./family/control: export type MigrationPlannerConflict from @prisma/orm-framework/components/control
+./family/control: export type MigrationPlannerResult from @prisma/orm-framework/components/control
+./family/control: export type TargetMigrationsCapability from @prisma/orm-framework/components/control
 ./family/control: function acceptedByDataType(json: JsonValue, codecRef: CodecRef, types: TypeLookups): boolean
 ./family/control: function appliedStatementsInOrder(statements: readonly ResolvedMigrationStatement[], planned: readonly PlannedStatement[], operationIndexesPlannedWithDiff: (statement: ResolvedMigrationStatement) => readonly number[]): readonly AppliedMigrationStatement[]
 ./family/control: function backfillOfDefaultedField(statements: readonly ResolvedMigrationStatement[], fromContract: ContractWithDomain | null, contract: Contract<SqlStorage>): SqlPlannerConflict | undefined
@@ -2781,8 +2781,8 @@
 ./family/control: function planVariantRowRewrites(input: { readonly statements: readonly ResolvedMigrationStatement[]; readonly fromContract: Contract<SqlStorage> | null; readonly contract: Contract<SqlStorage>; readonly tables: SchemaTables; }): Result<readonly VariantRowRewrite[], SqlPlannerConflict>
 ./family/control: function plannerFailure(conflicts: readonly SqlPlannerConflict[]): SqlPlannerFailureResult
 ./family/control: function plannerSuccess<TTargetDetails>(plan: SqlMigrationPlan<TTargetDetails>, appliedStatements: readonly AppliedMigrationStatement[], subjects: MigrationPlanSubjects, warnings?: readonly SqlPlannerConflict[]): SqlPlannerSuccessResult<TTargetDetails>
-./family/control: function readColumnDefault(codec: Codec, reported: { readonly literal: ReportedLiteralDefault; readonly raw: string; }, written: undefined | { readonly literal: ReportedLiteralDefault; readonly expression: string; }): Promise<ReadColumnDefault>
-./family/control: function readReportedDefault(codec: Codec, literal: ReportedLiteralDefault, raw: string): Promise<ReadReportedDefault>
+./family/control: function readColumnDefault(codec: @prisma/orm-framework.Codec, reported: { readonly literal: ReportedLiteralDefault; readonly raw: string; }, written: undefined | { readonly literal: ReportedLiteralDefault; readonly expression: string; }): Promise<ReadColumnDefault>
+./family/control: function readReportedDefault(codec: @prisma/orm-framework.Codec, literal: ReportedLiteralDefault, raw: string): Promise<ReadReportedDefault>
 ./family/control: function removalsOfMigration<TOperation extends { readonly precheck: readonly SqlMigrationPlanOperationStep[]; readonly execute: readonly SqlMigrationPlanOperationStep[]; readonly postcheck: readonly SqlMigrationPlanOperationStep[]; }>(operations: readonly TOperation[], edges: readonly { readonly operationCount: number; }[], operationIndex: number): readonly MarkedRemoval<TOperation>[]
 ./family/control: function requiredColumnMeta(table: string, column: string, reason: RowsWithoutValue['reason']): { readonly requiredColumn: RequiredColumn; }
 ./family/control: function requiredColumnOf(step: SqlMigrationPlanOperationStep): RequiredColumn | undefined
@@ -3278,8 +3278,8 @@
 ./family/ir: class SqlContractSerializerBase, constructor(entityHydrationRegistry?: ReadonlyMap<string, SqlEntityHydrationFactory>, packEntityKinds?: readonly AnyEntityKindDescriptor[], dataTypes?: Pick<DataTypeLookup, 'get'> | undefined)
 ./family/ir: class SqlContractSerializerBase, protected readonly required property entityHydrationRegistry: ReadonlyMap<string, SqlEntityHydrationFactory>
 ./family/ir: class SqlContractSerializerBase, protected required method constructTargetContract(hydrated: Contract<SqlStorage>): TContract
-./family/ir: class SqlContractSerializerBase, protected required method hydrateSqlNamespaceEntry(nsId: string, raw: Record<string, unknown>): Namespace | SqlNamespaceInput
-./family/ir: class SqlContractSerializerBase, protected required method hydrateSqlNamespaceMap(namespaces: Readonly<Record<string, Record<string, unknown>>>): Readonly<Record<string, Namespace>>
+./family/ir: class SqlContractSerializerBase, protected required method hydrateSqlNamespaceEntry(nsId: string, raw: Record<string, unknown>): @prisma/orm-framework.Namespace | SqlNamespaceInput
+./family/ir: class SqlContractSerializerBase, protected required method hydrateSqlNamespaceMap(namespaces: Readonly<Record<string, Record<string, unknown>>>): Readonly<Record<string, @prisma/orm-framework.Namespace>>
 ./family/ir: class SqlContractSerializerBase, protected required method hydrateSqlStorage(validated: Contract<SqlStorage>): Contract<SqlStorage>
 ./family/ir: class SqlContractSerializerBase, protected required method hydrateStorageTypeEntry(entry: SqlStorageTypeEntry): SqlStorageTypeEntry
 ./family/ir: class SqlContractSerializerBase, protected required method parseSqlContractStructure(json: unknown): Contract<SqlStorage>
@@ -3294,7 +3294,7 @@
 ./family/ir: class SqlSchemaVerifierBase, abstract protected required method verifyTargetExtensions(options: SchemaVerifyOptions<TContract, TSchema>): readonly SchemaDiffIssue[]
 ./family/ir: class SqlSchemaVerifierBase, required method verifySchema(options: SchemaVerifyOptions<TContract, TSchema>): SchemaVerifyResult
 ./family/ir: type SqlEntityHydrationFactory = (entry: unknown) => unknown
-./family/migration: abstract class Migration<TDetails extends SqlPlanTargetDetails, TTargetId extends string = string, Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends Migration<SqlMigrationPlanOperation<TDetails>, 'sql', TTargetId, Start, End>
+./family/migration: abstract class Migration<TDetails extends SqlPlanTargetDetails, TTargetId extends string = string, Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends @prisma/orm-toolchain.Migration<SqlMigrationPlanOperation<TDetails>, 'sql', TTargetId, Start, End>
 ./family/migration: class Migration, readonly required property get providedInvariants(): readonly string[]
 ./family/pack: export default = const sqlFamilyPack: typeof sqlFamilyPackBase & { readonly __dataTypeArguments?: { readonly 'sql/expression': { readonly argument: SqlExpression; readonly parameter: string; }; }; }
 ./family/pack: function idGeneratorFunctionBindings(codecs: { readonly text: readonly string[]; readonly uuid?: readonly string[]; }): readonly GeneratorFunctionContribution[]
@@ -3359,10 +3359,10 @@
 ./family/psl-infer: interface PslPrinterOptions, readonly optional property parseRawDefault?: (rawDefault: string, typeText?: string) => ColumnDefault | undefined
 ./family/psl-infer: type InferredRelations = { readonly relationsByTable: ReadonlyMap<string, readonly RelationField[]>; }
 ./family/psl-infer: type RelationField = { readonly fieldName: string; readonly typeName: string; readonly typeNamespaceId?: string | undefined; readonly typeContractSpaceId?: string | undefined; readonly referencedTableName?: string | undefined; readonly optional: boolean; readonly list: boolean; readonly relationName?: string | undefined; readonly fkName?: string | undefined; readonly fields?: readonly string[] | undefined; readonly references?: readonly string[] | undefined; readonly onDelete?: string | undefined; readonly onUpdate?: string | undefined; readonly index?: false | string | undefined; }
-./family/runtime: export ResolvedDomainModel from @prisma/orm-framework/contract/types
 ./family/runtime: export UNBOUND_DOMAIN_NAMESPACE_ID from @prisma/orm-framework/contract/types
 ./family/runtime: export default = const sqlRuntimeFamilyDescriptor: RuntimeFamilyDescriptor<'sql', SqlRuntimeFamilyInstance>
 ./family/runtime: export resolveDomainModel from @prisma/orm-framework/contract/types
+./family/runtime: export type ResolvedDomainModel from @prisma/orm-framework/contract/types
 ./family/runtime: function resolveStorageTable(storage: SqlStorage, tableName: string, namespaceId?: string): ResolvedStorageTable | undefined
 ./family/runtime: function timestampNowRuntimeGenerator(): RuntimeMutationDefaultGenerator
 ./family/runtime: interface ResolvedStorageTable
@@ -3370,7 +3370,7 @@
 ./family/runtime: interface ResolvedStorageTable, readonly required property table: StorageTable
 ./family/verify: function parseContractMarkerRow(row: unknown): ContractMarkerRecord
 ./family/verify: type ContractMarkerRow = { core_hash: string; profile_hash: string; contract_json: null | unknown; canonical_version: null | number; updated_at: Date | string; app_tag: null | string; meta: null | unknown; invariants: unknown; }
-./family: abstract class Migration<TDetails extends SqlPlanTargetDetails, TTargetId extends string = string, Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends Migration<SqlMigrationPlanOperation<TDetails>, 'sql', TTargetId, Start, End>
+./family: abstract class Migration<TDetails extends SqlPlanTargetDetails, TTargetId extends string = string, Start extends Contract<SqlStorage> = Contract<SqlStorage>, End extends Contract<SqlStorage> = Contract<SqlStorage>> extends @prisma/orm-toolchain.Migration<SqlMigrationPlanOperation<TDetails>, 'sql', TTargetId, Start, End>
 ./family: abstract class SqlContractSerializerBase<TContract extends Contract<SqlStorage>> implements ContractSerializer<TContract>
 ./family: abstract class SqlSchemaVerifierBase<TContract, TSchema> implements SchemaVerifier<TContract, TSchema>
 ./family: class Migration, readonly required property get providedInvariants(): readonly string[]
@@ -3379,8 +3379,8 @@
 ./family: class SqlContractSerializerBase, constructor(entityHydrationRegistry?: ReadonlyMap<string, SqlEntityHydrationFactory>, packEntityKinds?: readonly AnyEntityKindDescriptor[], dataTypes?: Pick<DataTypeLookup, 'get'> | undefined)
 ./family: class SqlContractSerializerBase, protected readonly required property entityHydrationRegistry: ReadonlyMap<string, SqlEntityHydrationFactory>
 ./family: class SqlContractSerializerBase, protected required method constructTargetContract(hydrated: Contract<SqlStorage>): TContract
-./family: class SqlContractSerializerBase, protected required method hydrateSqlNamespaceEntry(nsId: string, raw: Record<string, unknown>): Namespace | SqlNamespaceInput
-./family: class SqlContractSerializerBase, protected required method hydrateSqlNamespaceMap(namespaces: Readonly<Record<string, Record<string, unknown>>>): Readonly<Record<string, Namespace>>
+./family: class SqlContractSerializerBase, protected required method hydrateSqlNamespaceEntry(nsId: string, raw: Record<string, unknown>): @prisma/orm-framework.Namespace | SqlNamespaceInput
+./family: class SqlContractSerializerBase, protected required method hydrateSqlNamespaceMap(namespaces: Readonly<Record<string, Record<string, unknown>>>): Readonly<Record<string, @prisma/orm-framework.Namespace>>
 ./family: class SqlContractSerializerBase, protected required method hydrateSqlStorage(validated: Contract<SqlStorage>): Contract<SqlStorage>
 ./family: class SqlContractSerializerBase, protected required method hydrateStorageTypeEntry(entry: SqlStorageTypeEntry): SqlStorageTypeEntry
 ./family: class SqlContractSerializerBase, protected required method parseSqlContractStructure(json: unknown): Contract<SqlStorage>
@@ -3425,18 +3425,18 @@
 ./family: const NO_RENAMED_ORIGINS: WorkingSchemaOrigins
 ./family: const TABLE_NAME_CASE_CHANGED_CODE = "MIGRATION.TABLE_NAME_CASE_CHANGED"
 ./family: const exactName: SameName
-./family: export MigrationOperationClass from @prisma/orm-framework/components/control
-./family: export MigrationOperationPolicy from @prisma/orm-framework/components/control
-./family: export MigrationPlan from @prisma/orm-framework/components/control
-./family: export MigrationPlanOperation from @prisma/orm-framework/components/control
-./family: export MigrationPlanner from @prisma/orm-framework/components/control
-./family: export MigrationPlannerConflict from @prisma/orm-framework/components/control
-./family: export MigrationPlannerResult from @prisma/orm-framework/components/control
-./family: export ResolvedDomainModel from @prisma/orm-framework/contract/types
-./family: export TargetMigrationsCapability from @prisma/orm-framework/components/control
 ./family: export UNBOUND_DOMAIN_NAMESPACE_ID from @prisma/orm-framework/contract/types
 ./family: export assembleAuthoringContributions from @prisma/orm-framework/components/control
 ./family: export resolveDomainModel from @prisma/orm-framework/contract/types
+./family: export type MigrationOperationClass from @prisma/orm-framework/components/control
+./family: export type MigrationOperationPolicy from @prisma/orm-framework/components/control
+./family: export type MigrationPlan from @prisma/orm-framework/components/control
+./family: export type MigrationPlanOperation from @prisma/orm-framework/components/control
+./family: export type MigrationPlanner from @prisma/orm-framework/components/control
+./family: export type MigrationPlannerConflict from @prisma/orm-framework/components/control
+./family: export type MigrationPlannerResult from @prisma/orm-framework/components/control
+./family: export type ResolvedDomainModel from @prisma/orm-framework/contract/types
+./family: export type TargetMigrationsCapability from @prisma/orm-framework/components/control
 ./family: function acceptedByDataType(json: JsonValue, codecRef: CodecRef, types: TypeLookups): boolean
 ./family: function appliedStatementsInOrder(statements: readonly ResolvedMigrationStatement[], planned: readonly PlannedStatement[], operationIndexesPlannedWithDiff: (statement: ResolvedMigrationStatement) => readonly number[]): readonly AppliedMigrationStatement[]
 ./family: function arraysEqual(a: readonly string[], b: readonly string[]): boolean
@@ -3497,8 +3497,8 @@
 ./family: function plannerFailure(conflicts: readonly SqlPlannerConflict[]): SqlPlannerFailureResult
 ./family: function plannerSuccess<TTargetDetails>(plan: SqlMigrationPlan<TTargetDetails>, appliedStatements: readonly AppliedMigrationStatement[], subjects: MigrationPlanSubjects, warnings?: readonly SqlPlannerConflict[]): SqlPlannerSuccessResult<TTargetDetails>
 ./family: function pluralize(word: string): string
-./family: function readColumnDefault(codec: Codec, reported: { readonly literal: ReportedLiteralDefault; readonly raw: string; }, written: undefined | { readonly literal: ReportedLiteralDefault; readonly expression: string; }): Promise<ReadColumnDefault>
-./family: function readReportedDefault(codec: Codec, literal: ReportedLiteralDefault, raw: string): Promise<ReadReportedDefault>
+./family: function readColumnDefault(codec: @prisma/orm-framework.Codec, reported: { readonly literal: ReportedLiteralDefault; readonly raw: string; }, written: undefined | { readonly literal: ReportedLiteralDefault; readonly expression: string; }): Promise<ReadColumnDefault>
+./family: function readReportedDefault(codec: @prisma/orm-framework.Codec, literal: ReportedLiteralDefault, raw: string): Promise<ReadReportedDefault>
 ./family: function removalsOfMigration<TOperation extends { readonly precheck: readonly SqlMigrationPlanOperationStep[]; readonly execute: readonly SqlMigrationPlanOperationStep[]; readonly postcheck: readonly SqlMigrationPlanOperationStep[]; }>(operations: readonly TOperation[], edges: readonly { readonly operationCount: number; }[], operationIndex: number): readonly MarkedRemoval<TOperation>[]
 ./family: function requiredColumnMeta(table: string, column: string, reason: RowsWithoutValue['reason']): { readonly requiredColumn: RequiredColumn; }
 ./family: function requiredColumnOf(step: SqlMigrationPlanOperationStep): RequiredColumn | undefined
@@ -4590,12 +4590,12 @@
 ./relational-core/ast: class OpaqueSql, constructor(text: string)
 ./relational-core/ast: class OpaqueSql, readonly required property text: string
 ./relational-core/ast: class OperationExpr extends Expression_2
-./relational-core/ast: class OperationExpr, constructor(options: { readonly method: string; readonly self: AnyExpression; readonly args: ReadonlyArray<AnyExpression | LiteralExpr | ParamRef> | undefined; readonly returns: ParamSpec; readonly lowering: SqlLoweringSpec; })
+./relational-core/ast: class OperationExpr, constructor(options: { readonly method: string; readonly self: AnyExpression; readonly args: ReadonlyArray<AnyExpression | LiteralExpr | ParamRef> | undefined; readonly returns: @prisma/orm-framework.ParamSpec; readonly lowering: SqlLoweringSpec; })
 ./relational-core/ast: class OperationExpr, readonly required property args: ReadonlyArray<AnyExpression | LiteralExpr | ParamRef>
 ./relational-core/ast: class OperationExpr, readonly required property kind: "operation"
 ./relational-core/ast: class OperationExpr, readonly required property lowering: SqlLoweringSpec
 ./relational-core/ast: class OperationExpr, readonly required property method: string
-./relational-core/ast: class OperationExpr, readonly required property returns: ParamSpec
+./relational-core/ast: class OperationExpr, readonly required property returns: @prisma/orm-framework.ParamSpec
 ./relational-core/ast: class OperationExpr, readonly required property self: AnyExpression
 ./relational-core/ast: class OperationExpr, required method accept<R>(visitor: ExprVisitor<R>): R
 ./relational-core/ast: class OperationExpr, required method baseColumnRef(): ColumnRef
@@ -4655,10 +4655,10 @@
 ./relational-core/ast: class ProjectionItem, required method withCodec(codec: CodecRef | undefined): ProjectionItem
 ./relational-core/ast: class ProjectionItem, static required method of(alias: string, expr: ProjectionExpr, codec?: CodecRef): ProjectionItem
 ./relational-core/ast: class RawExpr extends Expression_2
-./relational-core/ast: class RawExpr, constructor(options: { readonly parts: ReadonlyArray<RawPart>; readonly returns: ParamSpec; })
+./relational-core/ast: class RawExpr, constructor(options: { readonly parts: ReadonlyArray<RawPart>; readonly returns: @prisma/orm-framework.ParamSpec; })
 ./relational-core/ast: class RawExpr, readonly required property kind: "raw-expr"
 ./relational-core/ast: class RawExpr, readonly required property parts: ReadonlyArray<RawPart>
-./relational-core/ast: class RawExpr, readonly required property returns: ParamSpec
+./relational-core/ast: class RawExpr, readonly required property returns: @prisma/orm-framework.ParamSpec
 ./relational-core/ast: class RawExpr, required method accept<R>(visitor: ExprVisitor<R>): R
 ./relational-core/ast: class RawExpr, required method fold<T>(folder: ExpressionFolder<T>): T
 ./relational-core/ast: class RawExpr, required method rewrite(rewriter: ExpressionRewriter): AnyExpression
@@ -4855,10 +4855,10 @@
 ./relational-core/ast: const sqlVarcharDescriptor: SqlVarcharDescriptor
 ./relational-core/ast: const sqlVarcharEncode: (value: string) => string
 ./relational-core/ast: const whereExprKinds: ReadonlySet<string>
-./relational-core/ast: export CodecCallContext from @prisma/orm-framework/components/codec
-./relational-core/ast: export CodecDescriptor from @prisma/orm-framework/components/codec
-./relational-core/ast: export CodecRef from @prisma/orm-framework/components/codec
-./relational-core/ast: export CodecTrait from @prisma/orm-framework/components/codec
+./relational-core/ast: export type CodecCallContext from @prisma/orm-framework/components/codec
+./relational-core/ast: export type CodecDescriptor from @prisma/orm-framework/components/codec
+./relational-core/ast: export type CodecRef from @prisma/orm-framework/components/codec
+./relational-core/ast: export type CodecTrait from @prisma/orm-framework/components/codec
 ./relational-core/ast: function checkLimitOffset(argument: 'limit' | 'offset', value: LimitOffsetValue | undefined): void
 ./relational-core/ast: function collectOrderedParamRefs(ast: AnyQueryAst): ReadonlyArray<AnyParamRef>
 ./relational-core/ast: function collectTableSources(ast: AnyQueryAst): readonly TableSource[]
@@ -4895,7 +4895,7 @@
 ./relational-core/ast: interface CaseBranch, readonly required property value: AnyExpression
 ./relational-core/ast: interface Codec, required method fromWire(wire: TWire, ctx: SqlCodecCallContext): Promise<TInput>
 ./relational-core/ast: interface Codec, required method toWire(value: TInput, ctx: SqlCodecCallContext): Promise<TWire>
-./relational-core/ast: interface Codec<Id extends string = string, TTraits extends readonly CodecTrait[] = readonly CodecTrait[], TWire = unknown, TInput = unknown> extends Codec<Id, TTraits, TWire, TInput>
+./relational-core/ast: interface Codec<Id extends string = string, TTraits extends readonly CodecTrait[] = readonly CodecTrait[], TWire = unknown, TInput = unknown> extends @prisma/orm-framework.Codec<Id, TTraits, TWire, TInput>
 ./relational-core/ast: interface ContractCodecRegistry
 ./relational-core/ast: interface ContractCodecRegistry, required method forCodecRef(ref: CodecRef): Codec
 ./relational-core/ast: interface ContractCodecRegistry, required method forColumn(namespaceId: string, table: string, column: string): Codec | undefined
@@ -5052,8 +5052,8 @@
 ./relational-core/ast: type CapabilityRequirement = { readonly [group: string]: { readonly [flag: string]: true; }; }
 ./relational-core/ast: type DdlTableConstraint = CheckExpressionConstraint | ForeignKeyConstraint | PrimaryKeyConstraint | UniqueConstraint
 ./relational-core/ast: type DescriptorCodecId<D> = D extends AnyCodecDescriptor ? D['codecId'] : never
-./relational-core/ast: type DescriptorCodecInput<D> = DescriptorResolvedCodec<D> extends Codec<string, readonly CodecTrait[], unknown, infer In> ? In : never
-./relational-core/ast: type DescriptorCodecJson<D> = DescriptorResolvedCodec<D> extends Codec<string, readonly CodecTrait[], unknown, unknown> ? ReturnType<DescriptorResolvedCodec<D>['toDataTypeValue']> extends DataTypeValue<infer J> ? J : never : never
+./relational-core/ast: type DescriptorCodecInput<D> = DescriptorResolvedCodec<D> extends @prisma/orm-framework.Codec<string, readonly CodecTrait[], unknown, infer In> ? In : never
+./relational-core/ast: type DescriptorCodecJson<D> = DescriptorResolvedCodec<D> extends @prisma/orm-framework.Codec<string, readonly CodecTrait[], unknown, unknown> ? ReturnType<DescriptorResolvedCodec<D>['toDataTypeValue']> extends DataTypeValue<infer J> ? J : never : never
 ./relational-core/ast: type DescriptorCodecTraits<D> = D extends { readonly traits: infer TTraits extends readonly CodecTrait[]; } ? TTraits[number] & CodecTrait : never
 ./relational-core/ast: type DescriptorKeepsWrittenFormFlag<D> = D extends { readonly keepsWrittenForm: true; } ? { readonly keepsWrittenForm: true; } : unknown
 ./relational-core/ast: type Direction = 'asc' | 'desc'
@@ -5160,7 +5160,7 @@
 ./relational-core/contract-free: class CfUpsertQuery, constructor(src: TableSource, schema: Schema, rowValues: TableInsertRow<Schema>, conflictCols: ReadonlyArray<ColumnProxy>, updateSet: TableSetValues<Schema> | undefined)
 ./relational-core/contract-free: class CfUpsertQuery, required method build(): InsertAst
 ./relational-core/contract-free: class CfUpsertQuery<Schema extends ColumnSchema>
-./relational-core/contract-free: const cfExpr: { countStar(): CfExpr; lit(value: boolean | number | string): CfExpr; identifierRef(name: string): CfExpr; param(value: unknown, codecId: string): CfExpr; fn(options: CfFnOptions): CfExpr; columnRef(qualifier: string, name: string): CfExpr; allOf(exprs: ReadonlyArray<CfExpr>): CfExpr; raw(sql: string, returns: ParamSpec): CfExpr; exists(query: CfExprSelectQuery): CfExpr; notExists(query: CfExprSelectQuery): CfExpr; }
+./relational-core/contract-free: const cfExpr: { countStar(): CfExpr; lit(value: boolean | number | string): CfExpr; identifierRef(name: string): CfExpr; param(value: unknown, codecId: string): CfExpr; fn(options: CfFnOptions): CfExpr; columnRef(qualifier: string, name: string): CfExpr; allOf(exprs: ReadonlyArray<CfExpr>): CfExpr; raw(sql: string, returns: @prisma/orm-framework.ParamSpec): CfExpr; exists(query: CfExprSelectQuery): CfExpr; notExists(query: CfExprSelectQuery): CfExpr; }
 ./relational-core/contract-free: function cfTable(name: string, alias?: string): TableSource
 ./relational-core/contract-free: function checkExpression(name: string, expression: SqlTextInput): CheckExpressionConstraint
 ./relational-core/contract-free: function col(name: string, type: string, options?: DdlColumnOptions): DdlColumn
@@ -5175,7 +5175,7 @@
 ./relational-core/contract-free: interface CfFnOptions
 ./relational-core/contract-free: interface CfFnOptions, readonly optional property args?: ReadonlyArray<CfExpr>
 ./relational-core/contract-free: interface CfFnOptions, readonly required property method: string
-./relational-core/contract-free: interface CfFnOptions, readonly required property returns: ParamSpec
+./relational-core/contract-free: interface CfFnOptions, readonly required property returns: @prisma/orm-framework.ParamSpec
 ./relational-core/contract-free: interface CfFnOptions, readonly required property self: CfExpr
 ./relational-core/contract-free: interface CfFnOptions, readonly required property template: string
 ./relational-core/contract-free: interface ColumnDescriptor
@@ -5222,7 +5222,7 @@
 ./relational-core/expression: interface BuildOperationSpec, readonly required property args: readonly [AnyExpression, ...AnyExpression[]]
 ./relational-core/expression: interface BuildOperationSpec, readonly required property lowering: SqlLoweringSpec
 ./relational-core/expression: interface BuildOperationSpec, readonly required property method: string
-./relational-core/expression: interface BuildOperationSpec, readonly required property returns: R & ParamSpec
+./relational-core/expression: interface BuildOperationSpec, readonly required property returns: R & @prisma/orm-framework.ParamSpec
 ./relational-core/expression: interface BuildOperationSpec<R extends ScopeField>
 ./relational-core/expression: interface RawAffectedCountQuery
 ./relational-core/expression: interface RawAffectedCountQuery, required method build(): SqlQueryPlan<AffectedCount>
@@ -5344,7 +5344,7 @@
 ./relational-core/types: type ComputeColumnJsType<TContract extends ColumnResolutionContract, NsId extends string, TableName extends string, ColumnName extends string, CodecTypes extends Record<string, { readonly output: unknown; }>> = ExtractTableToModel<TContract, NsId, TableName> extends (infer ModelName) ? [ModelName] extends [never] ? ColumnCodecFallback<TContract, NsId, TableName, ColumnName, CodecTypes> : ModelName extends string ? ExtractColumnToField<TContract, NsId, TableName, ColumnName> extends (infer FieldName) ? [FieldName] extends [never] ? ColumnCodecFallback<TContract, NsId, TableName, ColumnName, CodecTypes> : FieldName extends string ? NamespaceFieldOutput<TContract, NsId, ModelName, FieldName> extends (infer Out) ? [Out] extends [never] ? ColumnCodecFallback<TContract, NsId, TableName, ColumnName, CodecTypes> : Out : never : never : never : never : never
 ./relational-core/types: type Expr = ColumnRef | ParamRef
 ./relational-core/types: type Meta<T extends { [META]: unknown; }> = T[typeof META]
-./relational-core/types: type OperationTypeSignature = { readonly args: ReadonlyArray<ParamSpec>; readonly returns: ParamSpec; readonly lowering: SqlLoweringSpec; readonly capabilities?: ReadonlyArray<string>; }
+./relational-core/types: type OperationTypeSignature = { readonly args: ReadonlyArray<@prisma/orm-framework.ParamSpec>; readonly returns: @prisma/orm-framework.ParamSpec; readonly lowering: SqlLoweringSpec; readonly capabilities?: ReadonlyArray<string>; }
 ./relational-core/types: type OperationTypes = Record<string, Record<string, OperationTypeSignature>>
 ./relational-core/types: type OperationsForTypeId<TypeId extends string, Operations extends OperationTypes> = Operations extends Record<string, never> ? Record<string, never> : TypeId extends keyof Operations ? Operations[TypeId] : Record<string, never>
 ./relational-core/types: type SqlOrmPlan<Row = unknown> = SqlExecutionPlan<Row> | SqlQueryPlan<Row>
@@ -5656,12 +5656,12 @@
 ./relational-core: class OpaqueSql, constructor(text: string)
 ./relational-core: class OpaqueSql, readonly required property text: string
 ./relational-core: class OperationExpr extends Expression_2
-./relational-core: class OperationExpr, constructor(options: { readonly method: string; readonly self: AnyExpression; readonly args: ReadonlyArray<AnyExpression | LiteralExpr | ParamRef> | undefined; readonly returns: ParamSpec; readonly lowering: SqlLoweringSpec; })
+./relational-core: class OperationExpr, constructor(options: { readonly method: string; readonly self: AnyExpression; readonly args: ReadonlyArray<AnyExpression | LiteralExpr | ParamRef> | undefined; readonly returns: @prisma/orm-framework.ParamSpec; readonly lowering: SqlLoweringSpec; })
 ./relational-core: class OperationExpr, readonly required property args: ReadonlyArray<AnyExpression | LiteralExpr | ParamRef>
 ./relational-core: class OperationExpr, readonly required property kind: "operation"
 ./relational-core: class OperationExpr, readonly required property lowering: SqlLoweringSpec
 ./relational-core: class OperationExpr, readonly required property method: string
-./relational-core: class OperationExpr, readonly required property returns: ParamSpec
+./relational-core: class OperationExpr, readonly required property returns: @prisma/orm-framework.ParamSpec
 ./relational-core: class OperationExpr, readonly required property self: AnyExpression
 ./relational-core: class OperationExpr, required method accept<R>(visitor: ExprVisitor<R>): R
 ./relational-core: class OperationExpr, required method baseColumnRef(): ColumnRef
@@ -5721,10 +5721,10 @@
 ./relational-core: class ProjectionItem, required method withCodec(codec: CodecRef | undefined): ProjectionItem
 ./relational-core: class ProjectionItem, static required method of(alias: string, expr: ProjectionExpr, codec?: CodecRef): ProjectionItem
 ./relational-core: class RawExpr extends Expression_2
-./relational-core: class RawExpr, constructor(options: { readonly parts: ReadonlyArray<RawPart>; readonly returns: ParamSpec; })
+./relational-core: class RawExpr, constructor(options: { readonly parts: ReadonlyArray<RawPart>; readonly returns: @prisma/orm-framework.ParamSpec; })
 ./relational-core: class RawExpr, readonly required property kind: "raw-expr"
 ./relational-core: class RawExpr, readonly required property parts: ReadonlyArray<RawPart>
-./relational-core: class RawExpr, readonly required property returns: ParamSpec
+./relational-core: class RawExpr, readonly required property returns: @prisma/orm-framework.ParamSpec
 ./relational-core: class RawExpr, required method accept<R>(visitor: ExprVisitor<R>): R
 ./relational-core: class RawExpr, required method fold<T>(folder: ExpressionFolder<T>): T
 ./relational-core: class RawExpr, required method rewrite(rewriter: ExpressionRewriter): AnyExpression
@@ -5923,10 +5923,10 @@
 ./relational-core: const sqlVarcharDescriptor: SqlVarcharDescriptor
 ./relational-core: const sqlVarcharEncode: (value: string) => string
 ./relational-core: const whereExprKinds: ReadonlySet<string>
-./relational-core: export CodecCallContext from @prisma/orm-framework/components/codec
-./relational-core: export CodecDescriptor from @prisma/orm-framework/components/codec
-./relational-core: export CodecRef from @prisma/orm-framework/components/codec
-./relational-core: export CodecTrait from @prisma/orm-framework/components/codec
+./relational-core: export type CodecCallContext from @prisma/orm-framework/components/codec
+./relational-core: export type CodecDescriptor from @prisma/orm-framework/components/codec
+./relational-core: export type CodecRef from @prisma/orm-framework/components/codec
+./relational-core: export type CodecTrait from @prisma/orm-framework/components/codec
 ./relational-core: function buildOperation<R extends ScopeField>(spec: BuildOperationSpec<R>): Expression<R>
 ./relational-core: function checkLimitOffset(argument: 'limit' | 'offset', value: LimitOffsetValue | undefined): void
 ./relational-core: function codecOf(value: unknown): CodecRef | undefined
@@ -5972,7 +5972,7 @@
 ./relational-core: interface BuildOperationSpec, readonly required property args: readonly [AnyExpression, ...AnyExpression[]]
 ./relational-core: interface BuildOperationSpec, readonly required property lowering: SqlLoweringSpec
 ./relational-core: interface BuildOperationSpec, readonly required property method: string
-./relational-core: interface BuildOperationSpec, readonly required property returns: R & ParamSpec
+./relational-core: interface BuildOperationSpec, readonly required property returns: R & @prisma/orm-framework.ParamSpec
 ./relational-core: interface BuildOperationSpec<R extends ScopeField>
 ./relational-core: interface BuildOptions
 ./relational-core: interface BuildOptions, readonly optional property params?: BuildParamsMap
@@ -5983,7 +5983,7 @@
 ./relational-core: interface CaseBranch, readonly required property value: AnyExpression
 ./relational-core: interface Codec, required method fromWire(wire: TWire, ctx: SqlCodecCallContext): Promise<TInput>
 ./relational-core: interface Codec, required method toWire(value: TInput, ctx: SqlCodecCallContext): Promise<TWire>
-./relational-core: interface Codec<Id extends string = string, TTraits extends readonly CodecTrait[] = readonly CodecTrait[], TWire = unknown, TInput = unknown> extends Codec<Id, TTraits, TWire, TInput>
+./relational-core: interface Codec<Id extends string = string, TTraits extends readonly CodecTrait[] = readonly CodecTrait[], TWire = unknown, TInput = unknown> extends @prisma/orm-framework.Codec<Id, TTraits, TWire, TInput>
 ./relational-core: interface CodecDescriptorRegistry
 ./relational-core: interface CodecDescriptorRegistry, required method codecRefForColumn(namespaceId: string, table: string, column: string): CodecRef | undefined
 ./relational-core: interface CodecDescriptorRegistry, required method descriptorFor(codecId: string): CodecDescriptor<unknown> | undefined
@@ -6216,8 +6216,8 @@
 ./relational-core: type ComputeColumnJsType<TContract extends ColumnResolutionContract, NsId extends string, TableName extends string, ColumnName extends string, CodecTypes extends Record<string, { readonly output: unknown; }>> = ExtractTableToModel<TContract, NsId, TableName> extends (infer ModelName) ? [ModelName] extends [never] ? ColumnCodecFallback<TContract, NsId, TableName, ColumnName, CodecTypes> : ModelName extends string ? ExtractColumnToField<TContract, NsId, TableName, ColumnName> extends (infer FieldName) ? [FieldName] extends [never] ? ColumnCodecFallback<TContract, NsId, TableName, ColumnName, CodecTypes> : FieldName extends string ? NamespaceFieldOutput<TContract, NsId, ModelName, FieldName> extends (infer Out) ? [Out] extends [never] ? ColumnCodecFallback<TContract, NsId, TableName, ColumnName, CodecTypes> : Out : never : never : never : never : never
 ./relational-core: type DdlTableConstraint = CheckExpressionConstraint | ForeignKeyConstraint | PrimaryKeyConstraint | UniqueConstraint
 ./relational-core: type DescriptorCodecId<D> = D extends AnyCodecDescriptor ? D['codecId'] : never
-./relational-core: type DescriptorCodecInput<D> = DescriptorResolvedCodec<D> extends Codec<string, readonly CodecTrait[], unknown, infer In> ? In : never
-./relational-core: type DescriptorCodecJson<D> = DescriptorResolvedCodec<D> extends Codec<string, readonly CodecTrait[], unknown, unknown> ? ReturnType<DescriptorResolvedCodec<D>['toDataTypeValue']> extends DataTypeValue<infer J> ? J : never : never
+./relational-core: type DescriptorCodecInput<D> = DescriptorResolvedCodec<D> extends @prisma/orm-framework.Codec<string, readonly CodecTrait[], unknown, infer In> ? In : never
+./relational-core: type DescriptorCodecJson<D> = DescriptorResolvedCodec<D> extends @prisma/orm-framework.Codec<string, readonly CodecTrait[], unknown, unknown> ? ReturnType<DescriptorResolvedCodec<D>['toDataTypeValue']> extends DataTypeValue<infer J> ? J : never : never
 ./relational-core: type DescriptorCodecTraits<D> = D extends { readonly traits: infer TTraits extends readonly CodecTrait[]; } ? TTraits[number] & CodecTrait : never
 ./relational-core: type DescriptorKeepsWrittenFormFlag<D> = D extends { readonly keepsWrittenForm: true; } ? { readonly keepsWrittenForm: true; } : unknown
 ./relational-core: type Direction = 'asc' | 'desc'
@@ -6240,7 +6240,7 @@
 ./relational-core: type MarkerReadResult = { readonly kind: 'absent'; } | { readonly kind: 'no-table'; } | { readonly kind: 'present'; readonly record: ContractMarkerRecord; }
 ./relational-core: type Meta<T extends { [META]: unknown; }> = T[typeof META]
 ./relational-core: type NoReservedRowColumn = { readonly __proto__?: 'A raw row spec cannot declare a __proto__ column: alias the column in SQL and declare the alias instead'; }
-./relational-core: type OperationTypeSignature = { readonly args: ReadonlyArray<ParamSpec>; readonly returns: ParamSpec; readonly lowering: SqlLoweringSpec; readonly capabilities?: ReadonlyArray<string>; }
+./relational-core: type OperationTypeSignature = { readonly args: ReadonlyArray<@prisma/orm-framework.ParamSpec>; readonly returns: @prisma/orm-framework.ParamSpec; readonly lowering: SqlLoweringSpec; readonly capabilities?: ReadonlyArray<string>; }
 ./relational-core: type OperationTypes = Record<string, Record<string, OperationTypeSignature>>
 ./relational-core: type OperationsForTypeId<TypeId extends string, Operations extends OperationTypes> = Operations extends Record<string, never> ? Record<string, never> : TypeId extends keyof Operations ? Operations[TypeId] : Record<string, never>
 ./relational-core: type OrderByNulls = 'first' | 'last'
@@ -6336,25 +6336,25 @@
 ./runtime: class SqlRuntimeBase, required method query<Row>(plan: (SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>) & { readonly _row?: Row; }, options?: RuntimeExecuteOptions): AsyncIterableResult<Row>
 ./runtime: class SqlRuntimeBase, required method telemetry(): RuntimeTelemetryEvent | null
 ./runtime: const activitySource: unique symbol
-./runtime: export Activity from @prisma/orm-framework/components/runtime
-./runtime: export ActivityEndedResult from @prisma/orm-framework/components/runtime
-./runtime: export ActivityFinalizedResult from @prisma/orm-framework/components/runtime
-./runtime: export ActivityInterceptResult from @prisma/orm-framework/components/runtime
-./runtime: export ActivityParent from @prisma/orm-framework/components/runtime
-./runtime: export ClientActivity from @prisma/orm-framework/components/runtime
-./runtime: export ClientActivityEnd from @prisma/orm-framework/components/runtime
-./runtime: export ClientActivityEnded from @prisma/orm-framework/components/runtime
-./runtime: export ClientActivityKind from @prisma/orm-framework/components/runtime
-./runtime: export ClientActivityResult from @prisma/orm-framework/components/runtime
-./runtime: export ExecuteInterceptResult from @prisma/orm-framework/components/runtime
-./runtime: export Log = RuntimeLog from @prisma/orm-framework/components/runtime
-./runtime: export QueryInterceptResult from @prisma/orm-framework/components/runtime
-./runtime: export RuntimeMode from @prisma/orm-framework/components/runtime
-./runtime: export StartActivity from @prisma/orm-framework/components/runtime
-./runtime: export StatementActivity from @prisma/orm-framework/components/runtime
-./runtime: export StatementEnded from @prisma/orm-framework/components/runtime
-./runtime: export TransactionActivity from @prisma/orm-framework/components/runtime
-./runtime: export TransactionEnded from @prisma/orm-framework/components/runtime
+./runtime: export type Activity from @prisma/orm-framework/components/runtime
+./runtime: export type ActivityEndedResult from @prisma/orm-framework/components/runtime
+./runtime: export type ActivityFinalizedResult from @prisma/orm-framework/components/runtime
+./runtime: export type ActivityInterceptResult from @prisma/orm-framework/components/runtime
+./runtime: export type ActivityParent from @prisma/orm-framework/components/runtime
+./runtime: export type ClientActivity from @prisma/orm-framework/components/runtime
+./runtime: export type ClientActivityEnd from @prisma/orm-framework/components/runtime
+./runtime: export type ClientActivityEnded from @prisma/orm-framework/components/runtime
+./runtime: export type ClientActivityKind from @prisma/orm-framework/components/runtime
+./runtime: export type ClientActivityResult from @prisma/orm-framework/components/runtime
+./runtime: export type ExecuteInterceptResult from @prisma/orm-framework/components/runtime
+./runtime: export type Log = RuntimeLog from @prisma/orm-framework/components/runtime
+./runtime: export type QueryInterceptResult from @prisma/orm-framework/components/runtime
+./runtime: export type RuntimeMode from @prisma/orm-framework/components/runtime
+./runtime: export type StartActivity from @prisma/orm-framework/components/runtime
+./runtime: export type StatementActivity from @prisma/orm-framework/components/runtime
+./runtime: export type StatementEnded from @prisma/orm-framework/components/runtime
+./runtime: export type TransactionActivity from @prisma/orm-framework/components/runtime
+./runtime: export type TransactionEnded from @prisma/orm-framework/components/runtime
 ./runtime: function budgets(options?: BudgetsOptions): SqlMiddleware
 ./runtime: function createAstCodecRegistry(descriptors: CodecDescriptorRegistry): ContractCodecRegistry
 ./runtime: function createExecutionContext<TContract extends Contract<SqlStorage> = Contract<SqlStorage>, TTargetId extends string = string>(options: { readonly contract: TContract; readonly stack: SqlExecutionStack<TTargetId>; readonly driver?: RuntimeDriverDescriptor<'sql', TTargetId, unknown, SqlRuntimeDriverInstance<TTargetId>>; }): ExecutionContext<TContract>
@@ -6512,7 +6512,7 @@
 ./runtime: interface SqlStaticContributions extends Pick<MutationDefaultGeneratorContributor, 'mutationDefaultGenerators'>
 ./runtime: interface SqlStaticContributions, readonly optional property collectionMethods?: () => ReadonlyArray<CollectionMethodContribution>
 ./runtime: interface SqlStaticContributions, readonly optional property queryOperations?: () => SqlOperationDescriptors
-./runtime: interface SqlStaticContributions, readonly required property codecs: () => ReadonlyArray<AnyCodecDescriptor>
+./runtime: interface SqlStaticContributions, readonly required property codecs: () => ReadonlyArray<@prisma/orm-framework.AnyCodecDescriptor>
 ./runtime: interface ToSqlMember
 ./runtime: interface ToSqlMember, required method toSql(plan: SqlQueryPlan): RenderedSql
 ./runtime: interface TransactionContext extends RuntimeQueryable

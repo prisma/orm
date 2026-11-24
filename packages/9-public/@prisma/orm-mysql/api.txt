@@ -77,20 +77,6 @@
 ./contract-builder: const defineContract: MysqlDefineContract<typeof mysqlPackRef, typeof mysqlAdapterContractContributions>
 ./contract-builder: const enumType: BoundEnumType<{ readonly "sql/char@1": Pick<{ readonly input: string; readonly output: string; readonly json: JsonValue; readonly traits: "equality" | "order" | "textual"; }, "input" | "output" | "traits">; readonly "sql/varchar@1": Pick<{ readonly input: string; readonly output: string; readonly json: JsonValue; readonly traits: "equality" | "order" | "textual"; }, "input" | "output" | "traits">; readonly "sql/raw@1": Pick<{ readonly input: unknown; readonly output: unknown; readonly json: JsonValue; readonly traits: never; }, "input" | "output" | "traits">; readonly "mysql/text@1": Pick<{ readonly input: string; readonly output: string; readonly json: JsonValue; readonly traits: "equality" | "order" | "textual"; }, "input" | "output" | "traits">; readonly "mysql/int@1": Pick<{ readonly input: number; readonly output: number; readonly json: JsonValue; readonly traits: "equality" | "numeric" | "order"; }, "input" | "output" | "traits">; readonly "mysql/bigint@1": Pick<{ readonly input: bigint; readonly output: bigint; readonly json: JsonValue; readonly traits: "equality" | "numeric" | "order"; }, "input" | "output" | "traits">; readonly "mysql/bigintnumber@1": Pick<{ readonly input: number; readonly output: number; readonly json: JsonValue; readonly traits: "equality" | "numeric" | "order"; }, "input" | "output" | "traits">; readonly "mysql/double@1": Pick<{ readonly input: number; readonly output: number; readonly json: JsonValue; readonly traits: "equality" | "numeric" | "order"; }, "input" | "output" | "traits">; readonly "mysql/decimal@1": Pick<{ readonly input: string; readonly output: string; readonly json: JsonValue; readonly traits: "equality" | "numeric" | "order"; readonly keepsWrittenForm: true; }, "input" | "keepsWrittenForm" | "output" | "traits">; readonly "mysql/boolean@1": Pick<{ readonly input: boolean; readonly output: boolean; readonly json: JsonValue; readonly traits: "boolean" | "equality"; }, "input" | "output" | "traits">; readonly "mysql/longblob@1": Pick<{ readonly input: Uint8Array<ArrayBufferLike>; readonly output: Uint8Array<ArrayBufferLike>; readonly json: JsonValue; readonly traits: "equality" | "order"; }, "input" | "output" | "traits">; readonly "mysql/json@1": Pick<{ readonly input: JsonValue; readonly output: JsonValue; readonly json: JsonValue; readonly traits: never; }, "input" | "output" | "traits">; readonly "mysql/datetime@1": Pick<{ readonly input: Date; readonly output: Date; readonly json: JsonValue; readonly traits: "equality" | "order"; }, "input" | "output" | "traits">; readonly "mysql/datetime-temporal@1": Pick<{ readonly input: Temporal.Instant; readonly output: Temporal.Instant; readonly json: JsonValue; readonly traits: "equality" | "order"; }, "input" | "output" | "traits">; readonly "mysql/datetime-string@1": Pick<{ readonly input: string; readonly output: string; readonly json: JsonValue; readonly traits: "equality" | "order"; }, "input" | "output" | "traits">; readonly "mysql/timestamp-date@1": Pick<{ readonly input: Date; readonly output: Date; readonly json: JsonValue; readonly traits: "equality" | "order"; }, "input" | "output" | "traits">; readonly "mysql/timestamp-temporal@1": Pick<{ readonly input: Temporal.Instant; readonly output: Temporal.Instant; readonly json: JsonValue; readonly traits: "equality" | "order"; }, "input" | "output" | "traits">; readonly "mysql/timestamp-string@1": Pick<{ readonly input: string; readonly output: string; readonly json: JsonValue; readonly traits: "equality" | "order"; }, "input" | "output" | "traits">; readonly "mysql/date-string@1": Pick<{ readonly input: string; readonly output: string; readonly json: JsonValue; readonly traits: "equality" | "order"; }, "input" | "output" | "traits">; readonly "mysql/date-temporal@1": Pick<{ readonly input: Temporal.PlainDate; readonly output: Temporal.PlainDate; readonly json: JsonValue; readonly traits: "equality" | "order"; }, "input" | "output" | "traits">; readonly "mysql/time-string@1": Pick<{ readonly input: string; readonly output: string; readonly json: JsonValue; readonly traits: "equality" | "order"; }, "input" | "output" | "traits">; readonly "mysql/time-temporal@1": Pick<{ readonly input: Temporal.PlainTime; readonly output: Temporal.PlainTime; readonly json: JsonValue; readonly traits: "equality" | "order"; }, "input" | "output" | "traits">; readonly "mysql/duration-string@1": Pick<{ readonly input: string; readonly output: string; readonly json: JsonValue; readonly traits: "equality"; }, "input" | "output" | "traits">; readonly "mysql/enum@1": Pick<{ readonly input: string; readonly output: string; readonly json: JsonValue; readonly traits: "equality" | "order" | "textual"; }, "input" | "output" | "traits">; }>
 ./contract-builder: const gen: ComposedAuthoringHelpers<typeof sqlFamilyPack, typeof mysqlPackRef, undefined>['gen']
-./contract-builder: export ComposedAuthoringHelpers from @prisma/orm-family-sql/contract-ts/contract-builder
-./contract-builder: export ContractDefinition from @prisma/orm-family-sql/contract-ts/contract-builder
-./contract-builder: export ContractInput from @prisma/orm-family-sql/contract-ts/contract-builder
-./contract-builder: export ContractModelBuilder from @prisma/orm-family-sql/contract-ts/contract-builder
-./contract-builder: export FieldNode from @prisma/orm-family-sql/contract-ts/contract-builder
-./contract-builder: export ForeignKeyNode from @prisma/orm-family-sql/contract-ts/contract-builder
-./contract-builder: export IndexNode from @prisma/orm-family-sql/contract-ts/contract-builder
-./contract-builder: export ModelLike from @prisma/orm-family-sql/contract-ts/contract-builder
-./contract-builder: export ModelNode from @prisma/orm-family-sql/contract-ts/contract-builder
-./contract-builder: export PrimaryKeyNode from @prisma/orm-family-sql/contract-ts/contract-builder
-./contract-builder: export RelationNode from @prisma/orm-family-sql/contract-ts/contract-builder
-./contract-builder: export ScalarFieldBuilder from @prisma/orm-family-sql/contract-ts/contract-builder
-./contract-builder: export SqlExpression from @prisma/orm-family-sql/contract-ts/contract-builder
-./contract-builder: export UniqueConstraintNode from @prisma/orm-family-sql/contract-ts/contract-builder
 ./contract-builder: export autoincrement from @prisma/orm-family-sql/contract-ts/contract-builder
 ./contract-builder: export field from @prisma/orm-family-sql/contract-ts/contract-builder
 ./contract-builder: export member from @prisma/orm-family-sql/contract-ts/contract-builder
@@ -98,6 +84,20 @@
 ./contract-builder: export now from @prisma/orm-family-sql/contract-ts/contract-builder
 ./contract-builder: export rel from @prisma/orm-family-sql/contract-ts/contract-builder
 ./contract-builder: export sql from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type ComposedAuthoringHelpers from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type ContractDefinition from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type ContractInput from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type ContractModelBuilder from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type FieldNode from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type ForeignKeyNode from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type IndexNode from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type ModelLike from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type ModelNode from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type PrimaryKeyNode from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type RelationNode from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type ScalarFieldBuilder from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type SqlExpression from @prisma/orm-family-sql/contract-ts/contract-builder
+./contract-builder: export type UniqueConstraintNode from @prisma/orm-family-sql/contract-ts/contract-builder
 ./contract-types: everything from @prisma/orm-family-sql/contract/types
 ./contract-types: everything from @prisma/orm-framework/contract/types
 ./contract-types: everything from @prisma/orm-target-mysql/adapter/codec-types
@@ -114,7 +114,7 @@
 ./contract/validate-once: everything from @prisma/orm-framework/contract/validate-once
 ./contract/validate-storage: everything from @prisma/orm-framework/contract/validate-storage
 ./contract: everything from @prisma/orm-framework/contract
-./control: export ControlClient from @prisma/orm-toolchain/cli/control-api
+./control: export type ControlClient from @prisma/orm-toolchain/cli/control-api
 ./control: function createMysqlControlClient(options?: MysqlControlClientOptions): ControlClient
 ./control: interface MysqlControlClientOptions
 ./control: interface MysqlControlClientOptions, readonly optional property connection?: string
@@ -192,8 +192,8 @@
 ./runtime: class MysqlRuntimeImpl<TContract extends Contract<SqlStorage> = Contract<SqlStorage>> extends SqlRuntimeBase<TContract>
 ./runtime: const mysqlUrlSchemes: readonly string[]
 ./runtime: export IsolationLevel = mysqlIsolationLevels from @prisma/orm-target-mysql/target/runtime
-./runtime: export MysqlPoolOptions from @prisma/orm-target-mysql/driver/runtime
 ./runtime: export default = const mysql: MysqlClientFactory<MysqlTargetId>
+./runtime: export type MysqlPoolOptions from @prisma/orm-target-mysql/driver/runtime
 ./runtime: function createMysqlClient<TargetId extends string, TAdapterInstance extends SqlRuntimeAdapterInstance<TargetId>>(components: MysqlClientComponents<TargetId, TAdapterInstance>): MysqlClientFactory<TargetId>
 ./runtime: interface MysqlClient, required method [Symbol.asyncDispose](): Promise<void>
 ./runtime: interface MysqlClient, required method close(): Promise<void>

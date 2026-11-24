@@ -2,7 +2,7 @@
 (not exported) interface MongoBindingOptions
 (not exported) interface MongoBindingOptions, readonly optional property binding?: MongoBinding
 (not exported) interface MongoBindingOptions, readonly optional property dbName?: string
-(not exported) interface MongoBindingOptions, readonly optional property mongoClient?: MongoClient
+(not exported) interface MongoBindingOptions, readonly optional property mongoClient?: mongodb.MongoClient
 (not exported) interface MongoBindingOptions, readonly optional property uri?: string
 (not exported) interface MongoBindingOptions, readonly optional property url?: string
 (not exported) interface MongoOptionsBase
@@ -55,21 +55,21 @@
 ./contract-builder: const field: MongoHelpers['field']
 ./contract-builder: const gen: MongoHelpers['gen']
 ./contract-builder: const type: MongoHelpers['type']
-./contract-builder: export ContractFactory from @prisma/orm-family-mongo/contract-ts/contract-builder
-./contract-builder: export ContractInput from @prisma/orm-family-mongo/contract-ts/contract-builder
-./contract-builder: export ContractScaffold from @prisma/orm-family-mongo/contract-ts/contract-builder
-./contract-builder: export EnumMember from @prisma/orm-family-mongo/contract-ts/contract-builder
-./contract-builder: export EnumTypeHandle from @prisma/orm-family-mongo/contract-ts/contract-builder
-./contract-builder: export FieldBuilder from @prisma/orm-family-mongo/contract-ts/contract-builder
-./contract-builder: export FieldReference from @prisma/orm-family-mongo/contract-ts/contract-builder
-./contract-builder: export ModelBuilder from @prisma/orm-family-mongo/contract-ts/contract-builder
-./contract-builder: export MongoContractResult from @prisma/orm-family-mongo/contract-ts/contract-builder
-./contract-builder: export RelationBuilder from @prisma/orm-family-mongo/contract-ts/contract-builder
-./contract-builder: export ValueObjectBuilder from @prisma/orm-family-mongo/contract-ts/contract-builder
 ./contract-builder: export index from @prisma/orm-family-mongo/contract-ts/contract-builder
 ./contract-builder: export member from @prisma/orm-family-mongo/contract-ts/contract-builder
 ./contract-builder: export model from @prisma/orm-family-mongo/contract-ts/contract-builder
 ./contract-builder: export rel from @prisma/orm-family-mongo/contract-ts/contract-builder
+./contract-builder: export type ContractFactory from @prisma/orm-family-mongo/contract-ts/contract-builder
+./contract-builder: export type ContractInput from @prisma/orm-family-mongo/contract-ts/contract-builder
+./contract-builder: export type ContractScaffold from @prisma/orm-family-mongo/contract-ts/contract-builder
+./contract-builder: export type EnumMember from @prisma/orm-family-mongo/contract-ts/contract-builder
+./contract-builder: export type EnumTypeHandle from @prisma/orm-family-mongo/contract-ts/contract-builder
+./contract-builder: export type FieldBuilder from @prisma/orm-family-mongo/contract-ts/contract-builder
+./contract-builder: export type FieldReference from @prisma/orm-family-mongo/contract-ts/contract-builder
+./contract-builder: export type ModelBuilder from @prisma/orm-family-mongo/contract-ts/contract-builder
+./contract-builder: export type MongoContractResult from @prisma/orm-family-mongo/contract-ts/contract-builder
+./contract-builder: export type RelationBuilder from @prisma/orm-family-mongo/contract-ts/contract-builder
+./contract-builder: export type ValueObjectBuilder from @prisma/orm-family-mongo/contract-ts/contract-builder
 ./contract-builder: export valueObject from @prisma/orm-family-mongo/contract-ts/contract-builder
 ./contract-builder: function defineContract<const Extensions extends ExtensionsConstraint, const Scaffold extends MongoScaffoldInput<Extensions>, const Built extends { readonly models?: Record<string, unknown>; readonly valueObjects?: Record<string, unknown>; readonly roots?: Record<string, string>; }>(scaffold: Scaffold & { readonly extensions?: Extensions; }, factory: (helpers: MongoHelpers_2<Extensions>) => Built): MongoContractResult<Omit<Scaffold, 'family' | 'target'> & Built & { readonly family: MongoFamilyPack; readonly target: MongoTargetPack; }>
 ./contract-builder: function defineContract<const Input extends MongoContractInput<ExtensionsConstraint>>(input: Input): MongoContractResult<Omit<Input, 'family' | 'target'> & { readonly family: MongoFamilyPack; readonly target: MongoTargetPack; }>
@@ -89,7 +89,7 @@
 ./contract/validate-once: everything from @prisma/orm-framework/contract/validate-once
 ./contract/validate-storage: everything from @prisma/orm-framework/contract/validate-storage
 ./contract: everything from @prisma/orm-framework/contract
-./control: export ControlClient from @prisma/orm-toolchain/cli/control-api
+./control: export type ControlClient from @prisma/orm-toolchain/cli/control-api
 ./control: function createMongoControlClient(options?: MongoControlClientOptions): ControlClient
 ./control: interface MongoControlClientOptions
 ./control: interface MongoControlClientOptions, readonly optional property connection?: string
@@ -126,8 +126,8 @@
 ./query-ast: everything from @prisma/orm-family-mongo/query-ast
 ./query-builder/contract-free: everything from @prisma/orm-family-mongo/query-builder/contract-free
 ./query-builder: everything from @prisma/orm-family-mongo/query-builder
-./runtime: export MongoBinding from @prisma/orm-target-mongo/driver/runtime
 ./runtime: export default = function mongo<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>>(options: MongoOptions<TContract>): MongoClient<TContract>
+./runtime: export type MongoBinding from @prisma/orm-target-mongo/driver/runtime
 ./runtime: interface MongoClient, readonly required property context: MongoExecutionContext<TContract>
 ./runtime: interface MongoClient, readonly required property contract: TContract
 ./runtime: interface MongoClient, readonly required property enums: UnboundEnums<TContract>
@@ -143,7 +143,7 @@
 ./runtime: interface MongoPrepareMember<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>>
 ./runtime: interface MongoPreparedRowQuery, required method query(target: MongoQueryExecutor, params: Params, options?: RuntimeExecuteOptions): Result
 ./runtime: interface MongoPreparedRowQuery<Params, Result>
-./runtime: type MongoBindingInput = { readonly binding: MongoBinding; readonly url?: never; readonly uri?: never; readonly dbName?: never; readonly mongoClient?: never; } | { readonly mongoClient: MongoClient; readonly dbName: string; readonly binding?: never; readonly url?: never; readonly uri?: never; } | { readonly uri: string; readonly dbName: string; readonly binding?: never; readonly url?: never; readonly mongoClient?: never; } | { readonly url: string; readonly dbName?: string; readonly binding?: never; readonly uri?: never; readonly mongoClient?: never; }
+./runtime: type MongoBindingInput = { readonly binding: MongoBinding; readonly url?: never; readonly uri?: never; readonly dbName?: never; readonly mongoClient?: never; } | { readonly mongoClient: mongodb.MongoClient; readonly dbName: string; readonly binding?: never; readonly url?: never; readonly uri?: never; } | { readonly uri: string; readonly dbName: string; readonly binding?: never; readonly url?: never; readonly mongoClient?: never; } | { readonly url: string; readonly dbName?: string; readonly binding?: never; readonly uri?: never; readonly mongoClient?: never; }
 ./runtime: type MongoOptions<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> = MongoBindingOptions & MongoOptionsBase & { readonly contract: TContract; }
 ./runtime: type MongoPreparedFrom<Params, Q> = Q extends MongoPreparable<unknown, infer Result> ? MongoPreparedRowQuery<Params, Result> : Q extends MongoQueryPlan<infer Row, infer Command> ? MongoPreparedFor<Params, Row, Command> : never
 ./runtime: type MongoTargetId = 'mongo'

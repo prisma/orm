@@ -258,10 +258,10 @@
 ./cli-telemetry: type GatingDisabledReason = 'env-override' | 'stored-opt-out'
 ./cli-telemetry: type GatingResolution = { readonly enabled: false; readonly reason: GatingDisabledReason; } | { readonly enabled: true; }
 ./cli-telemetry: type TelemetryRunOutcome = { readonly spawned: false; readonly reason: 'ci' | 'fork-failed' | 'gated-off'; } | { readonly spawned: true; }
-./cli/config-types: export ContractConfig from @prisma/orm-framework/config/config-types
-./cli/config-types: export ContractSourceContext from @prisma/orm-framework/config/config-types
-./cli/config-types: export PrismaConfig from @prisma/orm-framework/config/config-types
 ./cli/config-types: export defineConfig from @prisma/orm-framework/config/config-types
+./cli/config-types: export type ContractConfig from @prisma/orm-framework/config/config-types
+./cli/config-types: export type ContractSourceContext from @prisma/orm-framework/config/config-types
+./cli/config-types: export type PrismaConfig from @prisma/orm-framework/config/config-types
 ./cli/control-api/testing: const FIXTURE_FAMILY_ID = "fixture-family"
 ./cli/control-api/testing: const FIXTURE_MIGRATION_HASH = "fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9"
 ./cli/control-api/testing: const FIXTURE_PROFILE_HASH = "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae"
@@ -295,13 +295,13 @@
 ./cli/control-api/testing: interface FixtureControlClientCall, readonly required property options: unknown
 ./cli/control-api: const NO_REF_ADVANCEMENT: RefAdvancementFields
 ./cli/control-api: deprecated: interface DbUpdateSuccess, readonly optional property databaseStorageHash?: string
-./cli/control-api: export ControlStack from @prisma/orm-framework/components/control
-./cli/control-api: export MigrationOperationSubject from @prisma/orm-framework/components/control
-./cli/control-api: export MigrationPlanSubjects from @prisma/orm-framework/components/control
-./cli/control-api: export MigrationSubject from @prisma/orm-framework/components/control
-./cli/control-api: export ResolvedMigrationStatement from @prisma/orm-framework/components/control
-./cli/control-api: export VerifyDatabaseResult from @prisma/orm-framework/components/control
-./cli/control-api: export VerifyDatabaseSchemaResult from @prisma/orm-framework/components/control
+./cli/control-api: export type ControlStack from @prisma/orm-framework/components/control
+./cli/control-api: export type MigrationOperationSubject from @prisma/orm-framework/components/control
+./cli/control-api: export type MigrationPlanSubjects from @prisma/orm-framework/components/control
+./cli/control-api: export type MigrationSubject from @prisma/orm-framework/components/control
+./cli/control-api: export type ResolvedMigrationStatement from @prisma/orm-framework/components/control
+./cli/control-api: export type VerifyDatabaseResult from @prisma/orm-framework/components/control
+./cli/control-api: export type VerifyDatabaseSchemaResult from @prisma/orm-framework/components/control
 ./cli/control-api: function advanceRefSafely(args: { readonly refsDir: string; readonly migrationsDir: string; readonly name: string; readonly hash: string; readonly contractIR: ContractIR; }): Promise<Result<{ readonly name: string; readonly hash: string; }, CliStructuredError>>
 ./cli/control-api: function appContractStandInFromIdentity(args: { readonly contractHash: string; readonly targetId: string; readonly targetFamily: string; }): Contract
 ./cli/control-api: function appliedHashesFromLedger(ledgerEntries: ReadonlyArray<{ readonly migrationHash: string; }>): ReadonlySet<string>
@@ -757,9 +757,9 @@
 ./cli/migration-cli: type MigrationCliWritable = Writable
 ./cli/migration-cli: type MigrationConstructor = new (...args: any[]) => Migration
 ./cli: const ormCommandFamily: CommandFamily
-./cli: const ormConfigSection: ConfigSection<PrismaConfig>
+./cli: const ormConfigSection: @prisma/cli-engine.ConfigSection<PrismaConfig>
 ./cli: function loadContractFromTs(entryPath: string, options?: LoadTsContractOptions): Promise<Contract>
-./cli: function loadOrmConfig(options: LoadOrmConfigOptions): Promise<LoadedConfig>
+./cli: function loadOrmConfig(options: LoadOrmConfigOptions): Promise<@prisma/cli-engine.LoadedConfig>
 ./cli: function runOrmBin(): Promise<void>
 ./cli: interface LoadOrmConfigOptions
 ./cli: interface LoadOrmConfigOptions, readonly optional property configPath?: string
@@ -769,8 +769,8 @@
 ./config-loader: const CONFIG_FILENAME = "prisma.config.ts"
 ./config-loader: const ORM_CONFIG_SECTION_NAME = "orm"
 ./config-loader: const ormConfigSchema: ObjectType<{ family: { emission: object; id: string; familyId: string; version: string; create: Function; kind: "family"; }; target: { targetId: string; id: string; familyId: string; version: string; create: Function; kind: "target"; }; adapter: { targetId: string; id: string; familyId: string; version: string; create: Function; kind: "adapter"; }; migrations: Default<{ dir: (In: Default<string, string>) => Out<string>; module?: string; }, {}>; driver?: { targetId: string; id: string; familyId: string; version: string; create: Function; kind: "driver"; }; extensions?: { targetId: string; id: string; familyId: string; version: string; create: Function; kind: "extension"; }[]; db?: { connection?: unknown; }; contract?: { source: { load: Function; format: "psl" | "typescript"; inputs?: ((In: string) => Out<string>)[]; parserOptions?: { grammar?: "prisma-7" | "prisma-8"; }; }; output: (In: Default<string, string>) => Out<string>; typesModule?: string; }; formatter?: { indent?: "tab" | number; newline?: "CRLF" | "LF"; }; }, { path: (In: string) => Out<string>; }>
-./config-loader: const ormConfigSection: ConfigSection<PrismaConfig>
-./config-loader: export PrismaConfig from @prisma/orm-framework/config/config-types
+./config-loader: const ormConfigSection: @prisma/cli-engine.ConfigSection<PrismaConfig>
+./config-loader: export type PrismaConfig from @prisma/orm-framework/config/config-types
 ./config-loader: function buildLoadedConfig(rawConfig: Record<string, unknown>, configDir: string): LoadedConfig
 ./config-loader: function evaluateConfigModule(configPath: string, options?: { readonly cwd?: string; }): Promise<Result<unknown, CliStructuredError>>
 ./config-loader: function expandContractInputs(patterns: readonly string[] | undefined): Promise<readonly string[]>
@@ -1071,7 +1071,7 @@
 ./migration-tools/io: interface ReadMigrationsDirResult, readonly required property problems: readonly PackageLoadProblem[]
 ./migration-tools/io: type PackageLoadProblem = { readonly kind: 'hashMismatch'; readonly dirName: string; readonly stored: string; readonly computed: string; } | { readonly kind: 'packageUnloadable'; readonly dirName: string; readonly detail: string; } | { readonly kind: 'providedInvariantsMismatch'; readonly dirName: string; }
 ./migration-tools/ledger-origin: function ledgerOriginFromStored(originCoreHash: null | string): null | string
-./migration-tools/metadata: export MigrationMetadata from @prisma/orm-framework/components/control
+./migration-tools/metadata: export type MigrationMetadata from @prisma/orm-framework/components/control
 ./migration-tools/migration-graph: function assertHashIsGraphNode(hash: string, graph: MigrationGraph): asserts hash is string
 ./migration-tools/migration-graph: function detectCycles(graph: MigrationGraph): readonly string[][]
 ./migration-tools/migration-graph: function detectOrphans(graph: MigrationGraph): readonly MigrationEdge[]
@@ -1122,7 +1122,7 @@
 ./migration-tools/migration: interface MigrationMeta
 ./migration-tools/migration: interface MigrationMeta, readonly required property from: null | string
 ./migration-tools/migration: interface MigrationMeta, readonly required property to: string
-./migration-tools/package: export MigrationPackage from @prisma/orm-framework/components/control
+./migration-tools/package: export type MigrationPackage from @prisma/orm-framework/components/control
 ./migration-tools/package: interface OnDiskMigrationPackage extends MigrationPackage
 ./migration-tools/package: interface OnDiskMigrationPackage, readonly required property dirPath: string
 ./migration-tools/package: type MigrationOps = readonly MigrationPlanOperation[]
@@ -1190,7 +1190,7 @@
 ./migration-tools/spaces: const RESERVED_SPACE_SUBDIR_NAMES: ReadonlySet<string>
 ./migration-tools/spaces: const SPACE_REFS_DIRNAME = "refs"
 ./migration-tools/spaces: export APP_SPACE_ID from @prisma/orm-framework/components/control
-./migration-tools/spaces: export ContractSpaceHeadRef from @prisma/orm-framework/components/control
+./migration-tools/spaces: export type ContractSpaceHeadRef from @prisma/orm-framework/components/control
 ./migration-tools/spaces: function assertDescriptorSelfConsistency(inputs: DescriptorSelfConsistencyInputs): void
 ./migration-tools/spaces: function assertValidSpaceId(spaceId: string): asserts spaceId is ValidSpaceId
 ./migration-tools/spaces: function computeExtensionSpaceApplyPath(inputs: ComputeExtensionSpaceApplyPathInputs): Promise<ExtensionSpaceApplyPathOutcome>
@@ -1285,9 +1285,9 @@
 ./migration-tools: const SPACE_REFS_DIRNAME = "refs"
 ./migration-tools: const WORKING_CONTRACT_REF = "@contract"
 ./migration-tools: export APP_SPACE_ID from @prisma/orm-framework/components/control
-./migration-tools: export ContractSpaceHeadRef from @prisma/orm-framework/components/control
-./migration-tools: export MigrationMetadata from @prisma/orm-framework/components/control
-./migration-tools: export MigrationPackage from @prisma/orm-framework/components/control
+./migration-tools: export type ContractSpaceHeadRef from @prisma/orm-framework/components/control
+./migration-tools: export type MigrationMetadata from @prisma/orm-framework/components/control
+./migration-tools: export type MigrationPackage from @prisma/orm-framework/components/control
 ./migration-tools: function advanceRef(refsDir: string, name: string, hash: string): Promise<RefEntry>
 ./migration-tools: function allStorageElementsExternal(contract: Contract): boolean
 ./migration-tools: function assertDescriptorSelfConsistency(inputs: DescriptorSelfConsistencyInputs): void
