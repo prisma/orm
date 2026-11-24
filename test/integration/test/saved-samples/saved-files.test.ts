@@ -136,7 +136,13 @@ describe.each(sets)('the $database files $release wrote', ({ release, database }
   it('has application migrations whose ends are snapshots', async () => {
     const { packages } = await readMigrationsDir(join(migrationsDir, 'app'), { migrationsDir });
     const ends = packages.flatMap((pkg) => [pkg.metadata.from, pkg.metadata.to]);
-    expect(ends.filter((hash) => hash !== null && !snapshotHashes.includes(hash))).toEqual([]);
+    expect({
+      migrations: packages.length,
+      endsWithoutSnapshot: ends.filter((hash) => hash !== null && !snapshotHashes.includes(hash)),
+    }).toEqual({
+      migrations: directories(join(migrationsDir, 'app'), /^\d{8}T\d{4}_/).length,
+      endsWithoutSnapshot: [],
+    });
   });
 
   it.each(spaces)('has %s refs that name snapshots', async (space) => {
