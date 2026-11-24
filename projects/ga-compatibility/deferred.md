@@ -10,6 +10,6 @@ Work we decided not to do now and do not want to lose. When this folder is close
 
 **What it would look like.** Git's plan for moving to a new hash function is the model: the move is declared and made for a whole repository at once, one repository never mixes the two, and a table maps each old name to its new one. For us: one declared step for each database, and a record of which old hash became which new hash, so that the migration history stays connected.
 
-**Also to settle then.** Nothing stored today says which rules a hash was computed with. A project selects them only by the major version of the packages it installs. A later release reading an earlier major's marker therefore cannot tell an old hash from a wrong one.
+**How stored data says which rules a hash was computed with.** For files, the format version can say it, given one rule: a change to the hashing rules always comes with a new format version, and a writer never writes a version older than the first one that uses the current rules. Each format version then belongs to one set of hashing rules, and several versions may share a set. The database's marker holds a hash and no format version. Its `canonical_version` column exists for this and is always empty today.
 
 **Decided.** Not built now (2026-11-24). At `8.0.0`, projects that used a release candidate sign their databases again with `db sign`.
