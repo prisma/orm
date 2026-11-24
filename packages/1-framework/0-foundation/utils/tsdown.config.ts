@@ -20,5 +20,6 @@ export default defineConfig({
     'src/exports/suppress-idle-connection-errors.ts',
     'src/exports/text.ts',
     'src/exports/types.ts',
+    'src/exports/upgrade-guides.ts',
   ],
 });

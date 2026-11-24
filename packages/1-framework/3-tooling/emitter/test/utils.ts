@@ -15,7 +15,10 @@ import { createContract } from '@repo/test-utils/contract-factories';
 import type { EmitOptions, EmitResult, EmitStackInput } from '../src/exports';
 import { emit as emitImpl } from '../src/exports';
 
-const identitySerialize = (c: Contract): JsonObject => c as unknown as JsonObject;
+const identitySerialize = (c: Contract): JsonObject => ({
+  formatVersion: 1,
+  ...(c as unknown as JsonObject),
+});
 const identityDeserialize = (json: Record<string, unknown>): Contract => {
   const contract = structuredClone(json) as unknown as Contract;
   for (const namespace of Object.values(contract.domain.namespaces)) {
@@ -87,7 +90,6 @@ type TestContractOverrides = {
   execution?: Record<string, unknown>;
   meta?: Record<string, unknown>;
   storageHash?: string;
-  schemaVersion?: string;
   sources?: Record<string, unknown>;
 };
 
@@ -115,14 +117,7 @@ export function modelsFromCanonicalContract(
 }
 
 export function createTestContract(overrides: TestContractOverrides = {}): Contract {
-  const {
-    storageHash: _sh,
-    schemaVersion: _sv,
-    sources: _src,
-    storage,
-    tables,
-    ...rest
-  } = overrides;
+  const { storageHash: _sh, sources: _src, storage, tables, ...rest } = overrides;
   const cleanStorage = storage
     ? (() => {
         const { storageHash: _innerSh, ...storageRest } = storage as Record<string, unknown>;

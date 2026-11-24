@@ -45,6 +45,7 @@
     "./contract-validation-error": "./dist/contract-validation-error.mjs",
     "./default-namespace": "./dist/default-namespace.mjs",
     "./enum-accessor": "./dist/enum-accessor.mjs",
+    "./format-version": "./dist/format-version.mjs",
     "./hashing": "./dist/hashing.mjs",
     "./hashing-utils": "./dist/hashing-utils.mjs",
     "./is-plain-record": "./dist/is-plain-record.mjs",

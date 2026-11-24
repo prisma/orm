@@ -10,10 +10,10 @@
       "type": "string",
       "description": "Reference to this JSON schema for IDE validation"
     },
-    "schemaVersion": {
-      "type": "string",
-      "enum": ["1"],
-      "description": "Contract schema version"
+    "formatVersion": {
+      "type": "integer",
+      "enum": [1],
+      "description": "The version of the contract file's format"
     },
     "target": {
       "type": "string",
@@ -85,7 +85,7 @@
       "required": ["document"]
     }
   },
-  "required": ["schemaVersion", "target", "targetFamily", "storageHash", "storage"],
+  "required": ["formatVersion", "target", "targetFamily", "storageHash", "storage"],
   "$defs": {
     "DocCollection": {
       "type": "object",

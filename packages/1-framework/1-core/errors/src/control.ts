@@ -6,7 +6,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction, StructuredError } from '@internal/utils/structured-error';
 import { docsUrlFor } from '@internal/utils/structured-error';
-import { APP_UPGRADE_GUIDES_URL } from './upgrade-guides';
+import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 
 /**
  * CLI error envelope for output formatting.
