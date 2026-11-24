@@ -19,6 +19,6 @@ Remove the old code, update every reference, tests and design docs to the curren
 
 [ADR 329](../../docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) applies. An application or extension built on one `8.x` release works on every later one, so:
 - Nothing Generally Available is removed or changed incompatibly within a major. A replaced API stays, deprecated, until the next major.
-- Specified behaviour does not change. A fix to wrong behaviour, a change to unspecified detail such as SQL text, or a security fix may change it; state the class of your change.
+- Specified behaviour (what the reference documentation states) changes only in a new major, as a new API the user adopts, or through a security fix. A fix to wrong behaviour and a change to unspecified detail, such as SQL text, may ship in any release. State the class of your change.
 - A later release reads every stored file and database record an earlier release wrote, and the same stored content keeps the same hash.
 - Code that no published package exports, whatever package it lives in, and anything below GA ([ADR 330](../../docs/architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)) still changes directly, as above.

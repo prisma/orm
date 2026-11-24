@@ -3,7 +3,8 @@
 // dependency on every publishable package.
 //
 // A declared floor must never claim more than our own test infra exercises.
-// Until `8.0.0` the floor may still be raised. From `8.0.0` it rises only in a
+// Until `8.0.0` the floor is the latest GA release we test against, and may
+// still be raised. From `8.0.0` it rises only in a
 // new major, or when TypeScript's maker ends support for a version (ADR 329).
 //
 // Every publishable package must declare:

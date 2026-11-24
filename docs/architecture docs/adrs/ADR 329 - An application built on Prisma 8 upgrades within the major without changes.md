@@ -221,8 +221,8 @@ These rules apply to Prisma 8 and the majors after it. How long Prisma 7 is main
 
 ## Consequences
 
-- After `8.0.0` a contributor who changes a GA export, a stored format or specified behaviour keeps what an earlier release accepted or wrote working, and does not change what a hash covers. Code that no published package exports is not covered and changes freely in any release. The test is the export, not the package name: most code in the `@internal/*` workspace packages reaches users through a `@prisma/orm-*` package and is covered.
-- The rule that Prisma 8 keeps nothing for backward compatibility holds until `8.0.0` and ends there for everything this record covers.
+- After `8.0.0` a contributor who changes a GA export, a stored format or specified behaviour keeps what an earlier release accepted or wrote working, and does not change what a hash covers. Code that no published package exports is not covered and changes freely in any release. The test is the export, not the package name: code in an `@internal/*` workspace package is covered when a GA `@prisma/orm-*` package exports it under a plain name.
+- Until `8.0.0` a change may still be made directly, with no compatibility code, except where an earlier record asks for some, such as a deprecated alias for a renamed PSL type. From `8.0.0` that ends for everything this record covers.
 - Whatever a GA package exports at `8.0.0` under a plain name, we support for the whole major. Reducing the exports is cheap before `8.0.0` and a breaking change after it.
 - After `8.0.0` a change to a stored format or a hash can no longer be handled by telling users to emit the contract and sign the database again, as several earlier records do.
 - This record states requirements, and a new design follows them. [Earlier records](#earlier-records) lists what it replaces and what is corrected when the code changes.
@@ -233,7 +233,7 @@ Each of these records carries a note that names the part this record replaces. T
 
 | Record | What this record replaces |
 | --- | --- |
-| [ADR 222](ADR%20222%20-%20Version%20support%20policy.md) | A minimum supported version is raised freely |
+| [ADR 222](ADR%20222%20-%20Version%20support%20policy.md) | A minimum supported version is raised freely, to the latest release we test against |
 | [ADR 219](ADR%20219%20-%20Database%20driver%20coupling%20-%20framework%20owns%20user-facing%20types%20and%20driver%20is%20a%20single-major%20peer%20dependency.md) | Exactly one major of a database driver is supported at a time, and the next one arrives in a breaking release |
 | [ADR 257](ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md), [ADR 316](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md), [ADR 322](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md) | A renamed name is removed after one release line, and a changed codec id ends with users emitting and signing again |
 | [ADR 010](ADR%20010%20-%20Canonicalization%20Rules.md), [ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md), [ADR 252](ADR%20252%20-%20An%20earlier%20Prisma%20version's%20schema%20is%20a%20contract%20source.md) | A change to canonicalization, to the normalizer or to the naming rule is handled by users emitting, signing or migrating again |
@@ -245,7 +245,7 @@ Some earlier records describe code that does not yet meet a requirement of this 
 
 - the contract's format version as an input to the storage hash ([ADR 004](ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md));
 - a runtime that fails a query when it cannot read or decode the marker ([ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md), [ADR 123](ADR%20123%20-%20Drift%20Detection%2C%20Recovery%20%26%20Reconciliation.md));
-- Prisma's own tables in the database, which are created only if absent and never brought up to date ([ADR 042](ADR%20042%20-%20Contract%20Marker%20Evolution.md), [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md));
+- Prisma's own tables in the database, which are created only if absent and never brought up to date (the note at the top of [ADR 042](ADR%20042%20-%20Contract%20Marker%20Evolution.md), whose own design does bring them up to date, [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md));
 - a facade that re-exports whole internal modules, where this record asks each package to export as little as possible ([ADR 242](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md));
 - error code types with no catch-all member ([ADR 239](ADR%20239%20-%20Errors%20are%20structural%20envelopes%20with%20dotted%20namespace%20codes.md)).
 

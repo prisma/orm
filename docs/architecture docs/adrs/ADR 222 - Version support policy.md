@@ -1,6 +1,6 @@
 # ADR 222 — Version support policy for Prisma Next
 
-**Status:** Accepted — PostgreSQL floor amended by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md); the CLI's copy of the server floors removed by [ADR 325](ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md); the rule "We raise floors freely" superseded from `8.0.0` by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md#supported-versions-of-what-prisma-runs-on), under which a floor rises only in a new major or when its maker ends support for a version
+**Status:** Accepted — PostgreSQL floor amended by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md); the CLI's copy of the server floors removed by [ADR 325](ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md); the rule "We raise floors freely", to the latest GA release we test against, superseded from `8.0.0` by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md#supported-versions-of-what-prisma-runs-on), under which a floor rises only in a new major or when its maker ends support for a version
 **Date:** 2026-05-31
 **Linear:** TML-1810, TML-1809
 
