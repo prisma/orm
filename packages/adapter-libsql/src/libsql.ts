@@ -5,6 +5,7 @@ import type {
   Transaction as LibSqlTransactionRaw,
 } from '@libsql/client'
 import type {
+  ConnectionInfo,
   IsolationLevel,
   SqlDriverAdapter,
   SqlMigrationAwareDriverAdapterFactory,
@@ -144,8 +145,18 @@ class LibSqlTransaction extends LibSqlQueryable<TransactionClient> implements Tr
 }
 
 export class PrismaLibSqlAdapter extends LibSqlQueryable<StdClient> implements SqlDriverAdapter {
-  constructor(client: StdClient, adapterOptions?: PrismaLibSqlOptions) {
+  readonly #maxBindValues: number | undefined
+
+  constructor(client: StdClient, adapterOptions?: PrismaLibSqlOptions, maxBindValues?: number) {
     super(client, adapterOptions)
+    this.#maxBindValues = maxBindValues
+  }
+
+  getConnectionInfo(): ConnectionInfo {
+    return {
+      maxBindValues: this.#maxBindValues,
+      supportsRelationJoins: false,
+    }
   }
 
   async executeScript(script: string): Promise<void> {
@@ -210,15 +221,37 @@ export abstract class PrismaLibSqlAdapterFactoryBase implements SqlMigrationAwar
   }
 
   connect(): Promise<SqlDriverAdapter> {
-    return Promise.resolve(new PrismaLibSqlAdapter(this.createClient(this.#config), this.#options))
+    return this.#connectTo(this.#config)
   }
 
   connectToShadowDb(): Promise<SqlDriverAdapter> {
     // TODO: the user should be able to provide a custom URL for the shadow database
-    return Promise.resolve(
-      new PrismaLibSqlAdapter(this.createClient({ ...this.#config, url: ':memory:' }), this.#options),
-    )
+    return this.#connectTo({ ...this.#config, url: ':memory:' })
+  }
+
+  async #connectTo(config: LibSqlConfig): Promise<SqlDriverAdapter> {
+    const client = this.createClient(config)
+    return new PrismaLibSqlAdapter(client, this.#options, await readMaxBindValues(client))
   }
 
   abstract createClient(config: LibSqlConfig): StdClient
+}
+
+/**
+ * SQLite's bind parameter limit is set at compile time: 999 before SQLite 3.32.0, 32766 since.
+ * Read it from the database so the query interpreter doesn't fall back to the old 999 default.
+ * Returns `undefined` (keeping that default) when the build doesn't report it or the server
+ * refuses the pragma.
+ */
+async function readMaxBindValues(client: StdClient): Promise<number | undefined> {
+  let result: LibSqlResultSet
+  try {
+    result = await client.execute('PRAGMA compile_options')
+  } catch (error) {
+    debug('could not read compile options, keeping the default bind limit: %O', error)
+    return undefined
+  }
+  const option = result.rows.map((row) => String(row[0])).find((opt) => opt.startsWith('MAX_VARIABLE_NUMBER='))
+  const value = Number(option?.slice('MAX_VARIABLE_NUMBER='.length))
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined
 }
