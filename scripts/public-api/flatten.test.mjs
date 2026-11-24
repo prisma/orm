@@ -631,6 +631,21 @@ describe('flattenPackage', () => {
 });
 
 describe('oneLine', () => {
+  it('keeps a literal inside an interpolation whose expression holds braces', () => {
+    const text = 'type Spaced = `\u0024{{ x:  string } extends { x: string } ? `a  b` : never}`';
+    strictEqual(
+      oneLine(text),
+      'type Spaced = `\u0024{{ x: string } extends { x: string } ? `a  b` : never}`',
+    );
+  });
+
+  it('keeps a literal after a template with several interpolations', () => {
+    strictEqual(
+      oneLine('type T =  `a\u0024{1}  b\u0024{"c  d"}  e`  |  "f  g "  |  "h"'),
+      'type T = `a\u0024{1}  b\u0024{"c  d"}  e` | "f  g " | "h"',
+    );
+  });
+
   it('collapses whitespace between tokens but not inside literals, and skips comments whole', () => {
     strictEqual(
       oneLine('type  A =\n  /* it\'s   here */  "x  y" |\n  `a  \u0024{"b  c"}  d`'),

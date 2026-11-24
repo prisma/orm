@@ -14,54 +14,49 @@ export class ApiListError extends Error {}
 
 export { compareCodeUnits };
 
+const WHITESPACE = new Set([ts.SyntaxKind.WhitespaceTrivia, ts.SyntaxKind.NewLineTrivia]);
+const COMMENTS = new Set([
+  ts.SyntaxKind.SingleLineCommentTrivia,
+  ts.SyntaxKind.MultiLineCommentTrivia,
+]);
+
 // Collapses whitespace between tokens to one space; the text of string and template literals is
-// kept as it is. Comments are skipped over as a whole, so a quote inside one starts no literal.
+// kept as it is. Tokens are TypeScript's own: a `}` that closes a template's `${…}` is scanned
+// again as the rest of the template.
 export function oneLine(text) {
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    false,
+    ts.LanguageVariant.Standard,
+    text,
+  );
+  const open = [];
   let result = '';
-  let index = 0;
-  while (index < text.length) {
-    const character = text[index];
-    if (character === '"' || character === "'" || character === '`') {
-      const end = literalEnd(text, index);
-      result += text.slice(index, end);
-      index = end;
-    } else if (character === '/' && (text[index + 1] === '*' || text[index + 1] === '/')) {
-      const close =
-        text[index + 1] === '*' ? text.indexOf('*/', index + 2) + 2 : text.indexOf('\n', index);
-      const end = close <= index + 1 ? text.length : close;
-      result += text.slice(index, end).replace(/\s+/g, ' ');
-      index = end;
-    } else if (/\s/.test(character)) {
-      while (index < text.length && /\s/.test(text[index])) index++;
-      result += ' ';
-    } else {
-      result += character;
-      index++;
+  let spaced = false;
+  for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
+    if (WHITESPACE.has(token)) {
+      if (!spaced) result += ' ';
+      spaced = true;
+      continue;
     }
+    spaced = false;
+    if (COMMENTS.has(token)) {
+      result += scanner.getTokenText().replace(/\s+/g, ' ');
+      continue;
+    }
+    if (token === ts.SyntaxKind.OpenBraceToken) open.push('brace');
+    if (token === ts.SyntaxKind.TemplateHead) open.push('template');
+    if (token === ts.SyntaxKind.CloseBraceToken) {
+      if (open.pop() === 'template') {
+        token = scanner.reScanTemplateToken(false);
+        if (token === ts.SyntaxKind.TemplateMiddle) open.push('template');
+      }
+    }
+    result += scanner.getTokenText();
   }
   return result.trim();
 }
 
-// The index after the string or template literal that starts at `start`. A template's `${…}`
-// parts are kept whole too.
-function literalEnd(text, start) {
-  const quote = text[start];
-  let index = start + 1;
-  let depth = 0;
-  while (index < text.length) {
-    const character = text[index];
-    if (character === '\\') index += 2;
-    else if (quote === '`' && character === '$' && text[index + 1] === '{') {
-      depth++;
-      index += 2;
-    } else if (depth > 0 && character === '}') {
-      depth--;
-      index++;
-    } else if (depth === 0 && character === quote) return index + 1;
-    else index++;
-  }
-  return index;
-}
 const withoutBundlerSuffix = (name) => name.replace(/\$\d+$/, '');
 const IDENTIFIER = /^[A-Za-z0-9_$]+$/;
 const TOP_LEVEL_REFERENCE = /^(@?[^!]+)!~?([A-Za-z0-9_$]+):[a-z]+(\(\d+\))?$/;
