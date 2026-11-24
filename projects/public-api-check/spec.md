@@ -59,7 +59,8 @@ The publish workflow tags every release (`v8.0.0-rc.25`). The `api.txt` files at
 
 - **Removed.** A line that the last release had and that is now gone fails the check when it is GA. A changed signature is one line removed and one added, so it fails too.
 - **GA** is as `maturity-levels.md` defines it: the package's version at the last release is a plain version with no pre-release part, and neither the item's name nor the name of the class or interface that contains it starts with `preview_` or `ea_`.
-- **Forwarded paths.** A line counts as GA when any GA package exposes it, directly or by forwarding the path it is on. If a platform package is below GA and a GA facade forwards one of its paths, a removal on that path fails, and the message names the facade's path.
+- **Forwarded paths.** A removal on a path that a facade forwards is judged in the package that owns the path. That is enough, because a GA package depends only on GA packages: a package cannot be more reliable than what it is built on.
+- **A GA signature that uses a type below GA.** A line of a GA package that names a type starting with `preview_` or `ea_` fails, for the same reason. Deno's standard library has the equivalent check for its unstable modules.
 - **Exceptions.** The check compares text. It cannot tell that a changed signature still accepts all existing code, and a security fix may require a break. `api/exceptions.txt` at the repository root holds the exact removed lines that are allowed, each with its reason, as Go's `api/except.txt` does. An entry that matches no removed line fails the check, so entries are deleted once the next release makes them unnecessary. Each exception is also named in the release notes, which is where a user learns of it.
 - **Until `8.0.0`.** Every package's version is `8.0.0-rc.N`, a pre-release, so by the rule above nothing is GA and nothing fails. The check still runs and reports. It starts to fail at the first release with a plain version, with nothing to switch on.
 
@@ -75,13 +76,23 @@ A comment can be ignored, so the approval is enforced. `CODEOWNERS` names the ow
 
 A new required member breaks code in two cases: on an interface that users implement, such as a middleware, and on an object that users build and pass to us, such as `PostgresConfigOptions`. It is harmless on an object that only Prisma creates, such as a result. The check cannot tell these apart.
 
-`api/type-roles.txt` at the repository root records it, one type per line: the package, the type's name, and either "users supply it" or "only Prisma creates it". In a GA package, a new required member fails when the type is marked "users supply it", and also when the type is not in the file. The message then asks for the type to be classified. So the safe answer is the default.
+This project does not teach the check the difference. A new required member is an added line, so the check does not fail on it. The comment on the pull request lists new required members under their own heading, and the person who approves the change decides.
 
-This project creates the file and the rule. The project that makes additions safe (new error codes, built-in names and builder methods) records which interfaces users implement, and writes them here.
+The project that makes additions safe (new error codes, built-in names and builder methods) records which interfaces users implement. When that list exists, the check can fail on a new required member of a listed type; the list would be a text file beside the exceptions file.
+
+### The last release's example apps must still compile
+
+The 16 applications under `examples/` import the published packages by name, and CI type-checks and tests them on every pull request. So a change that breaks user code already fails CI, unless the same pull request edits the example to fit. After `8.0.0` such an edit hides a break.
+
+CI therefore also type-checks the example apps as they were at the last release's tag, against the current build. This tests the policy's promise directly: code written for one release compiles on the next. It also covers what the line comparison cannot see, a query's result type, as far as the examples use it. Like the line comparison, it reports until `8.0.0` and fails from then on.
+
+### One reading of the API, shared with the reference documentation
+
+The compatibility policy makes the reference documentation the definition of what is public, generated from the code. API Extractor's structured description is the input Microsoft's documentation generator takes. The step that produces it is written so the reference documentation can use the same output, and nothing else reads the packages' API a second way.
 
 ## What the check does not see
 
-- **Types computed from the user's input.** A query's result type is worked out from the user's contract and query. It can change while every line stays the same. Only type tests catch this: tests that import the published packages as an application does and state the expected type of representative queries. The repository has 383 type test files, but nearly all import internal source. This is a follow-up project, not part of this one (see Non-goals). Until it exists, a change to a computed type is not checked.
+- **Types computed from the user's input.** A query's result type is worked out from the user's contract and query. It can change while every line stays the same. The example apps catch such a change only where their code depends on it; they do not state the exact type of each result. Tests that do are a possible follow-up (see Non-goals).
 - **Types from other publishers' packages.** A type from `pg` or `arktype` appears by name. A change inside that package does not change the line.
 - **Behaviour.** Runtime behaviour, error codes, CLI output and file formats belong to other projects in the compatibility work.
 - **Whether a change is compatible.** Any change to a released GA line fails until it has an exception.
@@ -89,6 +100,7 @@ This project creates the file and the rule. The project that makes additions saf
 ## Known costs
 
 - **Lines that change without an API change.** About 1,150 lines carry a name that a tool made up to avoid a clash, such as `Document_2`. About 1,200 contain an inferred type that TypeScript printed with an `import("...")` reference. 158 lines are longer than 1,000 characters, because an inferred type is printed in full. A refactor or a tool upgrade can change such lines. Before `8.0.0` that is noise in a diff. After it, each is a failure that needs an exception. The first pull request measures this on real changes, and the cure for the worst cases is an explicit type in the source.
+- **Union types.** API Extractor has an open issue (microsoft/rushstack#1958) that an inferred union type can print its members in a different order from one build to the next. The first pull request checks whether it happens here.
 - **Tool upgrades.** API Extractor and TypeScript are pinned for the check. An upgrade that prints types differently changes lines in bulk, and after `8.0.0` needs its lines accepted as exceptions in the same pull request.
 - **Time.** About 70 seconds on a laptop with four processes, in the `Lint` job. To be measured on a CI runner.
 - **Search.** About 30,000 generated lines match repository searches. The files are added to the ignore lists that search tools read.
@@ -97,7 +109,8 @@ This project creates the file and the rule. The project that makes additions saf
 
 - Removing or renaming exports. That is the next project, which reduces what the packages export; it reviews its removals in these files.
 - Deciding which interfaces users implement.
-- Type tests against the published packages. They need their own design: which queries are representative, and how a test written for one release is kept unchanged for the next.
+- Tests that state the exact result type of representative queries against the published packages.
+- A check that fails on a new required member, and a compiler-checked comparison of the old types with the new ones, as Microsoft's Fluid Framework does. Either can be added if approvals or exceptions prove too many.
 - Reference documentation.
 - A check on the `exports` field. The build writes `exports` into each `package.json` on a developer's machine and not in CI, so CI does not notice a committed `exports` that is out of date. This project reads `exports`, so it records the gap for a separate fix.
 
@@ -113,9 +126,10 @@ This project creates the file and the rule. The project that makes additions saf
 
 - Every published package has a committed `api.txt`, and CI fails when it does not match the build. The file generated on a laptop and the one generated in CI are identical.
 - A pull request that adds an export shows the comment, and cannot merge without an owner's approval. Shown on a real pull request.
-- In a test with a package's version set to a plain version: removing an export fails; changing a signature fails; an exception makes it pass; a stale exception fails; a new required member on an unclassified type fails; a removal on a path that a GA facade forwards fails. With today's `rc` version the same changes are reported and do not fail.
+- In a test with a package's version set to a plain version: removing an export fails; changing a signature fails; an exception makes it pass; a stale exception fails; a line that names a `preview_` type fails. With today's `rc` version the same changes are reported and do not fail.
+- CI type-checks the last release's example apps against the current build, and a deliberate break in a trial run is reported.
 - A contributor's guide in `docs/` says what the check does, how to update the files, and when an exception is right. A decision record states the decisions above.
-- The follow-up on type tests and the gap in `exports` are recorded where the owner of the compatibility work will see them.
+- The gap in `exports`, and the rule that a GA package depends only on GA packages, are recorded where the owner of the compatibility work will see them.
 
 ## Alternatives considered
 
