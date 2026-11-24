@@ -15,6 +15,7 @@ import type {
 import { Debug, DriverAdapterError } from '@prisma/driver-adapter-utils'
 // @ts-ignore: this is used to avoid the `Module '"<path>/node_modules/@types/pg/index"' has no default export.` error.
 import pg from 'pg'
+import { parse as parseConnectionString } from 'pg-connection-string'
 
 import { name as packageName } from '../package.json'
 import { FIRST_NORMAL_OBJECT_ID } from './constants'
@@ -210,9 +211,10 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
 
 export type PrismaPgOptions = {
   /**
-   * The name of the schema to use in generated queries. Raw queries are not affected: they resolve
-   * unqualified names through the connection's `search_path`. Qualify the name in raw SQL
-   * (`"mySchema"."User"`), or set the search path on the database role
+   * The name of the schema to use in generated queries. When not set, the `?schema=` parameter of the
+   * connection string is used, including the connection string of a pre-built `pg.Pool`. Raw queries are
+   * not affected: they resolve unqualified names through the connection's `search_path`. Qualify the
+   * name in raw SQL (`"mySchema"."User"`), or set the search path on the database role
    * (`ALTER ROLE ... SET search_path = ...`). The adapter does not set it itself, because behind a
    * connection pooler in transaction mode a session setting is shared with the pooler's other clients.
    */
@@ -334,12 +336,14 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
     if (poolOrConfig instanceof pg.Pool) {
       this.externalPool = poolOrConfig
       this.config = poolOrConfig.options
-    } else if (typeof poolOrConfig === 'string') {
-      this.externalPool = null
-      this.config = { connectionString: poolOrConfig }
     } else {
       this.externalPool = null
-      this.config = poolOrConfig
+      this.config = typeof poolOrConfig === 'string' ? { connectionString: poolOrConfig } : poolOrConfig
+    }
+
+    const schema = options?.schema ?? schemaFromConnectionString(this.config.connectionString)
+    if (schema !== undefined) {
+      this.options = { ...options, schema }
     }
   }
 
@@ -377,4 +381,43 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
       await client.end()
     })
   }
+}
+
+/**
+ * Reads `?schema=` with the parser `pg` uses, so the adapter and the connection agree on what the
+ * connection string says.
+ */
+function schemaFromConnectionString(connectionString: string | undefined): string | undefined {
+  if (connectionString === undefined) {
+    return undefined
+  }
+
+  let schema: unknown
+  try {
+    schema = parseConnectionString(withoutTlsParameters(connectionString)).schema
+  } catch {
+    // `pg` rejects the malformed string itself when it connects.
+    return undefined
+  }
+  return typeof schema === 'string' && schema !== '' ? schema : undefined
+}
+
+/**
+ * The parser reads the certificate files these parameters name and throws on some `sslmode`
+ * combinations. Neither affects the schema, and `pg` does both itself when it connects.
+ */
+const TLS_PARAMETERS = ['sslmode', 'sslcert', 'sslkey', 'sslrootcert']
+
+function withoutTlsParameters(connectionString: string): string {
+  const queryStart = connectionString.indexOf('?')
+  if (queryStart === -1) {
+    return connectionString
+  }
+  const fragmentStart = connectionString.indexOf('#', queryStart)
+  const queryEnd = fragmentStart === -1 ? connectionString.length : fragmentStart
+  const params = new URLSearchParams(connectionString.slice(queryStart + 1, queryEnd))
+  for (const name of TLS_PARAMETERS) {
+    params.delete(name)
+  }
+  return `${connectionString.slice(0, queryStart)}?${params.toString()}${connectionString.slice(queryEnd)}`
 }

@@ -238,7 +238,7 @@ export function runtimeIntegrationTest<Client>(input: Input<Client>) {
 
       switch (input.database.name) {
         case 'postgresql':
-          adapter = new PrismaPg({ connectionString }, { schema: ctx.id })
+          adapter = new PrismaPg({ connectionString })
           break
         case 'mysql':
         case 'mariadb':

@@ -6,6 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PrismaPgAdapterFactory } from '../pg'
 
 describe('PrismaPgAdapterFactory', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('should subscribe to pool error events', async () => {
     const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
     const factory = new PrismaPgAdapterFactory(config)
@@ -111,6 +115,154 @@ describe('PrismaPgAdapterFactory', () => {
     await adapter.dispose()
   })
 
+  it('should extract schema from connection string URL when not provided in options', async () => {
+    const connectionString = 'postgresql://test:test@localhost:5432/test?schema=custom_schema'
+    const factory = new PrismaPgAdapterFactory(connectionString)
+    const adapter = await factory.connect()
+
+    const connectionInfo = adapter.getConnectionInfo()
+    expect(connectionInfo.schemaName).toBe('custom_schema')
+
+    await adapter.dispose()
+  })
+
+  it('should prefer schema from options over connection string URL', async () => {
+    const connectionString = 'postgresql://test:test@localhost:5432/test?schema=url_schema'
+    const factory = new PrismaPgAdapterFactory(connectionString, { schema: 'options_schema' })
+    const adapter = await factory.connect()
+
+    const connectionInfo = adapter.getConnectionInfo()
+    expect(connectionInfo.schemaName).toBe('options_schema')
+
+    await adapter.dispose()
+  })
+
+  it('should extract schema from PoolConfig connectionString when not provided in options', async () => {
+    const factory = new PrismaPgAdapterFactory({
+      connectionString: 'postgresql://test:test@localhost:5432/test?schema=url_schema',
+    })
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('url_schema')
+
+    await adapter.dispose()
+  })
+
+  it('should accept a libpq-style connection string without extracting a schema', async () => {
+    const factory = new PrismaPgAdapterFactory('host=localhost port=5432 dbname=test user=test password=test')
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBeUndefined()
+
+    await adapter.dispose()
+  })
+
+  it('should not mutate the caller-provided PoolConfig', async () => {
+    const config: pg.PoolConfig = {
+      connectionString: 'postgresql://test:test@localhost:5432/test?schema=url_schema',
+      options: '-cstatement_timeout=5000',
+    }
+    const factory = new PrismaPgAdapterFactory(config)
+    const adapter = await factory.connect()
+
+    expect(config).toEqual({
+      connectionString: 'postgresql://test:test@localhost:5432/test?schema=url_schema',
+      options: '-cstatement_timeout=5000',
+    })
+
+    await adapter.dispose()
+  })
+
+  it('should honor the explicit schema option for external pools', async () => {
+    const pool = new pg.Pool({ user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' })
+    pool.on('error', () => {})
+    const factory = new PrismaPgAdapterFactory(pool, { schema: 'custom_schema' })
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('custom_schema')
+
+    await adapter.dispose()
+    await pool.end()
+  })
+
+  it('should extract schema from the connection string of an external pool without changing the pool', async () => {
+    const connectionString = 'postgresql://test:test@localhost:5432/test?schema=url_schema'
+    const pool = new pg.Pool({ connectionString })
+    pool.on('error', () => {})
+    const factory = new PrismaPgAdapterFactory(pool)
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('url_schema')
+    expect(pool.options).toEqual(expect.objectContaining({ connectionString }))
+    expect(pool.options.options).toBeUndefined()
+
+    await adapter.dispose()
+    await pool.end()
+  })
+
+  it.each([
+    ['a Unix socket URL with an empty host', 'postgresql://u:p@/db?host=/var/run/postgresql&schema=socket_schema'],
+    ['a socket:// URL', 'socket://u:p@/var/run/postgresql?db=db&schema=socket_schema'],
+  ])('should extract schema from %s, as pg parses it', async (_, connectionString) => {
+    const factory = new PrismaPgAdapterFactory(connectionString)
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('socket_schema')
+
+    await adapter.dispose()
+  })
+
+  it('should take the last of repeated schema parameters, as pg does', async () => {
+    const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost:5432/test?schema=first&schema=last')
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('last')
+
+    await adapter.dispose()
+  })
+
+  it('should extract the schema without reading the TLS files the URL names', async () => {
+    const factory = new PrismaPgAdapterFactory(
+      'postgresql://test:test@localhost:5432/test?sslmode=verify-ca&sslrootcert=/does/not/exist/ca.pem&sslcert=/does/not/exist/cert.pem&sslkey=/does/not/exist/key.pem&schema=app',
+    )
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('app')
+
+    await adapter.dispose()
+  })
+
+  it('should not include a URL fragment in the schema', async () => {
+    const factory = new PrismaPgAdapterFactory(
+      'postgresql://test:test@localhost:5432/test?sslmode=require&schema=app#fragment',
+    )
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('app')
+
+    await adapter.dispose()
+  })
+
+  it('should keep an encoded # in the schema name', async () => {
+    const factory = new PrismaPgAdapterFactory(
+      'postgresql://test:test@localhost:5432/test?sslmode=require&schema=a%23b#fragment',
+    )
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('a#b')
+
+    await adapter.dispose()
+  })
+
+  it('should not extract a schema from an empty schema parameter', async () => {
+    const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost:5432/test?schema=')
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBeUndefined()
+
+    await adapter.dispose()
+  })
+
   it('should pass generated name when statement name generator is provided', async () => {
     const mockGenerator = vi.fn(() => 'test-name')
     const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost/test', {
@@ -140,6 +292,23 @@ describe('PrismaPgAdapterFactory', () => {
     const adapter = await factory.connect()
 
     expect(adapter.underlyingDriver().options.options).toBeUndefined()
+
+    await adapter.dispose()
+  })
+
+  it('should not add startup parameters to the connection when the schema comes from the URL', async () => {
+    vi.stubEnv('PGOPTIONS', undefined)
+    vi.stubEnv('PGAPPNAME', undefined)
+    vi.stubEnv('PGREPLICATION', undefined)
+    const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost:5432/test?schema=url_schema')
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('url_schema')
+    // `pg` re-parses `connectionString` at connect time, so check the startup message a client would send.
+    const client = new pg.Client(adapter.underlyingDriver().options) as unknown as {
+      getStartupConf(): Record<string, string>
+    }
+    expect(client.getStartupConf()).toEqual({ user: 'test', database: 'test' })
 
     await adapter.dispose()
   })
