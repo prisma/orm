@@ -39,7 +39,7 @@ import {
   VERIFY_CODE_TARGET_MISMATCH,
 } from '@internal/framework-components/control';
 import type { TypesImportSpec } from '@internal/framework-components/emission';
-import { isPlainRecord, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   type PslDocumentAst,
   UNBOUND_PSL_NAMESPACE_NAME,
@@ -401,6 +401,14 @@ function buildTransitiveDependsOnMap(
  * Throws with a diagnostic naming the violating extension (source), the
  * target space, and the direction violation.
  */
+function isStoredContractDocument(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    ('formatVersion' in value || 'schemaVersion' in value)
+  );
+}
+
 function isObjectRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
@@ -533,9 +541,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       const { contractJson, headRef } = extension.contractSpace;
       assertDescriptorSelfConsistency({
         extensionId: extension.id,
-        target: contractJson.target,
-        targetFamily: contractJson.targetFamily,
-        storage: contractJson.storage,
+        contractJson,
         headRefHash: headRef.hash,
         ...sqlContractCanonicalizationHooks,
       });
@@ -636,21 +642,24 @@ export function createSqlFamilyInstance<TTargetId extends string>(
         ? [{ spaceId: extension.id, contract: extension.contractSpace.contractJson }]
         : [],
   );
-  const loadContract = (contractOrJson: unknown): Contract<SqlStorage> => {
-    const serializer = targetSerializer ?? new SqlContractSerializer();
-    const json =
-      targetSerializer !== undefined && !isPlainRecord(contractOrJson)
-        ? targetSerializer.serializeContract(
-            blindCast<
-              Contract<SqlStorage>,
-              'isPlainRecord returned false, so contractOrJson is a class instance, not raw JSON'
-            >(contractOrJson),
-          )
-        : contractOrJson;
-    const contract = serializer.deserializeContract(json);
+  const contractSerializer = targetSerializer ?? new SqlContractSerializer();
+  const loadContract = (json: unknown): Contract<SqlStorage> => {
+    const contract = contractSerializer.deserializeContract(json);
     assertContractMatchesStack(contract, stack);
     return contract;
   };
+  /** A contract the caller already deserialized is validated again from what it prints; a stored document is read as one. */
+  const loadContractOrDocument = (contractOrJson: unknown): Contract<SqlStorage> =>
+    loadContract(
+      isStoredContractDocument(contractOrJson)
+        ? contractOrJson
+        : contractSerializer.serializeContract(
+            blindCast<
+              Contract<SqlStorage>,
+              'a value without a format version field is a contract the caller already deserialized'
+            >(contractOrJson),
+          ),
+    );
 
   const contractHashesOf = (contract: SpaceToSign['contract']): MarkerHashes => {
     const storageHash = contract.storage.storageHash;
@@ -796,7 +805,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       } = verifyOptions;
       const startTime = Date.now();
 
-      const contract = loadContract(rawContract);
+      const contract = loadContractOrDocument(rawContract);
 
       const contractStorageHash = contract.storage.storageHash;
       const contractProfileHash = contract.profileHash;
@@ -912,7 +921,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       readonly strict: boolean;
       readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>;
     }): VerifyDatabaseSchemaResult {
-      const contract = loadContract(options.contract);
+      const contract = loadContractOrDocument(options.contract);
       if (!diffSchema) {
         throw missingDescriptorOperationError(target.targetId, 'diffSchema');
       }

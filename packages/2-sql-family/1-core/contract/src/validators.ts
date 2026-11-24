@@ -1,4 +1,5 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
+import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
 import {
   type Contract,
   ContractExecutionSectionSchema,
@@ -1134,6 +1135,9 @@ export interface ValidateSqlContractFullyOptions {
  * `ContractValidationError` on the first failure. Returns the
  * validated flat-data shape; IR class hydration happens in the SPI
  * base on top of this helper.
+ *
+ * A value that carries `formatVersion` or the old `schemaVersion` is a stored file, and is refused
+ * unless its format version is one this release reads. A value with neither is an in-memory contract.
  */
 export function validateSqlContractFully<T extends Contract<SqlStorage>>(
   value: unknown,
@@ -1142,8 +1146,11 @@ export function validateSqlContractFully<T extends Contract<SqlStorage>>(
   const stripped =
     typeof value === 'object' && value !== null
       ? (() => {
+          if ('formatVersion' in value || 'schemaVersion' in value) {
+            readFormatVersion(value, { kind: 'contract', knownVersions: CONTRACT_FORMAT_VERSIONS });
+          }
           const {
-            schemaVersion: _,
+            formatVersion: _,
             _generated: _g,
             ...rest
           } = blindCast<

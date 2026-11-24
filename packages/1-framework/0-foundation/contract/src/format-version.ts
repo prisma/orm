@@ -6,7 +6,6 @@ import {
   structuredError,
 } from '@internal/utils/structured-error';
 import { UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
-import { isPlainRecord } from './is-plain-record';
 
 /** The kinds of file Prisma writes into a repository and reads back, each of which says which version of its format it is in. */
 export type StoredFileKind = 'contract' | 'migration' | 'ref';
@@ -63,7 +62,7 @@ export function readFormatVersion<TVersion extends number>(
   document: unknown,
   options: ReadFormatVersionOptions<TVersion>,
 ): TVersion {
-  if (isPlainRecord(document) && !('schemaVersion' in document)) {
+  if (isJsonObject(document) && !('schemaVersion' in document)) {
     const known = options.knownVersions.find((version) => version === document['formatVersion']);
     if (known !== undefined) return known;
   }
@@ -75,8 +74,12 @@ export function readFormatVersion<TVersion extends number>(
   });
 }
 
+function isJsonObject(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function problemOf(document: unknown, knownVersions: readonly number[]): FormatVersionProblem {
-  if (!isPlainRecord(document)) return { reason: 'absent' };
+  if (!isJsonObject(document)) return { reason: 'absent' };
   const formatVersion = document['formatVersion'];
   if (
     typeof formatVersion === 'number' &&

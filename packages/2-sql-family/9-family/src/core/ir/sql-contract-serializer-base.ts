@@ -1,4 +1,9 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
+import {
+  CONTRACT_FORMAT_VERSIONS,
+  type ContractFormatVersion,
+  readFormatVersion,
+} from '@internal/contract/format-version';
 import { isPlainRecord } from '@internal/contract/is-plain-record';
 import type { Contract } from '@internal/contract/types';
 import { withDerivedToOneRelationNullability } from '@internal/contract-authoring';
@@ -39,6 +44,12 @@ const NamespaceRawSchema = type({
 });
 
 export type SqlEntityHydrationFactory = (entry: unknown) => unknown;
+
+/** One version of the `contract.json` format: its parser and its printer. The in-memory contract is the same for every version. */
+interface SqlContractFormat<TContract> {
+  parse(document: unknown): TContract;
+  print(contract: TContract): JsonObject;
+}
 
 /**
  * A `contract.json` written before to-one relations recorded `nullable` (rc.9 and earlier)
@@ -103,16 +114,37 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
       packEntityKinds.length > 0 ? createSqlContractSchema(this.entryKinds) : undefined;
   }
 
+  private readonly contractFormats: Readonly<
+    Record<ContractFormatVersion, SqlContractFormat<TContract>>
+  > = {
+    1: {
+      parse: (document) => this.parseContractV1(document),
+      print: (contract) => ({ formatVersion: 1, ...this.printContractV1(contract) }),
+    },
+  };
+
   deserializeContract<T extends TContract = TContract>(json: unknown): T {
-    const validated = withSqlToOneRelationNullability(this.parseSqlContractStructure(json));
-    const hydrated = this.hydrateSqlStorage(validated);
+    const formatVersion = readFormatVersion(json, {
+      kind: 'contract',
+      knownVersions: CONTRACT_FORMAT_VERSIONS,
+    });
     return blindCast<
       T,
       'target serializer constructTargetContract returns the requested contract subtype'
-    >(this.constructTargetContract(hydrated));
+    >(this.contractFormats[formatVersion].parse(json));
   }
 
   serializeContract(contract: TContract): JsonObject {
+    return this.contractFormats[1].print(contract);
+  }
+
+  protected parseContractV1(document: unknown): TContract {
+    const validated = withSqlToOneRelationNullability(this.parseSqlContractStructure(document));
+    return this.constructTargetContract(this.hydrateSqlStorage(validated));
+  }
+
+  /** The contract in version 1 of the file format, without the `formatVersion` field. Targets that serialize their namespaces themselves override it. */
+  protected printContractV1(contract: TContract): JsonObject {
     return blindCast<
       JsonObject,
       'SQL contract instances are JSON-clean envelopes and stringify to the persisted contract object'

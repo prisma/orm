@@ -161,9 +161,7 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
       const { contractJson, headRef } = extension.contractSpace;
       assertDescriptorSelfConsistency({
         extensionId: extension.id,
-        target: contractJson.target,
-        targetFamily: contractJson.targetFamily,
-        storage: contractJson.storage,
+        contractJson,
         headRefHash: headRef.hash,
         ...mongoContractCanonicalizationHooks,
       });

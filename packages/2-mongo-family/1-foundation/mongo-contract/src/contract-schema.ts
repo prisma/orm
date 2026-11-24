@@ -429,7 +429,6 @@ export function createMongoContractSchema(
   return type({
     '+': 'reject',
     targetFamily: "'mongo'",
-    'schemaVersion?': 'string',
     target: 'string',
     'storageHash?': 'string',
     'profileHash?': 'string',

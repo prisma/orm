@@ -35,8 +35,11 @@ export function contractFromJson<
   );
 }
 
+/** Validates a contract value for a Mongo client, once per value. */
 export function validateMongoContract<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 >(contract: TContract): TContract {
-  return contractFromJson<TContract>(contract);
+  return validateContractOnce(contract, validator, () =>
+    serializer.deserializeContract<TContract>(serializer.serializeContract(contract)),
+  );
 }
