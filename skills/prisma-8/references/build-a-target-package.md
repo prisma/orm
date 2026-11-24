@@ -91,7 +91,7 @@ export default {
 | `probe(databaseUrl, signal)` | Optional. Runs for `--probe-db` |
 | `prisma7QuickReference(input)` | Optional. Required when your `configModule` exports `prisma7Schema` |
 
-A user names your package in `--target` by its full package name, such as `--target prisma-orm-acmedb`; short names such as `postgres` exist only for the packages Prisma publishes. With `--skip-install`, your package must already be installed in the project, because every file `init` writes comes from it.
+A user names your package in `--target` by its package name, such as `--target prisma-orm-acmedb`. Short names such as `postgres` exist only for the packages in the CLI's list of targets Prisma vouches for; today that is Postgres and MongoDB. With `--skip-install`, your package must already be installed in the project: `init` loads your `/init` entrypoint before it writes anything, and reads the `prisma-orm-extension` keyword from the installed copy.
 
 Rules:
 
@@ -102,7 +102,7 @@ Rules:
 
 ## Package rules
 
-- Name the package `prisma-orm-<name>`, under your scope if you have one, and add the keyword `prisma-orm-extension` to its `package.json`. The keyword is required: `prisma orm init --target` reads it before installing your package and refuses a package without it. `init` checks the copy it is about to load: the registry's `latest` version when it will install your package, and the installed `package.json` when the project already declares your package and has it on disk. It asks the registry without credentials, so a user of a package on a registry that needs them, or on a scope's own registry, installs the package first and then runs `init`.
+- Name the package `prisma-orm-<name>`, under your scope if you have one, and add the keyword `prisma-orm-extension` to its `package.json`. The keyword is required: `prisma orm init --target` reads it before installing your package and refuses a package without it. `init` checks the copy it is about to load: the registry's `latest` version when it will install your package, and the installed `package.json` when it will not: under `--skip-install`, or when the project already declares your package and has it on disk. It asks the registry without credentials, so a user of a package on a registry that needs them, or on a scope's own registry, installs the package first and then runs `init`.
 - Depend on the Prisma packages your code imports at run time (`@prisma/orm-framework`, your family's package), each pinned to one exact version; see [`upgrade-extension.md`](upgrade-extension.md) § *Exact-pin rule*.
 - `/init` imports only the `InitContribution` type from `@prisma/orm-toolchain`. If that is your package's only use of it, make it a development dependency: as a pinned dependency it gives the application a second copy of the toolchain whenever its `prisma` is another version.
 - Import or name no module beginning `@internal/`. Those are Prisma's private workspace names.
@@ -110,3 +110,5 @@ Rules:
 ## Check it from outside
 
 Pack your package and install the tarball into a scratch application that depends on nothing from Prisma except the CLI. Run `prisma orm init --target <your package>`, `prisma contract emit` and `prisma migration plan`, then typecheck with `skipLibCheck` off. Every import in the generated files names your package, an extension's own package, or a relative path.
+
+A check with a package that borrows another target's parts behind its own name proves only the wiring: the imports and `init`. A target written from scratch also needs its own target, adapter and driver descriptors, its own codec and operation types under its own module names, its own migration planner and renderer, and its own contract serialiser and runtime client.
