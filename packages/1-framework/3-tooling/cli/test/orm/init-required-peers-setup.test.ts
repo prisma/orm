@@ -288,3 +288,106 @@ describe('whether a package the project lists is at the version asked for', () =
     });
   });
 });
+
+describe('a package installed at a version other than the one asked for', () => {
+  function installedAt(name: string, version: string, peers: Record<string, string>): void {
+    const path = join(projectDir, 'node_modules', name, 'package.json');
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify({ name, version, peerDependencies: peers }));
+  }
+
+  it('does not stand for the version asked for in the printed setup, and is not read from the registry', async () => {
+    installedAt('@prisma/orm-framework', '8.0.0', { 'old-peer': '^1.0.0' });
+
+    const list = await forSetup()('@prisma/orm-mongo');
+
+    expect({
+      packages: list.packages.map((peer) => peer.name),
+      unread: list.unread,
+      warnings: list.warnings,
+      askedFramework: asked.filter((spec) => spec.startsWith('@prisma/orm-framework')),
+    }).toEqual({
+      packages: ['@prisma/orm-family-mongo', '@prisma/orm-framework', 'mongodb'],
+      unread: [],
+      warnings: [
+        `@prisma/orm-framework is installed at 8.0.0, but @prisma/orm-mongo needs ${VERSION}, so init could not work out the packages @prisma/orm-framework needs as required peers. Once @prisma/orm-framework@${VERSION} is installed, add each package its package.json lists under peerDependencies, at the range listed there.`,
+      ],
+      askedFramework: [],
+    });
+  });
+
+  it('is read again once init installs the version asked for, and what that version names is installed', async () => {
+    const installs: (readonly string[])[] = [];
+    let frameworkVersion = '8.0.0';
+    const resolved = await resolveRequiredPeers({
+      packageName: '@prisma/orm-postgres',
+      ownsTarget: false,
+      installedElsewhere: new Set(),
+      declared: () => new Map(),
+      installedVersion: () => undefined,
+      install: async (specifiers) => {
+        installs.push(specifiers);
+        if (specifiers.includes(`@prisma/orm-framework@${VERSION}`)) frameworkVersion = VERSION;
+        return undefined;
+      },
+      read: async (name) =>
+        name === '@prisma/orm-postgres'
+          ? { version: VERSION, peers: new Map([['@prisma/orm-framework', VERSION]]) }
+          : {
+              version: frameworkVersion,
+              peers: new Map(
+                frameworkVersion === VERSION
+                  ? [['temporal-polyfill', '^1.0.8']]
+                  : [['old-peer', '^1.0.0']],
+              ),
+            },
+    });
+
+    expect({ resolved, installs }).toEqual({
+      resolved: {
+        target: `@prisma/orm-postgres@${VERSION}`,
+        packages: [
+          { name: '@prisma/orm-framework', version: VERSION, outcome: 'installed' },
+          { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
+        ],
+        unread: [],
+        warnings: [],
+      },
+      installs: [[`@prisma/orm-framework@${VERSION}`], ['temporal-polyfill@^1.0.8']],
+    });
+  });
+});
+
+describe('the packages init installs in a round', () => {
+  it('are read again, so a peer the installed version adds is installed too', async () => {
+    const installs: (readonly string[])[] = [];
+    let frameworkPeers = new Map<string, string>();
+    const resolved = await resolveRequiredPeers({
+      packageName: '@prisma/orm-postgres',
+      ownsTarget: false,
+      installedElsewhere: new Set(),
+      declared: () => new Map(),
+      installedVersion: () => undefined,
+      install: async (specifiers) => {
+        installs.push(specifiers);
+        frameworkPeers = new Map([['temporal-polyfill', '^1.0.8']]);
+        return undefined;
+      },
+      read: async (name) =>
+        name === '@prisma/orm-postgres'
+          ? { version: VERSION, peers: new Map([['@prisma/orm-framework', '~8.1.0']]) }
+          : { version: VERSION, peers: frameworkPeers },
+    });
+
+    expect({
+      packages: resolved instanceof Error ? resolved : resolved.packages,
+      installs,
+    }).toEqual({
+      packages: [
+        { name: '@prisma/orm-framework', version: '~8.1.0', outcome: 'installed' },
+        { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
+      ],
+      installs: [['@prisma/orm-framework@~8.1.0'], ['temporal-polyfill@^1.0.8']],
+    });
+  });
+});
