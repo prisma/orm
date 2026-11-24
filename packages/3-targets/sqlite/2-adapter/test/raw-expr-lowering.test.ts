@@ -15,6 +15,7 @@ import { renderLoweredSql } from '../src/core/adapter';
 import type { SqliteContract } from '../src/core/types';
 
 const contract = new SqlContractSerializer().deserializeContract({
+  formatVersion: 1,
   target: 'sqlite',
   targetFamily: 'sql',
   profileHash: 'raw-expr-test',

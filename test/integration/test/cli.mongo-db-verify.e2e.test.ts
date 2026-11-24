@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import { coreHash, crossRef, profileHash } from '@internal/contract/types';
 import { MongoControlDriver } from '@internal/driver-mongo/control';
+import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { MongoCollection, type MongoContract, MongoIndex } from '@internal/mongo-contract';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient } from 'mongodb';
@@ -75,7 +76,11 @@ const testContract: MongoContract = {
 function writeContractJson(testDir: string, contract: MongoContract): void {
   const outputDir = resolve(testDir, 'output');
   mkdirSync(outputDir, { recursive: true });
-  writeFileSync(resolve(outputDir, 'contract.json'), JSON.stringify(contract, null, 2), 'utf-8');
+  writeFileSync(
+    resolve(outputDir, 'contract.json'),
+    JSON.stringify(new MongoContractSerializer().serializeContract(contract), null, 2),
+    'utf-8',
+  );
 }
 
 describe('mongo db verify command (e2e)', { timeout: timeouts.spinUpMongoMemoryServer }, () => {

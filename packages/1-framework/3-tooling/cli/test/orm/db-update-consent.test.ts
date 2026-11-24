@@ -130,7 +130,7 @@ beforeEach(() => {
   writeProjectManifest(projectDir);
   writeFileSync(
     join(projectDir, 'contract.json'),
-    JSON.stringify({ storage: { storageHash: MARKER_HASH } }),
+    JSON.stringify({ formatVersion: 1, storage: { storageHash: MARKER_HASH } }),
   );
   writeFileSync(join(projectDir, 'contract.d.ts'), 'export type Contract = never;\n');
   answers.splice(0);

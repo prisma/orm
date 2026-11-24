@@ -32,7 +32,7 @@ describe('readContractSpaceHeadRef', () => {
     const hash = `${'0'.repeat(63)}1`;
     const invariants = ['inv-2', 'inv-1', 'inv-3'];
     await emitContractSpaceArtifacts(migrationsDir, 'cipherstash', {
-      contract: { storage: { storageHash: hash }, foo: 1 },
+      contract: { formatVersion: 1, storage: { storageHash: hash }, foo: 1 },
       contractDts: '\n',
       headRef: { hash, invariants },
     });
@@ -45,7 +45,7 @@ describe('readContractSpaceHeadRef', () => {
   it('round-trips for the app space (uniform with extensions)', async () => {
     const hash = 'a'.repeat(64);
     await emitContractSpaceArtifacts(migrationsDir, APP_SPACE_ID, {
-      contract: { storage: { storageHash: hash } },
+      contract: { formatVersion: 1, storage: { storageHash: hash } },
       contractDts: '\n',
       headRef: { hash, invariants: [] },
     });

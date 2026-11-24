@@ -1,5 +1,5 @@
 import type { Contract } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import { SqlStorage } from '@internal/sql-contract/types';
 import { PostgresSchema } from '@internal/target-postgres/types';
 import { createContract } from '@repo/test-utils';
 import { SignJWT } from 'jose';
@@ -26,6 +26,18 @@ vi.mock('pg', () => {
 import supabase from '../src/runtime/supabase';
 
 const base = createContract<SqlStorage>();
+const storage = {
+  storageHash: base.storage.storageHash,
+  namespaces: {
+    public: new PostgresSchema({
+      id: 'public',
+      entries: {
+        table: {},
+        valueSet: { AalLevel: { kind: 'valueSet', values: ['aal1', 'aal2'] } },
+      },
+    }),
+  },
+} as const;
 const enumContract = {
   ...base,
   domain: {
@@ -44,18 +56,7 @@ const enumContract = {
       },
     },
   },
-  storage: {
-    ...base.storage,
-    namespaces: {
-      public: new PostgresSchema({
-        id: 'public',
-        entries: {
-          table: {},
-          valueSet: { AalLevel: { kind: 'valueSet', values: ['aal1', 'aal2'] } },
-        },
-      }),
-    },
-  },
+  storage: new SqlStorage(storage) as SqlStorage & typeof storage,
 } as const;
 
 type EnumContract = Contract<SqlStorage> & {

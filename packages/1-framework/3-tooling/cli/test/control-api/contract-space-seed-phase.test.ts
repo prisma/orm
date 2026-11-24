@@ -18,7 +18,7 @@ const HASH_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 const HASH_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
 function makeContract(storageHash: string, extra: Record<string, unknown> = {}): unknown {
-  return { storage: { storageHash }, ...extra };
+  return { formatVersion: 1, storage: { storageHash }, ...extra };
 }
 
 function makeMetadata(args: {

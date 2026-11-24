@@ -1,6 +1,6 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
-import { readRefs } from '@internal/migration-tools/refs';
+import { readRefs, writeRef } from '@internal/migration-tools/refs';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readMigrationRefs } from '../../src/control-api/operations/refs';
@@ -30,11 +30,7 @@ describe('readMigrationRefs', () => {
   });
 
   it('returns ok with the parsed entries for a populated refs directory', async () => {
-    await mkdir(refsDir, { recursive: true });
-    await writeFile(
-      join(refsDir, 'staging.json'),
-      JSON.stringify({ hash: HASH_A, invariants: [] }),
-    );
+    await writeRef(refsDir, 'staging', { hash: HASH_A, invariants: [] });
     const result = await readMigrationRefs(refsDir);
     expect(result.ok).toBe(true);
     if (result.ok) {

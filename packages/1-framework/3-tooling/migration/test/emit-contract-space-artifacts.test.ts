@@ -13,7 +13,7 @@ const HASH_V2 = '2'.repeat(64);
 const HASH_APP = 'a'.repeat(64);
 
 function makeContract(storageHash: string, extra: Record<string, unknown> = {}): unknown {
-  return { storage: { storageHash }, ...extra };
+  return { formatVersion: 1, storage: { storageHash }, ...extra };
 }
 
 describe('emitContractSpaceArtifacts', () => {

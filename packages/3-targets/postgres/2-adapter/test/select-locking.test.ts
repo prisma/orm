@@ -18,6 +18,7 @@ import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
 
 const contract = new SqlContractSerializer().deserializeContract({
+  formatVersion: 1,
   target: 'postgres',
   targetFamily: 'sql',
   profileHash: 'test-profile',

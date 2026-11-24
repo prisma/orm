@@ -20,6 +20,7 @@ import type { PostgresContract } from '../src/core/types';
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const contract = new SqlContractSerializer().deserializeContract({
+  formatVersion: 1,
   target: 'postgres',
   targetFamily: 'sql',
   profileHash: 'raw-expr-test',

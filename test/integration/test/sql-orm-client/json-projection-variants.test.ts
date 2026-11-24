@@ -24,6 +24,7 @@ import {
 } from '../../../../packages/3-extensions/sql-orm-client/test/json-projection-plans';
 
 const sqliteContract = new TestSqlContractSerializer().deserializeContract({
+  formatVersion: 1,
   target: 'sqlite',
   targetFamily: 'sql',
   profileHash: 'test-profile',
