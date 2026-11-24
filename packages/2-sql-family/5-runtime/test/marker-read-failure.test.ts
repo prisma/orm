@@ -145,6 +145,43 @@ describe('when the marker cannot be read', () => {
     ]);
   });
 
+  it('warns and reads no more when the marker reader wrapped a statement error in CONTRACT.MARKER_READ_FAILED', async () => {
+    const statementError = new SqlQueryError('permission denied for table marker', {
+      sqlState: '42501',
+    });
+    const { runtime, log, readMarkerSpy } = failingRuntime(
+      structuredError(
+        'CONTRACT.MARKER_READ_FAILED',
+        'Database error while reading contract marker',
+        {
+          why: statementError.message,
+          cause: statementError,
+        },
+      ),
+    );
+
+    await expect(runtime.query(createPlan()).toArray()).resolves.toEqual([{}]);
+    await expect(runtime.query(createPlan()).toArray()).resolves.toEqual([{}]);
+
+    expect(readMarkerSpy).toHaveBeenCalledOnce();
+    expect(log.warn.mock.calls).toEqual([
+      [
+        {
+          code: 'CONTRACT.MARKER_READ_FAILED',
+          scope: 'marker-verification',
+          expected,
+          actual: null,
+          message: 'Contract marker could not be read from database',
+          error: {
+            code: 'CONTRACT.MARKER_READ_FAILED',
+            message: 'Database error while reading contract marker',
+            why: 'permission denied for table marker',
+          },
+        },
+      ],
+    ]);
+  });
+
   it('warns with CONTRACT.MARKER_READ_FAILED when the read throws something other than an Error', async () => {
     const { runtime, log } = failingRuntime('socket hang up');
 
@@ -199,27 +236,38 @@ describe('when the marker cannot be read', () => {
 });
 
 describe('when the marker read cannot reach the database', () => {
+  const refused = new SqlConnectionError('connect ECONNREFUSED 127.0.0.1:5432', {
+    transient: false,
+  });
+  const notConnected = structuredError('DRIVER.NOT_CONNECTED', 'Postgres driver is not connected');
+  const connectionFailed = structuredError(
+    'DRIVER.CONNECTION_FAILED',
+    'Database connection failed',
+  );
   const connectionFailures = [
+    ['a SqlConnectionError', refused, refused],
     [
-      'a SqlConnectionError',
-      new SqlConnectionError('connect ECONNREFUSED 127.0.0.1:5432', { transient: false }),
+      'a SqlConnectionError the marker reader wrapped in CONTRACT.MARKER_READ_FAILED',
+      refused,
+      structuredError(
+        'CONTRACT.MARKER_READ_FAILED',
+        'Database error while reading contract marker',
+        {
+          why: refused.message,
+          cause: refused,
+        },
+      ),
     ],
-    [
-      'DRIVER.NOT_CONNECTED',
-      structuredError('DRIVER.NOT_CONNECTED', 'Postgres driver is not connected'),
-    ],
-    [
-      'DRIVER.CONNECTION_FAILED',
-      structuredError('DRIVER.CONNECTION_FAILED', 'Database connection failed'),
-    ],
+    ['DRIVER.NOT_CONNECTED', notConnected, notConnected],
+    ['DRIVER.CONNECTION_FAILED', connectionFailed, connectionFailed],
   ] as const;
 
   it.each(connectionFailures)(
-    'rejects the call with %s unchanged and warns about nothing',
-    async (_, failure) => {
-      const { runtime, log } = failingRuntime(failure, unreachableDriver(failure));
+    'rejects the call with the driver error unchanged after %s and warns about nothing',
+    async (_, driverError, readFailure) => {
+      const { runtime, log } = failingRuntime(readFailure, unreachableDriver(driverError));
 
-      await expect(runtime.query(createPlan()).toArray()).rejects.toBe(failure);
+      await expect(runtime.query(createPlan()).toArray()).rejects.toBe(driverError);
 
       expect(log.warn).not.toHaveBeenCalled();
     },
@@ -227,15 +275,15 @@ describe('when the marker read cannot reach the database', () => {
 
   it.each(connectionFailures)(
     'checks the marker again on the next call after %s',
-    async (_, failure) => {
+    async (_, driverError, readFailure) => {
       const readMarkerSpy = vi
         .fn()
-        .mockRejectedValueOnce(failure)
+        .mockRejectedValueOnce(readFailure)
         .mockResolvedValue({ kind: 'present', record: markerRecord({ storageHash: 'stale' }) });
       const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
       const runtime = buildRuntime({ markerResult: { kind: 'absent' }, log, readMarkerSpy });
 
-      await expect(runtime.query(createPlan()).toArray()).rejects.toBe(failure);
+      await expect(runtime.query(createPlan()).toArray()).rejects.toBe(driverError);
       await expect(runtime.query(createPlan()).toArray()).resolves.toEqual([{}]);
       await expect(runtime.query(createPlan()).toArray()).resolves.toEqual([{}]);
 

@@ -1608,8 +1608,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     try {
       readResult = await this.familyAdapter.markerReader.readMarker(this.driver);
     } catch (error) {
-      if (isConnectionFailure(error)) {
-        throw error;
+      const unreachable = unreachableDatabaseError(error);
+      if (unreachable !== undefined) {
+        throw unreachable;
       }
       const corrupt = isStructuredError(error) && error.code === 'CONTRACT.MARKER_ROW_CORRUPT';
       this.warnAboutMarker({
@@ -1709,12 +1710,19 @@ function transactionAlreadyOpenError(
 // Rows of a handle's statement, refused at the first read when the handle no longer accepts children, before the route takes a connection or session.
 function noWork(): void {}
 
-function isConnectionFailure(error: unknown): boolean {
+function isConnectionFailure(error: unknown): error is Error {
   return (
     SqlConnectionError.is(error) ||
     (isStructuredError(error) &&
       (error.code === 'DRIVER.NOT_CONNECTED' || error.code === 'DRIVER.CONNECTION_FAILED'))
   );
+}
+
+/** The driver's error when the marker read failed because the database could not be reached, unwrapped from the `CONTRACT.MARKER_READ_FAILED` the marker readers wrap a `SqlConnectionError` in. */
+function unreachableDatabaseError(error: unknown): Error | undefined {
+  const driverError =
+    isStructuredError(error) && error.code === 'CONTRACT.MARKER_READ_FAILED' ? error.cause : error;
+  return isConnectionFailure(driverError) ? driverError : undefined;
 }
 
 function describeMarkerReadError(error: unknown): {
