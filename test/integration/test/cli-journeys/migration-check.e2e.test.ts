@@ -9,7 +9,6 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { writeRef } from '@internal/migration-tools/refs';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
@@ -165,7 +164,11 @@ withTempDir(({ createTempDir }) => {
 
         const danglingHash = `${'f'.repeat(64)}`;
         const refsDir = join(ctx.testDir, 'migrations', 'app', 'refs');
-        await writeRef(refsDir, 'dangling', { hash: danglingHash, invariants: [] });
+        mkdirSync(refsDir, { recursive: true });
+        writeFileSync(
+          join(refsDir, 'dangling.json'),
+          `${JSON.stringify({ formatVersion: 1, hash: danglingHash, invariants: [] }, null, 2)}\n`,
+        );
 
         const check = await runMigrationCheck(ctx, ['--json']);
         expect(check.exitCode, 'check exit code').toBe(4);
