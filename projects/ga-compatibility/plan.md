@@ -20,10 +20,10 @@ Some parts can only start at `8.0.0`. Nothing can be promised about exports unti
 
 Drafts exist for most of the documentation: decision records for the policy and for the maturity levels, and corrections to the docs, rules and skills that contradict them. They come from the pull request prisma/orm#31194, which was closed without merging because it documented the whole policy ahead of the code. A project starts its documentation from these drafts and takes only its own part.
 
-- **Branch:** `docs/compatibility-policy-records`, at commit `126f6d2d40`.
-- **If the branch is ever deleted:** the same commits stay on GitHub as `refs/pull/31194/head`. Fetch them with `git fetch bot refs/pull/31194/head`.
-- **Which project takes what:** `projects/ga-compatibility-records/handover.md` on that branch.
-- **To read a file:** `git fetch bot docs/compatibility-policy-records`, then `git show FETCH_HEAD:<path>`.
+- **Where they are:** the branch `docs/compatibility-policy-records`, at commit `126f6d2d40`.
+- **If the branch is ever deleted:** the drafts stay on GitHub as `refs/pull/31194/head`, at commit `6b840b95f6`. Fetch them with `git fetch bot refs/pull/31194/head`.
+- **Which project takes what:** [documentation-drafts.md](documentation-drafts.md) in this folder. It is a copy of the list the drafts' author wrote, kept here so that it does not depend on that branch.
+- **To read a draft:** `git fetch bot docs/compatibility-policy-records`, then `git show FETCH_HEAD:<path>`.
 
 ## How to read this plan
 
