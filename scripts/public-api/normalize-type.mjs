@@ -5,7 +5,7 @@ import ts from 'typescript';
 
 export class TypeTextError extends Error {}
 
-const compareCodeUnits = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+export const compareCodeUnits = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 const CONTAINER_DECLARATION = /^(abstract class|class|const enum|enum|namespace|module) /;
 
@@ -25,23 +25,36 @@ function wrapperFor(text, context) {
   }
 }
 
-function render(node, file) {
+function isTypeName(node) {
+  const { parent } = node;
+  if (!ts.isIdentifier(node) || parent === undefined) return false;
+  if (ts.isTypeReferenceNode(parent)) return parent.typeName === node;
+  if (ts.isQualifiedName(parent)) return parent.left === node;
+  if (ts.isTypeQueryNode(parent)) return parent.exprName === node;
+  if (ts.isExpressionWithTypeArguments(parent)) return parent.expression === node;
+  return false;
+}
+
+// Prints `node` with the members of every union sorted and `import("…").Name` as `Name`.
+// `rename` may give the printed name of an identifier that names a type.
+export function renderNode(node, file, rename = () => undefined) {
+  if (isTypeName(node)) return rename(node) ?? node.getText(file);
   if (ts.isUnionTypeNode(node)) {
     return node.types
-      .map((member) => render(member, file))
+      .map((member) => renderNode(member, file, rename))
       .sort(compareCodeUnits)
       .join(' | ');
   }
   if (ts.isImportTypeNode(node) && node.qualifier) {
     const typeArguments = node.typeArguments
-      ? `<${node.typeArguments.map((argument) => render(argument, file)).join(', ')}>`
+      ? `<${node.typeArguments.map((argument) => renderNode(argument, file, rename)).join(', ')}>`
       : '';
     return `${node.isTypeOf ? 'typeof ' : ''}${node.qualifier.getText(file)}${typeArguments}`;
   }
   let text = '';
   let cursor = node.getStart(file);
   ts.forEachChild(node, (child) => {
-    text += file.text.slice(cursor, child.getStart(file)) + render(child, file);
+    text += file.text.slice(cursor, child.getStart(file)) + renderNode(child, file, rename);
     cursor = child.end;
   });
   return text + file.text.slice(cursor, node.end);
@@ -64,6 +77,6 @@ export function normalizeTypes(text, context) {
   ) {
     throw new TypeTextError(`cannot parse "${text}" as a ${context}`);
   }
-  const rendered = render(statement, file);
+  const rendered = renderNode(statement, file);
   return rendered.slice(prefix.length, rendered.length - suffix.length);
 }

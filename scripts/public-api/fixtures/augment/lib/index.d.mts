@@ -1,3 +1,3 @@
-import "./augment.mjs";
+import { t as Kind } from "./augment.mjs";
 declare function plain(): void;
-export { plain };
+export { Kind, plain };

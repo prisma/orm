@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./lib/index.mjs",
+    "./default": "./lib/default.mjs",
     "./named": "./lib/named.mjs",
     "./package.json": "./package.json"
   }

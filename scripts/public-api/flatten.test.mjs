@@ -1,4 +1,5 @@
 import { deepStrictEqual, strictEqual, throws } from 'node:assert/strict';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -7,9 +8,28 @@ import { readPackageApi } from './read-api.mjs';
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
-function linesOf(fixture) {
+function linesOf(fixture, editModel) {
   const packageDir = join(fixtures, fixture);
-  return flattenPackage(packageDir, readPackageApi(packageDir));
+  const entryPoints = readPackageApi(packageDir);
+  if (editModel) {
+    for (const { modelFile } of entryPoints) {
+      const model = JSON.parse(readFileSync(modelFile, 'utf8'));
+      editModel(model);
+      writeFileSync(modelFile, JSON.stringify(model));
+    }
+  }
+  return flattenPackage(packageDir, entryPoints);
+}
+
+const membersOf = (model) => model.members[0].members;
+
+function removeItem(model, name) {
+  model.members[0].members = membersOf(model).filter((item) => item.name !== name);
+}
+
+function removeMember(model, container, name) {
+  const item = membersOf(model).find((candidate) => candidate.name === container);
+  item.members = item.members.filter((member) => member.name !== name);
 }
 
 const sorted = (lines) => [...lines].sort(compareCodeUnits);
@@ -105,6 +125,7 @@ describe('flattenPackage', () => {
         '.: everything from pathe/utils',
         './named: export join from pathe',
         './named: export norm from pathe (as normalize)',
+        './default: export paths from pathe (as default)',
         './named: export res from pathe (as resolve)',
       ]),
     );
@@ -119,12 +140,128 @@ describe('flattenPackage', () => {
         '.: augments fixture-augment/registry interface Registry, optional property name?: string',
         '.: deprecated: augments fixture-augment/registry interface Registry, optional property name?: string',
         '.: augments fixture-augment/registry interface Registry, readonly required property "fixture/size": number',
+        '.: augments fixture-augment/registry interface Registry, readonly required property kind: Kind',
         '.: augments fixture-augment/registry interface Registry, readonly required property mode: "read" | "write"',
         '.: augments fixture-augment/registry interface Registry, required method describe(): string',
         '.: function plain(): void',
+        '.: type Kind = "a" | "b"',
         './registry: interface Registry',
         './registry: interface Registry, readonly required property base: string',
       ]),
+    );
+  });
+
+  it('lists an @internal export and member like any other', () => {
+    deepStrictEqual(
+      linesOf('internal'),
+      sorted([
+        '.: function hidden(): void',
+        '.: interface Thing',
+        '.: interface Thing, readonly required property secret: string',
+        '.: interface Thing, readonly required property shown: string',
+      ]),
+    );
+  });
+
+  it('lists a declaration once under each name it is exported as', () => {
+    deepStrictEqual(
+      linesOf('alias'),
+      sorted([
+        '.: const descriptor: { readonly id: string }',
+        '.: export default = const descriptor: { readonly id: string }',
+        '.: function aliasHelper(): void',
+        '.: function helper(): void',
+        '.: type NarrowSegment = string',
+        '.: type WideSegment = readonly string[] | string',
+      ]),
+    );
+  });
+
+  it('lists an export whose name a global also has under its own name', () => {
+    deepStrictEqual(
+      linesOf('dom'),
+      sorted([
+        '.: function read(range: Range): Document',
+        '.: interface Range',
+        '.: interface Range, readonly required property start: number',
+        '.: type Document = Record<string, unknown>',
+      ]),
+    );
+  });
+
+  it('keeps apart non-exported declarations that read alike but refer to different types', () => {
+    deepStrictEqual(
+      linesOf('merge'),
+      sorted([
+        '(not exported) interface Holder',
+        '(not exported) interface Holder, readonly required property options: Options',
+        '(not exported) interface Holder_2',
+        '(not exported) interface Holder_2, readonly required property options: Options_2',
+        '(not exported) interface Options',
+        '(not exported) interface Options, readonly required property alpha: boolean',
+        '(not exported) interface Options_2',
+        '(not exported) interface Options_2, readonly required property beta: boolean',
+        '.: function first(holder: Holder): void',
+        '.: function second(holder: Holder_2): void',
+      ]),
+    );
+  });
+
+  it('lists identical copies of one non-exported declaration once', () => {
+    deepStrictEqual(
+      linesOf('copies'),
+      sorted([
+        '(not exported) interface Shared',
+        '(not exported) interface Shared, readonly required property id: string',
+        '.: function first(shared: Shared): void',
+        './other: function second(shared: Shared): void',
+      ]),
+    );
+  });
+
+  it('gives a non-exported type another name than a type of another package it references', () => {
+    deepStrictEqual(
+      linesOf('clash'),
+      sorted([
+        '(not exported) interface Stats_2',
+        '(not exported) interface Stats_2, readonly required property size: number',
+        '.: function fromFs(stats: Stats): void',
+        '.: function local(stats: Stats_2): void',
+      ]),
+    );
+  });
+
+  it('prints a type of another package that the bundler renamed by its own name', () => {
+    deepStrictEqual(linesOf('external-rename'), ['.: function check(errors: ArkErrors): void']);
+  });
+
+  it('lists a re-exported namespace import as everything from that module', () => {
+    deepStrictEqual(linesOf('nsimport'), ['.: export paths = everything from pathe']);
+  });
+
+  it('leaves out augmentations in files of another package', () => {
+    deepStrictEqual(linesOf('outside-augment'), ['.: function plain(): void']);
+  });
+
+  it('fails on declare global, which it cannot list', () => {
+    throws(() => linesOf('global'), /declare global/);
+  });
+
+  it('fails when an augmentation refers to a type that no line lists', () => {
+    throws(() => linesOf('augraw'), /augments pathe interface Extra.*Label/);
+  });
+
+  it('fails when API Extractor gives no item for an export', () => {
+    throws(
+      () => linesOf('kinds', (model) => removeItem(model, 'answer')),
+      /\.: export answer has no line/,
+    );
+  });
+
+  it('fails when API Extractor gives no item for a member', () => {
+    throws(
+      () => linesOf('kinds', (model) => removeMember(model, 'Shape', 'label')),
+      /\.: member Shape\.label has no line/,
     );
   });
 
@@ -193,6 +330,13 @@ describe('portabilityProblems', () => {
         'line names a local path: .: const a: import("/home/ci/repo/x").A',
         'line names a local path: .: const b: import("./chunk-AbCd1234.mjs").B',
       ],
+    );
+  });
+
+  it('reports a name the bundler renamed, but not a $1 inside a string', () => {
+    deepStrictEqual(
+      portabilityProblems(['.: const a: Label$1', '.: const s: "hashtext($1)"'], '/home/ci/repo'),
+      ['line has a name the bundler renamed: .: const a: Label$1'],
     );
   });
 

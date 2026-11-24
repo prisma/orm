@@ -1,16 +1,17 @@
-// Turns the API Extractor models of one package, plus what API Extractor leaves out
-// (forwarded paths and `declare module` augmentations, read with the TypeScript compiler),
-// into the sorted lines of the package's api.txt.
+// Turns one package's API into the sorted lines of its api.txt. The TypeScript compiler
+// (declarations.mjs) says what each import path exports, under which names; API Extractor's
+// models give the declarations' text and their members, and the types signatures use.
 
 import { existsSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { ApiItemKind, ApiPackage } from '@microsoft/api-extractor-model';
 import ts from 'typescript';
-import { normalizeTypes, TypeTextError } from './normalize-type.mjs';
+import { readDeclarations } from './declarations.mjs';
+import { compareCodeUnits, normalizeTypes, renderNode, TypeTextError } from './normalize-type.mjs';
 
 export class ApiListError extends Error {}
 
-export const compareCodeUnits = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+export { compareCodeUnits };
 
 const oneLine = (text) => text.replace(/\s+/g, ' ').trim();
 const withoutBundlerSuffix = (name) => name.replace(/\$\d+$/, '');
@@ -154,73 +155,203 @@ function emitItem(item, { prefix, context, ownName, nameOf, origin, lines }) {
   }
 }
 
-function tsCompilerOptions() {
+function loadModels(entryPoints) {
+  return [...entryPoints]
+    .sort((a, b) => compareCodeUnits(a.subpath, b.subpath))
+    .map((entryPoint) => {
+      const model = ApiPackage.loadFromJsonFile(entryPoint.modelFile).entryPoints[0];
+      const byReference = new Map(
+        model.members.map((item) => [item.canonicalReference.toString(), item]),
+      );
+      return { ...entryPoint, packageName: model.parent.name, items: model.members, byReference };
+    });
+}
+
+const AE_SIGNATURE_KEYS = {
+  [ApiItemKind.CallSignature]: '__call',
+  [ApiItemKind.ConstructSignature]: '__new',
+  [ApiItemKind.IndexSignature]: '__index',
+  [ApiItemKind.Constructor]: '__constructor',
+};
+
+const memberKeyOf = (member) =>
+  AE_SIGNATURE_KEYS[member.kind] ?? member.displayName.replace(/^(["'])(.*)\1$/, '$2');
+
+function forEachItem(items, visit) {
+  for (const item of items) {
+    visit(item);
+    if (item.members) forEachItem(item.members, visit);
+  }
+}
+
+// Matches each item API Extractor marks exported to the symbol TypeScript exports it as: by the
+// declared name, and by the export name where two exported declarations share a declared name.
+// API Extractor adds `_2` to a name a global also has.
+function matchExports(model, info, problems) {
+  const groups = [...info.groups.values()];
+  const exported = new Map();
+  for (const item of model.items) {
+    if (!item.isExported) continue;
+    let candidates = groups.filter((group) => group.declaredNames.has(declaredName(item)));
+    if (candidates.length > 1) {
+      const names = [item.displayName, item.displayName.replace(/_\d+$/, '')];
+      candidates = candidates.filter((group) => names.some((name) => group.names.includes(name)));
+    }
+    if (candidates.length !== 1) {
+      problems.push(
+        `${model.subpath}: API Extractor lists ${item.displayName}, which matches ${candidates.length} exports TypeScript sees`,
+      );
+      continue;
+    }
+    candidates[0].items.push(item);
+    exported.set(item, candidates[0]);
+  }
+  for (const group of groups) {
+    const named = group.names.filter((name) => name !== 'default').sort(compareCodeUnits);
+    group.referenceName = named[0] ?? withoutBundlerSuffix([...group.declaredNames][0]);
+  }
+  return exported;
+}
+
+// Names of types from elsewhere (other packages, the standard library) that the lines refer to.
+function externalNames(models, packageName) {
+  const names = new Set();
+  for (const model of models) {
+    forEachItem(model.items, (item) => {
+      for (const token of item.excerpt?.spannedTokens ?? []) {
+        const reference =
+          token.kind === 'Reference' ? token.canonicalReference?.toString() : undefined;
+        if (reference === undefined || reference.startsWith(`${packageName}!`)) continue;
+        const external = TOP_LEVEL_REFERENCE.exec(reference);
+        const name = external && token.text.includes('$') ? external[2] : token.text;
+        if (IDENTIFIER.test(name)) names.add(name);
+      }
+    });
+  }
+  return names;
+}
+
+const MAX_NAMING_ROUNDS = 20;
+
+// Gives every declaration one printed name: its export name if it is exported, otherwise a
+// name unique in the package, with `_2`, `_3` for names that clash. Non-exported declarations
+// are ordered by their printed text; those that print identically with the final names of
+// what they refer to are one declaration copied into two files, and share one name.
+function nameDeclarations(models, paths, packageName, problems) {
+  const exportedByModel = new Map();
+  const exportedNames = new Map();
+  const taken = externalNames(models, packageName);
+  for (const model of models) {
+    const info = paths.get(model.subpath);
+    for (const name of info.exportNames) taken.add(name);
+    const exported = matchExports(model, info, problems);
+    exportedByModel.set(model, exported);
+    for (const [item, group] of exported) {
+      const key = declarationKey(item);
+      if (!exportedNames.has(key)) exportedNames.set(key, group.referenceName);
+    }
+  }
+
+  const locals = new Map();
+  for (const model of models) {
+    const exported = exportedByModel.get(model);
+    const own = new Map();
+    for (const item of model.items) {
+      if (exported.has(item)) continue;
+      const key = declarationKey(item);
+      if (exportedNames.has(key) || locals.has(key)) continue;
+      own.set(key, [...(own.get(key) ?? []), item]);
+    }
+    for (const [key, items] of own) locals.set(key, { key, model, items });
+  }
+
+  let localNames = new Map();
+  const nameOf = (model, fallback) => (reference) => {
+    const item = model.byReference.get(reference);
+    if (item === undefined) return undefined;
+    const group = exportedByModel.get(model).get(item);
+    if (group) return group.referenceName;
+    const key = declarationKey(item);
+    return exportedNames.get(key) ?? localNames.get(key) ?? fallback(item);
+  };
+  const sourceName = (item) => withoutBundlerSuffix(declaredName(item));
+
+  for (let round = 0; ; round++) {
+    const byBase = new Map();
+    for (const local of locals.values()) {
+      const base = sourceName(local.items[0]);
+      const lines = new LineSet();
+      for (const item of local.items) {
+        emitItem(item, {
+          prefix: '',
+          context: '',
+          ownName: base,
+          nameOf: nameOf(local.model, sourceName),
+          origin: local.key,
+          lines,
+        });
+      }
+      local.content = lines.sorted().join('\n');
+      byBase.set(base, [...(byBase.get(base) ?? []), local]);
+    }
+    const next = new Map();
+    const used = new Set(taken);
+    for (const base of [...byBase.keys()].sort(compareCodeUnits)) {
+      const group = byBase.get(base).sort((a, b) => compareCodeUnits(a.content, b.content));
+      let suffix = 1;
+      let previous;
+      for (const local of group) {
+        local.sameAs = previous?.content === local.content ? previous : undefined;
+        if (local.sameAs) {
+          next.set(local.key, next.get(local.sameAs.key));
+          continue;
+        }
+        let name = suffix === 1 ? base : `${base}_${suffix}`;
+        while (used.has(name)) name = `${base}_${++suffix}`;
+        suffix++;
+        used.add(name);
+        next.set(local.key, name);
+        previous = local;
+      }
+    }
+    const stable = [...next].every(([key, name]) => localNames.get(key) === name);
+    localNames = next;
+    if (stable && round > 0) break;
+    if (round === MAX_NAMING_ROUNDS) {
+      throw new ApiListError('the names of non-exported declarations do not settle');
+    }
+  }
+
   return {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    lib: ['lib.es2023.d.ts', 'lib.dom.d.ts'],
-    strict: true,
-    skipLibCheck: true,
-    types: ['node'],
-    noEmit: true,
+    locals,
+    localNames,
+    nameOf: (model) => nameOf(model, () => undefined),
   };
 }
 
-function moduleSpecifierOf(declaration) {
-  if (ts.isImportSpecifier(declaration)) return declaration.parent.parent.parent.moduleSpecifier;
-  if (ts.isExportSpecifier(declaration)) return declaration.parent.parent.moduleSpecifier;
-  if (ts.isImportClause(declaration)) return declaration.parent.moduleSpecifier;
-  if (ts.isNamespaceImport(declaration)) return declaration.parent.parent.moduleSpecifier;
-  return undefined;
-}
-
-const isBare = (specifier) => !specifier.startsWith('.') && !specifier.startsWith('/');
-
-// Follows an exported name through imports and re-exports. Returns the first non-relative
-// module it passes through, the name it has there, and the declaration it ends at.
-function traceExport(checker, element, exportSpecifier) {
-  let bare = exportSpecifier !== undefined && isBare(exportSpecifier) ? exportSpecifier : undefined;
-  let originalName = element.propertyName?.text ?? element.name.text;
-  let symbol = checker.getSymbolAtLocation(element.name);
-  const seen = new Set();
-  while (symbol && symbol.flags & ts.SymbolFlags.Alias && !seen.has(symbol)) {
-    seen.add(symbol);
-    for (const declaration of symbol.declarations ?? []) {
-      const specifier = moduleSpecifierOf(declaration)?.text;
-      if (bare === undefined && specifier !== undefined && isBare(specifier)) {
-        bare = specifier;
-        originalName = ts.isImportClause(declaration)
-          ? 'default'
-          : ((declaration.propertyName ?? declaration.name)?.text ?? originalName);
-      }
+export function portabilityProblems(lines, root) {
+  const problems = [];
+  for (const line of lines) {
+    if (line.includes(root) || /import\("(\.{1,2}\/|\/|[A-Za-z]:)/.test(line)) {
+      problems.push(`line names a local path: ${line}`);
     }
-    const next = checker.getImmediateAliasedSymbol(symbol);
-    if (!next) break;
-    symbol = next;
-  }
-  return { bare, originalName, symbol, declaration: symbol?.declarations?.[0] };
-}
-
-function reachableFiles(program, entry, packageDir) {
-  const seen = new Set([entry.fileName]);
-  const stack = [entry];
-  const files = [];
-  while (stack.length > 0) {
-    const file = stack.pop();
-    files.push(file);
-    for (const statement of file.statements) {
-      const imports = ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement);
-      const specifier = imports ? statement.moduleSpecifier?.text : undefined;
-      if (!specifier?.startsWith('.')) continue;
-      const path = resolve(dirname(file.fileName), specifier.replace(/\.mjs$/, '.d.mts'));
-      if (seen.has(path) || !path.startsWith(`${packageDir}${sep}`)) continue;
-      seen.add(path);
-      const next = program.getSourceFile(path);
-      if (next) stack.push(next);
+    const outsideStrings = line.replace(
+      /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g,
+      '""',
+    );
+    if (/[A-Za-z0-9_]\$\d+\b/.test(outsideStrings)) {
+      problems.push(`line has a name the bundler renamed: ${line}`);
     }
   }
-  return files;
+  return problems;
+}
+
+function repositoryRoot(from) {
+  let folder = from;
+  while (!existsSync(join(folder, 'pnpm-workspace.yaml')) && dirname(folder) !== folder) {
+    folder = dirname(folder);
+  }
+  return folder;
 }
 
 function augmentationMemberWords(member) {
@@ -240,243 +371,74 @@ function augmentationMemberWords(member) {
   return words.join(' ');
 }
 
-function augmentationMemberText(member) {
-  const source = member.getSourceFile().text;
-  const start = member.modifiers?.length
-    ? member.modifiers[member.modifiers.length - 1].end
-    : member.getStart();
-  return oneLine(source.slice(start, member.end)).replace(/;$/, '');
-}
-
-function augmentationsOf(files) {
-  const found = [];
-  const problems = [];
-  for (const file of files) {
-    for (const statement of file.statements) {
-      if (!ts.isModuleDeclaration(statement) || !ts.isStringLiteral(statement.name)) continue;
-      if (!statement.body || !ts.isModuleBlock(statement.body)) continue;
-      for (const declaration of statement.body.statements) {
-        if (!ts.isInterfaceDeclaration(declaration)) {
-          problems.push(
-            `declare module "${statement.name.text}" contains a ${ts.SyntaxKind[declaration.kind]}, which this script cannot list`,
-          );
-          continue;
-        }
-        const head = `augments ${statement.name.text} interface ${declaration.name.text}`;
-        found.push({ line: head, deprecated: false });
-        for (const member of declaration.members) {
-          try {
-            const text = normalizeTypes(augmentationMemberText(member), 'interface member');
-            found.push({
-              line: `${head}, ${augmentationMemberWords(member)} ${text}`,
-              deprecated: ts.getJSDocDeprecatedTag(member) !== undefined,
-            });
-          } catch (error) {
-            if (!(error instanceof TypeTextError)) throw error;
-            problems.push(`${head}: ${error.message}`);
-          }
-        }
-      }
-    }
-  }
-  return { found, problems };
-}
-
-// What API Extractor leaves out: forwarded paths, export names that differ from the
-// declared name, and `declare module` augmentations.
-function analyseDeclarations(packageDir, entryPoints) {
-  const options = tsCompilerOptions();
-  const program = ts.createProgram(
-    entryPoints.map(({ declarationFile }) => declarationFile),
-    options,
-    ts.createCompilerHost(options),
-  );
-  const checker = program.getTypeChecker();
-  const result = new Map();
-  for (const { subpath, declarationFile } of entryPoints) {
-    const file = program.getSourceFile(declarationFile);
-    const info = {
-      starForwards: [],
-      namedForwards: [],
-      renames: new Map(),
-      augmentations: [],
-      problems: [],
-    };
-    result.set(subpath, info);
-    for (const statement of file.statements) {
-      if (!ts.isExportDeclaration(statement)) continue;
-      const specifier = statement.moduleSpecifier?.text;
-      if (!statement.exportClause) {
-        if (specifier !== undefined && isBare(specifier)) info.starForwards.push(specifier);
-        else info.problems.push(`export * from "${specifier}" is not a forward of another package`);
-        continue;
-      }
-      if (!ts.isNamedExports(statement.exportClause)) {
-        info.problems.push(`cannot list ${oneLine(statement.getText())}`);
-        continue;
-      }
-      for (const element of statement.exportClause.elements) {
-        const exportName = element.name.text;
-        const traced = traceExport(checker, element, specifier);
-        const targetFile = traced.declaration?.getSourceFile().fileName;
-        const ownTarget = targetFile?.startsWith(`${packageDir}${sep}`) ?? false;
-        if (traced.bare !== undefined && !ownTarget) {
-          info.namedForwards.push({
-            exportName,
-            originalName: traced.originalName,
-            from: traced.bare,
-          });
-        } else if (traced.declaration) {
-          const declared = withoutBundlerSuffix(ts.symbolName(traced.symbol));
-          if (traced.symbol.escapedName !== 'default' && declared !== exportName) {
-            info.renames.set(declared, exportName);
-          }
-        } else {
-          info.problems.push(`cannot resolve the export ${exportName}`);
-        }
-      }
-    }
-    const augmentations = augmentationsOf(reachableFiles(program, file, packageDir));
-    info.augmentations = augmentations.found;
-    info.problems.push(...augmentations.problems);
-  }
-  return result;
-}
-
-function loadModels(entryPoints) {
-  return [...entryPoints]
-    .sort((a, b) => compareCodeUnits(a.subpath, b.subpath))
-    .map((entryPoint) => {
-      const model = ApiPackage.loadFromJsonFile(entryPoint.modelFile).entryPoints[0];
-      const byReference = new Map(
-        model.members.map((item) => [item.canonicalReference.toString(), item]),
+// Prints the name of a type an augmentation refers to, as the other lines print it.
+function augmentationNames({ checker, isOwn, model, info, packageGroups, localNames }) {
+  return (identifier) => {
+    const symbol = checker.getSymbolAtLocation(identifier);
+    if (symbol === undefined) return undefined;
+    const target = symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+    if (target.flags & ts.SymbolFlags.TypeParameter) return undefined;
+    const declarations = target.declarations ?? [];
+    if (!declarations.some(isOwn)) return withoutBundlerSuffix(target.name);
+    const group = info.groups.get(target) ?? packageGroups.get(target);
+    if (group) return group.referenceName;
+    const declared = new Set(
+      declarations.map((declaration) => ts.getNameOfDeclaration(declaration)?.getText()),
+    );
+    const keys = new Set(
+      model.items.filter((item) => declared.has(declaredName(item))).map(declarationKey),
+    );
+    const name = keys.size === 1 ? localNames.get([...keys][0]) : undefined;
+    if (name === undefined) {
+      throw new ApiListError(
+        `refers to ${withoutBundlerSuffix(target.name)}, a type of this package that no line lists`,
       );
-      return { ...entryPoint, items: model.members, byReference };
+    }
+    return name;
+  };
+}
+
+function augmentationLines(augmentation, rename) {
+  const lines = [{ line: augmentation.head, deprecated: false }];
+  for (const member of augmentation.members) {
+    const text = oneLine(renderNode(member, augmentation.file, rename))
+      .replace(/;$/, '')
+      .replace(MEMBER_MODIFIERS, '');
+    lines.push({
+      line: `${augmentation.head}, ${augmentationMemberWords(member)} ${text}`,
+      deprecated: ts.getJSDocDeprecatedTag(member) !== undefined,
     });
-}
-
-// Gives every declaration of the package one printed name: an export name for an
-// exported declaration, and for the rest a name unique in the package, with `_2`, `_3`
-// for declarations whose names clash. Declarations that print identically share one name.
-function nameDeclarations(models, analysis) {
-  const exportedNames = new Map();
-  const taken = new Set();
-  for (const model of models) {
-    for (const item of model.items) {
-      if (!item.isExported) continue;
-      taken.add(item.displayName);
-      const key = declarationKey(item);
-      if (!exportedNames.has(key)) exportedNames.set(key, item.displayName);
-    }
-    for (const { exportName } of analysis.get(model.subpath).namedForwards) taken.add(exportName);
   }
-
-  const locals = new Map();
-  for (const model of models) {
-    for (const item of model.items) {
-      if (item.isExported) continue;
-      const key = declarationKey(item);
-      if (exportedNames.has(key)) continue;
-      const local = locals.get(key) ?? { key, model, items: [] };
-      if (local.model === model) local.items.push(item);
-      locals.set(key, local);
-    }
-  }
-
-  const sourceNameOf = (model) => (reference) => {
-    const item = model.byReference.get(reference);
-    return item === undefined ? undefined : withoutBundlerSuffix(declaredName(item));
-  };
-  const byBase = new Map();
-  for (const local of locals.values()) {
-    const base = withoutBundlerSuffix(declaredName(local.items[0]));
-    const lines = new LineSet();
-    for (const item of local.items) {
-      emitItem(item, {
-        prefix: '',
-        context: '',
-        ownName: base,
-        nameOf: sourceNameOf(local.model),
-        origin: local.key,
-        lines,
-      });
-    }
-    local.content = lines.sorted().join('\n');
-    byBase.set(base, [...(byBase.get(base) ?? []), local]);
-  }
-
-  const localNames = new Map();
-  for (const base of [...byBase.keys()].sort(compareCodeUnits)) {
-    const group = byBase.get(base).sort((a, b) => compareCodeUnits(a.content, b.content));
-    let suffix = 1;
-    let previous;
-    for (const local of group) {
-      if (previous?.content === local.content) {
-        localNames.set(local.key, localNames.get(previous.key));
-        local.sameAs = previous;
-        continue;
-      }
-      let name = suffix === 1 ? base : `${base}_${suffix}`;
-      while (taken.has(name)) name = `${base}_${++suffix}`;
-      suffix++;
-      taken.add(name);
-      localNames.set(local.key, name);
-      previous = local;
-    }
-  }
-
-  const nameOf = (model) => (reference) => {
-    const item = model.byReference.get(reference);
-    if (item === undefined) return undefined;
-    if (item.isExported) return item.displayName;
-    const key = declarationKey(item);
-    return exportedNames.get(key) ?? localNames.get(key);
-  };
-  return { locals, localNames, nameOf };
-}
-
-export function portabilityProblems(lines, root) {
-  return lines
-    .filter((line) => line.includes(root) || /import\("(\.{1,2}\/|\/|[A-Za-z]:)/.test(line))
-    .map((line) => `line names a local path: ${line}`);
-}
-
-function repositoryRoot(from) {
-  let folder = from;
-  while (!existsSync(join(folder, 'pnpm-workspace.yaml')) && dirname(folder) !== folder) {
-    folder = dirname(folder);
-  }
-  return folder;
+  return lines;
 }
 
 export function flattenPackage(packageDir, entryPoints) {
-  const analysis = analyseDeclarations(packageDir, entryPoints);
-  const problems = [...analysis].flatMap(([subpath, info]) =>
+  const where = relative(process.cwd(), packageDir);
+  const declarations = readDeclarations(packageDir, entryPoints);
+  const problems = [...declarations.paths].flatMap(([subpath, info]) =>
     info.problems.map((problem) => `${subpath}: ${problem}`),
   );
-  if (problems.length > 0) {
-    throw new ApiListError(`${relative(process.cwd(), packageDir)}:\n  ${problems.join('\n  ')}`);
-  }
+  if (problems.length > 0) throw new ApiListError(`${where}:\n  ${problems.join('\n  ')}`);
 
   let sorted;
   try {
-    sorted = collectLines(loadModels(entryPoints), analysis);
+    sorted = collectLines(loadModels(entryPoints), declarations);
   } catch (error) {
     if (!(error instanceof ApiListError)) throw error;
-    throw new ApiListError(`${relative(process.cwd(), packageDir)}: ${error.message}`);
+    throw new ApiListError(`${where}: ${error.message}`);
   }
   const portability = portabilityProblems(sorted, repositoryRoot(packageDir));
-  if (portability.length > 0) {
-    throw new ApiListError(
-      `${relative(process.cwd(), packageDir)}:\n  ${portability.join('\n  ')}`,
-    );
-  }
+  if (portability.length > 0) throw new ApiListError(`${where}:\n  ${portability.join('\n  ')}`);
   return sorted;
 }
 
-function collectLines(models, analysis) {
-  const { locals, localNames, nameOf } = nameDeclarations(models, analysis);
+function collectLines(models, { checker, paths, isOwn }) {
+  const problems = [];
+  const packageName = models[0]?.packageName;
+  const { locals, localNames, nameOf } = nameDeclarations(models, paths, packageName, problems);
   const lines = new LineSet();
+  const covered = new Set();
+  const cover = (subpath, name) => covered.add(`${subpath}\0${name}`);
 
   for (const local of locals.values()) {
     if (local.sameAs) continue;
@@ -492,25 +454,49 @@ function collectLines(models, analysis) {
     }
   }
 
+  const packageGroups = new Map();
   for (const model of models) {
-    const info = analysis.get(model.subpath);
+    for (const group of paths.get(model.subpath).groups.values()) {
+      if (!packageGroups.has(group.symbol)) packageGroups.set(group.symbol, group);
+    }
+  }
+
+  for (const model of models) {
+    const info = paths.get(model.subpath);
     const pathPrefix = `${model.subpath}: `;
-    for (const item of model.items) {
-      if (!item.isExported) continue;
-      const declared = withoutBundlerSuffix(declaredName(item));
-      const exportName = info.renames.get(declared);
-      const renamed = exportName !== undefined && exportName !== item.displayName;
-      emitItem(item, {
-        prefix: renamed ? `${pathPrefix}export ${exportName} = ` : pathPrefix,
-        context: '',
-        ownName: renamed ? declared : item.displayName,
-        nameOf: nameOf(model),
-        origin: model.subpath,
-        lines,
-      });
+    for (const group of info.groups.values()) {
+      for (const name of group.names) {
+        for (const item of group.items) {
+          const isDefault = name === 'default';
+          emitItem(item, {
+            prefix: isDefault ? `${pathPrefix}export default = ` : pathPrefix,
+            context: '',
+            ownName: isDefault ? withoutBundlerSuffix(declaredName(item)) : name,
+            nameOf: nameOf(model),
+            origin: `${model.subpath} ${name}`,
+            lines,
+          });
+          cover(model.subpath, name);
+        }
+      }
+      if (group.memberKeys === undefined) continue;
+      const listed = new Set(group.items.flatMap((item) => (item.members ?? []).map(memberKeyOf)));
+      for (const key of group.memberKeys) {
+        if (!listed.has(key)) {
+          problems.push(`${model.subpath}: member ${group.referenceName}.${key} has no line`);
+        }
+      }
     }
     for (const specifier of info.starForwards) {
       lines.add(`${pathPrefix}everything from ${specifier}`, `${model.subpath} * ${specifier}`);
+    }
+    for (const name of info.starCovered) cover(model.subpath, name);
+    for (const forward of info.namespaceForwards) {
+      lines.add(
+        `${pathPrefix}export ${forward.exportName} = everything from ${forward.from}`,
+        `${model.subpath} namespace ${forward.exportName}`,
+      );
+      cover(model.subpath, forward.exportName);
     }
     for (const forward of info.namedForwards) {
       const original =
@@ -519,13 +505,30 @@ function collectLines(models, analysis) {
         `${pathPrefix}export ${forward.exportName} from ${forward.from}${original}`,
         `${model.subpath} forward ${forward.exportName}`,
       );
+      cover(model.subpath, forward.exportName);
     }
-    for (const { line, deprecated } of info.augmentations) {
-      lines.add(`${pathPrefix}${line}`, `${model.subpath} augmentation ${line}`);
-      if (deprecated)
-        lines.add(`${pathPrefix}deprecated: ${line}`, `${model.subpath} augmentation ${line}`);
+    const rename = augmentationNames({ checker, isOwn, model, info, packageGroups, localNames });
+    for (const augmentation of info.augmentations) {
+      let augmentationLinesOfPath;
+      try {
+        augmentationLinesOfPath = augmentationLines(augmentation, rename);
+      } catch (error) {
+        if (!(error instanceof ApiListError)) throw error;
+        problems.push(`${model.subpath}: ${augmentation.head}: ${error.message}`);
+        continue;
+      }
+      for (const { line, deprecated } of augmentationLinesOfPath) {
+        const origin = `${model.subpath} augmentation ${line}`;
+        lines.add(`${pathPrefix}${line}`, origin);
+        if (deprecated) lines.add(`${pathPrefix}deprecated: ${line}`, origin);
+      }
+    }
+    for (const name of info.exportNames) {
+      if (!covered.has(`${model.subpath}\0${name}`)) {
+        problems.push(`${model.subpath}: export ${name} has no line`);
+      }
     }
   }
-
+  if (problems.length > 0) throw new ApiListError(`\n  ${problems.join('\n  ')}`);
   return lines.sorted();
 }

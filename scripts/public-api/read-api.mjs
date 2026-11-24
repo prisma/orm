@@ -60,7 +60,12 @@ function extractorConfig(packageDir, { declarationFile, modelFile }) {
         },
       },
       apiReport: { enabled: false },
-      docModel: { enabled: true, apiJsonFilePath: modelFile, includeForgottenExports: true },
+      docModel: {
+        enabled: true,
+        apiJsonFilePath: modelFile,
+        includeForgottenExports: true,
+        releaseTagsToTrim: [],
+      },
       dtsRollup: { enabled: false },
       tsdocMetadata: { enabled: false },
       messages: {
