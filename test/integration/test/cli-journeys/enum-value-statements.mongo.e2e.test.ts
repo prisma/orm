@@ -61,12 +61,12 @@ const RENAMED = usersPsl('  ACTIVE = "active"\n  RETIRED = "retired"');
 const REMOVED = usersPsl('  ACTIVE = "active"');
 const SWAPPED = usersPsl('  ACTIVE = "archived"\n  ARCHIVED = "active"');
 
-const THROUGH_SWAP = usersPsl('  ACTIVE = "prisma_swap"\n  ARCHIVED = "prisma_swap_"');
+const THROUGH_SWAP = usersPsl('  ACTIVE = "prisma_swap_1"\n  ARCHIVED = "prisma_swap_2"');
 
 const SWAP_REFUSAL = {
   summary:
     'Cannot change the stored values of enum "Status": enum values "Status.ACTIVE" and "Status.ARCHIVED" move stored values in a cycle, "active" to "archived" and "archived" to "active", and a rewrite of one would overwrite the other before it is read',
-  why: 'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Status.ACTIVE" a stored value no member stores, such as "prisma_swap"; give "Status.ARCHIVED" a stored value no member stores, such as "prisma_swap_"; and plan and apply that; then give "Status.ACTIVE" the stored value "archived"; give "Status.ARCHIVED" the stored value "active"; and plan again.',
+  why: 'The plan rewrites a changed stored value in every document that holds it, one value at a time, so when values trade places, whichever is rewritten first overwrites the other before it is read. Make the change in two plans: first give "Status.ACTIVE" a stored value no member stores, such as "prisma_swap_1"; give "Status.ARCHIVED" a stored value no member stores, such as "prisma_swap_2"; and plan and apply that; then give "Status.ACTIVE" the stored value "archived"; give "Status.ARCHIVED" the stored value "active"; and plan again.',
 };
 
 const SWAPPED_DOCUMENTS: readonly Document[] = [

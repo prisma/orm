@@ -138,7 +138,7 @@ describe('questions about storage when the origin contract is unknown', () => {
       '3.',
     ]);
     expect(ORIGIN_SNAPSHOT_RECOVERY).toContain('--dry-run');
-    expect(ORIGIN_SNAPSHOT_RECOVERY).toContain('`prisma db update --advance-ref <name> --dry-run`');
+    expect(ORIGIN_SNAPSHOT_RECOVERY).toContain('`prisma db update --advance-ref db --dry-run`');
     expect(ORIGIN_SNAPSHOT_RECOVERY).toContain(
       'with the same `--db` as this command if it has one',
     );

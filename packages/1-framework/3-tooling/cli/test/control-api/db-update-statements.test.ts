@@ -168,7 +168,7 @@ describe('executeDbUpdate with statements', () => {
     ).rejects.toMatchObject({
       code: 'MIGRATION.STATEMENT_ORIGIN_UNKNOWN',
       meta: { hash: ORIGIN_HASH, snapshotDirectory: join(migrationsDir, 'snapshots', ORIGIN_HASH) },
-      fix: expect.stringContaining('--advance-ref <name>'),
+      fix: expect.stringContaining('--advance-ref db'),
     });
     expect(calls).toEqual([]);
   });

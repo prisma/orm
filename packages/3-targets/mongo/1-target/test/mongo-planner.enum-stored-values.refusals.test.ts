@@ -23,7 +23,7 @@ describe('MongoMigrationPlanner, enum values that keep their names and trade or 
         kind: 'unsupportedOperation',
         summary:
           'Cannot change the stored values of enum "Status": enum values "Status.ACTIVE" and "Status.ARCHIVED" move stored values in a cycle, "active" to "archived" and "archived" to "active", and a rewrite of one would overwrite the other before it is read',
-        why: 'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Status.ACTIVE" a stored value no member stores, such as "prisma_swap"; give "Status.ARCHIVED" a stored value no member stores, such as "prisma_swap_"; and plan and apply that; then give "Status.ACTIVE" the stored value "archived"; give "Status.ARCHIVED" the stored value "active"; and plan again.',
+        why: 'The plan rewrites a changed stored value in every document that holds it, one value at a time, so when values trade places, whichever is rewritten first overwrites the other before it is read. Make the change in two plans: first give "Status.ACTIVE" a stored value no member stores, such as "prisma_swap_1"; give "Status.ARCHIVED" a stored value no member stores, such as "prisma_swap_2"; and plan and apply that; then give "Status.ACTIVE" the stored value "archived"; give "Status.ARCHIVED" the stored value "active"; and plan again.',
       },
     ]);
   });
@@ -42,7 +42,7 @@ describe('MongoMigrationPlanner, enum values that keep their names and trade or 
         kind: 'unsupportedOperation',
         summary:
           'Cannot change the stored values of enum "Status": enum values "Status.A" and "Status.B" move stored values along a chain, "a" to "b" and "b" to "c", and a rewrite of one would write a value another still has to read',
-        why: 'MongoDB applies a migration\'s operations one at a time, without a transaction, and knows that an operation already ran only from the documents. A rewrite of a value that another rewrite of the same migration writes would act on what that one wrote when the migration runs again after a later operation stops. Make the change in two plans: first give "Status.A" a stored value no member stores, such as "prisma_swap"; give "Status.B" the stored value "c"; and plan and apply that; then give "Status.A" the stored value "b"; and plan again.',
+        why: 'MongoDB applies a migration\'s operations one at a time, without a transaction, and knows that an operation already ran only from the documents. A rewrite of a value that another rewrite of the same migration writes would act on what that one wrote when the migration runs again after a later operation stops. Make the change in two plans: first give "Status.A" a stored value no member stores, such as "prisma_swap_1"; give "Status.B" the stored value "c"; and plan and apply that; then give "Status.A" the stored value "b"; and plan again.',
       },
     ]);
   });
@@ -80,7 +80,7 @@ describe('MongoMigrationPlanner, enum values that keep their names and trade or 
         kind: 'unsupportedOperation',
         summary:
           'Cannot change the stored values of enum "Status": enum values "Status.YES" and "Status.NO" move stored values in a cycle, true to false and false to true, and a rewrite of one would overwrite the other before it is read',
-        why: 'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle. A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps. A swap of the two values cannot be made so that a migration that stops part way can run again to finish, so keep the stored values of this enum in the contract.',
+        why: 'The plan rewrites a changed stored value in every document that holds it, one value at a time, so when values trade places, whichever is rewritten first overwrites the other before it is read. A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps. A swap of the two values cannot be made so that a migration that stops part way can run again to finish, so keep the stored values of this enum in the contract.',
       },
     ]);
   });
@@ -243,7 +243,7 @@ describe('MongoMigrationPlanner, a boolean enum swap the plan cannot give a hand
         kind: 'unsupportedOperation',
         summary:
           'Cannot change the stored values of enum "Status": enum values "Status.YES" and "Status.NO" move stored values in a cycle, true to false and false to true, and a rewrite of one would overwrite the other before it is read',
-        why: 'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle. A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps. A swap of the two values cannot be made so that a migration that stops part way can run again to finish, so keep the stored values of this enum in the contract.',
+        why: 'The plan rewrites a changed stored value in every document that holds it, one value at a time, so when values trade places, whichever is rewritten first overwrites the other before it is read. A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps. A swap of the two values cannot be made so that a migration that stops part way can run again to finish, so keep the stored values of this enum in the contract.',
       },
     ]);
   });

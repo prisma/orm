@@ -398,7 +398,7 @@ function lossText(
  * engine does not put the CLI's name in a question's text, so the steps name `prisma`.
  */
 export const ORIGIN_SNAPSHOT_RECOVERY = [
-  'If it was renamed, keep its data instead: store the snapshot of the contract the database is at, then run this command again and answer with --rename.',
+  'If it was renamed, keep its data instead: store the snapshot of the contract the database is at, then run this command again. A change of its stored name alone is then planned with no question; a change of its name is answered with --rename.',
   ...STORE_ORIGIN_SNAPSHOT_STEPS.map((step) => step.replaceAll('{bin}', 'prisma')),
 ].join('\n');
 

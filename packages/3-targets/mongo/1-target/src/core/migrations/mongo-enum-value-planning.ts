@@ -437,9 +437,10 @@ function temporaryValue(value: StoredValue, taken: readonly JsonValue[]): Stored
   const nextWholeNumber = numbers.length === 0 ? 0 : Math.floor(Math.max(...numbers)) + 1;
   if (typeof value === 'number') return nextWholeNumber;
   if (typeof value === 'string' && /^-?\d+$/.test(value)) return String(nextWholeNumber);
-  let candidate = 'prisma_swap';
-  while (taken.some((stored) => sameValue(stored, candidate))) candidate = `${candidate}_`;
-  return candidate;
+  for (let index = 1; ; index += 1) {
+    const candidate = `prisma_swap_${index}`;
+    if (!taken.some((stored) => sameValue(stored, candidate))) return candidate;
+  }
 }
 
 /**
@@ -477,7 +478,7 @@ function linkedMoves(
 }
 
 const CYCLE_WHY =
-  'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle.';
+  'The plan rewrites a changed stored value in every document that holds it, one value at a time, so when values trade places, whichever is rewritten first overwrites the other before it is read.';
 
 const CHAIN_WHY = `${ONE_AT_A_TIME} A rewrite of a value that another rewrite of the same migration writes would act on what that one wrote when the migration runs again after a later operation stops.`;
 
