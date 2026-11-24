@@ -88,17 +88,9 @@ Taking the format version out of the hash input changes every existing hash once
 - **Fixed answers.** A set of saved contracts, each with its expected hashes written in the test. Every release must compute the same hashes.
 - **Across format versions.** A contract written in one format version, then converted through each later version, keeps the same hashes.
 
-## 3. The marker in the database
+## 3. Prisma's own tables in the database
 
-The marker, the record in the user's database of the contract it matches, follows the same pattern as the files. It records the version of its format, from `8.0.0`.
-
-- **Reading.** A command that would change the database reads the version first, and stops if it is higher than any it knows. The check a running application makes is different: it never stops the application (section 7 of the policy), so there a higher version produces a warning.
-- **Writing.** A release writes the oldest version that can hold the data. This matters more here than for files, because one database is read by application instances on different releases while a deploy is in progress.
-- **Hashing rules.** As for files, a change to the hashing rules comes with a new version, so the version says which rules the marker's hash was computed with.
-
-The ledger gets no version, as the policy says: nothing is decided from it.
-
-This reverses a statement in the decision record on canonicalization, that there is no version field in the stored data and a change to the rules is handled by emitting and signing again.
+The marker and the ledger get no format version. The form of Prisma's own tables is identified by the hash of the contract that describes them, as [the design for project 7](7-prismas-own-tables.md) says.
 
 ## 4. Alternatives rejected
 

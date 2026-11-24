@@ -14,7 +14,7 @@ Each project is sized for one to four pull requests. Its design is written when 
 
 New work joins a project only when it serves that project's purpose. Work that serves the goal and fits no project becomes a new project.
 
-Projects 1 to 6 are Must for GA, 7, 9 and 12 are Aim, and 8, 10 and 11 are Later. Will confirmed this on 2026-11-24; it is updated as we go. Project 1 comes first, and project 4 before project 3.
+Projects 1 to 7 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are Later. Will confirmed this on 2026-11-24; it is updated as we go. Project 1 comes first, and project 4 before project 3.
 
 "Task N" is the number a piece of work had before 2026-11-24. The reports under [research/](research/) use those numbers. The facts about the code were read on 2026-11-23 and are rechecked when a project starts.
 
@@ -136,17 +136,17 @@ Projects 1 to 6 are Must for GA, 7, 9 and 12 are Aim, and 8, 10 and 11 are Later
 
 **To decide when it starts.** One decision is Will's: which packages are GA at `8.0.0`. The points in section 6 of [maturity-levels.md](maturity-levels.md) are details for whoever takes the project. This project replaces stream 6, row 4 of the GA plan, "Maturity per package".
 
-## Projects that can follow GA
-
 ### 7. Bring Prisma's own database tables up to date in each release, so no upgrade fails on them
 
 **Purpose.** An upgrade never fails because the tables Prisma keeps for itself in a user's database were created by an earlier release.
 
 **What it achieves.** The requirement in section 6.4 of the spec: the ORM brings the marker, ledger and contract tables up to date itself, or, for a change that is not additive, stops and names the one command that does. The user never edits or drops them by hand.
 
-**How, where we know.** On PostgreSQL today the tables are created only if absent and never changed afterwards, and a real database has already failed this way; see [analysis.md](analysis.md). The preferred design is to describe these tables as a contract and change them with Prisma's own migration system. MongoDB has its own code for these records and the requirement applies to it too. It needs its own design document (task 4).
+**How.** The agreed design is in [designs/7-prismas-own-tables.md](designs/7-prismas-own-tables.md): the tables are a contract space the framework owns, read from the installed package and applied when migrations are executed. `8.0.0` writes the marker row for that space, which is why this project is needed for GA. On PostgreSQL today the tables are created only if absent and never changed afterwards, and a real database has already failed this way; see [analysis.md](analysis.md) (task 4).
 
-**Until it is built.** Any release that changes these tables must still meet section 6.4 by other means.
+**To decide when it starts.** The points listed as not yet discussed in the design.
+
+## Projects that can follow GA
 
 ### 8. Define promised behaviour in reference documentation shipped inside each package
 
