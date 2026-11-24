@@ -1,5 +1,7 @@
 # ADR 320 — Databases record a change policy and a data protection policy
 
+**Amended by** [ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md): `prisma db sign --force` signs a database whose change policy does not permit `reconcile`. It overrides only that refusal, changes no policy, and is offered by no error or advice.
+
 **Status:** Accepted
 **Date:** 2026-10-30
 

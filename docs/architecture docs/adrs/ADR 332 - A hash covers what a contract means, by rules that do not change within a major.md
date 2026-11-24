@@ -57,6 +57,10 @@ The inputs this record removes did not describe what the hash identifies. The fo
 
 Removing those inputs changed every existing hash once, before `8.0.0`. A project that used a release candidate moves by the upgrade instructions for that release: a script rewrites the hashes in its files, and each database is signed again with `prisma db sign`. No mechanism in the migration system is built for this.
 
+A database whose change policy allows only migrations refuses `db sign` ([ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md)). For it, `prisma db sign --force` overrides that one refusal. It changes no schema, still checks that the database satisfies the contract before it writes the marker, and leaves the database's policies as they were. No error or advice offers the flag; the upgrade instructions do.
+
+The database's ledger keeps the migration hashes it recorded, and every migration hash changes with the hashes it covers. After the move, `migration status` therefore marks no earlier migration as applied. Nothing is applied or refused because of the ledger, so nothing else is affected.
+
 ## Alternatives considered
 
 - **Hash the file as written, by the rules of its format version.** Rejected: it changes the hash as soon as a later format version lays out `storage` differently.
