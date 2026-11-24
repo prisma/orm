@@ -364,6 +364,78 @@ describe("an application's copy of an extension's migrations, which has no snaps
   });
 });
 
+describe("an application whose snapshot store already holds the extension's contract at its new hash, written by `prisma contract emit`", () => {
+  const OLD = 'e4ab7d4329212a72d8e440fd7bf95a03e5c861e1d304dce1025b0fcaa1910d15';
+  const NEW = 'd2c19e6a88b5b89e23e8ce4863844d40813bcf7712509e631d7cd29d405af27b';
+  const withoutNewerCapabilities = (text: string) =>
+    text
+      .replace('"insertOnConflictTarget":true,', '')
+      .replace('"jsonAgg":true,"jsonAggWithoutTruncation":true,', '')
+      .replace('"outerReferencesInDerivedTables":true,', '');
+
+  function emittedProject(): string {
+    const root = copyFixture('before', 'postgres-app');
+    const migrations = join(fixturesDir, 'after', 'extension/migrations');
+    for (const entry of readdirSync(migrations))
+      if (entry !== 'snapshots')
+        copyInto(root, 'after', `extension/migrations/${entry}`, `migrations/pgvector/${entry}`);
+    copyInto(root, 'after', `extension/migrations/snapshots/${NEW}`, `migrations/snapshots/${NEW}`);
+    editFile(root, `migrations/snapshots/${NEW}/contract.json`, withoutNewerCapabilities);
+    copyInto(
+      root,
+      'before',
+      `extension/migrations/snapshots/${OLD}`,
+      `migrations/snapshots/${OLD}`,
+    );
+    return root;
+  }
+
+  it('keeps the emitted snapshot unchanged, removes the old one, and reports both', () => {
+    const root = emittedProject();
+    const emitted = Object.fromEntries(
+      Object.entries(readTree(root)).filter(([path]) => path.includes(NEW)),
+    );
+    const run = runScript(root);
+    const tree = readTree(root);
+    expect({
+      status: run.status,
+      stderr: run.stderr,
+      emitted: Object.fromEntries(Object.entries(tree).filter(([path]) => path.includes(NEW))),
+      old: Object.keys(tree).filter((path) => path.includes(OLD)),
+      app: Object.fromEntries(
+        Object.entries(tree).filter(
+          ([path]) => !path.startsWith('migrations/pgvector/') && !path.includes(NEW),
+        ),
+      ),
+    }).toEqual({
+      status: 0,
+      stderr: '',
+      emitted,
+      old: [],
+      app: fixtureTree('after', 'postgres-app'),
+    });
+    expect(run.stdout).toContain(
+      `Snapshot directories whose new name already held a snapshot with the same storage hash, which \`prisma contract emit\` wrote with this release. The script kept that snapshot unchanged and removed the old directory:\n  migrations/snapshots/${OLD} (kept migrations/snapshots/${NEW}/)\n`,
+    );
+    expect(runScript(root)).toEqual({ status: 0, stdout: NOTHING_CHANGED, stderr: '' });
+  });
+
+  it('is refused when the directory with the new name holds no contract that gives that storage hash', () => {
+    const root = emittedProject();
+    rmSync(join(root, `migrations/snapshots/${NEW}/contract.json`));
+    const edited = readTree(root);
+    const run = runScript(root);
+    expect({ status: run.status, stdout: run.stdout, tree: readTree(root) }).toEqual({
+      status: 1,
+      stdout: '',
+      tree: edited,
+    });
+    expect(run.stderr).toContain(
+      `  migrations/snapshots/${OLD}: becomes snapshots/${NEW}/, which already exists with other content.`,
+    );
+  });
+});
+
 function mongoStorageHashOf(path: string, which: 'content' | 'stored' = 'content'): string {
   const contract = JSON.parse(readFileSync(path, 'utf8'));
   const { storageHash, ...storage } = contract.storage;

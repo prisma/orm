@@ -909,6 +909,8 @@ interface Plan {
   readonly notes: string[];
   readonly kept: string[];
   readonly merged: string[];
+  /** Old snapshot directories removed because `prisma contract emit` already wrote their contract under its new storage hash. */
+  readonly superseded: string[];
   readonly problems: string[];
 }
 
@@ -961,6 +963,7 @@ function main(args: readonly string[]): number {
     notes: checks.notes,
     kept,
     merged: [],
+    superseded: [],
     problems: checks.left,
   };
   const alreadyNew = unknownHashesAlreadyNew(files.migrations, hashes);
@@ -1123,6 +1126,9 @@ function planContracts(
   shown: (path: string) => string,
 ): void {
   const targets = new Map<string, string>();
+  const storageHashByPath = new Map(
+    contracts.map((contract) => [contract.file.path, contract.newHashes.storage]),
+  );
   for (const contract of contracts) {
     const path = contract.file.path;
     const text = rewrittenContract(contract);
@@ -1154,6 +1160,14 @@ function planContracts(
     if (planned !== undefined || existsSync(newDir)) {
       const existing = planned ?? snapshotContent(newDir, undefined, undefined);
       if (existing !== content) {
+        const existingHash = storageHashByPath.get(join(newDir, 'contract.json'));
+        if (planned === undefined && existingHash === to) {
+          plan.writes.delete(path);
+          plan.writes.delete(join(oldDir, 'contract.d.ts'));
+          plan.removals.push(oldDir);
+          plan.superseded.push(`${shown(oldDir)} (kept ${shown(newDir)}/)`);
+          continue;
+        }
         stops.push(
           `${shown(oldDir)}: becomes snapshots/${to}/, which already exists with other content. Compare the two directories, keep the right one, and run the script again`,
         );
@@ -1242,6 +1256,11 @@ function report(
     lines.push(
       'Snapshot directories that held the same contract as another one, and were removed:',
       ...plan.merged.map((note) => `  ${note}`),
+    );
+  if (plan.superseded.length > 0)
+    lines.push(
+      'Snapshot directories whose new name already held a snapshot with the same storage hash, which `prisma contract emit` wrote with this release. The script kept that snapshot unchanged and removed the old directory:',
+      ...plan.superseded.map((note) => `  ${note}`),
     );
   process.stdout.write(`${lines.join('\n')}\n`);
 }
