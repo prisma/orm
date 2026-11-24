@@ -70,13 +70,17 @@ function packageOf(fileName) {
   return undefined;
 }
 
-// The package that declares what an exported symbol names, after following its aliases.
+// The module that declares what an exported symbol names, after following its aliases: the
+// `declare module "…"` around the declaration (how @types/node declares `fs`), or else the package
+// whose files hold it. Unknown when the import does not resolve.
 function declaringPackage(checker, symbol) {
   const target = symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
   const declaration = target.declarations?.[0];
-  return declaration === undefined
-    ? undefined
-    : packageOf(realpathSync(declaration.getSourceFile().fileName));
+  if (declaration === undefined) return undefined;
+  for (let node = declaration.parent; node; node = node.parent) {
+    if (ts.isModuleDeclaration(node) && ts.isStringLiteral(node.name)) return node.name.text;
+  }
+  return packageOf(realpathSync(declaration.getSourceFile().fileName));
 }
 
 // Follows an export through imports and re-exports to the first non-relative module it passes:

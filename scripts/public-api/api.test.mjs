@@ -1,5 +1,5 @@
 import { deepStrictEqual, match, strictEqual, throws } from 'node:assert/strict';
-import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, readdirSync, readFileSync, rmdirSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -37,10 +37,18 @@ function output() {
   return { write: (chunk) => (text += chunk), text: () => text };
 }
 
-// Update mode rewrites committed lists, so it runs on copies of the fixture roots, kept in the
-// worktree's ignored wip/ folder.
+// Update mode rewrites committed lists, so it runs on copies of the fixture roots. The copies stay
+// inside the repository so that their declarations resolve packages such as @types/node through
+// its node_modules; they go in the ignored wip/ folder and are removed afterwards.
+const copies = join(here, '..', '..', 'wip', 'public-api-test-roots');
+
+function removeCopy(root) {
+  rmSync(root, { recursive: true, force: true });
+  if (existsSync(copies) && readdirSync(copies).length === 0) rmdirSync(copies);
+}
+
 function copyOfRoot(name) {
-  const copy = join(here, '..', '..', 'wip', 'public-api-test-roots', `${name}-${process.pid}`);
+  const copy = join(copies, `${name}-${process.pid}`);
   rmSync(copy, { recursive: true, force: true });
   cpSync(join(fixtures, name), copy, { recursive: true });
   return copy;
@@ -72,7 +80,7 @@ describe('main in update mode', () => {
       );
       strictEqual(await main({ mode: 'check', root, stdout: output() }), 0);
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeCopy(root);
     }
   });
 
@@ -82,7 +90,7 @@ describe('main in update mode', () => {
       strictEqual(await main({ mode: 'update', root, stderr: output() }), 1);
       strictEqual(existsSync(join(root, 'packages/9-public/@prisma/ok/api.txt')), false);
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeCopy(root);
     }
   });
 });

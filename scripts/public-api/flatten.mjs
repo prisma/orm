@@ -4,6 +4,7 @@
 
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { builtinModules } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { ApiItemKind, ApiPackage } from '@microsoft/api-extractor-model';
 import ts from 'typescript';
@@ -259,6 +260,15 @@ function loadModels(entryPoints) {
     });
 }
 
+// One spelling for a module, whichever way a reference, a specifier or a package.json names it:
+// `fs` and `node:fs` are `node:fs`, `@types/pg` is `pg`, and a subpath is dropped.
+function sameModule(module) {
+  if (module === undefined) return undefined;
+  const bare = module.replace(/^node:/, '');
+  if (builtinModules.includes(bare)) return `node:${bare}`;
+  return moduleUsersImport(packageOfSpecifier(module));
+}
+
 // The package an import specifier names: `@scope/name` or `name`, without a subpath.
 function packageOfSpecifier(specifier) {
   const parts = specifier.split('/');
@@ -467,7 +477,10 @@ function nameDeclarations(models, paths, packageName, problems) {
   };
   const clashes = (name, module) =>
     ownNames.has(name) ||
-    (forwardedFrom.has(name) && [...forwardedFrom.get(name)].some((from) => from !== module));
+    (forwardedFrom.has(name) &&
+      [...forwardedFrom.get(name)].some(
+        (from) => from !== undefined && sameModule(from) !== sameModule(module),
+      ));
   // The module is the one API Extractor's reference names, the package that declares the type,
   // whatever the build wrote, so one type is always spelled one way. A global is `globalThis.X`.
   const qualified = (reference, text, { afterDot, afterImport }) => {

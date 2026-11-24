@@ -657,6 +657,28 @@ describe('flattenPackage', () => {
     );
   });
 
+  it('does not qualify a forwarded Node type where the package uses that same type', () => {
+    deepStrictEqual(
+      linesOf('node-forward'),
+      sorted([
+        '.: export ReadStream from node:fs',
+        '.: function viaImport(stream: ReadStream): void',
+        '.: function viaNamed(stream: ReadStream): void',
+      ]),
+    );
+  });
+
+  it('does not qualify a forwarded DefinitelyTyped type, in either form, where the package uses it', () => {
+    deepStrictEqual(
+      linesOf('dt-forward'),
+      sorted([
+        '.: export QueryResult from pg',
+        '.: function viaImport(result: QueryResult): void',
+        '.: function viaNamed(result: QueryResult): void',
+      ]),
+    );
+  });
+
   it('sorts union members and prints import("…") references by name alone', () => {
     deepStrictEqual(
       linesOf('normalize'),
