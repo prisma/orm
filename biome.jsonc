@@ -22,7 +22,7 @@
       "!**/migrations/*/*/ops.json",
       "!**/planner-golden/fixtures/*/planned.golden.json",
       // A saved sample set holds the files and records a release wrote, byte for byte.
-      "!**/saved-samples/*"
+      "!**/saved-samples/sets"
     ]
   },
   "formatter": {

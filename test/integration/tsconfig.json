@@ -13,6 +13,6 @@
     "test/packaging/fixtures/**/*",
     "test/authoring/templates/**/*",
     "test/upgrade-instructions/*/fixtures/**/*",
-    "test/saved-samples/*/**/*"
+    "test/saved-samples/sets/**/*"
   ]
 }
