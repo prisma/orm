@@ -20,6 +20,23 @@ Each subpath namespace consolidates one internal framework module; a bare namesp
 | `/type-implementations` | value logic that more than one target's codecs, data types and `now()` generators share |
 | `/target-package-config` | what a target package uses to restate its components' type declarations with its own module |
 
+## Holding contract hashes fixed
+
+Prisma records a contract's storage, profile and execution hashes in files and databases, and the rules that compute them do not change within a major version. A family or target built outside this repository can check that its own contracts keep their hashes: save a few emitted `contract.json` files, write down their hashes, and call `assertContractHashes` from a test with the family's canonicalization hooks. It throws an error naming each contract and hash that differs; the hashes the files store are ignored.
+
+```ts
+import { readFileSync } from 'node:fs';
+import { assertContractHashes } from '@prisma/orm-framework/contract/hashing';
+import { myFamilyCanonicalizationHooks } from '../src/canonicalization-hooks';
+
+const contract = JSON.parse(readFileSync(new URL('fixtures/users.json', import.meta.url), 'utf8'));
+
+assertContractHashes({
+  contracts: [{ name: 'users', contract, storageHash: '…', profileHash: '…', executionHash: '…' }],
+  ...myFamilyCanonicalizationHooks,
+});
+```
+
 ## Responsibilities
 
 Everything runtime and authoring code needs independently of a concrete database: contract representation and validation, component wiring, PSL handling, and shared utilities. No database drivers, no build tooling (that is `@prisma/orm-toolchain`).
