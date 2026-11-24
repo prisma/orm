@@ -46,13 +46,8 @@ describe('an extension pack installed next to the facade it extends', () => {
 
   beforeAll(() => {
     scratch = mkdtempSync(join(tmpdir(), 'orm-extension-pgvector-'));
-    // The target shell is declared alongside the facade because pnpm
-    // resolves a peer range through the registry rather than through
-    // `pnpm.overrides`, so a harness built on `file:` tarballs cannot
-    // satisfy a peer that only arrives transitively. It is the same single
-    // copy either way — which is what the identity assertion below checks.
     installShells(scratch, pack(scratch, [extension, facade, ...platform]), {
-      direct: [extension, facade, targetShell],
+      direct: [extension, facade, ...platform],
     });
     installedDir = join(scratch, 'node_modules', '@prisma', 'orm-extension-pgvector');
   });
@@ -165,17 +160,17 @@ describe('an extension pack next to a target shell of a different version', () =
     if (targetDir === undefined) throw new Error(`unknown shell ${targetShell}`);
     // Everything the extension needs is packed except the target, which is
     // present one patch ahead — so the only thing that can fail is the peer.
+    const matching: ShellName[] = [
+      '@prisma/orm-framework',
+      '@prisma/orm-family-sql',
+      '@prisma/orm-toolchain',
+    ];
     const packed = [
-      ...pack(scratch, [
-        extension,
-        '@prisma/orm-framework',
-        '@prisma/orm-family-sql',
-        '@prisma/orm-toolchain',
-      ]),
+      ...pack(scratch, [extension, ...matching]),
       packShellAtVersion(join(repoRoot, targetDir), scratch, skewedVersion),
     ];
     const result = tryInstallShells(scratch, packed, {
-      direct: [extension, targetShell],
+      direct: [extension, ...matching, targetShell],
       npmrc: ['strict-peer-dependencies=true', 'auto-install-peers=false'],
     });
     const workspaceYaml = readFileSync(join(scratch, 'pnpm-workspace.yaml'), 'utf8');

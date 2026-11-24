@@ -144,12 +144,10 @@ function printedMessage(run: AuthRun): string {
 // The install the adapter's README gives: the adapter at the database
 // package's version, and Better Auth with its `auth` program from the
 // registry, both at the lowest version the adapter's peer range admits, so
-// they share one copy and the oldest supported release is the one tested. The adapter's
-// two Prisma peers are declared too, because pnpm resolves a peer through
-// the registry rather than through the tarball overrides, and these exact
-// versions are not on the registry until they are released. From the
-// registry the peers and the database package's dependencies are the same
-// packages; the one-copy assertion below checks that here.
+// they share one copy and the oldest supported release is the one tested. The
+// database package's platform shells are declared too, as an application
+// lists them; the adapter's two Prisma peers are among them, and the one-copy
+// assertion below checks it shares them with the database package.
 describe('the Better Auth adapter installed next to the SQLite database package', () => {
   let scratch: string;
 
@@ -159,7 +157,7 @@ describe('the Better Auth adapter installed next to the SQLite database package'
       scratch,
       [packShell(adapterDir, scratch), ...pack(scratch, [facade, ...platform])],
       {
-        direct: [adapter, facade, familySql, '@prisma/orm-framework'],
+        direct: [adapter, facade, ...platform],
         registryDependencies: { 'better-auth': betterAuthFloor, auth: betterAuthFloor },
       },
     );
@@ -315,7 +313,7 @@ describe('the Better Auth adapter next to an ORM client of a different version',
       packShellAtVersion(join(repoRoot, familyDir), scratch, skewedVersion),
     ];
     const result = tryInstallShells(scratch, packed, {
-      direct: [adapter, familySql, '@prisma/orm-framework'],
+      direct: [adapter, familySql, '@prisma/orm-framework', '@prisma/orm-toolchain'],
       registryDependencies: { '@better-auth/core': '1.7' },
       npmrc: ['strict-peer-dependencies=true', 'auto-install-peers=false'],
     });
