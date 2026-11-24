@@ -11,3 +11,9 @@ Split Monolith into Modules
 Fix Import Violation
 - Plan: `.cursor/plans/fix-import-violation.md`
 - See: `.cursor/rules/import-validation.mdc`, `architecture.config.json`
+
+Update a Package's API List
+- Each package under `packages/9-public/@prisma/` has a generated `api.txt` beside its `package.json`: one line for each export of each import path and each member, read from the built declarations. It is not published.
+- CI's `Lint` job runs `pnpm api:check`, which fails when a committed `api.txt` does not match the build. To fix it, run `pnpm build` and then `pnpm api:update`, and commit the changed lists. A changed line in the pull request shows a change to what users can import.
+- Never edit an `api.txt` by hand. After a merge conflict in one, rebuild and run `pnpm api:update` in place of merging it.
+- The scripts are in `scripts/public-api/`. They also leave API Extractor's structured output in each package's `dist-api/` folder.

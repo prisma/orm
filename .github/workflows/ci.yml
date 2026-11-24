@@ -115,6 +115,8 @@ jobs:
         run: pnpm lint:workflows
       - name: Test scripts/
         run: pnpm test:scripts
+      - name: Check the committed API lists match the build
+        run: pnpm api:check
       - name: Lint ratchets (casts, throws, framework vocabulary)
         run: pnpm lint:ratchets
       - name: Lint consumer internal imports
