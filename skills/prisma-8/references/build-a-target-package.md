@@ -91,16 +91,19 @@ export default {
 | `probe(databaseUrl, signal)` | Optional. Runs for `--probe-db` |
 | `prisma7QuickReference(input)` | Optional. Required when your `configModule` exports `prisma7Schema` |
 
+A user names your package in `--target` by its package name, such as `--target prisma-orm-acmedb`. Short names such as `postgres` exist only for the packages in the CLI's list of targets Prisma vouches for; today that is Postgres and MongoDB. With `--skip-install`, your package must already be installed in the project: `init` loads your `/init` entrypoint before it writes anything, and reads the `prisma-orm-extension` keyword from the installed copy.
+
 Rules:
 
 - **No framework code runs in `/init`.** Types are fine. The CLI that loads it may be a different installed copy of the framework from the one your package depends on, and two copies in one process do not recognise each other's values.
 - **The connection string is `DATABASE_URL`.** `prisma.config.ts`, `db.ts` and `--probe-db` read it, and `dotenv` is installed with your package, so `db.ts` may import `dotenv/config`. `--probe-db` reads it from the shell's environment, not from `.env`.
 - **Drivers.** `init` reads `peerPackages` only after your package is installed. The first install is your package and `dotenv`; the package manager handles your package's required peers its own way, and a configuration that refuses a package without its peers makes that install fail, which `init` reports. Declare your driver as a required peer dependency, and list it in `peerPackages` so `init` declares it in the application.
+- **`/init` loads without the driver.** For a package that is not in the CLI's list, the driver is installed after `/init` is loaded, so import the driver inside `probe`, when it runs, and report `driver-missing` if that import fails.
 - **The probe** resolves to the server's version, `driver-missing`, `driver-failed`, or `version-unreadable` once connected, and rejects only when it cannot connect. Bound its connect and query with your driver's own timeouts. `init` aborts `signal` after 60 seconds; close your client when it fires.
 
 ## Package rules
 
-- Name the package `prisma-orm-<name>`, under your scope if you have one, and add the keyword `prisma-orm-extension` to its `package.json`. The keyword is required: `prisma orm init --target` reads it before installing your package and refuses a package without it. `init` checks the copy it is about to load: the registry's `latest` version when it will install your package, and the installed `package.json` when the project already declares your package and has it on disk. It asks the registry without credentials, so a user of a package on a registry that needs them, or on a scope's own registry, installs the package first and then runs `init`.
+- Name the package `prisma-orm-<name>`, under your scope if you have one, and add the keyword `prisma-orm-extension` to its `package.json`. The keyword is required: `prisma orm init --target` reads it before installing your package and refuses a package without it. `init` checks the copy it is about to load: the registry's `latest` version when it will install your package, and the installed `package.json` when it will not: under `--skip-install`, or when the project already declares your package and has it on disk. It asks the registry without credentials, so a user of a package on a registry that needs them, or on a scope's own registry, installs the package first and then runs `init`.
 - Depend on the Prisma packages your code imports at run time (`@prisma/orm-framework`, your family's package), each pinned to one exact version; see [`upgrade-extension.md`](upgrade-extension.md) § *Exact-pin rule*.
 - `/init` imports only the `InitContribution` type from `@prisma/orm-toolchain`. If that is your package's only use of it, make it a development dependency: as a pinned dependency it gives the application a second copy of the toolchain whenever its `prisma` is another version.
 - Import or name no module beginning `@internal/`. Those are Prisma's private workspace names.
@@ -108,3 +111,5 @@ Rules:
 ## Check it from outside
 
 Pack your package and install the tarball into a scratch application that depends on nothing from Prisma except the CLI. Run `prisma orm init --target <your package>`, `prisma contract emit` and `prisma migration plan`, then typecheck with `skipLibCheck` off. Every import in the generated files names your package, an extension's own package, or a relative path.
+
+A check with a package that borrows another target's parts behind its own name proves only the wiring: the imports and `init`. A target written from scratch also needs its own target, adapter and driver descriptors, its own codec and operation types under its own module names, its own migration planner and renderer, and its own contract serialiser and runtime client.
