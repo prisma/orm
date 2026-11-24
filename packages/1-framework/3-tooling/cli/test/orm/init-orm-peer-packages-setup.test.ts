@@ -211,9 +211,39 @@ describe('whether a package the project lists is at the version asked for', () =
       'left-at-another-version',
     ],
     ['a workspace line with the version installed', 'workspace:*', VERSION, 'already-listed'],
+    [
+      'a caret on an earlier version with the version installed',
+      '^8.0.0',
+      VERSION,
+      'already-listed',
+    ],
+    ['a caret with another version installed', '^8.0.0', '8.0.0', 'left-at-another-version'],
+    ['a tilde, nothing installed', '~8.0.0', undefined, 'already-listed'],
+    ['a dist-tag with the version installed', 'latest', VERSION, 'already-listed'],
   ])('decides %s', async (_case, line, installed, outcome) => {
     expect(await outcomeFor(line, installed)).toMatchObject({
       packages: [{ name: '@prisma/orm-framework', version: VERSION, outcome }],
+    });
+  });
+
+  it('counts a caret line init wrote for one release candidate once the next is installed and asked for', async () => {
+    const resolved = await resolveOrmPeerPackages({
+      packageName: '@prisma/orm-postgres',
+      ownsTarget: false,
+      declared: () => new Map([['@prisma/orm-framework', '^8.0.0-rc.26']]),
+      installedVersion: () => '8.0.0-rc.27',
+      install: undefined,
+      read: async () => ({
+        version: '8.0.0-rc.27',
+        peers: new Map([['@prisma/orm-framework', '8.0.0-rc.27']]),
+      }),
+    });
+
+    expect(resolved).toMatchObject({
+      packages: [
+        { name: '@prisma/orm-framework', version: '8.0.0-rc.27', outcome: 'already-listed' },
+      ],
+      warnings: [],
     });
   });
 });

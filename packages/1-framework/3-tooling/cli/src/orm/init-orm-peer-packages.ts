@@ -252,18 +252,20 @@ export async function resolveOrmPeerPackages(ctx: {
   };
 }
 
-const PROTOCOL_LINE = /^(?:workspace|catalog|link|file|npm|portal|git|git\+[a-z]+|github|https?):/;
+const EXACT_VERSION_LINE = /^[v=]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/;
 
 /**
- * Whether a `package.json` line stands for `version`. A version or range is judged by its text,
- * since the next clean install follows the line whatever is installed now: it stands for the
- * version when it is the version or a range written directly on it. A protocol line, whose target
- * only the package manager knows, stands for it when the installed copy is at the version, or when
- * nothing is installed to compare.
+ * Whether a `package.json` line stands for `version`. An exact version is judged by its text, since
+ * the next clean install follows it whatever is installed now. Any other line (a range, a dist-tag,
+ * or a `workspace:`, `catalog:`, `link:`, `file:` or alias line) cannot be judged from its text
+ * without resolving it, so the installed copy decides, and with nothing installed it counts as
+ * standing for the version. A caret line `init` wrote for one release candidate still admits the
+ * next one after an update, so it must not be judged by its text.
  */
 function lineStandsFor(line: string, version: string, installed: string | undefined): boolean {
-  if (PROTOCOL_LINE.test(line)) return installed === undefined || installed === version;
-  return ['', '=', 'v', '^', '~', '>='].some((op) => line === `${op}${version}`);
+  const exact = EXACT_VERSION_LINE.exec(line.trim());
+  if (exact !== null) return exact[1] === version;
+  return installed === undefined || installed === version;
 }
 
 function byName<T>(entries: ReadonlyMap<string, T>): [string, T][] {
