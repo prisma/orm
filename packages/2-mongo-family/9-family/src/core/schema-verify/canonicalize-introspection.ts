@@ -31,6 +31,12 @@ import type { CollationOptions } from '@internal/mongo-value/mongodb-types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
+import {
+  isDisabledChangeStream,
+  isSimpleCollation,
+  reportedCappedMax,
+  reportedCappedSize,
+} from '../reported-collection-options';
 
 export interface CanonicalizedSchemas {
   readonly live: MongoSchemaIR;
@@ -356,26 +362,34 @@ function canonicalizeExpectedOptions(
     ? undefined
     : expectedOptions.changeStreamPreAndPostImages;
 
+  const collation = isSimpleCollation(expectedOptions.collation)
+    ? undefined
+    : expectedOptions.collation;
+  const capped =
+    expectedOptions.capped === undefined
+      ? undefined
+      : {
+          size: reportedCappedSize(expectedOptions.capped.size),
+          ...(expectedOptions.capped.max === undefined
+            ? {}
+            : { max: reportedCappedMax(expectedOptions.capped.max) }),
+        };
+
   const hasMeaningful =
-    expectedOptions.capped ||
+    capped ||
     expectedOptions.timeseries ||
-    expectedOptions.collation ||
+    collation ||
     changeStreamPreAndPostImages ||
     expectedOptions.clusteredIndex;
   if (!hasMeaningful) return undefined;
 
   return new MongoSchemaCollectionOptionsCtor({
-    ...ifDefined('capped', expectedOptions.capped),
+    ...ifDefined('capped', capped),
     ...ifDefined('timeseries', expectedOptions.timeseries),
-    ...ifDefined('collation', expectedOptions.collation),
+    ...ifDefined('collation', collation),
     ...ifDefined('changeStreamPreAndPostImages', changeStreamPreAndPostImages),
     ...ifDefined('clusteredIndex', expectedOptions.clusteredIndex),
   });
-}
-
-/** Whether change stream images are given as turned off, which MongoDB reports as no option at all. */
-export function isDisabledChangeStream(value: { enabled: boolean } | undefined): boolean {
-  return value !== undefined && value.enabled === false;
 }
 
 /**

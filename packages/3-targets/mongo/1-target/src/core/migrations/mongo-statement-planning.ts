@@ -548,7 +548,7 @@ function collectionRenameRefusal(
       `${label}: collection "${from}" is a time-series collection`,
       statement === undefined
         ? `${changed}MongoDB cannot rename a time-series collection. Keep the collection's name: store the models in "${from}" (with @@map(${JSON.stringify(from)}) in PSL), then run this command again. To start the collection under its new name without its documents, remove the model in one change and add it back in a second.`
-        : `MongoDB cannot rename a time-series collection. Leave out this statement. To keep the documents, first create collection "${to}" yourself with exactly the options the contract gives it, its validator included, and copy them into it; the plan then drops "${from}" once --delete names the model. A migration that migration plan writes creates collection "${to}" itself, and stops at that creation when the collection you made has other options.`,
+        : `MongoDB cannot rename a time-series collection. Leave out this statement. With db update, first create collection "${to}" yourself with the time-series options of collection "${from}", which db.getCollectionInfos({ name: ${JSON.stringify(from)} }) shows in mongosh, copy the documents into it, and run db update again with --delete naming the model, which drops "${from}". With migration plan, plan with --delete naming the model; the migration.ts it writes creates collection "${to}", and there add a dataTransform that copies the documents right after that creation and before the drop of collection "${from}".`,
     );
   }
   const invalid = invalidCollectionNameReason(to);

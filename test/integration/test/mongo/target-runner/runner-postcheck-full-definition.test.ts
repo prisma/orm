@@ -183,6 +183,9 @@ describe('createCollection postchecks', { timeout: timeouts.spinUpMongoMemorySer
     ['change stream images turned off', { changeStreamPreAndPostImages: { enabled: false } }],
     ['the simple collation', { collation: { locale: 'simple' } }],
     ['capped turned off', { capped: false }],
+    ['a cap with no limit on the number of documents', { capped: true, size: 4096, max: 0 }],
+    ['a fractional cap size', { capped: true, size: 1000.5 }],
+    ['an empty validator', { validator: {} }],
   ] as const)(
     'hold once the operation created a collection with %s, and not before',
     async (_, options) => {
@@ -193,6 +196,12 @@ describe('createCollection postchecks', { timeout: timeouts.spinUpMongoMemorySer
       expect({ before, after: await postchecksHold(op) }).toEqual({ before: false, after: true });
     },
   );
+
+  it('does not hold for a view of that name', async () => {
+    await db.createCollection('created', { viewOn: 'items', pipeline: [] });
+
+    expect(await postchecksHold(createCollection('created'))).toBe(false);
+  });
 
   it('does not hold for a collection of that name made without the validator', async () => {
     const op = createCollection('items', { validator: { $jsonSchema: { bsonType: 'object' } } });

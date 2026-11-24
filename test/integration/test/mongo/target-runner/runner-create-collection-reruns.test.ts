@@ -94,6 +94,19 @@ describe('a migration that creates a collection, run again', {
     await db().createCollection('members');
     await initMarker(from);
     const result = await runOperations([createMembers], from, to);
-    expect({ ok: result.ok, members: await membersOptions() }).toEqual({ ok: false, members: {} });
+    expect({
+      failure: result.ok
+        ? undefined
+        : { code: result.failure.code, message: result.failure.message, why: result.failure.why },
+      members: await membersOptions(),
+    }).toEqual({
+      failure: {
+        code: 'MIGRATION.PRECHECK_FAILED',
+        message:
+          'Operation collection.members.create stopped: collection members already exists without the options this migration creates it with',
+        why: "If members holds nothing you need, drop it, then run the command again. Otherwise give it the options the createCollection call of this migration's migration.ts sets, its validator among them, and run the command again: the creation is then skipped. The failed apply changed nothing.",
+      },
+      members: {},
+    });
   });
 });

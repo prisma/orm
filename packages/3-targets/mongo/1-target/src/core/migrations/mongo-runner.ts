@@ -65,6 +65,7 @@ import type {
 } from '@internal/mongo-query-ast/control';
 import {
   CollModCommand,
+  CreateCollectionCommand,
   CreateIndexCommand,
   isInspectionCheckSource,
   isMongoDmlOperation,
@@ -326,6 +327,31 @@ function renameTargetExistsRefusal(
     `Operation ${op.id} stopped: collection ${to} already exists, so collection ${from} cannot be renamed to it`,
     {
       why: `If ${to} holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If an earlier operation of the same migration created ${to}, as a createIndex on ${to} does, make renameCollection(${JSON.stringify(from)}, ${JSON.stringify(to)}) the first operation of its migration.ts, run node on that migration.ts, and then drop ${to} and run the command again.`,
+      meta: { operationId: op.id },
+    },
+  );
+}
+
+/**
+ * The failure when a create's before-check finds a collection of that name, which the create's
+ * after-check did not take as the one it makes: made another way, with other options.
+ */
+function createTargetExistsRefusal(
+  op: MongoMigrationPlanOperation,
+  failed: MongoMigrationCheck,
+): MongoMigrationRunnerResult | undefined {
+  const create = op.execute.find(
+    (step) => step.command instanceof CreateCollectionCommand,
+  )?.command;
+  if (!(create instanceof CreateCollectionCommand) || failed.expect !== 'notExists') {
+    return undefined;
+  }
+  const name = create.collection;
+  return runnerFailure(
+    'MIGRATION.PRECHECK_FAILED',
+    `Operation ${op.id} stopped: collection ${name} already exists without the options this migration creates it with`,
+    {
+      why: `If ${name} holds nothing you need, drop it, then run the command again. Otherwise give it the options the createCollection call of this migration's migration.ts sets, its validator among them, and run the command again: the creation is then skipped.`,
       meta: { operationId: op.id },
     },
   );
@@ -1257,6 +1283,7 @@ export class MongoMigrationRunner {
             const failedCheck = failedCheckOf(operation.id, 'precheck', failing);
             return (
               renameTargetExistsRefusal(operation, failing) ??
+              createTargetExistsRefusal(operation, failing) ??
               (await this.documentsFailingValidatorRefusal(
                 operation,
                 failing,

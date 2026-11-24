@@ -1085,6 +1085,35 @@ describe('MongoMigrationRunner, a collection rename stopped because the new coll
 describe('MongoMigrationRunner, a DDL precheck that does not hold', () => {
   it('reports the failed check once, in meta.failedCheck', async () => {
     const harness = makeHarness();
+    harness.inspectionExecutor.indexes = [{ name: 'email_1', key: { name: 1 } }];
+
+    const result = await execute(
+      harness,
+      [createIndex('orders', [{ field: 'email', direction: 1 }], { name: 'email_1' })],
+      { prechecks: true, postchecks: false, idempotencyChecks: false },
+    );
+
+    expect(failureFields(result.assertNotOk())).toEqual({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      message:
+        'Operation index.orders.create(email_1) failed during precheck: no index named email_1 exists on orders',
+      why: 'Before operation index.orders.create(email_1) runs, it checks: no index named email_1 exists on orders. That check failed: the database already has an index named "email_1" in "orders". The failed apply changed nothing.',
+      meta: {
+        databaseUnchanged: true,
+        failedCheck: {
+          operationId: 'index.orders.create(email_1)',
+          phase: 'precheck',
+          description: 'no index named email_1 exists on orders',
+          expectation: { expects: 'absent', object: 'an index named "email_1" in "orders"' },
+        },
+      },
+    });
+  });
+});
+
+describe('MongoMigrationRunner, a create whose collection already exists', () => {
+  it('names the two ways out: drop it, or give it the options of the create', async () => {
+    const harness = makeHarness();
     harness.inspectionExecutor.collections = [{ name: 'orders' }];
 
     const result = await execute(harness, [createCollection('orders')], {
@@ -1096,17 +1125,9 @@ describe('MongoMigrationRunner, a DDL precheck that does not hold', () => {
     expect(failureFields(result.assertNotOk())).toEqual({
       code: 'MIGRATION.PRECHECK_FAILED',
       message:
-        'Operation collection.orders.create failed during precheck: collection orders does not exist',
-      why: 'Before operation collection.orders.create runs, it checks: collection orders does not exist. That check failed: the database already has collection "orders". The failed apply changed nothing.',
-      meta: {
-        databaseUnchanged: true,
-        failedCheck: {
-          operationId: 'collection.orders.create',
-          phase: 'precheck',
-          description: 'collection orders does not exist',
-          expectation: { expects: 'absent', object: 'collection "orders"' },
-        },
-      },
+        'Operation collection.orders.create stopped: collection orders already exists without the options this migration creates it with',
+      why: "If orders holds nothing you need, drop it, then run the command again. Otherwise give it the options the createCollection call of this migration's migration.ts sets, its validator among them, and run the command again: the creation is then skipped. The failed apply changed nothing.",
+      meta: { operationId: 'collection.orders.create', databaseUnchanged: true },
     });
   });
 });
@@ -1240,8 +1261,10 @@ describe('MongoMigrationRunner, a DDL postcheck that does not hold', () => {
 describe('MongoMigrationRunner, a failure after an earlier space changed the database', () => {
   it('says the operations that ran stay applied, though this space changed nothing', async () => {
     const harness = makeHarness();
-    harness.inspectionExecutor.collections = [{ name: 'orders' }];
-    const plan = makePlan([createCollection('orders')]);
+    harness.inspectionExecutor.indexes = [{ name: 'email_1', key: { name: 1 } }];
+    const plan = makePlan([
+      createIndex('orders', [{ field: 'email', direction: 1 }], { name: 'email_1' }),
+    ]);
 
     const result = await harness.runner.execute({
       plan,
@@ -1259,7 +1282,7 @@ describe('MongoMigrationRunner, a failure after an earlier space changed the dat
       why: failure.why,
     }).toEqual({
       databaseUnchanged: false,
-      why: 'Before operation collection.orders.create runs, it checks: collection orders does not exist. That check failed: the database already has collection "orders". The operations that ran before the failure stay applied.',
+      why: 'Before operation index.orders.create(email_1) runs, it checks: no index named email_1 exists on orders. That check failed: the database already has an index named "email_1" in "orders". The operations that ran before the failure stay applied.',
     });
   });
 });

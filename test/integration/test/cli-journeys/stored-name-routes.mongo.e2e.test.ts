@@ -6,7 +6,8 @@
  * - T3: two collections that move along a chain with no statement, through names nothing uses (both commands).
  * - T4: a new model takes the collection name a rename frees: the rename comes first (both commands).
  * - T5: `--rename` of a model that shares its collection with another root model: the route that plans without the statement and moves the documents in that plan's `migration.ts`, followed to the end (`migration plan`).
- * - T6: the same route with a field `@map` change of the model that stays: the move goes right after the create, so the rename does not reach the moved documents; and a stop after the create is finished by removing the create, as the route says (`migration plan`).
+ * - T6: the same route with a field `@map` change of the model that stays: the move goes right after the create, so the rename does not reach the moved documents; and a stop at the validator change is finished by removing the stray document and running the migration again, with no edit (`migration plan`).
+ * - T7: a variant delete beside a model that moves out: the two plans the route gives, with the documents of the model that moves read back, including one that holds the variant's discriminator value (`migration plan`).
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';

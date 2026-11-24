@@ -1,4 +1,10 @@
-export { isDisabledChangeStream } from '../core/schema-verify/canonicalize-introspection';
+export {
+  isDisabledChangeStream,
+  isSimpleCollation,
+  reportedCappedMax,
+  reportedCappedSize,
+  reportsValidator,
+} from '../core/reported-collection-options';
 export {
   type VerifyMongoSchemaOptions,
   verifyMongoSchema,

@@ -1,5 +1,11 @@
 import type { JsonValue } from '@internal/contract/types';
-import { isDisabledChangeStream } from '@internal/family-mongo/schema-verify';
+import {
+  isDisabledChangeStream,
+  isSimpleCollation,
+  reportedCappedMax,
+  reportedCappedSize,
+  reportsValidator,
+} from '@internal/family-mongo/schema-verify';
 import {
   defaultMongoIndexName,
   MONGO_INDEX_OPTION_KEYS,
@@ -1395,51 +1401,72 @@ const CREATED_OPTION_KINDS = {
   clusteredIndex: 'document',
 } as const satisfies Record<keyof CreateCollectionOptions, 'validator' | 'scalar' | 'document'>;
 
-/** The options MongoDB reports for a collection created with `options`: it reports none for an option set to its default. */
+/** The options MongoDB reports for a collection created with `options`, by the family's rule. */
 function reportedCreateOptions(options: CreateCollectionOptions): CreateCollectionOptions {
-  const { capped, collation, changeStreamPreAndPostImages, ...rest } = options;
+  const { validator, capped, size, max, collation, changeStreamPreAndPostImages, ...rest } =
+    options;
   return {
     ...rest,
+    ...(reportsValidator(validator) ? ifDefined('validator', validator) : {}),
     ...(capped === true ? { capped } : {}),
-    ...(collation === undefined || collation.locale === 'simple' ? {} : { collation }),
+    ...(size === undefined ? {} : { size: reportedCappedSize(size) }),
+    ...(max === undefined ? {} : { max: reportedCappedMax(max) }),
+    ...(isSimpleCollation(collation) ? {} : ifDefined('collation', collation)),
     ...(isDisabledChangeStream(changeStreamPreAndPostImages)
       ? {}
       : ifDefined('changeStreamPreAndPostImages', changeStreamPreAndPostImages)),
   };
 }
 
+/** Options `listCollections` can report that `createCollection` never sets, so a collection that has one was made another way. */
+const OPTIONS_CREATE_NEVER_SETS = [
+  'viewOn',
+  'pipeline',
+  'expireAfterSeconds',
+  'storageEngine',
+  'indexOptionDefaults',
+  'encryptedFields',
+] as const;
+
 /**
  * What `listCollections` reports for a collection created with `options`, so that the create is
  * skipped on a re-run only when the collection it made is there, and not for one made another way.
- * An option the call does not give, or sets to a default MongoDB does not report, must be absent.
+ * Its `type` must be the kind the call creates, an option the call does not give, or sets to a
+ * default MongoDB does not report, must be absent, and so must every option the call never sets.
  */
 function createdCollectionOptionFilters(options: CreateCollectionOptions): MongoFilterExpr[] {
   const reported = reportedCreateOptions(options);
-  return Object.entries(CREATED_OPTION_KINDS).flatMap(([option, kind]): MongoFilterExpr[] => {
-    const given: unknown = Reflect.get(reported, option);
-    if (given === undefined) return [MongoExistsExpr.notExists(`options.${option}`)];
-    if (kind === 'validator') {
-      return [
-        validatorBodyFilter(
-          blindCast<Readonly<Record<string, unknown>>, 'the validator option is a document'>(given),
-        ),
-      ];
-    }
-    if (kind === 'scalar') {
-      return [
+  return [
+    MongoFieldFilter.eq('type', options.timeseries === undefined ? 'collection' : 'timeseries'),
+    ...Object.entries(CREATED_OPTION_KINDS).flatMap(([option, kind]): MongoFilterExpr[] => {
+      const given: unknown = Reflect.get(reported, option);
+      if (given === undefined) return [MongoExistsExpr.notExists(`options.${option}`)];
+      if (kind === 'validator') {
+        return [
+          validatorBodyFilter(
+            blindCast<Readonly<Record<string, unknown>>, 'the validator option is a document'>(
+              given,
+            ),
+          ),
+        ];
+      }
+      if (kind === 'scalar') {
+        return [
+          MongoFieldFilter.eq(
+            `options.${option}`,
+            blindCast<MongoValue, 'scalar collection options are BSON scalars'>(given),
+          ),
+        ];
+      }
+      return Object.entries(Object(given)).map(([field, value]) =>
         MongoFieldFilter.eq(
-          `options.${option}`,
-          blindCast<MongoValue, 'scalar collection options are BSON scalars'>(given),
+          `options.${option}.${field}`,
+          blindCast<MongoValue, 'collection options are plain BSON values'>(value),
         ),
-      ];
-    }
-    return Object.entries(Object(given)).map(([field, value]) =>
-      MongoFieldFilter.eq(
-        `options.${option}.${field}`,
-        blindCast<MongoValue, 'collection options are plain BSON values'>(value),
-      ),
-    );
-  });
+      );
+    }),
+    ...OPTIONS_CREATE_NEVER_SETS.map((option) => MongoExistsExpr.notExists(`options.${option}`)),
+  ];
 }
 
 export function dropCollection(collectionName: string): MongoMigrationPlanOperation {

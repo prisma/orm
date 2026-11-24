@@ -107,6 +107,12 @@
             },
             {
               "kind": "field",
+              "field": "type",
+              "op": "$eq",
+              "value": "collection"
+            },
+            {
+              "kind": "field",
               "field": "options.validator.$jsonSchema",
               "op": "$eq",
               "value": {
@@ -213,6 +219,36 @@
             {
               "kind": "exists",
               "field": "options.clusteredIndex",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.viewOn",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.pipeline",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.storageEngine",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.indexOptionDefaults",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.encryptedFields",
               "exists": false
             }
           ]
@@ -379,6 +415,12 @@
             },
             {
               "kind": "field",
+              "field": "type",
+              "op": "$eq",
+              "value": "collection"
+            },
+            {
+              "kind": "field",
               "field": "options.validator.$jsonSchema",
               "op": "$eq",
               "value": {
@@ -535,6 +577,36 @@
               "kind": "exists",
               "field": "options.clusteredIndex",
               "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.viewOn",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.pipeline",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.storageEngine",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.indexOptionDefaults",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.encryptedFields",
+              "exists": false
             }
           ]
         },
@@ -640,6 +712,12 @@
             },
             {
               "kind": "field",
+              "field": "type",
+              "op": "$eq",
+              "value": "collection"
+            },
+            {
+              "kind": "field",
               "field": "options.validator.$jsonSchema",
               "op": "$eq",
               "value": {
@@ -736,6 +814,36 @@
               "kind": "exists",
               "field": "options.clusteredIndex",
               "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.viewOn",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.pipeline",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.storageEngine",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.indexOptionDefaults",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.encryptedFields",
+              "exists": false
             }
           ]
         },
@@ -819,6 +927,12 @@
             },
             {
               "kind": "field",
+              "field": "type",
+              "op": "$eq",
+              "value": "collection"
+            },
+            {
+              "kind": "field",
               "field": "options.validator.$jsonSchema",
               "op": "$eq",
               "value": {
@@ -892,6 +1006,36 @@
             {
               "kind": "exists",
               "field": "options.clusteredIndex",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.viewOn",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.pipeline",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.storageEngine",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.indexOptionDefaults",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.encryptedFields",
               "exists": false
             }
           ]
@@ -1031,6 +1175,12 @@
             },
             {
               "kind": "field",
+              "field": "type",
+              "op": "$eq",
+              "value": "collection"
+            },
+            {
+              "kind": "field",
               "field": "options.validator.$jsonSchema",
               "op": "$eq",
               "value": {
@@ -1160,6 +1310,36 @@
               "kind": "exists",
               "field": "options.clusteredIndex",
               "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.viewOn",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.pipeline",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.storageEngine",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.indexOptionDefaults",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.encryptedFields",
+              "exists": false
             }
           ]
         },
@@ -1283,6 +1463,12 @@
             },
             {
               "kind": "field",
+              "field": "type",
+              "op": "$eq",
+              "value": "collection"
+            },
+            {
+              "kind": "field",
               "field": "options.validator.$jsonSchema",
               "op": "$eq",
               "value": {
@@ -1397,6 +1583,36 @@
               "kind": "exists",
               "field": "options.clusteredIndex",
               "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.viewOn",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.pipeline",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.storageEngine",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.indexOptionDefaults",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.encryptedFields",
+              "exists": false
             }
           ]
         },
@@ -1497,6 +1713,12 @@
             },
             {
               "kind": "field",
+              "field": "type",
+              "op": "$eq",
+              "value": "collection"
+            },
+            {
+              "kind": "field",
               "field": "options.validator.$jsonSchema",
               "op": "$eq",
               "value": {
@@ -1587,6 +1809,36 @@
             {
               "kind": "exists",
               "field": "options.clusteredIndex",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.viewOn",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.pipeline",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.storageEngine",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.indexOptionDefaults",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "options.encryptedFields",
               "exists": false
             }
           ]

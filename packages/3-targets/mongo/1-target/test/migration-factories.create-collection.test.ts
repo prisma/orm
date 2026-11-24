@@ -12,6 +12,14 @@ const absent = (...options: readonly string[]) =>
 
 const SCALARS = ['validationLevel', 'validationAction', 'capped', 'size', 'max'];
 const DOCUMENTS = ['timeseries', 'collation', 'changeStreamPreAndPostImages', 'clusteredIndex'];
+const NEVER_SET = absent(
+  'viewOn',
+  'pipeline',
+  'expireAfterSeconds',
+  'storageEngine',
+  'indexOptionDefaults',
+  'encryptedFields',
+);
 
 describe('createCollection postcheck', () => {
   it('holds only for a collection with none of the options, when the call gives none', () => {
@@ -21,7 +29,9 @@ describe('createCollection postcheck', () => {
         source: new ListCollectionsCommand(),
         filter: MongoAndExpr.of([
           MongoFieldFilter.eq('name', 'users'),
+          MongoFieldFilter.eq('type', 'collection'),
           ...absent('validator', ...SCALARS, ...DOCUMENTS),
+          ...NEVER_SET,
         ]),
         expect: 'exists',
         object: 'collection "users"',
@@ -39,10 +49,12 @@ describe('createCollection postcheck', () => {
     expect(check?.filter).toEqual(
       MongoAndExpr.of([
         MongoFieldFilter.eq('name', 'users'),
+        MongoFieldFilter.eq('type', 'collection'),
         MongoFieldFilter.eq('options.validator.$jsonSchema', schema),
         MongoFieldFilter.eq('options.validationLevel', 'strict'),
         MongoFieldFilter.eq('options.validationAction', 'error'),
         ...absent('capped', 'size', 'max', ...DOCUMENTS),
+        ...NEVER_SET,
       ]),
     );
   });
@@ -60,6 +72,7 @@ describe('createCollection postcheck', () => {
     expect(check?.filter).toEqual(
       MongoAndExpr.of([
         MongoFieldFilter.eq('name', 'events'),
+        MongoFieldFilter.eq('type', 'timeseries'),
         ...absent('validator', 'validationLevel', 'validationAction'),
         MongoFieldFilter.eq('options.capped', true),
         MongoFieldFilter.eq('options.size', 5000),
@@ -71,6 +84,7 @@ describe('createCollection postcheck', () => {
         MongoFieldFilter.eq('options.changeStreamPreAndPostImages.enabled', true),
         MongoFieldFilter.eq('options.clusteredIndex.key', { _id: 1 }),
         MongoFieldFilter.eq('options.clusteredIndex.unique', true),
+        ...NEVER_SET,
       ]),
     );
   });
@@ -84,7 +98,30 @@ describe('createCollection postcheck', () => {
     expect(check?.filter).toEqual(
       MongoAndExpr.of([
         MongoFieldFilter.eq('name', 'users'),
+        MongoFieldFilter.eq('type', 'collection'),
         ...absent('validator', ...SCALARS, ...DOCUMENTS),
+        ...NEVER_SET,
+      ]),
+    );
+  });
+
+  it('compares the values MongoDB rewrites at create as it reports them', () => {
+    const [check] = createCollection('users', {
+      validator: {},
+      capped: true,
+      size: 1000.5,
+      max: 0,
+    }).postcheck;
+    expect(check?.filter).toEqual(
+      MongoAndExpr.of([
+        MongoFieldFilter.eq('name', 'users'),
+        MongoFieldFilter.eq('type', 'collection'),
+        ...absent('validator', 'validationLevel', 'validationAction'),
+        MongoFieldFilter.eq('options.capped', true),
+        MongoFieldFilter.eq('options.size', 1000),
+        MongoFieldFilter.eq('options.max', 2147483647),
+        ...absent(...DOCUMENTS),
+        ...NEVER_SET,
       ]),
     );
   });
