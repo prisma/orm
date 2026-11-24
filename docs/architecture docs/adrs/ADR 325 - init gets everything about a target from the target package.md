@@ -3,6 +3,8 @@
 **Status:** Accepted
 **Date:** 2026-11-18
 
+> **Amended by [ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) (2026-11).** `init` also adds the required peer dependencies that the target package and the Prisma packages it names declare, read from their installed manifests. The statement under the consequences that `init` does not work out a package's peers describes the earlier behaviour. The reason for the change is that Yarn installs no peer dependencies.
+
 ---
 
 `prisma orm init` sets up Prisma 8 in a project. It writes a handful of files and installs what they need:
