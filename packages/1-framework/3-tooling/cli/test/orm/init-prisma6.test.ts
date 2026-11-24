@@ -227,9 +227,33 @@ describe(
           ]),
         },
         warnings: [
-          'init could not read the peer dependencies of @prisma/orm-mongo from the registry, so the install command below leaves out the packages it needs as required peers. Add each of them too, at the version of @prisma/orm-mongo: after installing it, its package.json lists them under peerDependencies.',
+          'init could not read the peer dependencies of @prisma/orm-mongo from the registry, so the install command below leaves out the packages it needs as required peers. After installing @prisma/orm-mongo, add each package its package.json lists under peerDependencies, at the range listed there.',
         ],
       });
+    });
+
+    it('prints the warnings the list of required peers carries', async () => {
+      writePrisma6Project();
+      const { prompt } = scriptedPrompt();
+      const warnings: string[] = [];
+
+      await rejectionOf(
+        resolveInputs({
+          cwd: projectDir,
+          flags: flags(),
+          prompt,
+          packageManager: 'pnpm',
+          warn: (text) => warnings.push(text),
+          requiredPeersFor: async (packageName) => ({
+            target: packageName,
+            packages: [],
+            unread: [],
+            warnings: ['@prisma/orm-framework is installed at 8.0.0'],
+          }),
+        }),
+      );
+
+      expect(warnings).toEqual(['@prisma/orm-framework is installed at 8.0.0']);
     });
 
     it('finds a Prisma 6 schema that package.json names', async () => {

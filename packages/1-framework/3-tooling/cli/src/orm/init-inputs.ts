@@ -950,9 +950,10 @@ export async function resolveInitInputs(ctx: {
       const requiredPeers = await ctx.requiredPeersFor(prisma6.target.packageName);
       for (const unread of requiredPeers.unread) {
         ctx.warn(
-          `init could not read the peer dependencies of ${unread} from the registry, so the install command below leaves out the packages it needs as required peers. Add each of them too, at the version of ${unread}: after installing it, its package.json lists them under peerDependencies.`,
+          `init could not read the peer dependencies of ${unread} from the registry, so the install command below leaves out the packages it needs as required peers. After installing ${unread}, add each package its package.json lists under peerDependencies, at the range listed there.`,
         );
       }
+      for (const warning of requiredPeers.warnings) ctx.warn(warning);
       throw prisma6SchemaFound(detection, prisma6, ctx.packageManager, requiredPeers);
     }
     if (await choosePrisma7Path({ flags, prompt, detection, flagTarget, warn: ctx.warn })) {

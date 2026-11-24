@@ -188,8 +188,11 @@ export function requiredPeersForSetup(ctx: {
  * Collects the required peers of the target package: every `@prisma/orm-*` package its manifest
  * names as a peer, then the peers those name, until no new name appears, and every other required
  * peer those manifests name, whose own peers are not followed. With `install`,
- * it installs what the project does not list yet and reads the manifests that only that install
- * put on disk. A package the project lists at another version is left as it is and reported.
+ * it installs what the project does not list yet and reads again every package it installed, since
+ * the version installed can name peers the copy on disk before did not. A copy installed at a
+ * version other than the exact one asked for does not stand for it, so its peers are not followed;
+ * when no install replaces it, a warning says its required peers could not be worked out. A package
+ * the project lists at another version is left as it is and reported.
  */
 export async function resolveRequiredPeers(ctx: {
   readonly packageName: string;
@@ -226,6 +229,26 @@ export async function resolveRequiredPeers(ctx: {
     { name: ctx.packageName, manifest: target },
   ];
   let pinTarget = ctx.ownsTarget;
+  const atAnotherVersion = new Map<
+    string,
+    { readonly installed: string; readonly range: string; readonly by: string }
+  >();
+  const readWanted = async (name: string) => {
+    const wantedAt = wanted.get(name);
+    const manifest = await ctx.read(name, wantedAt?.range);
+    const exact = wantedAt === undefined ? null : EXACT_VERSION_LINE.exec(wantedAt.range.trim());
+    if (
+      wantedAt !== undefined &&
+      manifest?.version !== undefined &&
+      exact !== null &&
+      manifest.version !== exact[1]
+    ) {
+      atAnotherVersion.set(name, { installed: manifest.version, ...wantedAt });
+      return { name, manifest: undefined };
+    }
+    atAnotherVersion.delete(name);
+    return { name, manifest };
+  };
 
   for (;;) {
     while (level.length > 0) {
@@ -243,12 +266,7 @@ export async function resolveRequiredPeers(ctx: {
           if (isPrismaOrmPackage(peer)) next.push(peer);
         }
       }
-      level = await Promise.all(
-        next.map(async (name) => ({
-          name,
-          manifest: await ctx.read(name, wanted.get(name)?.range),
-        })),
-      );
+      level = await Promise.all(next.map(readWanted));
     }
 
     const declared = ctx.declared();
@@ -282,14 +300,18 @@ export async function resolveRequiredPeers(ctx: {
     if (ctx.install === undefined || toInstall.length === 0) break;
     const failure = await ctx.install(toInstall);
     if (failure !== undefined) return failure;
-    const retry = unread.filter((name) => toInstall.some((spec) => spec.startsWith(`${name}@`)));
-    unread = unread.filter((name) => !retry.includes(name));
-    if (retry.length === 0) break;
-    level = await Promise.all(
-      retry.map(async (name) => ({
-        name,
-        manifest: await ctx.read(name, wanted.get(name)?.range),
-      })),
+    const reread = [...wanted.keys()].filter(
+      (name) =>
+        isPrismaOrmPackage(name) && toInstall.includes(`${name}@${wanted.get(name)?.range}`),
+    );
+    unread = unread.filter((name) => !reread.includes(name));
+    level = await Promise.all(reread.map(readWanted));
+  }
+
+  for (const [name, { installed: installedAt, range, by }] of atAnotherVersion) {
+    unread = unread.filter((unreadName) => unreadName !== name);
+    warnings.push(
+      `${name} is installed at ${installedAt}, but ${by} needs ${range}, so init could not work out the packages ${name} needs as required peers. Once ${name}@${range} is installed, add each package its package.json lists under peerDependencies, at the range listed there.`,
     );
   }
 
