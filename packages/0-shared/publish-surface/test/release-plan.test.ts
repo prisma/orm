@@ -444,19 +444,27 @@ describe('firstVersionOfMinor', () => {
   });
 });
 
-/** Whether a tilde or caret range admits a version, with Semantic Versioning's rule for pre-releases. */
-function admits(range: string, version: string): boolean {
-  const base = parseVersion(range.slice(1));
-  const v = parseVersion(version);
-  const order = (a: typeof v, b: typeof v): number =>
+/** Semantic Versioning's order of two versions this repository publishes. */
+function compareVersions(left: string, right: string): number {
+  const a = parseVersion(left);
+  const b = parseVersion(right);
+  const levels = ['ea', 'preview', 'rc'];
+  return (
     a.major - b.major ||
     a.minor - b.minor ||
     a.patch - b.patch ||
     (a.level === undefined ? 1 : 0) - (b.level === undefined ? 1 : 0) ||
     (a.level !== undefined && b.level !== undefined
-      ? ['ea', 'preview', 'rc'].indexOf(a.level.name) -
-          ['ea', 'preview', 'rc'].indexOf(b.level.name) || a.level.counter - b.level.counter
-      : 0);
+      ? levels.indexOf(a.level.name) - levels.indexOf(b.level.name) ||
+        a.level.counter - b.level.counter
+      : 0)
+  );
+}
+
+/** Whether a tilde or caret range admits a version, with Semantic Versioning's rule for pre-releases. */
+function admits(range: string, version: string): boolean {
+  const base = parseVersion(range.slice(1));
+  const v = parseVersion(version);
   if (
     v.level !== undefined &&
     (base.level === undefined ||
@@ -466,36 +474,39 @@ function admits(range: string, version: string): boolean {
   ) {
     return false;
   }
-  if (order(v, base) < 0) return false;
+  if (compareVersions(version, range.slice(1)) < 0) return false;
   return range.startsWith('~')
     ? v.major === base.major && v.minor === base.minor
     : v.major === base.major;
 }
 
+const FIRST_RELEASE_WITH_LEVELS = input({
+  release: { major: 8, minor: 0 },
+  everGa: new Set(),
+  current: Object.fromEntries(Object.keys(graph).map((name) => [name, '8.0.0-rc.26'])),
+  levelChanges: { mongo: 'rc' },
+});
+
+const LATER_PLANS: Record<string, ReleasePlanInput> = {
+  '8.1': input({}),
+  'a fix within 8.1': input({ bump: ['framework', 'mongo', 'mysql', 'paradedb'] }),
+  'levels going up within 8.1': input({
+    levelChanges: { mongo: 'rc', mysql: 'preview', 'target-mysql': 'preview' },
+  }),
+  'a move up to rc within 8.0': input({
+    release: { major: 8, minor: 0 },
+    current: { ...AT_8_0, mongo: '8.0.0-preview.2' },
+    levelChanges: { mongo: 'rc' },
+    lastReleaseCandidate: 26,
+  }),
+  '8.2 with a level going down': input({
+    release: { major: 8, minor: 2 },
+    levelChanges: { mongo: 'ea' },
+  }),
+};
+
 describe('every range the plan writes admits the version the plan gives the package it names', () => {
-  const plans = {
-    'the first release with levels': input({
-      release: { major: 8, minor: 0 },
-      everGa: new Set(),
-      current: Object.fromEntries(Object.keys(graph).map((name) => [name, '8.0.0-rc.26'])),
-      levelChanges: { mongo: 'rc' },
-    }),
-    '8.1': input({}),
-    'a fix within 8.1': input({ bump: ['framework', 'mongo', 'mysql'] }),
-    'levels going up within 8.1': input({
-      levelChanges: { mongo: 'rc', mysql: 'preview', 'target-mysql': 'preview' },
-    }),
-    'a move up to rc within 8.0': input({
-      release: { major: 8, minor: 0 },
-      current: { ...AT_8_0, mongo: '8.0.0-preview.2' },
-      levelChanges: { mongo: 'rc' },
-      lastReleaseCandidate: 26,
-    }),
-    '8.2 with a level going down': input({
-      release: { major: 8, minor: 2 },
-      levelChanges: { mongo: 'ea' },
-    }),
-  };
+  const plans = { 'the first release with levels': FIRST_RELEASE_WITH_LEVELS, ...LATER_PLANS };
 
   it.each(Object.entries(plans))('%s', (_case, given) => {
     const plan = planRelease(given);
@@ -505,6 +516,35 @@ describe('every range the plan writes admits the version the plan gives the pack
         .map(([named, range]) => `${user} writes ${range} on ${named} at ${plan[named]?.version}`),
     );
     expect(refused).toEqual([]);
+  });
+});
+
+describe('a planned version never sorts below the version a package has', () => {
+  /** Each package whose planned version sorts below its current one, with both versions. */
+  function movedBack(given: ReleasePlanInput): string[] {
+    const plan = planRelease(given);
+    return Object.entries(plan)
+      .filter(([name, planned]) => compareVersions(planned.version, given.current[name] ?? '') < 0)
+      .map(([name, planned]) => `${name}: ${given.current[name]} to ${planned.version}`);
+  }
+
+  it.each(Object.entries(LATER_PLANS))('%s', (_case, given) => {
+    expect(movedBack(given)).toEqual([]);
+  });
+
+  // The open numbering question: at the first release with levels, a package that leaves the
+  // release candidates below GA (and ParadeDB, which leaves the release number) gets a version that
+  // sorts below the published 8.0.0-rc.26. This is today's design, kept until the operator decides;
+  // see projects/maturity-versions-and-dependencies/spikes/2026-11-25-ranges-on-versions-below-old-release-candidates.md.
+  it('at the first release with levels, moves back exactly the packages that leave the release candidates below GA, as designed for now', () => {
+    expect(movedBack(FIRST_RELEASE_WITH_LEVELS)).toEqual([
+      'target-mysql: 8.0.0-rc.26 to 8.0.0-ea.0',
+      'mysql: 8.0.0-rc.26 to 8.0.0-ea.0',
+      'mariadb: 8.0.0-rc.26 to 8.0.0-ea.0',
+      'supabase: 8.0.0-rc.26 to 8.0.0-preview.0',
+      'better-auth: 8.0.0-rc.26 to 8.0.0-preview.0',
+      'paradedb: 8.0.0-rc.26 to 0.1.0',
+    ]);
   });
 });
 
