@@ -264,7 +264,7 @@ export function schemaDriftNextActions(inputs: {
         ]
       : [
           runCommandAction(
-            'If the database is at an earlier contract, sign that contract, naming the last migration it applied, then run db migrate',
+            'If the database is at an earlier contract, sign that contract by the directory of the last migration it applied, then run db migrate',
             recovery.signEarlier,
           ),
           chooseAction(

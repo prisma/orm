@@ -45,12 +45,12 @@ const describeDatabase = (retry: string) => ({
 });
 
 const BY_DB_UPDATE = { kind: 'db-update' } as const;
-const SIGN_EARLIER = '{bin} db sign --contract <migration> --force';
+const SIGN_EARLIER = '{bin} db sign <migration directory> --force';
 const BY_MIGRATIONS = { kind: 'migrations', signEarlier: SIGN_EARLIER } as const;
 const signEarlier = {
   kind: 'run-command',
   label:
-    'If the database is at an earlier contract, sign that contract, naming the last migration it applied, then run db migrate',
+    'If the database is at an earlier contract, sign that contract by the directory of the last migration it applied, then run db migrate',
   command: SIGN_EARLIER,
 };
 const authorMigrations = {

@@ -303,8 +303,8 @@ describe('db sign', () => {
         {
           kind: 'run-command',
           label:
-            'If the database is at an earlier contract, sign that contract, naming the last migration it applied, then run db migrate',
-          command: 'prisma-test db sign --contract <migration> --force',
+            'If the database is at an earlier contract, sign that contract by the directory of the last migration it applied, then run db migrate',
+          command: 'prisma-test db sign <migration directory> --force',
         },
         {
           kind: 'user-choice',

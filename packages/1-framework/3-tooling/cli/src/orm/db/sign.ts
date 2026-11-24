@@ -69,8 +69,8 @@ const FINDINGS_EXIT_CODE = 4;
  */
 const DEFAULT_ADVANCE_REF = 'db';
 
-/** What advice prints where the user names the last migration the database applied. */
-const MIGRATION_PLACEHOLDER = '<migration>';
+/** What advice prints where the user names the directory of the last migration the database applied. */
+const MIGRATION_DIRECTORY_PLACEHOLDER = '<migration directory>';
 
 const CONTRACT_REF_BRIEF = `Contract reference (${RECORDED_CONTRACT_REF_FORMS})`;
 
@@ -670,8 +670,7 @@ export function createDbSignCommand(
             : {
                 kind: 'migrations',
                 signEarlier: cliCommand(cliInvocation(ctx, args.flags.db), 'db sign', [
-                  '--contract',
-                  MIGRATION_PLACEHOLDER,
+                  MIGRATION_DIRECTORY_PLACEHOLDER,
                   ...signRerunArgs({
                     contractRef: undefined,
                     advanceRef: args.flags.advanceRef,
