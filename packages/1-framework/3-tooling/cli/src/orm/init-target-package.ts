@@ -14,6 +14,7 @@ import {
 import {
   errorInitContributionUnavailable,
   errorInitInvalidManifest,
+  errorInitRequiredPeersAtAnotherVersion,
   errorInitRequiredPeersNotInstalled,
   errorInitTargetPackageNotInstalled,
   errorInitTargetPackageNotVerified,
@@ -31,6 +32,7 @@ import { chooseAction } from '../utils/next-actions';
 import { ENGINE_PACKAGE, installProjectDependencies } from './init-packages';
 import {
   installedManifests,
+  isExactVersion,
   type RequiredPeer,
   type RequiredPeers,
   requiredPeerSpecifier,
@@ -262,6 +264,11 @@ export function createTargetPackagePreparation(ctx: {
         restoreCommand: formatInstallCommand(ctx.packageManager),
       });
     }
+    if (!ctx.install) {
+      refuseRequiredPeersAtAnotherVersion(ctx, packageName, requiredPeers.packages, (name) =>
+        manifests.installedVersion(name),
+      );
+    }
 
     try {
       const contribution = await loadContribution(ctx, target, ranCommand, missing);
@@ -276,6 +283,44 @@ export function createTargetPackagePreparation(ctx: {
       throw added === undefined ? error : new TargetPackageRefusedAfterInstall(error, added);
     }
   };
+}
+
+/**
+ * Under `--skip-install`, a required peer installed at a version other than the exact one required
+ * cannot be corrected, and its own peers stay unknown, so init stops before it writes anything.
+ */
+function refuseRequiredPeersAtAnotherVersion(
+  ctx: { readonly cwd: string; readonly packageManager: PackageManager },
+  packageName: string,
+  peers: readonly RequiredPeer[],
+  installedVersion: (name: string) => string | undefined,
+): void {
+  const declared = declaredPackages(ctx.cwd);
+  const wrong = peers.flatMap((peer) => {
+    const found = installedVersion(peer.name);
+    return found === undefined || !isExactVersion(peer.version) || found === peer.version
+      ? []
+      : [{ peer, found }];
+  });
+  if (wrong.length === 0) return;
+  const toAdd = wrong.filter(({ peer }) => peer.outcome === 'to-install').map(({ peer }) => peer);
+  throw errorInitRequiredPeersAtAnotherVersion({
+    packageName,
+    packages: wrong.map(({ peer, found }) => ({
+      name: peer.name,
+      found,
+      required: peer.version,
+      listed: peer.outcome === 'left-at-another-version' ? declared.get(peer.name) : undefined,
+    })),
+    installCommand:
+      toAdd.length === 0
+        ? undefined
+        : installCommand(ctx.packageManager, toAdd.map(requiredPeerSpecifier)),
+    listedAtRequired: wrong
+      .filter(({ peer }) => peer.outcome === 'already-listed')
+      .map(({ peer }) => peer.name),
+    restoreCommand: formatInstallCommand(ctx.packageManager),
+  });
 }
 
 /**

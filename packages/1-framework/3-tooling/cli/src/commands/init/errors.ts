@@ -728,6 +728,69 @@ export function errorInitRequiredPeersNotInstalled(options: {
   );
 }
 
+export interface RequiredPeerAtAnotherVersion {
+  readonly name: string;
+  /** The version of the copy the project resolves. */
+  readonly found: string;
+  /** The exact version the package that names it requires. */
+  readonly required: string;
+  /** The project's `package.json` line for it, when that line asks for another version. */
+  readonly listed: string | undefined;
+}
+
+/** Under `--skip-install`, a required peer is installed at a version other than the exact one required. */
+export function errorInitRequiredPeersAtAnotherVersion(options: {
+  readonly packageName: string;
+  readonly packages: readonly RequiredPeerAtAnotherVersion[];
+  /** The command that adds those `package.json` does not list; `undefined` when it lists them all. */
+  readonly installCommand: string | undefined;
+  /** Those `package.json` lists at the required version, which the package manager's install puts in place. */
+  readonly listedAtRequired: readonly string[];
+  /** The package manager's own install command. */
+  readonly restoreCommand: string;
+}): CliStructuredError {
+  const { packageName, packages, listedAtRequired } = options;
+  const relisted = packages.filter((pkg) => pkg.listed !== undefined);
+  const steps: string[] = relisted.map(
+    (pkg) =>
+      `Change the line for ${pkg.name} in package.json from ${pkg.listed} to ${pkg.required} and run \`${options.restoreCommand}\``,
+  );
+  if (listedAtRequired.length > 0) {
+    steps.push(
+      `${steps.length === 0 ? 'Run' : 'run'} \`${options.restoreCommand}\` to install ${listed(listedAtRequired)} at the version package.json lists`,
+    );
+  }
+  if (options.installCommand !== undefined) {
+    steps.push(
+      `${steps.length === 0 ? 'Add them' : 'add the others'} with \`${options.installCommand}\``,
+    );
+  }
+  const found = packages.map(
+    (pkg) => `${pkg.name} at ${pkg.found}, where ${pkg.required} is required`,
+  );
+  return new CliStructuredError(
+    'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
+    `${packageName} needs peer dependencies at versions that are not installed`,
+    {
+      why: `${packageName} needs its required peer dependencies at exact versions, and the project has ${listed(found)}. A copy at another version does not stand for the one required, and init cannot tell which peers the required version needs in turn. \`--skip-install\` forbids installing them. Nothing was changed.`,
+      fix: `${steps.join(', and ')}, then run \`prisma orm init\` again.`,
+      docsUrl: docsUrlFor('CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION'),
+      meta: {
+        packageName,
+        packages: packages.map((pkg) => ({
+          name: pkg.name,
+          found: pkg.found,
+          required: pkg.required,
+          ...ifDefined('listed', pkg.listed),
+        })),
+        listedAtRequired,
+        ...ifDefined('installCommand', options.installCommand),
+        restoreCommand: options.restoreCommand,
+      },
+    },
+  );
+}
+
 /** `--authoring` names a way to write the contract the target package does not offer. */
 export function errorInitAuthoringUnsupported(options: {
   readonly packageName: string;

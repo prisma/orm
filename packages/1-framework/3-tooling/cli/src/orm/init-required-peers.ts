@@ -327,6 +327,11 @@ export async function resolveRequiredPeers(ctx: {
   };
 }
 
+/** Whether a required peer's version is one exact version, not a range. */
+export function isExactVersion(spec: string): boolean {
+  return EXACT_VERSION_LINE.test(spec.trim());
+}
+
 const EXACT_VERSION_LINE = /^[v=]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/;
 
 /**
