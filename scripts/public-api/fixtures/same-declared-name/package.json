@@ -1,0 +1,9 @@
+{
+  "name": "fixture-same-declared-name",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./package.json": "./package.json"
+  }
+}

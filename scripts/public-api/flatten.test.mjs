@@ -177,6 +177,18 @@ describe('flattenPackage', () => {
     );
   });
 
+  it('tells apart two exported declarations with the same declared name by their export names', () => {
+    deepStrictEqual(
+      linesOf('same-declared-name'),
+      sorted([
+        '.: interface AlphaOptions',
+        '.: interface AlphaOptions, readonly required property alpha: boolean',
+        '.: interface BetaOptions',
+        '.: interface BetaOptions, readonly required property beta: boolean',
+      ]),
+    );
+  });
+
   it('lists an export whose name a global also has under its own name', () => {
     deepStrictEqual(
       linesOf('dom'),
