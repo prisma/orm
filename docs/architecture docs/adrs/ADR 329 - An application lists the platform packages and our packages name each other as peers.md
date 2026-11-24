@@ -23,7 +23,7 @@ A PostgreSQL application with the pgvector extension lists six Prisma packages:
 
 `@prisma/orm-postgres` is the **target package**: the package an application installs to use a database, which ADR 242 calls the facade. The next four are the **platform packages**: the framework, the SQL family, the PostgreSQL target and the toolchain. They are the packages extension authors build against.
 
-Every line carries the same exact version. Prisma 8 is released as release candidates, and one release candidate may break another, so a range between them would promise something false.
+Every line names the same version, and each package names its peers at that one exact version. Prisma 8 is released as release candidates, and one release candidate may break another, so a range between our packages would promise something false.
 
 None of the six brings a copy of another. `@prisma/orm-postgres` publishes:
 
