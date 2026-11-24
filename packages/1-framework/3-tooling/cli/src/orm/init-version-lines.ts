@@ -11,7 +11,8 @@ export interface VersionLines {
 }
 
 const EXACT_VERSION = /^[v=]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/;
-const RELEASE_NUMBER = /^[~^]?(\d+\.\d+)\./;
+const RANGE = /^([~^])(\d+)\.(\d+)\./;
+const RELEASE = /^[v=]?(\d+)\.(\d+)\./;
 
 /**
  * The version a spec names when it is one exact version, in one form (`v8.0.0` and `=8.0.0` read
@@ -25,10 +26,13 @@ export function exactVersionOf(spec: string): string | undefined {
 /**
  * A target package that names its `@prisma/orm-*` peers at exact versions, as on the `8.0.0`
  * release candidates and in a development build, gets those versions; inside this repository a
- * `workspace:` specifier on an exact version counts as one. One that names them with
- * ranges gets a tilde on every line when its own version has a pre-release part, since a caret on a
- * pre-release never selects the next minor's pre-release, and a caret on every line otherwise, so
- * an update moves them all to the next release together.
+ * `workspace:` specifier on an exact version counts as one. One that names them with ranges gets
+ * each peer at the range it names, so `init` never asks for a version the target package refuses,
+ * and the target package itself at a range of the same kind on its installed version: a tilde
+ * beside tilde peers, as every target package of ours names its platform packages, so an update
+ * keeps all the lines on one release; a caret only when every peer is a caret and the target
+ * package's version has no pre-release part, since a caret on a pre-release never selects the next
+ * minor's.
  */
 export function versionLines(
   targetVersion: string,
@@ -37,32 +41,34 @@ export function versionLines(
   if (ormPeerRanges.every((range) => EXACT_VERSION.test(range.trim().replace(/^workspace:/, '')))) {
     return { target: targetVersion, ormPackage: (range) => range, standsFor: lineStandsFor };
   }
-  if (targetVersion.includes('-')) {
-    return {
-      target: `~${targetVersion}`,
-      ormPackage: (range) => range,
-      standsFor: lineStandsFor,
-    };
-  }
-  const [major, minor] = targetVersion.split('.');
+  const caret =
+    !targetVersion.includes('-') && ormPeerRanges.every((range) => range.trim().startsWith('^'));
   return {
-    target: `^${major}.${minor}.0`,
-    ormPackage: (range) => (range.startsWith('~') ? `^${range.slice(1)}` : range),
+    target: `${caret ? '^' : '~'}${targetVersion}`,
+    ormPackage: (range) => range,
     standsFor: lineStandsFor,
   };
 }
 
 /**
- * Whether a required peer's version or range admits an installed version: an exact version only
- * itself, and a caret or tilde range any version of the release it starts at, its major and minor.
- * `undefined` for any other range, which this cannot judge.
+ * Whether a required peer's version or range admits an installed version, judged by its operator:
+ * an exact version only itself, a tilde any version of the release it starts at (its major and
+ * minor), and a caret any version of its major from that minor on. `undefined` for any other range,
+ * which this cannot judge; the installed copy then decides.
  */
 export function requirementAdmits(requirement: string, version: string): boolean | undefined {
   const exact = exactVersionOf(requirement);
   if (exact !== undefined) return exact === (exactVersionOf(version) ?? version);
-  const release = RELEASE_NUMBER.exec(requirement.trim())?.[1];
-  if (release === undefined) return undefined;
-  return RELEASE_NUMBER.exec(version)?.[1] === release;
+  const range = RANGE.exec(requirement.trim());
+  const installed = RELEASE.exec(version.trim());
+  if (range === null) return undefined;
+  if (installed === null) return false;
+  const [, operator, major, minor] = range;
+  const [, installedMajor, installedMinor] = installed;
+  if (Number(installedMajor) !== Number(major)) return false;
+  return operator === '~'
+    ? Number(installedMinor) === Number(minor)
+    : Number(installedMinor) >= Number(minor);
 }
 
 /**

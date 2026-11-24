@@ -529,8 +529,8 @@ describe('init --skip-install on a target package that names its peers with rang
         error: {
           code: 'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
           meta: {
-            packages: [{ name: '@prisma/orm-framework', found: '8.0.4', required: '^8.1.0' }],
-            installCommand: 'pnpm add "@prisma/orm-framework@^8.1.0"',
+            packages: [{ name: '@prisma/orm-framework', found: '8.0.4', required: '~8.1.0' }],
+            installCommand: 'pnpm add "@prisma/orm-framework@~8.1.0"',
           },
         },
       });
