@@ -180,6 +180,10 @@ export async function writeContractSnapshot(
   input: ContractSnapshotInput,
 ): Promise<{ readonly written: boolean; readonly dir: string }> {
   const dir = contractSnapshotDir(migrationsDir, storageHash);
+  readFormatVersion(input.contractJson, {
+    kind: 'contract',
+    knownVersions: CONTRACT_FORMAT_VERSIONS,
+  });
 
   // contractJson is unknown JSON; only storage.storageHash is read, to check
   // it against the hash the snapshot is being written under.

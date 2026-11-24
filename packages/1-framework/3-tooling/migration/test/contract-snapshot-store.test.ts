@@ -139,6 +139,26 @@ describe('writeContractSnapshot', () => {
     );
   });
 
+  it('refuses to write a contract that has no format version, and writes nothing', async () => {
+    const { formatVersion: _, ...withoutVersion } = contractFixture(STORAGE_HASH);
+    await expect(
+      writeContractSnapshot(migrationsDir, STORAGE_HASH, {
+        contractJson: withoutVersion,
+        contractDts: 'export type Contract = {};',
+      }),
+    ).rejects.toThrow(expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' }));
+    expect(await hasContractSnapshot(migrationsDir, STORAGE_HASH)).toBe(false);
+  });
+
+  it('refuses to write a contract in a format version this release does not know', async () => {
+    await expect(
+      writeContractSnapshot(migrationsDir, STORAGE_HASH, {
+        contractJson: { ...contractFixture(STORAGE_HASH), formatVersion: 2 },
+        contractDts: 'export type Contract = {};',
+      }),
+    ).rejects.toThrow(expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_NEWER' }));
+  });
+
   it('throws a plain Error on a malformed storageHash', async () => {
     await expect(
       writeContractSnapshot(migrationsDir, 'not-a-hash', {

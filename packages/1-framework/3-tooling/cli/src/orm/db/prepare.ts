@@ -1,10 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import type { PrismaConfig } from '@internal/config/config-types';
+import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
 import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { CliStructuredError, Result } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
-import { errorFromCaught } from '../../control-api/operations/caught-errors';
+import { errorFromCaught, formatVersionFailure } from '../../control-api/operations/caught-errors';
 import type { ControlClient, CreateControlClient } from '../../control-api/types';
 import {
   errorConfigValidation,
@@ -34,7 +35,7 @@ export interface PreparedMigrationRun {
   readonly refsDir: string;
 }
 
-/** Reads the emitted contract as the raw document the control API validates. */
+/** Reads the emitted contract as the raw document the control API validates, after reading its format version. */
 export async function readContractDocument(
   contractPath: string,
 ): Promise<Result<Record<string, unknown>, CliStructuredError>> {
@@ -55,8 +56,16 @@ export async function readContractDocument(
     );
   }
   try {
-    return ok(castAs<Record<string, unknown>>(JSON.parse(content)));
+    const document = castAs<Record<string, unknown>>(JSON.parse(content));
+    readFormatVersion(document, {
+      kind: 'contract',
+      knownVersions: CONTRACT_FORMAT_VERSIONS,
+      path: contractPath,
+    });
+    return ok(document);
   } catch (error) {
+    const formatFailure = formatVersionFailure(error, contractPath);
+    if (formatFailure !== undefined) return notOk(normalizeError(formatFailure));
     return notOk(
       normalizeError(
         errorContractValidationFailed(
