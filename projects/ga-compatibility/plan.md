@@ -1,6 +1,6 @@
 # GA compatibility: plan
 
-This is the plan for stream 7 of the Prisma 8 GA plan. The policy it implements is in [spec.md](spec.md) and [maturity-levels.md](maturity-levels.md). The order of the projects and what GA requires are also listed in the GA plan, `planning/plan.md` on the branch `planning/prisma-8-ga`; the two lists must name the same projects.
+The plan for stream 7 of the Prisma 8 GA plan (`planning/plan.md` on the branch `planning/prisma-8-ga`), which lists the same projects. The policy is in [spec.md](spec.md) and [maturity-levels.md](maturity-levels.md).
 
 ## Goal
 
@@ -8,22 +8,15 @@ From `8.0.0`, an application built on Prisma 8 upgrades to any later `8.x` relea
 
 Upgrading becomes routine, so users stay on the latest release and we maintain one release line for each major. It is always clear to a user what they can rely on. A project belongs in this stream when it removes a reason for a user to hesitate before upgrading.
 
-## How this plan is organised
+## How to read this plan
 
-The work is a stream of 12 projects. Each is sized for one to four pull requests and is run through the Drive process. When a project starts it gets its own folder under `projects/` and its own Linear project, and its design is written then, by whoever takes it. This plan does not hold those designs.
+Each project is sized for one to four pull requests. Its design is written when it starts.
 
-Each project below states:
+New work joins a project only when it serves that project's purpose. Work that serves the goal and fits no project becomes a new project.
 
-- **Purpose:** why it exists, in the user's terms. New work joins a project only when it serves this purpose. Work that serves the goal above and fits no project becomes a new project. Work that serves neither belongs in another stream.
-- **What it achieves:** what is true when the project is done.
-- **How, where we know:** the work we expect. The numbers in brackets are the task numbers this plan used before 2026-11-24; the research reports under [research/](research/) and [handover.md](handover.md) refer to tasks by those numbers.
-- **To decide when it starts:** what is not settled.
+Projects 1 to 6 are Must for GA, 7, 9 and 12 are Aim, and 8, 10 and 11 are Later. This is proposed and not yet confirmed. Project 1 comes first, and project 4 before project 3.
 
-**What GA requires.** Projects 1 to 6 are Must, 7, 9 and 12 are Aim, and 8, 10 and 11 are Later. This is proposed and not yet confirmed. A project is Must when its changes would break the promise if made after `8.0.0`: a change to a stored format, a hash, an import path or a published type.
-
-**Order.** Project 1 first. Project 4 before project 3, which needs its list of each package's exports.
-
-The facts below about the code were read on 2026-11-23 at `8.0.0-rc.24` and nothing was run. Each project rechecks them when it starts.
+"Task N" is the number a piece of work had before 2026-11-24. The reports under [research/](research/) use those numbers. The facts about the code were read on 2026-11-23 and are rechecked when a project starts.
 
 ## Projects that GA requires
 
@@ -203,7 +196,3 @@ The facts below about the code were read on 2026-11-23 at `8.0.0-rc.24` and noth
 ## Moved out of this stream
 
 Finishing the rename of "extension pack" to "extension" (task 2) is terminology clean-up and not part of the compatibility promise. It is row 15 of stream 6 in the GA plan. On 2026-11-23 the old term appeared in 74 files under `docs/`, 136 under `packages/`, 9 under `examples/`, 5 rules, 2 skills, and 29 Prisma 8 pages in prisma/web. It is done when a search for "extension pack" finds nothing outside release notes and other historical records.
-
-## Done
-
-On 2026-11-23 every rule in the spec was checked against the repository: 135 rules, 19 already true. The reports are [research/gap-packages-and-api.md](research/gap-packages-and-api.md), [research/gap-stored-data.md](research/gap-stored-data.md) and [research/gap-docs-releases-tooling.md](research/gap-docs-releases-tooling.md). Tasks 10 to 22 came from them.
