@@ -22,7 +22,7 @@ Each subpath namespace consolidates one internal framework module; a bare namesp
 
 ## Holding contract hashes fixed
 
-Prisma records a contract's storage, profile and execution hashes in files and databases, and the rules that compute them do not change within a major version. A family or target built outside this repository can check that its own contracts keep their hashes: save a few emitted `contract.json` files, write down their hashes, and call `assertContractHashes` from a test with the family's canonicalization hooks. It throws an error naming each contract and hash that differs; the hashes the files store are ignored.
+Prisma records a contract's storage, profile and execution hashes in files and databases, and the rules that compute them do not change within a major version. A family or target built outside this repository can check that its own contracts keep their hashes: save a few emitted `contract.json` files, write down their hashes, and call `assertContractHashes` from a test with the family's canonicalization hooks. If the family computes the profile hash from other capabilities than the contract's `capabilities`, pass them as `profileCapabilities`, a function from the saved contract to the capabilities hashed; the SQL family, for example, hashes none. It throws an error naming each contract and hash that differs; the hashes the files store are ignored.
 
 ```ts
 import { readFileSync } from 'node:fs';

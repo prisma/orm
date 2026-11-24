@@ -121,14 +121,24 @@ export interface ExpectedContractHashes {
   readonly executionHash?: string;
 }
 
-/**
- * Throws when the hash rules give any saved contract a storage, profile or execution hash other than the one expected, naming each contract and hash that differs. Families and targets call it from their tests, with their own canonicalization hooks, to hold their hashes fixed within a major.
- */
-export function assertContractHashes(options: {
+export type ProfileCapabilities = (
+  contract: SavedContractSections,
+) => Record<string, Record<string, boolean>>;
+
+export interface AssertContractHashesOptions {
   readonly contracts: readonly ExpectedContractHashes[];
   readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
   readonly sortStorage?: StorageSort;
-}): void {
+  /**
+   * The capabilities the family computes the profile hash from. Defaults to the contract's `capabilities`.
+   */
+  readonly profileCapabilities?: ProfileCapabilities;
+}
+
+/**
+ * Throws when the hash rules give any saved contract a storage, profile or execution hash other than the one expected, naming each contract and hash that differs. Families and targets call it from their tests, with their own canonicalization hooks and profile-hash capabilities, to hold their hashes fixed within a major.
+ */
+export function assertContractHashes(options: AssertContractHashesOptions): void {
   const failing = options.contracts
     .map((expected) => ({
       name: expected.name,
@@ -148,7 +158,7 @@ export function assertContractHashes(options: {
 
 function contractHashDifferences(
   expected: ExpectedContractHashes,
-  hooks: CanonicalizationHooks,
+  options: AssertContractHashesOptions,
 ): string[] {
   const { contract } = expected;
   const { storageHash: _storedStorageHash, ...storage } = contract.storage;
@@ -164,8 +174,8 @@ function contractHashDifferences(
       target: contract.target,
       targetFamily: contract.targetFamily,
       storage,
-      ...ifDefined('shouldPreserveEmpty', hooks.shouldPreserveEmpty),
-      ...ifDefined('sortStorage', hooks.sortStorage),
+      ...ifDefined('shouldPreserveEmpty', options.shouldPreserveEmpty),
+      ...ifDefined('sortStorage', options.sortStorage),
     }),
     expected.storageHash,
   );
@@ -174,7 +184,7 @@ function contractHashDifferences(
     computeProfileHash({
       target: contract.target,
       targetFamily: contract.targetFamily,
-      capabilities: contract.capabilities,
+      capabilities: options.profileCapabilities?.(contract) ?? contract.capabilities,
     }),
     expected.profileHash,
   );

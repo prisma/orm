@@ -28,7 +28,10 @@ import type {
 } from '@internal/framework-components/codec';
 import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import {
+  sqlContractCanonicalizationHooks,
+  sqlProfileHashCapabilities,
+} from '@internal/sql-contract/canonicalization-hooks';
 import {
   type CheckExpressionRenderer,
   discriminatorValueSet,
@@ -559,14 +562,10 @@ export function buildSqlContractFromDefinition(
       ...Object.values(definition.extensions ?? {}),
     ]),
   );
-  // Internal `profileHash` computation is unchanged from `origin/main`: it
-  // continues to fingerprint the author-declared capability subset. With
-  // `capabilities` removed from the `defineContract` input that subset is
-  // now always empty, so the hash naturally stabilises at `hash({})`.
   const profileHash = computeProfileHash({
     target,
     targetFamily,
-    capabilities: {},
+    capabilities: sqlProfileHashCapabilities(),
   });
 
   const executionWithHash = buildExecutionSection({
