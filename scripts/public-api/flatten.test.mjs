@@ -277,6 +277,141 @@ describe('flattenPackage', () => {
     );
   });
 
+  it('gives stable names to non-exported declarations that refer to each other', () => {
+    const expected = sorted([
+      '(not exported) interface X',
+      '(not exported) interface X, readonly required property p: Y_2',
+      "(not exported) interface X, readonly required property z: '1'",
+      '(not exported) interface X_2',
+      '(not exported) interface X_2, readonly required property p: Y',
+      "(not exported) interface X_2, readonly required property z: '2'",
+      '(not exported) interface Y',
+      '(not exported) interface Y, readonly required property q: X_2',
+      "(not exported) interface Y, readonly required property w: '1'",
+      '(not exported) interface Y_2',
+      '(not exported) interface Y_2, readonly required property q: X',
+      "(not exported) interface Y_2, readonly required property w: '2'",
+      '.: function first(x: X_2): void',
+      '.: function second(x: X): void',
+    ]);
+    deepStrictEqual(linesOf('cycle'), expected);
+  });
+
+  it('merges copies of declarations that refer to copies of other declarations', () => {
+    deepStrictEqual(
+      linesOf('copies-deep'),
+      sorted([
+        '(not exported) interface Holder',
+        '(not exported) interface Holder, readonly required property options: Options',
+        '(not exported) interface Options',
+        '(not exported) interface Options, readonly required property verbose: boolean',
+        '.: function first(holder: Holder): void',
+        './other: function second(holder: Holder): void',
+      ]),
+    );
+  });
+
+  it('keeps apart declarations whose types differ only by the module of an import("…")', () => {
+    deepStrictEqual(
+      linesOf('extmerge'),
+      sorted([
+        '(not exported) interface Holder',
+        '(not exported) interface Holder, readonly required property stream: ReadStream',
+        '(not exported) interface Holder_2',
+        '(not exported) interface Holder_2, readonly required property stream: ReadStream',
+        '.: function fromFile(holder: Holder): void',
+        '.: function fromTerminal(holder: Holder_2): void',
+      ]),
+    );
+  });
+
+  it('refers to a declaration exported under two names by the first name in code-unit order', () => {
+    deepStrictEqual(
+      linesOf('two-names'),
+      sorted([
+        '.: function origin(): Coordinate',
+        '.: interface Coordinate',
+        '.: interface Coordinate, readonly required property x: number',
+        '.: interface Point',
+        '.: interface Point, readonly required property x: number',
+      ]),
+    );
+  });
+
+  it('lists members of non-exported classes and of namespaces', () => {
+    deepStrictEqual(
+      linesOf('hiddenmember'),
+      sorted([
+        '(not exported) class Base',
+        '(not exported) class Base, readonly required property secret: string',
+        '(not exported) class Base, readonly required property shown: string',
+        '.: function make(): Base',
+        '.: namespace Units',
+        '.: namespace Units, const hiddenUnit: number',
+        '.: namespace Units, const meter: number',
+      ]),
+    );
+  });
+
+  it('fails when API Extractor gives no item for a member of a non-exported class', () => {
+    throws(
+      () => linesOf('hiddenmember', (model) => removeMember(model, 'Base', 'secret')),
+      /member Base\.secret has no line/,
+    );
+  });
+
+  it('fails when API Extractor gives no item for a member of a namespace', () => {
+    throws(
+      () => linesOf('hiddenmember', (model) => removeMember(model, 'Units', 'hiddenUnit')),
+      /member Units\.hiddenUnit has no line/,
+    );
+  });
+
+  it('fails when API Extractor gives no item for a member of an interface inside a namespace', () => {
+    deepStrictEqual(
+      linesOf('nested-namespace'),
+      sorted([
+        '.: namespace Shapes',
+        '.: namespace Shapes, interface Square',
+        '.: namespace Shapes, interface Square, readonly required property side: number',
+      ]),
+    );
+    throws(
+      () =>
+        linesOf('nested-namespace', (model) => {
+          const shapes = membersOf(model).find((item) => item.name === 'Shapes');
+          const square = shapes.members.find((member) => member.name === 'Square');
+          square.members = [];
+        }),
+      /member Shapes\.Square\.side has no line/,
+    );
+  });
+
+  it('fails when API Extractor gives no item for a static member', () => {
+    throws(
+      () => linesOf('kinds', (model) => removeMember(model, 'Circle', 'unit')),
+      /member Circle\.unit has no line/,
+    );
+  });
+
+  it('fails when an augmentation refers to a non-exported type with a plain name that no line lists', () => {
+    throws(() => linesOf('augplain'), /augments pathe interface Extra: refers to Label/);
+  });
+
+  it('fails on export * as from another package, naming the form', () => {
+    throws(
+      () => linesOf('nsexport'),
+      /\.: export \* as paths from "pathe" is a form of export this script does not support/,
+    );
+  });
+
+  it('names the package and path when API Extractor fails', () => {
+    throws(
+      () => linesOf('nsexport-chunk'),
+      /fixtures\/nsexport-chunk: API Extractor failed on \.: fetchAstModuleExportInfo\(\) is not supported for external modules\. /,
+    );
+  });
+
   it('sorts union members and prints import("…") references by name alone', () => {
     deepStrictEqual(
       linesOf('normalize'),

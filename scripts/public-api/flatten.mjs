@@ -2,6 +2,7 @@
 // (declarations.mjs) says what each import path exports, under which names; API Extractor's
 // models give the declarations' text and their members, and the types signatures use.
 
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { ApiItemKind, ApiPackage } from '@microsoft/api-extractor-model';
@@ -75,15 +76,15 @@ function excerptText(item, nameOf, ownName) {
   return bare ? `${ownName}${text.slice(bare[0].length)}` : text;
 }
 
-function signature(item, nameOf, ownName) {
+function signature(item, nameOf, ownName, options) {
   const text = excerptText(item, nameOf, ownName);
   if (item.kind === ApiItemKind.Variable) {
-    return normalizeTypes(`${item.isReadonly ? 'const' : 'let'} ${text}`, 'declaration');
+    return normalizeTypes(`${item.isReadonly ? 'const' : 'let'} ${text}`, 'declaration', options);
   }
   if (item.kind === ApiItemKind.Function && !text.startsWith('function ')) {
-    return normalizeTypes(`const ${text}`, 'declaration');
+    return normalizeTypes(`const ${text}`, 'declaration', options);
   }
-  return normalizeTypes(text, 'declaration');
+  return normalizeTypes(text, 'declaration', options);
 }
 
 function memberContext(item) {
@@ -91,10 +92,11 @@ function memberContext(item) {
   return item.parent?.kind === ApiItemKind.Class ? 'class member' : 'interface member';
 }
 
-function memberLine(item, nameOf) {
+function memberLine(item, nameOf, options) {
   const text = normalizeTypes(
     excerptText(item, nameOf, item.displayName),
     memberContext(item),
+    options,
   ).replace(MEMBER_MODIFIERS, '');
   const words = [];
   if (item.isStatic) words.push('static');
@@ -124,15 +126,17 @@ class LineSet {
   }
 }
 
-// Emits the lines of one item and its members. `ownName` is null for a member.
-function emitItem(item, { prefix, context, ownName, nameOf, origin, lines }) {
+// Emits the lines of one item and its members. `ownName` is null for a member. With
+// `keepImportModules`, types keep the module of an `import("…")` reference, to compare declarations.
+function emitItem(item, { prefix, context, ownName, nameOf, origin, lines, keepImportModules }) {
   const itemOrigin = `${origin} ${item.canonicalReference.toString()}`;
+  const options = { keepImportModules };
   let own;
   try {
     own =
       ownName === null
-        ? `${context}${memberLine(item, nameOf)}`
-        : `${context}${signature(item, nameOf, ownName)}`;
+        ? `${context}${memberLine(item, nameOf, options)}`
+        : `${context}${signature(item, nameOf, ownName, options)}`;
   } catch (error) {
     if (!(error instanceof TypeTextError)) throw error;
     throw new ApiListError(`${prefix}${item.canonicalReference.toString()}: ${error.message}`);
@@ -151,6 +155,7 @@ function emitItem(item, { prefix, context, ownName, nameOf, origin, lines }) {
       nameOf,
       origin,
       lines,
+      keepImportModules,
     });
   }
 }
@@ -213,6 +218,41 @@ function matchExports(model, info, problems) {
   return exported;
 }
 
+const CONTAINER_KINDS = {
+  [ApiItemKind.Class]: 'class',
+  [ApiItemKind.Interface]: 'interface',
+  [ApiItemKind.Enum]: 'enum',
+  [ApiItemKind.Namespace]: 'namespace',
+};
+
+// Compares the members API Extractor gives a container with the public members TypeScript sees
+// in its declaration, and does the same inside namespaces. A non-exported container is found by
+// its declared name; when several declarations have that name, the one that fits best counts.
+function memberProblems(item, candidates, label, memberKeysOf) {
+  const kind = CONTAINER_KINDS[item.kind];
+  if (kind === undefined) return [];
+  const listed = new Set(item.members.map(memberKeyOf));
+  let best;
+  for (const symbol of candidates) {
+    const keys = memberKeysOf(symbol, kind);
+    if (keys === undefined) continue;
+    const missing = [...keys].filter((key) => !listed.has(key));
+    if (best === undefined || missing.length < best.missing.length) best = { symbol, missing };
+  }
+  if (best === undefined) return [`${kind} ${label} has no declaration this script can find`];
+  const problems = best.missing.map((key) => `member ${label}.${key} has no line`);
+  if (kind !== 'namespace') return problems;
+  for (const member of item.members) {
+    const inner = best.symbol.exports?.get(ts.escapeLeadingUnderscores(member.displayName));
+    if (inner) {
+      problems.push(
+        ...memberProblems(member, [inner], `${label}.${member.displayName}`, memberKeysOf),
+      );
+    }
+  }
+  return problems;
+}
+
 // Names of types from elsewhere (other packages, the standard library) that the lines refer to.
 function externalNames(models, packageName) {
   const names = new Set();
@@ -231,12 +271,18 @@ function externalNames(models, packageName) {
   return names;
 }
 
-const MAX_NAMING_ROUNDS = 20;
+const DEPENDENCY_DEPTH = 8;
+
+const hash = (text) => createHash('sha256').update(text).digest('hex');
 
 // Gives every declaration one printed name: its export name if it is exported, otherwise a
-// name unique in the package, with `_2`, `_3` for names that clash. Non-exported declarations
-// are ordered by their printed text; those that print identically with the final names of
-// what they refer to are one declaration copied into two files, and share one name.
+// name unique in the package, with `_2`, `_3` for names that clash.
+//
+// Non-exported declarations with the same name are ordered by a key that does not depend on
+// assigned names: their text with source names, then the same for what they refer to, a few
+// levels deep. Declarations that print identically once what they refer to has its final name
+// are one declaration copied into two files and share one name; merges are only ever added, so
+// the rounds end.
 function nameDeclarations(models, paths, packageName, problems) {
   const exportedByModel = new Map();
   const exportedNames = new Map();
@@ -265,68 +311,119 @@ function nameDeclarations(models, paths, packageName, problems) {
     for (const [key, items] of own) locals.set(key, { key, model, items });
   }
 
-  let localNames = new Map();
-  const nameOf = (model, fallback) => (reference) => {
+  const sourceName = (item) => withoutBundlerSuffix(declaredName(item));
+  const nameOf = (model, names) => (reference) => {
     const item = model.byReference.get(reference);
     if (item === undefined) return undefined;
     const group = exportedByModel.get(model).get(item);
     if (group) return group.referenceName;
     const key = declarationKey(item);
-    return exportedNames.get(key) ?? localNames.get(key) ?? fallback(item);
+    return exportedNames.get(key) ?? (names ? names.get(key) : sourceName(item));
   };
-  const sourceName = (item) => withoutBundlerSuffix(declaredName(item));
-
-  for (let round = 0; ; round++) {
-    const byBase = new Map();
-    for (const local of locals.values()) {
-      const base = sourceName(local.items[0]);
-      const lines = new LineSet();
-      for (const item of local.items) {
-        emitItem(item, {
-          prefix: '',
-          context: '',
-          ownName: base,
-          nameOf: nameOf(local.model, sourceName),
-          origin: local.key,
-          lines,
-        });
-      }
-      local.content = lines.sorted().join('\n');
-      byBase.set(base, [...(byBase.get(base) ?? []), local]);
+  const contentOf = (local, names) => {
+    const lines = new LineSet();
+    for (const item of local.items) {
+      emitItem(item, {
+        prefix: '',
+        context: '',
+        ownName: sourceName(local.items[0]),
+        nameOf: nameOf(local.model, names),
+        origin: local.key,
+        lines,
+        keepImportModules: true,
+      });
     }
-    const next = new Map();
+    return lines.sorted().join('\n');
+  };
+
+  for (const local of locals.values()) {
+    local.source = contentOf(local, undefined);
+    local.references = [];
+    forEachItem(local.items, (item) => {
+      for (const token of item.excerpt?.spannedTokens ?? []) {
+        const reference =
+          token.kind === 'Reference' ? token.canonicalReference?.toString() : undefined;
+        const target = reference && local.model.byReference.get(reference);
+        if (target && locals.has(declarationKey(target)))
+          local.references.push(declarationKey(target));
+      }
+    });
+  }
+  let keys = new Map([...locals.values()].map((local) => [local.key, hash(local.source)]));
+  for (let depth = 1; depth < DEPENDENCY_DEPTH; depth++) {
+    const previous = keys;
+    keys = new Map(
+      [...locals.values()].map((local) => [
+        local.key,
+        hash([local.source, ...local.references.map((key) => previous.get(key))].join('\0')),
+      ]),
+    );
+  }
+
+  const byBase = new Map();
+  for (const local of locals.values()) {
+    const base = sourceName(local.items[0]);
+    byBase.set(base, [...(byBase.get(base) ?? []), local]);
+  }
+  const ordered = [...byBase.keys()].sort(compareCodeUnits).map((base) => ({
+    base,
+    group: byBase
+      .get(base)
+      .sort(
+        (a, b) =>
+          compareCodeUnits(a.source, b.source) ||
+          compareCodeUnits(keys.get(a.key), keys.get(b.key)),
+      ),
+  }));
+
+  const representative = new Map();
+  const find = (key) => {
+    let current = key;
+    while (representative.has(current)) current = representative.get(current);
+    return current;
+  };
+  let localNames;
+  for (;;) {
+    localNames = new Map();
     const used = new Set(taken);
-    for (const base of [...byBase.keys()].sort(compareCodeUnits)) {
-      const group = byBase.get(base).sort((a, b) => compareCodeUnits(a.content, b.content));
+    for (const { base, group } of ordered) {
       let suffix = 1;
-      let previous;
       for (const local of group) {
-        local.sameAs = previous?.content === local.content ? previous : undefined;
-        if (local.sameAs) {
-          next.set(local.key, next.get(local.sameAs.key));
+        const root = find(local.key);
+        if (root !== local.key) {
+          localNames.set(local.key, localNames.get(root));
           continue;
         }
         let name = suffix === 1 ? base : `${base}_${suffix}`;
         while (used.has(name)) name = `${base}_${++suffix}`;
         suffix++;
         used.add(name);
-        next.set(local.key, name);
-        previous = local;
+        localNames.set(local.key, name);
       }
     }
-    const stable = [...next].every(([key, name]) => localNames.get(key) === name);
-    localNames = next;
-    if (stable && round > 0) break;
-    if (round === MAX_NAMING_ROUNDS) {
-      throw new ApiListError('the names of non-exported declarations do not settle');
+    let merged = false;
+    for (const { group } of ordered) {
+      const seen = new Map();
+      for (const local of group) {
+        const content = contentOf(local, localNames);
+        const root = find(local.key);
+        const earlier = seen.get(content);
+        if (earlier !== undefined && earlier !== root) {
+          representative.set(root, earlier);
+          merged = true;
+        } else if (earlier === undefined) {
+          seen.set(content, root);
+        }
+      }
     }
+    if (!merged) break;
+  }
+  for (const local of locals.values()) {
+    const root = find(local.key);
+    local.sameAs = root === local.key ? undefined : locals.get(root);
   }
 
-  return {
-    locals,
-    localNames,
-    nameOf: (model) => nameOf(model, () => undefined),
-  };
+  return { locals, localNames, nameOf: (model) => nameOf(model, localNames) };
 }
 
 export function portabilityProblems(lines, root) {
@@ -401,7 +498,7 @@ function augmentationNames({ checker, isOwn, model, info, packageGroups, localNa
 function augmentationLines(augmentation, rename) {
   const lines = [{ line: augmentation.head, deprecated: false }];
   for (const member of augmentation.members) {
-    const text = oneLine(renderNode(member, augmentation.file, rename))
+    const text = oneLine(renderNode(member, augmentation.file, { rename }))
       .replace(/;$/, '')
       .replace(MEMBER_MODIFIERS, '');
     lines.push({
@@ -432,7 +529,7 @@ export function flattenPackage(packageDir, entryPoints) {
   return sorted;
 }
 
-function collectLines(models, { checker, paths, isOwn }) {
+function collectLines(models, { checker, paths, isOwn, containers, memberKeysOf }) {
   const problems = [];
   const packageName = models[0]?.packageName;
   const { locals, localNames, nameOf } = nameDeclarations(models, paths, packageName, problems);
@@ -451,6 +548,15 @@ function collectLines(models, { checker, paths, isOwn }) {
         origin: local.key,
         lines,
       });
+    }
+  }
+
+  for (const local of locals.values()) {
+    if (local.sameAs) continue;
+    for (const item of local.items) {
+      const candidates = [...(containers.get(declaredName(item)) ?? [])];
+      const missing = memberProblems(item, candidates, localNames.get(local.key), memberKeysOf);
+      problems.push(...missing.map((problem) => `(not exported) ${problem}`));
     }
   }
 
@@ -479,12 +585,9 @@ function collectLines(models, { checker, paths, isOwn }) {
           cover(model.subpath, name);
         }
       }
-      if (group.memberKeys === undefined) continue;
-      const listed = new Set(group.items.flatMap((item) => (item.members ?? []).map(memberKeyOf)));
-      for (const key of group.memberKeys) {
-        if (!listed.has(key)) {
-          problems.push(`${model.subpath}: member ${group.referenceName}.${key} has no line`);
-        }
+      for (const item of group.items) {
+        const missing = memberProblems(item, [group.symbol], group.referenceName, memberKeysOf);
+        problems.push(...missing.map((problem) => `${model.subpath}: ${problem}`));
       }
     }
     for (const specifier of info.starForwards) {

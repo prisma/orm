@@ -11,6 +11,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { CompilerState, Extractor, ExtractorConfig } from '@microsoft/api-extractor';
+import ts from 'typescript';
 
 export const MODEL_FOLDER = 'dist-api';
 
@@ -82,6 +83,26 @@ function extractorConfig(packageDir, { declarationFile, modelFile }) {
   });
 }
 
+// `export * as ns from "<package>"`: API Extractor cannot read it, so it is reported by name.
+function namespaceForwardsIn(declarationFile) {
+  const file = ts.createSourceFile(
+    declarationFile,
+    readFileSync(declarationFile, 'utf8'),
+    ts.ScriptTarget.Latest,
+  );
+  return file.statements
+    .filter(
+      (statement) =>
+        ts.isExportDeclaration(statement) &&
+        statement.exportClause !== undefined &&
+        ts.isNamespaceExport(statement.exportClause),
+    )
+    .map(
+      (statement) =>
+        `export * as ${statement.exportClause.name.text} from "${statement.moduleSpecifier.text}"`,
+    );
+}
+
 function augmentsItself(packageDir, entryPoints) {
   const { name } = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
   const ownModule = new RegExp(
@@ -105,6 +126,16 @@ export function readPackageApi(packageDir) {
     );
   }
 
+  const where = relative(process.cwd(), packageDir);
+  const unsupported = entryPoints.flatMap(({ subpath, declarationFile }) =>
+    namespaceForwardsIn(declarationFile).map((text) => `${subpath}: ${text}`),
+  );
+  if (unsupported.length > 0) {
+    throw new ApiReadError(
+      `${where}:\n  ${unsupported.map((text) => `${text} is a form of export this script does not support. Import the module and export it by name, or teach scripts/public-api to read it.`).join('\n  ')}`,
+    );
+  }
+
   const modelFolder = join(packageDir, MODEL_FOLDER);
   rmSync(modelFolder, { recursive: true, force: true });
   mkdirSync(modelFolder, { recursive: true });
@@ -121,22 +152,27 @@ export function readPackageApi(packageDir) {
   const errors = [];
   for (const [index, config] of configs.entries()) {
     const { subpath } = entryPoints[index];
-    const result = Extractor.invoke(config, {
-      localBuild: true,
-      compilerState,
-      messageCallback: (message) => {
-        if (message.logLevel === 'error') errors.push(`${subpath}: ${message.text}`);
-        message.handled = true;
-      },
-    });
+    let result;
+    try {
+      result = Extractor.invoke(config, {
+        localBuild: true,
+        compilerState,
+        messageCallback: (message) => {
+          if (message.logLevel === 'error') errors.push(`${subpath}: ${message.text}`);
+          message.handled = true;
+        },
+      });
+    } catch (error) {
+      throw new ApiReadError(
+        `${where}: API Extractor failed on ${subpath}: ${error instanceof Error ? error.message : String(error)}. Check that \`pnpm build\` is current; if it is, this path probably uses a form of export the script does not support yet, which scripts/public-api would have to learn to read.`,
+      );
+    }
     if (!result.succeeded && errors.length === 0) {
       errors.push(`${subpath}: API Extractor failed with ${result.errorCount} error(s)`);
     }
   }
   if (errors.length > 0) {
-    throw new ApiReadError(
-      `${relative(process.cwd(), packageDir)}: API Extractor reported errors:\n  ${errors.join('\n  ')}`,
-    );
+    throw new ApiReadError(`${where}: API Extractor reported errors:\n  ${errors.join('\n  ')}`);
   }
 
   writeFileSync(

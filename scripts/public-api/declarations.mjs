@@ -74,15 +74,22 @@ function inAugmentation(declaration) {
   return false;
 }
 
-// The keys of the public members a class, interface or enum declares in this package.
-function ownMemberKeys(symbol, isOwn) {
-  const containers = ts.SymbolFlags.Class | ts.SymbolFlags.Interface | ts.SymbolFlags.Enum;
-  if (!(symbol.flags & containers)) return undefined;
+const CONTAINER_FLAGS = {
+  class: ts.SymbolFlags.Class,
+  interface: ts.SymbolFlags.Interface,
+  enum: ts.SymbolFlags.Enum,
+  namespace: ts.SymbolFlags.NamespaceModule | ts.SymbolFlags.ValueModule,
+};
+
+// The keys of the public members that a class, interface, enum or namespace declares in this
+// package, or undefined when the symbol is not that kind of container.
+function ownMemberKeys(symbol, kind, isOwn) {
+  if (!(symbol.flags & CONTAINER_FLAGS[kind])) return undefined;
   const members = [];
-  if (symbol.flags & ts.SymbolFlags.Enum) members.push(...(symbol.exports?.values() ?? []));
+  if (kind === 'enum' || kind === 'namespace') members.push(...(symbol.exports?.values() ?? []));
   else {
     members.push(...(symbol.members?.values() ?? []));
-    if (symbol.flags & ts.SymbolFlags.Class) {
+    if (kind === 'class') {
       for (const member of symbol.exports?.values() ?? []) {
         if (member.escapedName !== 'prototype') members.push(member);
       }
@@ -98,6 +105,31 @@ function ownMemberKeys(symbol, isOwn) {
     keys.add(memberKey(member));
   }
   return keys;
+}
+
+// The classes, interfaces, enums and namespaces declared at the top of the package's files, by name.
+function containersByName(program, checker, isOwn) {
+  const byName = new Map();
+  for (const file of program.getSourceFiles()) {
+    if (!isOwn(file)) continue;
+    for (const statement of file.statements) {
+      const container =
+        ts.isClassDeclaration(statement) ||
+        ts.isInterfaceDeclaration(statement) ||
+        ts.isEnumDeclaration(statement) ||
+        (ts.isModuleDeclaration(statement) &&
+          ts.isIdentifier(statement.name) &&
+          !ts.isGlobalScopeAugmentation(statement));
+      const symbol =
+        container && statement.name ? checker.getSymbolAtLocation(statement.name) : undefined;
+      if (symbol === undefined) continue;
+      const name = statement.name.text;
+      const symbols = byName.get(name) ?? new Set();
+      symbols.add(symbol);
+      byName.set(name, symbols);
+    }
+  }
+  return byName;
 }
 
 function reachableFiles(program, entry, packageDir) {
@@ -165,22 +197,10 @@ function readPath(checker, program, file, packageDir) {
   };
   const starNames = new Set();
   for (const statement of file.statements) {
-    if (
-      !ts.isExportDeclaration(statement) ||
-      statement.exportClause?.kind === ts.SyntaxKind.NamedExports
-    ) {
-      continue;
-    }
+    if (!ts.isExportDeclaration(statement) || statement.exportClause !== undefined) continue;
     const specifier = statement.moduleSpecifier?.text;
     if (specifier === undefined || !isBare(specifier)) {
       info.problems.push(`export * from "${specifier}" is not a forward of another package`);
-      continue;
-    }
-    if (statement.exportClause) {
-      info.namespaceForwards.push({
-        exportName: statement.exportClause.name.text,
-        from: specifier,
-      });
       continue;
     }
     const module = checker.getSymbolAtLocation(statement.moduleSpecifier);
@@ -202,7 +222,6 @@ function readPath(checker, program, file, packageDir) {
       else info.problems.push(`cannot tell where the export ${name} comes from`);
       continue;
     }
-    if (ts.isNamespaceExport(here)) continue;
     const target =
       exported.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exported) : exported;
     const own = (target.declarations ?? []).filter(
@@ -215,7 +234,6 @@ function readPath(checker, program, file, packageDir) {
         declaredNames: new Set(
           own.map((declaration) => ts.getNameOfDeclaration(declaration)?.getText()).filter(Boolean),
         ),
-        memberKeys: ownMemberKeys(target, isOwn),
         items: [],
       };
       group.names.push(name);
@@ -251,6 +269,7 @@ export function readDeclarations(packageDir, entryPoints) {
     ts.createCompilerHost(options),
   );
   const checker = program.getTypeChecker();
+  const isOwn = (node) => node.getSourceFile().fileName.startsWith(`${packageDir}${sep}`);
   const paths = new Map();
   for (const { subpath, declarationFile } of entryPoints) {
     paths.set(
@@ -261,6 +280,8 @@ export function readDeclarations(packageDir, entryPoints) {
   return {
     checker,
     paths,
-    isOwn: (declaration) => declaration.getSourceFile().fileName.startsWith(`${packageDir}${sep}`),
+    isOwn,
+    containers: containersByName(program, checker, isOwn),
+    memberKeysOf: (symbol, kind) => ownMemberKeys(symbol, kind, isOwn),
   };
 }

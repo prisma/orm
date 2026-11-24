@@ -35,36 +35,39 @@ function isTypeName(node) {
   return false;
 }
 
-// Prints `node` with the members of every union sorted and `import("…").Name` as `Name`.
-// `rename` may give the printed name of an identifier that names a type.
-export function renderNode(node, file, rename = () => undefined) {
+// Prints `node` with the members of every union sorted and `import("…").Name` as `Name`, or
+// with the module kept when `keepImportModules` is set. `rename` may give the printed name of an
+// identifier that names a type.
+export function renderNode(node, file, options = {}) {
+  const { rename = () => undefined, keepImportModules = false } = options;
   if (isTypeName(node)) return rename(node) ?? node.getText(file);
   if (ts.isUnionTypeNode(node)) {
     return node.types
-      .map((member) => renderNode(member, file, rename))
+      .map((member) => renderNode(member, file, options))
       .sort(compareCodeUnits)
       .join(' | ');
   }
-  if (ts.isImportTypeNode(node) && node.qualifier) {
+  if (ts.isImportTypeNode(node) && node.qualifier && !keepImportModules) {
     const typeArguments = node.typeArguments
-      ? `<${node.typeArguments.map((argument) => renderNode(argument, file, rename)).join(', ')}>`
+      ? `<${node.typeArguments.map((argument) => renderNode(argument, file, options)).join(', ')}>`
       : '';
     return `${node.isTypeOf ? 'typeof ' : ''}${node.qualifier.getText(file)}${typeArguments}`;
   }
   let text = '';
   let cursor = node.getStart(file);
   ts.forEachChild(node, (child) => {
-    text += file.text.slice(cursor, child.getStart(file)) + renderNode(child, file, rename);
+    text += file.text.slice(cursor, child.getStart(file)) + renderNode(child, file, options);
     cursor = child.end;
   });
   return text + file.text.slice(cursor, node.end);
 }
 
 // `context` says what `text` is: 'declaration', 'interface member', 'class member' or 'enum member'.
-export function normalizeTypes(text, context) {
+export function normalizeTypes(text, context, { keepImportModules = false } = {}) {
   const [prefix, suffix] = wrapperFor(text, context);
   const source = `${prefix}${text}${suffix}`;
   const file = ts.createSourceFile('type.d.ts', source, ts.ScriptTarget.Latest, true);
+  // parseDiagnostics is internal to TypeScript; it is the only way to learn a parse failed without building a program.
   if (!Array.isArray(file.parseDiagnostics)) {
     throw new TypeTextError('this TypeScript version does not expose parse diagnostics');
   }
@@ -77,6 +80,6 @@ export function normalizeTypes(text, context) {
   ) {
     throw new TypeTextError(`cannot parse "${text}" as a ${context}`);
   }
-  const rendered = renderNode(statement, file);
+  const rendered = renderNode(statement, file, { keepImportModules });
   return rendered.slice(prefix.length, rendered.length - suffix.length);
 }
