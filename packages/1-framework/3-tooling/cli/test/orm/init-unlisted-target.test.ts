@@ -217,7 +217,7 @@ describe('init with a facade that is in no list', () => {
         ok: false,
         error: {
           code: 'CLI.INIT_INVALID_FLAG_VALUE',
-          summary: 'Invalid facade name',
+          summary: 'Invalid package name',
           meta: { value: '../outside' },
         },
       });
@@ -296,7 +296,7 @@ describe('an unlisted package that cannot be used', () => {
           nextActions: expect.arrayContaining([
             expect.objectContaining({
               label:
-                'Write prisma.config.ts by hand, with the defineConfig import the README of prisma-orm-noinit shows. To use a facade from the list instead, pass its short name (--target postgres, --target mongodb); for any other, pass its full package name.',
+                'Write prisma.config.ts by hand, with the defineConfig import the README of prisma-orm-noinit shows. To use a database package from the list instead, pass its short name (--target postgres, --target mongodb); for any other, pass its full package name.',
             }),
           ]),
           meta: {
@@ -330,7 +330,7 @@ describe('an unlisted package that cannot be used', () => {
           ),
           nextActions: [
             expect.objectContaining({
-              label: `Run \`prisma orm init\` again without \`--skip-install\`: it checks that ${NO_INIT} lists the keyword \`prisma-orm-extension\` before installing it. To use a facade from the list instead, pass its short name (--target postgres, --target mongodb); for any other, pass its full package name.`,
+              label: `Run \`prisma orm init\` again without \`--skip-install\`: it checks that ${NO_INIT} lists the keyword \`prisma-orm-extension\` before installing it. To use a database package from the list instead, pass its short name (--target postgres, --target mongodb); for any other, pass its full package name.`,
             }),
           ],
           meta: { packageName: NO_INIT, takenAsPackageName: true },
@@ -343,7 +343,7 @@ describe('an unlisted package that cannot be used', () => {
 });
 
 const LISTED_INSTEAD =
-  'To use a facade from the list instead, pass its short name (--target postgres, --target mongodb); for any other, pass its full package name.';
+  'To use a database package from the list instead, pass its short name (--target postgres, --target mongodb); for any other, pass its full package name.';
 
 const TAKEN = (name: string) =>
   `\`${name}\` is not one of the short names (postgres, mongodb), so init took it as a package name.`;
@@ -380,7 +380,7 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
         error: {
           code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
           summary: `${value} does not list the keyword \`${KEYWORD}\``,
-          why: `${TAKEN(value)} The latest version of ${value} on ${REGISTRY} does not list the keyword \`${KEYWORD}\` in its package.json. init requires that keyword of a facade before it installs or uses one, so it did not install ${value}. Nothing was changed.`,
+          why: `${TAKEN(value)} The latest version of ${value} on ${REGISTRY} does not list the keyword \`${KEYWORD}\` in its package.json. init requires that keyword of a database package before it installs or uses one, so it did not install ${value}. Nothing was changed.`,
           nextActions: [
             expect.objectContaining({
               label: `Check the package name. If you maintain ${value}, add \`${KEYWORD}\` to the keywords in its package.json and publish a new version. ${LISTED_INSTEAD}`,
@@ -491,7 +491,7 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
         error: {
           code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
           summary: 'Could not read the keywords of acmedb',
-          why: `${TAKEN('acmedb')} init requires the keyword \`${KEYWORD}\` of a facade before it installs or uses one, and it could not read the keywords of acmedb from ${REGISTRY}: the registry answered with status 403. Nothing was changed.`,
+          why: `${TAKEN('acmedb')} init requires the keyword \`${KEYWORD}\` of a database package before it installs or uses one, and it could not read the keywords of acmedb from ${REGISTRY}: the registry answered with status 403. Nothing was changed.`,
           nextActions: [
             expect.objectContaining({
               label: `Check the package name. If it is right and acmedb lists \`${KEYWORD}\`, install it yourself with \`pnpm add acmedb\` and run \`prisma orm init\` again: init reads the keywords of an installed package from disk. ${LISTED_INSTEAD}`,
@@ -694,7 +694,7 @@ describe('which copy of an unlisted package init checks', () => {
         ok: false,
         error: {
           code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
-          why: `${TAKEN('acmedb')} The installed acmedb does not list the keyword \`${KEYWORD}\` in its package.json. init requires that keyword of a facade before it installs or uses one, so it did not use acmedb. Nothing was changed.`,
+          why: `${TAKEN('acmedb')} The installed acmedb does not list the keyword \`${KEYWORD}\` in its package.json. init requires that keyword of a database package before it installs or uses one, so it did not use acmedb. Nothing was changed.`,
           nextActions: [
             expect.objectContaining({
               label: `Check the package name. If a newer version of acmedb lists the keyword, update it with \`pnpm add acmedb@latest\` and run \`prisma orm init\` again. If you maintain acmedb, add \`${KEYWORD}\` to the keywords in its package.json and publish a new version. ${LISTED_INSTEAD}`,
@@ -781,10 +781,10 @@ describe('an unlisted --target in a Prisma 7 project', () => {
         ok: false,
         error: {
           code: 'CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE',
-          why: `${UNLISTED} is not one of the facades in Prisma's list (postgres, mongodb), and only a package in that list can keep ${PRISMA7_SCHEMA} as the contract source. Nothing was changed.`,
+          why: `${UNLISTED} is not one of the database packages in Prisma's list (postgres, mongodb), and only a package in that list can keep ${PRISMA7_SCHEMA} as the contract source. Nothing was changed.`,
           nextActions: [
             expect.objectContaining({
-              label: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${UNLISTED}. To keep ${PRISMA7_SCHEMA}, name a facade from the list instead.`,
+              label: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${UNLISTED}. To keep ${PRISMA7_SCHEMA}, name a database package from the list instead.`,
             }),
           ],
           meta: { schemaPath: PRISMA7_SCHEMA, packageName: UNLISTED, reason: 'unlisted' },
@@ -815,7 +815,7 @@ describe('an unlisted --target in a Prisma 7 project', () => {
         authoring: 'psl',
         prisma7: null,
         warnings: expect.arrayContaining([
-          `${UNLISTED} is not in the list of facades that can keep a Prisma 7 schema, so init sets up a fresh Prisma 8 project instead and leaves ${PRISMA7_SCHEMA} alone.`,
+          `${UNLISTED} is not in the list of database packages that can keep a Prisma 7 schema, so init sets up a fresh Prisma 8 project instead and leaves ${PRISMA7_SCHEMA} alone.`,
         ]),
       });
       expect(readProjectFile(PRISMA7_SCHEMA)).toContain('provider = "postgresql"');

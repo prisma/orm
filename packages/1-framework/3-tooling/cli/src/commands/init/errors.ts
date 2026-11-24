@@ -94,12 +94,12 @@ export function errorInitInvalidTarget(options: {
       ? {
           summary: 'Invalid value for --target',
           why: `\`--target ${options.value}\` is not one of the short names (${SHORT_NAME_LIST}), and init does not take it as a package name: ${problems}.`,
-          fix: `Pass a short name (${SHORT_NAME_FLAGS}) or the full name of a facade (\`--target ${PACKAGE_NAME_PLACEHOLDER}\`).`,
+          fix: `Pass a short name (${SHORT_NAME_FLAGS}) or the full name of the package for your database (\`--target ${PACKAGE_NAME_PLACEHOLDER}\`).`,
         }
       : {
-          summary: 'Invalid facade name',
-          why: `\`${options.value}\`, typed as the name of the facade, is not taken as a package name: ${problems}. Nothing was changed.`,
-          fix: `Run \`prisma orm init\` again and type the facade's name as it is published, or pass it as \`--target ${PACKAGE_NAME_PLACEHOLDER}\`.`,
+          summary: 'Invalid package name',
+          why: `\`${options.value}\`, typed as the name of the package for your database, is not taken as a package name: ${problems}. Nothing was changed.`,
+          fix: `Run \`prisma orm init\` again and type the package's name as it is published, or pass it as \`--target ${PACKAGE_NAME_PLACEHOLDER}\`.`,
         };
   return new CliStructuredError('CLI.INIT_INVALID_FLAG_VALUE', wording.summary, {
     why: wording.why,
@@ -123,7 +123,7 @@ function takenAsPackageName(packageName: string): string {
   return `\`${packageName}\` is not one of the short names (${SHORT_NAME_LIST}), so init took it as a package name.`;
 }
 
-const LISTED_INSTEAD = `To use a facade from the list instead, pass its short name (${SHORT_NAME_FLAGS}); for any other, pass its full package name.`;
+const LISTED_INSTEAD = `To use a database package from the list instead, pass its short name (${SHORT_NAME_FLAGS}); for any other, pass its full package name.`;
 
 /**
  * `--authoring` and `--schema-path` disagree on file extension (e.g. PSL
@@ -584,7 +584,8 @@ export function errorInitTargetPackageNotVerified(
 ): CliStructuredError {
   const { packageName, installCommand } = options;
   const keyword = `\`${PRISMA_ORM_PACKAGE_KEYWORD}\``;
-  const required = 'init requires that keyword of a facade before it installs or uses one';
+  const required =
+    'init requires that keyword of a database package before it installs or uses one';
   const runAgain = 'run `prisma orm init` again';
   const maintainer = `If you maintain ${packageName}, add ${keyword} to the keywords in its package.json and publish a new version.`;
   const wording = (() => {
@@ -611,7 +612,7 @@ export function errorInitTargetPackageNotVerified(
         const from = options.registry === undefined ? '' : ` from ${options.registry}`;
         return {
           summary: `Could not read the keywords of ${packageName}`,
-          why: `init requires the keyword ${keyword} of a facade before it installs or uses one, and it could not read the keywords of ${packageName}${from}: ${options.cause}. Nothing was changed.`,
+          why: `init requires the keyword ${keyword} of a database package before it installs or uses one, and it could not read the keywords of ${packageName}${from}: ${options.cause}. Nothing was changed.`,
           fix:
             options.registry === undefined
               ? `Check the package name. If it is right, reinstall ${packageName} with \`${installCommand}\` and ${runAgain}.`
@@ -902,8 +903,8 @@ export function errorInitPrisma7SourceUnavailable(
         : options.reason === 'unlisted'
           ? {
               summary: `${packageName} cannot keep a Prisma 7 schema`,
-              why: `${packageName} is not one of the facades in Prisma's list (${SHORT_NAME_LIST}), and only a package in that list can keep ${schemaPath} as the contract source. Nothing was changed.`,
-              fix: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${packageName}. To keep ${schemaPath}, name a facade from the list instead.`,
+              why: `${packageName} is not one of the database packages in Prisma's list (${SHORT_NAME_LIST}), and only a package in that list can keep ${schemaPath} as the contract source. Nothing was changed.`,
+              fix: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${packageName}. To keep ${schemaPath}, name a database package from the list instead.`,
             }
           : {
               summary: 'No Prisma 7 contract source for this database',

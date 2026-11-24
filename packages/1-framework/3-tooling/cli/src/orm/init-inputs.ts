@@ -221,10 +221,10 @@ const ANOTHER_PACKAGE = 'another-package';
 async function askTarget(prompt: PromptSurface): Promise<TargetPackage> {
   const answer = await prompt.select('What database are you using?', [
     ...KNOWN_TARGET_PACKAGES.map((entry) => ({ value: entry.shortName, label: entry.label })),
-    { value: ANOTHER_PACKAGE, label: 'Another facade' },
+    { value: ANOTHER_PACKAGE, label: 'Another package' },
   ]);
   if (answer === ANOTHER_PACKAGE) {
-    const packageName = await prompt.text('Which facade?', {
+    const packageName = await prompt.text('Which package?', {
       placeholder: PACKAGE_NAME_PLACEHOLDER,
     });
     return resolveTargetName(packageName.trim(), 'prompt');
@@ -397,7 +397,7 @@ async function choosePrisma7Path(ctx: {
   if (ctx.flagTarget !== undefined && ctx.flagTarget.listed === undefined) {
     ctx.warn(
       freshInitWarning(
-        `${ctx.flagTarget.packageName} is not in the list of facades that can keep a Prisma 7 schema`,
+        `${ctx.flagTarget.packageName} is not in the list of database packages that can keep a Prisma 7 schema`,
         ctx.detection,
       ),
     );
