@@ -84,10 +84,10 @@ The packages of one release are tested together, so among themselves they accept
 
 ## What an application writes
 
-`prisma orm init` writes the lines from the installed target package's manifest:
+- On a GA target package: a caret on every `@prisma/orm-*` line, `^8.3.0`. An update moves all of them to the next release together.
+- On a target package below GA: a tilde on every line, `~8.3.0-ea.0` on the packages below GA and `~8.3.0` on the GA ones, and the target package at a tilde on its own version, such as `~8.3.0-ea.1`. A caret on a pre-release never selects the next minor's pre-release. At each new minor the user edits the lines, or runs their package manager's command that updates to the latest version.
 
-- Each `@prisma/orm-*` package the target package names, at the range the target package names it: `~8.3.0` on a GA package and `~8.3.0-ea.0` on one below GA. So `init` never asks for a version the target package refuses.
-- The target package at a tilde on its own installed version: `~8.3.2`, or `~8.3.0-ea.1` below GA. An update then keeps every line on one release. At each new minor the user edits the lines, or runs their package manager's command that updates to the latest version.
+`prisma orm init` writes the lines this way when it adds the target package itself. When the project already lists the target package, `init` leaves that line as the user wrote it and writes each platform package at the range the installed target package declares for it, so that it never installs a platform package the user's target package does not accept.
 
 On the release candidates `init` writes the exact `8.0.0-rc.N` on every line.
 

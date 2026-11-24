@@ -26,26 +26,32 @@ export function exactVersionOf(spec: string): string | undefined {
 /**
  * A target package that names its `@prisma/orm-*` peers at exact versions, as on the `8.0.0`
  * release candidates and in a development build, gets those versions; inside this repository a
- * `workspace:` specifier on an exact version counts as one. One that names them with ranges gets
- * each peer at the range it names, so `init` never asks for a version the target package refuses,
- * and the target package itself at a range of the same kind on its installed version: a tilde
- * beside tilde peers, as every target package of ours names its platform packages, so an update
- * keeps all the lines on one release; a caret only when every peer is a caret and the target
- * package's version has no pre-release part, since a caret on a pre-release never selects the next
- * minor's.
+ * `workspace:` specifier on an exact version counts as one. One that names them with ranges:
+ *
+ * - When init adds the target package itself, a GA one (a plain version) gets a caret on every line:
+ *   `^X.Y.0` on the target package and a tilde peer as the same version with a caret, so an update
+ *   moves every line to the next release together. One whose version has a pre-release part gets a
+ *   tilde on every line: each peer at its declared range and the target package at a tilde on its
+ *   version, since a caret on a pre-release never selects the next minor's.
+ * - When the project already lists the target package, its line is the user's, and each peer gets
+ *   the range the installed target package declares, so init never installs a platform package
+ *   that target package does not accept.
  */
 export function versionLines(
   targetVersion: string,
   ormPeerRanges: readonly string[],
+  options: { readonly addsTarget: boolean },
 ): VersionLines {
   if (ormPeerRanges.every((range) => EXACT_VERSION.test(range.trim().replace(/^workspace:/, '')))) {
     return { target: targetVersion, ormPackage: (range) => range, standsFor: lineStandsFor };
   }
-  const caret =
-    !targetVersion.includes('-') && ormPeerRanges.every((range) => range.trim().startsWith('^'));
+  if (!options.addsTarget || targetVersion.includes('-')) {
+    return { target: `~${targetVersion}`, ormPackage: (range) => range, standsFor: lineStandsFor };
+  }
+  const [major, minor] = targetVersion.split('.');
   return {
-    target: `${caret ? '^' : '~'}${targetVersion}`,
-    ormPackage: (range) => range,
+    target: `^${major}.${minor}.0`,
+    ormPackage: (range) => (range.trim().startsWith('~') ? `^${range.trim().slice(1)}` : range),
     standsFor: lineStandsFor,
   };
 }

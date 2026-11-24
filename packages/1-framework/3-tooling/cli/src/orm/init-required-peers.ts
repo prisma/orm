@@ -170,6 +170,7 @@ export function requiredPeersForSetup(ctx: {
       resolved = await resolveRequiredPeers({
         packageName,
         ownsTarget: false,
+        listsTarget: false,
         installedElsewhere: ctx.installedElsewhere,
         declared: () => new Map(),
         installedVersion: () => undefined,
@@ -199,6 +200,11 @@ export async function resolveRequiredPeers(ctx: {
   readonly packageName: string;
   /** Whether init wrote the target package's line, so it may pin it to the installed version. */
   readonly ownsTarget: boolean;
+  /**
+   * Whether the project listed the target package before init ran. Its line is then the user's,
+   * and each peer is written at the range the installed target package declares.
+   */
+  readonly listsTarget: boolean;
   /** Packages init installs another way, such as the CLI's engine, which the list leaves out. */
   readonly installedElsewhere: ReadonlySet<string>;
   readonly declared: () => ReadonlyMap<string, string>;
@@ -224,10 +230,12 @@ export async function resolveRequiredPeers(ctx: {
   const lines = versionLines(
     target.version,
     [...target.peers].filter(([name]) => isPrismaOrmPackage(name)).map(([, range]) => range),
+    { addsTarget: !ctx.listsTarget },
   );
   const lineOf = (name: string, range: string) =>
     isPrismaOrmPackage(name) ? lines.ormPackage(range) : range;
-  const targetSpecifier = `${ctx.packageName}@${lines.target}`;
+  const listedTarget = ctx.listsTarget ? ctx.declared().get(ctx.packageName) : undefined;
+  const targetSpecifier = `${ctx.packageName}@${listedTarget ?? lines.target}`;
   const wanted = new Map<string, { readonly range: string; readonly by: string }>();
   const outcomes = new Map<string, RequiredPeerOutcome>();
   const warnings: string[] = [];
@@ -235,7 +243,7 @@ export async function resolveRequiredPeers(ctx: {
   let level: { readonly name: string; readonly manifest: ReadManifest | undefined }[] = [
     { name: ctx.packageName, manifest: target },
   ];
-  let pinTarget = ctx.ownsTarget;
+  let pinTarget = ctx.ownsTarget && !ctx.listsTarget;
   const atAnotherVersion = new Map<
     string,
     { readonly installed: string; readonly range: string; readonly by: string }

@@ -213,6 +213,7 @@ export function createTargetPackagePreparation(ctx: {
       read: manifests.read,
       installedVersion: manifests.installedVersion,
       ownsTarget: installsTarget,
+      listsTarget: declaredBefore.has(packageName),
       installedElsewhere: INSTALLED_ELSEWHERE,
       declared: () => declaredPackages(ctx.cwd),
       install: ctx.install

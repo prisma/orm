@@ -104,6 +104,7 @@ describe("the required peers of this repository's target packages", () => {
       const resolved = await resolveRequiredPeers({
         packageName,
         ownsTarget: false,
+        listsTarget: false,
         installedElsewhere: new Set([ENGINE_PACKAGE]),
         declared: () => new Map(),
         installedVersion: manifests.installedVersion,

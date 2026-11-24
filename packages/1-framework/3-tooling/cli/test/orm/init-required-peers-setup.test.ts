@@ -224,6 +224,7 @@ describe('whether a package the project lists is at the version asked for', () =
     return resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
       ownsTarget: false,
+      listsTarget: false,
       installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', line]]),
       installedVersion: () => installed,
@@ -270,6 +271,7 @@ describe('whether a package the project lists is at the version asked for', () =
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
       ownsTarget: false,
+      listsTarget: false,
       installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', '^8.0.0-rc.26']]),
       installedVersion: () => '8.0.0-rc.27',
@@ -322,6 +324,7 @@ describe('a package installed at a version other than the one asked for', () => 
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
       ownsTarget: false,
+      listsTarget: false,
       installedElsewhere: new Set(),
       declared: () => new Map(),
       installedVersion: () => undefined,
@@ -365,6 +368,7 @@ describe('the packages init installs in a round', () => {
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
       ownsTarget: false,
+      listsTarget: false,
       installedElsewhere: new Set(),
       declared: () => new Map(),
       installedVersion: () => undefined,
@@ -384,10 +388,10 @@ describe('the packages init installs in a round', () => {
       installs,
     }).toEqual({
       packages: [
-        { name: '@prisma/orm-framework', version: '~8.1.0', outcome: 'installed' },
+        { name: '@prisma/orm-framework', version: '^8.1.0', outcome: 'installed' },
         { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
       ],
-      installs: [['@prisma/orm-framework@~8.1.0'], ['temporal-polyfill@^1.0.8']],
+      installs: [['@prisma/orm-framework@^8.1.0'], ['temporal-polyfill@^1.0.8']],
     });
   });
 });
@@ -397,11 +401,13 @@ describe('the lines init writes for each line of releases', () => {
     targetVersion: string,
     peers: Record<string, string>,
     declared: Record<string, string> = {},
+    options: { readonly listsTarget: boolean } = { listsTarget: false },
   ) {
     const installs: (readonly string[])[] = [];
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-mysql',
-      ownsTarget: true,
+      ownsTarget: !options.listsTarget,
+      listsTarget: options.listsTarget,
       installedElsewhere: new Set(),
       declared: () => new Map(Object.entries(declared)),
       installedVersion: () => undefined,
@@ -453,7 +459,7 @@ describe('the lines init writes for each line of releases', () => {
     ]);
   });
 
-  it('writes each peer at the range the target package names it, and a tilde on a GA target package', async () => {
+  it('writes a caret on every line when it adds a GA target package', async () => {
     const { resolved, installs } = await resolveFor('8.1.2', {
       '@prisma/orm-framework': '~8.1.0',
       'temporal-polyfill': '^1.0.8',
@@ -461,30 +467,32 @@ describe('the lines init writes for each line of releases', () => {
 
     expect({ resolved, installs }).toMatchObject({
       resolved: {
-        target: '@prisma/orm-mysql@~8.1.2',
+        target: '@prisma/orm-mysql@^8.1.0',
         packages: [
-          { name: '@prisma/orm-framework', version: '~8.1.0', outcome: 'installed' },
+          { name: '@prisma/orm-framework', version: '^8.1.0', outcome: 'installed' },
           { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
         ],
       },
       installs: [
-        ['@prisma/orm-mysql@~8.1.2', '@prisma/orm-framework@~8.1.0', 'temporal-polyfill@^1.0.8'],
+        ['@prisma/orm-mysql@^8.1.0', '@prisma/orm-framework@^8.1.0', 'temporal-polyfill@^1.0.8'],
       ],
     });
   });
 
-  it('never asks for a newer minor than an older target package the project lists accepts', async () => {
+  it('leaves the target line the project lists and writes each peer at the range the target package declares', async () => {
     const { resolved, installs } = await resolveFor(
       '8.1.2',
       { '@prisma/orm-framework': '~8.1.0' },
       { '@prisma/orm-mysql': '8.1.2' },
+      { listsTarget: true },
     );
 
     expect({ resolved, installs }).toMatchObject({
       resolved: {
+        target: '@prisma/orm-mysql@8.1.2',
         packages: [{ name: '@prisma/orm-framework', version: '~8.1.0', outcome: 'installed' }],
       },
-      installs: [['@prisma/orm-mysql@~8.1.2', '@prisma/orm-framework@~8.1.0']],
+      installs: [['@prisma/orm-framework@~8.1.0']],
     });
   });
 
@@ -516,12 +524,12 @@ describe('the lines init writes for each line of releases', () => {
     const { resolved, installs } = await resolveFor(
       '8.1.2',
       { '@prisma/orm-framework': '~8.1.0' },
-      { '@prisma/orm-mysql': '~8.1.2', '@prisma/orm-framework': '~8.1.0' },
+      { '@prisma/orm-mysql': '^8.1.0', '@prisma/orm-framework': '^8.1.0' },
     );
 
     expect({ resolved, installs }).toMatchObject({
       resolved: {
-        packages: [{ name: '@prisma/orm-framework', version: '~8.1.0', outcome: 'already-listed' }],
+        packages: [{ name: '@prisma/orm-framework', version: '^8.1.0', outcome: 'already-listed' }],
         warnings: [],
       },
       installs: [],
@@ -534,6 +542,7 @@ describe('a required version written with a v prefix', () => {
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
       ownsTarget: false,
+      listsTarget: false,
       installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', VERSION]]),
       installedVersion: () => VERSION,
@@ -556,6 +565,7 @@ describe('a required peer that is not a Prisma ORM package, listed at another ex
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
       ownsTarget: false,
+      listsTarget: false,
       installedElsewhere: new Set(),
       declared: () => new Map([['left-pad', '1.2.0']]),
       installedVersion: () => '1.2.0',
