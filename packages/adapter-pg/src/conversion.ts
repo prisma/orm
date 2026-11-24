@@ -307,12 +307,14 @@ function normalize_date(date: string): string {
  * ex: 1996-12-19T16:39:57-08:00
  */
 
-function normalize_timestamp(time: string): string {
-  return `${time.replace(' ', 'T')}+00:00`
+export function normalize_timestamp(time: string): string {
+  const iso = `${time.replace(' ', 'T')}+00:00`
+  return iso.replace(/^(\d{5,})(?=-)/, (_, year: string) => `+${year.padStart(6, '0')}`)
 }
 
-function normalize_timestamptz(time: string): string {
-  return time.replace(' ', 'T').replace(/[+-]\d{2}(:\d{2})?$/, '+00:00')
+export function normalize_timestamptz(time: string): string {
+  const iso = time.replace(' ', 'T').replace(/[+-]\d{2}(:\d{2})?$/, '+00:00')
+  return iso.replace(/^(\d{5,})(?=-)/, (_, year: string) => `+${year.padStart(6, '0')}`)
 }
 
 /*

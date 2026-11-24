@@ -1,7 +1,7 @@
 import pg from 'pg'
 import { describe, expect, it } from 'vitest'
 
-import { customParsers, mapArg } from '../conversion'
+import { customParsers, mapArg, normalize_timestamp, normalize_timestamptz } from '../conversion'
 
 describe('mapArg', () => {
   it('converts a date with a 4-digit year (value >= 1000-01-01) to the correct date', () => {
@@ -89,5 +89,37 @@ describe('customParsers', () => {
     '$5.00-',
   ])('rejects money %s, whose separators or sign cannot be read safely', (input) => {
     expect(() => customParsers[MONEY](input)).toThrow('Unsupported money format')
+  })
+})
+
+describe('normalize_timestamp', () => {
+  it('leaves standard 4-digit years unaffected', () => {
+    expect(normalize_timestamp('2026-09-02 05:00:00')).toBe('2026-09-02T05:00:00+00:00')
+  })
+
+  it.each([
+    ['10000-01-01 00:00:00', '+010000-01-01T00:00:00+00:00'],
+    ['99999-12-31 23:59:59', '+099999-12-31T23:59:59+00:00'],
+    ['202609-02-05 05:00:00', '+202609-02-05T05:00:00+00:00'],
+  ])('formats expanded year %s as %s', (input, expected) => {
+    const result = normalize_timestamp(input)
+    expect(result).toBe(expected)
+    expect(Number.isNaN(new Date(result).getTime())).toBe(false)
+  })
+})
+
+describe('normalize_timestamptz', () => {
+  it('leaves standard 4-digit years unaffected', () => {
+    expect(normalize_timestamptz('2026-09-02 05:00:00+00')).toBe('2026-09-02T05:00:00+00:00')
+  })
+
+  it.each([
+    ['10000-01-01 00:00:00+00', '+010000-01-01T00:00:00+00:00'],
+    ['99999-12-31 23:59:59+00', '+099999-12-31T23:59:59+00:00'],
+    ['202609-02-05 05:00:00+00', '+202609-02-05T05:00:00+00:00'],
+  ])('formats expanded year %s as %s', (input, expected) => {
+    const result = normalize_timestamptz(input)
+    expect(result).toBe(expected)
+    expect(Number.isNaN(new Date(result).getTime())).toBe(false)
   })
 })
