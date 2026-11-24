@@ -88,6 +88,15 @@ Stopping point for the open upgrade issues: every urgent and high issue is close
 
 Will, 2026-09-30: the emulator controls (start, stop, list, reset) are now urgent and start immediately. They were already required for GA; what changed is the order. They move to the top of the editor and tools stream. The VS Code extension work that depends on them (items 2 and 3 of that stream) waits on them. Background from 2026-09-28: several emulators of each type can run, so status is a list; the eval found that stopping `prisma dev` leaves the emulator processes running and no stop or cleanup command exists.
 
+## Changes of 2026-11-24
+
+- Stream 7, the compatibility policy, is a stream of projects and not one project (Will, 2026-11-24). Its 23 tasks were too many for one project, so they are grouped into 12 projects, each sized for one to four pull requests and each run through the Drive process.
+- Each project in stream 7 is named as an instruction that says what is achieved and how, with the purpose in the user's terms where possible and the means in ours (Will, 2026-11-24). Example: "Prevent new error codes, built-in names and builder methods from breaking user code". Names that stated a result read like rules, not like work.
+- This plan records stream 7's goal, its projects and a pointer to its Drive assets. The assets, which are the policy, the maturity levels, the research and the plan, are kept on the branch `ga-compatibility` under `projects/ga-compatibility/` and no longer on this branch (Will, 2026-11-24). That plan records each project's purpose, what it achieves and how, so that scope stays in line with intent as new work appears.
+- Will asked on 2026-11-24 that no row in stream 7 stays "Not decided". The placements themselves are the agent's proposal of that day, and Will has not yet moved or confirmed any of them: six projects Must, three Aim and three Later. The rule used: the promise starts at `8.0.0`, so a project is Must when its changes would themselves break the promise if made later. Will had placed two on 2026-11-23: reducing exports is Must, and Prisma's own tables can possibly follow GA.
+- Maturity per package (stream 6, row 4) is replaced by stream 7, project 6 (Will, 2026-11-24).
+- Proposed by the agent on 2026-11-24, not yet confirmed by Will: finishing the rename of "extension pack" to "extension" moves from stream 7 to stream 6, row 15, as Later, because it is terminology clean-up and not part of the compatibility promise.
+
 ## Changes of 2026-11-23
 
 - Migrations that are safe on a large production table become a project that completes before GA (stream 6, row 14) (Will, 2026-11-23). It began with prisma/orm#31182, where the PostgreSQL runner waits for a table lock with no time limit, and with a public account of two outages in which generated Prisma migrations locked a 300-million-row table at peak traffic. What Will decided:

@@ -16,7 +16,7 @@ Read [plan.md](plan.md). It is one page. It lists every project in priority orde
 | 4 | Query features |
 | 5 | Docs and the new user's first hour |
 | 6 | Work found along the way |
-| 7 | Compatibility policy: what we promise a user who upgrades within Prisma 8. The policy itself is in [ga-readiness/spec.md](ga-readiness/spec.md) |
+| 7 | Compatibility policy: from `8.0.0`, an application upgrades to any later `8.x` release with no changes. The policy itself is [spec.md](https://github.com/prisma/orm/blob/ga-compatibility/projects/ga-compatibility/spec.md) on the branch `ga-compatibility` |
 
 If you work on language tools or queries, streams 3 and 4 are yours to read first.
 

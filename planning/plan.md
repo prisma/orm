@@ -23,9 +23,9 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Editor and tools | 3 of 6 (50%) | `█████░░░░░` | 1 | 2 |
 | Query features | 10 of 11 (91%) | `█████████░` | 1 | 0 |
 | Docs and the new user's first hour | 2 of 5 (40%) | `████░░░░░░` | 2 | 1 |
-| Work found along the way | 4 of 10 (40%) | `████░░░░░░` | 1 | 5 |
-| Compatibility policy | 0 of 1 (0%) | `░░░░░░░░░░` | 0 | 1 |
-| **All streams** | **34 of 48 (71%)** | `███████░░░` | **5** | **9** |
+| Work found along the way | 4 of 9 (44%) | `████░░░░░░` | 1 | 4 |
+| Compatibility policy | 0 of 6 (0%) | `░░░░░░░░░░` | 0 | 6 |
+| **All streams** | **34 of 52 (65%)** | `███████░░░` | **5** | **13** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -118,7 +118,7 @@ Test: the getting-started eval passes, in few steps and with no workarounds.
 
 ## Stream 6: Work found along the way
 
-**GA readiness:** 4 of 10 Must projects done (40%). 1 in progress, 5 not started.
+**GA readiness:** 4 of 9 Must projects done (44%). 1 in progress, 4 not started.
 
 Work found after the plan was made goes here, so the first five streams keep the scope they started with (Will, 2026-10-21).
 
@@ -128,7 +128,7 @@ Work found after the plan was made goes here, so the first five streams keep the
 | 1b | ⏳ | `contract print` writes a relation into another contract space (TML-3326), and an extension pack says how its entity kind is printed (TML-3323, needs an ADR first) | Not decided | Will | Backlog. Moved from stream 2 row 1 on 2026-10-29 | |
 | 2 | ✅ 1/1 | Shrink the generated contract files, so a PR's line count shows the change and not the regenerated `contract.d.ts` and `contract.json` | Must | Will | Done 2026-11-10. Will decided on 2026-11-06: the pair next to the contract source stays pretty-printed; every `migrations/snapshots` pair is written on one line. TML-3808, prisma/orm#30965 merged 2026-11-10 | TML-3808 |
 | 3 | ✅ 6/6 | Date and time usability: `DateTime`, `Date`, `Time` and `Duration` convenience types over the explicit database types; string codecs return ISO strings; a Prisma 7 `@default(now())` keeps filling the value on create | Must | Will | Started 2026-10-21. The design (ADR 279) and slices TML-3418, TML-3711, TML-3713 and TML-3719 merged 2026-10-23. TML-3710 was cancelled. The convenience types (TML-3712) merged 2026-10-28. Done 2026-10-29; the close-out merged that day |  |
-| 4 | ⏳ | Maturity per package: design the policy and document it publicly. The framework and each database package have their own maturity level, and a package's public API is its public exports | Must | Will | Decided 2026-10-30. Not started. The design decides how a package's version number relates to its maturity, since every package shares one version today. The docs to update: `docs/oss/versioning.md`, and in prisma/web `orm/release-status.mdx` and `orm/supported-databases.mdx` |  |
+| 4 | — | Maturity per package: design the policy and document it publicly. The framework and each database package have their own maturity level, and a package's public API is its public exports | Moved to stream 7 | Will | Replaced on 2026-11-24 by stream 7, project 6. Working definitions of the levels were agreed with Will on 2026-11-23, in the [maturity levels](https://github.com/prisma/orm/blob/ga-compatibility/projects/ga-compatibility/maturity-levels.md) document. Finishing the design, documenting it publicly and giving each package its own version are part of that project. No longer counted in this stream |  |
 | 5 | 🔄 3/5 | Database change policies: a database records whether `db update` may change it and whether a change may lose data, and the commands obey it | Must | Will | Started 2026-10-27. Slice 1 merged. Slice 3, the policy recorded in the database and obeyed by `db migrate`, `db update` and `db sign`, merged 2026-11-17 (TML-3727). Slice 4, data protection enforced in `db update`, `db migrate` and `migration plan` (TML-3728), merged 2026-11-20, and a fix to the advice its refusals give merged the same day. Left: two Composer slices. They need an ORM release that contains slice 4; the latest release, `8.0.0-rc.24`, does not. The release PR for `8.0.0-rc.25` opened on 2026-11-23 and waits for review. A fix merged 2026-11-23: after `db migrate`, the next `migration plan` starts from what was applied | Merge the `8.0.0-rc.25` release PR, then build the two Composer slices |
 | 6 | ✅ 4/4 | Convenience date and time types (`DateTime`, `Date`, `Time`, `Duration`) on SQLite, MySQL and MongoDB, as PostgreSQL has them | Must | Will | Done 2026-11-11. SQLite merged 2026-11-02, MySQL 2026-11-06, MongoDB fields typed with `type.X()` 2026-11-10, and the MongoDB convenience types, with `Date` becoming a calendar date, 2026-11-11. The close-out merged 2026-11-11 |  |
 | 7 | ✅ 2/2 | Convenience types `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` on PostgreSQL, over explicit types that take the database's names | Must | Will | Done 2026-11-06. Dropping the plan to deprecate these names merged 2026-11-05, and the convenience types merged 2026-11-06. Not in this row: the other databases (TML-3790), done 2026-11-19: MongoDB merged 2026-11-17, SQLite 2026-11-18, MySQL and MariaDB 2026-11-19. `Json` is a convenience type too: a bare `Json` is still a `json` column and `Json(storage: jsonb)` gives `jsonb` (TML-3789, merged 2026-11-17). The whole project's close-out merged 2026-11-20. Work it left that is breaking is in rows 9, 11 and 12 |  |
@@ -139,38 +139,34 @@ Work found after the plan was made goes here, so the first five streams keep the
 | 12 | ⏳ | Remove the deprecated type names before GA, or keep them through Prisma 8. The decision records keep a renamed name "for one release line" and do not say whether the release candidates are that line | Not decided | Will | Not started, no ticket. The names: PostgreSQL `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real`, `VarChar` and `VarBit`; `sql.String(n)` on every SQL database; MongoDB `Int64`; SQLite `BigIntNumber`. Each still works and warns `PSL_DEPRECATED_SCALAR_NAME`. Removing one is breaking, so names that ship in 8.0 stay until Prisma 9 | Decide: remove before GA or keep |
 | 13 | ⏳ | Querying other contract spaces: find out whether it needs a breaking change. An application's queries reach only its own contract space today; we want them to reach the models of another space, such as an extension pack's, in Prisma 8 | Must (research, and a spike if needed) | Will | Added 2026-11-20. Not started, no ticket. Building the feature can follow GA. What must happen before GA is the research, because a breaking change it needs cannot land after 8.0 | Research the design; spike if the answer is unclear |
 | 14 | ⏳ | Migrations that are safe on a large production table. Today the PostgreSQL runner applies every pending migration in one transaction, waits for a table lock with no time limit, and has no operation that avoids a long exclusive lock; a statement that scans or rewrites a large table blocks every query on it. Four parts: a time limit on each wait for a table lock; a migration states which groups of its operations run in a transaction, so an operation that cannot run in one, such as `CREATE INDEX CONCURRENTLY`, is possible; operations that take the low-lock form of a change; and table size estimates the user gives at plan time, so the planner knows which tables are large when it chooses how to make a change | Must | Will | Added 2026-11-23. Not started; no code. Design work comes first. The lock wait limit has a reviewed design (prisma/orm#31182). It changes what a migration file can say and what a failed run promises, so it lands before GA | Start as a Drive project: settle the design with Will, the lock wait limit as the first slice |
+| 15 | ⏳ | Finish renaming "extension pack" to "extension" in the docs, the code and the docs site | Later | Will | Not started. Moved here from stream 7 on 2026-11-24, because it is terminology clean-up and not part of the compatibility promise | |
 
 ## Stream 7: Compatibility policy
 
-**GA readiness:** 0 of 1 Must projects done (0%). 0 in progress, 1 not started.
+**GA readiness:** 0 of 6 Must projects done (0%). 0 in progress, 6 not started.
 
-What we promise a user who upgrades within Prisma 8, and the work that makes the promise true. Will asked for it as its own stream on 2026-11-23. The design was agreed with Will on 2026-11-23 and is in [ga-readiness/spec.md](ga-readiness/spec.md) (the policy) and [ga-readiness/maturity-levels.md](ga-readiness/maturity-levels.md) (Early Access, Preview and GA, for packages and for single APIs). The tasks are in [ga-readiness/plan.md](ga-readiness/plan.md); the rows below follow it. The rows are not in priority order yet, and only row 1 has a GA decision, because the policy says it happens before `8.0.0`.
+**Goal:** from `8.0.0`, an application built on Prisma 8 upgrades to any later `8.x` release with no changes to its code, its generated files or its database. Upgrading becomes routine, so users stay on the latest release and we maintain one release line for each major. It is always clear to a user what they can rely on. Each project is judged by one question: would this make a user hesitate before upgrading?
+
+**More information:** the policy, the maturity levels, the research and the plan are the Drive assets of this stream. They are in [`projects/ga-compatibility/`](https://github.com/prisma/orm/tree/ga-compatibility/projects/ga-compatibility) on the branch `ga-compatibility`: [spec.md](https://github.com/prisma/orm/blob/ga-compatibility/projects/ga-compatibility/spec.md) is the policy, [maturity-levels.md](https://github.com/prisma/orm/blob/ga-compatibility/projects/ga-compatibility/maturity-levels.md) defines Early Access, Preview and GA, and [plan.md](https://github.com/prisma/orm/blob/ga-compatibility/projects/ga-compatibility/plan.md) gives each project's purpose, what it achieves and how. The projects below and the projects in that plan must stay the same list.
+
+**Status: in progress.** Will asked for this as its own stream on 2026-11-23 and agreed the policy that day. On 2026-11-24 the stream was planned as the 12 projects below, each sized for one to four pull requests. Each is run through the Drive process, the team's workflow of spec, plan, build and review. Execution is being set up, and no project has started building yet. Work them from the top, except that project 4 comes before project 3, which needs it.
+
+**How the GA column was filled:** the agent proposed these placements on 2026-11-24 and Will has moved none; he had placed project 3 as Must on 2026-11-23. The promise starts at `8.0.0`. A project is Must when its changes would themselves break the promise if made later: a change to a stored format, a hash, an import path or a published type. Project 1 is Must because the people and agents who build the others read the repository's docs, and project 4 because project 3 needs it. A project is Aim when users need it from the first release after `8.0.0`, or when Will said it can possibly follow GA. Project 8 is Later, with a cost: until the reference documentation exists, no behaviour is specified, so the promise holds for types, stored data and formats but not yet for behaviour.
 
 | # | Progress | Project | GA | Owner | Status | Next |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | ⏳ | Reduce what each published package exports to what we intend to support for the whole major, and rename every published import path that contains `internal` | Must | Will | Not started | |
-| 2 | ⏳ | Fix the Supabase extension's relationship to the PostgreSQL package. It imports the PostgreSQL package's `internal` paths, which row 1 renames | Not decided | Will | Not started. The target relationship is not decided | |
-| 3 | ⏳ | Define Early Access, Preview and GA in full, and publish them as a page in the Prisma 8 docs in place of the five labels used there today | Not decided | Will | Working definitions agreed. Not started | |
-| 4 | ⏳ | A check that compares each package's exported API with the last release: it fails on a removal or an incompatible change, and reports every addition | Not decided | Will | Research done. Not started | |
-| 5 | ⏳ | The ORM keeps its own tables (marker, ledger, contract) up to date in an existing database, so no upgrade fails because they are missing or in an older form | Can follow GA | Will | Requirement agreed. Needs a design document. Not started | |
-| 6 | ⏳ | State, for each runtime, database and driver, which event ends our support for a version, and publish it on the supported-versions page | Not decided | Will | Not started | |
-| 7 | ⏳ | The upgrade tool: where an upgrade needs a change to a user's project, a deterministic tool makes it | Not decided | Will | Principle agreed. Not started | |
-| 8 | ⏳ | Finish renaming "extension pack" to "extension" in the docs, the code and the docs site | Not decided | Will | Not started | |
-| 9 | ✅ | Check every rule in the policy against the code and add a task for each one that is not yet true | Not decided | Will | Done 2026-11-23. 135 rules checked, 19 already true. The reports are in [ga-readiness/research/](ga-readiness/research/), and rows 10 to 22 came from it | |
-| 10 | ⏳ | Every stored file carries a format version and every reader checks it first; rename the contract's `schemaVersion` field | Not decided | Will | Not started | |
-| 11 | ⏳ | Hashes stay the same for the whole major: take the format version out of the storage hash, and test saved hashes | Not decided | Will | Not started | |
-| 12 | ⏳ | Test on every release that it reads the files, records and migrations that `8.0.0` wrote | Not decided | Will | Not started | |
-| 13 | ⏳ | The runtime marker check warns and never stops an application | Not decided | Will | Not started | |
-| 14 | ⏳ | Reference documentation for every export, CLI command, config option, error code and file format, shipped inside the packages | Not decided | Will | Not started | |
-| 15 | ⏳ | Each change states its class, from the pull request to the release notes | Not decided | Will | Not started | |
-| 16 | ⏳ | The release process publishes packages at different maturity levels, and can cut `8.0.0` | Not decided | Will | Not started | |
-| 17 | ⏳ | The command-line tool stops when its major version differs from the library's | Not decided | Will | Not started | |
-| 18 | ⏳ | Decide where `definePrismaConfig` comes from: applications import it from `@prisma/cli-engine` today, a package the policy does not list | Not decided | Will | Not started | |
-| 19 | ⏳ | Make additions safe where they are not: sets a user handles case by case, built-in names a user's name can hide, and extension names a later release can take | Not decided | Will | Not started | |
-| 20 | ⏳ | CI tests every supported version of Node.js, TypeScript, each database and each driver | Not decided | Will | Not started | |
-| 21 | ⏳ | A change for a package below GA does not reach a GA package through the code they share | Not decided | Will | Not started | |
-| 22 | ⏳ | Composer, the `prisma` tool and the control plane use only ORM APIs the policy covers | Not decided | Will | Not started | |
-| 23 | ⏳ | Publish the policy for users: a docs page that says what a release will never break, what may change, and how long Prisma 8 gets fixes | Not decided | Will | Written last, once the other rows are done, so it states what was built | |
+| 1 | ⏳ | Document the compatibility policy in the repository | Must | Will | Not started. The policy is only on the `ga-compatibility` branch, and docs on `main` say the opposite in places | Start this project first |
+| 2 | ⏳ | Make later releases read the files and database records of earlier releases | Must | Will | Not started | |
+| 3 | ⏳ | Minimize the exported TS APIs of GA packages and guarantee them until the next major version | Must | Will | Not started. Two decisions are Will's when it starts: the Supabase extension's relationship to the PostgreSQL package, and where `definePrismaConfig` comes from | |
+| 4 | ⏳ | Catch breaking changes and accidental new exports in CI, by comparing each package's API with the last release | Must | Will | Research done. Not started. Build it before project 3 | |
+| 5 | ⏳ | Prevent new error codes, built-in names and builder methods from breaking user code | Must | Will | Not started | |
+| 6 | ⏳ | Show whether something is GA in a package's version and an API's name, and release each package at its own level | Must | Will | Working definitions of the levels agreed 2026-11-23. Not started. One decision is Will's when it starts: which packages are GA at `8.0.0`. Replaces stream 6, row 4 | |
+| 7 | ⏳ | Bring Prisma's own database tables up to date in each release, so no upgrade fails on them | Aim | Will | Requirement agreed. Needs a design document. Not started. Will, 2026-11-23: it can possibly be built after GA | |
+| 8 | ⏳ | Define promised behaviour in reference documentation shipped inside each package | Later | Will | Not started | |
+| 9 | ⏳ | Classify every change to behaviour in its pull request, and list it by class in the release notes | Aim | Will | Not started. The first release after `8.0.0` needs it | |
+| 10 | ⏳ | Make the changes an upgrade needs with a deterministic tool, not a guide | Later | Will | Principle agreed. Not started | |
+| 11 | ⏳ | Follow each maker's lifetime for supported versions of Node.js, TypeScript and databases, and test them in CI | Later | Will | Not started | |
+| 12 | ⏳ | Publish the compatibility policy in the user docs | Aim | Will | Written last, once the projects GA requires are done, so it states what was built | |
 
 ## Databases
 
