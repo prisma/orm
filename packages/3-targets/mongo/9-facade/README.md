@@ -86,7 +86,7 @@ The contract carries no `$jsonSchema` validators, because a Prisma 6 database ha
 
 ##### Running the Prisma 6 and Prisma 8 CLIs in one project
 
-Both CLIs are published as `prisma`, so one package name cannot resolve to both. Keep Prisma 8 as `prisma` (`prisma.config.ts` imports its `prisma/config`) and install the Prisma 6 CLI under an npm alias, `prisma6`, at the version of your `@prisma/client` (6.19.3 here). Give every `@prisma/orm-*` package the same version, `<version>`, the Prisma 8 release you want:
+Both CLIs are published as `prisma`, so one package name cannot resolve to both. Keep Prisma 8 as `prisma` (`prisma.config.ts` imports its `prisma/config`) and install the Prisma 6 CLI under an npm alias, `prisma6`, at the version of your `@prisma/client` (6.19.3 here). Give every `@prisma/orm-*` package the same version, `<version>`: the release the `prisma` CLI you install runs, which is the version of `@prisma/orm-toolchain` that `prisma` depends on. With `prisma@latest`, as below, that is the latest release (`pnpm view prisma@latest dependencies` names it). For an older release, install the `prisma` version that depends on it instead of `prisma@latest`:
 
 ```sh
 pnpm add @prisma/orm-mongo@<version> @prisma/orm-framework@<version> @prisma/orm-family-mongo@<version> @prisma/orm-target-mongo@<version> @prisma/orm-toolchain@<version>
