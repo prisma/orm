@@ -5,25 +5,9 @@ import {
   composeDevVersion,
   computeNextMinor,
   computeNextReleaseVersion,
-  parseVersion,
   planDispatchPublish,
   planPushPublish,
 } from './determine-version-utils.ts';
-
-describe('parseVersion', () => {
-  it('parses a clean release', () => {
-    assert.deepEqual(parseVersion('0.7.0'), { major: 0, minor: 7, patch: 0 });
-  });
-
-  it('parses a multi-digit version', () => {
-    assert.deepEqual(parseVersion('12.34.567'), { major: 12, minor: 34, patch: 567 });
-  });
-
-  it('tolerates a pre-release suffix', () => {
-    assert.deepEqual(parseVersion('0.7.0-dev.5'), { major: 0, minor: 7, patch: 0 });
-    assert.deepEqual(parseVersion('1.2.3-foo'), { major: 1, minor: 2, patch: 3 });
-  });
-});
 
 describe('computeNextMinor', () => {
   it('advances 0.7.0 to 0.8.0', () => {
@@ -102,6 +86,31 @@ describe('composeDevVersion', () => {
       version: '8.0.0-rc.2-dev.1',
       tag: 'dev',
     });
+  });
+
+  it('continues the counter on the levels line while the anchor package keeps its version', () => {
+    assert.deepEqual(composeDevVersion('8.1.0', '8.1.1-dev.4', '8.1.1'), {
+      version: '8.1.0-dev.5',
+      tag: 'dev',
+    });
+    assert.deepEqual(composeDevVersion('8.1.0', '8.1.0-preview.0-dev.3', '8.1.0-preview.0'), {
+      version: '8.1.0-dev.4',
+      tag: 'dev',
+    });
+  });
+
+  it('resets the counter on the levels line when the anchor package moved on', () => {
+    assert.deepEqual(composeDevVersion('8.1.0', '8.1.0-dev.9', '8.1.1'), {
+      version: '8.1.0-dev.1',
+      tag: 'dev',
+    });
+  });
+
+  it('stops on a development build with an unknown suffix, naming it', () => {
+    assert.throws(
+      () => composeDevVersion('8.1.0', '8.1.0-beta.1-dev.2'),
+      /"8\.1\.0-beta\.1-dev\.2"/,
+    );
   });
 
   it('resets the counter across the stable-to-rc transition', () => {

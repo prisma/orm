@@ -3,31 +3,11 @@
 // `scripts/bump-version.ts`); this file is reserved for deterministic
 // helpers exercised under `node --test` from `pnpm test:scripts`.
 
-const NUM = '(0|[1-9]\\d*)';
-const STABLE_BASE_PATTERN = new RegExp(`^${NUM}\\.${NUM}\\.${NUM}$`);
-// The one supported RC line (docs/oss/versioning.md): `8.0.0-rc.N`,
-// counting from rc.1. Deliberately not a general X.Y.Z-rc.N shape — this
-// is a publish guard, and a base like `9.2.3-rc.1` or `8.0.0-rc.0`
-// reaching the pipeline is a mistake to fail on, not a case to support.
-// A future RC line widens this constant.
-const RC_BASE_PATTERN = /^8\.0\.0-rc\.([1-9]\d*)$/;
-
-export interface ParsedVersion {
-  major: number;
-  minor: number;
-  patch: number;
-}
-
-/**
- * Parses a semver-shaped version string into its numeric components.
- * Tolerant of pre-release suffixes (`0.7.0-foo` parses the same as
- * `0.7.0`); strict on the leading `major.minor.patch` shape — anything
- * else returns NaN-bearing components.
- */
-export function parseVersion(version: string): ParsedVersion {
-  const [major, minor, patch] = version.split('-')[0].split('.').map(Number);
-  return { major, minor, patch };
-}
+import {
+  formatVersion,
+  type ParsedVersion,
+  parseVersion,
+} from '../packages/0-shared/publish-surface/src/release-plan.ts';
 
 /**
  * Given the current version, computes the next minor's zero-patch
@@ -50,11 +30,11 @@ export function computeNextMinor(current: string): string {
  */
 export function computeNextReleaseVersion(current: string): string {
   assertCanonicalBase(current);
-  const rcMatch = current.match(RC_BASE_PATTERN);
-  if (rcMatch) {
-    return `8.0.0-rc.${Number(rcMatch[1]) + 1}`;
+  const parsed = parseVersion(current);
+  if (parsed.level?.name === 'rc') {
+    return `8.0.0-rc.${parsed.level.counter + 1}`;
   }
-  if (parseVersion(current).major < 8) {
+  if (parsed.major < 8) {
     return '8.0.0-rc.1';
   }
   return computeNextMinor(current);
@@ -82,16 +62,17 @@ export function planPushPublish(
   base: string,
   previous: PreviousVersionLookup,
   latestDevVersion: string | undefined,
+  anchorVersion: string = base,
 ): VersionResult {
   const isReleaseBump = previous.available && previous.version !== base;
   if (isReleaseBump) {
     return {
       version: base,
       tag: 'latest',
-      devVersion: composeDevVersion(base, latestDevVersion).version,
+      devVersion: composeDevVersion(base, latestDevVersion, anchorVersion).version,
     };
   }
-  return composeDevVersion(base, latestDevVersion);
+  return composeDevVersion(base, latestDevVersion, anchorVersion);
 }
 
 /**
@@ -106,34 +87,41 @@ export function planDispatchPublish(
   tag: string,
   isDryRun: boolean,
   latestDevVersion: string | undefined,
+  anchorVersion: string = base,
 ): VersionResult {
   if (tag === 'latest' && !isDryRun) {
-    return { version: base, tag, devVersion: composeDevVersion(base, latestDevVersion).version };
+    return {
+      version: base,
+      tag,
+      devVersion: composeDevVersion(base, latestDevVersion, anchorVersion).version,
+    };
   }
   return { version: base, tag };
 }
 
 /**
  * Composes the `<base>-dev.N` version for a routine (non-release) push,
- * given the version currently published under the `dev` dist-tag. The
- * counter continues while the base is unchanged and resets to 1 when
- * the base moves (new minor, new rc counter, stable-to-rc transition).
+ * given the version the anchor package has under the `dev` dist-tag. The
+ * counter continues while that development build was made from the anchor
+ * package's planned version, and resets to 1 when it moved on (new minor,
+ * new rc counter, a fix to the anchor package). On the release candidates
+ * the anchor's version is the root version. A development build with a
+ * suffix the repository does not publish stops here, naming it.
  */
 export function composeDevVersion(
   baseVersion: string,
   latestDevVersion: string | undefined,
+  anchorVersion: string = baseVersion,
 ): VersionResult {
   let buildNumber = 1;
 
   if (latestDevVersion) {
-    const devPattern = /^(\d+\.\d+\.\d+(?:-rc\.\d+)?)-dev\.(\d+)$/;
-    const match = latestDevVersion.match(devPattern);
-
-    if (match) {
-      const [, devBase, build] = match;
-      if (devBase === baseVersion) {
-        buildNumber = Number.parseInt(build, 10) + 1;
-      }
+    const latest = parseVersion(latestDevVersion);
+    if (
+      latest.dev !== undefined &&
+      formatVersion({ ...latest, dev: undefined }) === anchorVersion
+    ) {
+      buildNumber = latest.dev + 1;
     }
   }
 
@@ -152,7 +140,22 @@ export function composeDevVersion(
  * publish versions like `0.7.0-foo-dev.1`.
  */
 export function assertCanonicalBase(base: string): void {
-  if (!STABLE_BASE_PATTERN.test(base) && !RC_BASE_PATTERN.test(base)) {
+  let parsed: ParsedVersion | undefined;
+  try {
+    parsed = parseVersion(base);
+  } catch {
+    parsed = undefined;
+  }
+  const canonical =
+    parsed !== undefined &&
+    parsed.dev === undefined &&
+    (parsed.level === undefined ||
+      (parsed.level.name === 'rc' &&
+        parsed.level.counter >= 1 &&
+        parsed.major === 8 &&
+        parsed.minor === 0 &&
+        parsed.patch === 0));
+  if (!canonical) {
     throw new Error(
       `Base version "${base}" is not canonical. ` +
         'The root package.json `version` must be a clean release shape ("0.7.0") ' +
