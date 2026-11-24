@@ -1,7 +1,7 @@
 import { readFileSync, realpathSync } from 'node:fs';
 import type { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { dirname } from 'pathe';
-import { versionLines } from './init-version-lines';
+import { requirementAdmits, versionLines } from './init-version-lines';
 import { installedManifest } from './project-modules';
 import { type PublishedPackage, REGISTRY_LOOKUP_TIMEOUT_MILLIS } from './registry-keywords';
 
@@ -191,7 +191,7 @@ export function requiredPeersForSetup(ctx: {
  * peer those manifests name, whose own peers are not followed. With `install`,
  * it installs what the project does not list yet and reads again every package it installed, since
  * the version installed can name peers the copy on disk before did not. A copy installed at a
- * version other than the exact one asked for does not stand for it, so its peers are not followed;
+ * version the requirement does not admit does not stand for it, so its peers are not followed;
  * when no install replaces it, a warning says its required peers could not be worked out. A package
  * the project lists at another version is left as it is and reported.
  */
@@ -243,12 +243,10 @@ export async function resolveRequiredPeers(ctx: {
   const readWanted = async (name: string) => {
     const wantedAt = wanted.get(name);
     const manifest = await ctx.read(name, wantedAt?.range);
-    const exact = wantedAt === undefined ? null : EXACT_VERSION_LINE.exec(wantedAt.range.trim());
     if (
       wantedAt !== undefined &&
       manifest?.version !== undefined &&
-      exact !== null &&
-      manifest.version !== exact[1]
+      requirementAdmits(wantedAt.range, manifest.version) === false
     ) {
       atAnotherVersion.set(name, { installed: manifest.version, ...wantedAt });
       return { name, manifest: undefined };
@@ -335,6 +333,11 @@ export async function resolveRequiredPeers(ctx: {
     unread,
     warnings,
   };
+}
+
+/** Whether a required peer's version is one exact version, not a range. */
+export function isExactVersion(spec: string): boolean {
+  return EXACT_VERSION_LINE.test(spec.trim());
 }
 
 const EXACT_VERSION_LINE = /^[v=]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/;

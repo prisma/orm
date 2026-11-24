@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { versionLines } from '../../src/orm/init-version-lines';
+import { requirementAdmits, versionLines } from '../../src/orm/init-version-lines';
 
 describe('the lines init writes, read from how the target package names its peers', () => {
   it('keeps the versions as they are when every peer is an exact version', () => {
@@ -70,5 +70,22 @@ describe('whether a line the project lists stands for the line init writes', () 
     const lines = versionLines('8.1.2', ['~8.1.0']);
 
     expect(lines.standsFor(line, '^8.1.0', installed)).toBe(stands);
+  });
+});
+
+describe('whether a requirement admits an installed version', () => {
+  it.each([
+    ['8.0.0-rc.27', '8.0.0-rc.27', true],
+    ['8.0.0-rc.27', '8.0.0-rc.26', false],
+    ['~8.1.0', '8.1.5', true],
+    ['~8.1.0', '8.0.4', false],
+    ['^8.1.0', '8.2.0', false],
+    ['~8.1.0-ea.0', '8.1.0-ea.3', true],
+  ])('%s admits %s: %s', (requirement, version, admits) => {
+    expect(requirementAdmits(requirement, version)).toBe(admits);
+  });
+
+  it('cannot tell for a range it does not read', () => {
+    expect(requirementAdmits('>=8.1.0 <8.2.0', '8.1.0')).toBeUndefined();
   });
 });

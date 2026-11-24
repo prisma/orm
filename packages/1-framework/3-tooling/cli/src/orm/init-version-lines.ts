@@ -56,6 +56,19 @@ function exactLineStandsFor(line: string, version: string, installed: string | u
 }
 
 /**
+ * Whether a required peer's version or range admits an installed version: an exact version only
+ * itself, and a caret or tilde range any version of the release it starts at, its major and minor.
+ * `undefined` for any other range, which this cannot judge.
+ */
+export function requirementAdmits(requirement: string, version: string): boolean | undefined {
+  const exact = EXACT_VERSION.exec(requirement.trim());
+  if (exact !== null) return exact[1] === version;
+  const release = RELEASE_NUMBER.exec(requirement.trim())?.[1];
+  if (release === undefined) return undefined;
+  return RELEASE_NUMBER.exec(version)?.[1] === release;
+}
+
+/**
  * The line `init` writes stands for itself. Any other line is judged by the installed copy: with
  * nothing installed it counts as standing, and otherwise the copy must be of the release the
  * written range starts at, its major and minor.
@@ -67,6 +80,5 @@ function rangedLineStandsFor(
 ): boolean {
   if (line.trim() === written) return true;
   if (installed === undefined) return true;
-  const release = RELEASE_NUMBER.exec(written)?.[1];
-  return release !== undefined && RELEASE_NUMBER.exec(installed)?.[1] === release;
+  return requirementAdmits(written, installed) === true;
 }
