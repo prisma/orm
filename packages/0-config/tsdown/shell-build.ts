@@ -547,6 +547,22 @@ function checkShellManifest(
     if (!expectedPeers.has(dep))
       errors.push(`peerDependencies["${dep}"] is not needed by any bundled internal package`);
   }
+  const actualDevDeps = stringRecordField(manifest, 'devDependencies');
+  const peersMeta = recordField(manifest, 'peerDependenciesMeta');
+  for (const sibling of siblings) {
+    const range = `workspace:${version}`;
+    if (actualDevDeps[sibling] !== range) {
+      errors.push(
+        `devDependencies["${sibling}"] should be "${range}", got ${JSON.stringify(actualDevDeps[sibling])}`,
+      );
+    }
+    const meta = peersMeta[sibling];
+    if (isRecord(meta) && meta['optional'] === true) {
+      errors.push(
+        `peerDependenciesMeta["${sibling}"] marks a sibling package optional; an application must list it`,
+      );
+    }
+  }
   if (errors.length > 0) {
     throw new ShellConfigError(
       `${shellName} package.json is out of sync with its internal packages:\n  ${errors.join('\n  ')}`,

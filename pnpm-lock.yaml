@@ -5960,9 +5960,6 @@ importers:
       '@prisma/orm-framework':
         specifier: workspace:8.0.0-rc.25
         version: link:../orm-framework
-      '@prisma/orm-target-postgres':
-        specifier: workspace:8.0.0-rc.25
-        version: link:../orm-target-postgres
       '@prisma/orm-toolchain':
         specifier: workspace:8.0.0-rc.25
         version: link:../orm-toolchain

@@ -15,6 +15,7 @@ interface Manifest {
   readonly version: string;
   readonly dependencies: Record<string, string>;
   readonly peerDependencies: Record<string, string>;
+  readonly devDependencies: Record<string, string>;
   readonly [field: string]: unknown;
 }
 
@@ -24,11 +25,13 @@ function facadeManifest(): Manifest {
   );
   const dependencies = { ...manifest.dependencies };
   const peerDependencies = { ...manifest.peerDependencies };
+  const devDependencies = { ...manifest.devDependencies };
   for (const sibling of siblings) {
     delete dependencies[sibling];
     peerDependencies[sibling] = `workspace:${manifest.version}`;
+    devDependencies[sibling] = `workspace:${manifest.version}`;
   }
-  return { ...manifest, dependencies, peerDependencies };
+  return { ...manifest, dependencies, peerDependencies, devDependencies };
 }
 
 function validate(manifest: Manifest): () => void {
@@ -86,6 +89,29 @@ describe('the shell build checks a shell manifest against its bundle', () => {
       },
     };
 
-    expect(validate(loose)).toThrow(ShellConfigError);
+    expect(validate(loose)).toThrow(
+      `peerDependencies["@prisma/orm-target-postgres"] should be "workspace:${manifest.version}", got "workspace:*"`,
+    );
+  });
+
+  it('refuses a sibling peer missing from devDependencies', () => {
+    const manifest = facadeManifest();
+    const { '@prisma/orm-toolchain': _, ...devDependencies } = manifest.devDependencies;
+
+    expect(validate({ ...manifest, devDependencies })).toThrow(
+      `devDependencies["@prisma/orm-toolchain"] should be "workspace:${manifest.version}", got undefined`,
+    );
+  });
+
+  it('refuses a sibling peer marked optional', () => {
+    const manifest = facadeManifest();
+    const optionalPeer = {
+      ...manifest,
+      peerDependenciesMeta: { '@prisma/orm-framework': { optional: true } },
+    };
+
+    expect(validate(optionalPeer)).toThrow(
+      'peerDependenciesMeta["@prisma/orm-framework"] marks a sibling package optional; an application must list it',
+    );
   });
 });
