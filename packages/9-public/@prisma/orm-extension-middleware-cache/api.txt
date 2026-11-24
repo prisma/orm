@@ -8,12 +8,12 @@
 .: interface CacheAnnotationOptions, readonly optional property key?: string | undefined
 .: interface CacheAnnotationOptions, readonly optional property meta?: TMeta | undefined
 .: interface CacheAnnotationOptions<TMeta = unknown>
-.: interface CacheEntry, readonly required property data: { readonly empty: true; } | { readonly empty: false; readonly value: TValue; }
+.: interface CacheEntry, readonly required property data: { readonly empty: false; readonly value: TValue; } | { readonly empty: true; }
 .: interface CacheEntry, readonly required property key: string
 .: interface CacheEntry, readonly required property meta: TMeta | undefined
 .: interface CacheEntry, readonly required property version: number
 .: interface CacheEntry<TMeta = unknown, TValue = CachedValue>
-.: interface CacheMiddlewareOptions, readonly optional property deriveKey?: (exec: ExecutionPlan, ctx: ActivityContext) => string | Promise<string>
+.: interface CacheMiddlewareOptions, readonly optional property deriveKey?: (exec: ExecutionPlan, ctx: ActivityContext) => Promise<string> | string
 .: interface CacheMiddlewareOptions, readonly optional property store?: CacheStore<TMeta, CachedValue>
 .: interface CacheMiddlewareOptions<TMeta = unknown>
 .: interface CacheStore, required method get(target: { readonly key: string; readonly meta?: TMeta | undefined; }): Promise<CacheEntry<TMeta, TValue>>
@@ -30,5 +30,5 @@
 .: type CacheAnnotationHandle = (<TMeta = unknown>(options: CacheAnnotationOptions<TMeta>) => AnnotationValue<CacheAnnotationOptions, 'read'>) & { readonly namespace: string; readonly applicableTo: ReadonlySet<'read'>; readonly read: AnnotationHandle<CacheAnnotationOptions, 'read'>['read']; }
 .: type CacheMiddleware<TMeta = unknown> = CrossFamilyMiddleware & { readonly invalidate: (target: InvalidationTarget<TMeta>) => Promise<void>; }
 .: type CachedRows = readonly Record<string, unknown>[]
-.: type CachedValue = { readonly kind: 'statement-rows'; readonly rows: CachedRows; } | { readonly kind: 'call-result'; readonly result: unknown; }
+.: type CachedValue = { readonly kind: 'call-result'; readonly result: unknown; } | { readonly kind: 'statement-rows'; readonly rows: CachedRows; }
 .: type InvalidateAnnotationHandle = (<TMeta = unknown>(options: InvalidationTarget<TMeta>) => AnnotationValue<InvalidationTarget, 'write'>) & { readonly namespace: string; readonly applicableTo: ReadonlySet<'write'>; readonly read: AnnotationHandle<InvalidationTarget, 'write'>['read']; }

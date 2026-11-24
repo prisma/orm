@@ -145,7 +145,7 @@
 ./runtime: type MariadbTargetId = typeof mariadbTarget.targetId
 ./runtime: type MariadbTransactionContext<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = MysqlTransactionContext<TContract, TCollections>
 ./schema-ir/types: everything from @prisma/orm-family-sql/schema-ir/types
-./static: const contractFromJson: <TContract extends import("@prisma/orm-framework/contract/types").Contract<import("@prisma/orm-family-sql/contract/types").SqlStorage>>(json: unknown) => TContract
+./static: const contractFromJson: <TContract extends Contract<SqlStorage>>(json: unknown) => TContract
 ./static: export MariadbStaticContext from @prisma/orm-mysql/static (as MysqlStaticContext)
 ./static: export default = const mariadbStatic: MysqlStaticFactory<MariadbTargetId>
 ./target/control: everything from @prisma/orm-target-mariadb/target/control

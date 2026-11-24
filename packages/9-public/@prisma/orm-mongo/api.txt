@@ -2,7 +2,7 @@
 (not exported) interface MongoBindingOptions
 (not exported) interface MongoBindingOptions, readonly optional property binding?: MongoBinding
 (not exported) interface MongoBindingOptions, readonly optional property dbName?: string
-(not exported) interface MongoBindingOptions, readonly optional property mongoClient?: import('mongodb').MongoClient
+(not exported) interface MongoBindingOptions, readonly optional property mongoClient?: MongoClient
 (not exported) interface MongoBindingOptions, readonly optional property uri?: string
 (not exported) interface MongoBindingOptions, readonly optional property url?: string
 (not exported) interface MongoOptionsBase
@@ -50,7 +50,7 @@
 ./config: interface MongoConfigOptions, readonly optional property formatter?: FormatterConfig
 ./config: interface MongoConfigOptions, readonly optional property migrations?: { readonly dir?: string; }
 ./config: interface MongoConfigOptions, readonly optional property output?: string
-./config: interface MongoConfigOptions, readonly required property contract: string | ContractConfig
+./config: interface MongoConfigOptions, readonly required property contract: ContractConfig | string
 ./contract-builder: const enumType: BoundEnumType<MongoCodecTypes>
 ./contract-builder: const field: MongoHelpers['field']
 ./contract-builder: const gen: MongoHelpers['gen']
@@ -139,11 +139,11 @@
 ./runtime: interface MongoClient, required method connect(bindingInput?: MongoBindingInput): Promise<MongoRuntime>
 ./runtime: interface MongoClient, required method runtime(): Promise<MongoRuntime>
 ./runtime: interface MongoClient<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> extends MongoPrepareMember<TContract>
-./runtime: interface MongoPrepareMember, required method prepare<D extends MongoDeclaration<CT>, Q extends MongoQueryPlan | MongoPreparable<unknown, unknown>, CT extends MongoCodecTypesBase = ExtractMongoCodecTypes<TContract>>(declaration: D, callback: (placeholders: MongoPlaceholders<D>) => Q): Promise<MongoPreparedFrom<MongoParamsFromDeclaration<D, CT>, Q>>
+./runtime: interface MongoPrepareMember, required method prepare<D extends MongoDeclaration<CT>, Q extends MongoPreparable<unknown, unknown> | MongoQueryPlan, CT extends MongoCodecTypesBase = ExtractMongoCodecTypes<TContract>>(declaration: D, callback: (placeholders: MongoPlaceholders<D>) => Q): Promise<MongoPreparedFrom<MongoParamsFromDeclaration<D, CT>, Q>>
 ./runtime: interface MongoPrepareMember<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>>
 ./runtime: interface MongoPreparedRowQuery, required method query(target: MongoQueryExecutor, params: Params, options?: RuntimeExecuteOptions): Result
 ./runtime: interface MongoPreparedRowQuery<Params, Result>
-./runtime: type MongoBindingInput = { readonly binding: MongoBinding; readonly url?: never; readonly uri?: never; readonly dbName?: never; readonly mongoClient?: never; } | { readonly url: string; readonly dbName?: string; readonly binding?: never; readonly uri?: never; readonly mongoClient?: never; } | { readonly uri: string; readonly dbName: string; readonly binding?: never; readonly url?: never; readonly mongoClient?: never; } | { readonly mongoClient: MongoClient; readonly dbName: string; readonly binding?: never; readonly url?: never; readonly uri?: never; }
+./runtime: type MongoBindingInput = { readonly binding: MongoBinding; readonly url?: never; readonly uri?: never; readonly dbName?: never; readonly mongoClient?: never; } | { readonly mongoClient: MongoClient; readonly dbName: string; readonly binding?: never; readonly url?: never; readonly uri?: never; } | { readonly uri: string; readonly dbName: string; readonly binding?: never; readonly url?: never; readonly mongoClient?: never; } | { readonly url: string; readonly dbName?: string; readonly binding?: never; readonly uri?: never; readonly mongoClient?: never; }
 ./runtime: type MongoOptions<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> = MongoBindingOptions & MongoOptionsBase & { readonly contract: TContract; }
 ./runtime: type MongoPreparedFrom<Params, Q> = Q extends MongoPreparable<unknown, infer Result> ? MongoPreparedRowQuery<Params, Result> : Q extends MongoQueryPlan<infer Row, infer Command> ? MongoPreparedFor<Params, Row, Command> : never
 ./runtime: type MongoTargetId = 'mongo'
