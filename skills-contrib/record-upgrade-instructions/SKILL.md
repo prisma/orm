@@ -15,7 +15,7 @@ description: >-
 
 # Record upgrade instructions
 
-This skill serves the release candidates, which may break. From `8.0.0`, ADR 329 (in `docs/architecture docs/adrs/`) applies: a change that breaks an application or extension is not made within the major.
+This skill serves the release candidates, which may break, and the step from the last release candidate to `8.0.0`. From `8.0.0`, ADR 329 (in `docs/architecture docs/adrs/`) applies: an upgrade within the major needs no changes, except for the exceptions it lists, such as a security fix. Where one of those needs a change, a deterministic tool makes it; instructions an agent follows do not meet that requirement.
 
 Contribute an independent fragment on the PR that changes Prisma 8. Release preparation combines fragments into the published app and extension guides; **feature PRs do not edit shared transition guides or choose a release number**. Read the canonical [upgrade instruction lifecycle](../../upgrade-instructions/README.md) for storage, release assembly, and checker modes.
 

@@ -159,9 +159,8 @@ The following namespaces are reserved and cannot be used by extension packs:
 - A capability has no maturity level of its own: it has the level of the package that publishes it ([ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
 
 ### Versioning
-- Capability keys are immutable once published
-- New capabilities can be added as stable
-- Breaking changes require new capability keys
+- A new capability can be added in any release
+- A change to what a published key means requires a new capability key
 
 ## Capability Negotiation
 

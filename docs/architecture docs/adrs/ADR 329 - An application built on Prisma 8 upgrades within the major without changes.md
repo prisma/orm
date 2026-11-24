@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-11-24
-**Supersedes, from `8.0.0`:** the rule in [ADR 222](ADR%20222%20-%20Version%20support%20policy.md) that a minimum supported version is raised freely, and the parts of ADRs 010, 016, 017, 140, 219, 234, 252, 257, 316 and 322 listed under [Earlier records](#earlier-records)
+**Supersedes:** the rule in [ADR 222](ADR%20222%20-%20Version%20support%20policy.md) that a minimum supported version is raised freely, and parts of ADRs 010, 016, 017, 140, 219, 234, 252, 257, 316 and 322, as [Earlier records](#earlier-records) lists
 **Related:** [ADR 330 — Maturity levels](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md), which says what is Generally Available
 
 ---
@@ -28,19 +28,19 @@ It must be clear to a user what they can rely on and what they cannot, and the r
 
 ### When the rules start
 
-The promise starts at `8.0.0`. Until then every release is a release candidate, `8.0.0-rc.N`, and may contain breaking changes: to an API, to behaviour, and to any stored format. While the release candidates last, a change is made directly, with no alias, deprecation or compatibility code left behind, and each release ships upgrade instructions. We provide upgrade instructions from the last release candidate to `8.0.0`.
+The promise starts at `8.0.0`. Until then every release is a release candidate, `8.0.0-rc.N`, and may contain breaking changes: to an API, to behaviour, and to any stored format. Each release ships upgrade instructions, and we provide upgrade instructions from the last release candidate to `8.0.0`.
 
 A choice that cannot be changed after `8.0.0` without breaking this promise is made before `8.0.0`: what each package exports, what each stored file records, and what each hash covers.
 
 ### Terms
 
-Terms follow the [glossary](../../glossary.md). This record uses **extension** more broadly than the glossary: here it includes a target and a family.
+Terms follow the [glossary](../../glossary.md), with two departures. This record uses **extension** more broadly than the glossary: here it includes a target and a family. It calls the package an application installs for its database the **facade**, the word [ADR 242](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md) uses, where the glossary says *target package*, to keep it apart from the `@prisma/orm-target-*` packages.
 
 - **Major**: all releases that share a major version number, such as every `8.x`.
 - **User**: an application developer, who builds an application on Prisma, or an extension author, who builds an extension.
 - **Extension**: anything built on the platform packages for applications to use: a target, a family, middleware, or support for a database feature. An **extension package** is a published package that contains one, such as `@prisma/orm-extension-pgvector`.
 - **Facade**: the package an application installs for its database, such as `@prisma/orm-postgres`.
-- **Platform packages**: the packages extension authors build against: `@prisma/orm-framework`, `@prisma/orm-toolchain`, `@prisma/orm-family-*` and `@prisma/orm-target-*`. The target and family packages we publish are platform packages, not extension packages.
+- **Platform packages**: the packages extension authors build against: `@prisma/orm-framework`, `@prisma/orm-toolchain`, `@prisma/orm-family-*` and `@prisma/orm-target-*`. The `@prisma/orm-target-*` and `@prisma/orm-family-*` packages we publish are platform packages, not extension packages.
 - **Internal**: not exported by any published package.
 - **GA**: Generally Available, the highest maturity level. **Below GA** means Preview or Early Access ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
 - **Reference documentation**: the precise description of each API, command, file format and error code. Behaviour is **specified** when the reference documentation states it.
@@ -62,7 +62,7 @@ An application depends on more than an API. Prisma also writes state that outliv
 | What Prisma runs on: Node.js, TypeScript, database server, driver | A minimum rises only in a new major, or in a minor when its maker ends support |
 | The platform packages' APIs, which extensions are built on | Covered under the same rules: a release does not break an extension |
 
-The exceptions are listed under [Changes to existing behaviour](#changes-to-existing-behaviour). There are no others.
+The exceptions are listed under [Changes to existing behaviour](#changes-to-existing-behaviour).
 
 ### Everything that is GA is covered
 
@@ -77,8 +77,8 @@ Each package states who it is for. The terms and the split come from the record 
 - Both audiences are covered, under identical rules. A release does not break an application or an extension. A package's audience is information for the reader; no rule depends on it.
 - Every published package exports as little as possible. `8.0.0` exports only what we intend to cover, from the facades as well as from the platform packages.
 - File formats and machine-readable command output are covered.
-- Nothing we publish is named "internal". From `8.0.0` no published import path contains the word.
-- Our own products that build on the ORM, such as Composer, the `prisma` command-line tool and the control plane, follow the same rules as any user. They use only what is covered and get no special access.
+- From `8.0.0` nothing we publish is named "internal": no published import path contains the word.
+- Our own products that build on the ORM, such as Composer, the `prisma` command-line tool and Prisma's hosted control plane service (a product, not the control plane of this repository's architecture), follow the same rules as any user. They use only what is covered and get no special access.
 - The command-line tool and the library in one project have the same major version. When they do not, the tool stops and says so.
 - The release candidates force anything that depends on the ORM to pin an exact version. That requirement ends at `8.0.0`.
 
@@ -142,7 +142,7 @@ This covers everything outside Prisma that an application needs: Node.js and the
 
 TypeScript does not follow Semantic Versioning: any TypeScript release may break existing code. We support from the stated minimum to the newest release. We test the next TypeScript release before it ships and fix any break it causes in a patch release.
 
-This replaces the rule in [ADR 222](ADR%20222%20-%20Version%20support%20policy.md) that a minimum is raised freely. Until `8.0.0` a minimum may still be raised. Lowering a minimum breaks nobody and stays possible in any release. The rest of ADR 222 stands: a declared minimum never claims more than our tests exercise, and each minimum has one source of truth.
+This replaces the rule in [ADR 222](ADR%20222%20-%20Version%20support%20policy.md) that a minimum is raised freely. Until `8.0.0` ADR 222's choice of each minimum stands: the latest release we test against, lowered when a user needs it. From `8.0.0` the minimums are the ones `8.0.0` declares, and the rules above govern every change to them. ADR 222's other rules stand: a declared minimum never claims more than our tests exercise, and each minimum has one source of truth.
 
 ## Stored data
 
@@ -156,7 +156,7 @@ This replaces the rule in [ADR 222](ADR%20222%20-%20Version%20support%20policy.m
 
 - Each stored file records the version of its format: the contract, migration files and ref files. A reader checks the version before interpreting the file.
 - A command that would modify the database or the user's files from a record it cannot interpret stops with an error, and modifies nothing.
-- The contract's format version field has a name that does not contain "schema".
+- The contract's format version field, `schemaVersion` today, is renamed to a name that does not contain "schema".
 
 ### Hashes
 
@@ -221,15 +221,15 @@ These rules apply to Prisma 8 and the majors after it. How long Prisma 7 is main
 
 ## Consequences
 
-- A contributor who changes a GA export, a stored format, a hash input or specified behaviour after `8.0.0` keeps what an earlier release accepted or wrote working. Internal code is not covered: it changes freely in any release.
+- After `8.0.0` a contributor who changes a GA export, a stored format or specified behaviour keeps what an earlier release accepted or wrote working, and does not change what a hash covers. Code that no published package exports is not covered and changes freely in any release. The test is the export, not the package name: most code in the `@internal/*` workspace packages reaches users through a `@prisma/orm-*` package and is covered.
 - The rule that Prisma 8 keeps nothing for backward compatibility holds until `8.0.0` and ends there for everything this record covers.
-- Whatever `8.0.0` exports, we support for the whole major. Reducing the exports is cheap before `8.0.0` and a breaking change after it.
-- Decisions about stored formats and hashes that earlier records made by telling users to emit and sign again are not available after `8.0.0`.
+- Whatever a GA package exports at `8.0.0` under a plain name, we support for the whole major. Reducing the exports is cheap before `8.0.0` and a breaking change after it.
+- After `8.0.0` a change to a stored format or a hash can no longer be handled by telling users to emit the contract and sign the database again, as several earlier records do.
 - This record states requirements, and a new design follows them. [Earlier records](#earlier-records) lists what it replaces and what is corrected when the code changes.
 
 ## Earlier records
 
-Each of these records carries a note that names the part this record replaces from `8.0.0`. Until `8.0.0` they hold as written.
+Each of these records carries a note that names the part this record replaces. The parts of ADR 016 and ADR 017 no longer apply. The other parts hold as written until `8.0.0`.
 
 | Record | What this record replaces |
 | --- | --- |
@@ -238,10 +238,16 @@ Each of these records carries a note that names the part this record replaces fr
 | [ADR 257](ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md), [ADR 316](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md), [ADR 322](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md) | A renamed name is removed after one release line, and a changed codec id ends with users emitting and signing again |
 | [ADR 010](ADR%20010%20-%20Canonicalization%20Rules.md), [ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md), [ADR 252](ADR%20252%20-%20An%20earlier%20Prisma%20version's%20schema%20is%20a%20contract%20source.md) | A change to canonicalization, to the normalizer or to the naming rule is handled by users emitting, signing or migrating again |
 | [ADR 016](ADR%20016%20-%20Adapter%20SPI%20for%20Lowering.md) | A change to emitted SQL is a breaking change unless a feature flag guards it |
-| [ADR 017](ADR%20017%20-%20Extension%20Compatibility%20Policy.md) | A separate version for each of the contract format, the plan model, the hook interface and each adapter |
+| [ADR 017](ADR%20017%20-%20Extension%20Compatibility%20Policy.md) | A separate version for each of the plan model, the hook interface and each adapter, which was not built |
 | [ADR 140](ADR%20140%20-%20Package%20Layering%20%26%20Target-Family%20Namespacing.md) | No transitional code is kept because there are no external consumers |
 
-Some earlier records describe behaviour that does not yet meet a requirement of this record: the contract's format version as an input to the storage hash ([ADR 004](ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md)), and a runtime that fails a query when it cannot read or decode the marker ([ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md), [ADR 123](ADR%20123%20-%20Drift%20Detection%2C%20Recovery%20%26%20Reconciliation.md)). Those records describe the code and are corrected in the change that makes the code conform.
+Some earlier records describe code that does not yet meet a requirement of this record. Those records describe the code as it is, and each is corrected in the change that makes the code conform. They include:
+
+- the contract's format version as an input to the storage hash ([ADR 004](ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md));
+- a runtime that fails a query when it cannot read or decode the marker ([ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md), [ADR 123](ADR%20123%20-%20Drift%20Detection%2C%20Recovery%20%26%20Reconciliation.md));
+- Prisma's own tables in the database, which are created only if absent and never brought up to date ([ADR 042](ADR%20042%20-%20Contract%20Marker%20Evolution.md), [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md));
+- a facade that re-exports whole internal modules, where this record asks each package to export as little as possible ([ADR 242](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md));
+- error code types with no catch-all member ([ADR 239](ADR%20239%20-%20Errors%20are%20structural%20envelopes%20with%20dotted%20namespace%20codes.md)).
 
 ## Alternatives considered
 

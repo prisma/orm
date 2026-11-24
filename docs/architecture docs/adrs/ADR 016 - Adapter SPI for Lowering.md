@@ -1,6 +1,6 @@
 # ADR 016 — Adapter SPI for lowering relational AST
 
-> **Partially superseded by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) from `8.0.0`.** Its "Stability guarantees" and "Versioning policy" sections treat a change to emitted SQL as a breaking change unless it is guarded by an adapter version or a feature flag. Under ADR 329 SQL text is unspecified detail that may change in any release, and Prisma 8 has no feature flags. The lowering interface itself stands.
+> **Partially superseded by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md).** Its "Stability guarantees" and "Versioning policy" sections, which treat a change to emitted SQL as a breaking change unless an adapter version or a feature flag guards it, no longer apply: Prisma 8 has no feature flags, and SQL text is unspecified detail that may change in any release. The lowering interface itself stands.
 
 ## Context
 

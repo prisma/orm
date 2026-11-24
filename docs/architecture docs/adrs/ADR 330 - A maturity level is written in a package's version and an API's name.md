@@ -15,8 +15,8 @@ A user reads two things in their own project to learn whether the compatibility 
 ```
 
 ```ts
-db.orm.user.find(...)          // Generally Available: a plain name in a GA package
-db.orm.user.preview_foo(...)   // Preview: the name says so, inside a GA package
+db.orm.users.where({ email }).first()  // Generally Available: a plain name in a GA package
+db.orm.users.preview_foo(...)          // Preview: the name says so, inside a GA package
 ```
 
 The package and API names in these samples only show the form. Which packages are at which level is not part of this record.
@@ -78,12 +78,12 @@ The version number uses the meaning Semantic Versioning gives a pre-release vers
 
 ### Until `8.0.0`
 
-Until `8.0.0` every release of every package is a release candidate, `8.0.0-rc.N`, and the compatibility promise covers none of them. The levels are written this way from `8.0.0`.
+Until `8.0.0` every Prisma 8 package published from this repository is a release candidate, `8.0.0-rc.N`, and the compatibility promise covers none of them. The levels are written this way from `8.0.0`.
 
 ## Consequences
 
 - No file in the repository, no documentation page and no import path is the place a user learns what is covered. A doc may describe a level; the version and the name decide it.
-- Prisma 8 has no feature flags and no second word, such as "unstable", for what is not covered. A contributor who needs to ship something that may still change puts it in a package below GA or gives it a name that starts with `preview_` or `ea_`.
+- Prisma 8 has no feature flags and no second word, such as "unstable", for what is not covered. A contributor who needs to ship something that may still change puts it in a package below GA or gives it a name that starts with `preview_` or `ea_` (for a TypeScript identifier; for other names see [Not decided by this record](#not-decided-by-this-record)).
 - A package below GA has a version different from a GA package released on the same day, so the packages no longer all share one version.
 - Moving an API to GA changes its name.
 
@@ -95,7 +95,7 @@ Each of these is recorded in a later record when it is decided.
 - **Version numbers while packages are at different levels.** Unanswered: what a Preview package's version is at each release; that a range on a pre-release, such as `^8.1.0-preview.3`, does not select the pre-releases of the next minor, so a user edits it by hand; which tag a package gets that has never had a GA release; and which package carries a database's level (the facade, the target package or both).
 - **How an API moves to GA.** Its name changes, from `preview_foo` to `foo`. Whether the old name keeps working, and for how long, is not decided.
 - **How the word is written where the name is not a TypeScript identifier**: a command-line flag, a config option, an attribute in a contract source, an error code, and a type whose name starts with a capital letter.
-- **How the levels relate to the scale First-Class, Supported and Unofficial** that describes where the maintainers spend effort, not how finished a package is.
+- **How the levels relate to a second scale, First-Class, Supported and Unofficial,** proposed in a public issue on the prisma/orm repository. That scale says where the maintainers spend effort on each database, not how finished a package is.
 
 ## Alternatives considered
 
