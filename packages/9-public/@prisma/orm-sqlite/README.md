@@ -34,7 +34,7 @@ The driver is Node's built-in `node:sqlite`, so there is no native module to com
 | `/migration`, `/control` | migration planning and the control client |
 | `/init` | the init contribution `prisma orm init --target @prisma/orm-sqlite` writes a project from |
 
-A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so application code imports from the facade alone, even though the application lists those packages too:
+A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. This package also forwards the namespaces of the packages it is built from, so application code imports from this package alone, even though the application lists those packages too:
 
 | Namespace | Forwards |
 | --- | --- |

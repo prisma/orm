@@ -21,4 +21,4 @@ An application on a SQL database lists this package beside its database package 
 
 Everything SQL databases share and nothing any one of them owns: contract semantics, relational query building, the ORM client, and the family-level control/migration surface. Target-specific behavior (Postgres or SQLite DDL, drivers) lives in the `@prisma/orm-target-*` packages.
 
-The ORM client sits here rather than in a facade because both SQL facades use it and a module may be published from only one package. Its source still lives in `packages/3-extensions/sql-orm-client/` for historical reasons; the directory does not make it a user-installed extension.
+The ORM client sits here rather than in the package for one database, because every SQL database package uses it and a module may be published from only one package. Its source still lives in `packages/3-extensions/sql-orm-client/` for historical reasons; the directory does not make it a user-installed extension.

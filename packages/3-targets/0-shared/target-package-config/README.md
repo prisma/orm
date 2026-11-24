@@ -1,6 +1,6 @@
 # @internal/target-package-config
 
-> **Internal package.** This package is an implementation detail of Prisma 8 and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and a database facade (e.g. `@prisma/orm-postgres`) instead.
+> **Internal package.** This package is an implementation detail of Prisma 8 and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and the package for your database (e.g. `@prisma/orm-postgres`) instead.
 
 What every facade's `defineConfig` shares, and that depends on no database and no family.
 
