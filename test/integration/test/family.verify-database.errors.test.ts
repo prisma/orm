@@ -316,7 +316,7 @@ describe('family instance verify - errors', () => {
 
           // Create an invalid contract IR (missing storageHash/target)
           const invalidContract = {
-            schemaVersion: '1',
+            formatVersion: 1,
             targetFamily: 'sql',
             storage: {
               tables: {},
