@@ -89,7 +89,7 @@ describe('the plan for the published packages', () => {
       release: { major: 8, minor: 0 },
       line: 'levels',
       rcCounter: undefined,
-      current: { ...graph.currentAll('8.0.0-rc.26'), '@prisma/orm-extension-paradedb': '0.1.0' },
+      current: graph.currentAll('8.0.0-rc.26'),
       everGa: new Set(),
       bump: [],
       dev: undefined,

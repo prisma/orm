@@ -2,8 +2,9 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { packageLevels } from '../src/levels';
-import { levelViolations } from '../src/release-plan';
+import { packageKinds, packageLevels } from '../src/levels';
+import { type DeclaredLevel, levelViolations } from '../src/release-plan';
+import { publicShells } from '../src/shells';
 
 const publishedRoot = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -43,7 +44,7 @@ describe('the declared level of each published package', () => {
       '@prisma/orm-better-auth': 'preview',
       '@prisma/orm-extension-arktype-json': 'ga',
       '@prisma/orm-extension-middleware-cache': 'preview',
-      '@prisma/orm-extension-paradedb': 'own-version',
+      '@prisma/orm-extension-paradedb': { ownVersion: '0.1.0' },
       '@prisma/orm-extension-pgvector': 'ga',
       '@prisma/orm-extension-postgis': 'ga',
       '@prisma/orm-extension-supabase': 'preview',
@@ -62,6 +63,23 @@ describe('the declared level of each published package', () => {
       '@prisma/orm-target-postgres': 'ga',
       '@prisma/orm-target-sqlite': 'ea',
       '@prisma/orm-toolchain': 'ga',
+    });
+  });
+
+  it('gives every published package a kind: the shell map’s, and Better Auth a library integration', () => {
+    const kinds = packageKinds(publicShells);
+
+    expect([...Object.keys(kinds)].sort()).toEqual(published.map((m) => m.name).sort());
+    expect({
+      'better-auth': kinds['@prisma/orm-better-auth'],
+      postgres: kinds['@prisma/orm-postgres'],
+      framework: kinds['@prisma/orm-framework'],
+      pgvector: kinds['@prisma/orm-extension-pgvector'],
+    }).toEqual({
+      'better-auth': 'library-integration',
+      postgres: 'facade',
+      framework: 'platform',
+      pgvector: 'extension',
     });
   });
 
@@ -86,14 +104,21 @@ describe('levelViolations', () => {
     ],
     ['a Preview package naming a GA one', { a: 'preview', b: 'ga' }, { a: ['b'] }, []],
     ['two packages at one level', { a: 'ea', b: 'ea' }, { a: ['b'] }, []],
-    ['an own-version package naming any level', { a: 'own-version', b: 'ea' }, { a: ['b'] }, []],
+    [
+      'an own-version package naming any level',
+      { a: { ownVersion: '0.1.0' }, b: 'ea' },
+      { a: ['b'] },
+      [],
+    ],
     [
       'a package naming an own-version one',
-      { a: 'ga', b: 'own-version' },
+      { a: 'ga', b: { ownVersion: '0.1.0' } },
       { a: ['b'] },
-      [{ user: 'a', userLevel: 'ga', named: 'b', namedLevel: 'own-version' }],
+      [{ user: 'a', userLevel: 'ga', named: 'b', namedLevel: { ownVersion: '0.1.0' } }],
     ],
-  ] as const)('%s', (_case, levels, graph, violations) => {
-    expect(levelViolations(new Map(Object.entries(levels)), graph)).toEqual(violations);
+  ])('%s', (_case, levels, graph, violations) => {
+    expect(
+      levelViolations(new Map(Object.entries(levels as Record<string, DeclaredLevel>)), graph),
+    ).toEqual(violations);
   });
 });

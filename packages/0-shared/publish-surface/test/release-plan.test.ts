@@ -26,7 +26,7 @@ const graph: Record<string, { level: DeclaredLevel; kind: PackageKind; uses: str
   mariadb: { level: 'ea', kind: 'facade', uses: ['mysql', 'target-mysql'] },
   supabase: { level: 'preview', kind: 'extension', uses: ['postgres'] },
   'better-auth': { level: 'preview', kind: 'library-integration', uses: ['framework'] },
-  paradedb: { level: 'own-version', kind: 'extension', uses: ['framework'] },
+  paradedb: { level: { ownVersion: '0.1.0' }, kind: 'extension', uses: ['framework'] },
 };
 
 const AT_8_1 = {
@@ -255,7 +255,7 @@ describe('planRelease', () => {
         release: { major: 9, minor: 0 },
         levelChanges: Object.fromEntries(
           Object.entries(graph)
-            .filter(([, entry]) => entry.level !== 'own-version')
+            .filter(([, entry]) => typeof entry.level === 'string')
             .map(([name]) => [name, 'rc']),
         ),
       }),
@@ -281,11 +281,6 @@ describe('planRelease', () => {
         'a version with an unknown suffix',
         input({ current: { ...AT_8_1, mongo: '8.1.0-beta.1' } }),
         'mongo: "8.1.0-beta.1"',
-      ],
-      [
-        'a level going down within a major',
-        input({ levelChanges: { postgres: 'preview' }, release: { major: 8, minor: 2 } }),
-        'postgres',
       ],
       ['a level changing within a minor', input({ levelChanges: { mongo: 'ea' } }), 'mongo'],
       [
@@ -325,15 +320,6 @@ describe('planRelease', () => {
         }),
         'bump',
       ],
-      [
-        'an own-version package still on the release-candidate version at the first release with levels',
-        input({
-          release: { major: 8, minor: 0 },
-          everGa: new Set(),
-          current: Object.fromEntries(Object.keys(graph).map((name) => [name, '8.0.0-rc.26'])),
-        }),
-        'paradedb',
-      ],
     ])('%s', (_case, given, named) => {
       expect(() => planRelease(given)).toThrow(named);
     });
@@ -344,10 +330,7 @@ describe('planRelease', () => {
       input({
         release: { major: 8, minor: 0 },
         everGa: new Set(),
-        current: {
-          ...Object.fromEntries(Object.keys(graph).map((name) => [name, '8.0.0-rc.26'])),
-          paradedb: '0.1.0',
-        },
+        current: Object.fromEntries(Object.keys(graph).map((name) => [name, '8.0.0-rc.26'])),
         levelChanges: { mongo: 'rc' },
       }),
     );
@@ -357,11 +340,31 @@ describe('planRelease', () => {
       mongo: line(plan, 'mongo'),
       mysql: line(plan, 'mysql'),
       supabase: line(plan, 'supabase'),
+      paradedb: line(plan, 'paradedb'),
     }).toEqual({
       framework: '8.0.0 latest',
-      mongo: '8.0.0-rc.0 latest framework ~8.0.0',
+      mongo: '8.0.0-rc.27 latest framework ~8.0.0',
       mysql: '8.0.0-ea.0 latest framework ~8.0.0 target-mysql ~8.0.0-ea.0',
       supabase: '8.0.0-preview.0 latest postgres ^8.0.0',
+      paradedb: '0.1.0 latest framework ^8.0.0',
     });
+  });
+
+  it('lets a level go down at a new minor, tagging the release with its level once the package has been GA', () => {
+    const plan = planRelease(
+      input({ release: { major: 8, minor: 2 }, levelChanges: { postgres: 'preview' } }),
+    );
+
+    expect(line(plan, 'postgres')).toBe(
+      '8.2.0-preview.0 preview family ~8.2.0 framework ~8.2.0 target ~8.2.0',
+    );
+  });
+
+  it('starts an rc package at X.Y.0-rc.0 in a later minor', () => {
+    const plan = planRelease(
+      input({ release: { major: 8, minor: 2 }, levelChanges: { mongo: 'rc' } }),
+    );
+
+    expect(line(plan, 'mongo')).toBe('8.2.0-rc.0 latest framework ~8.2.0');
   });
 });

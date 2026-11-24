@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { packageLevels } from '../src/levels';
-import type { PackageKind, ReleasePlan } from '../src/release-plan';
+import { packageKinds, packageLevels } from '../src/levels';
+import type { ReleasePlan } from '../src/release-plan';
 import { publicShells } from '../src/shells';
 
 const SCOPE = '@prisma/orm-';
@@ -27,10 +27,7 @@ export function realGraph() {
       Object.keys(manifest.peerDependencies ?? {}).filter((peer) => peer.startsWith(SCOPE)),
     ]),
   );
-  const kinds: Record<string, PackageKind> = {
-    ...Object.fromEntries([...publicShells].map(([name, shell]) => [name, shell.kind])),
-    '@prisma/orm-better-auth': 'library-integration',
-  };
+  const kinds = packageKinds(publicShells);
   return {
     levels: packageLevels,
     kinds,

@@ -1,9 +1,10 @@
-import type { DeclaredLevel } from './release-plan';
+import type { DeclaredLevel, PackageKind } from './release-plan';
 
 /**
  * The maturity level of every package this repository publishes, as decided for `8.0.0`. A
  * package's version, tag and the ranges others write on it follow from its level; see
- * `planRelease`. `own-version` marks a package numbered outside the release number.
+ * `planRelease`. `{ ownVersion }` marks a package numbered outside the release number, with its
+ * version at the first release with levels.
  *
  * `@prisma/orm-extension-middleware-cache` and `@prisma/orm-better-auth` are Preview until the
  * operator decides otherwise.
@@ -30,5 +31,19 @@ export const packageLevels: ReadonlyMap<string, DeclaredLevel> = new Map<string,
   ['@prisma/orm-target-mariadb', 'ea'],
   ['@prisma/orm-sqlite', 'ea'],
   ['@prisma/orm-target-sqlite', 'ea'],
-  ['@prisma/orm-extension-paradedb', 'own-version'],
+  ['@prisma/orm-extension-paradedb', { ownVersion: '0.1.0' }],
 ]);
+
+/**
+ * The kind of every published package: the shell map's `kind` for each shell, and a library
+ * integration for `@prisma/orm-better-auth`, which is not a shell. A facade or platform package
+ * writes a tilde on the packages it names; an extension or library integration a caret.
+ */
+export function packageKinds(
+  shells: ReadonlyMap<string, { readonly kind: 'platform' | 'facade' | 'extension' }>,
+): Readonly<Record<string, PackageKind>> {
+  return {
+    ...Object.fromEntries([...shells].map(([name, shell]) => [name, shell.kind])),
+    '@prisma/orm-better-auth': 'library-integration',
+  };
+}
