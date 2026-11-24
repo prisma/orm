@@ -71,13 +71,19 @@ Hashing the file as written, by the rules of its format version, was rejected: i
 
 ### 2.3 Changing the hashing rules
 
-Within a major version, the code that computes a hash may change only in ways that give the same hash for the same contract. This includes the parts of the rules that a family or a target supplies.
+Within a major version, the code that computes a hash may change only in ways that give the same hash for the same contract.
+
+Part of the rules is supplied by a family or a target: which empty values are kept, and how storage entries are ordered. The same guarantee binds them, including a family or target built outside this repository. We state it in the policy and give their authors the test in section 2.4 as a helper they run on their own saved contracts.
+
+One project never holds hashes computed in two ways. Git has the same rule: its plan for moving to a new hash function lists "intermixing objects using multiple hash functions in a single repository" as a non-goal.
 
 A mistake found in the rules after `8.0.0` therefore stays until the next major version. That is accepted: a hash that is stable still identifies a contract, and we do not expect large changes to what a contract holds.
 
-A way for a user to move a database to a hash that a later release computes differently, as a step in the migration system, is a possible later refinement. It is not built now.
+### 2.4 Moving existing projects to the new hashes at `8.0.0`
 
-### 2.4 Tests
+Taking the format version out of the hash input changes every existing hash once, at `8.0.0`. A project that used a release candidate moves by the upgrade instructions for that release: its files are rewritten, and each database is signed again with `db sign`. No mechanism in the migration system is built for this.
+
+### 2.5 Tests
 
 - **Fixed answers.** A set of saved contracts, each with its expected hashes written in the test. Every release must compute the same hashes.
 - **Across format versions.** A contract written in one format version, then converted through each later version, keeps the same hashes.
@@ -92,6 +98,5 @@ A way for a user to move a database to a hash that a later release computes diff
 - What a reader does with a file that has no format version, or has the old field name, as every file written by a release candidate does.
 - How `ops.json` is covered by a format version.
 - Whether today's hash input is tidied in the one change that every hash goes through at `8.0.0`.
-- How an existing project and database move to the new hashes at `8.0.0`.
 - Prisma's own records in the database, and the runtime check of the contract against the marker.
 - The saved samples of what `8.0.0` writes, and their tests.
