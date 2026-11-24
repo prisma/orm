@@ -9,7 +9,7 @@ This file is for an agent picking up the planning discussion with Will. People s
 | File | What it holds | How current |
 | --- | --- | --- |
 | [plan.md](plan.md) | The projects in priority order, by stream | Kept current. This is the source of truth for order. |
-| [`projects/ga-compatibility/`](https://github.com/prisma/orm/tree/ga-compatibility/projects/ga-compatibility) on the branch `ga-compatibility` | Stream 7's Drive assets: the compatibility policy (`spec.md`), the maturity levels (`maturity-levels.md`), the plan of 12 projects (`plan.md`), and the analysis and research behind them. They moved there from `ga-readiness/` on this branch on 2026-11-24 | The policy was agreed with Will 2026-11-23, and `spec.md` holds only agreed decisions. The plan was restructured 2026-11-24. |
+| [`projects/ga-compatibility/`](https://github.com/prisma/orm/tree/ga-compatibility/projects/ga-compatibility) on the branch `ga-compatibility` | Stream 7: the compatibility policy (`spec.md`), the maturity levels, the plan of 12 projects (`plan.md`) and the research | `spec.md` holds only decisions agreed with Will. |
 | [evidence.md](evidence.md) | The pull requests, tickets and dates behind each status in plan.md | Kept current with plan.md. |
 | [decisions.md](decisions.md) | Every decision Will has made, with reasons, and the principles | Kept current. |
 | [context.md](context.md) | Findings and reasoning behind the decisions, and the changes made in Linear and pull requests | Written 2026-09-29 |
