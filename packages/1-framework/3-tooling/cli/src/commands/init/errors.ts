@@ -728,6 +728,8 @@ export function errorInitRequiredPeersNotInstalled(options: {
   );
 }
 
+const EXACT_VERSION_LINE = /^[v=]?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
 export interface RequiredPeerAtAnotherVersion {
   readonly name: string;
   /** The version of the copy the project resolves. */
@@ -751,9 +753,10 @@ export function errorInitRequiredPeersAtAnotherVersion(options: {
 }): CliStructuredError {
   const { packageName, packages, listedAtRequired } = options;
   const relisted = packages.filter((pkg) => pkg.listed !== undefined);
-  const steps: string[] = relisted.map(
-    (pkg) =>
-      `Change the line for ${pkg.name} in package.json from ${pkg.listed} to ${pkg.required} and run \`${options.restoreCommand}\``,
+  const steps: string[] = relisted.map((pkg) =>
+    pkg.listed !== undefined && !EXACT_VERSION_LINE.test(pkg.listed.trim())
+      ? `Make the line for ${pkg.name} in package.json resolve to ${pkg.required} (it is \`${pkg.listed}\` now, so change the version where it points, such as the catalog entry or the workspace package) and run \`${options.restoreCommand}\``
+      : `Change the line for ${pkg.name} in package.json from ${pkg.listed} to ${pkg.required} and run \`${options.restoreCommand}\``,
   );
   if (listedAtRequired.length > 0) {
     steps.push(

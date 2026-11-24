@@ -461,4 +461,31 @@ describe('init --skip-install with a required peer installed at another version'
     },
     timeouts.coldTransformImport,
   );
+
+  it(
+    'says to change the version a catalog line points to, not to replace the line',
+    async () => {
+      writeManifest({
+        '@prisma/orm-postgres': VERSION,
+        '@prisma/orm-framework': 'catalog:',
+        'temporal-polyfill': '^1.0.8',
+        pg: '^8.22.0',
+      });
+
+      const { run, wrote } = await skipInstall();
+
+      expect(wrote).toBe(false);
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: `Make the line for @prisma/orm-framework in package.json resolve to ${VERSION} (it is \`catalog:\` now, so change the version where it points, such as the catalog entry or the workspace package) and run \`pnpm install\`, then run \`prisma orm init\` again.`,
+            }),
+          ]),
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
 });
