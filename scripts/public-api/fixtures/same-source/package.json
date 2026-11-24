@@ -1,0 +1,10 @@
+{
+  "name": "fixture-same-source",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./other": "./lib/other.mjs",
+    "./package.json": "./package.json"
+  }
+}

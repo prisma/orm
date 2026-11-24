@@ -484,6 +484,24 @@ describe('flattenPackage', () => {
     );
   });
 
+  it('fails when an item matches several declarations with different members', () => {
+    throws(
+      () => linesOf('same-source'),
+      /\(not exported\) Options matches 2 different declarations, so its members cannot be checked/,
+    );
+  });
+
+  it('fails when no declaration is found for an item', () => {
+    throws(
+      () =>
+        linesOf('hiddenmember', (model) => {
+          const base = membersOf(model).find((item) => item.name === 'Base');
+          if (base) base.fileUrlPath = 'lib/elsewhere.d.mts';
+        }),
+      /\(not exported\) Base has no declaration this script can find in lib\/elsewhere\.d\.mts, the file API Extractor records for it\. If API Extractor changed how it names that file/,
+    );
+  });
+
   it('sorts union members and prints import("…") references by name alone', () => {
     deepStrictEqual(
       linesOf('normalize'),

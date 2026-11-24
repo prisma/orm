@@ -231,14 +231,19 @@ const CONTAINER_KINDS = {
 // interface of one name are two items) with the public members TypeScript sees in it, and does the
 // same inside namespaces. `symbols` are the declarations the items can be; several are allowed
 // only when they are copies with the same members.
-function memberProblems(items, symbols, label, memberKeysOf) {
+function memberProblems(items, symbols, label, memberKeysOf, location = undefined) {
   const kinds = [...new Set(items.map((item) => CONTAINER_KINDS[item.kind]).filter(Boolean))];
   if (kinds.length === 0) return [];
   const keysOf = (symbol) => {
     const keys = kinds.flatMap((kind) => [...(memberKeysOf(symbol, kind) ?? [])]);
     return [...new Set(keys)].sort(compareCodeUnits);
   };
-  if (symbols.length === 0) return [`${label} has no declaration this script can find`];
+  if (symbols.length === 0) {
+    const where = location
+      ? ` in ${location}, the file API Extractor records for it. If API Extractor changed how it names that file, update containersByLocation in scripts/public-api/declarations.mjs`
+      : '';
+    return [`${label} has no declaration this script can find${where}`];
+  }
   const expected = keysOf(symbols[0]);
   if (symbols.some((symbol) => keysOf(symbol).join('\0') !== expected.join('\0'))) {
     return [
@@ -564,7 +569,13 @@ function collectLines(models, { checker, paths, isOwn, containers, memberKeysOf 
 
   for (const local of locals.values()) {
     const symbols = [...(containers.get(local.key) ?? [])];
-    const missing = memberProblems(local.items, symbols, localNames.get(local.key), memberKeysOf);
+    const missing = memberProblems(
+      local.items,
+      symbols,
+      localNames.get(local.key),
+      memberKeysOf,
+      local.items[0].fileUrlPath,
+    );
     problems.push(...missing.map((problem) => `(not exported) ${problem}`));
   }
 

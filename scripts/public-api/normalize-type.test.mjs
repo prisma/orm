@@ -72,7 +72,7 @@ describe('normalizeTypes', () => {
   it('fails on an import("…") of a file rather than a package', () => {
     throws(
       () => normalizeTypes('const x: import("./chunk-AbCd1234.mjs").Foo', 'declaration'),
-      /import\("\.\/chunk-AbCd1234\.mjs"\) names a file, not a package/,
+      /import\("\.\/chunk-AbCd1234\.mjs"\) names a file, not a package\. Declarations must refer to another package by its name/,
     );
     throws(
       () =>
