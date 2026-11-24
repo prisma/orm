@@ -1,3 +1,4 @@
+import { carriesFormatVersion } from '@internal/contract/format-version';
 import { validateContractOnce } from '@internal/contract/validate-once';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import type {
@@ -40,6 +41,8 @@ export function validateMongoContract<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 >(contract: TContract): TContract {
   return validateContractOnce(contract, validator, () =>
-    serializer.deserializeContract<TContract>(serializer.serializeContract(contract)),
+    serializer.deserializeContract<TContract>(
+      carriesFormatVersion(contract) ? contract : serializer.serializeContract(contract),
+    ),
   );
 }

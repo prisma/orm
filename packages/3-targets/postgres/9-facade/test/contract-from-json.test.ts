@@ -27,12 +27,32 @@ describe('contractFromJson', () => {
   });
 
   it('throws the structured validation error for invalid JSON', () => {
-    expect(() => contractFromJson({ target: 'postgres' })).toThrow(
+    expect(() => contractFromJson({ formatVersion: 1, target: 'postgres' })).toThrow(
       expect.objectContaining({
         name: 'ContractValidationError',
         code: 'CONTRACT.VALIDATION_FAILED',
       }),
     );
+  });
+
+  it('refuses a contract written by a newer release, before reading anything else', () => {
+    expect(() => contractFromJson({ formatVersion: 2, target: 'postgres' })).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_NEWER' }),
+    );
+  });
+
+  it('refuses a contract a pre-release wrote', () => {
+    expect(() => contractFromJson({ schemaVersion: '1', target: 'postgres' })).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' }),
+    );
+  });
+
+  it('refuses a newer contract passed straight to a client', () => {
+    expect(() =>
+      postgresStatic({
+        contract: { formatVersion: 2, target: 'postgres' } as unknown as Contract,
+      }),
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_NEWER' }));
   });
 });
 

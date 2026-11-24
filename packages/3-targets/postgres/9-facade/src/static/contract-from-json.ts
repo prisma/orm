@@ -1,3 +1,4 @@
+import { carriesFormatVersion } from '@internal/contract/format-version';
 import type { Contract } from '@internal/contract/types';
 import { validateContractOnce } from '@internal/contract/validate-once';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -34,6 +35,8 @@ export function validatePostgresContract<TContract extends Contract<SqlStorage>>
   contract: TContract,
 ): TContract {
   return validateContractOnce(contract, validator, () =>
-    serializer.deserializeContract<TContract>(serializer.serializeContract(contract)),
+    serializer.deserializeContract<TContract>(
+      carriesFormatVersion(contract) ? contract : serializer.serializeContract(contract),
+    ),
   );
 }
