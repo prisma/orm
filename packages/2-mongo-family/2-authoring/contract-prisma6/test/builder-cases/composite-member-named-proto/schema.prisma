@@ -1,0 +1,13 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+type Address {
+  __proto__ String
+}
+
+model User {
+  id      String  @id @default(auto()) @map("_id") @db.ObjectId
+  address Address
+}

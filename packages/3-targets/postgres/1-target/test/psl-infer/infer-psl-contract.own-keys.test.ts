@@ -43,7 +43,7 @@ describe('contract infer of tables named like properties every object has', () =
       tables: { thing: tableNamed('thing', '__proto__') },
       meta: { tableName: 'thing', columnName: '__proto__' },
     },
-  ])('refuses a $kind named __proto__, which no contract can hold', async ({ tables, meta }) => {
+  ])('refuses a $kind named __proto__', async ({ tables, meta }) => {
     await expect(inferPslAstFromFlat(new SqlSchemaIR({ tables }))).rejects.toMatchObject({
       code: 'CONTRACT.INFER_UNSUPPORTED',
       meta,

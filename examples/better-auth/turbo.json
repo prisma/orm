@@ -1,0 +1,37 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "inputs": ["app/**", "src/**", "prisma/**", "package.json", "tsconfig.json"],
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": ["app/**", "prisma/**", "src/**", "test/**", "vitest.config.ts", "tsconfig.json"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build", "build"],
+      "inputs": [
+        "app/**",
+        "prisma/**",
+        "src/**",
+        "test/**",
+        "prisma.config.ts",
+        "vitest.config.ts",
+        "tsconfig.json"
+      ]
+    },
+    "lint": {
+      "inputs": [
+        "app/**",
+        "prisma/**",
+        "src/**",
+        "test/**",
+        "prisma.config.ts",
+        "vitest.config.ts",
+        "biome.jsonc"
+      ]
+    }
+  }
+}

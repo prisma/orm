@@ -454,10 +454,17 @@ function buildProjection(
   }
   const fields = include ?? exclude;
   if (fields === undefined || (fields.length === 0 && hasWildcard)) return undefined;
+  if (fields.includes('__proto__')) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_INDEX',
+      message:
+        'A wildcard index cannot include or exclude the path "__proto__", which JavaScript reads as the prototype of an object rather than as a key',
+      ...ctx.source.at(ctx.span),
+    });
+    return null;
+  }
   const value = include === undefined ? 0 : 1;
-  const projection: Record<string, 0 | 1> = {};
-  for (const field of fields) projection[field] = value;
-  return projection;
+  return Object.fromEntries(fields.map((field) => [field, value]));
 }
 
 /** Index options as the attribute specs read them, which are the values MongoDB takes. */
@@ -959,9 +966,9 @@ function processEnumDeclarations(input: {
   /** Filled with where each enum is declared, for diagnostics about it. */
   readonly sites: Map<string, EnumSite>;
 }): Record<string, EnumTypeHandle> {
-  const handles: Record<string, EnumTypeHandle> = {};
+  const handles = new Map<string, EnumTypeHandle>();
 
-  if (input.enumSymbols.length === 0) return handles;
+  if (input.enumSymbols.length === 0) return {};
 
   const enumDescriptor =
     input.authoringContributions?.entityTypes?.['enum'] !== undefined &&
@@ -978,7 +985,7 @@ function processEnumDeclarations(input: {
         ...source.at(enumSymbol.span),
       });
     }
-    return handles;
+    return {};
   }
 
   for (const enumSymbol of input.enumSymbols) {
@@ -994,7 +1001,7 @@ function processEnumDeclarations(input: {
     );
 
     if (handle === undefined || handle === null) continue;
-    handles[envelope.name] = handle;
+    handles.set(envelope.name, handle);
     const typeAttribute = envelope.attributes['type'];
     input.sites.set(envelope.name, {
       block: {
@@ -1008,7 +1015,7 @@ function processEnumDeclarations(input: {
     });
   }
 
-  return handles;
+  return Object.fromEntries(handles);
 }
 
 function withoutMergedIndexSites(

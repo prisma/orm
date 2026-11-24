@@ -261,7 +261,7 @@ describe('renderCallsToTypeScript', () => {
     expect(output).toContain('[\n');
   });
 
-  it('quotes __proto__ key in rendered object literals', () => {
+  it('writes a __proto__ key as a computed key in rendered object literals', () => {
     const opts = Object.create(null) as Record<string, unknown>;
     Object.defineProperty(opts, '__proto__', {
       value: 'poisoned',
@@ -277,7 +277,7 @@ describe('renderCallsToTypeScript', () => {
       }),
     ];
     const output = renderTypeScript(calls);
-    expect(output).toContain('"__proto__"');
+    expect(output).toContain('["__proto__"]: "poisoned"');
   });
 
   it('throws on non-JSON value types', () => {
