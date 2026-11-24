@@ -117,6 +117,21 @@ describe('PostgreSQL TLS parameters', () => {
     }
   })
 
+  test('the schema parameter reaches the adapter and is reported as the schema name', async () => {
+    const { PrismaPg: RealPrismaPg } = await vi.importActual<typeof import('@prisma/adapter-pg')>('@prisma/adapter-pg')
+    vi.mocked(PrismaPg).mockImplementationOnce(function (...args: ConstructorParameters<typeof PrismaPg>) {
+      return new RealPrismaPg(...args)
+    })
+
+    const adapter = await createAdapter(
+      'postgresql://user:pass@localhost:5432/db?schema=tenant&sslmode=require',
+    ).connect()
+
+    expect(adapter.getConnectionInfo?.().schemaName).toBe('tenant')
+
+    await adapter.dispose()
+  })
+
   test('custom certificate parameters should throw error', () => {
     const certParams = ['sslcert', 'sslkey', 'sslrootcert']
 
