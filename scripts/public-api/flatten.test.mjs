@@ -679,6 +679,16 @@ describe('flattenPackage', () => {
     );
   });
 
+  it('qualifies an outside type whose name a namespace forward exports', () => {
+    deepStrictEqual(
+      linesOf('namespace-clash'),
+      sorted([
+        '.: export ArkErrors = everything from pathe',
+        '.: function check(errors: @ark/schema.ArkErrors): void',
+      ]),
+    );
+  });
+
   it('sorts union members and prints import("…") references by name alone', () => {
     deepStrictEqual(
       linesOf('normalize'),

@@ -459,11 +459,14 @@ function nameDeclarations(models, paths, packageName, problems) {
   // A type from elsewhere whose name this package also exports is printed with its package, so
   // the two read differently. A name the package forwards counts unless the forward names the
   // same declaration, which shows as the same declaring package.
-  const ownNames = new Set(
-    [...exportedByModel.values()].flatMap((exported) =>
+  // A namespace forward exports a module object, never the same declaration as a type, so its
+  // name always counts.
+  const ownNames = new Set([
+    ...[...exportedByModel.values()].flatMap((exported) =>
       [...exported.values()].flatMap((group) => group.names),
     ),
-  );
+    ...[...paths.values()].flatMap((info) => info.namespaceForwards.map((f) => f.exportName)),
+  ]);
   const forwardedFrom = new Map();
   for (const info of paths.values()) {
     for (const [name, from] of info.forwardedFrom) {
