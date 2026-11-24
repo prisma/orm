@@ -6,7 +6,7 @@ import { type PublishedPackage, REGISTRY_LOOKUP_TIMEOUT_MILLIS } from './registr
 const PRISMA_ORM_PACKAGE_PREFIX = '@prisma/orm-';
 
 /** What `init` did about one package in the list. */
-export type OrmPeerOutcome =
+export type RequiredPeerOutcome =
   /** `init` installed it at the version the list asks for. */
   | 'installed'
   /** The project already lists it, and its installed copy, or its line, is at that version. */
@@ -16,11 +16,11 @@ export type OrmPeerOutcome =
   /** Under `--skip-install`: the application has to install it. */
   | 'to-install';
 
-export interface OrmPeerPackage {
+export interface RequiredPeer {
   readonly name: string;
   /** The version the package that names it asks for. */
   readonly version: string;
-  readonly outcome: OrmPeerOutcome;
+  readonly outcome: RequiredPeerOutcome;
 }
 
 /**
@@ -28,16 +28,16 @@ export interface OrmPeerPackage {
  * peer dependency, directly or through another such package. An application lists each of them
  * beside the target package. The list can hold another target package: MariaDB's names MySQL's.
  */
-export interface OrmPeerPackages {
+export interface RequiredPeers {
   /** The target package as the application lists it: `name@version` when it has Prisma ORM peer packages, otherwise its bare name. */
   readonly target: string;
-  readonly packages: readonly OrmPeerPackage[];
+  readonly packages: readonly RequiredPeer[];
   /** Packages whose own manifest could not be read, so their peers are missing from `packages`. */
   readonly unread: readonly string[];
   readonly warnings: readonly string[];
 }
 
-export function ormPeerSpecifier(peer: OrmPeerPackage): string {
+export function requiredPeerSpecifier(peer: RequiredPeer): string {
   return `${peer.name}@${peer.version}`;
 }
 
@@ -92,7 +92,7 @@ export function installedManifests(cwd: string): {
  * installed manifests and, for a package the project has not installed, from the registry. Every
  * registry read shares one time limit. Nothing is installed.
  */
-export function ormPeerPackagesForSetup(ctx: {
+export function requiredPeersForSetup(ctx: {
   readonly cwd: string;
   readonly signal: AbortSignal;
   readonly readPublished: (
@@ -100,7 +100,7 @@ export function ormPeerPackagesForSetup(ctx: {
     spec: string,
     signal: AbortSignal,
   ) => Promise<PublishedPackage | undefined>;
-}): (packageName: string) => Promise<OrmPeerPackages> {
+}): (packageName: string) => Promise<RequiredPeers> {
   return async (packageName) => {
     const limit = new AbortController();
     const timer = setTimeout(
@@ -121,9 +121,9 @@ export function ormPeerPackagesForSetup(ctx: {
         return undefined;
       }
     };
-    let resolved: OrmPeerPackages | CliStructuredError;
+    let resolved: RequiredPeers | CliStructuredError;
     try {
-      resolved = await resolveOrmPeerPackages({
+      resolved = await resolveRequiredPeers({
         packageName,
         ownsTarget: false,
         declared: () => new Map(),
@@ -146,7 +146,7 @@ export function ormPeerPackagesForSetup(ctx: {
  * it installs what the project does not list yet and reads the manifests that only that install
  * put on disk. A package the project lists at another version is left as it is and reported.
  */
-export async function resolveOrmPeerPackages(ctx: {
+export async function resolveRequiredPeers(ctx: {
   readonly packageName: string;
   /** Whether init wrote the target package's line, so it may pin it to the installed version. */
   readonly ownsTarget: boolean;
@@ -156,7 +156,7 @@ export async function resolveOrmPeerPackages(ctx: {
     | ((specifiers: readonly string[]) => Promise<CliStructuredError | undefined>)
     | undefined;
   readonly read: ReadPackage;
-}): Promise<OrmPeerPackages | CliStructuredError> {
+}): Promise<RequiredPeers | CliStructuredError> {
   const target = await ctx.read(ctx.packageName, undefined);
   if (target === undefined || target.version === undefined || target.peers.size === 0) {
     return {
@@ -168,7 +168,7 @@ export async function resolveOrmPeerPackages(ctx: {
   }
   const targetSpecifier = `${ctx.packageName}@${target.version}`;
   const wanted = new Map<string, { readonly range: string; readonly by: string }>();
-  const outcomes = new Map<string, OrmPeerOutcome>();
+  const outcomes = new Map<string, RequiredPeerOutcome>();
   const warnings: string[] = [];
   let unread: string[] = [];
   let level: { readonly name: string; readonly manifest: ReadManifest | undefined }[] = [

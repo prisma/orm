@@ -108,7 +108,7 @@ describe('the Prisma 7 result document', () => {
         ],
         filesDeleted: [],
         filesRenamed: [{ from: 'prisma.config.ts', to: 'prisma7.config.ts' }],
-        packagesInstalled: { status: 'skipped', deps: [], devDeps: [], ormPeerPackages: [] },
+        packagesInstalled: { status: 'skipped', deps: [], devDeps: [], requiredPeers: [] },
         contractEmitted: false,
         prisma7: {
           schemaPath: 'prisma/schema.prisma',

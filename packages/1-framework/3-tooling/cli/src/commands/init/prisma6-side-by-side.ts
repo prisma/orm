@@ -1,7 +1,7 @@
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { extname } from 'pathe';
 import { DB_SIGN_COMMAND, EMIT_COMMAND } from '../../orm/init-diagnostics';
-import { type OrmPeerPackages, ormPeerSpecifier } from '../../orm/init-orm-peer-packages';
+import { type RequiredPeers, requiredPeerSpecifier } from '../../orm/init-required-peers';
 import { formatAddArgs, formatAddDevArgs, type PackageManager } from './detect-package-manager';
 /**
  * What a Prisma 6 project needs to run Prisma 8 beside Prisma 6 with the Prisma 6 schema as the
@@ -37,7 +37,7 @@ export function prisma6SideBySideSetup(inputs: {
   readonly cliVersion: string | undefined;
   /** The project's own Prisma 6 `prisma.config.*`, when it has one. */
   readonly ownConfigPath: string | undefined;
-  readonly ormPeerPackages: OrmPeerPackages;
+  readonly requiredPeers: RequiredPeers;
   /** The packages the target package declares as required peer dependencies. */
   readonly peerPackages: readonly string[];
   readonly targetConfigEntrypoint: string;
@@ -96,8 +96,8 @@ export function prisma6SideBySideSetup(inputs: {
         label: 'Install the Prisma 8 packages',
         command: add(
           formatAddArgs(packageManager, [
-            inputs.ormPeerPackages.target,
-            ...inputs.ormPeerPackages.packages.map(ormPeerSpecifier),
+            inputs.requiredPeers.target,
+            ...inputs.requiredPeers.packages.map(requiredPeerSpecifier),
             'dotenv',
             ...inputs.peerPackages,
           ]),

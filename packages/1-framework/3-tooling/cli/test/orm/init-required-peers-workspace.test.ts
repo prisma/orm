@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync 
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'pathe';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { installedManifests, resolveOrmPeerPackages } from '../../src/orm/init-orm-peer-packages';
+import { installedManifests, resolveRequiredPeers } from '../../src/orm/init-required-peers';
 
 const publishedRoot = resolve(import.meta.dirname, '../../../../../9-public/@prisma');
 
@@ -78,7 +78,7 @@ describe("the Prisma ORM peer packages of this repository's target packages", ()
     const version = versionOf(packageName);
     const manifests = installedManifests(projectDir);
 
-    const resolved = await resolveOrmPeerPackages({
+    const resolved = await resolveRequiredPeers({
       packageName,
       ownsTarget: false,
       declared: () => new Map(),

@@ -48,7 +48,7 @@ function declareWithCaret(request: Parameters<PackageManagerRunner>[0]): void {
 }
 
 beforeEach(() => {
-  projectDir = createTestProjectDir('orm-init-orm-peer-packages');
+  projectDir = createTestProjectDir('orm-init-required-peers');
   installs = [];
   onInstall = () => {};
   fails = () => false;
@@ -315,7 +315,7 @@ describe('init lists the packages the target package names as peers', () => {
             'dotenv',
             'pg',
           ],
-          ormPeerPackages: [
+          requiredPeers: [
             { name: '@prisma/orm-family-sql', version: VERSION, outcome: 'installed' },
             { name: '@prisma/orm-framework', version: VERSION, outcome: 'left-at-another-version' },
             { name: '@prisma/orm-target-postgres', version: VERSION, outcome: 'installed' },
@@ -440,7 +440,7 @@ describe('init lists the packages the target package names as peers', () => {
       expect(run.presented?.data).toMatchObject({
         warnings: expect.not.arrayContaining([expect.stringContaining('package.json lists')]),
         packagesInstalled: {
-          ormPeerPackages: expect.arrayContaining([
+          requiredPeers: expect.arrayContaining([
             { name: '@prisma/orm-framework', version: VERSION, outcome: 'already-listed' },
           ]),
         },

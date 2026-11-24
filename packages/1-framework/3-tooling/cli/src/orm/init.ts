@@ -30,9 +30,9 @@ import {
   type ResolvedInitInputs,
   resolveInitInputs,
 } from './init-inputs';
-import { ormPeerPackagesForSetup, ormPeerSpecifier } from './init-orm-peer-packages';
 import { engineDevDependencySpec, installProjectDependencies } from './init-packages';
 import { createPrisma7SourceCheck } from './init-prisma7-check';
+import { requiredPeerSpecifier, requiredPeersForSetup } from './init-required-peers';
 import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold';
 import { createTargetPackagePreparation } from './init-target-package';
 import { normalizeError } from './normalize-error';
@@ -191,7 +191,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           }),
           warn,
           packageManager,
-          ormPeerPackagesFor: ormPeerPackagesForSetup({
+          requiredPeersFor: requiredPeersForSetup({
             cwd: ctx.cwd,
             signal: ctx.signal,
             readPublished: (name, spec, signal) =>
@@ -211,7 +211,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           filesWritten: [],
           filesDeleted: [],
           filesRenamed: [],
-          packagesInstalled: { status: 'failed', deps: [], devDeps: [], ormPeerPackages: [] },
+          packagesInstalled: { status: 'failed', deps: [], devDeps: [], requiredPeers: [] },
           contractEmitted: false,
           prisma7:
             error.authoring === 'prisma7'
@@ -259,10 +259,10 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // workspace or catalog, is left alone: only a declared major below 7 moves.
       const moveClient = movePackages !== null && clientMajor !== undefined && clientMajor < 7;
       const deps = [
-        inputs.ormPeerPackages.target,
-        ...inputs.ormPeerPackages.packages
+        inputs.requiredPeers.target,
+        ...inputs.requiredPeers.packages
           .filter((peer) => peer.outcome !== 'left-at-another-version')
-          .map(ormPeerSpecifier),
+          .map(requiredPeerSpecifier),
         'dotenv',
         ...inputs.contribution.peerPackages,
         ...(moveClient ? ['@prisma/client@7'] : []),
@@ -312,7 +312,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             status: packagesInstalled,
             deps: installed ? deps : [...inputs.preinstalled],
             devDeps: installed ? devDeps : [],
-            ormPeerPackages: [...inputs.ormPeerPackages.packages],
+            requiredPeers: [...inputs.requiredPeers.packages],
           },
           contractEmitted,
           prisma7: adoptsPrisma7

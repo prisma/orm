@@ -173,7 +173,7 @@ describe(
           flags: flags(),
           prompt,
           packageManager: 'pnpm',
-          ormPeerPackagesFor: async (packageName) => {
+          requiredPeersFor: async (packageName) => {
             asked.push(packageName);
             return {
               target: `${packageName}@8.1.0`,
@@ -211,7 +211,7 @@ describe(
           prompt,
           packageManager: 'pnpm',
           warn: (text) => warnings.push(text),
-          ormPeerPackagesFor: async (packageName) => ({
+          requiredPeersFor: async (packageName) => ({
             target: packageName,
             packages: [],
             unread: [packageName],

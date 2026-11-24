@@ -2,10 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ormPeerPackagesForSetup,
-  resolveOrmPeerPackages,
-} from '../../src/orm/init-orm-peer-packages';
+import { requiredPeersForSetup, resolveRequiredPeers } from '../../src/orm/init-required-peers';
 import { REGISTRY_LOOKUP_TIMEOUT_MILLIS } from '../../src/orm/registry-keywords';
 
 const VERSION = '8.1.0';
@@ -57,7 +54,7 @@ function installed(name: string, peers: Record<string, string>): void {
 }
 
 function forSetup(read = readPublished) {
-  return ormPeerPackagesForSetup({ cwd: projectDir, signal: never, readPublished: read });
+  return requiredPeersForSetup({ cwd: projectDir, signal: never, readPublished: read });
 }
 
 describe('the list the printed Prisma 6 setup names', () => {
@@ -144,7 +141,7 @@ describe('the shared time limit and cancelling of the registry reads', () => {
   it('counts the time a read before took against the reads after it', async () => {
     vi.useFakeTimers();
     const firstRead = REGISTRY_LOOKUP_TIMEOUT_MILLIS * 0.6;
-    const list = ormPeerPackagesForSetup({
+    const list = requiredPeersForSetup({
       cwd: projectDir,
       signal: never,
       readPublished: slowRead({
@@ -163,7 +160,7 @@ describe('the shared time limit and cancelling of the registry reads', () => {
 
   it('passes the command being cancelled through instead of naming an unread package', async () => {
     const command = new AbortController();
-    const list = ormPeerPackagesForSetup({
+    const list = requiredPeersForSetup({
       cwd: projectDir,
       signal: command.signal,
       readPublished: slowRead({}),
@@ -182,7 +179,7 @@ describe('whether a package the project lists is at the version asked for', () =
   };
 
   function outcomeFor(line: string, installed: string | undefined) {
-    return resolveOrmPeerPackages({
+    return resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
       ownsTarget: false,
       declared: () => new Map([['@prisma/orm-framework', line]]),
@@ -227,7 +224,7 @@ describe('whether a package the project lists is at the version asked for', () =
   });
 
   it('counts a caret line init wrote for one release candidate once the next is installed and asked for', async () => {
-    const resolved = await resolveOrmPeerPackages({
+    const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
       ownsTarget: false,
       declared: () => new Map([['@prisma/orm-framework', '^8.0.0-rc.26']]),

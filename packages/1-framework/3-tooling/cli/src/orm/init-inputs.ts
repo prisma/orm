@@ -46,8 +46,8 @@ import {
   type TargetPackage,
 } from '../commands/init/target-packages';
 import { defaultSchemaPath } from '../commands/init/templates/code-templates';
-import type { OrmPeerPackages } from './init-orm-peer-packages';
 import type { CheckPrisma7Source, Prisma7QuickReference } from './init-prisma7-check';
+import type { RequiredPeers } from './init-required-peers';
 import {
   CONFIG_FILE,
   generatedFilesInitReplaces,
@@ -119,7 +119,7 @@ export interface ResolvedInitInputs {
   /** What detection and the Prisma 7 check could not do; reported, never fatal. */
   readonly warnings: readonly string[];
   readonly install: boolean;
-  readonly ormPeerPackages: OrmPeerPackages;
+  readonly requiredPeers: RequiredPeers;
   /** Packages installed with the target package, so the install phase skips them. */
   readonly preinstalled: readonly string[];
   readonly writeEnv: boolean;
@@ -689,7 +689,7 @@ async function confirmPrisma7Inputs(ctx: {
     sideBySide,
     warnings: [...detection.warnings, ...prepared.warnings],
     install: !flags.skipInstall,
-    ormPeerPackages: prepared.ormPeerPackages,
+    requiredPeers: prepared.requiredPeers,
     preinstalled: prepared.installed,
     writeEnv,
     probeDb: flags.probeDb,
@@ -838,7 +838,7 @@ async function confirmStarterInputs(ctx: {
     sideBySide: null,
     warnings: [...ctx.warnings, ...prepared.warnings],
     install: !flags.skipInstall,
-    ormPeerPackages: prepared.ormPeerPackages,
+    requiredPeers: prepared.requiredPeers,
     preinstalled: prepared.installed,
     writeEnv,
     probeDb: flags.probeDb,
@@ -868,7 +868,7 @@ function prisma6SchemaFound(
   detection: Prisma7Detection,
   { schema, target }: Prisma6Schema,
   packageManager: PackageManager,
-  ormPeerPackages: OrmPeerPackages,
+  requiredPeers: RequiredPeers,
 ) {
   const { config, cli } = detection;
   const ownConfigPath =
@@ -885,7 +885,7 @@ function prisma6SchemaFound(
       packageManager,
       cliVersion: cli.kind === 'earlier' ? cli.version : undefined,
       ownConfigPath,
-      ormPeerPackages,
+      requiredPeers,
       peerPackages: target.peerPackages,
       targetConfigEntrypoint: `${target.packageName}/config`,
     }),
@@ -925,7 +925,7 @@ export async function resolveInitInputs(ctx: {
   /** The manager the printed Prisma 6 setup names in its commands. */
   readonly packageManager: PackageManager;
   /** The Prisma ORM peer packages of a target package, for the printed Prisma 6 setup. */
-  readonly ormPeerPackagesFor: (packageName: string) => Promise<OrmPeerPackages>;
+  readonly requiredPeersFor: (packageName: string) => Promise<RequiredPeers>;
 }): Promise<ResolvedInitInputs> {
   const { cwd, flags, prompt } = ctx;
 
@@ -947,13 +947,13 @@ export async function resolveInitInputs(ctx: {
     const detection = await detectPrisma7Project({ cwd, schemaPath: flags.fromPrisma7Schema });
     const prisma6 = prisma6Schema(detection.schema);
     if (prisma6 !== undefined) {
-      const ormPeerPackages = await ctx.ormPeerPackagesFor(prisma6.target.packageName);
-      for (const unread of ormPeerPackages.unread) {
+      const requiredPeers = await ctx.requiredPeersFor(prisma6.target.packageName);
+      for (const unread of requiredPeers.unread) {
         ctx.warn(
           `init could not read the peer dependencies of ${unread} from the registry, so the install command below leaves out the @prisma/orm-* packages it names as peers. Add each of them too, at the version of ${unread}: after installing it, its package.json lists them under peerDependencies.`,
         );
       }
-      throw prisma6SchemaFound(detection, prisma6, ctx.packageManager, ormPeerPackages);
+      throw prisma6SchemaFound(detection, prisma6, ctx.packageManager, requiredPeers);
     }
     if (await choosePrisma7Path({ flags, prompt, detection, flagTarget, warn: ctx.warn })) {
       return resolvePrisma7Inputs({

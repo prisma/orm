@@ -26,13 +26,13 @@ import {
   type TargetPackage,
 } from '../commands/init/target-packages';
 import { chooseAction } from '../utils/next-actions';
+import { installProjectDependencies } from './init-packages';
 import {
   installedManifests,
-  type OrmPeerPackages,
-  ormPeerSpecifier,
-  resolveOrmPeerPackages,
-} from './init-orm-peer-packages';
-import { installProjectDependencies } from './init-packages';
+  type RequiredPeers,
+  requiredPeerSpecifier,
+  resolveRequiredPeers,
+} from './init-required-peers';
 import { normalizeError } from './normalize-error';
 import { keywordsOf } from './package-manifest';
 import { type ImportFromProject, installedManifest } from './project-modules';
@@ -104,7 +104,7 @@ export function installCommand(
 /** The target package and the contribution it exports, with what installing it changed. */
 export interface PreparedTargetPackage {
   readonly contribution: InitContribution;
-  readonly ormPeerPackages: OrmPeerPackages;
+  readonly requiredPeers: RequiredPeers;
   /** Every package the step installed or found in place, so the install phase skips them. */
   readonly installed: readonly string[];
   /** The installed packages the project did not declare before; `undefined` when there are none. */
@@ -197,7 +197,7 @@ export function createTargetPackagePreparation(ctx: {
     }
 
     const manifests = installedManifests(ctx.cwd);
-    const ormPeerPackages = await resolveOrmPeerPackages({
+    const requiredPeers = await resolveRequiredPeers({
       packageName,
       read: manifests.read,
       installedVersion: manifests.installedVersion,
@@ -213,23 +213,23 @@ export function createTargetPackagePreparation(ctx: {
             })
         : undefined,
     });
-    if (ormPeerPackages instanceof CliStructuredError) {
+    if (requiredPeers instanceof CliStructuredError) {
       const addedBeforeFailure = manifestChanges(
         ctx.packageManager,
         declaredBefore,
         declaredPackages(ctx.cwd),
       );
       throw addedBeforeFailure === undefined
-        ? new TargetPackageInstallFailed(ormPeerPackages)
-        : new TargetPackageRefusedAfterInstall(ormPeerPackages, addedBeforeFailure);
+        ? new TargetPackageInstallFailed(requiredPeers)
+        : new TargetPackageRefusedAfterInstall(requiredPeers, addedBeforeFailure);
     }
-    warnings.push(...ormPeerPackages.warnings);
+    warnings.push(...requiredPeers.warnings);
     if (ctx.install) {
       installed = [
         ...new Set([
           ...installed,
-          ormPeerPackages.target,
-          ...ormPeerPackages.packages.map(ormPeerSpecifier),
+          requiredPeers.target,
+          ...requiredPeers.packages.map(requiredPeerSpecifier),
         ]),
       ];
       added = manifestChanges(ctx.packageManager, declaredBefore, declaredPackages(ctx.cwd));
@@ -239,7 +239,7 @@ export function createTargetPackagePreparation(ctx: {
       const contribution = await loadContribution(ctx, target, ranCommand);
       return {
         contribution,
-        ormPeerPackages,
+        requiredPeers,
         installed,
         added,
         warnings,
