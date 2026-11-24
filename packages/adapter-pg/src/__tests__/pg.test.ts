@@ -232,6 +232,17 @@ describe('PrismaPgAdapterFactory', () => {
     await adapter.dispose()
   })
 
+  it('should not include a URL fragment in the schema', async () => {
+    const factory = new PrismaPgAdapterFactory(
+      'postgresql://test:test@localhost:5432/test?sslmode=require&schema=app#fragment',
+    )
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('app')
+
+    await adapter.dispose()
+  })
+
   it('should not extract a schema from an empty schema parameter', async () => {
     const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost:5432/test?schema=')
     const adapter = await factory.connect()

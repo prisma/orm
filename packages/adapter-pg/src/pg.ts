@@ -403,8 +403,8 @@ function schemaFromConnectionString(connectionString: string | undefined): strin
 }
 
 /**
- * The parser reads the certificate files these parameters name and warns about some `sslmode`
- * values. Neither affects the schema, and `pg` does both itself when it connects.
+ * The parser reads the certificate files these parameters name and throws on some `sslmode`
+ * combinations. Neither affects the schema, and `pg` does both itself when it connects.
  */
 const TLS_PARAMETERS = ['sslmode', 'sslcert', 'sslkey', 'sslrootcert']
 
@@ -413,9 +413,11 @@ function withoutTlsParameters(connectionString: string): string {
   if (queryStart === -1) {
     return connectionString
   }
-  const params = new URLSearchParams(connectionString.slice(queryStart + 1))
+  const fragmentStart = connectionString.indexOf('#', queryStart)
+  const queryEnd = fragmentStart === -1 ? connectionString.length : fragmentStart
+  const params = new URLSearchParams(connectionString.slice(queryStart + 1, queryEnd))
   for (const name of TLS_PARAMETERS) {
     params.delete(name)
   }
-  return `${connectionString.slice(0, queryStart)}?${params.toString()}`
+  return `${connectionString.slice(0, queryStart)}?${params.toString()}${connectionString.slice(queryEnd)}`
 }
