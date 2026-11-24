@@ -3,7 +3,7 @@
 
 > **Edit your data contract. Prisma handles the rest.**
 
-This skill covers Prisma 8's build-tool plugins — the dev-server / build-system integrations that re-emit contract artifacts automatically as the user edits the contract source. Today that's the Vite plugin for Vite 7 and Vite 8, `prismaVitePlugin`, which the database package exports from its `vite-plugin-contract-emit` entry (`@prisma/orm-postgres/vite-plugin-contract-emit`, `@prisma/orm-sqlite/vite-plugin-contract-emit`, `@prisma/orm-mongo/vite-plugin-contract-emit`, and the same for MySQL and MariaDB). Next.js, Webpack, esbuild, Rollup, and Turbopack plugins are documented under *What Prisma 8 doesn't do yet* with the workaround.
+This skill covers Prisma 8's build-tool plugins — the dev-server / build-system integrations that re-emit contract artifacts automatically as the user edits the contract source. Today that's the Vite plugin for Vite 7 and Vite 8, `prismaVitePlugin`, which the target package exports from its `vite-plugin-contract-emit` entry (`@prisma/orm-postgres/vite-plugin-contract-emit`, `@prisma/orm-sqlite/vite-plugin-contract-emit`, `@prisma/orm-mongo/vite-plugin-contract-emit`, and the same for MySQL and MariaDB). Next.js, Webpack, esbuild, Rollup, and Turbopack plugins are documented under *What Prisma 8 doesn't do yet* with the workaround.
 
 **If the project is using Vite and consuming the contract, use the plugin.** There's no good reason not to — manual `prisma contract emit` during dev is friction the plugin eliminates. The agent should proactively offer the plugin whenever it sees a `vite.config.ts` in the project; the user doesn't need to ask.
 
@@ -24,14 +24,14 @@ This skill covers Prisma 8's build-tool plugins — the dev-server / build-syste
 
 - **The plugin's job is `contract emit`, on a schedule the bundler knows about.** It is *not* a runtime concern — at runtime, the application reads `contract.json` / `contract.d.ts` the same way whether the plugin emitted them or a script did. The plugin saves you the manual command during development.
 - **Vite 7 and Vite 8 only.** Peer range `^7.0.0 || ^8.0.0`. Vite 6 is not on the support matrix.
-- **Emission goes through the CLI's own publish path.** The Vite plugin and `prisma contract emit` both call `executeContractEmit`, which renames `contract.d.ts` before `contract.json` and queues writes per output. Never re-implement emission by writing the artefacts yourself; run `prisma contract emit` instead. No database package re-exports `executeContractEmit` (see *What Prisma 8 doesn't do yet*).
+- **Emission goes through the CLI's own publish path.** The Vite plugin and `prisma contract emit` both call `executeContractEmit`, which renames `contract.d.ts` before `contract.json` and queues writes per output. Never re-implement emission by writing the artefacts yourself; run `prisma contract emit` instead. No target package re-exports `executeContractEmit` (see *What Prisma 8 doesn't do yet*).
 - **No build-time / production emission.** The Vite plugin runs in `vite dev` only. For `vite build` / production, run `prisma contract emit` from a `prebuild` script.
 
 ## Workflow — Vite (the supported path)
 
 ### 1. Have the plugin
 
-The plugin ships inside the database package the project already depends on (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb` or `@prisma/orm-mongo`), so there is nothing to install besides Vite itself.
+The plugin ships inside the target package the project already depends on (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb` or `@prisma/orm-mongo`), so there is nothing to install besides Vite itself.
 
 ### 2. Wire `vite.config.ts`
 
@@ -116,7 +116,7 @@ See [`examples/react-router-demo`](https://github.com/prisma/prisma/tree/main/ex
 ## What Prisma 8 doesn't do yet
 
 - **Next.js plugin.** No first-party Next.js plugin exists. Workaround: run `prisma contract emit` from a `prebuild` script in `package.json` and run it manually during development when the contract changes. Many Next.js projects also run a dev-time `tsx --watch` against a small script that calls the CLI on contract-source change. If you want a first-party Next.js plugin, file a feature request via the `references/feedback.md` skill.
-- **Webpack, esbuild, Rollup, Turbopack plugins.** None exist yet as first-party. `executeContractEmit`, the function the Vite plugin calls, is exported only by the platform package `@prisma/orm-toolchain` (`cli/control-api`), and no database package re-exports it; application code imports only from its database package and extension packs, never from a platform package, even though `package.json` lists the platform packages; so do not build a plugin on it. Workaround: run `prisma contract emit` from the bundler's prebuild step (or a `prebuild` script in `package.json`), and rerun it when the contract changes during development. If you want a first-party plugin for your bundler, or a public entry for contract emission, file a feature request via the `references/feedback.md` skill.
+- **Webpack, esbuild, Rollup, Turbopack plugins.** None exist yet as first-party. `executeContractEmit`, the function the Vite plugin calls, is exported only by the platform package `@prisma/orm-toolchain` (`cli/control-api`), and no target package re-exports it; application code imports only from its target package and extension packs, never from a platform package, even though `package.json` lists the platform packages; so do not build a plugin on it. Workaround: run `prisma contract emit` from the bundler's prebuild step (or a `prebuild` script in `package.json`), and rerun it when the contract changes during development. If you want a first-party plugin for your bundler, or a public entry for contract emission, file a feature request via the `references/feedback.md` skill.
 - **`vite build` integration.** The plugin runs in `vite dev` only. Workaround: a `prebuild` script that runs `prisma contract emit`. If you want the plugin to also run during `vite build`, file a feature request via the `references/feedback.md` skill.
 - **Vite 6 or earlier.** Not on the support matrix. Workaround: upgrade Vite to 7 or 8. If you have a hard reason to stay on Vite 6, file a feature request via the `references/feedback.md` skill.
 

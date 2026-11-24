@@ -1508,7 +1508,7 @@ E2E tests use a shared fixture app pattern to ensure proper module resolution:
 - **No package.json in test directories**: Test directories inherit workspace dependencies from the parent `package.json` at the root
 - **Helper function**: `setupTestDirectoryFromFixtures()` handles directory setup and returns a cleanup function
 - **Cleanup responsibility**: Each test must clean up its own directory (use `afterEach` hooks or `finally` blocks)
-- **Internal database packages**: `test/fixture-app/package.json` aliases `@prisma/orm-postgres` and `@prisma/orm-mongo` to `@internal/postgres` and `@internal/mongo`, so a fixture config and the CLI under test load one framework copy
+- **Internal target packages**: `test/fixture-app/package.json` aliases `@prisma/orm-postgres` and `@prisma/orm-mongo` to `@internal/postgres` and `@internal/mongo`, so a fixture config and the CLI under test load one framework copy
 
 **Example:**
 ```typescript
