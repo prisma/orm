@@ -86,8 +86,8 @@ Extensions already shipping:
 
 - **[`@prisma/orm-extension-pgvector`](https://www.npmjs.com/package/@prisma/orm-extension-pgvector)**: vector columns and similarity search.
 - **[`@prisma/orm-extension-postgis`](https://www.npmjs.com/package/@prisma/orm-extension-postgis)**: geometry columns and geo queries.
-- **[`@prisma/orm-extension-paradedb`](https://www.npmjs.com/package/@prisma/orm-extension-paradedb)**: BM25 full-text search indexes (experimental).
-- **[`@prisma/orm-extension-supabase`](https://www.npmjs.com/package/@prisma/orm-extension-supabase)**: Supabase auth and storage tables, role-bound clients (experimental).
+- **[`@prisma/orm-extension-paradedb`](https://www.npmjs.com/package/@prisma/orm-extension-paradedb)**: BM25 full-text search indexes. From `8.0.0` it is numbered on its own, starting at `0.1.0`.
+- **[`@prisma/orm-extension-supabase`](https://www.npmjs.com/package/@prisma/orm-extension-supabase)**: Supabase auth and storage tables, role-bound clients. Preview from `8.0.0`.
 - **[`@prisma/orm-extension-arktype-json`](https://www.npmjs.com/package/@prisma/orm-extension-arktype-json)**: JSON columns validated by an arktype schema.
 - **[`@prisma/orm-postgres-contrib`](https://www.npmjs.com/package/@prisma/orm-postgres-contrib)**: packs for the trusted PostgreSQL contrib modules, starting with `citext` case-insensitive text.
 - **[`@cipherstash/stack-prisma`](https://www.npmjs.com/package/@cipherstash/stack-prisma)**: searchable encryption and data-level access control.
@@ -96,11 +96,13 @@ See [Using extensions](https://www.prisma.io/docs/orm/extensions/using-extension
 
 ## Supported databases
 
-- **PostgreSQL** — the primary target, first-class support
-- **MongoDB** — first-class support
-- **SQLite** — a proof of concept today
-- **MySQL** — a proof of concept today, MySQL 8.4 and later ([`@prisma/orm-mysql`](./packages/9-public/@prisma/orm-mysql/README.md))
-- **MariaDB** — a proof of concept today, MariaDB 10.11 and later ([`@prisma/orm-mariadb`](./packages/9-public/@prisma/orm-mariadb/README.md))
+Every package has a [maturity level](./docs/oss/versioning.md#maturity-levels) from `8.0.0`: Generally Available, Release Candidate, Preview or Early Access. Until then every package is a release candidate.
+
+- **PostgreSQL**: Generally Available from `8.0.0`
+- **MongoDB**: Preview from `8.0.0`
+- **SQLite**: Early Access from `8.0.0`
+- **MySQL**: Early Access from `8.0.0`, MySQL 8.4 and later ([`@prisma/orm-mysql`](./packages/9-public/@prisma/orm-mysql/README.md))
+- **MariaDB**: Early Access from `8.0.0`, MariaDB 10.11 and later ([`@prisma/orm-mariadb`](./packages/9-public/@prisma/orm-mariadb/README.md))
 
 See the [feature scoreboard](./scorecard.md) for what PostgreSQL, SQLite and MongoDB support today; it does not yet cover MySQL or MariaDB.
 

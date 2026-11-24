@@ -2,6 +2,8 @@
 
 The concrete PostgreSQL target of Prisma 8: the target descriptor (DDL planning, codecs, migration rendering), the Postgres adapter, and the `pg`-based driver.
 
+> **From `8.0.0` this package is Generally Available.** A later release in the same major version does not break its users. Until `8.0.0` every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`. See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+
 A PostgreSQL application lists this package beside `@prisma/orm-postgres`, at the same version, because that target package names it as a peer dependency; `prisma orm init` writes that list. Application code imports from the target package. Extension authors targeting Postgres and decomposed installs (for example, replacing the adapter with a custom one while keeping the target and driver) import this package directly.
 
 ## Entrypoints

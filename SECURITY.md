@@ -32,7 +32,7 @@ In scope — we accept reports against any of the following published packages:
 
 Out of scope (please do not file vulnerability reports for these):
 
-- Pre-release / experimental code under `examples/**` and `test/**` workspaces. These are not published and are not intended for production use.
+- Code under the `examples/**` and `test/**` workspaces. These are not published and are not intended for production use.
 - Bugs in transitive dependencies that do not impact our published surface — please report those upstream.
 - Vulnerabilities that require an attacker to already have shell access on the developer's or operator's machine.
 - Issues only affecting the documentation or marketing site.

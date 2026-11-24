@@ -2,6 +2,8 @@
 
 BM25 full-text search indexes for Prisma 8 on PostgreSQL, powered by [ParadeDB](https://paradedb.com).
 
+> **From `8.0.0` this package has its own version number, starting at `0.1.0`.** A `0.x` version may change in any release. Until `8.0.0` every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`. See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+
 ```bash
 pnpm add @prisma/orm-extension-paradedb
 ```

@@ -2,6 +2,8 @@
 
 The package a MariaDB application installs for its database. It wires the framework, the SQL family and the MariaDB target together. It names the MySQL package and the platform packages it is built on as peer dependencies, each at this package's own exact version, so the application lists them beside it, every `@prisma/orm-*` line naming the same version. `prisma orm init` writes that list, in the form the project's package manager writes a version it is given. To install them by hand, give every `@prisma/orm-*` package the same version, the release you want:
 
+> **From `8.0.0` this package is Early Access.** It is released so that people can try it, and it may change in any release. Until `8.0.0` every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`. See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+
 ```sh
 pnpm add @prisma/orm-mariadb@<version> @prisma/orm-framework@<version> @prisma/orm-family-sql@<version> @prisma/orm-target-mariadb@<version> @prisma/orm-target-mysql@<version> @prisma/orm-mysql@<version> @prisma/orm-toolchain@<version>
 ```
@@ -20,7 +22,7 @@ The application lists the platform packages because it must hold exactly one cop
 
 In a repository with several applications on different Prisma versions, npm workspaces and Bun with its hoisted linker can give one application two copies of a platform package without a warning. Keep the applications on one Prisma version, or use pnpm, Yarn, or Bun with its isolated linker.
 
-MariaDB support is early. The package covers contracts, migrations and queries on MariaDB 10.11 and later: `prisma contract emit`, `prisma migration plan`, `prisma db migrate`, `prisma db verify`, `prisma db sign`, and `mariadb({ contract, url })`, the query client, which reads and writes through the ORM, the SQL builder and raw SQL as `mysql()` does on MySQL. The contract is a `.prisma` schema or a TypeScript contract written with `defineContract` from `@prisma/orm-mariadb/contract-builder`.
+The package covers contracts, migrations and queries on MariaDB 10.11 and later: `prisma contract emit`, `prisma migration plan`, `prisma db migrate`, `prisma db verify`, `prisma db sign`, and `mariadb({ contract, url })`, the query client, which reads and writes through the ORM, the SQL builder and raw SQL as `mysql()` does on MySQL. The contract is a `.prisma` schema or a TypeScript contract written with `defineContract` from `@prisma/orm-mariadb/contract-builder`.
 
 ```ts
 import mariadb from '@prisma/orm-mariadb/runtime';

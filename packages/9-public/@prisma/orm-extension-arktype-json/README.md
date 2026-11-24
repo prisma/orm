@@ -2,6 +2,8 @@
 
 JSON columns with a validated, typed shape for Prisma 8, built on [arktype](https://arktype.io).
 
+> **From `8.0.0` this package is Generally Available.** A later release in the same major version does not break its users. Until `8.0.0` every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`. See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+
 ```bash
 pnpm add @prisma/orm-extension-arktype-json
 ```

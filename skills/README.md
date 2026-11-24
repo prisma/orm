@@ -44,7 +44,7 @@ To limit a `skills add` install to one agent runtime, add `-a <agent>` (e.g. `-a
 
 ## Capability-gap honesty
 
-Prisma 8 is in early access (`0.x`). Each reference file carries a *What Prisma 8 doesn't do yet* section that names features the framework doesn't implement (model validations, lifecycle callbacks, Studio, runtime-apply migrations, `EXPLAIN`, prepared statements, `db.batch()`, multi-database routing, Next.js plugin, …) along with the workaround and a route to [`prisma-8/references/feedback.md`](./prisma-8/references/feedback.md) so the request becomes a tracked issue instead of a one-line URL.
+Prisma 8 is not finished: until `8.0.0` it ships as release candidates, and from `8.0.0` each package has its own [maturity level](../docs/oss/versioning.md#maturity-levels). Each reference file carries a *What Prisma 8 doesn't do yet* section that names features the framework doesn't implement (model validations, lifecycle callbacks, Studio, runtime-apply migrations, `EXPLAIN`, prepared statements, `db.batch()`, multi-database routing, Next.js plugin, …) along with the workaround and a route to [`prisma-8/references/feedback.md`](./prisma-8/references/feedback.md) so the request becomes a tracked issue instead of a one-line URL.
 
 The pattern is deliberate: it gives the agent something concrete to say when a user asks about an unbuilt feature, instead of confabulating a plausible-looking API call against something that doesn't exist.
 

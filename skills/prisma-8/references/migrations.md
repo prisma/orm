@@ -11,7 +11,7 @@ The three-step user model:
 
 Once the contract changes, you choose how the change reaches the database. This skill covers the two paths (`db update` and `migration plan` + `db migrate`), the migration-package contract, the `migration.ts` authoring API, and the failure modes you recover from without leaving the loop.
 
-**Targets.** Migration authoring is first-class for **Postgres** and **Mongo**. The CLI reads the target from `prisma.config.ts` (set during `prisma orm init --target …`). Migration commands do not accept a `--target` flag — use a config scoped to the target you need. Examples below call out target-specific imports, markers, factories, and transaction behavior where they diverge.
+**Targets.** This reference covers migration authoring for **Postgres** and **Mongo**. The CLI reads the target from `prisma.config.ts` (set during `prisma orm init --target …`). Migration commands do not accept a `--target` flag — use a config scoped to the target you need. Examples below call out target-specific imports, markers, factories, and transaction behavior where they diverge.
 
 ## When to Use
 

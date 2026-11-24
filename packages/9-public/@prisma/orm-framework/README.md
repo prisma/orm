@@ -2,6 +2,8 @@
 
 The target-agnostic core of Prisma 8: the contract model, the component/registry system, and the authoring surface that emitted contracts and application code reach at runtime.
 
+> **From `8.0.0` this package is Generally Available.** A later release in the same major version does not break its users. Until `8.0.0` every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`. See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+
 Every application lists this package beside its target package (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb`, `@prisma/orm-mongo`), at the same version, because the target package and every other Prisma package name it as a peer dependency; `prisma orm init` writes that list. Application code imports from the target package, not from this package. Extension authors and decomposed installs (applications replacing part of the default wiring) import it directly.
 
 ## Entrypoints
