@@ -24,8 +24,8 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Query features | 10 of 11 (91%) | `█████████░` | 1 | 0 |
 | Docs and the new user's first hour | 2 of 5 (40%) | `████░░░░░░` | 2 | 1 |
 | Work found along the way | 4 of 9 (44%) | `████░░░░░░` | 1 | 4 |
-| Compatibility policy | 0 of 6 (0%) | `░░░░░░░░░░` | 2 | 4 |
-| **All streams** | **34 of 52 (65%)** | `███████░░░` | **7** | **11** |
+| Compatibility policy | 0 of 7 (0%) | `░░░░░░░░░░` | 2 | 5 |
+| **All streams** | **34 of 53 (64%)** | `██████░░░░` | **7** | **12** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -143,7 +143,7 @@ Work found after the plan was made goes here, so the first five streams keep the
 
 ## Stream 7: Compatibility policy
 
-**GA readiness:** 0 of 6 Must projects done (0%). 2 in progress, 4 not started.
+**GA readiness:** 0 of 7 Must projects done (0%). 2 in progress, 5 not started.
 
 **Goal:** from `8.0.0`, an application built on Prisma 8 upgrades to any later `8.x` release with no changes to its code, its generated files or its database. Upgrading becomes routine, so users stay on the latest release and we maintain one release line for each major. It is always clear to a user what they can rely on. A project belongs in this stream when it removes a reason for a user to hesitate before upgrading.
 
@@ -159,7 +159,7 @@ Project 4 comes before project 3, which needs it.
 | 4 | ⏳ | Catch breaking changes and accidental new exports in CI, by comparing each package's API with the last release | Must | Will | Started 2026-11-24 with its design | |
 | 5 | ⏳ | Prevent new error codes, built-in names and builder methods from breaking user code | Must | Will | Not started | |
 | 6 | ⏳ | Show whether something is GA in a package's version and an API's name, and release each package at its own level | Must | Will | Not started. Needs one decision from Will | |
-| 7 | ⏳ | Bring Prisma's own database tables up to date in each release, so no upgrade fails on them | Aim | Will | Not started | |
+| 7 | ⏳ | Bring Prisma's own database tables up to date in each release, so no upgrade fails on them | Must | Will | Not started. Design agreed 2026-11-24 | |
 | 8 | ⏳ | Define promised behaviour in reference documentation shipped inside each package | Later | Will | Not started | |
 | 9 | ⏳ | Classify every change to behaviour in its pull request, and list it by class in the release notes | Aim | Will | Not started | |
 | 10 | ⏳ | Make the changes an upgrade needs with a deterministic tool, not a guide | Later | Will | Not started | |
