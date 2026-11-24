@@ -34,15 +34,15 @@ const prisma = new PrismaClient({ adapter })
 
 ### Schema selection
 
-The `schema` option determines the PostgreSQL schema used in generated queries and, for pools managed by the adapter, the `search_path` of its connections:
+The `schema` option sets the PostgreSQL schema used in generated queries:
 
 ```ts
 const adapter = new PrismaPg({ connectionString }, { schema: 'myschema' })
 ```
 
-When the option is not set and the adapter is constructed from a connection string or a config containing one, the `?schema=` parameter of the connection URL is used as a fallback.
+When the option is not set, the `?schema=` parameter of the connection string is used, whether you pass the string directly or as `connectionString` in a pool config. An explicit `schema` option wins over the URL. When you pass a pre-built `pg.Pool`, its connection string is not read.
 
-When you pass a pre-constructed `pg.Pool` instance instead, its configuration is left untouched: the connection URL fallback does not apply and `search_path` is not modified, but an explicit `schema` option still determines the schema used in generated queries. Because the `search_path` is not adjusted in this case, the `schema` option only affects generated queries; raw queries (`$queryRaw`, `$executeRaw`) continue to use the pool's existing `search_path` and may fail for non-`public` schemas. Configure the pool or its connection string (for example, via `options: '-csearch_path=myschema'`) if you need raw queries to resolve unqualified names in a non-`public` schema.
+Raw queries (`$queryRaw`, `$executeRaw`) are not affected by the schema: they resolve unqualified names through the connection's `search_path`. Qualify names in raw SQL (`"myschema"."User"`), or set the search path on the database role (`ALTER ROLE ... SET search_path = myschema`).
 
 ## Feedback
 

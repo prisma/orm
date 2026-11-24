@@ -212,8 +212,8 @@ export type PrismaPgOptions = {
   /**
    * The name of the schema to use in generated queries. When not set, the `?schema=` parameter of the
    * connection string is used; a pre-built `pg.Pool`'s connection string is not read. Raw queries are
-   * not affected: they resolve unqualified names through the connection's `search_path`. Qualify the name in raw SQL
-   * (`"mySchema"."User"`), or set the search path on the database role
+   * not affected: they resolve unqualified names through the connection's `search_path`. Qualify the
+   * name in raw SQL (`"mySchema"."User"`), or set the search path on the database role
    * (`ALTER ROLE ... SET search_path = ...`). The adapter does not set it itself, because behind a
    * connection pooler in transaction mode a session setting is shared with the pooler's other clients.
    */
@@ -339,22 +339,13 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
     }
 
     this.externalPool = null
-    this.config = typeof poolOrConfig === 'string' ? { connectionString: poolOrConfig } : { ...poolOrConfig }
+    this.config = typeof poolOrConfig === 'string' ? { connectionString: poolOrConfig } : poolOrConfig
 
-    const parsedUrl = parseConnectionUrl(this.config.connectionString)
-    const schema = this.options?.schema ?? parsedUrl.schema
-
-    if (schema) {
-      this.options = { ...options, schema }
-
-      // `pg` merges a connection string's query parameters over the config object at
-      // connect time, so an `options` embedded in the URL would override `config.options`
-      // and drop the injected `search_path`. Fold the URL's `options` (which take
-      // precedence over `config.options` in `pg`) into the effective value and drop them
-      // from the connection string so the injected `search_path` survives.
-      const baseOptions = parsedUrl.options ?? this.config.options
-      this.config.connectionString = parsedUrl.connectionString
-      this.config.options = [baseOptions, `-csearch_path=${schema}`].filter(Boolean).join(' ')
+    if (!options?.schema) {
+      const schema = schemaFromConnectionString(this.config.connectionString)
+      if (schema) {
+        this.options = { ...options, schema }
+      }
     }
   }
 
@@ -395,37 +386,17 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
 }
 
 /**
- * Extracts the `schema` and libpq `options` parameters from a connection URL and returns
- * the connection string with the `options` parameter removed.
- *
- * `pg` also accepts libpq connection strings (e.g. `host=localhost dbname=test`) that are
- * not parseable as URLs; those carry no such parameters, so parsing failures yield an empty
- * result and the original connection string.
- *
- * The `options` parameter is stripped because `pg` merges a connection string's query
- * parameters over the config object at connect time: an `options` left in the URL would
- * override the `search_path` injected for the configured schema.
+ * `pg` also accepts libpq key/value connection strings (`host=localhost dbname=test`), which are not
+ * URLs and carry no `schema` parameter.
  */
-function parseConnectionUrl(connectionString: string | undefined): {
-  schema: string | undefined
-  options: string | undefined
-  connectionString: string | undefined
-} {
+function schemaFromConnectionString(connectionString: string | undefined): string | undefined {
   if (connectionString === undefined) {
-    return { schema: undefined, options: undefined, connectionString }
+    return undefined
   }
 
-  let url: URL
   try {
-    url = new URL(connectionString)
+    return new URL(connectionString).searchParams.get('schema') ?? undefined
   } catch {
-    return { schema: undefined, options: undefined, connectionString }
+    return undefined
   }
-
-  const schema = url.searchParams.get('schema') ?? undefined
-  const options = url.searchParams.get('options') ?? undefined
-
-  url.searchParams.delete('options')
-
-  return { schema, options, connectionString: url.toString() }
 }

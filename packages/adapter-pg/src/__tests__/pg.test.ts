@@ -133,55 +133,6 @@ describe('PrismaPgAdapterFactory', () => {
     await adapter.dispose()
   })
 
-  it('should set search_path via connection options when schema is configured', async () => {
-    const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost:5432/test', {
-      schema: 'custom_schema',
-    })
-    const adapter = await factory.connect()
-
-    expect(adapter.underlyingDriver().options.options).toBe('-csearch_path=custom_schema')
-
-    await adapter.dispose()
-  })
-
-  it('should append search_path to existing connection options', async () => {
-    const factory = new PrismaPgAdapterFactory(
-      { connectionString: 'postgresql://test:test@localhost:5432/test', options: '-cstatement_timeout=5000' },
-      { schema: 'custom_schema' },
-    )
-    const adapter = await factory.connect()
-
-    expect(adapter.underlyingDriver().options.options).toBe('-cstatement_timeout=5000 -csearch_path=custom_schema')
-
-    await adapter.dispose()
-  })
-
-  it('should keep URL-level options and search_path in the effective startup options', async () => {
-    const factory = new PrismaPgAdapterFactory({
-      connectionString:
-        'postgresql://test:test@localhost:5432/test?schema=url_schema&options=-cstatement_timeout%3D5000',
-    })
-    const adapter = await factory.connect()
-
-    // `Pool.options.options` alone is not enough: `pg` re-parses `connectionString`
-    // at connect time, so we assert the options the client would actually send.
-    const { connectionParameters } = new pg.Client(adapter.underlyingDriver().options) as unknown as {
-      connectionParameters: { options?: string }
-    }
-    expect(connectionParameters.options).toBe('-cstatement_timeout=5000 -csearch_path=url_schema')
-
-    await adapter.dispose()
-  })
-
-  it('should set search_path from URL schema parameter', async () => {
-    const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost:5432/test?schema=url_schema')
-    const adapter = await factory.connect()
-
-    expect(adapter.underlyingDriver().options.options).toBe('-csearch_path=url_schema')
-
-    await adapter.dispose()
-  })
-
   it('should extract schema from PoolConfig connectionString when not provided in options', async () => {
     const factory = new PrismaPgAdapterFactory({
       connectionString: 'postgresql://test:test@localhost:5432/test?schema=url_schema',
@@ -189,16 +140,6 @@ describe('PrismaPgAdapterFactory', () => {
     const adapter = await factory.connect()
 
     expect(adapter.getConnectionInfo().schemaName).toBe('url_schema')
-    expect(adapter.underlyingDriver().options.options).toBe('-csearch_path=url_schema')
-
-    await adapter.dispose()
-  })
-
-  it('should not set connection options when no schema is configured', async () => {
-    const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost:5432/test')
-    const adapter = await factory.connect()
-
-    expect(adapter.underlyingDriver().options.options).toBeUndefined()
 
     await adapter.dispose()
   })
@@ -208,7 +149,6 @@ describe('PrismaPgAdapterFactory', () => {
     const adapter = await factory.connect()
 
     expect(adapter.getConnectionInfo().schemaName).toBeUndefined()
-    expect(adapter.underlyingDriver().options.options).toBeUndefined()
 
     await adapter.dispose()
   })
@@ -221,20 +161,21 @@ describe('PrismaPgAdapterFactory', () => {
     const factory = new PrismaPgAdapterFactory(config)
     const adapter = await factory.connect()
 
-    expect(config.options).toBe('-cstatement_timeout=5000')
-    expect(adapter.underlyingDriver().options.options).toBe('-cstatement_timeout=5000 -csearch_path=url_schema')
+    expect(config).toEqual({
+      connectionString: 'postgresql://test:test@localhost:5432/test?schema=url_schema',
+      options: '-cstatement_timeout=5000',
+    })
 
     await adapter.dispose()
   })
 
-  it('should not modify config for external pools while honoring the explicit schema option', async () => {
+  it('should honor the explicit schema option for external pools', async () => {
     const pool = new pg.Pool({ user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' })
     pool.on('error', () => {})
     const factory = new PrismaPgAdapterFactory(pool, { schema: 'custom_schema' })
     const adapter = await factory.connect()
 
     expect(adapter.getConnectionInfo().schemaName).toBe('custom_schema')
-    expect(adapter.underlyingDriver().options.options).toBeUndefined()
 
     await adapter.dispose()
     await pool.end()
@@ -247,7 +188,6 @@ describe('PrismaPgAdapterFactory', () => {
     const adapter = await factory.connect()
 
     expect(adapter.getConnectionInfo().schemaName).toBeUndefined()
-    expect(adapter.underlyingDriver().options.options).toBeUndefined()
 
     await adapter.dispose()
     await pool.end()
@@ -282,6 +222,20 @@ describe('PrismaPgAdapterFactory', () => {
     const adapter = await factory.connect()
 
     expect(adapter.underlyingDriver().options.options).toBeUndefined()
+
+    await adapter.dispose()
+  })
+
+  it('should not add startup options to the connection when the schema comes from the URL', async () => {
+    const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost:5432/test?schema=url_schema')
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('url_schema')
+    // `pg` re-parses `connectionString` at connect time, so check the options a client would send.
+    const { connectionParameters } = new pg.Client(adapter.underlyingDriver().options) as unknown as {
+      connectionParameters: { options?: string }
+    }
+    expect(connectionParameters.options).toBeUndefined()
 
     await adapter.dispose()
   })
