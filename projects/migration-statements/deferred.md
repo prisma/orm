@@ -663,3 +663,14 @@ When several root models of a shared collection rename one field to the same new
 **Found:** system design review of the MongoDB stored-name renames, round 2, 2026-11-24.
 
 A MongoDB root model that moves out of a collection it shares with other root models starts with no documents: they stay in the old collection, read by the models there. The plan asks about it as a `drop` loss, answered by `--delete`, although nothing is deleted (`leftBehindOf` and `leftBehindAdvice` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts`, `leftBehindLosses` in `mongo-planner.ts`). The question's text says so. A framework loss kind for data a plan leaves where it is, with its own answer, would say it without the text. That is a framework change.
+
+## MongoDB renames are passed as several values, where SQL passes one `StorageRenames`
+
+**Found:** system design reviews of the MongoDB stored-name renames, rounds 1 and 2, 2026-11-24.
+
+The SQL family builds one `StorageRenames` (models, fields, table changes, column changes) and every later step reads it. The MongoDB planner threads the same facts as several values: `statements`, `models`, `collections` (`CollectionRenames`), `fieldRenames`, `fieldRenameCalls` and `renamedCollections` (`planStatements` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts`, and `mongo-planner.ts`). Model pairing now has one owner (`destinationModelOf` reads `models`), so the planner does not disagree with itself, but the shape differs from SQL's. Two related left-overs:
+
+- `planStatements` builds two `ModelMatchInput` values with `fieldRenames: []` (for `embedRelationRefusals` and `unstatedFieldRenamesOf`), because those steps run before the field renames they would hold exist. Removing the placeholders needs a model-pairing input without field renames, which is part of the larger change above.
+- `plannedCollectionChanges` (`mongo-rename-conflicts.ts`) both decides which collection renames are planned and refuses the ones that cannot be, where SQL separates `plannedStorageRenames` from `storageRenameConflict`. The result is the same; the split would make each easier to read.
+
+Neither was done in the stored-name renames pull request, since each touches most of the MongoDB planner's steps.
