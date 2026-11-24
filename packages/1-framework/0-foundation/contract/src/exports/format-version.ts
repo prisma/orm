@@ -1,6 +1,7 @@
 export {
   CONTRACT_FORMAT_VERSIONS,
   type ContractFormatVersion,
+  carriesFormatVersion,
   formatVersionErrorAt,
   isFormatVersionError,
   type ReadFormatVersionOptions,

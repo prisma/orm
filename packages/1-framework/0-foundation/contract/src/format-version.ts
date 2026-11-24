@@ -40,17 +40,28 @@ const FILE_LABELS: Readonly<Record<StoredFileKind, string>> = {
   ref: 'ref file',
 };
 
-const NAMESPACES: Readonly<Record<StoredFileKind, 'CONTRACT' | 'MIGRATION'>> = {
-  contract: 'CONTRACT',
-  migration: 'MIGRATION',
-  ref: 'MIGRATION',
-};
+const CODES = {
+  contract: {
+    newer: 'CONTRACT.FORMAT_VERSION_NEWER',
+    missing: 'CONTRACT.FORMAT_VERSION_MISSING',
+  },
+  migration: {
+    newer: 'MIGRATION.FORMAT_VERSION_NEWER',
+    missing: 'MIGRATION.FORMAT_VERSION_MISSING',
+  },
+  ref: {
+    newer: 'MIGRATION.FORMAT_VERSION_NEWER',
+    missing: 'MIGRATION.FORMAT_VERSION_MISSING',
+  },
+} as const satisfies Readonly<
+  Record<
+    StoredFileKind,
+    { readonly newer: `${string}.${string}`; readonly missing: `${string}.${string}` }
+  >
+>;
 
 const FORMAT_VERSION_ERROR_CODES: ReadonlySet<string> = new Set(
-  ['CONTRACT', 'MIGRATION'].flatMap((namespace) => [
-    `${namespace}.FORMAT_VERSION_NEWER`,
-    `${namespace}.FORMAT_VERSION_MISSING`,
-  ]),
+  Object.values(CODES).flatMap((codes) => [codes.newer, codes.missing]),
 );
 
 const FACTS = Symbol('formatVersionErrorFacts');
@@ -93,6 +104,11 @@ function problemOf(document: unknown, knownVersions: readonly number[]): FormatV
   return { reason: 'invalid', formatVersion };
 }
 
+/** Whether `value` carries a format version field, new or old, so it is a stored file rather than a contract in memory, which carries none. */
+export function carriesFormatVersion(value: unknown): boolean {
+  return isJsonObject(value) && ('formatVersion' in value || 'schemaVersion' in value);
+}
+
 /** Whether `error` is one that {@link readFormatVersion} throws. */
 export function isFormatVersionError(error: unknown): error is StructuredError {
   return isStructuredError(error) && FORMAT_VERSION_ERROR_CODES.has(error.code);
@@ -120,41 +136,33 @@ function formatVersionError(facts: FormatVersionErrorFacts): StructuredError {
   };
   const error =
     problem.reason === 'newer'
-      ? structuredError(
-          `${NAMESPACES[kind]}.FORMAT_VERSION_NEWER`,
-          `${file} was written by a newer release of Prisma`,
-          {
-            why: `It is in format version ${problem.formatVersion}, and this release of Prisma reads format ${versionsText(knownVersions)} only.`,
-            fix: 'Upgrade Prisma to the release that wrote the file, or a later one, and run the command again.',
-            nextActions: [
-              {
-                kind: 'user-choice',
-                label: 'Upgrade Prisma to the release that wrote the file, or a later one',
-              },
-            ],
-            meta: { ...meta, formatVersion: problem.formatVersion },
-            docsUrl: docsUrlFor(`${NAMESPACES[kind]}.FORMAT_VERSION_NEWER`),
-            ...ifDefined('where', path === undefined ? undefined : { path }),
-          },
-        )
-      : structuredError(
-          `${NAMESPACES[kind]}.FORMAT_VERSION_MISSING`,
-          `${file} has no format version`,
-          {
-            why: missingWhy(problem),
-            fix: `A pre-release of Prisma 8 wrote this file. Follow the upgrade instructions of each release since the one that wrote it; they add the format version: ${UPGRADE_GUIDES_URL}`,
-            nextActions: [
-              {
-                kind: 'open-url',
-                label: 'Follow the upgrade instructions',
-                url: UPGRADE_GUIDES_URL,
-              },
-            ],
-            meta,
-            docsUrl: docsUrlFor(`${NAMESPACES[kind]}.FORMAT_VERSION_MISSING`),
-            ...ifDefined('where', path === undefined ? undefined : { path }),
-          },
-        );
+      ? structuredError(CODES[kind].newer, `${file} was written by a newer release of Prisma`, {
+          why: `It is in format version ${problem.formatVersion}, and this release of Prisma reads format ${versionsText(knownVersions)} only.`,
+          fix: 'Upgrade Prisma to the release that wrote the file, or a later one, and run the command again.',
+          nextActions: [
+            {
+              kind: 'user-choice',
+              label: 'Upgrade Prisma to the release that wrote the file, or a later one',
+            },
+          ],
+          meta: { ...meta, formatVersion: problem.formatVersion },
+          docsUrl: docsUrlFor(CODES[kind].newer),
+          ...ifDefined('where', path === undefined ? undefined : { path }),
+        })
+      : structuredError(CODES[kind].missing, `${file} has no format version`, {
+          why: missingWhy(problem),
+          fix: `A pre-release of Prisma 8 wrote this file. Follow the upgrade instructions of each release since the one that wrote it; they add the format version: ${UPGRADE_GUIDES_URL}`,
+          nextActions: [
+            {
+              kind: 'open-url',
+              label: 'Follow the upgrade instructions',
+              url: UPGRADE_GUIDES_URL,
+            },
+          ],
+          meta,
+          docsUrl: docsUrlFor(CODES[kind].missing),
+          ...ifDefined('where', path === undefined ? undefined : { path }),
+        });
   Object.defineProperty(error, FACTS, { value: facts });
   return error;
 }

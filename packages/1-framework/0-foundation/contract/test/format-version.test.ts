@@ -2,6 +2,7 @@ import { UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { describe, expect, it } from 'vitest';
 import {
   CONTRACT_FORMAT_VERSIONS,
+  carriesFormatVersion,
   formatVersionErrorAt,
   isFormatVersionError,
   readFormatVersion,
@@ -173,5 +174,18 @@ describe('isFormatVersionError', () => {
   it('is false for other errors', () => {
     expect(isFormatVersionError(new Error('x'))).toBe(false);
     expect(isFormatVersionError({ code: 'CONTRACT.VALIDATION_FAILED', message: 'x' })).toBe(false);
+  });
+});
+
+describe('carriesFormatVersion', () => {
+  it('is true for a stored file, with the new or the old field', () => {
+    expect(carriesFormatVersion({ formatVersion: 2 })).toBe(true);
+    expect(carriesFormatVersion({ schemaVersion: '1' })).toBe(true);
+  });
+
+  it('is false for a contract in memory and for anything that is not an object', () => {
+    expect(carriesFormatVersion({ target: 'postgres' })).toBe(false);
+    expect(carriesFormatVersion(null)).toBe(false);
+    expect(carriesFormatVersion([])).toBe(false);
   });
 });

@@ -475,6 +475,14 @@ A single-table-inheritance variant declares a foreign key on columns that anothe
 
 A foreign key's target refs are empty or inconsistent: no target ref given, refs point at different models, or compound refs disagree on `spaceId`, `namespaceId`, or `tableName`. Raised by the SQL contract DSL while declaring the FK. Payload: `mismatch`, `first`, `second`.
 
+### CONTRACT.FORMAT_VERSION_MISSING
+
+A `contract.json` or a contract snapshot has no format version: it has no `formatVersion` field, it has the field `schemaVersion` that a pre-release of Prisma 8 wrote in its place, or its `formatVersion` is not a positive integer. Raised by every reader of a stored contract before it looks at anything else in the file: the commands that read `contract.json` or a snapshot, the clients' `contractFromJson`, and the loading of an extension's bundled contract. The reader does not guess the format. Fix path: follow the upgrade instructions of each release since the one that wrote the file, which add the format version. Payload: `fileKind`, `knownFormatVersions`, `path` when the reader knows the file.
+
+### CONTRACT.FORMAT_VERSION_NEWER
+
+A `contract.json` or a contract snapshot is in a format version higher than any this release reads, so a newer release of Prisma wrote it. The reader interprets nothing else in the file and changes nothing. Fix path: upgrade Prisma to the release that wrote the file, or a later one. Payload: `fileKind`, `formatVersion`, `knownFormatVersions`, `path` when the reader knows the file.
+
 ### CONTRACT.IDENTITY_INVALID
 
 A model's identity is wrong: multiple fields marked `.id()`, identity declared both inline and in `.attributes(...)`, an empty identity, a model with non-owning relations but no id to anchor them, or an M:N target with no primary/unique key to derive junction columns from. Raised while lowering/building a SQL contract. Payload: `modelName`, `reason`.
@@ -1750,6 +1758,14 @@ A required migration file is absent: either an on-disk package is missing `migra
 ### MIGRATION.FOREIGN_KEY_VIOLATION
 
 SQLite only: after applying migration plans with `PRAGMA foreign_keys` temporarily off (needed for recreate-table operations), the post-apply `PRAGMA foreign_key_check` reported broken references, and the whole transaction is rolled back. With foreign keys off, no `ON DELETE` action runs, so a `deleteRows` operation, such as the one that deletes the rows of a removed variant, fails the apply here when another table references a deleted row; the one exception is the own table of a variant whose discriminator value changed, which the plan's `deleteRows` empties first, as its foreign key's cascade would. Delete or change the referencing rows first. Payload: `violations` (rows from the pragma).
+
+### MIGRATION.FORMAT_VERSION_MISSING
+
+A `migration.json` or a ref file (including `refs/head.json`) has no format version: it has no `formatVersion` field, it has the old `schemaVersion` field, or its `formatVersion` is not a positive integer. A pre-release of Prisma 8 wrote such files. Raised by every reader of these files before it looks at anything else in them, including the readers that otherwise report a corrupt file as a finding. Fix path: follow the upgrade instructions of each release since the one that wrote the file, which add the format version. Payload: `fileKind` (`migration` or `ref`), `knownFormatVersions`, `path` when the reader knows the file.
+
+### MIGRATION.FORMAT_VERSION_NEWER
+
+A `migration.json` or a ref file is in a format version higher than any this release reads, so a newer release of Prisma wrote it. The reader interprets nothing else in the file, including the migration's `ops.json`, and changes nothing. Fix path: upgrade Prisma to the release that wrote the file, or a later one. Payload: `fileKind`, `formatVersion`, `knownFormatVersions`, `path` when the reader knows the file.
 
 ### MIGRATION.HASH_MISMATCH
 
