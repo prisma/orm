@@ -29,6 +29,7 @@ import type {
   AnyQueryAst,
   ContractCodecRegistry,
   LoweredStatement,
+  MarkerReadResult,
   PreparedExecuteRequest,
   SqlCodecCallContext,
   SqlConnection,
@@ -51,7 +52,11 @@ import type { RuntimeScope, SqlOrmPlan } from '@internal/sql-relational-core/typ
 import { invariant } from '@internal/utils/assertions';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { type StructuredError, structuredError } from '@internal/utils/structured-error';
+import {
+  isStructuredError,
+  type StructuredError,
+  structuredError,
+} from '@internal/utils/structured-error';
 import {
   type ActivityExecuteOptions,
   type ActivityHandle,
@@ -302,7 +307,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   private readonly codecDescriptors: CodecDescriptorRegistry;
   private readonly sqlCtx: ActivityContextFields<SqlMiddlewareContext>;
   private readonly verifyMarkerOption: VerifyMarkerOption;
-  // Memoises the first verifyMarker() call so concurrent first calls share one read and one log line, and is cleared when that read fails so the next call retries it. `null` until the first call; pre-resolved when `verifyMarkerOption === false`.
+  // Memoises the first verifyMarker() call so concurrent first calls share one read and one log line; a read that fails counts as that call and is not retried. `null` until the first call; pre-resolved when `verifyMarkerOption === false`.
   private verifyMarkerPromise: Promise<void> | null;
   private closePromise: Promise<void> | null;
   private readonly ownsDriver: boolean;
@@ -812,7 +817,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   /**
-   * Returns a raw driver connection, after the contract marker check has finished through the driver; it rejects with the marker read's error, such as `CONTRACT.MARKER_READ_FAILED`, and takes no connection when that read fails. Every connection the runtime or a subclass holds must come from here, so the check never waits for a connection its caller holds. SQL issued on it runs below the middleware/codec/telemetry pipeline. It carries its own lifecycle (`release`/`destroy`/`beginTransaction`); the caller owns disposal. It follows the runtime's close rule for connections: see {@link Runtime.close}. Pass the `activityParent` of the activity it is acquired for, so it is admitted after `close()` while that activity is open.
+   * Returns a raw driver connection, after the contract marker check has finished through the driver; the check only logs, so a marker that cannot be read never stops the connection being taken. Every connection the runtime or a subclass holds must come from here, so the check never waits for a connection its caller holds. SQL issued on it runs below the middleware/codec/telemetry pipeline. It carries its own lifecycle (`release`/`destroy`/`beginTransaction`); the caller owns disposal. It follows the runtime's close rule for connections: see {@link Runtime.close}. Pass the `activityParent` of the activity it is acquired for, so it is admitted after `close()` while that activity is open.
    */
   protected async acquireRawConnection(
     options?: Pick<ActivityExecuteOptions, 'activityParent'>,
@@ -867,10 +872,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   private ensureMarkerChecked(): Promise<void> {
-    this.verifyMarkerPromise ??= this.verifyMarker().catch((error: unknown) => {
-      this.verifyMarkerPromise = null;
-      throw error;
-    });
+    this.verifyMarkerPromise ??= this.verifyMarker();
     return this.verifyMarkerPromise;
   }
 
@@ -1594,11 +1596,27 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   private async verifyMarker(): Promise<void> {
-    const readResult = await this.familyAdapter.markerReader.readMarker(this.driver);
-
     const expectedStorageHash = this.contract.storage.storageHash;
     const expectedProfileHash = this.contract.profileHash ?? null;
     const expected = { storageHash: expectedStorageHash, profileHash: expectedProfileHash };
+
+    let readResult: MarkerReadResult;
+    try {
+      readResult = await this.familyAdapter.markerReader.readMarker(this.driver);
+    } catch (error) {
+      const corrupt = isStructuredError(error) && error.code === 'CONTRACT.MARKER_ROW_CORRUPT';
+      this.sqlCtx.log.warn({
+        code: corrupt ? 'CONTRACT.MARKER_ROW_CORRUPT' : 'CONTRACT.MARKER_READ_FAILED',
+        scope: 'marker-verification',
+        expected,
+        actual: null,
+        message: corrupt
+          ? 'Contract marker in database could not be decoded'
+          : 'Contract marker could not be read from database',
+        error: describeMarkerReadError(error),
+      });
+      return;
+    }
 
     if (readResult.kind !== 'present') {
       this.sqlCtx.log.warn({
@@ -1675,6 +1693,17 @@ function transactionAlreadyOpenError(
 
 // Rows of a handle's statement, refused at the first read when the handle no longer accepts children, before the route takes a connection or session.
 function noWork(): void {}
+
+function describeMarkerReadError(error: unknown): {
+  readonly message: string;
+  readonly code?: string;
+  readonly why?: string;
+} {
+  if (isStructuredError(error)) {
+    return { code: error.code, message: error.message, ...ifDefined('why', error.why) };
+  }
+  return { message: error instanceof Error ? error.message : String(error) };
+}
 
 function rowsBeneath<Row>(
   run: ClientActivityRun<ClientActivityKind, SqlMiddlewareContext>,

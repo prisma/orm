@@ -16,6 +16,7 @@ import type {
 } from '@internal/sql-relational-core/ast';
 import { SelectAst, TableSource } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan } from '@internal/sql-relational-core/plan';
+import { structuredError } from '@internal/utils/structured-error';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
@@ -32,8 +33,10 @@ import { createTestRuntime as createRuntime, descriptorsFromCodecs } from './uti
  * Pins the per-result-kind branches of `verifyMarker` in `sql-runtime.ts`: absent marker
  * (warns CONTRACT.MARKER_MISSING), missing table (warns CONTRACT.MARKER_MISSING), storage-hash
  * mismatch (warns CONTRACT.MARKER_MISMATCH), profile-hash mismatch (warns CONTRACT.MARKER_MISMATCH),
- * matching marker (silent), verifyMarker: false (reader never called), and one-shot semantics
- * (at most one log per runtime lifetime).
+ * matching marker (silent), a marker that cannot be read or decoded (warns
+ * CONTRACT.MARKER_READ_FAILED or CONTRACT.MARKER_ROW_CORRUPT, the query still runs),
+ * verifyMarker: false (reader never called), and one-shot semantics (at most one log per
+ * runtime lifetime).
  *
  * Storage-hash mismatch ordering against middleware interceptors is covered by
  * `marker-vs-intercept-ordering.test.ts`.
@@ -373,5 +376,184 @@ describe('verifyMarker', () => {
 
     expect(readMarkerSpy).toHaveBeenCalledTimes(1);
     expect(log.warn).toHaveBeenCalledTimes(1);
+  });
+
+  describe('when the marker cannot be read', () => {
+    const expected = { storageHash: 'test', profileHash: 'test-profile' };
+
+    function failingRuntime(failure: unknown, driver?: SqlDriver) {
+      const readMarkerSpy = vi.fn().mockRejectedValue(failure);
+      const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const runtime = buildRuntime({
+        markerResult: { kind: 'absent' },
+        log,
+        readMarkerSpy,
+        ...(driver ? { driver } : {}),
+      });
+      return { runtime, log, readMarkerSpy };
+    }
+
+    it('warns with CONTRACT.MARKER_READ_FAILED and runs the query', async () => {
+      const { runtime, log } = failingRuntime(
+        structuredError(
+          'CONTRACT.MARKER_READ_FAILED',
+          'Database error while reading contract marker',
+          {
+            why: 'permission denied for table _prisma_marker',
+          },
+        ),
+      );
+
+      const rows = await runtime.query(createPlan()).toArray();
+
+      expect(rows).toEqual([{}]);
+      expect(log.warn.mock.calls).toEqual([
+        [
+          {
+            code: 'CONTRACT.MARKER_READ_FAILED',
+            scope: 'marker-verification',
+            expected,
+            actual: null,
+            message: 'Contract marker could not be read from database',
+            error: {
+              code: 'CONTRACT.MARKER_READ_FAILED',
+              message: 'Database error while reading contract marker',
+              why: 'permission denied for table _prisma_marker',
+            },
+          },
+        ],
+      ]);
+    });
+
+    it('warns with CONTRACT.MARKER_ROW_CORRUPT and runs the query when the marker row cannot be decoded', async () => {
+      const { runtime, log } = failingRuntime(
+        structuredError('CONTRACT.MARKER_ROW_CORRUPT', 'Marker row is corrupt', {
+          why: 'storage_hash is not a string',
+        }),
+      );
+
+      const rows = await runtime.query(createPlan()).toArray();
+
+      expect(rows).toEqual([{}]);
+      expect(log.warn.mock.calls).toEqual([
+        [
+          {
+            code: 'CONTRACT.MARKER_ROW_CORRUPT',
+            scope: 'marker-verification',
+            expected,
+            actual: null,
+            message: 'Contract marker in database could not be decoded',
+            error: {
+              code: 'CONTRACT.MARKER_ROW_CORRUPT',
+              message: 'Marker row is corrupt',
+              why: 'storage_hash is not a string',
+            },
+          },
+        ],
+      ]);
+    });
+
+    it('warns with CONTRACT.MARKER_READ_FAILED and runs the statement when a driver error passes through', async () => {
+      const { runtime, log } = failingRuntime(
+        structuredError('DRIVER.QUERY_FAILED', 'relation "_prisma_marker" is locked'),
+      );
+
+      await expect(runtime.execute(createPlan())).resolves.toEqual({ affectedRows: 0 });
+
+      expect(log.warn.mock.calls).toEqual([
+        [
+          {
+            code: 'CONTRACT.MARKER_READ_FAILED',
+            scope: 'marker-verification',
+            expected,
+            actual: null,
+            message: 'Contract marker could not be read from database',
+            error: { code: 'DRIVER.QUERY_FAILED', message: 'relation "_prisma_marker" is locked' },
+          },
+        ],
+      ]);
+    });
+
+    it('warns with CONTRACT.MARKER_READ_FAILED when the read throws something other than an Error', async () => {
+      const { runtime, log } = failingRuntime('socket hang up');
+
+      await runtime.query(createPlan()).toArray();
+
+      expect(log.warn.mock.calls).toEqual([
+        [
+          {
+            code: 'CONTRACT.MARKER_READ_FAILED',
+            scope: 'marker-verification',
+            expected,
+            actual: null,
+            message: 'Contract marker could not be read from database',
+            error: { message: 'socket hang up' },
+          },
+        ],
+      ]);
+    });
+
+    it('does not repeat a failed check on later queries', async () => {
+      const { runtime, log, readMarkerSpy } = failingRuntime(new Error('connection reset'));
+
+      await runtime.query(createPlan()).toArray();
+      await runtime.query(createPlan()).toArray();
+      await runtime.execute(createPlan());
+
+      expect(readMarkerSpy).toHaveBeenCalledOnce();
+      expect(log.warn).toHaveBeenCalledOnce();
+    });
+
+    it("warns, then rejects the query with the driver's own error when the database cannot be reached", async () => {
+      const unreachable = structuredError(
+        'DRIVER.CONNECTION_FAILED',
+        'connect ECONNREFUSED 127.0.0.1:5432',
+      );
+      const driver = createDriver();
+      vi.mocked(driver.query).mockImplementation(() => {
+        throw unreachable;
+      });
+      const { runtime, log } = failingRuntime(unreachable, driver);
+
+      await expect(runtime.query(createPlan()).toArray()).rejects.toBe(unreachable);
+
+      expect(log.warn.mock.calls).toEqual([
+        [
+          {
+            code: 'CONTRACT.MARKER_READ_FAILED',
+            scope: 'marker-verification',
+            expected,
+            actual: null,
+            message: 'Contract marker could not be read from database',
+            error: {
+              code: 'DRIVER.CONNECTION_FAILED',
+              message: 'connect ECONNREFUSED 127.0.0.1:5432',
+            },
+          },
+        ],
+      ]);
+    });
+
+    it('single-flights a failing marker read under concurrent first queries', async () => {
+      let failMarker: (error: Error) => void = () => {};
+      const markerPromise = new Promise<MarkerReadResult>((_, reject) => {
+        failMarker = reject;
+      });
+      const readMarkerSpy = vi.fn().mockImplementation(() => markerPromise);
+      const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const runtime = buildRuntime({ markerResult: { kind: 'absent' }, log, readMarkerSpy });
+
+      const inflight = [
+        runtime.query(createPlan()).toArray(),
+        runtime.query(createPlan()).toArray(),
+        runtime.execute(createPlan()),
+      ];
+
+      failMarker(new Error('connection reset'));
+      await expect(Promise.all(inflight)).resolves.toEqual([[{}], [{}], { affectedRows: 0 }]);
+
+      expect(readMarkerSpy).toHaveBeenCalledOnce();
+      expect(log.warn).toHaveBeenCalledOnce();
+    });
   });
 });

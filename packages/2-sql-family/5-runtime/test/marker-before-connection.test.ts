@@ -33,6 +33,7 @@ class RawConnectionRuntime extends SqlRuntimeBase {
 type ReadMarker = (queryable: SqlQueryable) => Promise<MarkerReadResult>;
 
 function setup(options: { readMarker?: ReadMarker; verifyMarker?: false } = {}) {
+  const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
   const calls: string[] = [];
   const readMarker = vi.fn<ReadMarker>(
     options.readMarker ??
@@ -89,9 +90,10 @@ function setup(options: { readMarker?: ReadMarker; verifyMarker?: false } = {}) 
     context: createTestContext(contract, adapter),
     adapter: instantiateExecutionStack(stack).adapter,
     driver,
+    log,
     ...(options.verifyMarker === false ? { verifyMarker: false } : {}),
   });
-  return { runtime, driver, readMarker, acquireConnection, connection, calls };
+  return { runtime, driver, readMarker, acquireConnection, connection, calls, log };
 }
 
 function affectedCountPlan(): SqlQueryPlan<AffectedCount> {
@@ -191,45 +193,60 @@ describe('the contract marker check before a connection is taken', () => {
   describe('when the marker read fails', () => {
     const failure = new Error('simulated marker read failure');
     const acquiringCalls = [
-      ['connection()', (runtime: RawConnectionRuntime) => runtime.connection()],
+      [
+        'connection()',
+        async (runtime: RawConnectionRuntime) => (await runtime.connection()).release(),
+      ],
       [
         'a transaction',
-        (runtime: RawConnectionRuntime) =>
-          withTransaction(runtime, (tx) => tx.execute(affectedCountPlan())),
+        async (runtime: RawConnectionRuntime) => {
+          await withTransaction(runtime, (tx) => tx.execute(affectedCountPlan()));
+        },
       ],
-      ["a subclass's raw connection", (runtime: RawConnectionRuntime) => runtime.rawConnection()],
+      [
+        "a subclass's raw connection",
+        async (runtime: RawConnectionRuntime) => (await runtime.rawConnection()).release(),
+      ],
     ] as const;
 
     it.each(acquiringCalls)(
-      'rejects %s, takes no connection, and the next call retries the read',
+      'warns, lets %s take its connection, and does not read the marker again',
       async (_, open) => {
         const readMarker = vi
           .fn<ReadMarker>()
           .mockRejectedValueOnce(failure)
           .mockResolvedValue({ kind: 'absent' });
-        const { runtime, acquireConnection } = setup({ readMarker });
+        const { runtime, acquireConnection, log } = setup({ readMarker });
 
-        await expect(open(runtime)).rejects.toBe(failure);
-        expect(acquireConnection).not.toHaveBeenCalled();
-
+        await expect(open(runtime)).resolves.toBeUndefined();
         await (await runtime.connection()).release();
-        expect(readMarker).toHaveBeenCalledTimes(2);
-        expect(acquireConnection).toHaveBeenCalledOnce();
+
+        expect(readMarker).toHaveBeenCalledOnce();
+        expect(acquireConnection).toHaveBeenCalledTimes(2);
+        expect(log.warn.mock.calls).toEqual([
+          [
+            {
+              code: 'CONTRACT.MARKER_READ_FAILED',
+              scope: 'marker-verification',
+              expected: { storageHash: 'marker-before-connection', profileHash: 'testprofile' },
+              actual: null,
+              message: 'Contract marker could not be read from database',
+              error: { message: 'simulated marker read failure' },
+            },
+          ],
+        ]);
       },
     );
 
-    it.each(acquiringCalls)(
-      'leaves nothing for close() to wait for after it rejects %s',
-      async (_, open) => {
-        const { runtime, driver } = setup({
-          readMarker: vi.fn<ReadMarker>().mockRejectedValue(failure),
-        });
+    it.each(acquiringCalls)('leaves nothing for close() to wait for after %s', async (_, open) => {
+      const { runtime, driver } = setup({
+        readMarker: vi.fn<ReadMarker>().mockRejectedValue(failure),
+      });
 
-        await expect(open(runtime)).rejects.toBe(failure);
+      await open(runtime);
 
-        await expect(runtime.close()).resolves.toBeUndefined();
-        expect(driver.close).toHaveBeenCalledOnce();
-      },
-    );
+      await expect(runtime.close()).resolves.toBeUndefined();
+      expect(driver.close).toHaveBeenCalledOnce();
+    });
   });
 });
