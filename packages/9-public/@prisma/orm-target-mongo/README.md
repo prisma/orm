@@ -2,7 +2,7 @@
 
 The concrete MongoDB target of Prisma 8: the target descriptor (migration rendering, codec types, control), the Mongo adapter, and the `mongodb`-based driver.
 
-> **From `8.0.0` this package is in Preview.** Its tests block a release for what it supports, its reference documentation lists what it does not support yet, and it may change in any release. Until `8.0.0` every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`. See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+> **From `8.0.0` this package is in Preview.** Its tests block a release for what it supports, and it may change in any release. Until `8.0.0` every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`. See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
 
 A MongoDB application lists this package beside `@prisma/orm-mongo`, at the version that target package names it at, because it names it as a peer dependency; `prisma orm init` writes that list. Application code imports from the target package. Extension authors targeting MongoDB and decomposed installs (for example, replacing the adapter while keeping the target and driver) import this package directly.
 
