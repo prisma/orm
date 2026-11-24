@@ -1,12 +1,17 @@
-// Reads the API of one published package with API Extractor, one run per import path.
-// API Extractor reads the declarations with the TypeScript it bundles (6.0.3 with 7.60.1); the
-// flattener's own reading (read-exports.mjs) uses the repository's TypeScript.
+// Reads one published package with API Extractor, one run per import path. This is API
+// Extractor's half of the reading: its models give declaration text, members and the types
+// signatures use. They are not the package's API. They lack forwards of other packages, `declare
+// module` augmentations and the second name of a declaration exported under two names, and they
+// keep API Extractor's `_2` on a name a global also has. The full reading, joined with what the
+// TypeScript compiler says each import path exports (read-exports.mjs), is what flattenPackage
+// in flatten.mjs builds.
 //
-// Output: <package>/dist-api/<import path, with / as __>.api.json for each path (`index` for
-// the package root), and
-// <package>/dist-api/entry-points.json, which maps each import path to its model file.
-// Anything that needs a package's API in structured form reads these files after
-// `pnpm api:update` or `pnpm api:check`.
+// API Extractor reads the declarations with the TypeScript it bundles (6.0.3 with 7.60.1);
+// read-exports.mjs uses the repository's TypeScript.
+//
+// Output: <package>/dist-api/<import path, with / as __>.api.json for each import path (`index`
+// for the package root), and <package>/dist-api/entry-points.json, which maps each import path
+// to its model file. `pnpm api:check` also writes the list it generated to dist-api/api.txt.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
@@ -19,14 +24,25 @@ export const MODEL_FOLDER = 'dist-api';
 export class ApiReadError extends Error {}
 
 export function entryPointsOf(packageDir) {
-  const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
+  const where = relative(process.cwd(), packageDir);
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
+  } catch (error) {
+    throw new ApiReadError(`${where}: cannot read package.json: ${error.message}`);
+  }
+  if (manifest.exports === undefined) {
+    throw new ApiReadError(
+      `${where}: package.json has no exports. Run \`pnpm build\`, which writes them.`,
+    );
+  }
   const entryPoints = [];
   const modelFiles = new Map();
-  for (const [subpath, target] of Object.entries(manifest.exports ?? {})) {
+  for (const [subpath, target] of Object.entries(manifest.exports)) {
     if (subpath === './package.json') continue;
     if (typeof target !== 'string' || !target.endsWith('.mjs')) {
       throw new ApiReadError(
-        `${manifest.name}: export "${subpath}" is not a path to an .mjs file, which this script expects`,
+        `${where}: import path "${subpath}" does not point at an .mjs file, which this script expects`,
       );
     }
     const declarationFile = join(packageDir, target.replace(/\.mjs$/, '.d.mts'));
@@ -35,7 +51,7 @@ export function entryPointsOf(packageDir) {
     const sharing = modelFiles.get(modelFile);
     if (sharing !== undefined) {
       throw new ApiReadError(
-        `${manifest.name}: exports "${sharing}" and "${subpath}" would share the model file ${modelName}.api.json`,
+        `${where}: import paths "${sharing}" and "${subpath}" would share the model file ${modelName}.api.json`,
       );
     }
     modelFiles.set(modelFile, subpath);
@@ -157,7 +173,7 @@ export function readPackageApi(packageDir) {
       });
     } catch (error) {
       throw new ApiReadError(
-        `${where}: API Extractor failed on ${subpath}: ${error instanceof Error ? error.message : String(error)}. Check that \`pnpm build\` is current; if it is, this path probably uses a form of export the script does not support yet, which scripts/public-api would have to learn to read.`,
+        `${where}: API Extractor failed on import path ${subpath}: ${error instanceof Error ? error.message : String(error)}. Check that \`pnpm build\` is current; if it is, this path probably uses a form of export the script does not support yet, which scripts/public-api would have to learn to read.`,
       );
     }
     if (!result.succeeded && errors.length === 0) {

@@ -9,8 +9,9 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { listDifferences } from './differences.mjs';
 import { compareCodeUnits } from './flatten.mjs';
-import { entryPointsOf } from './read-api.mjs';
+import { entryPointsOf, MODEL_FOLDER } from './read-api.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const LIST_FILE = 'api.txt';
@@ -35,26 +36,16 @@ export function apiText(lines) {
   return `${[HEADER, ...lines].join('\n')}\n`;
 }
 
-const listLines = (text) => text.split('\n').filter((line) => line !== '' && !line.startsWith('#'));
+export class WorkerError extends Error {}
 
-// Lines only in `generated` are added, lines only in `committed` removed. Up to `limit` of each.
-export function listDifferences(committed, generated, limit = 10) {
-  const before = new Set(listLines(committed));
-  const after = new Set(listLines(generated));
-  const added = [...after].filter((line) => !before.has(line));
-  const removed = [...before].filter((line) => !after.has(line));
-  const shown = [
-    ...removed.slice(0, limit).map((line) => `- ${line}`),
-    ...added.slice(0, limit).map((line) => `+ ${line}`),
-  ];
-  const hidden = Math.max(0, removed.length - limit) + Math.max(0, added.length - limit);
-  if (hidden > 0) shown.push(`  ... and ${hidden} more`);
-  if (shown.length === 0 && committed !== generated)
-    shown.push('  (same lines, different order or spacing)');
-  return shown;
+export function workerStopped(packageDir, root, code, signal) {
+  const how = signal ? `on signal ${signal}` : `with exit code ${code}`;
+  return new WorkerError(
+    `${relative(root, packageDir)}: the worker stopped ${how} before it reported`,
+  );
 }
 
-function generateOne(packageDir) {
+function generateOne(packageDir, root) {
   return new Promise((resolveText, reject) => {
     const child = fork(join(here, 'worker.mjs'), [packageDir], {
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
@@ -64,14 +55,19 @@ function generateOne(packageDir) {
       reply = message;
     });
     child.on('error', reject);
-    child.on('exit', (code) => {
+    child.on('exit', (code, signal) => {
       if (reply?.lines) resolveText(apiText(reply.lines));
-      else reject(new Error(reply?.error ?? `${packageDir}: the worker exited with code ${code}`));
+      else if (reply?.error) reject(new WorkerError(reply.error));
+      else reject(workerStopped(packageDir, root, code, signal));
     });
   });
 }
 
-export async function generateLists(packageDirs, workers = Math.min(4, availableParallelism())) {
+export async function generateLists(
+  packageDirs,
+  root,
+  workers = Math.min(4, availableParallelism()),
+) {
   const texts = new Map();
   const failures = [];
   const sizes = new Map();
@@ -88,7 +84,7 @@ export async function generateLists(packageDirs, workers = Math.min(4, available
   const run = async () => {
     for (let packageDir = queue.shift(); packageDir; packageDir = queue.shift()) {
       try {
-        texts.set(packageDir, await generateOne(packageDir));
+        texts.set(packageDir, await generateOne(packageDir, root));
       } catch (error) {
         failures.push(error.message);
       }
@@ -104,7 +100,7 @@ export async function main({ mode, root, stdout = process.stdout, stderr = proce
     return 2;
   }
   const { packageDirs, leftovers } = publishedPackageDirs(root);
-  const { texts, failures } = await generateLists(packageDirs);
+  const { texts, failures } = await generateLists(packageDirs, root);
   for (const leftover of leftovers) {
     failures.push(
       `${relative(root, leftover)} has an ${LIST_FILE} but no package.json. Delete the folder if the package is gone.`,
@@ -121,6 +117,7 @@ export async function main({ mode, root, stdout = process.stdout, stderr = proce
   for (const [packageDir, text] of [...texts].sort(([a], [b]) => compareCodeUnits(a, b))) {
     const file = join(packageDir, LIST_FILE);
     const committed = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    if (mode === 'check') writeFileSync(join(packageDir, MODEL_FOLDER, LIST_FILE), text);
     if (committed === text) continue;
     stale.push({ file: relative(root, file), differences: listDifferences(committed, text) });
     if (mode === 'update') writeFileSync(file, text);
@@ -140,7 +137,12 @@ export async function main({ mode, root, stdout = process.stdout, stderr = proce
     stderr.write(`\n${file}\n${differences.map((line) => `  ${line}`).join('\n')}\n`);
   }
   stderr.write(
-    '\nRun `pnpm build`, then `pnpm api:update`, and commit the changed api.txt files. Do not edit or hand-merge an api.txt.\n',
+    [
+      '',
+      'Run `pnpm build`, then `pnpm api:update`, and commit the changed api.txt files. Do not edit or hand-merge an api.txt.',
+      `The lists this run generated are in each package's ${MODEL_FOLDER}/${LIST_FILE}; in CI they are uploaded as the workflow artifact "api-lists", which can be downloaded from the run.`,
+      '',
+    ].join('\n'),
   );
   return 1;
 }

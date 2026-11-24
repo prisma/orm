@@ -439,7 +439,7 @@ describe('flattenPackage', () => {
   it('names the package and path when API Extractor fails', () => {
     throws(
       () => linesOf('nsexport-chunk'),
-      /fixtures\/nsexport-chunk: API Extractor failed on \.: fetchAstModuleExportInfo\(\) is not supported for external modules\. /,
+      /fixtures\/nsexport-chunk: API Extractor failed on import path \.: fetchAstModuleExportInfo\(\) is not supported for external modules\. /,
     );
   });
 
