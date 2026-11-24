@@ -1,5 +1,5 @@
 import { Debug } from '@prisma/debug'
-import { SqlDriverAdapter, SqlQuery, SqlQueryable, Transaction } from '@prisma/driver-adapter-utils'
+import { ConnectionInfo, SqlDriverAdapter, SqlQuery, SqlQueryable, Transaction } from '@prisma/driver-adapter-utils'
 
 import { randomUUID } from '../crypto'
 import { QueryEvent } from '../events'
@@ -148,6 +148,7 @@ export class TransactionManager {
   private readonly tracingHelper: TracingHelper
   readonly #onQuery?: (event: QueryEvent) => void
   readonly #provider?: SchemaProvider
+  readonly #connectionInfo?: ConnectionInfo
 
   constructor({
     driverAdapter,
@@ -167,6 +168,7 @@ export class TransactionManager {
     this.tracingHelper = tracingHelper
     this.#onQuery = onQuery
     this.#provider = provider
+    this.#connectionInfo = driverAdapter.getConnectionInfo?.()
   }
 
   /**
@@ -703,6 +705,7 @@ export class TransactionManager {
       provider: this.#provider ?? queryable.provider,
       tracingHelper: this.tracingHelper,
       onQuery: this.#onQuery,
+      connectionInfo: this.#connectionInfo,
     })
   }
 }
