@@ -62,17 +62,16 @@ export function planPushPublish(
   base: string,
   previous: PreviousVersionLookup,
   latestDevVersion: string | undefined,
-  anchorVersion: string = base,
 ): VersionResult {
   const isReleaseBump = previous.available && previous.version !== base;
   if (isReleaseBump) {
     return {
       version: base,
       tag: 'latest',
-      devVersion: composeDevVersion(base, latestDevVersion, anchorVersion).version,
+      devVersion: composeDevVersion(base, latestDevVersion).version,
     };
   }
-  return composeDevVersion(base, latestDevVersion, anchorVersion);
+  return composeDevVersion(base, latestDevVersion);
 }
 
 /**
@@ -87,40 +86,37 @@ export function planDispatchPublish(
   tag: string,
   isDryRun: boolean,
   latestDevVersion: string | undefined,
-  anchorVersion: string = base,
 ): VersionResult {
   if (tag === 'latest' && !isDryRun) {
     return {
       version: base,
       tag,
-      devVersion: composeDevVersion(base, latestDevVersion, anchorVersion).version,
+      devVersion: composeDevVersion(base, latestDevVersion).version,
     };
   }
   return { version: base, tag };
 }
 
 /**
- * Composes the `<base>-dev.N` version for a routine (non-release) push,
- * given the version the anchor package has under the `dev` dist-tag. The
- * counter continues while that development build was made from the anchor
- * package's planned version, and resets to 1 when it moved on (new minor,
- * new rc counter, a fix to the anchor package). On the release candidates
- * the anchor's version is the root version. A development build with a
- * suffix the repository does not publish stops here, naming it.
+ * Composes the `<base>-dev.N` version for a routine (non-release) push, given
+ * the version the anchor package has under the `dev` dist-tag. Every package
+ * is published as `<its planned version>-dev.N` with one counter, so the
+ * counter must never repeat for a version any package still has. It continues
+ * within one release and resets only when the release moves on: on the
+ * release candidates when the root version does (every package moves with it),
+ * and after them at a new major or minor. A fix to one package within a
+ * release, the anchor's included, keeps the counter going. A development build
+ * with a suffix the repository does not publish stops here, naming it.
  */
 export function composeDevVersion(
   baseVersion: string,
   latestDevVersion: string | undefined,
-  anchorVersion: string = baseVersion,
 ): VersionResult {
   let buildNumber = 1;
 
   if (latestDevVersion) {
     const latest = parseVersion(latestDevVersion);
-    if (
-      latest.dev !== undefined &&
-      formatVersion({ ...latest, dev: undefined }) === anchorVersion
-    ) {
+    if (latest.dev !== undefined && releaseOf(latest) === releaseOf(parseVersion(baseVersion))) {
       buildNumber = latest.dev + 1;
     }
   }
@@ -129,6 +125,16 @@ export function composeDevVersion(
     version: `${baseVersion}-dev.${buildNumber}`,
     tag: 'dev',
   };
+}
+
+/** The release a version belongs to: the whole version on the `8.0.0` release candidates, else its major and minor. */
+function releaseOf(version: ParsedVersion): string {
+  return version.level?.name === 'rc' &&
+    version.major === 8 &&
+    version.minor === 0 &&
+    version.patch === 0
+    ? formatVersion({ ...version, dev: undefined })
+    : `${version.major}.${version.minor}`;
 }
 
 /**

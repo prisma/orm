@@ -45,7 +45,6 @@ import {
   planDispatchPublish,
   planPushPublish,
 } from './determine-version-utils.ts';
-import { planWorkspace } from './release-plan-workspace.ts';
 
 // The counter reads one package's `dev` dist-tag as the high-water mark, so
 // that package must be one this repo still publishes on every dev build.
@@ -125,13 +124,9 @@ const inputDistTag = process.env.INPUT_DIST_TAG;
 const baseVersion = readRootVersion();
 assertCanonicalBase(baseVersion);
 
-// The anchor's own planned version: its `dev` tag holds `<that version>-dev.N`,
-// which on the levels line can differ from the root version.
-const anchorVersion = planWorkspace(rootDir, baseVersion)[PACKAGE_NAME]?.version ?? baseVersion;
-
 console.log(`Event:                 ${eventName}`);
 console.log(`Base version (root):   ${baseVersion}`);
-console.log(`Dev counter anchor:    ${PACKAGE_NAME} ${anchorVersion}`);
+console.log(`Dev counter anchor:    ${PACKAGE_NAME}`);
 
 let result: VersionResult;
 
@@ -144,13 +139,12 @@ switch (eventName) {
       inputDistTag || 'latest',
       process.env.INPUT_DRY_RUN === 'true',
       getLatestDevVersion(),
-      anchorVersion,
     );
     break;
 
   case 'push': {
     const previous = readPreviousRootVersion();
-    result = planPushPublish(baseVersion, previous, getLatestDevVersion(), anchorVersion);
+    result = planPushPublish(baseVersion, previous, getLatestDevVersion());
     if (result.tag === 'latest') {
       console.log(
         `Previous root version: ${previous.available ? (previous.version ?? '(unset)') : '(unreadable)'} → release bump detected.`,

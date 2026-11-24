@@ -45,8 +45,12 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { classifyPublishResult, publishTagFor, wasEverGa } from './publish-packages-utils.mjs';
-import { levelOf, planWorkspace, releaseOfRootVersion } from './release-plan-workspace.ts';
+import {
+  alreadyPublishedOwnNumbered,
+  classifyPublishResult,
+  publishTagFor,
+  releaseTagsFor,
+} from './publish-packages-utils.mjs';
 
 const args = process.argv.slice(2);
 let tag;
@@ -79,11 +83,26 @@ const listJson = execFileSync('pnpm', ['list', '-r', '--json', '--depth', '-1'],
   encoding: 'utf-8',
   maxBuffer: 64 * 1024 * 1024,
 });
-const packages = JSON.parse(listJson)
+const listed = JSON.parse(listJson)
   .filter((p) => !p.private && p.path && p.name)
-  .map((p) => ({ name: p.name, path: p.path }));
+  .map((p) => ({ name: p.name, path: p.path, version: p.version }));
+const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const rootVersion = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8')).version;
+const skipped = new Set(
+  alreadyPublishedOwnNumbered({ rootVersion, packages: listed, publishedVersions }),
+);
+for (const name of skipped) console.log(`  ${name}: skipped, already published at this version`);
+const packages = listed.filter(({ name }) => !skipped.has(name));
 
-const tags = tag === 'latest' ? releaseTags() : new Map();
+const tags =
+  tag === 'latest'
+    ? releaseTagsFor({
+        rootDir,
+        rootVersion,
+        names: packages.map(({ name }) => name),
+        publishedVersions,
+      })
+    : new Map();
 const tagOf = (name) => publishTagFor(tag, tags.get(name));
 
 console.log(
@@ -91,29 +110,6 @@ console.log(
 );
 for (const { name } of packages) {
   if (tagOf(name) !== tag) console.log(`  ${name} goes under ${tagOf(name)}`);
-}
-
-/**
- * Each package's tag in the release plan for the root version. On the
- * levels line a package below GA that was ever GA in the release's major
- * goes under its level's name, which the registry's published versions
- * tell; the release candidates read nothing from the registry.
- */
-function releaseTags() {
-  const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
-  const rootVersion = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8')).version;
-  const { release, line } = releaseOfRootVersion(rootVersion);
-  const everGa = new Set(
-    line === 'levels'
-      ? packages
-          .map(({ name }) => name)
-          .filter(
-            (name) => levelOf(name) !== 'ga' && wasEverGa(publishedVersions(name), release.major),
-          )
-      : [],
-  );
-  const plan = planWorkspace(rootDir, rootVersion, everGa);
-  return new Map(Object.entries(plan).map(([name, planned]) => [name, planned.tag]));
 }
 
 function publishedVersions(name) {

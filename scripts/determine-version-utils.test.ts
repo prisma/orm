@@ -88,20 +88,34 @@ describe('composeDevVersion', () => {
     });
   });
 
-  it('continues the counter on the levels line while the anchor package keeps its version', () => {
-    assert.deepEqual(composeDevVersion('8.1.0', '8.1.1-dev.4', '8.1.1'), {
+  it('continues the counter within a release on the levels line, whichever version the anchor package has', () => {
+    assert.deepEqual(composeDevVersion('8.1.0', '8.1.1-dev.4'), {
       version: '8.1.0-dev.5',
       tag: 'dev',
     });
-    assert.deepEqual(composeDevVersion('8.1.0', '8.1.0-preview.0-dev.3', '8.1.0-preview.0'), {
+    assert.deepEqual(composeDevVersion('8.1.0', '8.1.0-preview.0-dev.3'), {
       version: '8.1.0-dev.4',
       tag: 'dev',
     });
   });
 
-  it('resets the counter on the levels line when the anchor package moved on', () => {
-    assert.deepEqual(composeDevVersion('8.1.0', '8.1.0-dev.9', '8.1.1'), {
-      version: '8.1.0-dev.1',
+  it('continues the counter across a fix to the anchor package, so no other package repeats a build', () => {
+    assert.deepEqual(composeDevVersion('8.1.0', '8.1.0-dev.9'), {
+      version: '8.1.0-dev.10',
+      tag: 'dev',
+    });
+  });
+
+  it('continues the counter across a fix to another package', () => {
+    assert.deepEqual(composeDevVersion('8.1.0', '8.1.1-dev.9'), {
+      version: '8.1.0-dev.10',
+      tag: 'dev',
+    });
+  });
+
+  it('resets the counter at a new release on the levels line', () => {
+    assert.deepEqual(composeDevVersion('8.2.0', '8.1.1-dev.9'), {
+      version: '8.2.0-dev.1',
       tag: 'dev',
     });
   });

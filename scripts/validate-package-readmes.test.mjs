@@ -53,4 +53,40 @@ describe('validate package READMEs', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('requires each published package to state the level levels.ts declares', () => {
+    const root = mkdtempSync(join(tmpdir(), 'validate-package-readmes-'));
+    const run = () =>
+      spawnSync(process.execPath, [join(process.cwd(), 'scripts/validate-package-readmes.mjs')], {
+        cwd: root,
+        encoding: 'utf8',
+      });
+
+    try {
+      const dir = join(root, 'packages/9-public/@prisma/orm-mongo');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: '@prisma/orm-mongo' }));
+      writeFileSync(
+        join(dir, 'README.md'),
+        '# @prisma/orm-mongo\n\n> **From `8.0.0` this package is Generally Available.**\n',
+      );
+      const wrong = run();
+      writeFileSync(
+        join(dir, 'README.md'),
+        '# @prisma/orm-mongo\n\n> **From `8.0.0` this package is in Preview.**\n',
+      );
+      const right = run();
+
+      assert.deepEqual(
+        {
+          wrong: wrong.status,
+          names: wrong.stderr.includes('orm-mongo/README.md'),
+          right: right.status,
+        },
+        { wrong: 1, names: true, right: 0 },
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

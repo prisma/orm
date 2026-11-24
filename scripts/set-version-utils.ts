@@ -98,6 +98,34 @@ export function rewriteWorkspaceDepsByPlan(
 }
 
 /**
+ * One workspace member's manifest as `set-version` writes it for `version`: a published package at
+ * the version the release plan gives it, anything else at the root version, and every workspace
+ * specifier from the plan. Mutates in place.
+ */
+export function rewriteManifestByPlan(
+  packageJson: MutablePackageJson,
+  options: {
+    readonly version: string;
+    readonly line: PlanSpecifierRule['line'];
+    readonly plan: Readonly<
+      Record<
+        string,
+        { readonly version: string; readonly ranges: Readonly<Record<string, string>> }
+      >
+    >;
+  },
+): void {
+  const planned = packageJson.name === undefined ? undefined : options.plan[packageJson.name];
+  packageJson.version = planned?.version ?? options.version;
+  rewriteWorkspaceDepsByPlan(packageJson, {
+    rootVersion: options.version,
+    line: options.line,
+    published: new Set(Object.keys(options.plan)),
+    ranges: planned?.ranges,
+  });
+}
+
+/**
  * Whether a manifest that is NOT a workspace member still versions in
  * lockstep with the workspace. A `workspace:` dep spec is the tell:
  * project-boundary manifests (e.g. `examples/bundle-size/src/postgres`,

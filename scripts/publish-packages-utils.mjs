@@ -4,7 +4,11 @@
  * `pnpm publish` subprocesses.
  */
 
-import { parseVersion } from '../packages/0-shared/publish-surface/src/release-plan.ts';
+import {
+  isNumberedOnItsOwn,
+  parseVersion,
+} from '../packages/0-shared/publish-surface/src/release-plan.ts';
+import { levelOf, planWorkspace, releaseOfRootVersion } from './release-plan-workspace.ts';
 
 /**
  * npm's error wording when republishing a version number that already
@@ -77,10 +81,12 @@ export function publishTagFor(passedTag, plannedTag) {
 }
 
 /**
- * Whether a package was ever GA in a major: a plain `X.Y.Z` of that major
- * is among its published versions.
+ * Whether a package has ever had a GA release, in any major version: a
+ * plain `X.Y.Z` with a major of 1 or more is among its published versions.
+ * A `0.x` version is Semantic Versioning's initial development, and the
+ * `0.x` minors these packages had before the release candidates were not GA.
  */
-export function wasEverGa(publishedVersions, major) {
+export function wasEverGa(publishedVersions) {
   return publishedVersions.some((version) => {
     let parsed;
     try {
@@ -88,6 +94,39 @@ export function wasEverGa(publishedVersions, major) {
     } catch {
       return false;
     }
-    return parsed.major === major && parsed.level === undefined && parsed.dev === undefined;
+    return parsed.major >= 1 && parsed.level === undefined && parsed.dev === undefined;
   });
+}
+
+/**
+ * Each published package's tag in the release plan for the root version.
+ * On the levels line a package below GA that has ever had a GA release goes
+ * under its level's name, which its published versions tell; the release
+ * candidates read nothing from the registry. `publishedVersions` reads one
+ * package's versions from the registry.
+ */
+export function releaseTagsFor({ rootDir, rootVersion, names, publishedVersions }) {
+  const { line } = releaseOfRootVersion(rootVersion);
+  const everGa = new Set(
+    line === 'levels'
+      ? names.filter((name) => levelOf(name) !== 'ga' && wasEverGa(publishedVersions(name)))
+      : [],
+  );
+  const plan = planWorkspace(rootDir, rootVersion, everGa);
+  return new Map(Object.entries(plan).map(([name, planned]) => [name, planned.tag]));
+}
+
+/**
+ * The packages numbered on their own whose version is already on the
+ * registry. Such a package keeps its version until it gets a fix, so at most
+ * releases there is nothing new of it to publish; it is skipped and reported,
+ * not published and refused. On the release candidates every version is new,
+ * and nothing is read from the registry.
+ */
+export function alreadyPublishedOwnNumbered({ rootVersion, packages, publishedVersions }) {
+  if (releaseOfRootVersion(rootVersion).line === 'release-candidates') return [];
+  return packages
+    .filter(({ name }) => isNumberedOnItsOwn(levelOf(name)))
+    .filter(({ name, version }) => publishedVersions(name).includes(version))
+    .map(({ name }) => name);
 }

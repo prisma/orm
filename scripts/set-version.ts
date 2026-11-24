@@ -9,6 +9,7 @@ import { planWorkspace, releaseOfRootVersion } from './release-plan-workspace.ts
 import {
   participatesInLockstep,
   restampExtensionVersion,
+  rewriteManifestByPlan,
   rewriteWorkspaceDepsByPlan,
   stampSkillMetadata,
 } from './set-version-utils.ts';
@@ -63,15 +64,7 @@ for (const pkg of workspacePackages) {
   const packageJsonPath = path.join(pkg.path, 'package.json');
   const content = await fs.readFile(packageJsonPath, 'utf-8');
   const packageJson: PackageJson = JSON.parse(content);
-  const planned = plan[packageJson.name];
-
-  packageJson.version = planned?.version ?? version;
-  rewriteWorkspaceDepsByPlan(packageJson, {
-    rootVersion: version,
-    line,
-    published,
-    ranges: planned?.ranges,
-  });
+  rewriteManifestByPlan(packageJson, { version, line, plan });
   await fs.writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
   console.log(`Updated ${pkg.name} to ${packageJson.version}`);
