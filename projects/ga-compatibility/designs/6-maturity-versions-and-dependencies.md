@@ -28,11 +28,16 @@ The number is what a person reads. What a tool checks is the range the package d
 
 Two costs for the outside maintainer, which we accept on their behalf in recommending this: a feature of theirs that needs no newer framework ships as a patch, and they cannot make a breaking change of their own inside our major version once their package is GA.
 
-## 2. Which packages are GA at `8.0.0`
+## 2. The level of each package at `8.0.0`
 
-The PostgreSQL facade and everything it depends on, and pgvector and the other PostgreSQL extensions we maintain.
+Until now every package has carried the suffix `rc`, whatever its real state. From `8.0.0` the suffix says what [maturity-levels.md](../maturity-levels.md) defines.
 
-The ParadeDB extension is not among them. It is deleted from this repository before GA, and the ParadeDB team takes it into a repository of their own. It then becomes a package maintained outside, under section 1.2.
+| Level at `8.0.0` | Packages |
+| --- | --- |
+| GA | The PostgreSQL facade and everything it depends on, and pgvector and the other PostgreSQL extensions we maintain, except the two below |
+| Preview | The Supabase extension. We expect to change it, and need real use and feedback first, which is not the priority before GA |
+| Early Access | MySQL, MariaDB and SQLite |
+| Outside the scale | The ParadeDB extension. It is deleted from this repository before GA, and the ParadeDB team takes it into a repository of their own, where section 1.2 applies to it. While it is still here it is numbered `0.x` |
 
 ## 3. How the packages depend on each other
 
@@ -85,7 +90,8 @@ The policy says an application depends on one facade, on the extension packages 
 
 ## 5. Not yet discussed
 
-- Whether the Supabase extension, which the README calls experimental, is GA at `8.0.0`.
+- The level of MongoDB at `8.0.0`.
+- How the packages that move from `rc` to a lower level are numbered: `8.0.0-ea.0` sorts below the `8.0.0-rc.N` versions already published.
 - Whether the command-line tool must be at least as new as the library in the project.
 - A fix to a package below GA: whether it raises the suffix counter and not the patch number, so that a user's range selects it.
 - Which tag a package that has never had a GA release is published under.

@@ -13,13 +13,14 @@ A maturity level tells a user two things about a package or an API:
 
 There is one scale. It applies to a package and to a single API, so a user learns one set of words. Kubernetes uses alpha, beta and GA for both features and API versions. Angular uses Developer Preview and Experimental for both features and single APIs.
 
-There are three levels, with the names Prisma already uses: Early Access, Preview and Generally Available (GA). "Below GA" means Preview or Early Access.
+There are four levels: Early Access, Preview, Release Candidate and Generally Available (GA). Three are the names Prisma already uses. Release Candidate is the step before GA: Preview says the thing may still change, and Release Candidate says we believe it is finished and only fixes will go in. "Below GA" means Release Candidate, Preview or Early Access.
 
 A level is defined by what we do for the package or API, not by a description of its quality. These are working definitions (section 6):
 
 | Level | What we do |
 | --- | --- |
 | Generally Available | Its tests run on every release and a failure blocks the release. A package passes the full test suite against its database. The compatibility policy covers it. |
+| Release Candidate | As for GA, and we expect to make no further change that breaks its users. The compatibility policy does not cover it until it is GA. |
 | Preview | The same tests run and block the release for what it supports. Its reference documentation lists what it does not yet support. The compatibility policy does not cover it. |
 | Early Access | Released so that people can try it. A failing test does not block a release. The compatibility policy does not cover it. |
 
@@ -41,12 +42,13 @@ A level is written in two places, both visible in the user's own code. The same 
 | Level | In a package's version number | At the start of an API's name |
 | --- | --- | --- |
 | Generally Available | Plain version: `8.1.0` | Nothing: `foo` |
+| Release Candidate | `8.1.0-rc.1` | Not decided (section 6) |
 | Preview | `8.1.0-preview.3` | `preview_foo` |
 | Early Access | `8.1.0-ea.1` | `ea_foo` |
 
 A user therefore needs two facts to know whether something is GA: the package's version, and the API's name.
 
-The version number uses the meaning Semantic Versioning gives a pre-release version, and package managers follow it when they match a range. A range such as `^8.0.0` never selects a pre-release, so a user gets a release below GA only by asking for it. A GA release is published under the `latest` tag and a release below GA under another tag, so a plain install of a package that has a GA release gives a GA version. The words also sort in the right order: `ea`, then `preview`, then the plain version.
+The version number uses the meaning Semantic Versioning gives a pre-release version, and package managers follow it when they match a range. A range such as `^8.0.0` never selects a pre-release, so a user gets a release below GA only by asking for it. A GA release is published under the `latest` tag and a release below GA under another tag, so a plain install of a package that has a GA release gives a GA version. The words also sort in the right order: `ea`, then `preview`, then `rc`, then the plain version.
 
 An extension author tells what they can depend on in the same two ways as an application developer.
 
@@ -59,8 +61,9 @@ An extension author tells what they can depend on in the same two ways as an app
 
 ## 6. Not yet decided
 
-- **The full definition of each level.** The table in section 2 is a working version. Unanswered: what level the framework package has when it has no database of its own; which release a failing test blocks while all packages are released together; who decides what a Preview package supports; which level `8.0.0-rc.N` has. The [plan](plan.md) has a task for this, and for a page that explains the levels to users.
+- **The full definition of each level.** The table in section 2 is a working version. Unanswered: what level the framework package has when it has no database of its own; which release a failing test blocks while all packages are released together; who decides what a Preview package supports. The [plan](plan.md) has a task for this, and for a page that explains the levels to users.
 - **Version numbers while packages are at different levels.** Today every package has the same version and they are released together. Once one package is GA and another is Preview, their versions differ. Unanswered: what the Preview package's version is at each release; that a range on a pre-release, such as `^8.1.0-preview.3`, does not select the pre-releases of the next minor, so a user edits it by hand; which tag a package gets that has never had a GA release; and which package carries a database's level (the facade, the target package or both).
+- **Release Candidate for a single API.** Whether an API inside a GA package can be a release candidate, and how its name would say so.
 - **How an API moves to GA.** Its name changes, from `preview_foo` to `foo`. Proposed and not agreed: the release that makes it GA adds the plain name, and the old name keeps working until the next major.
 - **How the word is written where the name is not a TypeScript identifier.** A command-line flag, a config option, an attribute in a schema file, an error code, and a type whose name starts with a capital letter.
 - **How the levels relate to the scale First-Class, Supported and Unofficial** in [prisma/orm#25843](https://github.com/prisma/orm/issues/25843), which says where we spend effort and not how finished a package is.
