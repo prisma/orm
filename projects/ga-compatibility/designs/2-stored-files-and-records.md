@@ -1,6 +1,6 @@
 # Design: later releases read the files and database records of earlier releases
 
-The design for project 2 of the [plan](../plan.md). It holds only what has been agreed. So far that is the part about files: sections 6.1 and 6.2 of the [policy](../spec.md). Section 5 lists what is not yet discussed, including hashes, database records and the runtime marker check. Terms such as storage hash, ref file and marker are defined in section 2 of the policy.
+The design for project 2 of the [plan](../plan.md). It holds only what has been agreed. It implements sections 6.1, 6.2, 6.3 and 7 of the [policy](../spec.md); section 6.4, Prisma's own tables, is [project 7](7-prismas-own-tables.md). Terms such as storage hash, ref file and marker are defined in section 2 of the policy.
 
 ## 1. Format versions
 
@@ -92,15 +92,26 @@ Taking the format version out of the hash input changes every existing hash once
 
 The marker and the ledger get no format version. The form of Prisma's own tables is identified by the hash of the contract that describes them, as [the design for project 7](7-prismas-own-tables.md) says.
 
-## 4. Alternatives rejected
+## 4. The check a running application makes
+
+On its first use of the database, a running application compares its contract's hashes with the database's marker. The policy says this check never stops the application.
+
+Today a hash that does not match and a missing marker each produce a warning, and the query runs. Two cases still fail the query: a marker that cannot be read, and a marker row that cannot be decoded. Nothing decided that; the code handles the first two cases and lets every other failure through as an error.
+
+Both cases become warnings, and the query runs. If the database cannot be reached at all, the user's own query fails with its own error.
+
+The check still runs once, before the first use of the database, as the decision record on the marker describes.
+
+## 5. Details settled without discussion
+
+These follow from what is above and were not discussed one by one.
+
+- **`ops.json`.** It is covered by the format version in `migration.json`. The two files are one migration and are hashed together.
+- **A file with no format version.** Every file a release candidate wrote lacks one, or has the old field name. An `8.0.0` reader refuses such a file and names the upgrade instructions, which add the version. It does not guess. This matches the project's rule that nothing is kept for compatibility with a pre-release.
+- **Today's hash input** carries blank fields that are not about storage, such as an empty profile hash and empty roots. They are removed in the one change every hash goes through at `8.0.0`, so the input of the storage hash is the target, the family and the storage.
+- **Saved samples.** When `8.0.0` is released, one sample of each file and of the database records it writes is saved, with a set of migrations and their snapshots. Every later release is tested against them: it reads the samples, computes the same hashes, and applies the migrations, on PostgreSQL and MongoDB. The tests are built before `8.0.0`, on samples from a release candidate, and the samples are replaced when `8.0.0` is cut.
+
+## 6. Alternatives rejected
 
 - **A reader ignores the fields it does not know**, as Protocol Buffers readers do; they keep such fields and write them back. Rejected: it would apply a migration while ignoring part of it, and the policy requires a command to stop on a record it cannot interpret.
 - **Each addition says whether an older reader may ignore it.** Rejected: too complex. Someone would have to judge that correctly for every field ever added. The writing rule in section 1.3 serves the same case, an older release meeting a file from newer tooling, with no judgement for each field.
-
-## 5. Not yet discussed
-
-- What a reader does with a file that has no format version, or has the old field name, as every file written by a release candidate does.
-- How `ops.json` is covered by a format version.
-- Whether today's hash input is tidied in the one change that every hash goes through at `8.0.0`.
-- Whether a marker that cannot be read or decoded warns or stops the query, in the check a running application makes.
-- The saved samples of what `8.0.0` writes, and their tests.
