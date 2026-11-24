@@ -1,7 +1,8 @@
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'pathe';
+import { readFileSync, symlinkSync } from 'node:fs';
+import { join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
+  changedList,
   copyFixture,
   fixturesDir,
   fixtureTree,
@@ -11,6 +12,7 @@ import {
   runScript,
   SCRIPT_PATHS,
   type Tree,
+  writeFile,
 } from './test-helpers';
 
 afterAll(removeWorkDirs);
@@ -38,15 +40,6 @@ const REWRITTEN = [
 const NOTHING_CHANGED = 'Every stored file already has a format version; nothing changed.\n';
 const NO_FILE_CHANGED = 'Added the format version to no file.\n';
 const OLD_CONTRACT = 'app/src/prisma/contract.json';
-
-function changedList(paths: readonly string[]): string {
-  return paths.map((path) => `  ${path}\n`).join('');
-}
-
-function writeFile(root: string, path: string, content: string): void {
-  mkdirSync(dirname(join(root, path)), { recursive: true });
-  writeFileSync(join(root, path), content);
-}
 
 function withFiles(tree: Tree, files: Tree): Tree {
   return Object.fromEntries(
@@ -320,6 +313,18 @@ describe('where a ref file is', () => {
       },
       app: written,
       extension: written,
+    });
+  });
+
+  it('leaves a JSON file in a refs folder alone when the snapshots folder next to it holds no folder named by a storage hash', () => {
+    const files = {
+      'app/test/snapshots/foo.js.snap/contract.json': '{"name":"Ada"}\n',
+      'app/test/snapshots/abc/contract.json': '{"name":"Ada"}\n',
+      'app/test/refs/user.json': '{"name":"Ada"}\n',
+    };
+    expect(runWith(files)).toMatchObject({
+      run: { status: 0, stdout: NOTHING_CHANGED, stderr: '' },
+      tree: files,
     });
   });
 });

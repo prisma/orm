@@ -4,7 +4,7 @@
  *
  * Usage: node stored-files-format-version.ts [project-root]
  *
- * The project root defaults to the working directory. The script walks it, skipping `node_modules`, `dist`, `build` and directories whose name starts with a dot. It recognises a contract by its content (`targetFamily`, `storage` and `schemaVersion` at the top level) in any `*.json` file, a `migration.json` by its fields and by the `ops.json` next to it, and a ref file by where Prisma writes refs: `<migrations>/<space>/refs/` in an application, and `<migrations>/refs/` in an extension's own repository. A migrations directory is one named `migrations`, or one holding the `snapshots` store or a migration package, as a directory configured under another name does. A JSON file in any other `refs` directory is not Prisma's and is left alone. It edits each file's text in place, so the rest of the file keeps its bytes: the version goes first, except in a contract whose top-level keys are sorted (a snapshot), where it goes in sorted position, as Prisma writes them. No hash covers the version, so no hash changes.
+ * The project root defaults to the working directory. The script walks it, skipping `node_modules`, `dist`, `build` and directories whose name starts with a dot. It recognises a contract by its content (`targetFamily`, `storage` and `schemaVersion` at the top level) in any `*.json` file, a `migration.json` by its fields and by the `ops.json` next to it, and a ref file by where Prisma writes refs or by its content. Every `*.json` file in `<migrations>/<space>/refs/` (in an application) or `<migrations>/refs/` (in an extension's own repository) is a ref, where a migrations directory is one holding the contract snapshot store (`snapshots/<hash>/contract.json`) or a migration package, whatever it is named. A `*.json` file in any other `refs` directory is a ref when its content is one: a `hash` that is `empty` or a storage hash, and an `invariants` list of strings. This finds the refs of a space with no migrations after `snapshots/` was deleted. Any other JSON file in a `refs` directory is not Prisma's and is left alone. It edits each file's text in place, so the rest of the file keeps its bytes: the version goes first, except in a contract whose top-level keys are sorted (a snapshot), where it goes in sorted position, as Prisma writes them. No hash covers the version, so no hash changes.
  *
  * A ref file may have fields the format does not have; earlier releases ignored them when they read a ref and dropped them when they wrote one again. The script drops them too, and lists each one it dropped.
  *
@@ -31,6 +31,7 @@ type StoredFileKind = 'contract' | 'migration' | 'ref';
 const SKIPPED_DIRECTORIES = new Set(['node_modules', 'dist', 'build']);
 const SPACE_ID = /^[a-z][a-z0-9_-]{0,63}$/;
 const STORAGE_HASH = /^[0-9a-f]{64}$/;
+const REF_HASH = /^(empty|[0-9a-f]{64})$/;
 const BYTE_ORDER_MARK = '﻿';
 const MIGRATION_FIELDS = ['from', 'to', 'migrationHash', 'providedInvariants', 'createdAt'];
 const MIGRATION_KEYS = new Set(MIGRATION_FIELDS);
@@ -281,6 +282,16 @@ function isRefLocation(root: string, path: string): boolean {
   return false;
 }
 
+function isInRefsDirectory(root: string, path: string): boolean {
+  return relative(root, dirname(path)).split(sep).includes('refs');
+}
+
+/** Whether `value` holds what Prisma writes to a ref file, besides fields a ref file does not have. */
+function hasRefContent(value: JsonRecord): boolean {
+  const hash = value['hash'];
+  return typeof hash === 'string' && REF_HASH.test(hash) && isStringArray(value['invariants']);
+}
+
 /** The kind of stored file `path` is by its name and place, before its content is read. */
 function expectedKind(root: string, path: string): StoredFileKind | undefined {
   const name = basename(path);
@@ -371,7 +382,9 @@ function handleFile(root: string, path: string, outcome: Outcome, write = true):
     if (reason !== undefined) outcome.problems.push(`${shown}: ${reason}`);
     return;
   }
-  const result = rewrite(text, value, expected);
+  const kind =
+    expected ?? (isInRefsDirectory(root, path) && hasRefContent(value) ? 'ref' : undefined);
+  const result = rewrite(text, value, kind);
   if (result.kind === 'unchanged') return;
   if (result.kind === 'problem') {
     outcome.problems.push(`${shown}: ${result.reason}`);

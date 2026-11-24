@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'pathe';
@@ -42,9 +50,23 @@ export function fixtureTree(side: 'before' | 'after'): Tree {
   return readTree(join(fixturesDir, side));
 }
 
-export function copyFixture(side: 'before' | 'after'): string {
+export function writeFile(root: string, path: string, content: string): void {
+  mkdirSync(dirname(join(root, path)), { recursive: true });
+  writeFileSync(join(root, path), content);
+}
+
+export function changedList(paths: readonly string[]): string {
+  return paths.map((path) => `  ${path}\n`).join('');
+}
+
+export function emptyProject(): string {
   const root = mkdtempSync(join(tmpdir(), 'stored-files-format-version-'));
   workDirs.push(root);
+  return root;
+}
+
+export function copyFixture(side: 'before' | 'after'): string {
+  const root = emptyProject();
   cpSync(join(fixturesDir, side), root, { recursive: true });
   return root;
 }
