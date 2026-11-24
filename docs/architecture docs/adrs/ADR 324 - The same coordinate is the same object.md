@@ -53,12 +53,12 @@ A `--rename` statement pairs two objects whose coordinates differ. The same coor
 
 | Object | Paired by, in this order |
 | --- | --- |
-| Model | a model rename statement; else a namespace rename statement and the same model name; else the same coordinate; else, for MongoDB variants only, the same storage |
+| Model | a model rename statement; else a namespace rename statement and the same model name; else the same coordinate; else, on MongoDB, the same storage |
 | Field of a paired model | a field rename statement; else the same field name |
 | Field of an embedded model (MongoDB) | the same field name in the same embedded model |
 | Enum member | an enum value rename statement; else the same member name |
 
-Fields pair through their model's pair, whichever rule made it. When `--rename User:Account` renames a model and one of its fields changes only its `@map`, that field is paired by its name and its column is renamed.
+On MongoDB a root model paired only by the same storage gives questions and refusals as before this rule, never a rename with no question: its fields are not paired, so a field whose stored name changes is removed and asked about. A variant paired by storage is renamed as any other pair. Fields pair through their model's pair, whichever other rule made it. When `--rename User:Account` renames a model and one of its fields changes only its `@map`, that field is paired by its name and its column is renamed.
 
 A namespace has no stored name apart from its id, so it has no change of stored name alone. The SQL family has no pairing by storage.
 

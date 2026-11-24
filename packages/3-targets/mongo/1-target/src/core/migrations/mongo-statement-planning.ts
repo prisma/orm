@@ -381,6 +381,8 @@ function fieldChangeOf(rename: FieldRename, { call }: FieldRenameCall): FieldCha
  */
 function embedRelationRefusals(match: ModelMatchInput): readonly MigrationPlannerConflict[] {
   return modelCoordinates(match.fromContract).flatMap((origin) => {
+    const pairedByStorageOnly = !match.models.some((rename) => sameModel(rename.from, origin));
+    if (pairedByStorageOnly && isRootModel(match.fromContract, origin)) return [];
     const destination = destinationModelOf(origin, match);
     const originModel = modelAt(match.fromContract, origin);
     const destinationModel =
@@ -422,9 +424,11 @@ function embedRelationRefusals(match: ModelMatchInput): readonly MigrationPlanne
 }
 
 /**
- * The field renames no statement asks for: each field of an origin model, root or variant, that the
- * destination model it is paired with has under its name, whichever rule paired the models, and
- * that no field rename statement names.
+ * The field renames no statement asks for: each field of an origin model that the destination
+ * model it is paired with has under its name, and that no field rename statement names. The pair is
+ * a statement's, the same coordinate's, or, for a variant, the same storage's (ADR 324). A root model
+ * paired only by storage gets none: its fields are planned as removals and additions, with their
+ * questions, so no rename is made on that guess.
  */
 function unstatedFieldRenamesOf(match: ModelMatchInput): readonly FieldRename[] {
   const named = (field: FieldCoordinate) =>
@@ -434,6 +438,8 @@ function unstatedFieldRenamesOf(match: ModelMatchInput): readonly FieldRename[] 
         (sameField(statement.from, field) || sameField(statement.to, field)),
     );
   return modelCoordinates(match.fromContract).flatMap((origin) => {
+    const pairedByStorageOnly = !match.models.some((rename) => sameModel(rename.from, origin));
+    if (pairedByStorageOnly && isRootModel(match.fromContract, origin)) return [];
     const destination = destinationModelOf(origin, match);
     const originModel = modelAt(match.fromContract, origin);
     const destinationModel =
@@ -890,10 +896,9 @@ export interface FieldRemoval {
 
 /**
  * The destination model an origin model became: its pair in the plan's model renames (a statement,
- * else the same name, as the collection renames pair them), else, for a variant only, the only new
- * variant stored the same way (same collection, same variant value) that no rename pairs and that
- * no other unpaired origin model is stored like, so no two origin models become one. Root models are
- * never paired by storage (ADR 324).
+ * else the same name, as the collection renames pair them), else the only new model stored the
+ * same way (same collection, same variant value) that no rename pairs and that no other unpaired
+ * origin model is stored like, so no two origin models become one.
  */
 export function destinationModelOf(
   origin: ModelCoordinate,
@@ -901,7 +906,6 @@ export function destinationModelOf(
 ): ModelCoordinate | undefined {
   const paired = input.models.find((rename) => sameModel(rename.from, origin));
   if (paired !== undefined) return paired.to;
-  if (isRootModel(input.fromContract, origin)) return undefined;
   const unpaired = modelCoordinates(input.fromContract).filter(
     (other) => !input.models.some((rename) => sameModel(rename.from, other)),
   );
@@ -909,7 +913,6 @@ export function destinationModelOf(
     (candidate) =>
       modelAt(input.fromContract, candidate) === undefined &&
       !input.models.some((rename) => sameModel(rename.to, candidate)) &&
-      !isRootModel(input.contract, candidate) &&
       storedAlike(origin, candidate, input) &&
       unpaired.filter((other) => storedAlike(other, candidate, input)).length === 1,
   );

@@ -239,14 +239,24 @@ describe('MongoMigrationPlanner, a base renamed without a statement', () => {
       { tasks: {} },
     );
 
-  it('pairs nothing by storage, since the base is a root model: the plan has no operation for the removed variant or the renamed discriminator', () => {
-    expect({
-      sameDiscriminator: planned(plan({ from: BEFORE, to: renamedBase('type'), schema: live })),
-      renamedDiscriminator: planned(plan({ from: BEFORE, to: renamedBase('kind'), schema: live })),
-    }).toEqual({
-      sameDiscriminator: { labels: [], classes: [], applied: [], dataLoss: [] },
-      renamedDiscriminator: { labels: [], classes: [], applied: [], dataLoss: [] },
+  it('deletes the documents of a removed variant and asks about it', () => {
+    expect(planned(plan({ from: BEFORE, to: renamedBase('type'), schema: live }))).toEqual({
+      labels: [deleteLabel('bug')],
+      classes: ['destructive'],
+      applied: [],
+      dataLoss: [{ operationIndex: 0, subject: bugModel, loss: 'drop', label: deleteLabel('bug') }],
     });
+  });
+
+  it('refuses the plan when the discriminator is renamed too, offering both renames', () => {
+    expect(refusal(plan({ from: BEFORE, to: renamedBase('kind'), schema: live }))).toEqual([
+      {
+        kind: 'unsupportedOperation',
+        summary:
+          'Cannot plan the migration: new discriminator field "Ticket.kind" has no value in the documents of collection tasks',
+        why: 'A document\'s discriminator value says which variant it is, and no temporary value names a variant, so the plan does not fill the field. The documents hold their variant in "Task.type", which the plan removes: add --rename Task:Ticket --rename Ticket.type:Ticket.kind to keep it, and run the command again.',
+      },
+    ]);
   });
 });
 

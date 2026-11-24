@@ -66,13 +66,15 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
     { tasks: {} },
   );
 
-  it('plans nothing when no statement renames the base, since a root model is not paired by storage', () => {
-    expect(planned(plan({ from: BEFORE, to: jobs, schema: live }))).toEqual({
-      labels: [],
-      classes: [],
-      applied: [],
-      dataLoss: [],
-    });
+  it('offers the rename of the base with the discriminator rename when no statement renames the base', () => {
+    expect(refusal(plan({ from: BEFORE, to: jobs, schema: live }))).toEqual([
+      {
+        kind: 'unsupportedOperation',
+        summary:
+          'Cannot plan the migration: new discriminator field "Job.kind" has no value in the documents of collection tasks',
+        why: `${NO_TEMPORARY_VALUE} The documents hold their variant in "Task.type", which the plan removes: add --rename Task:Job --rename Job.type:Job.kind to keep it, and run the command again.`,
+      },
+    ]);
   });
 
   it("names the discriminator rename through the base's new name when the base is renamed too", () => {

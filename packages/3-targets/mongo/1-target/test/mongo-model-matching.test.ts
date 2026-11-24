@@ -43,14 +43,6 @@ const tasks = (variants: Readonly<Record<string, string>>): Record<string, Model
 });
 
 describe('destinationModelOf', () => {
-  it('pairs no root model by storage, even with the only new model stored like it', () => {
-    const input = match({ Note: plain }, { Article: plain });
-    expect([destinationModelOf(at('Note'), input), originModelOf(at('Article'), input)]).toEqual([
-      undefined,
-      undefined,
-    ]);
-  });
-
   it('pairs no origin model with a new model that two origin models are stored like', () => {
     const input = match({ Note: plain, Task: plain }, { Article: plain });
 
@@ -132,6 +124,34 @@ describe('a model rename statement onto the name of another origin model', () =>
           subject: { kind: 'model', namespaceId: NS, model: 'Account' },
           loss: 'drop',
           label: 'Drop collection accounts',
+        },
+      ],
+    });
+  });
+});
+
+describe('a root model paired only by storage', () => {
+  it('gets no field rename with no statement: a field whose stored name changes is unset and asked about, as before', () => {
+    const from = contract(
+      'from',
+      { User: { collection: 'users', fields: ['_id', 'nick'], storedAs: { nick: 'n' } } },
+      { users: {} },
+    );
+    const to = contract(
+      'to',
+      { Member: { collection: 'users', fields: ['_id', 'nick'], storedAs: { nick: 'nn' } } },
+      { users: {} },
+    );
+    expect(planned(plan({ from, to, schema: [schemaCollection('users')] }))).toEqual({
+      labels: ['Remove field n from collection users'],
+      classes: ['destructive'],
+      applied: [],
+      dataLoss: [
+        {
+          operationIndex: 0,
+          subject: { kind: 'field', namespaceId: NS, model: 'User', field: 'nick' },
+          loss: 'drop',
+          label: 'Remove field n from collection users',
         },
       ],
     });
