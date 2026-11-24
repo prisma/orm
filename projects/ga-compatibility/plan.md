@@ -16,7 +16,14 @@ A part is in force from the first release after its project merges. Until `8.0.0
 
 Some parts can only start at `8.0.0`. Nothing can be promised about exports until they are reduced, which project 3 does, and no package is GA before then.
 
-Drafts exist for most of the documentation: decision records for the policy and the maturity levels, and corrections to the docs that contradict them. They are on the branch `docs/compatibility-policy-records`, from the closed pull request prisma/orm#31194. The file `projects/ga-compatibility-records/handover.md` on that branch says which project takes each one.
+### Drafts to start the documentation from
+
+Drafts exist for most of the documentation: decision records for the policy and for the maturity levels, and corrections to the docs, rules and skills that contradict them. They come from the pull request prisma/orm#31194, which was closed without merging because it documented the whole policy ahead of the code. A project starts its documentation from these drafts and takes only its own part.
+
+- **Branch:** `docs/compatibility-policy-records`, at commit `126f6d2d40`.
+- **If the branch is ever deleted:** the same commits stay on GitHub as `refs/pull/31194/head`. Fetch them with `git fetch bot refs/pull/31194/head`.
+- **Which project takes what:** `projects/ga-compatibility-records/handover.md` on that branch.
+- **To read a file:** `git fetch bot docs/compatibility-policy-records`, then `git show FETCH_HEAD:<path>`.
 
 ## How to read this plan
 
