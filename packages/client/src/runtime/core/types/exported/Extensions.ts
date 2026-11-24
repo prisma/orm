@@ -198,17 +198,16 @@ export type DynamicModelExtensionThis<
   [K: symbol]: { types: TypeMap['model'][M] }
 }
 
-export type DynamicModelExtensionOperationFn<
-  TypeMap extends TypeMapDef,
-  M extends PropertyKey,
-  P extends PropertyKey,
-> = {} extends TypeMap['model'][M]['operations'][P]['args'] // will match fully optional args
-  ? <A extends TypeMap['model'][M]['operations'][P]['args']>(
-      args?: Exact<A, TypeMap['model'][M]['operations'][P]['args']>,
-    ) => DynamicModelExtensionFnResult<TypeMap, M, A, P, DynamicModelExtensionFnResultNull<P>>
-  : <A extends TypeMap['model'][M]['operations'][P]['args']>(
-      args: Exact<A, TypeMap['model'][M]['operations'][P]['args']>,
-    ) => DynamicModelExtensionFnResult<TypeMap, M, A, P, DynamicModelExtensionFnResultNull<P>>
+export type DynamicModelExtensionOperationFn<TypeMap extends TypeMapDef, M extends PropertyKey, P extends PropertyKey> =
+  // Extension methods commonly forward their args to `Prisma.getExtensionContext(this)`.
+  // `Exact` makes TypeScript compare the full generated arg trees and can blow up on large schemas.
+  {} extends TypeMap['model'][M]['operations'][P]['args'] // will match fully optional args
+    ? <A extends TypeMap['model'][M]['operations'][P]['args']>(
+        args?: A,
+      ) => DynamicModelExtensionFnResult<TypeMap, M, A, P, DynamicModelExtensionFnResultNull<P>>
+    : <A extends TypeMap['model'][M]['operations'][P]['args']>(
+        args: A,
+      ) => DynamicModelExtensionFnResult<TypeMap, M, A, P, DynamicModelExtensionFnResultNull<P>>
 
 // prettier-ignore
 export type DynamicModelExtensionFnResult<
