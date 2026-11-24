@@ -63,11 +63,24 @@ Changing a file's format version must not change a hash. A contract written in f
 
 ### 2.2 What a hash is computed from
 
-A hash is computed from the contract as it is in memory after reading, not from the file as written. The rules that turn the in-memory contract into the input of the hash do not depend on the format version, and they do not change within a major version.
+This applies to the storage hash, the profile hash and the execution hash.
 
-For each format version this is tested: read a file, write it in every other version that can hold it, and get the same hashes.
+A hash is computed from the contract as it is in memory after reading, not from the file as written. The rules that turn the in-memory contract into the input of the hash do not depend on the format version.
 
 Hashing the file as written, by the rules of its format version, was rejected: it breaks the requirement as soon as a format version lays out the `storage` section differently.
+
+### 2.3 Changing the hashing rules
+
+Within a major version, the code that computes a hash may change only in ways that give the same hash for the same contract. This includes the parts of the rules that a family or a target supplies.
+
+A mistake found in the rules after `8.0.0` therefore stays until the next major version. That is accepted: a hash that is stable still identifies a contract, and we do not expect large changes to what a contract holds.
+
+A way for a user to move a database to a hash that a later release computes differently, as a step in the migration system, is a possible later refinement. It is not built now.
+
+### 2.4 Tests
+
+- **Fixed answers.** A set of saved contracts, each with its expected hashes written in the test. Every release must compute the same hashes.
+- **Across format versions.** A contract written in one format version, then converted through each later version, keeps the same hashes.
 
 ## 3. Alternatives rejected
 
@@ -78,7 +91,7 @@ Hashing the file as written, by the rules of its format version, was rejected: i
 
 - What a reader does with a file that has no format version, or has the old field name, as every file written by a release candidate does.
 - How `ops.json` is covered by a format version.
-- Whether today's hash input is tidied in the one change that every hash goes through at `8.0.0`, and what happens if a mistake is found in the hashing rules later in the major version.
+- Whether today's hash input is tidied in the one change that every hash goes through at `8.0.0`.
 - How an existing project and database move to the new hashes at `8.0.0`.
 - Prisma's own records in the database, and the runtime check of the contract against the marker.
 - The saved samples of what `8.0.0` writes, and their tests.
