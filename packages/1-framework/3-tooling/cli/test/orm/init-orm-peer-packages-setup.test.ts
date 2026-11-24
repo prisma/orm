@@ -1,8 +1,12 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'pathe';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ormPeerPackagesForSetup } from '../../src/orm/init-orm-peer-packages';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  ormPeerPackagesForSetup,
+  resolveOrmPeerPackages,
+} from '../../src/orm/init-orm-peer-packages';
+import { REGISTRY_LOOKUP_TIMEOUT_MILLIS } from '../../src/orm/registry-keywords';
 
 const VERSION = '8.1.0';
 const never = new AbortController().signal;
@@ -111,5 +115,105 @@ describe('the list the printed Prisma 6 setup names', () => {
     )('@prisma/orm-mongo');
 
     expect(list.unread).toEqual(['@prisma/orm-family-mongo']);
+  });
+});
+
+describe('the shared time limit and cancelling of the registry reads', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Answers after `delay` milliseconds, or rejects when its signal aborts. */
+  function slowRead(delays: Readonly<Record<string, number>>) {
+    return (name: string, spec: string, signal: AbortSignal) =>
+      new Promise<Awaited<ReturnType<typeof readPublished>>>((resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        const delay = delays[name];
+        if (delay === undefined) return;
+        setTimeout(() => {
+          const peers = published.get(`${name}@${spec}`);
+          resolve(
+            peers === undefined
+              ? undefined
+              : { version: spec === 'latest' ? VERSION : spec, peerDependencies: peers },
+          );
+        }, delay);
+      });
+  }
+
+  it('counts the time a read before took against the reads after it', async () => {
+    vi.useFakeTimers();
+    const firstRead = REGISTRY_LOOKUP_TIMEOUT_MILLIS * 0.6;
+    const list = ormPeerPackagesForSetup({
+      cwd: projectDir,
+      signal: never,
+      readPublished: slowRead({
+        '@prisma/orm-mongo': firstRead,
+        '@prisma/orm-framework': firstRead,
+      }),
+    })('@prisma/orm-mongo');
+
+    await vi.advanceTimersByTimeAsync(REGISTRY_LOOKUP_TIMEOUT_MILLIS);
+
+    await expect(list).resolves.toMatchObject({
+      target: `@prisma/orm-mongo@${VERSION}`,
+      unread: ['@prisma/orm-framework', '@prisma/orm-family-mongo'],
+    });
+  });
+
+  it('passes the command being cancelled through instead of naming an unread package', async () => {
+    const command = new AbortController();
+    const list = ormPeerPackagesForSetup({
+      cwd: projectDir,
+      signal: command.signal,
+      readPublished: slowRead({}),
+    })('@prisma/orm-mongo');
+
+    command.abort(new Error('cancelled'));
+
+    await expect(list).rejects.toThrow('cancelled');
+  });
+});
+
+describe('whether a package the project lists is at the version asked for', () => {
+  const target = {
+    version: VERSION,
+    peers: new Map([['@prisma/orm-framework', VERSION]]),
+  };
+
+  function outcomeFor(line: string, installed: string | undefined) {
+    return resolveOrmPeerPackages({
+      packageName: '@prisma/orm-postgres',
+      ownsTarget: false,
+      declared: () => new Map([['@prisma/orm-framework', line]]),
+      installedVersion: () => installed,
+      install: undefined,
+      read: async (name) =>
+        name === '@prisma/orm-postgres' ? target : { version: installed, peers: new Map() },
+    });
+  }
+
+  it.each([
+    ['the version, nothing installed', VERSION, undefined, 'already-listed'],
+    ['a caret on the version, nothing installed', `^${VERSION}`, undefined, 'already-listed'],
+    ['a catalog line, nothing installed', 'catalog:', undefined, 'already-listed'],
+    ['another version, nothing installed', '8.0.0', undefined, 'left-at-another-version'],
+    [
+      'another version with the asked-for version installed',
+      '8.0.0',
+      VERSION,
+      'left-at-another-version',
+    ],
+    [
+      'a workspace line with another version installed',
+      'workspace:*',
+      '8.0.0',
+      'left-at-another-version',
+    ],
+    ['a workspace line with the version installed', 'workspace:*', VERSION, 'already-listed'],
+  ])('decides %s', async (_case, line, installed, outcome) => {
+    expect(await outcomeFor(line, installed)).toMatchObject({
+      packages: [{ name: '@prisma/orm-framework', version: VERSION, outcome }],
+    });
   });
 });

@@ -102,10 +102,12 @@ export function ormPeerPackagesForSetup(ctx: {
   ) => Promise<PublishedPackage | undefined>;
 }): (packageName: string) => Promise<OrmPeerPackages> {
   return async (packageName) => {
-    const signal = AbortSignal.any([
-      ctx.signal,
-      AbortSignal.timeout(REGISTRY_LOOKUP_TIMEOUT_MILLIS),
-    ]);
+    const limit = new AbortController();
+    const timer = setTimeout(
+      () => limit.abort(new Error('the registry reads ran out of time')),
+      REGISTRY_LOOKUP_TIMEOUT_MILLIS,
+    );
+    const signal = AbortSignal.any([ctx.signal, limit.signal]);
     const read: ReadPackage = async (name, range) => {
       const local = readInstalled(ctx.cwd, name);
       if (local !== undefined) return local;
@@ -119,14 +121,19 @@ export function ormPeerPackagesForSetup(ctx: {
         return undefined;
       }
     };
-    const resolved = await resolveOrmPeerPackages({
-      packageName,
-      ownsTarget: false,
-      declared: () => new Map(),
-      installedVersion: () => undefined,
-      install: undefined,
-      read,
-    });
+    let resolved: OrmPeerPackages | CliStructuredError;
+    try {
+      resolved = await resolveOrmPeerPackages({
+        packageName,
+        ownsTarget: false,
+        declared: () => new Map(),
+        installedVersion: () => undefined,
+        install: undefined,
+        read,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     return resolved instanceof Error
       ? { target: packageName, packages: [], unread: [packageName], warnings: [] }
       : resolved;
@@ -210,7 +217,7 @@ export async function resolveOrmPeerPackages(ctx: {
         continue;
       }
       const installed = ctx.installedVersion(name);
-      if (installed === range || (installed === undefined && lineAdmits(listed, range))) {
+      if (lineStandsFor(listed, range, installed)) {
         outcomes.set(name, 'already-listed');
         continue;
       }
@@ -248,15 +255,15 @@ export async function resolveOrmPeerPackages(ctx: {
 const PROTOCOL_LINE = /^(?:workspace|catalog|link|file|npm|portal|git|git\+[a-z]+|github|https?):/;
 
 /**
- * Whether a `package.json` line can stand for `version` when no copy is installed to compare: the
- * version itself, a protocol whose target only the package manager knows, or a range written
- * directly on that version.
+ * Whether a `package.json` line stands for `version`. A version or range is judged by its text,
+ * since the next clean install follows the line whatever is installed now: it stands for the
+ * version when it is the version or a range written directly on it. A protocol line, whose target
+ * only the package manager knows, stands for it when the installed copy is at the version, or when
+ * nothing is installed to compare.
  */
-function lineAdmits(line: string, version: string): boolean {
-  return (
-    PROTOCOL_LINE.test(line) ||
-    ['', '=', 'v', '^', '~', '>='].some((op) => line === `${op}${version}`)
-  );
+function lineStandsFor(line: string, version: string, installed: string | undefined): boolean {
+  if (PROTOCOL_LINE.test(line)) return installed === undefined || installed === version;
+  return ['', '=', 'v', '^', '~', '>='].some((op) => line === `${op}${version}`);
 }
 
 function byName<T>(entries: ReadonlyMap<string, T>): [string, T][] {
