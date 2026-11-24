@@ -33,6 +33,11 @@ Spike records are in [spikes/](spikes/).
 
 **Note.** The comparison of the last release's example apps needs no earlier slice. Until a release has been cut after slice 1, the generated tests read the previous release from the registry, which works for any release.
 
+## Known limits of the lists, left as they are
+
+- An outside type imported under a local alias prints under the alias. Printing API Extractor's referenced name instead was tried and made 133 lines worse, because that name is often not one any package exports (`SqlMigration` for `Migration`). A fix would ask the TypeScript checker which name the declaring module exports.
+- Types inside the members of a `declare module` augmentation are not qualified on a name clash. Today's augmentation lines refer only to the package's own types.
+
 ## Recorded for the owner of the compatibility work
 
 - A GA package depends only on GA packages. The maturity levels do not yet say so.
