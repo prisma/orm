@@ -2,7 +2,7 @@
 changes:
   - id: contract-hash-inputs
     summary: |
-      Every storage, profile and execution hash takes a new value, once: each now covers only the target, the family and its own section of the contract, and the rules that compute them do not change again within Prisma 8. Run the colocated script on the project: it rewrites every hash in the emitted contract, `contract.d.ts`, the snapshot directories, each `migration.json` and `ops.json`, each ref file and each `migration.ts`. Then run `prisma db sign` against every database the project uses (`prisma db sign --force` where the change policy permits only migrations), and `prisma contract emit`.
+      Every storage, profile and execution hash takes a new value, once: each now covers only the target, the family and its own section of the contract, and the rules that compute them do not change again within Prisma 8. Before upgrading, deploy every pending migration to every database with the release you are on. Then upgrade Prisma in a release of its own: run the colocated script on the project, which rewrites every hash in the emitted contract, `contract.d.ts`, the snapshot directories, each `migration.json` and `ops.json`, each ref file and each `migration.ts`, then `prisma contract emit`, and commit. That release's deploy runs `prisma db sign` (`prisma db sign --force` where the change policy permits only migrations) and then `prisma db migrate` against every database. A database still behind is signed at the last migration it applied.
     script: ./scripts/contract-hash-inputs/contract-hash-inputs.ts
 ---
 
@@ -14,9 +14,17 @@ A contract has three hashes: the storage hash (`storage.storageHash`), which nam
 
 The storage hash names a contract everywhere Prisma refers to one: the snapshot directories under `migrations/snapshots/<hash>/`, the `from` and `to` of each `migration.json` and the query plans of a data transform in its `ops.json` (and so its `migrationHash`), the `hash` of each ref file, the snapshot imports and hash literals of each `migration.ts`, and the marker Prisma writes in each database. All of them must move to the new hashes together.
 
-### 1. Run the script
+### 1. Bring every database to the newest contract first
 
-Run the upgrade step for the stored-file format version (`stored-files-format-version`) first: this script refuses a file without `formatVersion`. Commit your work, so the script's changes can be reviewed and undone with git. Then run the script from the project root:
+Before you upgrade Prisma, deploy every pending migration to every database the project uses (development, staging, production and any other) with the release you are on now, application and extension migrations alike. Each database is then at the newest contract, and the upgrade's own release carries no migration.
+
+The upgrade signs each database at the newest contract, which is safe only for a database that is already there. Signing a database that is behind either fails, because its schema does not match, and leaves `db migrate` refusing to run, or, when its pending migrations only drop something or move data, succeeds and marks it as up to date, so those migrations never run.
+
+If a database cannot be brought up to date first, note the last migration it applied while you are still on the old release: run `prisma migration status` against it and take the directory name of the last migration it shows as applied. Step 5 needs it.
+
+### 2. Upgrade Prisma and run the script
+
+Upgrade Prisma in a release of its own, with no new migration in it. Run the upgrade step for the stored-file format version (`stored-files-format-version`) first, if you have not: this script refuses a file without `formatVersion`. Commit your work, so the script's changes can be reviewed and undone with git. Then run the script from the project root:
 
 ```sh
 node <path-to-this-guide>/scripts/contract-hash-inputs/contract-hash-inputs.ts
@@ -43,32 +51,49 @@ The script exits 1 without changing that file when it cannot finish one:
 - A `contract.json` has neither `formatVersion` nor `schemaVersion`, so no release of Prisma wrote it. The script leaves it alone.
 - A `contract.d.ts` names a hash that is not one of its contract's. Emit the contract again with `prisma contract emit` (or, for a snapshot, restore both files from version control) and run the script again.
 
-### 2. Upgrade every extension with Prisma
+### 3. Upgrade every extension with Prisma
 
-An extension package bundles a contract and migrations with its hashes, and this release checks them when it loads the extension. An extension built for an earlier release fails to load with `MIGRATION.DESCRIPTOR_HEAD_HASH_MISMATCH`, whose message names the extension. Upgrade each extension to its version for this release in the same change.
+An extension package bundles a contract and migrations with its hashes, and this release checks them when it loads the extension. An extension built for an earlier release fails to load with `MIGRATION.DESCRIPTOR_HEAD_HASH_MISMATCH`, whose message names the extension. Upgrade each extension to its version for this release in the same change. Its migrations that are already in your databases come with it, renamed to the new hashes; step 1 already applied them.
 
-### 3. Sign every database
+### 4. Emit the contract and commit
 
-Each database records the storage and profile hash of the contract it was last moved to, in its marker. That is the old hash, so run `prisma db sign` against every database the project uses: development, staging, production and any other. `db sign` checks that the database's schema matches the contract and then writes the new hashes into the marker; it changes no table. Run it after the script and after upgrading Prisma and the extensions, with this release.
+Run `prisma contract emit` and commit the result with the script's changes. It writes the emitted contract with the hashes the script wrote, and the files Prisma keeps for each extension under `migrations/<extension>/`.
 
-If you skip it, the database stays usable, but the commands that compare it with the project see a contract they do not know:
+### 5. Sign every database in that release's deploy
 
-- `prisma db migrate` stops before it changes anything, with `MIGRATION.MARKER_MISMATCH`: "The database is at a contract that is not in the migration graph". Its advice to run `db update` does not apply here; run `db sign`.
+Each database records the storage and profile hash of the contract it was last moved to, in its marker. That is the old hash, so each database must be signed with this release. `db sign` checks that the database's schema matches the contract and then writes the new hashes into the marker; it changes no table.
+
+In the deploy of the release that upgrades Prisma, run these two lines against every database, in place of `prisma db migrate`:
+
+```sh
+prisma db sign
+prisma db migrate
+```
+
+A database whose change policy permits only migrations, usually production, refuses `db sign` with "This database's change policy permits only migrations". For it, the first line is `prisma db sign --force`. `--force` overrides only the change policy's refusal: `db sign` changes no schema, still checks that the database matches the contract of the application and of each extension before it writes a marker, and leaves the database's policies as they were.
+
+Remove the `db sign` line once the release is deployed. Later deploys run `prisma db migrate` alone.
+
+#### A database that is still behind
+
+A database that did not get every migration before the upgrade is behind the newest contract. Sign it at the contract it is at instead, which is the destination of the last migration it applied, named by that migration's directory (step 1 says how to find it):
+
+```sh
+prisma db sign --force <migration directory>
+prisma db migrate
+```
+
+`db sign` takes the directory name as its contract and signs the contract that migration leads to; `db migrate` then applies the migrations after it. Leave out `--force` where the change policy permits `db sign`.
+
+#### If you skip signing
+
+The database stays usable, but the commands that compare it with the project see a contract they do not know:
+
+- `prisma db migrate` stops before it changes anything, with `MIGRATION.MARKER_MISMATCH`: "The database is at a contract that is not in the migration graph". Its advice does not apply here; sign the database as this step says.
 - `prisma migration status` warns with `MIGRATION.MARKER_NOT_IN_HISTORY`: "Database was updated outside the migration system".
 - `prisma db verify` fails with `CONTRACT.MARKER_MISMATCH`: "Contract storageHash does not match database marker".
 - At runtime, queries still run. A SQL client that is given a `log` option logs one `CONTRACT.MARKER_MISMATCH` warning; a MongoDB client does not check the marker.
 
-A database whose change policy permits only migrations refuses `db sign`, with "This database's change policy permits only migrations". For such a database, usually production, put these two lines in your deploy script for this one release, in place of `prisma db migrate`:
-
-```sh
-prisma db sign --force
-prisma db migrate
-```
-
-Remove the `--force` line after the release is deployed. `--force` overrides only the change policy's refusal: `db sign` changes no schema, still checks that the database matches the contract of the application and of each extension before it writes a marker, and leaves the database's policies as they were.
+#### What `migration status` shows afterwards
 
 After the upgrade, `prisma migration status` shows none of the migrations applied before it as applied. The database's ledger records each applied migration by its `migrationHash`, the ledger keeps the old values, and the script gave every migration a new one. `prisma migration log` likewise lists the earlier migrations with their old hashes. No command decides anything from the ledger: `db migrate` decides what to apply from the marker, which `db sign` moved to the new hash. The ledger is otherwise read only to explain a marker that is outside the migration graph, should that happen later. Migrations applied after the upgrade show as applied.
-
-### 4. Emit the contract
-
-Run `prisma contract emit` and commit the result. It writes the emitted contract with the hashes the script wrote, and the files Prisma keeps for each extension under `migrations/<extension>/`.
