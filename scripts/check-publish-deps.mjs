@@ -23,11 +23,6 @@
 //      siblings, which is what `prisma-8-check-pins` exploits on the
 //      consumer side.
 //
-//   4. Sibling-dependency check. No published package may hold another
-//      package this repository publishes under `dependencies` or
-//      `optionalDependencies`; it names it as a peer dependency, so the
-//      application's own list is the only place a copy comes from.
-//
 //   3. Declaration-dependency check. Every module specifier named by a
 //      `.d.ts`/`.d.mts`/`.d.cts` file inside the tarball must resolve for a
 //      consumer: the package it belongs to has to appear in
@@ -37,6 +32,11 @@
 //      never install them. Without this, a package compiles in the
 //      workspace (where pnpm has every dev dependency linked) and fails for
 //      anyone who builds with `skipLibCheck: false`.
+//
+//   4. Sibling-dependency check. No published package may hold another
+//      package this repository publishes under `dependencies` or
+//      `optionalDependencies`; it names it as a peer dependency, so the
+//      application's own list is the only place a copy comes from.
 //
 // Usage:
 //   node scripts/check-publish-deps.mjs           — exit 1 on any violation

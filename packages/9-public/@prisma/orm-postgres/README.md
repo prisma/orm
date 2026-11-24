@@ -1,9 +1,10 @@
 # @prisma/orm-postgres
 
-The package a PostgreSQL application installs for its database. It wires the framework, the SQL family, and the Postgres target into a single lazy client. It names the platform packages it is built on as peer dependencies, so the application lists them beside it, every one at the same exact version. `prisma orm init` writes that list. To install them by hand (`--save-exact` writes the exact version, not a range):
+The package a PostgreSQL application installs for its database. It wires the framework, the SQL family, and the Postgres target into a single lazy client. It names the platform packages it is built on as peer dependencies, each at this package's own exact version, so the application lists them beside it, every `@prisma/orm-*` line naming the same version. `prisma orm init` writes that list, in the form the project's package manager writes a version it is given. To install them by hand, give every `@prisma/orm-*` package the same version, the release you want:
 
 ```sh
-pnpm add --save-exact @prisma/orm-postgres @prisma/orm-framework @prisma/orm-family-sql @prisma/orm-target-postgres @prisma/orm-toolchain pg
+pnpm add @prisma/orm-postgres@<version> @prisma/orm-framework@<version> @prisma/orm-family-sql@<version> @prisma/orm-target-postgres@<version> @prisma/orm-toolchain@<version>
+pnpm add pg
 pnpm add -D @types/pg
 ```
 

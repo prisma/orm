@@ -30,7 +30,7 @@ const runner: PackageManagerRunner = async (request) => {
 };
 
 /**
- * What a package manager writes for `<name>@<version>` without an exact-save setting: the version
+ * What npm, Yarn and Bun wrote for `<name>@<pre-release version>` in the install trial: the version
  * with a caret. A bare name gets the fixed range of the shared fake.
  */
 function declareWithCaret(request: Parameters<PackageManagerRunner>[0]): void {

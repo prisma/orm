@@ -2,7 +2,7 @@
 changes:
   - id: list-the-platform-packages
     summary: |
-      The target package (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb` or `@prisma/orm-mongo`) and every extension now name the Prisma packages they are built on, the platform packages, as peer dependencies instead of bringing them along. List each of them in the application's `package.json`, at the same exact version as the target package. Nothing in application code changes.
+      The target package (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb` or `@prisma/orm-mongo`) and every extension now name the Prisma packages they are built on, the platform packages, as peer dependencies instead of bringing them along. List each of them in the application's `package.json`, at the same version as the target package. Nothing in application code changes.
     detection:
       glob: "**/package.json"
       matches:
@@ -15,7 +15,7 @@ changes:
 
 The target package, such as `@prisma/orm-postgres`, no longer brings `@prisma/orm-framework`, its family, its target and `@prisma/orm-toolchain` along as its own dependencies. It names them as peer dependencies, and so does every extension. A package manager never gives a package its own copy of a peer dependency: it uses the copy the application lists. So the application now lists them, and holds exactly one copy of each. Yarn installs no peer dependencies at all, so an application under Yarn that does not list them cannot load the target package. npm and pnpm install a missing peer by themselves, which hides the gap until the project moves to another package manager.
 
-For each `package.json` that lists a target package, add every `@prisma/orm-*` package that the target package and each installed `@prisma/orm-*` extension name as peer dependencies. Put them in the same field as the target package (usually `dependencies`), each at the same exact version as the target package: no caret, no tilde. Leave entries the file already has.
+For each `package.json` that lists a target package, add every `@prisma/orm-*` package that the target package and each installed `@prisma/orm-*` extension name as peer dependencies. Put them in the same field as the target package (usually `dependencies`), each naming the same version as the target package, written the same way as the target package's line (an exact version, or a caret if that line has one), so an update moves them together. Leave entries the file already has.
 
 These are the packages each target package names:
 
