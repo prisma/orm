@@ -48,7 +48,7 @@ function makePkg(from: string, to: string, dirName: string): OnDiskMigrationPack
 function sampleContractIR(storageHash: string): ContractIR {
   return {
     contract: {
-      schemaVersion: '1',
+      formatVersion: 1,
       targetFamily: 'sql',
       target: 'postgres',
       profileHash: `${'p'.repeat(64)}`,

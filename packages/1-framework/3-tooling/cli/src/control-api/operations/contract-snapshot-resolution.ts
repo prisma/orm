@@ -1,3 +1,4 @@
+import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
 /**
  * Resolves a user-supplied contract reference to an on-disk contract JSON (snapshot store or emitted contract), shared by db sign and db update --to.
  */
@@ -31,7 +32,7 @@ import {
 } from '../../utils/cli-errors';
 import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
-import { errorFromCaught } from './caught-errors';
+import { errorFromCaught, formatVersionFailure } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 
 function isEnoent(error: unknown): boolean {
@@ -182,6 +183,11 @@ export async function resolveContractRefToSnapshot(
         ),
       );
     }
+    readFormatVersion(parsed, {
+      kind: 'contract',
+      knownVersions: CONTRACT_FORMAT_VERSIONS,
+      path: options.contractPathAbsolute,
+    });
     const defaultContract = blindCast<
       Record<string, unknown>,
       'narrowed to a non-null, non-array object by the shape check above'
@@ -213,6 +219,8 @@ export async function resolveContractRefToSnapshot(
       ),
     );
   } catch (error) {
+    const formatFailure = formatVersionFailure(error);
+    if (formatFailure !== undefined) return notOk(formatFailure);
     if (MigrationToolsError.is(error)) {
       return notOk(error);
     }

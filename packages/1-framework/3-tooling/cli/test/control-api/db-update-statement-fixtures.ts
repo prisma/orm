@@ -30,7 +30,7 @@ export const DESTINATION_HASH = 'b'.repeat(64);
 
 export function contractWithModels(storageHash: string, models: readonly string[]): Contract {
   return {
-    schemaVersion: '1',
+    formatVersion: 1,
     target: 'postgres',
     targetFamily: 'sql',
     storage: { storageHash, tables: {}, namespaces: {} },
@@ -162,7 +162,7 @@ export async function migrationsDirWithSnapshot(contract: Contract | undefined):
   const migrationsDir = join(dir, 'migrations');
   if (contract !== undefined) {
     await writeContractSnapshot(migrationsDir, contract.storage.storageHash, {
-      contractJson: contract,
+      contractJson: { formatVersion: 1, ...contract },
       contractDts: '',
     });
   }

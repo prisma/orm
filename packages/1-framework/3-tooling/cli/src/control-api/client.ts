@@ -1,4 +1,5 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import { carriesFormatVersion, isFormatVersionError } from '@internal/contract/format-version';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { emit as emitContractArtifacts } from '@internal/emitter';
 import { CliStructuredError } from '@internal/errors/control';
@@ -187,6 +188,17 @@ class ControlClientImpl implements ControlClient {
    * planner's DDL); read-only operations never build it. The descriptor is
    * optional on the stack — targets without migrations omit it.
    */
+  /** A stored contract document as it is; a contract a caller already deserialized, printed again by the target so the family validates it from its file format. */
+  private contractDocument(contractOrDocument: unknown): unknown {
+    return carriesFormatVersion(contractOrDocument)
+      ? contractOrDocument
+      : this.options.target.contractSerializer.serializeContract(
+          blindCast<Contract, 'a value without a format version field is a deserialized contract'>(
+            contractOrDocument,
+          ),
+        );
+  }
+
   private buildControlAdapter(): ControlAdapterInstance<string, string> {
     this.init();
     if (!this.stack?.adapter) {
@@ -253,8 +265,9 @@ class ControlClientImpl implements ControlClient {
     // Validate contract using family instance
     let contract: Contract;
     try {
-      contract = familyInstance.deserializeContract(options.contract);
+      contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
+      if (isFormatVersionError(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -309,8 +322,9 @@ class ControlClientImpl implements ControlClient {
     // Validate contract using family instance
     let contract: Contract;
     try {
-      contract = familyInstance.deserializeContract(options.contract);
+      contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
+      if (isFormatVersionError(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -374,8 +388,9 @@ class ControlClientImpl implements ControlClient {
 
     let contract: Contract;
     try {
-      contract = familyInstance.deserializeContract(options.contract);
+      contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
+      if (isFormatVersionError(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -417,8 +432,9 @@ class ControlClientImpl implements ControlClient {
 
     let contract: Contract;
     try {
-      contract = familyInstance.deserializeContract(options.contract);
+      contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
+      if (isFormatVersionError(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -525,8 +541,9 @@ class ControlClientImpl implements ControlClient {
 
     let contract: Contract;
     try {
-      contract = familyInstance.deserializeContract(options.contract);
+      contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
+      if (isFormatVersionError(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -743,8 +760,9 @@ class ControlClientImpl implements ControlClient {
 
     let contract: Contract;
     try {
-      contract = this.familyInstance.deserializeContract(options.contract);
+      contract = this.familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
+      if (isFormatVersionError(error)) throw error;
       return notOk({
         code: 'CONTRACT_VALIDATION_FAILED',
         summary: 'Contract validation failed',

@@ -510,7 +510,7 @@ describe('executeContractEmit', () => {
       familyId: 'test-family',
       targetId: 'test-target',
       contractSpace: {
-        contractJson: { storage: { storageHash: packHash } },
+        contractJson: { formatVersion: 1, storage: { storageHash: packHash } },
         headRef: { hash: packHash, invariants: [] },
         migrations: [
           {
@@ -540,6 +540,7 @@ describe('executeContractEmit', () => {
       { spaceId: 'testpack', path: join(spaceDir, '20260101T0000_create_testpack') },
     ]);
     expect(JSON.parse(await readFile(join(spaceDir, 'refs', 'head.json'), 'utf-8'))).toEqual({
+      formatVersion: 1,
       hash: packHash,
       invariants: [],
     });
@@ -559,7 +560,7 @@ describe('executeContractEmit', () => {
       familyId: 'test-family',
       targetId: 'test-target',
       contractSpace: {
-        contractJson: { storage: { storageHash: 'b'.repeat(64) } },
+        contractJson: { formatVersion: 1, storage: { storageHash: 'b'.repeat(64) } },
         headRef: { hash: 'a'.repeat(64), invariants: [] },
         migrations: [],
       },
@@ -583,7 +584,7 @@ describe('executeContractEmit', () => {
       familyId: 'test-family',
       targetId: 'test-target',
       contractSpace: {
-        contractJson: { storage: { storageHash: 'a'.repeat(64) } },
+        contractJson: { formatVersion: 1, storage: { storageHash: 'a'.repeat(64) } },
         headRef: { hash: 'a'.repeat(64), invariants: [] },
         migrations: [],
       },
@@ -613,7 +614,7 @@ describe('executeContractEmit', () => {
       familyId: 'test-family',
       targetId: 'test-target',
       contractSpace: {
-        contractJson: { storage: { storageHash: 'a'.repeat(64) } },
+        contractJson: { formatVersion: 1, storage: { storageHash: 'a'.repeat(64) } },
         headRef: { hash: 'a'.repeat(64), invariants: [] },
         migrations: [],
       },

@@ -405,6 +405,7 @@ describe('MigrationCLI.run', () => {
     createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
 
     const existing = {
+      formatVersion: 1,
       from: 'from',
       to: 'to',
       migrationHash: null,

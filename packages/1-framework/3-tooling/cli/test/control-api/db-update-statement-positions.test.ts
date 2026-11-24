@@ -32,7 +32,7 @@ const AUDIT_SPACE = 'audit';
 
 function contractWithModels(storageHash: string, models: readonly string[]): Contract {
   return {
-    schemaVersion: '1',
+    formatVersion: 1,
     target: 'postgres',
     targetFamily: 'sql',
     storage: { storageHash, tables: {}, namespaces: {} },
@@ -144,7 +144,7 @@ const auditExtension: ControlExtensionDescriptor<'sql', 'postgres'> = {
   targetId: 'postgres',
   version: '1.0.0',
   contractSpace: {
-    contractJson: AUDIT_CONTRACT,
+    contractJson: Object.assign(AUDIT_CONTRACT, { formatVersion: 1 }),
     headRef: { hash: AUDIT_HEAD, invariants: [] },
     migrations: [
       {
@@ -171,11 +171,11 @@ async function migrationsDirWithPendingExtension(): Promise<string> {
   tempDirs.push(dir);
   const migrationsDir = join(dir, 'migrations');
   await writeContractSnapshot(migrationsDir, ORIGIN_HASH, {
-    contractJson: origin,
+    contractJson: { formatVersion: 1, ...origin },
     contractDts: '',
   });
   await writeContractSnapshot(migrationsDir, AUDIT_HEAD, {
-    contractJson: AUDIT_CONTRACT,
+    contractJson: { formatVersion: 1, ...AUDIT_CONTRACT },
     contractDts: '',
   });
   await writeMigrationPackage(

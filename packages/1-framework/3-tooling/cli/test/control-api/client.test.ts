@@ -732,6 +732,7 @@ describe('ControlClient progress emission', () => {
       const result = await client.dbUpdate({
         invocation: TEST_INVOCATION,
         contract: {
+          formatVersion: 1,
           target: 'postgres',
           storage: { storageHash: 'fixture', tables: {}, namespaces: {} },
         },
@@ -790,6 +791,7 @@ describe('ControlClient progress emission', () => {
         const asked: string[][] = [];
         const result = await client.dbUpdate({
           contract: {
+            formatVersion: 1,
             target: 'postgres',
             storage: { storageHash: 'fixture', tables: {}, namespaces: {} },
           },
@@ -858,6 +860,7 @@ describe('ControlClient progress emission', () => {
       const result = await client.dbUpdate({
         invocation: TEST_INVOCATION,
         contract: {
+          formatVersion: 1,
           target: 'postgres',
           storage: { storageHash: 'fixture', tables: {}, namespaces: {} },
         },

@@ -1,3 +1,4 @@
+import { formatVersionErrorAt, isFormatVersionError } from '@internal/contract/format-version';
 import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
 import {
@@ -26,6 +27,15 @@ export function errorFromCaught(
   return options.connection === undefined
     ? reported
     : withoutConnectionString(reported, options.connection);
+}
+
+/** A stored file's format version error, reported as itself and naming the file at `path` when its reader did not; undefined for any other error. A command never folds one into another error. */
+export function formatVersionFailure(
+  error: unknown,
+  path?: string,
+): CliStructuredError | undefined {
+  if (!isFormatVersionError(error)) return undefined;
+  return cliErrorFromStructured(path === undefined ? error : formatVersionErrorAt(error, path));
 }
 
 /** A structured error a library raised, reported under its own code, message and fields. */

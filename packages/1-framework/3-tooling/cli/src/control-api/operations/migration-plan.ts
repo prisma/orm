@@ -77,7 +77,7 @@ import { resolveStatements } from '../statements/resolve-statements';
 import { isPlannedStatement, type StatementText } from '../statements/statement-text';
 import { reportTemporaryValues, type TemporaryValueReport } from '../statements/temporary-values';
 import type { ControlClient } from '../types';
-import { errorFromCaught } from './caught-errors';
+import { errorFromCaught, formatVersionFailure } from './caught-errors';
 import {
   type ChangedStorageEntity,
   changedStorageEntities,
@@ -594,6 +594,8 @@ async function executeMigrationPlanCommandInner(
     emittedContractJson = castAs<unknown>(JSON.parse(contractJsonContent));
     toContract = familyInstance.deserializeContract(emittedContractJson);
   } catch (error) {
+    const formatFailure = formatVersionFailure(error, contractPathAbsolute);
+    if (formatFailure !== undefined) return notOk(formatFailure);
     return notOk(
       errorContractValidationFailed(
         `Contract at ${contractPathAbsolute} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,

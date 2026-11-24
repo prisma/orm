@@ -1,3 +1,4 @@
+import { formatVersionFailure } from './caught-errors';
 /**
  * Policy core of `migration check`: per-space explicit graph checks, aggregate-integrity loading, and single-target resolution.
  */
@@ -400,6 +401,8 @@ export async function loadAggregateIntegrityViolations(
     });
     return ok(aggregate.checkIntegrity({ declaredExtensions, checkContracts: true }));
   } catch (error) {
+    const formatFailure = formatVersionFailure(error, contractPath);
+    if (formatFailure !== undefined) return notOk(formatFailure);
     if (
       MigrationToolsError.is(error) &&
       error.code === 'MIGRATION.CONTRACT_DESERIALIZATION_FAILED'

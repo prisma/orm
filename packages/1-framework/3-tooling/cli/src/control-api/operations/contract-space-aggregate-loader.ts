@@ -24,7 +24,7 @@ import { CliStructuredError } from '../../utils/cli-errors';
 import { readContractEnvelope, resolveContractPath } from '../../utils/command-helpers';
 import { toDeclaredExtensionsFromRaw } from '../../utils/extension-pack-inputs';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
-import { errorFromCaught } from './caught-errors';
+import { errorFromCaught, formatVersionFailure } from './caught-errors';
 
 const CONTRACT_SPACES_DOCS_URL = 'https://pris.ly/contract-spaces';
 
@@ -358,7 +358,6 @@ export function appContractStandInFromIdentity(args: {
     'read-aggregate consumers query only storage.storageHash and target; empty models stand in for an unreadable contract.json'
   >({
     storage: { storageHash: args.contractHash },
-    schemaVersion: '0.0.0',
     target: args.targetId,
     targetFamily: args.targetFamily,
     models: {},
@@ -412,7 +411,9 @@ export async function buildReadAggregate(
   try {
     const envelope = await readContractEnvelope(config);
     contractHash = envelope.storageHash;
-  } catch {
+  } catch (error) {
+    const formatFailure = formatVersionFailure(error);
+    if (formatFailure !== undefined) return notOk(formatFailure);
     // Contract unreadable — marker uses EMPTY_CONTRACT_HASH
   }
 
@@ -430,7 +431,9 @@ export async function buildReadAggregate(
     if (contractRawForAggregate !== null) {
       try {
         appContractForLoad = deserializeContract(contractRawForAggregate);
-      } catch {
+      } catch (error) {
+        const formatFailure = formatVersionFailure(error, resolveContractPath(config));
+        if (formatFailure !== undefined) return notOk(formatFailure);
         // Deserialization failed — identity-only stand-in fallback
       }
     }

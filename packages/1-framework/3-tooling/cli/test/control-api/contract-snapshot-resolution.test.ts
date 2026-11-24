@@ -22,7 +22,7 @@ const HASH_FLOAT = `${'f'.repeat(64)}`;
 
 function contractJsonForHash(storageHash: string): Record<string, unknown> {
   return {
-    schemaVersion: '1.0.0',
+    formatVersion: 1,
     targetFamily: 'sql',
     target: 'postgres',
     storage: { storageHash },

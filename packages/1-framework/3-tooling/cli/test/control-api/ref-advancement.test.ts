@@ -24,7 +24,7 @@ const PROFILE_HASH = `${'c'.repeat(64)}`;
 function sampleContractIR(storageHash: string = HASH_A): ContractIR {
   return {
     contract: {
-      schemaVersion: '1',
+      formatVersion: 1,
       targetFamily: 'sql',
       target: 'postgres',
       profileHash: PROFILE_HASH,

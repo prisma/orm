@@ -22,7 +22,7 @@ const HASH_B = `${'b'.repeat(64)}`;
 const ENTRY_A: RefEntry = { hash: HASH_A, invariants: [] };
 const ENTRY_B: RefEntry = { hash: HASH_B, invariants: ['split-user-name'] };
 
-function refFile(content: Record<string, unknown>): string {
+function refFile(content: object): string {
   return JSON.stringify({ formatVersion: 1, ...content });
 }
 

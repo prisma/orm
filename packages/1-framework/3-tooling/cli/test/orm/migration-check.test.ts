@@ -131,7 +131,7 @@ async function seedDanglingRef(migrationsDir: string, name: string): Promise<voi
   await mkdir(refsDir, { recursive: true });
   await writeFile(
     join(refsDir, `${name}.json`),
-    JSON.stringify({ hash: HASH_UNPRODUCED, invariants: [] }),
+    JSON.stringify({ formatVersion: 1, hash: HASH_UNPRODUCED, invariants: [] }),
     'utf-8',
   );
 }
@@ -449,7 +449,11 @@ describe('migration check', () => {
       const dir = await projectDir();
       await seedMigration(join(dir, 'migrations'));
       await mkdir(join(dir, 'output'), { recursive: true });
-      await writeFile(join(dir, 'output', 'contract.json'), JSON.stringify(TEST_CONTRACT), 'utf-8');
+      await writeFile(
+        join(dir, 'output', 'contract.json'),
+        JSON.stringify({ formatVersion: 1, ...TEST_CONTRACT }),
+        'utf-8',
+      );
       const refusedDefaults = [{ namespaceId: 'public', table: 'user', column: 'id' }];
       const config = ormConfig({
         family: {

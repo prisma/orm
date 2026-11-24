@@ -62,7 +62,7 @@ async function tamperSnapshot(project: OfflineProject): Promise<void> {
     jsonPath,
     JSON.stringify({
       storage: { storageHash: GENUINE_HASH, namespaces: { sneaky: { entries: {} } } },
-      schemaVersion: '1.0.0',
+      formatVersion: 1,
       target: 'postgres',
       targetFamily: 'sql',
       models: {},
