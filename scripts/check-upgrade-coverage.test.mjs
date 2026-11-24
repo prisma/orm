@@ -72,6 +72,8 @@ describe('version and format helpers', () => {
     assert.deepEqual(parseVersion('8.0.0-rc.3'), { major: 8, minor: 0, patch: 0, rc: 3 });
     assert.equal(parseVersion('8.0.0-dev.7').rc, null);
     assert.throws(() => parseVersion('invalid'));
+    assert.throws(() => parseVersion('8.0.0-beta.1'), /8\.0\.0-beta\.1/);
+    assert.throws(() => parseVersion('8.1.0-preview.0'), /8\.1\.0-preview\.0/);
     assert.equal(transitionLabel(parseVersion('0.7.3'), parseVersion('0.9.0')), '0.7-to-0.9');
     assert.equal(
       transitionLabel(parseVersion('8.0.0-rc.7'), parseVersion('8.0.0')),

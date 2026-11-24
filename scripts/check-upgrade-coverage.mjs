@@ -5,6 +5,7 @@ import { basename, posix } from 'node:path';
 import { argv, cwd, exit, stderr, stdout } from 'node:process';
 import { fileURLToPath } from 'node:url';
 import matter from 'gray-matter';
+import { parseVersion as parseReleaseVersion } from '../packages/0-shared/publish-surface/src/release-plan.ts';
 
 export function parseChangesFrontmatter(src) {
   if (!/^---\s*\n[\s\S]*?\n---/.test(src))
@@ -18,15 +19,22 @@ export function parseChangesFrontmatter(src) {
   }
 }
 
+/**
+ * A root version: a release `X.Y.Z` or a release candidate `X.Y.Z-rc.N`, read with the release plan's
+ * parser. A development build reads as the version it was made from, without the release candidate
+ * counter. The root never carries another level, so one stops the check, naming it.
+ */
 export function parseVersion(spec) {
-  const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(spec);
-  if (!match) throw new Error(`unparseable version "${spec}"`);
-  const rc = match[4] ? /^rc\.(\d+)$/.exec(match[4]) : null;
+  const parsed = parseReleaseVersion(spec);
+  if (parsed.level !== undefined && parsed.level.name !== 'rc')
+    throw new Error(
+      `root version "${spec}" carries the ${parsed.level.name} level, which only a package's own version may carry`,
+    );
   return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-    rc: rc ? Number(rc[1]) : null,
+    major: parsed.major,
+    minor: parsed.minor,
+    patch: parsed.patch,
+    rc: parsed.level !== undefined && parsed.dev === undefined ? parsed.level.counter : null,
   };
 }
 export function versionSegment(version) {
