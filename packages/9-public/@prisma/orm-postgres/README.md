@@ -1,6 +1,6 @@
 # @prisma/orm-postgres
 
-The package a PostgreSQL application installs for its database. It wires the framework, the SQL family, and the Postgres target into a single lazy client. It names the platform packages it is built on as peer dependencies, each at this package's own exact version, so the application lists them beside it, every `@prisma/orm-*` line naming the same version. `prisma orm init` writes that list, in the form the project's package manager writes a version it is given. To install them by hand, give every `@prisma/orm-*` package the same version, the release you want:
+The package a PostgreSQL application installs for its database. It wires the framework, the SQL family, and the Postgres target into a single lazy client. It names the platform packages it is built on as peer dependencies: until `8.0.0` at this package's own exact version, and from `8.0.0` at a range within this package's release, such as `~8.1.0`. The application lists them beside it, and `prisma orm init` writes that list. To install them by hand, give every `@prisma/orm-*` package the same `8.0.0-rc.N` until `8.0.0`, and from `8.0.0` the lines [the versioning page](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#what-an-application-writes) gives for the release you want:
 
 > **Maturity level: Generally Available.** A later release in the same major version does not break its users. Until `8.0.0` every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`; from `8.0.0` the version shows the level. See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
 
@@ -58,7 +58,7 @@ This package ships no bin. The ORM commands run inside the unified `prisma` CLI,
 
 ## Decomposing
 
-Every application lists the four platform packages, so an application that outgrows the default wiring already has them. It imports from them directly and recomposes them — for example replacing `@prisma/orm-target-postgres/adapter` with a pooled adapter of its own while keeping the target and driver — and drops the facade. Because every package is at one exact version, the decomposed application gets exactly what the facade would have provided, minus the replaced part.
+Every application lists the four platform packages, so an application that outgrows the default wiring already has them. It imports from them directly and recomposes them — for example replacing `@prisma/orm-target-postgres/adapter` with a pooled adapter of its own while keeping the target and driver — and drops the facade. Because every package is of the same release, the decomposed application gets exactly what the facade would have provided, minus the replaced part.
 
 ## Responsibilities
 

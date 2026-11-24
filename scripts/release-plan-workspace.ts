@@ -109,9 +109,9 @@ export function levelOf(name: string): DeclaredLevel | undefined {
 }
 
 /**
- * A plan as a table: package, level, version, tag, and the range on each package it names. A version
- * the package already had at the release before is marked as already published: there is nothing new
- * of it to publish.
+ * A plan as a table: package, level, version, tag, and the range on each package it names. A package
+ * that keeps the version it had at the release before is not published again, so its row says so in
+ * place of ranges it would not publish.
  */
 export function formatPlanTable(
   plan: ReleasePlan,
@@ -127,11 +127,13 @@ export function formatPlanTable(
       return [
         name,
         level === undefined ? '?' : isNumberedOnItsOwn(level) ? 'own-version' : level,
-        previous[name] === planned.version
-          ? `${planned.version} (already published)`
-          : planned.version,
+        planned.version,
         planned.tag,
-        ranges.length === 0 ? '-' : ranges.join(', '),
+        previous[name] === planned.version
+          ? '(not republished)'
+          : ranges.length === 0
+            ? '-'
+            : ranges.join(', '),
       ];
     });
   const widths = [0, 1, 2, 3].map((column) =>

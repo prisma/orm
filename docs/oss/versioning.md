@@ -86,11 +86,34 @@ The packages of one release are tested together, so among themselves they accept
 ## What an application writes
 
 - On a GA target package: a caret on every `@prisma/orm-*` line, `^8.3.0`. An update moves all of them to the next release together.
-- On a target package below GA: a tilde on every line, `~8.3.0-ea.0` on the packages below GA and `~8.3.0` on the GA ones, and the target package at a tilde on its own version, such as `~8.3.0-ea.1`. A caret on a pre-release never selects the next minor's pre-release. At each new minor the user edits the lines, or runs their package manager's command that updates to the latest version.
+- On a target package below GA: a tilde on every line, `~8.3.0-ea.0` on the packages below GA and `~8.3.0` on the GA ones, and the target package at a tilde on its own version, such as `~8.3.0-ea.1`. A caret on a pre-release never selects the next minor's pre-release, so at each new minor the user edits the lines; see [below](#a-new-minor-below-ga).
 
 `prisma orm init` writes the lines this way when it adds the target package itself. When the project already lists the target package, `init` leaves that line as the user wrote it and writes each platform package at the range the installed target package declares for it, so that it never installs a platform package the user's target package does not accept.
 
 On the release candidates `init` writes the exact `8.0.0-rc.N` on every line.
+
+Under pnpm a line on a package below GA is exact: pnpm writes `8.1.0-ea.0` even when it is given `~8.1.0-ea.0`, and `pnpm update` rewrites such a line to an exact version. That is pnpm's behaviour, which `init` does not change. To take a fix to that package, such as `8.1.0-ea.1`, change the line or add the package again.
+
+### A new minor below GA
+
+At each new minor, an application on a target package below GA edits every `@prisma/orm-*` line by hand to the new minor, `~X.Y.0-<level>.0` for the packages below GA and `~X.Y.0` for the GA ones, then runs its package manager's install. For SQLite going from `8.1` to `8.2`:
+
+```jsonc
+// before
+"@prisma/orm-sqlite": "~8.1.0-ea.0",
+"@prisma/orm-target-sqlite": "~8.1.0-ea.0",
+"@prisma/orm-framework": "~8.1.0",
+"@prisma/orm-family-sql": "~8.1.0",
+"@prisma/orm-toolchain": "~8.1.0"
+// after
+"@prisma/orm-sqlite": "~8.2.0-ea.0",
+"@prisma/orm-target-sqlite": "~8.2.0-ea.0",
+"@prisma/orm-framework": "~8.2.0",
+"@prisma/orm-family-sql": "~8.2.0",
+"@prisma/orm-toolchain": "~8.2.0"
+```
+
+A package manager's command that updates to the latest version is not a substitute: npm and Yarn rewrite every tilde line as a caret, and the next ordinary update then moves the GA lines to the following minor without the target package, which does not accept it.
 
 ## Printing the release plan
 
