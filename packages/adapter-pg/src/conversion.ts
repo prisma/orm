@@ -299,7 +299,13 @@ function normalize_numeric(numeric: string): string {
  */
 
 function normalize_date(date: string): string {
-  return date
+  const bc = /^(\d+)(-\d{2}-\d{2}) BC$/.exec(date)
+  if (!bc) {
+    return date
+  }
+  const year = Number(bc[1]) - 1
+  const isoYear = year === 0 ? '0000' : `-${String(year).padStart(6, '0')}`
+  return isoYear + bc[2]
 }
 
 /*
@@ -489,7 +495,10 @@ function formatDateTime(date: Date): string {
 
 function formatDate(date: Date): string {
   const pad = (n: number, z = 2) => String(n).padStart(z, '0')
-  return pad(date.getUTCFullYear(), 4) + '-' + pad(date.getUTCMonth() + 1) + '-' + pad(date.getUTCDate())
+  const year = date.getUTCFullYear()
+  const pgYear = year <= 0 ? 1 - year : year
+  const suffix = year <= 0 ? ' BC' : ''
+  return `${pad(pgYear, 4)}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}${suffix}`
 }
 
 function formatTime(date: Date): string {
