@@ -49,7 +49,9 @@ function declaredName(item) {
   return DECLARATION_HEAD.exec(text)?.[2] ?? BARE_HEAD.exec(text)?.[1] ?? item.displayName;
 }
 
-const declarationKey = (item) => [item.fileUrlPath ?? '', item.kind, declaredName(item)].join('\0');
+// A declaration is identified by the file API Extractor records for it and its declared name,
+// so the halves of a merged declaration (a class and an interface of one name) are one.
+const declarationKey = (item) => `${item.fileUrlPath ?? ''}\0${declaredName(item)}`;
 
 // Prints an item's declaration text. `nameOf` gives the printed name of a top-level item of
 // this package from its canonical reference, and `ownName` the name this item is printed under.
@@ -225,30 +227,39 @@ const CONTAINER_KINDS = {
   [ApiItemKind.Namespace]: 'namespace',
 };
 
-// Compares the members API Extractor gives a container with the public members TypeScript sees
-// in its declaration, and does the same inside namespaces. A non-exported container is found by
-// its declared name; when several declarations have that name, the one that fits best counts.
-function memberProblems(item, candidates, label, memberKeysOf) {
-  const kind = CONTAINER_KINDS[item.kind];
-  if (kind === undefined) return [];
-  const listed = new Set(item.members.map(memberKeyOf));
-  let best;
-  for (const symbol of candidates) {
-    const keys = memberKeysOf(symbol, kind);
-    if (keys === undefined) continue;
-    const missing = [...keys].filter((key) => !listed.has(key));
-    if (best === undefined || missing.length < best.missing.length) best = { symbol, missing };
+// Compares the members API Extractor gives the items of one declaration (a class and an
+// interface of one name are two items) with the public members TypeScript sees in it, and does the
+// same inside namespaces. `symbols` are the declarations the items can be; several are allowed
+// only when they are copies with the same members.
+function memberProblems(items, symbols, label, memberKeysOf) {
+  const kinds = [...new Set(items.map((item) => CONTAINER_KINDS[item.kind]).filter(Boolean))];
+  if (kinds.length === 0) return [];
+  const keysOf = (symbol) => {
+    const keys = kinds.flatMap((kind) => [...(memberKeysOf(symbol, kind) ?? [])]);
+    return [...new Set(keys)].sort(compareCodeUnits);
+  };
+  if (symbols.length === 0) return [`${label} has no declaration this script can find`];
+  const expected = keysOf(symbols[0]);
+  if (symbols.some((symbol) => keysOf(symbol).join('\0') !== expected.join('\0'))) {
+    return [
+      `${label} matches ${symbols.length} different declarations, so its members cannot be checked`,
+    ];
   }
-  if (best === undefined) return [`${kind} ${label} has no declaration this script can find`];
-  const problems = best.missing.map((key) => `member ${label}.${key} has no line`);
-  if (kind !== 'namespace') return problems;
-  for (const member of item.members) {
-    const inner = best.symbol.exports?.get(ts.escapeLeadingUnderscores(member.displayName));
-    if (inner) {
-      problems.push(
-        ...memberProblems(member, [inner], `${label}.${member.displayName}`, memberKeysOf),
-      );
+  const listed = new Set(items.flatMap((item) => (item.members ?? []).map(memberKeyOf)));
+  const problems = expected
+    .filter((key) => !listed.has(key))
+    .map((key) => `member ${label}.${key} has no line`);
+  const inner = new Map();
+  for (const item of items) {
+    if (item.kind !== ApiItemKind.Namespace) continue;
+    for (const member of item.members) {
+      inner.set(member.displayName, [...(inner.get(member.displayName) ?? []), member]);
     }
+  }
+  for (const [name, members] of inner) {
+    const symbol = symbols[0].exports?.get(ts.escapeLeadingUnderscores(name));
+    if (symbol)
+      problems.push(...memberProblems(members, [symbol], `${label}.${name}`, memberKeysOf));
   }
   return problems;
 }
@@ -552,12 +563,9 @@ function collectLines(models, { checker, paths, isOwn, containers, memberKeysOf 
   }
 
   for (const local of locals.values()) {
-    if (local.sameAs) continue;
-    for (const item of local.items) {
-      const candidates = [...(containers.get(declaredName(item)) ?? [])];
-      const missing = memberProblems(item, candidates, localNames.get(local.key), memberKeysOf);
-      problems.push(...missing.map((problem) => `(not exported) ${problem}`));
-    }
+    const symbols = [...(containers.get(local.key) ?? [])];
+    const missing = memberProblems(local.items, symbols, localNames.get(local.key), memberKeysOf);
+    problems.push(...missing.map((problem) => `(not exported) ${problem}`));
   }
 
   const packageGroups = new Map();
@@ -585,10 +593,13 @@ function collectLines(models, { checker, paths, isOwn, containers, memberKeysOf 
           cover(model.subpath, name);
         }
       }
-      for (const item of group.items) {
-        const missing = memberProblems(item, [group.symbol], group.referenceName, memberKeysOf);
-        problems.push(...missing.map((problem) => `${model.subpath}: ${problem}`));
-      }
+      const missing = memberProblems(
+        group.items,
+        [group.symbol],
+        group.referenceName,
+        memberKeysOf,
+      );
+      problems.push(...missing.map((problem) => `${model.subpath}: ${problem}`));
     }
     for (const specifier of info.starForwards) {
       lines.add(`${pathPrefix}everything from ${specifier}`, `${model.subpath} * ${specifier}`);

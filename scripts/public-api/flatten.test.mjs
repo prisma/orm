@@ -23,6 +23,37 @@ function linesOf(fixture, editModel) {
 
 const membersOf = (model) => model.members[0].members;
 
+const SHAPES = [
+  '.: class Accessors',
+  '.: class Accessors, readonly required property get onlyGet(): number',
+  '.: class Accessors, required property get both(): string; set both(value: string)',
+  '.: class Accessors, required property set onlySet(value: string)',
+  '.: class Both',
+  '.: class Both, readonly required property fromClass: number',
+  '.: const Pair: { readonly size: 2 }',
+  '.: const enum Mode',
+  '.: const key: unique symbol',
+  '.: enum Level',
+  '.: enum Level, member High = 1',
+  '.: enum Level, member Low = 0',
+  '.: enum Mode, member Off = "off"',
+  '.: enum Mode, member On = "on"',
+  '.: export default = const _default: { readonly answer: 42; }',
+  '.: function build(): void',
+  '.: interface Both',
+  '.: interface Both, readonly required property fromInterface: string',
+  '.: interface Keyed',
+  '.: interface Keyed, index signature [index: number]: string',
+  '.: interface Keyed, index signature [name: string]: unknown',
+  '.: interface Keyed, readonly required property [key]: string',
+  '.: interface Keyed, required method [Symbol.iterator](): Iterator<string>',
+  '.: namespace build',
+  '.: namespace build, const version: string',
+  '.: namespace build, interface Options',
+  '.: namespace build, interface Options, readonly required property fast: boolean',
+  '.: type Pair = readonly [string, string]',
+];
+
 function removeItem(model, name) {
   model.members[0].members = membersOf(model).filter((item) => item.name !== name);
 }
@@ -409,6 +440,47 @@ describe('flattenPackage', () => {
     throws(
       () => linesOf('nsexport-chunk'),
       /fixtures\/nsexport-chunk: API Extractor failed on \.: fetchAstModuleExportInfo\(\) is not supported for external modules\. /,
+    );
+  });
+
+  it('lists a class merged with an interface under one name, with the members of both', () => {
+    deepStrictEqual(
+      linesOf('mixin'),
+      sorted([
+        '(not exported) class Widget',
+        '(not exported) class Widget, readonly required property base: number',
+        '(not exported) interface Widget',
+        '(not exported) interface Widget, readonly required property extra: string',
+        '.: function make(): Widget',
+      ]),
+    );
+  });
+
+  it('lists merged declarations, enums, symbol keys and accessors', () => {
+    deepStrictEqual(linesOf('shapes'), sorted(SHAPES));
+  });
+
+  it('checks each non-exported declaration against its own declaration, not one with the same name', () => {
+    deepStrictEqual(
+      linesOf('bestfit'),
+      sorted([
+        '(not exported) interface Options',
+        '(not exported) interface Options, readonly required property alpha: boolean',
+        '(not exported) interface Options_2',
+        '(not exported) interface Options_2, readonly required property alpha: boolean',
+        '(not exported) interface Options_2, readonly required property secret: string',
+        '.: function first(options: Options_2): void',
+        '.: function second(options: Options): void',
+      ]),
+    );
+    throws(
+      () =>
+        linesOf('bestfit', (model) => {
+          for (const item of membersOf(model)) {
+            item.members = item.members?.filter((member) => member.name !== 'secret');
+          }
+        }),
+      /member Options(_2)?\.secret has no line/,
     );
   });
 

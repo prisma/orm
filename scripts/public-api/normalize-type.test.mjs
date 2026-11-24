@@ -69,6 +69,20 @@ describe('normalizeTypes', () => {
     strictEqual(normalizeTypes('namespace Units', 'declaration'), 'namespace Units');
   });
 
+  it('fails on an import("…") of a file rather than a package', () => {
+    throws(
+      () => normalizeTypes('const x: import("./chunk-AbCd1234.mjs").Foo', 'declaration'),
+      /import\("\.\/chunk-AbCd1234\.mjs"\) names a file, not a package/,
+    );
+    throws(
+      () =>
+        normalizeTypes('const x: import("/home/ci/repo/x").Foo', 'declaration', {
+          keepImportModules: true,
+        }),
+      /import\("\/home\/ci\/repo\/x"\) names a file, not a package/,
+    );
+  });
+
   it('fails on text it cannot parse, naming the text', () => {
     throws(() => normalizeTypes('const x: {', 'declaration'), /cannot parse "const x: \{"/);
   });

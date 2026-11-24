@@ -47,6 +47,12 @@ export function renderNode(node, file, options = {}) {
       .sort(compareCodeUnits)
       .join(' | ');
   }
+  if (ts.isImportTypeNode(node)) {
+    const specifier = node.argument.getText(file).slice(1, -1);
+    if (/^(\.|\/|[A-Za-z]:)/.test(specifier)) {
+      throw new TypeTextError(`import("${specifier}") names a file, not a package`);
+    }
+  }
   if (ts.isImportTypeNode(node) && node.qualifier && !keepImportModules) {
     const typeArguments = node.typeArguments
       ? `<${node.typeArguments.map((argument) => renderNode(argument, file, options)).join(', ')}>`

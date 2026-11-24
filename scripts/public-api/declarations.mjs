@@ -1,7 +1,8 @@
 // What each import path of a package exports, as the TypeScript compiler sees it. This uses the
 // repository's TypeScript; API Extractor brings its own copy, which reads the same files.
 
-import { dirname, resolve, sep } from 'node:path';
+import { dirname, relative, resolve, sep } from 'node:path';
+import { SourceMapper } from '@microsoft/api-extractor/lib/collector/SourceMapper';
 import ts from 'typescript';
 
 const isBare = (specifier) => !specifier.startsWith('.') && !specifier.startsWith('/');
@@ -107,9 +108,12 @@ function ownMemberKeys(symbol, kind, isOwn) {
   return keys;
 }
 
-// The classes, interfaces, enums and namespaces declared at the top of the package's files, by name.
-function containersByName(program, checker, isOwn) {
-  const byName = new Map();
+// The classes, interfaces, enums and namespaces declared at the top of the package's files, by
+// the file API Extractor records for them and their name. API Extractor follows the declaration
+// files' source maps to name that file, so the same mapper is used here.
+function containersByLocation(program, checker, isOwn, packageDir) {
+  const mapper = new SourceMapper();
+  const byLocation = new Map();
   for (const file of program.getSourceFiles()) {
     if (!isOwn(file)) continue;
     for (const statement of file.statements) {
@@ -123,13 +127,14 @@ function containersByName(program, checker, isOwn) {
       const symbol =
         container && statement.name ? checker.getSymbolAtLocation(statement.name) : undefined;
       if (symbol === undefined) continue;
-      const name = statement.name.text;
-      const symbols = byName.get(name) ?? new Set();
+      const { sourceFilePath } = mapper.getSourceLocation({ sourceFile: file, pos: statement.pos });
+      const location = `${relative(packageDir, sourceFilePath).split(sep).join('/')}\0${statement.name.text}`;
+      const symbols = byLocation.get(location) ?? new Set();
       symbols.add(symbol);
-      byName.set(name, symbols);
+      byLocation.set(location, symbols);
     }
   }
-  return byName;
+  return byLocation;
 }
 
 function reachableFiles(program, entry, packageDir) {
@@ -281,7 +286,7 @@ export function readDeclarations(packageDir, entryPoints) {
     checker,
     paths,
     isOwn,
-    containers: containersByName(program, checker, isOwn),
+    containers: containersByLocation(program, checker, isOwn, packageDir),
     memberKeysOf: (symbol, kind) => ownMemberKeys(symbol, kind, isOwn),
   };
 }
