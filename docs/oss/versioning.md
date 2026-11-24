@@ -30,7 +30,7 @@ The rest of this page, from [Maturity levels](#maturity-levels) to [What an appl
 
 ## Maturity levels
 
-Every published package has one of four maturity levels. A level is defined by the least the maintainers do for a package at it. [ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md) records the decision.
+Every published package but one has one of four maturity levels; `@prisma/orm-extension-paradedb` has its own version instead, [below](#version-numbers). A level is defined by the least the maintainers do for a package at it. [ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md) records the decision.
 
 | Level | What the maintainers do, at least |
 | --- | --- |
@@ -52,13 +52,14 @@ A level is written in two places, and nowhere else: in a package's version numbe
 
 An API has the level of its package unless its name starts with the word for a lower level. A capability has the level of the package that publishes it. A GA package of ours names only GA packages of ours. There are no feature flags: functionality that is not ready ships in its own package below GA, or under a name that carries its level.
 
-Each package's level is declared in [`packages/0-shared/publish-surface/src/levels.ts`](../../packages/0-shared/publish-surface/src/levels.ts). Within a minor a package's level may go up and not down, because its version can only move forward. At a new minor it may move either way.
+Each package's level is declared in [`packages/0-shared/publish-surface/src/levels.ts`](../../packages/0-shared/publish-surface/src/levels.ts). A package's level may go up at any release; within a minor it can only go up, because its version can only move forward. It may go down at a new minor only if the package has never been GA. Whether a GA package may go below GA again is not decided, and the release scripts refuse it.
 
 ## Version numbers
 
-- **The major and minor are the release number.** Release `8.3` publishes every package at `8.3`. The root `package.json` `version` is the release number with a zero patch, such as `8.3.0`; on the release candidates it is `8.0.0-rc.N`.
+- **The major and minor are the release number.** Release `8.3` publishes every package at `8.3`, except `@prisma/orm-extension-paradedb`. The root `package.json` `version` is the release number with a zero patch, such as `8.3.0`; on the release candidates it is `8.0.0-rc.N`.
 - **A GA package has its own patch number.** A fix to one GA package raises that package's patch number, to `8.3.1`, and no other package's. The commands that release such a fix are not written yet.
 - **A package below GA carries its level as a suffix, with its own counter.** A fix to it raises the counter, `8.3.0-preview.1`, and not the patch number, so that a user's range can select it.
+- **At release `8.0`, a package at Release Candidate continues the release candidates' counter**, above the last `8.0.0-rc.N`, so its version sorts above every release candidate already published; the other levels start at `8.0.0` and `8.0.0-<level>.0`. One function in the release plan, `firstVersionOfMinor`, gives the first version of every minor.
 - **The suffix is what Semantic Versioning calls a pre-release.** A range such as `^8.0.0` never selects one, so a user gets a release below GA only by asking for it. The words sort in the right order: `ea`, `preview`, `rc`, then the plain version.
 
 `@prisma/orm-extension-paradedb` has no level and is numbered on its own from `8.0.0`: it takes `0.1.0` at `8.0.0`, then keeps its version at each release until it gets a fix, which raises its patch number. Its first version is declared in `levels.ts`; after that its version is in its manifest. At a release where its version is already on the registry, the publish script skips it and says so. It names our packages as an extension does ([ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).

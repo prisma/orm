@@ -2,7 +2,7 @@
 
 The package a MySQL application installs for its database. It wires the framework, the SQL family, and the MySQL target together. It names the platform packages it is built on as peer dependencies, each at this package's own exact version, so the application lists them beside it, every `@prisma/orm-*` line naming the same version. `prisma orm init` writes that list, in the form the project's package manager writes a version it is given. To install them by hand, give every `@prisma/orm-*` package the same version, the release you want:
 
-> **From `8.0.0` this package is Early Access.** It is released so that people can try it, and it may change in any release. Until `8.0.0` every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`. See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+> **Maturity level: Early Access.** It is released so that people can try it, and it may change in any release. Until `8.0.0` every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`; from `8.0.0` the version shows the level. See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
 
 ```sh
 pnpm add @prisma/orm-mysql@<version> @prisma/orm-framework@<version> @prisma/orm-family-sql@<version> @prisma/orm-target-mysql@<version> @prisma/orm-toolchain@<version>

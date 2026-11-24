@@ -96,7 +96,7 @@ See [Using extensions](https://www.prisma.io/docs/orm/extensions/using-extension
 
 ## Supported databases
 
-Every package has a [maturity level](./docs/oss/versioning.md#maturity-levels) from `8.0.0`: Generally Available, Release Candidate, Preview or Early Access. Until then every package is a release candidate.
+Every package but `@prisma/orm-extension-paradedb`, which has its own version, has a [maturity level](./docs/oss/versioning.md#maturity-levels) from `8.0.0`: Generally Available, Release Candidate, Preview or Early Access. Until then every package is a release candidate.
 
 - **PostgreSQL**: Generally Available from `8.0.0`
 - **MongoDB**: Preview from `8.0.0`

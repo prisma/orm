@@ -2,7 +2,7 @@
 
 The concrete MySQL target of Prisma 8: the target descriptor (DDL planning, codecs, migration rendering), the MySQL adapter, and the driver.
 
-> **From `8.0.0` this package is Early Access.** It is released so that people can try it, and it may change in any release. Until `8.0.0` every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`. See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+> **Maturity level: Early Access.** It is released so that people can try it, and it may change in any release. Until `8.0.0` every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`; from `8.0.0` the version shows the level. See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
 
 A MySQL or MariaDB application lists this package beside its target package (`@prisma/orm-mysql`, `@prisma/orm-mariadb`), at the version the target package names it at, because the target package names it as a peer dependency; `prisma orm init` writes that list. Application code imports from the target package. Extension authors targeting MySQL and decomposed installs import this package directly.
 

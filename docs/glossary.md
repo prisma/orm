@@ -95,7 +95,7 @@ How finished a package or an API is: Early Access, Preview, Release Candidate or
 
 ### Release number
 
-The major and minor that every package of one release shares: release `8.3` publishes every package at `8.3`. The rest of a version is each package's own: a GA package's patch number, or a level suffix and its counter for a package below GA. From `8.0.0`, the root `package.json` `version` is the release number with a zero patch, `8.3.0`. See [Versioning](oss/versioning.md#version-numbers).
+The major and minor that every package of one release shares: release `8.3` publishes every package at `8.3`, except `@prisma/orm-extension-paradedb`, which has its own version. The rest of a version is each package's own: a GA package's patch number, or a level suffix and its counter for a package below GA. From `8.0.0`, the root `package.json` `version` is the release number with a zero patch, `8.3.0`. See [Versioning](oss/versioning.md#version-numbers).
 
 ### Init contribution
 

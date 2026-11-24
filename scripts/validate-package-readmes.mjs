@@ -8,18 +8,17 @@ import { isNumberedOnItsOwn } from '../packages/0-shared/publish-surface/src/rel
 
 const PUBLISHED_DIR = 'packages/9-public/@prisma';
 
-/** The opening of the level sentence a published package's README carries for its declared level. */
+/** The sentence a published package's README opens its level note with, for its declared level. */
 function levelSentence(level) {
-  if (isNumberedOnItsOwn(level)) {
-    return `**From \`8.0.0\` this package has its own version number, starting at \`${level.firstVersion}\`.**`;
-  }
+  if (isNumberedOnItsOwn(level))
+    return '**Maturity level: none; this package has its own version.**';
   const words = {
-    ga: 'is Generally Available',
-    rc: 'is a Release Candidate',
-    preview: 'is in Preview',
-    ea: 'is Early Access',
+    ga: 'Generally Available',
+    rc: 'Release Candidate',
+    preview: 'Preview',
+    ea: 'Early Access',
   };
-  return `**From \`8.0.0\` this package ${words[level]}.**`;
+  return `**Maturity level: ${words[level]}.**`;
 }
 
 /** Every published package whose README does not state the level `levels.ts` declares for it. */

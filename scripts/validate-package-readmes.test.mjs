@@ -68,12 +68,12 @@ describe('validate package READMEs', () => {
       writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: '@prisma/orm-mongo' }));
       writeFileSync(
         join(dir, 'README.md'),
-        '# @prisma/orm-mongo\n\n> **From `8.0.0` this package is Generally Available.**\n',
+        '# @prisma/orm-mongo\n\n> **Maturity level: Generally Available.**\n',
       );
       const wrong = run();
       writeFileSync(
         join(dir, 'README.md'),
-        '# @prisma/orm-mongo\n\n> **From `8.0.0` this package is in Preview.**\n',
+        '# @prisma/orm-mongo\n\n> **Maturity level: Preview.**\n',
       );
       const right = run();
 
