@@ -1,6 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { packageKinds, packageLevels } from '@internal/publish-surface/levels';
 import { platformEntrypointOf } from '@internal/publish-surface/platform-entrypoints';
+import {
+  type PublishedManifest,
+  planInputFor,
+  planRelease,
+} from '@internal/publish-surface/release-plan';
 import {
   excludedSubpaths,
   publicShells,
@@ -206,7 +212,17 @@ export async function defineShellConfig(shellName: ShellName): Promise<UserConfi
     }
   }
 
-  checkShellManifest(shellName, shell, readJson(join(shellDir, 'package.json')), lookup);
+  checkShellManifest(
+    shellName,
+    shell,
+    readJson(join(shellDir, 'package.json')),
+    lookup,
+    plannedRanges(
+      repoRoot,
+      shellName,
+      stringField(readJson(join(repoRoot, 'package.json')), 'version', 'the root'),
+    ),
+  );
 
   return defineConfig({
     entry,
@@ -441,10 +457,59 @@ export function validateShellManifest(
   shellName: ShellName,
   manifest: Record<string, unknown>,
   repoRoot: string,
+  rootVersion: string = stringField(
+    readJson(join(repoRoot, 'package.json')),
+    'version',
+    'the root',
+  ),
 ): void {
   const shell = publicShells.get(shellName);
   if (shell === undefined) throw new ShellConfigError(`unknown shell ${shellName}`);
-  checkShellManifest(shellName, shell, manifest, readAllInternalPackages(repoRoot));
+  checkShellManifest(
+    shellName,
+    shell,
+    manifest,
+    readAllInternalPackages(repoRoot),
+    plannedRanges(repoRoot, shellName, rootVersion),
+  );
+}
+
+/**
+ * The range the release plan for `rootVersion` gives `shellName` on each package of ours it names,
+ * planned from every published manifest under `packages/9-public/@prisma`, as `set-version` plans
+ * it. A level declared above one the package names fails here, naming the pair.
+ */
+function plannedRanges(
+  repoRoot: string,
+  shellName: ShellName,
+  rootVersion: string,
+): Readonly<Record<string, string>> {
+  const publishedDir = join(repoRoot, 'packages', '9-public', '@prisma');
+  const manifests: PublishedManifest[] = [];
+  for (const dir of readdirSync(publishedDir)) {
+    const manifest = readJson(join(publishedDir, dir, 'package.json'));
+    if (manifest['private'] === true) continue;
+    manifests.push({
+      name: stringField(manifest, 'name', dir),
+      version: stringField(manifest, 'version', dir),
+      peerDependencies: stringRecordField(manifest, 'peerDependencies'),
+    });
+  }
+  let plan: ReturnType<typeof planRelease>;
+  try {
+    plan = planRelease(
+      planInputFor({
+        rootVersion,
+        manifests,
+        levels: packageLevels,
+        kinds: packageKinds(publicShells),
+        everGa: new Set(),
+      }),
+    );
+  } catch (cause) {
+    throw new ShellConfigError(`the release plan for ${rootVersion} cannot be made`, { cause });
+  }
+  return plan[shellName]?.ranges ?? {};
 }
 
 /**
@@ -455,8 +520,8 @@ function checkShellManifest(
   shell: ShellDefinition,
   manifest: Record<string, unknown>,
   lookup: Map<string, InternalPackage>,
+  ranges: Readonly<Record<string, string>>,
 ): void {
-  const version = stringField(manifest, 'version', shellName);
   const internals = [...lookup.values()].filter((pkg) => pkg.shell === shellName);
 
   const expectedDeps = new Map<string, string>();
@@ -508,7 +573,11 @@ function checkShellManifest(
   // Some internal packages declare an optional peer on a third-party package
   // they also depend on; there the dependency wins.
   for (const dep of expectedDeps.keys()) expectedPeers.delete(dep);
-  for (const sibling of siblings) expectedPeers.set(sibling, `workspace:${version}`);
+  const siblingSpecifier = (sibling: string): string => {
+    const range = ranges[sibling];
+    return range === undefined ? 'a workspace: range' : `workspace:${range}`;
+  };
+  for (const sibling of siblings) expectedPeers.set(sibling, siblingSpecifier(sibling));
 
   const errors: string[] = [];
   const actualDeps = stringRecordField(manifest, 'dependencies');
@@ -550,7 +619,7 @@ function checkShellManifest(
   const actualDevDeps = stringRecordField(manifest, 'devDependencies');
   const peersMeta = recordField(manifest, 'peerDependenciesMeta');
   for (const sibling of siblings) {
-    const range = `workspace:${version}`;
+    const range = siblingSpecifier(sibling);
     if (actualDevDeps[sibling] !== range) {
       errors.push(
         `devDependencies["${sibling}"] should be "${range}", got ${JSON.stringify(actualDevDeps[sibling])}`,

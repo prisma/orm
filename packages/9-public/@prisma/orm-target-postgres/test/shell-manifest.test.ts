@@ -114,4 +114,34 @@ describe('the shell build checks a shell manifest against its bundle', () => {
       'peerDependenciesMeta["@prisma/orm-framework"] marks a sibling package optional; an application must list it',
     );
   });
+
+  it('requires the release plan’s range on the levels line, under peers and development copies', () => {
+    const atRange = (range: string): Manifest => {
+      const manifest = facadeManifest();
+      return {
+        ...manifest,
+        peerDependencies: Object.fromEntries(
+          Object.entries(manifest.peerDependencies).map(([name, spec]) => [
+            name,
+            siblings.includes(name) ? `workspace:${range}` : spec,
+          ]),
+        ),
+        devDependencies: Object.fromEntries(
+          Object.entries(manifest.devDependencies).map(([name, spec]) => [
+            name,
+            siblings.includes(name) ? `workspace:${range}` : spec,
+          ]),
+        ),
+      };
+    };
+
+    expect(() =>
+      validateShellManifest('@prisma/orm-postgres', atRange('~8.1.0'), repoRoot, '8.1.0'),
+    ).not.toThrow();
+    expect(() =>
+      validateShellManifest('@prisma/orm-postgres', atRange('8.1.0'), repoRoot, '8.1.0'),
+    ).toThrow(
+      'peerDependencies["@prisma/orm-framework"] should be "workspace:~8.1.0", got "workspace:8.1.0"',
+    );
+  });
 });
