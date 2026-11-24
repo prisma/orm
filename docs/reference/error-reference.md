@@ -1121,7 +1121,7 @@ The operation needs a contract capability the contract does not declare; the pay
 
 ### ORM.COLUMN_AMBIGUOUS
 
-The `sql()` builder's `select`, `orderBy`, `groupBy` or `distinctOn` names a column by itself, and more than one joined table or alias has that name, so the builder cannot tell which one is meant. A name that two or more joined tables share is never a top-level field. Thrown by the `select`, `orderBy`, `groupBy` or `distinctOn` call. `fix` lists the tables that have the name and gives the call with the table left as a placeholder for the user to choose, such as `select('id', (f) => f.<table>.id)` for `select`, or `orderBy((f) => f.<table>.id)` for the others. Payload: `column`, `candidates` (the tables or aliases that have it).
+The `sql()` builder's `select`, `orderBy`, `groupBy` or `distinctOn` names a column by itself, and more than one joined table or alias has that name, so the builder cannot tell which one is meant. A name that two or more joined tables share is never a top-level field. Thrown by the `select`, `orderBy`, `groupBy` or `distinctOn` call. `fix` lists the tables that have the name and gives the call with the table left as a placeholder for the user to choose, such as `select('id', (f) => f.<table>.id)` for `select`, or `orderBy((f) => f.<table>.id)` for the others. The suggestion replaces only that one name; the call keeps its other names and options. Payload: `column`, `candidates` (the tables or aliases that have it).
 
 ### ORM.COLUMN_UNKNOWN
 

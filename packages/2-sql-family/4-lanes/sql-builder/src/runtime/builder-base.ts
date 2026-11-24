@@ -338,7 +338,7 @@ function columnScopeError(
     'ORM.COLUMN_AMBIGUOUS',
     `Column "${column}"${where} is in more than one joined table (${tables.join(', ')})`,
     {
-      fix: `Name the table the column comes from (${listOfAlternatives(tables)}): ${suggestion}`,
+      fix: `Name the table the column comes from (${listOfAlternatives(tables)}) and keep the call's other arguments: ${suggestion}`,
       meta: { column, candidates: tables },
     },
   );
