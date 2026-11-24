@@ -226,6 +226,7 @@ Each pull request is one family: the rule, its refusals, its tests and journeys,
 - Removal of the by-hand advice and tests that the rule makes unreachable.
 - The new ADR and the other records listed above.
 - One upgrade instruction fragment per pull request.
+- MongoDB `createCollection` gets a postcheck (TML-3929, added to PR 2 with the operator's approval, 2026-11-24). It holds when the collection exists with every option the call sets, and with none it does not set, comparing only the given fields of the options MongoDB completes with defaults. It lets a re-run skip the creation it made, so the move routes no longer tell users to remove the creation from `migration.ts`. It changes every MongoDB `createCollection` that `migration.ts` emits, and the migration hash of the committed `examples/retail-store` initial migration.
 
 **Deliberately out, each with an entry in `deferred.md`:**
 
@@ -268,6 +269,7 @@ Each pull request is one family: the rule, its refusals, its tests and journeys,
 7. No `MIGRATION.PLANNING_FAILED` caused by a pair with the same coordinate carries `refusedStatement`, in the JSON error output, or the words "this statement".
 8. No test, journey, doc or message in the repository still says that a stored-name change is a drop and a create on PostgreSQL, SQLite or MongoDB.
 9. `git diff` of `packages/1-framework` shows only the CLI package, and nothing in it names a family or target.
+10. On MongoDB, a migration that stops after a `createCollection` finishes when run again, and a collection of that name made without the create's options still stops at the precheck: `test/integration/test/mongo/target-runner/runner-create-collection-reruns.test.ts`, the `createCollection` cases of `runner-postcheck-full-definition.test.ts`, and journey T6 in `stored-name-routes.mongo.e2e.test.ts`.
 
 ## Open questions
 

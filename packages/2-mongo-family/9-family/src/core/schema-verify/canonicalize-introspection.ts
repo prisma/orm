@@ -373,7 +373,8 @@ function canonicalizeExpectedOptions(
   });
 }
 
-function isDisabledChangeStream(value: { enabled: boolean } | undefined): boolean {
+/** Whether change stream images are given as turned off, which MongoDB reports as no option at all. */
+export function isDisabledChangeStream(value: { enabled: boolean } | undefined): boolean {
   return value !== undefined && value.enabled === false;
 }
 

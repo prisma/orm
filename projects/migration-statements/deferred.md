@@ -689,3 +689,9 @@ A script that passed `--delete User` for a `@@map` change, as it had to before, 
 **Found:** manual QA of the MongoDB stored-name renames, round 1, 2026-11-24.
 
 For a chain of collection renames (`users` to `accounts` while `accounts` moves to `members`), the two-plan route gives every collection in the chain a temporary name, though only the one that takes the name another frees needs one (`collectionRoute` and `fieldRoute` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-rename-conflicts.ts`, through `temporaryNamesRoute`). The route works; it is one step longer than needed. The SQL family's route (`storage-renames.ts`) does the same, so change both together. Enum chains already move only the member that needs a temporary value.
+
+## Under migration plan, the time-series rename route depends on matching every option by hand
+
+**Found:** MongoDB stored-name renames, whole-branch review round 9, 2026-11-24. The route predates that work.
+
+MongoDB cannot rename a time-series collection, so a rename statement for one is refused with a route: create the new collection yourself with the options the contract gives it, copy the documents into it, and let the plan drop the old one. Under `db update` the plan reads the live database, sees the new collection, and writes no create. Under `migration plan` the origin contract lacks the new collection, so the migration writes its own `createCollection`. That create is skipped only when the collection the user made has exactly the options it sets, validator, validation level and action included; otherwise it stops at its precheck, as every such create did on `main`. The route text now says so. What is missing is a route that keeps the documents under `migration plan` without that hand matching: `$merge` cannot write into a time-series collection, so the shared document-move steps do not apply, and a copy would need its own operation.

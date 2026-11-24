@@ -74,4 +74,18 @@ describe('createCollection postcheck', () => {
       ]),
     );
   });
+
+  it('takes an option set to a default MongoDB does not report as not set', () => {
+    const [check] = createCollection('users', {
+      capped: false,
+      collation: { locale: 'simple' },
+      changeStreamPreAndPostImages: { enabled: false },
+    }).postcheck;
+    expect(check?.filter).toEqual(
+      MongoAndExpr.of([
+        MongoFieldFilter.eq('name', 'users'),
+        ...absent('validator', ...SCALARS, ...DOCUMENTS),
+      ]),
+    );
+  });
 });

@@ -1,3 +1,4 @@
+export { isDisabledChangeStream } from '../core/schema-verify/canonicalize-introspection';
 export {
   type VerifyMongoSchemaOptions,
   verifyMongoSchema,

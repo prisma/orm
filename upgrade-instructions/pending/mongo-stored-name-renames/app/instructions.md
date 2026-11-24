@@ -85,7 +85,7 @@ A plan cannot tell the two models' documents apart, since nothing in a document 
 
 Before, `createCollection` had no check after it ran. When a later operation of the same migration stopped, running `db migrate` again tried the create again, and it stopped because the collection already existed. Now the create checks that the collection exists with the options it sets, and a re-run skips it, so a migration that stopped part way is finished by fixing what stopped it and running `db migrate` again.
 
-A collection that has the name but not those options, such as one made by hand with no validator, still stops the create: change or drop it yourself, then run the command again.
+A collection that has the name but not those options, such as one made by hand with no validator, still stops the create: change or drop it yourself, then run the command again. The same holds when a hand-written `migration.ts` changes the options of a collection after creating it, for example with `setValidation`: a re-run then stops at the create, so give the final options in the `createCollection` call instead.
 
 The check is written into `ops.json` when `migration.ts` is run. A migration emitted before this release keeps the old create until you run its `migration.ts` again, which changes its migration hash. Do that only for a migration no database has applied yet. If one of those older migrations stops after its create, run it again once it is emitted anew; if it has already been applied somewhere, leave it as it is and, after a stop on a database, apply the operations that did not run by hand.
 

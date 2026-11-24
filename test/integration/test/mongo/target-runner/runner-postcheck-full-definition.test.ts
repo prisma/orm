@@ -33,9 +33,7 @@ afterAll(async () => {
 }, timeouts.spinUpMongoMemoryServer);
 
 beforeEach(async () => {
-  for (const collection of await db.listCollections().toArray()) {
-    await db.dropCollection(collection['name'] as string);
-  }
+  await db.dropDatabase();
   await db.createCollection('items');
 });
 
@@ -182,6 +180,9 @@ describe('createCollection postchecks', { timeout: timeouts.spinUpMongoMemorySer
     ['a time series', { timeseries: { timeField: 'at', metaField: 'source' } }],
     ['a clustered index', { clusteredIndex: { key: { _id: 1 }, unique: true } }],
     ['change stream images', { changeStreamPreAndPostImages: { enabled: true } }],
+    ['change stream images turned off', { changeStreamPreAndPostImages: { enabled: false } }],
+    ['the simple collation', { collation: { locale: 'simple' } }],
+    ['capped turned off', { capped: false }],
   ] as const)(
     'hold once the operation created a collection with %s, and not before',
     async (_, options) => {

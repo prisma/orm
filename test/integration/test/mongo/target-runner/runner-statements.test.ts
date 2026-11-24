@@ -177,7 +177,7 @@ describe('MongoMigrationPlanner and runner - statements', () => {
         snapshotsImportPath: '../../snapshots',
       });
       expect(refused.kind === 'failure' ? refused.conflicts[0]?.why : refused.kind).toBe(
-        'MongoDB cannot rename a time-series collection. Leave out this statement. To keep the documents, first create collection "measurements" yourself with the same time-series options and copy them into it; the plan then drops "readings" once --delete names the model.',
+        'MongoDB cannot rename a time-series collection. Leave out this statement. To keep the documents, first create collection "measurements" yourself with exactly the options the contract gives it, its validator included, and copy them into it; the plan then drops "readings" once --delete names the model. A migration that migration plan writes creates collection "measurements" itself, and stops at that creation when the collection you made has other options.',
       );
 
       await live.db().createCollection('measurements', { timeseries: { timeField: 'at' } });

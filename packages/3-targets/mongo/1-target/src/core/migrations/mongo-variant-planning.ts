@@ -22,14 +22,10 @@ import {
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { planCreatesCollection } from './mongo-collection-creates';
 import { collectionControlPolicy } from './mongo-control-policy';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
-import {
-  documentCollectionOf,
-  hasCollection,
-  modelCoordinates,
-  sameModel,
-} from './mongo-model-coordinates';
+import { documentCollectionOf, modelCoordinates, sameModel } from './mongo-model-coordinates';
 import { capitalized, documentMoveSteps, joinedList, modelNamesText } from './mongo-plan-text';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
 import {
@@ -385,7 +381,7 @@ function sharedCollectionRefusal(
     .map((to) => ({
       names: moving.filter((name) => destinationOf(name) === to),
       to,
-      created: !hasCollection(fromContract, to),
+      created: planCreatesCollection(fromContract, input.contract, to),
     }));
   const effect =
     change.to === undefined

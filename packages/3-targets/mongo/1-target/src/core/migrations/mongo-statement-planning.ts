@@ -33,10 +33,10 @@ import { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir'
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
+import { planCreatesCollection } from './mongo-collection-creates';
 import { collectionControlPolicy, managedOnBothSides } from './mongo-control-policy';
 import {
   documentCollectionOf,
-  hasCollection,
   isRootModel,
   modelCoordinates,
   sameModel,
@@ -548,7 +548,7 @@ function collectionRenameRefusal(
       `${label}: collection "${from}" is a time-series collection`,
       statement === undefined
         ? `${changed}MongoDB cannot rename a time-series collection. Keep the collection's name: store the models in "${from}" (with @@map(${JSON.stringify(from)}) in PSL), then run this command again. To start the collection under its new name without its documents, remove the model in one change and add it back in a second.`
-        : `MongoDB cannot rename a time-series collection. Leave out this statement. To keep the documents, first create collection "${to}" yourself with the same time-series options and copy them into it; the plan then drops "${from}" once --delete names the model.`,
+        : `MongoDB cannot rename a time-series collection. Leave out this statement. To keep the documents, first create collection "${to}" yourself with exactly the options the contract gives it, its validator included, and copy them into it; the plan then drops "${from}" once --delete names the model. A migration that migration plan writes creates collection "${to}" itself, and stops at that creation when the collection you made has other options.`,
     );
   }
   const invalid = invalidCollectionNameReason(to);
@@ -630,7 +630,7 @@ function sharedCollectionRefusal(
       return refusedOutcome(
         statement,
         `${label}: collection "${from}" also stores ${others}`,
-        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${leavesBehind ? `${leaveOutRemoved(moving, shared.objects, modelsText(change.renames.map((renamed) => renamed.to)), readersIn(to), from)} ${moveInLeftOutPlan({ moving, from, to, created: !hasCollection(fromContract, to) })}` : `${leaveOutShared(moving)} ${moveSteps}`}`,
+        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${leavesBehind ? `${leaveOutRemoved(moving, shared.objects, modelsText(change.renames.map((renamed) => renamed.to)), readersIn(to), from)} ${moveInLeftOutPlan({ moving, from, to, created: planCreatesCollection(fromContract, contract, to) })}` : `${leaveOutShared(moving)} ${moveSteps}`}`,
       );
     case 'merged':
       return refusedOutcome(

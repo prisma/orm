@@ -17,6 +17,9 @@ PR 2 makes the MongoDB target pair origin and destination objects by coordinate 
 | 5 | CLI journeys for MongoDB mirroring the SQL set, with every journey that encoded the old behaviour rewritten. The ORM test assertions that quote the engine's first line of `CLI.CONSENT_REQUIRED` are deleted | 1 to 4 |
 | 6 | Docs and close of the PR: ADR 324 status and consequences, Migration System doc, error reference, `skills/prisma-8/references/migrations.md`, the upgrade instruction (app and extension), `deferred.md`, `plan.md` corrected to the true state, CLI enum keep-data code deleted if nothing reaches it, `handover.md` and `handover-notes/` deleted | 5 |
 
+
+Added after the dispatches, with the operator's approval (2026-11-24): `createCollection` gets a postcheck (TML-3929), so a migration that stopped after a create finishes when run again. See the spec's scope and done condition 10.
+
 Each dispatch has one Opus implementer at medium effort, then one Opus reviewer at high effort. After dispatch 6: `/drive-code-review` (both passes, no walkthrough) on the commit to be pushed, fixes, manual QA on that commit, then the PR.
 
 ## Checks for every dispatch

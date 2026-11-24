@@ -36,6 +36,7 @@ import { deepEqual, MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { unrewritableFieldNameReason } from './migration-factories';
+import { collectionHasOptions, writesCollectionCreate } from './mongo-collection-creates';
 import { collectionControlOf } from './mongo-control-policy';
 import {
   backfillTransform,
@@ -250,10 +251,6 @@ function hasImmutableOptionChange(
   return undefined;
 }
 
-function collectionHasOptions(coll: MongoSchemaCollection): boolean {
-  return !!(coll.options || coll.validator);
-}
-
 export type PlanCallsResult =
   | {
       readonly kind: 'success';
@@ -386,7 +383,7 @@ function planCollectionDiff(
     // indexes to ride along on. Collections that have indexes
     // continue to rely on createIndex for materialisation, keeping
     // existing plans byte-stable.
-    if (destColl && (collectionHasOptions(destColl) || destColl.indexes.length === 0)) {
+    if (destColl && writesCollectionCreate(destColl)) {
       const opts = collectionHasOptions(destColl)
         ? schemaCollectionToCreateCollectionOptions(destColl)
         : undefined;
