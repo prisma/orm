@@ -483,6 +483,10 @@ A `contract.json` or a contract snapshot has no format version: it has no `forma
 
 A `contract.json` or a contract snapshot is in a format version higher than any this release reads, so a newer release of Prisma wrote it. The reader interprets nothing else in the file and changes nothing. Fix path: upgrade Prisma to the release that wrote the file, or a later one. Payload: `fileKind`, `formatVersion`, `knownFormatVersions`, `path` when the reader knows the file.
 
+### CONTRACT.HASH_MISMATCH
+
+The hash rules give a saved contract a storage, profile or execution hash other than the one expected. Raised by `assertContractHashes` from `@prisma/orm-framework/contract/hashing`, which a family or target calls from its own tests to hold its hashes fixed within a major release. The message names each contract and each hash that differs, with the hash computed and the hash expected: `Contract "<name>": the storage hash is <computed>, but <expected> was expected.` Fix path: find the change to canonicalization, hashing or the family's hooks that altered the hash, and undo it; within a major release a saved contract keeps its hashes. Payload: `contracts`, the names of the contracts whose hashes differ.
+
 ### CONTRACT.IDENTITY_INVALID
 
 A model's identity is wrong: multiple fields marked `.id()`, identity declared both inline and in `.attributes(...)`, an empty identity, a model with non-owning relations but no id to anchor them, or an M:N target with no primary/unique key to derive junction columns from. Raised while lowering/building a SQL contract. Payload: `modelName`, `reason`.

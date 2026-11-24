@@ -371,11 +371,15 @@ describe('assertContractHashes', () => {
         ...SQL_HOOKS,
       }),
     ).toThrow(
-      [
-        'The hash rules give different hashes for 2 saved contracts:',
-        `Contract "first": the storage hash is ${hashes.storageHash}, but x was expected.`,
-        `Contract "second": the execution hash is ${hashes.executionHash}, but y was expected.`,
-      ].join('\n'),
+      expect.objectContaining({
+        code: 'CONTRACT.HASH_MISMATCH',
+        message: [
+          'The hash rules give different hashes for 2 saved contracts:',
+          `Contract "first": the storage hash is ${hashes.storageHash}, but x was expected.`,
+          `Contract "second": the execution hash is ${hashes.executionHash}, but y was expected.`,
+        ].join('\n'),
+        meta: { contracts: ['first', 'second'] },
+      }),
     );
   });
 

@@ -6,6 +6,7 @@ import {
   type PreserveEmptyPredicate,
   type StorageSort,
 } from './canonicalization';
+import { contractError } from './contract-errors';
 import { isPlainRecord } from './is-plain-record';
 import type { ExecutionHashBase, ProfileHashBase, StorageHashBase } from './types';
 
@@ -147,13 +148,15 @@ export function assertContractHashes(options: AssertContractHashesOptions): void
     }))
     .filter(({ differences }) => differences.length > 0);
   if (failing.length === 0) return;
-  throw new Error(
+  throw contractError(
+    'CONTRACT.HASH_MISMATCH',
     [
       `The hash rules give different hashes for ${failing.length} saved contract${failing.length === 1 ? '' : 's'}:`,
       ...failing.flatMap(({ name, differences }) =>
         differences.map((difference) => `Contract "${name}": ${difference}`),
       ),
     ].join('\n'),
+    { meta: { contracts: failing.map(({ name }) => name) } },
   );
 }
 
