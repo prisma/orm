@@ -11,4 +11,12 @@ The slice spec is [spec.md](spec.md). The branch starts from the hash branch. Ev
 ## Decisions taken in shaping
 
 - The samples live under `test/integration/test/saved-samples/<release>/<database>/`, because the integration package already runs the in-process PostgreSQL server and MongoDB.
-- The database records are saved as the rows themselves (JSON), and the test writes them into the tables the current code creates. A saved SQL dump would tie the test to one server version's dump format.
+- The database records are saved as the rows themselves (JSON). A saved SQL dump would tie the test to one server version's dump format.
+
+## Decisions changed while building
+
+The pull request description must say each of these, with its reason.
+
+- **The test rebuilds Prisma's own tables as the saved release created them, from a saved `tables.json`, not with the current code.** Shaping chose the tables the current code creates. The review showed that this hides the case the test exists for: if a later release changed Prisma's own tables, the test would load the old rows into the new tables and pass. The generator refuses to save a set when the tables hold anything `tables.json` does not record.
+- **A released set is guarded by a checksum list, and the generator runs only through `pnpm samples:write`.** The design says a released set is never edited; nothing enforced it.
+- **Known gap: the database test cannot see a column a release only writes.** Nothing writes to the rebuilt tables in the test. Bringing Prisma's own tables up to date belongs to project 7 of the compatibility stream, recorded in `deferred.md`.
