@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
@@ -36,6 +36,7 @@ const REWRITTEN = [
 ];
 
 const NOTHING_CHANGED = 'Every stored file already has a format version; nothing changed.\n';
+const NO_FILE_CHANGED = 'Added the format version to no file.\n';
 const OLD_CONTRACT = 'app/src/prisma/contract.json';
 
 function changedList(paths: readonly string[]): string {
@@ -136,12 +137,186 @@ describe('a stored file the script cannot rewrite', () => {
     }).toEqual({
       run: {
         status: 1,
-        stdout: NOTHING_CHANGED,
+        stdout: NO_FILE_CHANGED,
         stderr:
           'Left unchanged:\n  other/contract.json: its "schemaVersion" is "2", which no release of Prisma wrote\n',
       },
       written: contract,
     });
+  });
+});
+
+describe('a stored file the script does not recognise', () => {
+  function runWith(files: Tree): {
+    readonly run: ReturnType<typeof runScript>;
+    readonly tree: Tree;
+  } {
+    const root = copyFixture('after');
+    for (const [path, content] of Object.entries(files)) writeFile(root, path, content);
+    return { run: runScript(root), tree: readTree(root) };
+  }
+
+  function leftUnchanged(path: string, reason: string) {
+    return {
+      status: 1,
+      stdout: NO_FILE_CHANGED,
+      stderr: `Left unchanged:\n  ${path}: ${reason}\n`,
+    };
+  }
+
+  it('reports a ref file with no invariants, which no release read, and exits 1', () => {
+    const path = 'app/migrations/app/refs/staging.json';
+    const content = '{"hash":"h"}\n';
+    expect(runWith({ [path]: content })).toMatchObject({
+      run: leftUnchanged(
+        path,
+        'a ref file has "hash" and "invariants", and this one has no "invariants" list. Add "invariants": [] (or the invariants the ref should carry) and run the script again',
+      ),
+      tree: { [path]: content },
+    });
+  });
+
+  it('drops a field a ref file does not have, as an earlier release did when it rewrote the ref, and says so', () => {
+    const path = 'app/migrations/app/refs/staging.json';
+    const { run, tree } = runWith({
+      [path]: '{\n  "hash": "h",\n  "note": "staging",\n  "invariants": [],\n  "owner": "ops"\n}\n',
+    });
+    expect({ run, written: tree[path] }).toEqual({
+      run: {
+        status: 0,
+        stdout: `Added the format version to 1 file:\n  ${path}\nRemoved the fields a ref file does not have, which earlier releases ignored and dropped when they wrote the ref again:\n  ${path}: "note", "owner"\n`,
+        stderr: '',
+      },
+      written: '{\n  "formatVersion": 1,\n  "hash": "h",\n  "invariants": []\n}\n',
+    });
+  });
+
+  it('reports a ref file that is not a JSON object', () => {
+    const path = 'app/migrations/app/refs/staging.json';
+    expect(runWith({ [path]: '["h"]\n' }).run).toEqual(
+      leftUnchanged(
+        path,
+        'a ref file is a JSON object with "hash" and "invariants", and this one is not an object',
+      ),
+    );
+  });
+
+  it('reports a migration.json next to an ops.json with a field the format does not have', () => {
+    const path = 'app/migrations/app/20260520T1317_migration/migration.json';
+    const content = JSON.stringify({
+      from: null,
+      to: 't',
+      migrationHash: 'm',
+      providedInvariants: [],
+      createdAt: 'c',
+      labels: [],
+    });
+    expect(runWith({ [path]: content })).toMatchObject({
+      run: leftUnchanged(
+        path,
+        'it has the field "labels", which a migration.json does not have, so no release read it. Remove the field and run the script again',
+      ),
+      tree: { [path]: content },
+    });
+  });
+
+  it('reports a migration.json next to an ops.json that lacks a field every migration.json has', () => {
+    const path = 'app/migrations/app/20260520T1317_migration/migration.json';
+    expect(runWith({ [path]: '{"from":null,"to":"t"}' }).run).toEqual(
+      leftUnchanged(
+        path,
+        'it has no "migrationHash", which every migration.json has, so no release read it. Plan the migration again, or restore the file from version control',
+      ),
+    );
+  });
+
+  it('reports a contract with both formatVersion and schemaVersion', () => {
+    const path = 'other/contract.json';
+    const content = '{"formatVersion":1,"schemaVersion":"1","targetFamily":"sql","storage":{}}\n';
+    expect(runWith({ [path]: content })).toMatchObject({
+      run: leftUnchanged(
+        path,
+        'it has both "formatVersion" and "schemaVersion". Delete the "schemaVersion" field',
+      ),
+      tree: { [path]: content },
+    });
+  });
+
+  it('reports a contract.json with neither field, which no release wrote', () => {
+    const path = 'app/src/prisma/contract.json';
+    expect(runWith({ [path]: '{"targetFamily":"sql","storage":{}}\n' }).run).toEqual(
+      leftUnchanged(
+        path,
+        'it has neither "formatVersion" nor "schemaVersion", so no release of Prisma wrote it. Emit it again with `prisma contract emit`, or restore it from version control',
+      ),
+    );
+  });
+
+  it('leaves a contract.json that is not a Prisma contract alone', () => {
+    expect(runWith({ 'other/contract.json': '{"name":"not prisma"}\n' }).run).toEqual({
+      status: 0,
+      stdout: NOTHING_CHANGED,
+      stderr: '',
+    });
+  });
+});
+
+describe('a symbolic link', () => {
+  it('reports a link to a folder outside the project that holds stored files without a format version, and does not follow it', () => {
+    const root = copyFixture('before');
+    symlinkSync(join(root, 'extension/migrations'), join(root, 'app/shared-migrations'));
+    const run = runScript(join(root, 'app'));
+    expect({ status: run.status, stderr: run.stderr }).toEqual({
+      status: 1,
+      stderr:
+        'Left unchanged:\n  shared-migrations: is a symbolic link to ../extension/migrations, a folder outside the project that holds stored files the script would change or report; the script does not follow links. Run it on ../extension/migrations as well\n',
+    });
+    expect(readTree(join(root, 'extension'))).toEqual(
+      readTree(join(fixturesDir, 'before/extension')),
+    );
+  });
+
+  it('reports a link to a stored file outside the project', () => {
+    const root = copyFixture('after');
+    writeFile(root, 'shared/db.json', '{"hash":"h","invariants":[]}');
+    mkdirSync(join(root, 'app/linked/refs'), { recursive: true });
+    symlinkSync(join(root, 'shared/db.json'), join(root, 'app/linked/refs/db.json'));
+    expect(runScript(join(root, 'app'))).toEqual({
+      status: 1,
+      stdout: NO_FILE_CHANGED,
+      stderr:
+        'Left unchanged:\n  linked/refs/db.json: is a symbolic link to ../shared/db.json, a file outside the project that the script would change or report; the script does not follow links. Replace the link with the file, or add the format version to ../shared/db.json by hand\n',
+    });
+  });
+
+  it('ignores a link to a folder with no stored files, a link inside the project, and a link that points nowhere', () => {
+    const root = copyFixture('after');
+    writeFile(root, 'assets/logo.json', '{"name":"logo"}');
+    symlinkSync(join(root, 'assets'), join(root, 'app/linked-assets'));
+    symlinkSync(join(root, 'app/migrations'), join(root, 'app/linked-migrations'));
+    symlinkSync(join(root, 'missing'), join(root, 'app/dangling.json'));
+    expect(runScript(join(root, 'app'))).toEqual({
+      status: 0,
+      stdout: NOTHING_CHANGED,
+      stderr: '',
+    });
+  });
+
+  it('does not loop on a link to a folder above it', () => {
+    const root = copyFixture('before');
+    symlinkSync(root, join(root, 'app/loop'));
+    expect(runScript(root).status).toBe(0);
+  });
+});
+
+describe('the final message', () => {
+  it('does not say nothing changed when a file was left unhandled on a second run', () => {
+    const root = copyFixture('before');
+    writeFile(root, 'app/migrations/app/20260520T1317_migration/migration.json', '{ broken');
+    runScript(root);
+    const second = runScript(root);
+    expect(second.status).toBe(1);
+    expect(second.stdout).toBe(NO_FILE_CHANGED);
   });
 });
 
