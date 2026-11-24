@@ -1,8 +1,17 @@
 /**
- * Writes a new saved sample set with this branch's code. `vitest.config.ts` leaves it out of every test run; `pnpm samples:write` runs it, with `REGENERATE_SAVED_SAMPLES` naming the release. It never writes into a set that exists. The procedure is in this folder's README.
+ * Writes a new saved sample set with this branch's code. `vitest.config.ts` leaves it out of every test run unless `WRITE_SAVED_SAMPLES` is set, which `pnpm samples:write` does; `REGENERATE_SAVED_SAMPLES` names the release. It never writes into a set that exists. The procedure is in this folder's README.
  */
 
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import type { DeclaredDatabasePolicies } from '@internal/framework-components/control';
 import { writeRef } from '@internal/migration-tools/refs';
 import { createDevDatabase, timeouts, withClient } from '@repo/test-utils';
@@ -23,17 +32,19 @@ import {
 } from '../utils/journey-test-helpers';
 import { mongoConfig, mongoSources, postgresConfig, postgresSources } from './generator-inputs';
 import {
-  computeSampleChecksums,
+  assertPostgresSchemaSavable,
+  computeChecksumsIn,
   connectionPlaceholder,
+  databaseDirIn,
   mongoRecordCollection,
   postgresSchemaFile,
+  projectDirIn,
+  queryPathIn,
   type SampleDatabase,
   type SavedSchema,
   sampleChecksumsPath,
-  sampleDatabaseDir,
-  sampleProjectDir,
-  sampleQueryPath,
   sampleSetDir,
+  samplesRoot,
   writeProjectConfig,
 } from './sample-projects';
 
@@ -43,13 +54,22 @@ const release = process.env['REGENERATE_SAVED_SAMPLES'] ?? '';
 /** The policies the `production` ref declares, which `db migrate --to production` records on the marker. */
 const productionPolicies: DeclaredDatabasePolicies = { change: ['migrate'] };
 
+/** The generator writes a set into `sets/.unfinished-<release>/` and moves it to `sets/<release>/` only when every step succeeded, so a failed run leaves no partial set. */
+const unfinishedPrefix = '.unfinished-';
+const unfinishedSetDir = join(samplesRoot, `${unfinishedPrefix}${release}`);
+
 function writeJson(path: string, value: unknown): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 /** The project files a release writes, the contract source and the config the user wrote; the config keeps the placeholder for the connection string. */
-function saveProjectFiles(ctx: JourneyContext, database: SampleDatabase, config: string): void {
+function saveProjectFiles(
+  ctx: JourneyContext,
+  setDir: string,
+  database: SampleDatabase,
+  config: string,
+): void {
   const kept = new Set([
     'contract.prisma',
     'contract.json',
@@ -57,7 +77,7 @@ function saveProjectFiles(ctx: JourneyContext, database: SampleDatabase, config:
     'output',
     'migrations',
   ]);
-  const projectDir = sampleProjectDir(release, database);
+  const projectDir = projectDirIn(setDir, database);
   for (const entry of readdirSync(ctx.testDir)) {
     if (kept.has(entry)) {
       cpSync(join(ctx.testDir, entry), join(projectDir, entry), { recursive: true });
@@ -121,6 +141,7 @@ async function deployProduction(ctx: JourneyContext, invariantId: string): Promi
 
 /** Saves how Prisma's tables on PostgreSQL were created and the rows they hold, one JSON file per table. */
 async function savePostgresRecords(connectionString: string, dir: string): Promise<void> {
+  await assertPostgresSchemaSavable(connectionString);
   await withClient(connectionString, async (client) => {
     const columns = await client.query(`
       SELECT c.table_name, c.column_name, c.is_nullable, c.column_default,
@@ -200,7 +221,7 @@ async function saveMongoRecords(db: Db, dir: string): Promise<void> {
   );
 }
 
-async function generatePostgres(createTempDir: () => string): Promise<void> {
+async function generatePostgres(createTempDir: () => string, setDir: string): Promise<void> {
   const database = await createDevDatabase();
   try {
     const ctx = writeProjectConfig(createTempDir(), postgresConfig, database.connectionString);
@@ -233,9 +254,9 @@ async function generatePostgres(createTempDir: () => string): Promise<void> {
     );
     await deployProduction(ctx, 'backfill-user-display-name');
 
-    saveProjectFiles(ctx, 'postgres', postgresConfig);
-    await savePostgresRecords(database.connectionString, sampleDatabaseDir(release, 'postgres'));
-    writeJson(sampleQueryPath(release, 'postgres'), {
+    saveProjectFiles(ctx, setDir, 'postgres', postgresConfig);
+    await savePostgresRecords(database.connectionString, databaseDirIn(setDir, 'postgres'));
+    writeJson(queryPathIn(setDir, 'postgres'), {
       model: 'User',
       table: 'user',
       row: { email: 'ada@example.com', role: 'ADMIN', displayName: 'Ada' },
@@ -245,7 +266,7 @@ async function generatePostgres(createTempDir: () => string): Promise<void> {
   }
 }
 
-async function generateMongo(createTempDir: () => string): Promise<void> {
+async function generateMongo(createTempDir: () => string, setDir: string): Promise<void> {
   const replSet = await MongoMemoryReplSet.create({
     instanceOpts: [
       { launchTimeout: timeouts.spinUpMongoMemoryServer, storageEngine: 'wiredTiger' },
@@ -267,9 +288,9 @@ async function generateMongo(createTempDir: () => string): Promise<void> {
     );
     await deployProduction(ctx, 'backfill-user-name');
 
-    saveProjectFiles(ctx, 'mongo', mongoConfig);
-    await saveMongoRecords(client.db(dbName), sampleDatabaseDir(release, 'mongo'));
-    writeJson(sampleQueryPath(release, 'mongo'), {
+    saveProjectFiles(ctx, setDir, 'mongo', mongoConfig);
+    await saveMongoRecords(client.db(dbName), databaseDirIn(setDir, 'mongo'));
+    writeJson(queryPathIn(setDir, 'mongo'), {
       root: 'users',
       row: { email: 'ada@example.com', role: 'ADMIN', name: 'Ada' },
     });
@@ -279,9 +300,9 @@ async function generateMongo(createTempDir: () => string): Promise<void> {
   }
 }
 
-function writeSetReadme(): void {
+function writeSetReadme(setDir: string): void {
   writeFileSync(
-    join(sampleSetDir(release), 'README.md'),
+    join(setDir, 'README.md'),
     `# Saved samples written by ${release}
 
 These files and records were written on ${new Date().toISOString().slice(0, 10)} by the code of ${release}, with \`pnpm samples:write\` (see [the procedure](../../README.md)). \`../${release}.sha256\` lists every file with its SHA-256; once ${release} is released, neither changes.
@@ -295,6 +316,18 @@ These files and records were written on ${new Date().toISOString().slice(0, 10)}
   );
 }
 
+/** Removes the folders an earlier run left when it failed before moving its set into place. */
+function removeUnfinishedSets(): void {
+  for (const entry of readdirSync(samplesRoot)) {
+    if (entry.startsWith(unfinishedPrefix)) {
+      console.warn(
+        `Removing sets/${entry}, left by an earlier run of the generator that failed before its set was complete.`,
+      );
+      rmSync(join(samplesRoot, entry), { recursive: true, force: true });
+    }
+  }
+}
+
 withTempDir(({ createTempDir }) => {
   it(
     `writes the saved sample set for ${release || '(no release named)'}`,
@@ -304,15 +337,19 @@ withTempDir(({ createTempDir }) => {
           'Name the release the set is for: REGENERATE_SAVED_SAMPLES=<version> pnpm samples:write',
         );
       }
+      removeUnfinishedSets();
       if (existsSync(sampleSetDir(release)) || existsSync(sampleChecksumsPath(release))) {
         throw new Error(
           `A saved sample set for ${release} exists. A saved set is never written over: it records what ${release} wrote. Write a set for the release that will ship this change instead.`,
         );
       }
-      await generatePostgres(createTempDir);
-      await generateMongo(createTempDir);
-      writeSetReadme();
-      writeFileSync(sampleChecksumsPath(release), computeSampleChecksums(release));
+      mkdirSync(unfinishedSetDir);
+      await generatePostgres(createTempDir, unfinishedSetDir);
+      await generateMongo(createTempDir, unfinishedSetDir);
+      writeSetReadme(unfinishedSetDir);
+      const checksums = computeChecksumsIn(unfinishedSetDir);
+      renameSync(unfinishedSetDir, sampleSetDir(release));
+      writeFileSync(sampleChecksumsPath(release), checksums);
     },
     timeouts.spinUpPpgDev + timeouts.spinUpMongoMemoryServer,
   );

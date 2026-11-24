@@ -7,9 +7,9 @@ export const initJourneyExclude = process.env['RUN_INIT_JOURNEY']
   ? []
   : ['test/cli-journeys/init-journey.e2e.test.ts'];
 
-// The saved-samples generator writes a new set; `pnpm samples:write` runs it with
-// REGENERATE_SAVED_SAMPLES naming the release (test/saved-samples/README.md).
-export const savedSamplesGeneratorExclude = process.env['REGENERATE_SAVED_SAMPLES']
+// The saved-samples generator writes a new set; `pnpm samples:write` sets
+// WRITE_SAVED_SAMPLES=1 to run it (test/saved-samples/README.md).
+export const savedSamplesGeneratorExclude = process.env['WRITE_SAVED_SAMPLES']
   ? []
   : ['test/saved-samples/regenerate.test.ts'];
 

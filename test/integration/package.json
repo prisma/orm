@@ -15,7 +15,7 @@
     "test": "vitest run",
     "test:journeys": "vitest run --config vitest.journeys.config.ts",
     "test:init-journey": "RUN_INIT_JOURNEY=1 vitest run --config vitest.journeys.config.ts test/cli-journeys/init-journey.e2e.test.ts",
-    "samples:write": "vitest run test/saved-samples/regenerate.test.ts",
+    "samples:write": "WRITE_SAVED_SAMPLES=1 vitest run test/saved-samples/regenerate.test.ts",
     "test:vite-plugin": "vitest run test/vite-plugin.hmr.e2e.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --project tsconfig.json --noEmit",

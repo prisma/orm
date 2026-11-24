@@ -29,19 +29,31 @@ export function sampleChecksumsPath(release: string): string {
   return join(samplesRoot, `${release}.sha256`);
 }
 
-/** The files of a project as `release` wrote them, with the config its user wrote. */
+/** The files of a project in the set in `setDir`, with the config its user wrote. */
+export function projectDirIn(setDir: string, database: SampleDatabase): string {
+  return join(setDir, database, 'project');
+}
+
+/** Prisma's own database records in the set in `setDir`. */
+export function databaseDirIn(setDir: string, database: SampleDatabase): string {
+  return join(setDir, database, 'database');
+}
+
+/** The row a test writes and reads back through the facade, as the contract of the set in `setDir` describes it. */
+export function queryPathIn(setDir: string, database: SampleDatabase): string {
+  return join(setDir, database, 'query.json');
+}
+
 export function sampleProjectDir(release: string, database: SampleDatabase): string {
-  return join(samplesRoot, release, database, 'project');
+  return projectDirIn(sampleSetDir(release), database);
 }
 
-/** Prisma's own database records as `release` wrote them. */
 export function sampleDatabaseDir(release: string, database: SampleDatabase): string {
-  return join(samplesRoot, release, database, 'database');
+  return databaseDirIn(sampleSetDir(release), database);
 }
 
-/** The row a test writes and reads back through the facade, as the set's contract describes it. */
 export function sampleQueryPath(release: string, database: SampleDatabase): string {
-  return join(samplesRoot, release, database, 'query.json');
+  return queryPathIn(sampleSetDir(release), database);
 }
 
 export function sampleSetExists(release: string, database: SampleDatabase): boolean {
@@ -108,9 +120,8 @@ function filesUnder(dir: string): string[] {
     .sort();
 }
 
-/** Every file of a set with its SHA-256, one `<hash>  <path>` line per file, as `sha256sum` writes them. */
-export function computeSampleChecksums(release: string): string {
-  const dir = sampleSetDir(release);
+/** Every file of the set in `dir` with its SHA-256, one `<hash>  <path>` line per file, as `sha256sum` writes them. */
+export function computeChecksumsIn(dir: string): string {
   return filesUnder(dir)
     .map((file) => {
       const hash = createHash('sha256')
@@ -119,6 +130,10 @@ export function computeSampleChecksums(release: string): string {
       return `${hash}  ${file}\n`;
     })
     .join('');
+}
+
+export function computeSampleChecksums(release: string): string {
+  return computeChecksumsIn(sampleSetDir(release));
 }
 
 /** A table of Prisma's on PostgreSQL as a release created it. */
@@ -148,6 +163,66 @@ export interface SavedSchema {
 }
 
 export const postgresSchemaFile = 'tables.json';
+
+/** The schema of the function the in-process dev server's own trigger on every table calls to record changes; that trigger is the server's, not a release's. */
+const devServerChangeCaptureSchema = '_prisma_dev_wal';
+
+const unsavedPostgresObjectsQuery = `
+  WITH tables AS (
+    SELECT c.oid, c.relname FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'prisma_contract' AND c.relkind = 'r'
+  )
+  SELECT format('index %s on %s', ic.relname, t.relname) AS object
+    FROM pg_index i JOIN tables t ON t.oid = i.indrelid JOIN pg_class ic ON ic.oid = i.indexrelid
+    WHERE NOT i.indisprimary
+  UNION ALL
+  SELECT format('constraint %s (type %s) on %s', con.conname, con.contype, t.relname)
+    FROM pg_constraint con JOIN tables t ON t.oid = con.conrelid
+    WHERE con.contype NOT IN ('p', 'n')
+  UNION ALL
+  SELECT format('identity column %s.%s', t.relname, a.attname)
+    FROM pg_attribute a JOIN tables t ON t.oid = a.attrelid
+    WHERE a.attnum > 0 AND NOT a.attisdropped AND a.attidentity <> ''
+  UNION ALL
+  SELECT format('generated column %s.%s', t.relname, a.attname)
+    FROM pg_attribute a JOIN tables t ON t.oid = a.attrelid
+    WHERE a.attnum > 0 AND NOT a.attisdropped AND a.attgenerated <> ''
+  UNION ALL
+  SELECT format('sequence %s, not owned by a serial column', s.relname)
+    FROM pg_class s JOIN pg_namespace n ON n.oid = s.relnamespace
+    WHERE n.nspname = 'prisma_contract' AND s.relkind = 'S'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_depend d JOIN tables t ON t.oid = d.refobjid
+        WHERE d.objid = s.oid AND d.deptype = 'a'
+      )
+  UNION ALL
+  SELECT format('trigger %s on %s', tg.tgname, t.relname)
+    FROM pg_trigger tg JOIN tables t ON t.oid = tg.tgrelid
+    JOIN pg_proc p ON p.oid = tg.tgfoid JOIN pg_namespace pn ON pn.oid = p.pronamespace
+    WHERE NOT tg.tgisinternal AND pn.nspname <> $1
+  UNION ALL
+  SELECT format('%s %s', CASE c.relkind WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized view' ELSE format('relation of kind %s', c.relkind) END, c.relname)
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'prisma_contract' AND c.relkind NOT IN ('r', 'i', 'S')
+  ORDER BY object`;
+
+/**
+ * Refuses Prisma's schema on PostgreSQL when it holds anything `tables.json` does not record (columns, their defaults and not-null, primary keys, and the sequences of `serial` columns), so a set never describes tables its release did not create.
+ */
+export async function assertPostgresSchemaSavable(connectionString: string): Promise<void> {
+  const unsaved = await withClient(connectionString, async (client) => {
+    const result = await client.query<{ object: string }>(unsavedPostgresObjectsQuery, [
+      devServerChangeCaptureSchema,
+    ]);
+    return result.rows.map((row) => row.object);
+  });
+  if (unsaved.length > 0) {
+    throw new Error(
+      `Prisma's schema prisma_contract holds what ${postgresSchemaFile} does not record: ${unsaved.join('; ')}. The generator must learn to save and restore these before it writes this set.`,
+    );
+  }
+}
 
 const quote = (identifier: string) => `"${identifier.replaceAll('"', '""')}"`;
 const qualified = (name: string) => `prisma_contract.${quote(name)}`;
