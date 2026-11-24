@@ -15,6 +15,9 @@ changes:
   - id: mongo-shared-collection-rename-refused
     summary: |
       On MongoDB, `--rename` of a model whose collection another root model shares is now refused, where it used to rename the whole collection and take the other models' documents with it.
+  - id: mongo-create-collection-postcheck
+    summary: |
+      On MongoDB, `createCollection` now checks after it runs that the collection exists with the options it sets, so a migration that created a collection and then stopped can be run again. Migrations emitted before keep the old create, with no such check, until their `ops.json` is written again.
 ---
 
 # A changed stored name is a rename on MongoDB
@@ -77,3 +80,12 @@ Cannot rename model "User" to "Member": collection "users" also stores model "Ad
 ```
 
 A plan cannot tell the two models' documents apart, since nothing in a document names its root model. Without the statement the plan does not move them either: `User` is removed and nothing is asked, since nothing is deleted; its documents stay in `users`, where `Admin` still reads them, and `Member` starts with none. If the new validator of `users` does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there. To keep them, move them in a hand-written migration with `migration plan`, as the message describes.
+
+## `mongo-create-collection-postcheck`
+
+Before, `createCollection` had no check after it ran. When a later operation of the same migration stopped, running `db migrate` again tried the create again, and it stopped because the collection already existed. Now the create checks that the collection exists with the options it sets, and a re-run skips it, so a migration that stopped part way is finished by fixing what stopped it and running `db migrate` again.
+
+A collection that has the name but not those options, such as one made by hand with no validator, still stops the create: change or drop it yourself, then run the command again.
+
+The check is written into `ops.json` when `migration.ts` is run. A migration emitted before this release keeps the old create until you run its `migration.ts` again, which changes its migration hash. Do that only for a migration no database has applied yet. If one of those older migrations stops after its create, run it again once it is emitted anew; if it has already been applied somewhere, leave it as it is and, after a stop on a database, apply the operations that did not run by hand.
+

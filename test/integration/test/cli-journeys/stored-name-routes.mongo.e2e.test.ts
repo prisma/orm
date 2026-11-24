@@ -87,12 +87,6 @@ function withMoveAfterCreate(text: string, from: string, to: string, filter: str
   return `${imported.slice(0, end)}${move}${imported.slice(end)}`;
 }
 
-/** Removes the creation of `collection` from a `migration.ts`, as the route says to do when the apply stopped after it. */
-function withoutCreate(text: string, collection: string): string {
-  const { start, end } = createCallRange(text, collection);
-  return `${text.slice(0, start)}${text.slice(end)}`;
-}
-
 describe('Journeys (MongoDB): stored-name refusal routes', {
   timeout: timeouts.spinUpMongoMemoryServer,
 }, () => {
@@ -266,7 +260,7 @@ model ${user} {
     await expectSettled(journey, 'T5.07');
   });
 
-  it('T6: the documents move right after the create, before a rename of the staying model reaches them, and a stop after the create is finished by removing the create', async () => {
+  it('T6: the documents move right after the create, before a rename of the staying model reaches them, and a stop after the create is finished by running the migration again', async () => {
     const journey = project('t6_plan');
     const shared = (user: string, collection: string, adminEmail: string) => `// use prisma-8
 
@@ -314,16 +308,19 @@ model ${user} {
     const stopped = await runMigrate(journey.ctx);
     expect(stopped.exitCode, 'T6.05: the validator change stops on the stray document').not.toBe(0);
     await journey.db.collection('users').deleteMany({ stray: true });
-    writeFileSync(path, withoutCreate(readFileSync(path, 'utf-8'), 'members'));
-    expect((await selfEmitMigration(journey.ctx, ['--dir', dir])).exitCode, 'T6.06').toBe(0);
     const finished = await runMigrate(journey.ctx);
-    expect(finished.exitCode, `T6.07: ${finished.stdout}${finished.stderr}`).toBe(0);
+    expect(finished.exitCode, `T6.06: ${finished.stdout}${finished.stderr}`).toBe(0);
+    const [members] = await journey.db
+      .listCollections({ name: 'members' }, { nameOnly: false })
+      .toArray();
     expect({
       users: await documents(journey.db, 'users'),
       members: await documents(journey.db, 'members'),
+      validated: members?.options?.['validator'] !== undefined,
     }).toEqual({
       users: [{ admin: 'Root', mail: 'root@example.com' }],
       members: [{ user: 'Ada', email: 'ada@example.com' }],
+      validated: true,
     });
   });
 
@@ -378,7 +375,7 @@ model Feat {
         kind: 'unsupportedOperation',
         summary:
           'Cannot delete the documents of variant "Bug": the documents of model "Admin" in collection "tasks" can hold type "bug"',
-        why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so deleting the documents with that value would delete the documents of "Admin" too. A model that moves out of collection "tasks" leaves its documents in it, so make the change in two plans. First move model "Admin" to collection "admins", keep variant "Bug" as it is, and plan that with migration plan: in the operations of the migration.ts it writes, right after the creation of collection "admins" and before any other operation on collection "tasks", add a dataTransform whose run copies the documents of model "Admin" into collection "admins", such as rawAggregate("tasks", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "admins" } }]), and a deleteDocuments({ collection: "tasks", filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart from the other documents of collection "tasks", which can hold the same values in the fields they share, such as a discriminator value: filter by a field only model "Admin" stores. If the apply stops after collection "admins" is created, do not drop it, since it holds the moved documents: remove its creation from that migration.ts, run the file again, fix what stopped the apply, and run db migrate again. Under db update, apply that change, then move the documents out of collection "tasks" by hand. Then make the change to variant "Bug" and plan again. Or keep variant "Bug" in the contract.',
+        why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so deleting the documents with that value would delete the documents of "Admin" too. A model that moves out of collection "tasks" leaves its documents in it, so make the change in two plans. First move model "Admin" to collection "admins", keep variant "Bug" as it is, and plan that with migration plan: in the operations of the migration.ts it writes, right after the creation of collection "admins" and before any other operation on collection "tasks", add a dataTransform whose run copies the documents of model "Admin" into collection "admins", such as rawAggregate("tasks", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "admins" } }]), and a deleteDocuments({ collection: "tasks", filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart from the other documents of collection "tasks", which can hold the same values in the fields they share, such as a discriminator value: filter by a field only model "Admin" stores. If the apply stops, fix what stopped it and run db migrate again. Under db update, apply that change, then move the documents out of collection "tasks" by hand. Then make the change to variant "Bug" and plan again. Or keep variant "Bug" in the contract.',
       },
     ]);
 

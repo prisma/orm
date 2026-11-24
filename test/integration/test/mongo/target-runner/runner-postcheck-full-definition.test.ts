@@ -6,7 +6,7 @@ import {
   type MongoMigrationPlanOperation,
 } from '@internal/mongo-query-ast/control';
 import { FilterEvaluator } from '@internal/target-mongo/control';
-import { collMod, createIndex } from '@internal/target-mongo/migration';
+import { collMod, createCollection, createIndex } from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
@@ -161,5 +161,41 @@ describe('collMod postchecks for a query validator', {
     );
 
     expect(await postchecksHold(wanted())).toBe(false);
+  });
+});
+
+describe('createCollection postchecks', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
+  it.each([
+    ['no options', {}],
+    [
+      'a validator',
+      {
+        validator: {
+          $jsonSchema: { bsonType: 'object', properties: { a: { bsonType: 'string' } } },
+        },
+        validationLevel: 'strict',
+        validationAction: 'error',
+      },
+    ],
+    ['a cap', { capped: true, size: 5000, max: 10 }],
+    ['a collation', { collation: { locale: 'fr', strength: 2 } }],
+    ['a time series', { timeseries: { timeField: 'at', metaField: 'source' } }],
+    ['a clustered index', { clusteredIndex: { key: { _id: 1 }, unique: true } }],
+    ['change stream images', { changeStreamPreAndPostImages: { enabled: true } }],
+  ] as const)(
+    'hold once the operation created a collection with %s, and not before',
+    async (_, options) => {
+      const op = createCollection('created', options);
+      const before = await postchecksHold(op);
+      await execute(op);
+
+      expect({ before, after: await postchecksHold(op) }).toEqual({ before: false, after: true });
+    },
+  );
+
+  it('does not hold for a collection of that name made without the validator', async () => {
+    const op = createCollection('items', { validator: { $jsonSchema: { bsonType: 'object' } } });
+
+    expect(await postchecksHold(op)).toBe(false);
   });
 });

@@ -1360,8 +1360,63 @@ export function createCollection(
         command: collection(collectionName).createCollection(options),
       },
     ],
-    postcheck: [],
+    postcheck: [
+      {
+        description: `collection ${collectionName} exists with the options it is created with`,
+        source: new ListCollectionsCommand(),
+        filter: MongoAndExpr.of([
+          f.name.eq(collectionName),
+          ...createdCollectionOptionFilters(options ?? {}),
+        ]),
+        expect: 'exists',
+        object: `collection "${collectionName}"`,
+      },
+    ],
   };
+}
+
+const CREATED_SCALAR_OPTIONS = [
+  'validationLevel',
+  'validationAction',
+  'capped',
+  'size',
+  'max',
+] as const satisfies readonly (keyof CreateCollectionOptions)[];
+
+const CREATED_DOCUMENT_OPTIONS = [
+  'timeseries',
+  'collation',
+  'changeStreamPreAndPostImages',
+  'clusteredIndex',
+] as const satisfies readonly (keyof CreateCollectionOptions)[];
+
+/**
+ * What `listCollections` reports for a collection created with `options`, so that the create is
+ * skipped on a re-run only when the collection it made is there, and not for one made another way.
+ * MongoDB reports the options as given, except that it completes a time-series spec, a collation and
+ * a clustered index with defaults, so only the fields the call gives are compared in those; an
+ * option the call does not give must be absent.
+ */
+function createdCollectionOptionFilters(options: CreateCollectionOptions): MongoFilterExpr[] {
+  return [
+    options.validator === undefined
+      ? MongoExistsExpr.notExists('options.validator')
+      : validatorBodyFilter(options.validator),
+    ...CREATED_SCALAR_OPTIONS.map(
+      (option): MongoFilterExpr => optionFilter(`options.${option}`, options[option]),
+    ),
+    ...CREATED_DOCUMENT_OPTIONS.flatMap((option): MongoFilterExpr[] => {
+      const given = options[option];
+      return given === undefined
+        ? [MongoExistsExpr.notExists(`options.${option}`)]
+        : Object.entries(given).map(([field, value]) =>
+            MongoFieldFilter.eq(
+              `options.${option}.${field}`,
+              blindCast<MongoValue, 'collection options are plain BSON values'>(value),
+            ),
+          );
+    }),
+  ];
 }
 
 export function dropCollection(collectionName: string): MongoMigrationPlanOperation {

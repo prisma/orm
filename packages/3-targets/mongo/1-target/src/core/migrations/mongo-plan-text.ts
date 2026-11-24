@@ -64,15 +64,12 @@ export interface DocumentMove {
 /**
  * The steps that add a document move to the migration.ts a plan writes: the operations, where they
  * go (right after the creation of the new collection, or first when the collection already exists,
- * so no later rewrite of the old collection reaches the documents first), the filter they need, and,
- * when the plan creates the collection, what to do if the apply stops after the creation.
+ * so no later rewrite of the old collection reaches the documents first), the filter they need, and
+ * what to do if the apply stops.
  */
 export function documentMoveSteps({ moving, from, to, created }: DocumentMove): string {
   const placement = created
     ? `in the operations of the migration.ts it writes, right after the creation of collection "${to}" and before any other operation on collection "${from}"`
     : `at the start of the operations of the migration.ts it writes, before any other operation on collection "${from}"`;
-  const stop = created
-    ? ` If the apply stops after collection "${to}" is created, do not drop it, since it holds the moved documents: remove its creation from that migration.ts, run the file again, fix what stopped the apply, and run db migrate again.`
-    : '';
-  return `${placement}, add a dataTransform whose run copies the documents of ${moving} into collection "${to}", such as rawAggregate(${JSON.stringify(from)}, [{ $match: <a filter that selects only those documents> }, { $merge: { into: ${JSON.stringify(to)} } }]), and a deleteDocuments({ collection: ${JSON.stringify(from)}, filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart from the other documents of collection "${from}", which can hold the same values in the fields they share, such as a discriminator value: filter by a field only ${moving} stores.${stop}`;
+  return `${placement}, add a dataTransform whose run copies the documents of ${moving} into collection "${to}", such as rawAggregate(${JSON.stringify(from)}, [{ $match: <a filter that selects only those documents> }, { $merge: { into: ${JSON.stringify(to)} } }]), and a deleteDocuments({ collection: ${JSON.stringify(from)}, filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart from the other documents of collection "${from}", which can hold the same values in the fields they share, such as a discriminator value: filter by a field only ${moving} stores. If the apply stops, fix what stopped it and run db migrate again.`;
 }
