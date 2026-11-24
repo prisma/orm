@@ -2,7 +2,7 @@
 
 ## Status
 
-**Partially superseded** by [ADR 199 — Storage-only migration identity](./ADR%20199%20-%20Storage-only%20migration%20identity.md) and [ADR 197 — Migration packages snapshot their own contract](./ADR%20197%20-%20Migration%20packages%20snapshot%20their%20own%20contract.md). Two pieces of the original design no longer match the implementation:
+**Partially superseded** by [ADR 199 — Storage-only migration identity](./ADR%20199%20-%20Storage-only%20migration%20identity.md) and [ADR 197 — Migration packages snapshot their own contract](./ADR%20197%20-%20Migration%20packages%20snapshot%20their%20own%20contract.md). Two pieces of the original design no longer match the implementation: [ADR 331](ADR%20331%20-%20Stored%20files%20carry%20a%20format%20version%2C%20and%20a%20reader%20refuses%20one%20it%20does%20not%20know.md) adds `formatVersion` to `migration.json` and to ref files.
 
 - **Migration identity (section 3 below).** `migrationId` is now computed from `(strippedManifest, ops)` only. The full source and destination contract IRs are not part of the hash input. ADR 199 captures the storage-only identity model.
 - **Contracts embedded in the manifest (section 7 below).** `migration.json` no longer inlines `fromContract` / `toContract`. The full contract IRs live as sibling `start-contract.json` / `end-contract.json` files next to the manifest (the snapshot convention from ADR 197); the manifest itself records only the storage-hash bookends. The author-time data-migration code reads the snapshots through TypeScript imports. The change was driven by TML-2512; the runner-independence property — apply only needs `migration.json` + `ops.json` per package — is locked in by regression tests in `@internal/migration-tools`.

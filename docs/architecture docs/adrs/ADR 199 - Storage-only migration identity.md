@@ -3,6 +3,7 @@
 **Revised:** 2026-04-30 — `kind` removed; `from` is now nullable (TML-2270).
 **Revised:** 2026-05-14 — vestigial `authorship` and `signature` fields removed from `MigrationMetadata` (TML-2458); `strippedMeta` description and example updated to match.
 **Revised:** 2026-05-29 — vestigial `labels` and `hints` fields removed from `MigrationMetadata` entirely (TML-2701); `strippedMeta` description, destructure example, "What stays on disk", and "Why `hints` is excluded" sections updated to match.
+**Amended by** [ADR 331](ADR%20331%20-%20Stored%20files%20carry%20a%20format%20version%2C%20and%20a%20reader%20refuses%20one%20it%20does%20not%20know.md): `migration.json` carries `formatVersion`, which `computeMigrationId` leaves out of its input as it leaves out `migrationHash`.
 
 **Amends:** [ADR 169 §3 — Content-addressed migration identity](ADR%20169%20-%20On-disk%20migration%20persistence.md)
 
