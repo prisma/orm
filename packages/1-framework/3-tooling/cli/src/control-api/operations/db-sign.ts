@@ -44,6 +44,8 @@ export interface ExecuteDbSignOptions<TFamilyId extends string, TTargetId extend
   readonly verifySnapshotContent?: SnapshotContentVerifier;
   /** The command line the advice of a refusal repeats. */
   readonly invocation: CliInvocation;
+  /** Sign even when the database's change policy permits only migrations. Every other check still applies, and the recorded policies are kept. */
+  readonly force?: boolean;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -101,6 +103,7 @@ export async function executeDbSign<TFamilyId extends string, TTargetId extends 
     aggregate: loaded.value,
     frameworkComponents: options.frameworkComponents,
     invocation: options.invocation,
+    ...ifDefined('force', options.force),
     ...ifDefined('onProgress', options.onProgress),
   });
 }
@@ -112,6 +115,8 @@ export interface SignContractSpacesOptions<TFamilyId extends string, TTargetId e
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
   /** The command line the advice of a refusal repeats. */
   readonly invocation: CliInvocation;
+  /** Sign even when the database's change policy permits only migrations. Every other check still applies, and the recorded policies are kept. */
+  readonly force?: boolean;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -150,7 +155,7 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
   const inForce = markers.has(appSpaceId)
     ? databasePoliciesInForce(markers, appSpaceId, familyInstance.markerLocation)
     : undefined;
-  if (inForce !== undefined) {
+  if (inForce !== undefined && options.force !== true) {
     const permitted = checkRunPolicies({
       command: 'db sign',
       app: appSpaceOf(aggregate),

@@ -324,6 +324,8 @@ export interface DbSignOptions {
   readonly invocation: CliInvocation;
   readonly migrationsDir: string;
   readonly connection?: unknown;
+  /** Sign even when the database's change policy permits only migrations. Every other check still applies, and the recorded policies are kept. */
+  readonly force?: boolean;
   readonly onProgress?: OnControlProgress;
 }
 

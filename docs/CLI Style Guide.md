@@ -133,7 +133,7 @@ This is a deliberate divergence from clig.dev §Arguments §Confirmation. AI age
 
 - `db update`: asks one question per model, field or storage name an operation would lose data from, answered by `--delete` or `--rename`, and one per operation that would change who can read or write a model's data, answered by `--allow`; `--no-interactive --delete Legacy --allow User` applies without a prompt.
 - `init`: re-running `init` in a directory with a generated `prisma.config.ts` asks the user to type the directory's basename; `-y` alone is not sufficient to authorise overwriting generated files. (The commander-era `--force` retired with the commander shell in the S5 cutover; the engine-hosted `init` uses the consent form above.)
-- `db sign`: overwriting a marker that holds a different hash happens without consent (the previous hash is reported). This is an intentional exception to the rule above: `db sign` verifies the live schema against the contract before writing, so the overwrite only ever records a contract the database already satisfies. If that ever grows a switch, it takes the consent form above — not a `--force`.
+- `db sign`: overwriting a marker that holds a different hash happens without consent (the previous hash is reported). This is an intentional exception to the rule above: `db sign` verifies the live schema against the contract before writing, so the overwrite only ever records a contract the database already satisfies. If that ever grows a switch, it takes the consent form above. `db sign --force` is not that switch: it overrides only the change policy's refusal of `db sign`, which consents to nothing destructive, since signing still verifies the schema and changes none of it.
 
 ## Config & Environment
 - Config file names: `prisma.config.ts|.mjs|.js` (ESM); optional CJS fallback.
@@ -243,7 +243,7 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
   - Writes or updates the marker of every space that verified, in one transaction on PostgreSQL and SQLite: missing marker → insert; same hash → no‑op; different hash → overwrite, reporting the previous hash.
   - Then writes each signed space's contract into its snapshot store and advances its `db` ref to the signed hash (`--advance-ref <name>` picks another ref). Unlike `db init` / `db update`, `--db` does not suppress this — signing never mutates the schema, and adoption normally runs against the real database via `--db`. `--no-advance-ref` signs without writing any ref or snapshot; combining it with `--advance-ref` is `CLI.ADVANCE_REF_ARG_CONFLICT` (exit code 2). Human output names the advanced ref and, when it existed, the previous hash; JSON is `{ ok, summary, spaces, advancedRefs }`: one outcome per space (`signed`, `unchanged` or `failed`) and one `{ space, name, hash }` per advanced ref.
   - No migration package is written.
-  - Options: `[contract]` positional or `--contract <ref>` (hash, prefix, ref name, migration dir name, or `<dir>^`; both accept the same forms; defaults to the emitted `contract.json`; both together is `CLI.CONTRACT_ARG_CONFLICT`), `--db <url>`, `--advance-ref <name>`, `--no-advance-ref`.
+  - Options: `[contract]` positional or `--contract <ref>` (hash, prefix, ref name, migration dir name, or `<dir>^`; both accept the same forms; defaults to the emitted `contract.json`; both together is `CLI.CONTRACT_ARG_CONFLICT`), `--db <url>`, `--advance-ref <name>`, `--no-advance-ref`, `--force` (signs a database whose change policy permits only migrations; it overrides only that refusal, still verifies every space, keeps the recorded policies, and no error or advice suggests it).
   - Exit codes: 0 signed; 2 the command could not run (unresolvable contract reference, no emitted contract, unreachable database, conflicting flags); 4 verification failed for at least one space.
 
 ## Init Flow
@@ -271,7 +271,7 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
 - Per‑command examples:
   - `contract emit`: `--contract <path>`, `--out <dir>`, `--show-sql`, `--show-diff`.
   - `migration plan`: `--out <dir>`, `--show-sql`, `--show-diff`, `--max-sql-lines <n>`, `--yes`.
-  - `db sign`: `[contract]` / `--contract <ref>`, `--db <url>`, `--advance-ref <name>`, `--no-advance-ref`.
+  - `db sign`: `[contract]` / `--contract <ref>`, `--db <url>`, `--advance-ref <name>`, `--no-advance-ref`, `--force`.
   - `db migrate`: `--db <url>`, `--to <contract>`, `--advance-ref <name>`, `--no-advance-ref`.
 
 ## Rationale

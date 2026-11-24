@@ -474,6 +474,25 @@ describe('db sign', () => {
     });
   });
 
+  it('signs with the change policy overridden only when --force is given', async () => {
+    const dir = await projectDir();
+
+    await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+    await harness(ormConfig()).run(['db', 'sign', '--force', '--json'], { cwd: dir });
+
+    expect(mocks.dbSign.mock.calls.map(([options]) => options.force)).toEqual([false, true]);
+  });
+
+  it('describes --force in --help', async () => {
+    const dir = await projectDir();
+
+    const run = await harness(ormConfig()).run(['db', 'sign', '--help'], { cwd: dir });
+
+    expect(`${run.stdout}${run.stderr}`).toMatch(
+      /--force +Sign even if the database's change policy permits only migrations; the schema is still verified and the policies are kept/,
+    );
+  });
+
   it('spells its exit codes in --help, which does not render the exitCodes map', async () => {
     const dir = await projectDir();
 
@@ -524,5 +543,29 @@ describe('db sign when the policies move while it runs', () => {
         },
       ],
     });
+  });
+
+  it('repeats --force in the command to sign again only when the user gave it', async () => {
+    mocks.dbSign.mockImplementation(async (options: { invocation: CliInvocation }) =>
+      notOk(
+        errorDatabasePoliciesMovedDuringSign({
+          spaceId: 'app',
+          checked: DEFAULT_DATABASE_POLICIES,
+          found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+          invocation: options.invocation,
+        }),
+      ),
+    );
+    const dir = await projectDir();
+
+    const forced = await harness(ormConfig()).run(['db', 'sign', '--force', '--json'], {
+      cwd: dir,
+    });
+    const plain = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+    expect([envelopeOf(forced)?.error, envelopeOf(plain)?.error]).toMatchObject([
+      { nextActions: [{ command: 'prisma-test db sign --force' }] },
+      { nextActions: [{ command: 'prisma-test db sign' }] },
+    ]);
   });
 });

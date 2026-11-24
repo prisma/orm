@@ -503,6 +503,7 @@ class ControlClientImpl implements ControlClient {
       extensions: this.options.extensions ?? [],
       frameworkComponents,
       invocation: options.invocation,
+      ...ifDefined('force', options.force),
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });

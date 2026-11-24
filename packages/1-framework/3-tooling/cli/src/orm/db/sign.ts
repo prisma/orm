@@ -249,11 +249,13 @@ function signRerunArgs(args: {
   readonly contractRef: string | undefined;
   readonly advanceRef: string | undefined;
   readonly noAdvanceRef: boolean;
+  readonly force: boolean;
 }): readonly string[] {
   return [
     ...(args.contractRef === undefined ? [] : ['--contract', shellQuoted(args.contractRef)]),
     ...(args.advanceRef === undefined ? [] : ['--advance-ref', shellQuoted(args.advanceRef)]),
     ...(args.noAdvanceRef ? ['--no-advance-ref'] : []),
+    ...(args.force ? ['--force'] : []),
   ];
 }
 
@@ -470,7 +472,10 @@ export function createDbSignCommand(
         '4 = schema verification failed for a space,\n' +
         'or its marker changed while db sign ran; its signature was not written.\n' +
         'Also 4 when a space requires invariants its marker does not record;\n' +
-        'its signature is not written, and db migrate provides them.',
+        'its signature is not written, and db migrate provides them.\n' +
+        '--force signs a database whose change policy permits only migrations.\n' +
+        'It overrides only that refusal: the schema is still verified against\n' +
+        "every contract, and the database's recorded policies stay as they are.",
       examples: [
         'db sign',
         'db sign --db $DATABASE_URL',
@@ -496,6 +501,10 @@ export function createDbSignCommand(
         }),
         noAdvanceRef: flag.boolean({
           brief: 'Sign without advancing any ref (no ref file or snapshot is written)',
+        }),
+        force: flag.boolean({
+          brief:
+            "Sign even if the database's change policy permits only migrations; the schema is still verified and the policies are kept",
         }),
       },
     },
@@ -602,6 +611,7 @@ export function createDbSignCommand(
           contractRef,
           advanceRef: args.flags.advanceRef,
           noAdvanceRef: args.flags.noAdvanceRef,
+          force: args.flags.force,
         }),
       };
       const rerun = rerunCommand(invocation);
@@ -617,6 +627,7 @@ export function createDbSignCommand(
           migrationsDir,
           invocation,
           connection: dbConnection,
+          force: args.flags.force,
           onProgress: controlProgressReporter(ctx.report),
         });
         if (!signed.ok) {
