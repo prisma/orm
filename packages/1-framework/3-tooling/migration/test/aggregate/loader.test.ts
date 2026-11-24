@@ -548,7 +548,12 @@ describe('loadContractSpaceAggregate', () => {
       const violations = aggregate.checkIntegrity({ checkContracts: true });
 
       expect(violationsOfKind(violations, 'refUnreadable')).toContainEqual(
-        expect.objectContaining({ spaceId: 'beta', refName: 'head', path: headPath }),
+        expect.objectContaining({
+          spaceId: 'beta',
+          refName: 'head',
+          path: headPath,
+          detail: expect.stringContaining('note'),
+        }),
       );
       expect(violations.filter((v) => 'spaceId' in v && v.spaceId === 'beta')).toEqual([
         expect.objectContaining({ kind: 'refUnreadable' }),

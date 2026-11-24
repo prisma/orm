@@ -241,7 +241,12 @@ async function readHeadRefTolerant(
   }
 }
 
+/** Why the head ref was refused: the reason a refusal records, else the error's message. */
 function detailOf(error: unknown): string {
+  if (MigrationToolsError.is(error)) {
+    const reason = error.meta?.['reason'];
+    if (typeof reason === 'string') return reason;
+  }
   return error instanceof Error ? error.message : String(error);
 }
 
