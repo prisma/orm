@@ -243,6 +243,17 @@ describe('PrismaPgAdapterFactory', () => {
     await adapter.dispose()
   })
 
+  it('should keep an encoded # in the schema name', async () => {
+    const factory = new PrismaPgAdapterFactory(
+      'postgresql://test:test@localhost:5432/test?sslmode=require&schema=a%23b#fragment',
+    )
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('a#b')
+
+    await adapter.dispose()
+  })
+
   it('should not extract a schema from an empty schema parameter', async () => {
     const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost:5432/test?schema=')
     const adapter = await factory.connect()
