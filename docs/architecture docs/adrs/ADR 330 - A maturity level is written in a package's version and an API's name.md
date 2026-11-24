@@ -47,13 +47,14 @@ A level is defined by the least we do for a package or API at it, not by a descr
 Four points follow from these definitions and from the rule below that a package names only packages at its own level or above:
 
 - **Which release a failing test blocks.** At each release number our packages are released together, so a failing test of a GA, Release Candidate or Preview package blocks that release for all of them. Early Access is the one level at which we may release with a failing test; nothing requires CI to allow it.
-- **Who decides what a Preview package supports.** Its maintainers, in the list its reference documentation carries. A package is not Preview until that list exists.
+- **Who decides what a Preview package supports.** Its maintainers, in the list its reference documentation carries. The list for each package that is Preview at `8.0.0` is written before `8.0.0` is released.
 - **A package that has no database of its own**, such as the framework, has the level of the most mature package that names it. The framework is GA when the first target package is.
-- **A level changes at a release number.** A package's version within one minor can only move forward, so within a minor a level can go up and not down.
+- **When a level can change.** At a new release number, or within one, upwards: a package's version within one minor can only move forward, so within a minor a level can go up and not down.
+- **Whether a GA package can go below GA again is not decided.** It bears on what GA promises. Until it is decided, the release scripts refuse it.
 
 ### What has a level
 
-- **A package.** Every published package has a level. A database's level is the level of its target package, so each database reaches GA on its own date. A target package is never at a higher level than the platform packages it names.
+- **A package.** Every published package has a level, except the one named above. A database's level is the level of its target package, so each database reaches GA on its own date. A target package is never at a higher level than the platform packages it names.
 - **An API.** An API is an export, or a member of one, such as a method, a property or an option. An API has the level of its package unless its name starts with the word for a lower level. A member of an API below GA has at least that API's level.
 
 A name can only lower a level. A GA API cannot exist inside a package below GA, because the package's version already says that nothing in it is kept compatible.
