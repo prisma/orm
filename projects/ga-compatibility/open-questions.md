@@ -38,5 +38,3 @@ Found on 2026-11-24 by the reviews of prisma/orm#31194, which records the policy
 6. **Bun and Deno.** The policy covers "the other runtimes", and `docs/Supported Versions.md` says best effort.
 7. **A change to Prisma's own tables that is not additive** needs a command the user runs, and that is not among the listed exceptions to "no changes". Affects project 7.
 8. **Driver types.** One decision record re-exports the database driver's types and says that works with one major version of the driver only. If `8.0.0` exports them, how they are exposed must be decided before `8.0.0`. Affects project 3.
-
-Also from that work: the list of docs to rewrite when `8.0.0` is released is only in that pull request's description, and needs a place in the plan.

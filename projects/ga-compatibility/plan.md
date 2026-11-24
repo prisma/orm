@@ -131,6 +131,7 @@ Projects 1 to 6 are Must for GA, 7, 9 and 12 are Aim, and 8, 10 and 11 are Later
 
 - Turn the working definitions in [maturity-levels.md](maturity-levels.md) into exact requirements for a package to enter each level, and settle every point in its section 6: version numbers while packages are at different levels, what happens to the name `preview_foo` when the API reaches GA, and how a level is written where the name is not a TypeScript identifier. State how the levels relate to the support categories in prisma/orm#25843 (task 1).
 - Change the release scripts and workflow. Today they give every package one version, publish everything under `latest`, and cannot produce `8.0.0` without a hand edit. Decide the version ranges between our own packages from `8.0.0`, which are exact pins today, and change the publish step to write them. State the 12 months of fixes for the previous major in `SECURITY.md`, `docs/oss/versioning.md` and the docs (task 16).
+- Follow the procedure for releasing `8.0.0` in `docs/oss/versioning.md`, which lists the docs to rewrite on that day. It is added by prisma/orm#31194.
 - Make the `prisma` tool or the toolchain read the installed library's version and stop on a different major. Nothing compares them today (task 17).
 
 **To decide when it starts.** One decision is Will's: which packages are GA at `8.0.0`. The points in section 6 of [maturity-levels.md](maturity-levels.md) are details for whoever takes the project. This project replaces stream 6, row 4 of the GA plan, "Maturity per package".
