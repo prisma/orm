@@ -6,6 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PrismaPgAdapterFactory } from '../pg'
 
 describe('PrismaPgAdapterFactory', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('should subscribe to pool error events', async () => {
     const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
     const factory = new PrismaPgAdapterFactory(config)
@@ -181,16 +185,49 @@ describe('PrismaPgAdapterFactory', () => {
     await pool.end()
   })
 
-  it('should not extract schema from the connection string of an external pool', async () => {
-    const pool = new pg.Pool({ connectionString: 'postgresql://test:test@localhost:5432/test?schema=url_schema' })
+  it('should extract schema from the connection string of an external pool without changing the pool', async () => {
+    const connectionString = 'postgresql://test:test@localhost:5432/test?schema=url_schema'
+    const pool = new pg.Pool({ connectionString })
     pool.on('error', () => {})
     const factory = new PrismaPgAdapterFactory(pool)
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('url_schema')
+    expect(pool.options).toEqual(expect.objectContaining({ connectionString }))
+    expect(pool.options.options).toBeUndefined()
+
+    await adapter.dispose()
+    await pool.end()
+  })
+
+  it.each([
+    ['a Unix socket URL with an empty host', 'postgresql://u:p@/db?host=/var/run/postgresql&schema=socket_schema'],
+    ['a socket:// URL', 'socket://u:p@/var/run/postgresql?db=db&schema=socket_schema'],
+  ])('should extract schema from %s, as pg parses it', async (_, connectionString) => {
+    const factory = new PrismaPgAdapterFactory(connectionString)
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('socket_schema')
+
+    await adapter.dispose()
+  })
+
+  it('should take the last of repeated schema parameters, as pg does', async () => {
+    const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost:5432/test?schema=first&schema=last')
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('last')
+
+    await adapter.dispose()
+  })
+
+  it('should not extract a schema from an empty schema parameter', async () => {
+    const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost:5432/test?schema=')
     const adapter = await factory.connect()
 
     expect(adapter.getConnectionInfo().schemaName).toBeUndefined()
 
     await adapter.dispose()
-    await pool.end()
   })
 
   it('should pass generated name when statement name generator is provided', async () => {
@@ -226,16 +263,19 @@ describe('PrismaPgAdapterFactory', () => {
     await adapter.dispose()
   })
 
-  it('should not add startup options to the connection when the schema comes from the URL', async () => {
+  it('should not add startup parameters to the connection when the schema comes from the URL', async () => {
+    vi.stubEnv('PGOPTIONS', undefined)
+    vi.stubEnv('PGAPPNAME', undefined)
+    vi.stubEnv('PGREPLICATION', undefined)
     const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost:5432/test?schema=url_schema')
     const adapter = await factory.connect()
 
     expect(adapter.getConnectionInfo().schemaName).toBe('url_schema')
-    // `pg` re-parses `connectionString` at connect time, so check the options a client would send.
-    const { connectionParameters } = new pg.Client(adapter.underlyingDriver().options) as unknown as {
-      connectionParameters: { options?: string }
+    // `pg` re-parses `connectionString` at connect time, so check the startup message a client would send.
+    const client = new pg.Client(adapter.underlyingDriver().options) as unknown as {
+      getStartupConf(): Record<string, string>
     }
-    expect(connectionParameters.options).toBeUndefined()
+    expect(client.getStartupConf()).toEqual({ user: 'test', database: 'test' })
 
     await adapter.dispose()
   })

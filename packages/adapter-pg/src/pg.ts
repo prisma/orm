@@ -15,6 +15,7 @@ import type {
 import { Debug, DriverAdapterError } from '@prisma/driver-adapter-utils'
 // @ts-ignore: this is used to avoid the `Module '"<path>/node_modules/@types/pg/index"' has no default export.` error.
 import pg from 'pg'
+import { parse as parseConnectionString } from 'pg-connection-string'
 
 import { name as packageName } from '../package.json'
 import { FIRST_NORMAL_OBJECT_ID } from './constants'
@@ -211,7 +212,7 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
 export type PrismaPgOptions = {
   /**
    * The name of the schema to use in generated queries. When not set, the `?schema=` parameter of the
-   * connection string is used; a pre-built `pg.Pool`'s connection string is not read. Raw queries are
+   * connection string is used, including the connection string of a pre-built `pg.Pool`. Raw queries are
    * not affected: they resolve unqualified names through the connection's `search_path`. Qualify the
    * name in raw SQL (`"mySchema"."User"`), or set the search path on the database role
    * (`ALTER ROLE ... SET search_path = ...`). The adapter does not set it itself, because behind a
@@ -335,17 +336,14 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
     if (poolOrConfig instanceof pg.Pool) {
       this.externalPool = poolOrConfig
       this.config = poolOrConfig.options
-      return
+    } else {
+      this.externalPool = null
+      this.config = typeof poolOrConfig === 'string' ? { connectionString: poolOrConfig } : poolOrConfig
     }
 
-    this.externalPool = null
-    this.config = typeof poolOrConfig === 'string' ? { connectionString: poolOrConfig } : poolOrConfig
-
-    if (!options?.schema) {
-      const schema = schemaFromConnectionString(this.config.connectionString)
-      if (schema) {
-        this.options = { ...options, schema }
-      }
+    const schema = options?.schema ?? schemaFromConnectionString(this.config.connectionString)
+    if (schema !== undefined) {
+      this.options = { ...options, schema }
     }
   }
 
@@ -386,17 +384,20 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
 }
 
 /**
- * `pg` also accepts libpq key/value connection strings (`host=localhost dbname=test`), which are not
- * URLs and carry no `schema` parameter.
+ * Reads `?schema=` with the parser `pg` uses, so the adapter and the connection agree on what the
+ * connection string says.
  */
 function schemaFromConnectionString(connectionString: string | undefined): string | undefined {
   if (connectionString === undefined) {
     return undefined
   }
 
+  let schema: unknown
   try {
-    return new URL(connectionString).searchParams.get('schema') ?? undefined
+    schema = parseConnectionString(connectionString).schema
   } catch {
+    // `pg` rejects the malformed string itself when it connects.
     return undefined
   }
+  return typeof schema === 'string' && schema !== '' ? schema : undefined
 }
