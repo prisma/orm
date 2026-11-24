@@ -136,7 +136,7 @@ const auditExtension: ControlExtensionDescriptor<'sql', 'postgres'> = {
   targetId: 'postgres',
   version: '1.0.0',
   contractSpace: {
-    contractJson: { formatVersion: 1, ...AUDIT_CONTRACT },
+    contractJson: { formatVersion: 1, ...AUDIT_CONTRACT } as Contract,
     headRef: { hash: AUDIT_HEAD, invariants: [] },
     migrations: [
       {

@@ -400,12 +400,15 @@ describe('postgres', () => {
       },
     });
 
+    const namespaces = { public: publicNs, audit: auditNs };
     const twoNamespaceStorage = {
       ...contract,
       storage: new SqlStorage({
         storageHash: contract.storage.storageHash,
-        namespaces: { public: publicNs, audit: auditNs },
-      }),
+        namespaces,
+      }) as SqlStorage & {
+        readonly namespaces: typeof namespaces;
+      },
     };
 
     // A literal-keyed contract so `db.nativeEnums.public` and `.audit` resolve

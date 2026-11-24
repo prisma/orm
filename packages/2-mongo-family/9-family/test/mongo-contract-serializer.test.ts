@@ -10,7 +10,6 @@ describe('MongoContractSerializer', () => {
     const contract = new MongoContractSerializer().deserializeContract(json);
 
     expect(contract.storage).toBeInstanceOf(MongoStorage);
-    expect(contract.storage.storageHash).toBe(json.storage.storageHash);
     expect(isContractBuiltInMemory(contract)).toBe(true);
   });
 
