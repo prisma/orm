@@ -25,7 +25,7 @@ The spec is [spec.md](spec.md). Four pull requests, then a close-out. The stream
 - The repository's own files: `pnpm fixtures:emit` for what it reaches, the script for the rest. Fixtures of earlier upgrade scripts stay as they are.
 - A decision record: stored files carry a format version; the reading rule and the writing rule. Docs that name `schemaVersion` follow the rename.
 
-**Checks.** Tests first. Only the touched test files, `pnpm typecheck`, lint of touched packages, `pnpm lint:deps`, `pnpm fixtures:check`, `pnpm check:upgrade-coverage`. CI runs the suites.
+**Checks.** Tests first. Locally: only the touched test files, the touched packages' typecheck and lint, `pnpm lint:deps`, `pnpm check:upgrade-coverage`. Repository-wide work (`pnpm build`, whole-repo typecheck, `pnpm fixtures:check`, any test suite) runs in CI, not on this machine, which many sessions share.
 
 ## 2. Hashes
 

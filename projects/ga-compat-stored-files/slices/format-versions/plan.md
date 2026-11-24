@@ -1,6 +1,6 @@
 # Plan: stored files carry a format version
 
-The slice spec is [spec.md](spec.md). Every dispatch runs on Opus: implementers at medium effort, reviewers at high effort. No dispatch runs a whole test suite; each runs the test files it touches, typecheck, lint of touched packages and `pnpm lint:deps`.
+The slice spec is [spec.md](spec.md). Every dispatch runs on Opus: implementers at medium effort, reviewers at high effort. No dispatch runs a whole test suite or any other repository-wide command (`pnpm build`, whole-repo typecheck, `pnpm fixtures:check`); CI runs those. Each dispatch runs the test files it touches, typecheck, lint of touched packages and `pnpm lint:deps`.
 
 ## Dispatches
 

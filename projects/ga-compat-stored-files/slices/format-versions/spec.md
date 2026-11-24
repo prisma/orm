@@ -24,7 +24,7 @@ One pull request. Part of the project in [../../spec.md](../../spec.md), section
 - Every reader of these files checks the version first: the two family serializers, `readContractEnvelope`, the snapshot store's two readers, the extension self-consistency check, `contractSpaceFromJson`, every `migration.json` and ref reader, and any found beyond them. A test per path shows it refuses a higher version, and `buildReadAggregate` no longer hides that error.
 - Each unit has a round-trip test (print, parse, same data).
 - The upgrade script has tests with `before` and `after` fixtures, including a run on its own output that changes nothing, and a file it cannot rewrite reported and left alone.
-- Every committed `contract.json`, snapshot, `migration.json` and ref file in the repository, outside frozen history, carries `formatVersion: 1`. `pnpm fixtures:check` passes.
+- Every committed `contract.json`, snapshot, `migration.json` and ref file in the repository, outside frozen history, carries `formatVersion: 1`. `pnpm fixtures:check` passes in CI.
 - `pnpm check:upgrade-coverage` passes, with an `app` and an `extension` fragment.
 - ADR 331, "Stored files carry a format version, and a reader refuses one it does not know", is in the pull request, and every doc that names `schemaVersion` as the contract's field names `formatVersion`.
 - `/drive-code-review` on the final commit has no open finding. Manual QA has run `contract emit`, `migration plan`, `db migrate`, `migration status` and an application query against a project on the new format, and the same commands against a file with `formatVersion: 2`, a file with `schemaVersion`, and a ref file with an extra field.

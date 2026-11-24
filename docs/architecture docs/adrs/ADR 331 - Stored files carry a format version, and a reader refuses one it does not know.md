@@ -58,7 +58,7 @@ A reader looks at `formatVersion` before anything else in the file.
 - **A version higher than any it knows:** it stops and says the file was written by a newer release of Prisma. It interprets nothing else in the file.
 - **No version:** it stops and names the upgrade instructions. Only a pre-release of Prisma 8 wrote such a file. The reader does not guess.
 
-This holds for every read: a command that changes nothing, the runtime loading `contract.json`, and a contract, migration or ref that an extension package ships inside itself.
+This holds for every read: a command that changes nothing, the runtime loading `contract.json`, and a contract, migration or ref that an extension package ships inside itself. The one value a reader does not check is a contract Prisma built in memory, from the TypeScript builder or by reading a file; a reader tells it from a file by its storage, which is then an object Prisma constructed rather than parsed JSON.
 
 A reader never skips a field it does not know. A migration is an instruction to change a database, and acting on one that is only partly understood is the failure this rule prevents. Because every reader is strict, a release cannot add a field to a format without raising its version.
 
