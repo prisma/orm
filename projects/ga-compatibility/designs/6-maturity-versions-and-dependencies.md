@@ -32,6 +32,8 @@ Two costs for the outside maintainer, which we accept on their behalf in recomme
 
 The PostgreSQL facade and everything it depends on, and pgvector and the other PostgreSQL extensions we maintain.
 
+The ParadeDB extension is not among them. It is deleted from this repository before GA, and the ParadeDB team takes it into a repository of their own. It then becomes a package maintained outside, under section 1.2.
+
 ## 3. How the packages depend on each other
 
 ### 3.1 The requirement
@@ -83,7 +85,7 @@ The policy says an application depends on one facade, on the extension packages 
 
 ## 5. Not yet discussed
 
-- Whether ParadeDB and Supabase, which the README calls experimental, are among "the other PostgreSQL extensions we maintain".
+- Whether the Supabase extension, which the README calls experimental, is GA at `8.0.0`.
 - Whether the command-line tool must be at least as new as the library in the project.
 - A fix to a package below GA: whether it raises the suffix counter and not the patch number, so that a user's range selects it.
 - Which tag a package that has never had a GA release is published under.
