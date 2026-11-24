@@ -301,7 +301,7 @@ Divergence between contract and database. Taxonomy includes marker-level (missin
 
 ### Storage Hash
 
-The deterministic hash over a contract's storage-affecting parts (`schemaVersion`, `targetFamily`, `target`, `storage`). The identity of a *contract* in the migration graph; when the CLI says "hash" without qualification, this is what it means. Formerly `coreHash`.
+The deterministic hash over a contract's storage-affecting parts (`targetFamily`, `target`, `storage`). The identity of a *contract* in the migration graph; when the CLI says "hash" without qualification, this is what it means. Formerly `coreHash`.
 
 ### Migration Hash
 

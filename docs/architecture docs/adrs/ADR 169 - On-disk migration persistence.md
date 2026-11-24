@@ -2,7 +2,7 @@
 
 ## Status
 
-**Partially superseded** by [ADR 199 — Storage-only migration identity](./ADR%20199%20-%20Storage-only%20migration%20identity.md) and [ADR 197 — Migration packages snapshot their own contract](./ADR%20197%20-%20Migration%20packages%20snapshot%20their%20own%20contract.md). Two pieces of the original design no longer match the implementation: [ADR 331](ADR%20331%20-%20Stored%20files%20carry%20a%20format%20version%2C%20and%20a%20reader%20refuses%20one%20it%20does%20not%20know.md) adds `formatVersion` to `migration.json` and to ref files.
+**Partially superseded** by [ADR 199 — Storage-only migration identity](./ADR%20199%20-%20Storage-only%20migration%20identity.md) and [ADR 197 — Migration packages snapshot their own contract](./ADR%20197%20-%20Migration%20packages%20snapshot%20their%20own%20contract.md). Two pieces of the original design no longer match the implementation:
 
 - **Migration identity (section 3 below).** `migrationId` is now computed from `(strippedManifest, ops)` only. The full source and destination contract IRs are not part of the hash input. ADR 199 captures the storage-only identity model.
 - **Contracts embedded in the manifest (section 7 below).** `migration.json` no longer inlines `fromContract` / `toContract`. The full contract IRs live as sibling `start-contract.json` / `end-contract.json` files next to the manifest (the snapshot convention from ADR 197); the manifest itself records only the storage-hash bookends. The author-time data-migration code reads the snapshots through TypeScript imports. The change was driven by TML-2512; the runner-independence property — apply only needs `migration.json` + `ops.json` per package — is locked in by regression tests in `@internal/migration-tools`.
@@ -10,6 +10,8 @@
 **Target resolution by walking to a tip (2026-09-24).** `findLeaf`, `findLatestMigration` and the codes `MIGRATION.AMBIGUOUS_TARGET`, `MIGRATION.NO_TARGET` and `MIGRATION.NO_INITIAL_MIGRATION` described in section 2 were removed. No command resolves a target by walking from the empty hash to a single leaf: origins and destinations come from a ref, the emitted head, the live marker, or an explicit flag, and a graph with several branch tips is a normal state rather than an error. `migration plan` and `migration new` resolve a missing `--from` the same way (the `db` ref, else greenfield on an empty graph, else `MIGRATION.PLAN_ORIGIN_UNKNOWN`). Removed in [prisma/orm#30389](https://github.com/prisma/orm/pull/30389), which lists the sites that changed.
 
 The rest of the body — offline planning via contract-to-schemaIR conversion, graph-topology ordering, direct SQL on disk, transactional apply with resume semantics, and "from" contract resolution — remains accurate.
+
+**Amended by** [ADR 331](ADR%20331%20-%20Stored%20files%20carry%20a%20format%20version%2C%20and%20a%20reader%20refuses%20one%20it%20does%20not%20know.md): `migration.json` and ref files carry `formatVersion`.
 
 ## Context
 
