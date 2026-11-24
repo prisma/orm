@@ -1,0 +1,153 @@
+// use prisma-next
+
+type Price {
+  amount   Double
+  currency String
+}
+
+type Image {
+  url String
+}
+
+type Address {
+  streetAndNumber String
+  city            String
+  postalCode      String
+  country         String
+}
+
+type CartItem {
+  productId String
+  name      String
+  brand     String
+  amount    Int32
+  price     Price
+  image     Image
+}
+
+type OrderLineItem {
+  productId String
+  name      String
+  brand     String
+  amount    Int32
+  price     Price
+  image     Image
+}
+
+type StatusEntry {
+  status    String
+  timestamp DateTime
+}
+
+type InvoiceLineItem {
+  name      String
+  amount    Int32
+  unitPrice Double
+  lineTotal Double
+}
+
+model Product {
+  id             ObjectId @id @map("_id")
+  name           String
+  brand          String
+  code           String
+  description    String
+  primaryCategory String
+  subCategory    String
+  articleType    String
+  price          Price
+  image          Image
+  @@map("products")
+  @@textIndex([name, description], weights: { name: 10, description: 1 })
+  @@index([brand, subCategory])
+  @@index([primaryCategory, articleType])
+  @@index([code], type: "hashed")
+}
+
+model User {
+  id      ObjectId @id @map("_id")
+  name    String
+  email   String   @unique
+  address Address?
+  carts   Cart[]
+  orders  Order[]
+  @@map("users")
+}
+
+model Cart {
+  id     ObjectId   @id @map("_id")
+  userId ObjectId
+  items  CartItem[]
+  user   User       @relation(fields: [userId], references: [id])
+  @@map("carts")
+  @@unique([userId])
+}
+
+model Order {
+  id              ObjectId         @id @map("_id")
+  userId          ObjectId
+  items           OrderLineItem[]
+  shippingAddress String
+  type            String
+  statusHistory   StatusEntry[]
+  user            User             @relation(fields: [userId], references: [id])
+  invoices        Invoice[]
+  @@map("orders")
+  @@index([userId])
+}
+
+model Location {
+  id              ObjectId @id @map("_id")
+  name            String
+  streetAndNumber String
+  city            String
+  postalCode      String
+  country         String
+  @@map("locations")
+  @@index([city, country], collationLocale: "en", collationStrength: 2)
+}
+
+model Invoice {
+  id       ObjectId          @id @map("_id")
+  orderId  ObjectId
+  items    InvoiceLineItem[]
+  subtotal Double
+  tax      Double
+  total    Double
+  issuedAt DateTime
+  order    Order             @relation(fields: [orderId], references: [id])
+  @@map("invoices")
+  @@index([orderId])
+  @@index([sort(issuedAt, Desc)], sparse: true)
+}
+
+model Event {
+  id        ObjectId @id @map("_id")
+  userId    String
+  sessionId String
+  type      String
+  timestamp DateTime
+  @@map("events")
+  @@discriminator(type)
+  @@index([userId, sort(timestamp, Desc)])
+  @@index([timestamp], expireAfterSeconds: 7776000)
+}
+
+model ViewProductEvent {
+  productId   String
+  subCategory String
+  brand       String
+  exitMethod  String?
+  @@base(Event, "view-product")
+}
+
+model SearchEvent {
+  query String
+  @@base(Event, "search")
+}
+
+model AddToCartEvent {
+  productId String
+  brand     String
+  @@base(Event, "add-to-cart")
+}

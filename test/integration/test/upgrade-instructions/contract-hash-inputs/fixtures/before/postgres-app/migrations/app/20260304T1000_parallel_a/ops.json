@@ -1,0 +1,34 @@
+[
+  {
+    "id": "column.user.feature",
+    "label": "Add column \"feature\" to \"user\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "__unbound__",
+        "objectType": "column",
+        "name": "feature",
+        "table": "user"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"feature\" is missing",
+        "sql": "SELECT NOT EXISTS (\n  SELECT 1\n  FROM information_schema.columns\n  WHERE table_schema = current_schema()\n    AND table_name = 'user'\n    AND column_name = 'feature'\n)"
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"feature\"",
+        "sql": "ALTER TABLE \"user\" ADD COLUMN \"feature\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"feature\" exists",
+        "sql": "SELECT EXISTS (\n  SELECT 1\n  FROM information_schema.columns\n  WHERE table_schema = current_schema()\n    AND table_name = 'user'\n    AND column_name = 'feature'\n)"
+      }
+    ]
+  }
+]

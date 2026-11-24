@@ -1,0 +1,34 @@
+[
+  {
+    "id": "column.user.bio",
+    "label": "Add column \"bio\" to \"user\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "__unbound__",
+        "objectType": "column",
+        "name": "bio",
+        "table": "user"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"bio\" is missing",
+        "sql": "SELECT NOT EXISTS (\n  SELECT 1\n  FROM information_schema.columns\n  WHERE table_schema = current_schema()\n    AND table_name = 'user'\n    AND column_name = 'bio'\n)"
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"bio\"",
+        "sql": "ALTER TABLE \"user\" ADD COLUMN \"bio\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"bio\" exists",
+        "sql": "SELECT EXISTS (\n  SELECT 1\n  FROM information_schema.columns\n  WHERE table_schema = current_schema()\n    AND table_name = 'user'\n    AND column_name = 'bio'\n)"
+      }
+    ]
+  }
+]

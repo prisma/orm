@@ -1,0 +1,8 @@
+{
+  "formatVersion": 1,
+  "from": "4ae263c38bb0abf30b3daf57d2b002997c15260b0e5528bd924969c25f3d00bb",
+  "to": "10cdd020e0f2e31ec61d010c58b77fbed5fae1c1919e21839ba1d2bb82b6aef6",
+  "providedInvariants": [],
+  "createdAt": "2026-06-02T07:58:51.180Z",
+  "migrationHash": "b87762c123fec5119ac1b83218bd4cc31a7ea66d89ac919b55e5749e75626865"
+}
