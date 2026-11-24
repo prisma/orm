@@ -4,8 +4,10 @@ import {
   formatVersion,
   type PackageKind,
   parseVersion,
+  planInputFor,
   planRelease,
   type ReleasePlanInput,
+  releaseOfRootVersion,
 } from '../src/release-plan';
 
 /**
@@ -366,5 +368,81 @@ describe('planRelease', () => {
     );
 
     expect(line(plan, 'mongo')).toBe('8.2.0-rc.0 latest framework ~8.2.0');
+  });
+});
+
+describe('releaseOfRootVersion', () => {
+  it.each([
+    [
+      '8.0.0-rc.26',
+      {
+        release: { major: 8, minor: 0 },
+        line: 'release-candidates',
+        rcCounter: 26,
+        dev: undefined,
+      },
+    ],
+    [
+      '8.0.0-rc.26-dev.3',
+      { release: { major: 8, minor: 0 }, line: 'release-candidates', rcCounter: 26, dev: 3 },
+    ],
+    [
+      '8.0.0',
+      { release: { major: 8, minor: 0 }, line: 'levels', rcCounter: undefined, dev: undefined },
+    ],
+    [
+      '8.1.0-dev.7',
+      { release: { major: 8, minor: 1 }, line: 'levels', rcCounter: undefined, dev: 7 },
+    ],
+  ])('reads %s', (version, expected) => {
+    expect(releaseOfRootVersion(version)).toEqual(expected);
+  });
+
+  it.each(['8.1.0-preview.0', '8.1.0-ea.2', '8.1.2', '8.0.0-beta.1'])(
+    'refuses %s as a root version, naming it',
+    (version) => {
+      expect(() => releaseOfRootVersion(version)).toThrow(`"${version}"`);
+    },
+  );
+});
+
+describe('planInputFor', () => {
+  it('reads current versions and who names whom from the published manifests', () => {
+    const levels = new Map<string, DeclaredLevel>([
+      ['@prisma/orm-framework', 'ga'],
+      ['@prisma/orm-postgres', 'ga'],
+    ]);
+    const kinds = {
+      '@prisma/orm-framework': 'platform',
+      '@prisma/orm-postgres': 'facade',
+    } as const;
+
+    expect(
+      planInputFor({
+        rootVersion: '8.1.0',
+        manifests: [
+          { name: '@prisma/orm-framework', version: '8.1.0' },
+          {
+            name: '@prisma/orm-postgres',
+            version: '8.1.0',
+            peerDependencies: { '@prisma/orm-framework': 'workspace:~8.1.0', pg: '^8.22.0' },
+          },
+        ],
+        levels,
+        kinds,
+        everGa: new Set(),
+      }),
+    ).toEqual({
+      release: { major: 8, minor: 1 },
+      line: 'levels',
+      rcCounter: undefined,
+      dev: undefined,
+      current: { '@prisma/orm-framework': '8.1.0', '@prisma/orm-postgres': '8.1.0' },
+      uses: { '@prisma/orm-framework': [], '@prisma/orm-postgres': ['@prisma/orm-framework'] },
+      levels,
+      kinds,
+      everGa: new Set(),
+      bump: [],
+    });
   });
 });

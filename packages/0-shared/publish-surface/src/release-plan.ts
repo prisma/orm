@@ -360,3 +360,69 @@ function withDev(version: string, dev: number | undefined): string {
 function isCount(value: number): boolean {
   return Number.isInteger(value) && value >= 0;
 }
+
+export interface RootRelease {
+  readonly release: { readonly major: number; readonly minor: number };
+  readonly line: 'release-candidates' | 'levels';
+  readonly rcCounter: number | undefined;
+  readonly dev: number | undefined;
+}
+
+/**
+ * The release a root version stands for. The root version is `X.Y.0-rc.N` on the release-candidate
+ * line and the release number `X.Y.0` on the levels line, either followed by `-dev.N` for a
+ * development build. Packages may carry other levels and patches; the root never does.
+ */
+export function releaseOfRootVersion(version: string): RootRelease {
+  const parsed = parseVersion(version);
+  const release = { major: parsed.major, minor: parsed.minor };
+  if (parsed.patch === 0 && parsed.level?.name === 'rc') {
+    return {
+      release,
+      line: 'release-candidates',
+      rcCounter: parsed.level.counter,
+      dev: parsed.dev,
+    };
+  }
+  if (parsed.patch === 0 && parsed.level === undefined) {
+    return { release, line: 'levels', rcCounter: undefined, dev: parsed.dev };
+  }
+  throw new ReleasePlanError(
+    `root version "${version}" is neither a release candidate X.Y.0-rc.N nor a release number X.Y.0`,
+  );
+}
+
+export interface PublishedManifest {
+  readonly name: string;
+  readonly version: string;
+  readonly peerDependencies?: Readonly<Record<string, string>>;
+}
+
+const OUR_SCOPE = '@prisma/orm-';
+
+/**
+ * The plan input for a root version, read from the published packages' manifests: each package's
+ * current version, and the packages of ours it names as peers.
+ */
+export function planInputFor(options: {
+  readonly rootVersion: string;
+  readonly manifests: readonly PublishedManifest[];
+  readonly levels: ReadonlyMap<string, DeclaredLevel>;
+  readonly kinds: Readonly<Record<string, PackageKind>>;
+  readonly everGa: ReadonlySet<string>;
+}): ReleasePlanInput {
+  return {
+    ...releaseOfRootVersion(options.rootVersion),
+    current: Object.fromEntries(options.manifests.map((m) => [m.name, m.version])),
+    uses: Object.fromEntries(
+      options.manifests.map((m) => [
+        m.name,
+        Object.keys(m.peerDependencies ?? {}).filter((peer) => peer.startsWith(OUR_SCOPE)),
+      ]),
+    ),
+    levels: options.levels,
+    kinds: options.kinds,
+    everGa: options.everGa,
+    bump: [],
+  };
+}
