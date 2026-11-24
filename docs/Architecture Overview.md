@@ -42,7 +42,7 @@ Behavior comes from adapters, extension packs, and runtime plugins, not global f
 All packages are modular and composable with strict tree‑shakability: only imported components end up in the bundle. Exports are curated and side‑effect free with named, per‑module entry points. We ship ESM‑compatible packages and TypeScript source to maximize modern bundler support and DX.
 
 ### Feedback before execution
-Fast, targeted feedback at authoring, planning, and execution time. AST-first lints (SQL domain) and budgets inspect `plan.ast` when present; offline artifact checks in CI and marker checks catch risks early and explain what to fix, with stricter defaults in staging and production (ADR 022, ADR 021, ADR 115, ADR 162)
+Fast, targeted feedback at authoring, planning, and execution time. AST-first lints (SQL domain) and budgets inspect `plan.ast` when present; offline artifact checks in CI and marker checks catch risks early and explain what to fix. The runtime's marker check only warns; `prisma db verify` in the deploy is what stops on a mismatch (ADR 022, ADR 021, ADR 333, ADR 115, ADR 162)
 
 ## Architecture at a Glance
 
@@ -191,7 +191,7 @@ Notes
 
 **Verification**
 
-- Runtime verifies marker `storageHash` and `profileHash` equality with the contract and applies lint rules and budgets configured by policy
+- Runtime compares the marker's `storageHash` and `profileHash` with the contract, warning on a difference, and applies lint rules and budgets configured by policy
 - Extensible linting highlights potential issues before execution
  - Runtime validates declared codec `typeId` coverage: if the contract declares a per-column `typeId` (via extension decoration), a matching codec must be present in the composed registry or execution fails with a stable error
 
@@ -244,7 +244,7 @@ sequenceDiagram
 |------------------|------------------------------------------------------------------|-----------------------------------------------------------------|
 | Authoring        | Contract builders validate schema intent and capability usage.   | DSL annotations and TypedSQL expose capabilities and policies. |
 | Planning         | Planner simulates edges; hash-stamps preconditions and outcomes. | Plan factories attach lint/budget annotations. |
-| Verification     | `migration check` verifies artifacts offline; `db verify` reports live drift. | Runtime verifies marker equality and applies guardrail plugins. |
+| Verification     | `migration check` verifies artifacts offline; `db verify` reports live drift. | Runtime compares the marker with the contract, warns on a difference, and applies guardrail plugins. |
 | Execution        | Runner enforces idempotency, markers, and extension requirements. | Streaming execution monitored by guardrail plugins and budgets. |
 | Post-feedback    | PPg ledger, drift detectors, and diagnostics inform authors.     | Policy outcomes and drift indicators feed back to authoring tools. |
 ## Modularity and Extensibility
