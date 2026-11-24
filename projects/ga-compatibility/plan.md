@@ -19,9 +19,9 @@ Each project below states:
 - **How, where we know:** the work we expect. The numbers in brackets are the task numbers this plan used before 2026-11-24; the research reports under [research/](research/) and [handover.md](handover.md) refer to tasks by those numbers.
 - **To decide when it starts:** what is not settled.
 
-**What GA requires.** These placements were proposed on 2026-11-24 and are not yet confirmed, except that reducing exports was already placed as Must. The promise starts at `8.0.0`. A project is **Must** when its changes would themselves break the promise if made later: a change to a stored format, a hash, an import path or a published type. Project 1 is Must because the people and agents who build the others read the repository's docs. Project 4 is Must because project 3 needs it. A project is **Aim**, wanted at GA but able to ship just after, when users need it from the first release after `8.0.0`: projects 7, 9 and 12. The others are **Later**. Project 8 being Later has a cost: until the reference documentation exists, no behaviour is specified, so the promise holds for types, stored data and formats but not yet for behaviour.
+**What GA requires.** Projects 1 to 6 are Must, 7, 9 and 12 are Aim, and 8, 10 and 11 are Later. This is proposed and not yet confirmed. A project is Must when its changes would break the promise if made after `8.0.0`: a change to a stored format, a hash, an import path or a published type.
 
-**Order.** Project 1 first. Project 4 before project 3, because it lists each package's exports, which is what makes reducing them reviewable. Projects 2, 5 and 6 depend on none of the others.
+**Order.** Project 1 first. Project 4 before project 3, which needs its list of each package's exports.
 
 The facts below about the code were read on 2026-11-23 at `8.0.0-rc.24` and nothing was run. Each project rechecks them when it starts.
 
@@ -143,8 +143,6 @@ The facts below about the code were read on 2026-11-23 at `8.0.0-rc.24` and noth
 **To decide when it starts.** One decision is Will's: which packages are GA at `8.0.0`. The points in section 6 of [maturity-levels.md](maturity-levels.md) are details for whoever takes the project. This project replaces stream 6, row 4 of the GA plan, "Maturity per package".
 
 ## Projects that can follow GA
-
-Projects 7, 9 and 12 are Aim. Projects 8, 10 and 11 are Later.
 
 ### 7. Bring Prisma's own database tables up to date in each release, so no upgrade fails on them
 
