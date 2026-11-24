@@ -43,9 +43,13 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@internal/target-postgres": "workspace:8.0.0-rc.25",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
+    "@internal/target-postgres": {
+      "optional": true
+    },
     "typescript": {
       "optional": true
     }
