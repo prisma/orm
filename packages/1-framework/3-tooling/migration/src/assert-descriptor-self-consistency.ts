@@ -45,6 +45,8 @@ export function assertDescriptorSelfConsistency(inputs: DescriptorSelfConsistenc
   readFormatVersion(inputs.contractJson, {
     kind: 'contract',
     knownVersions: CONTRACT_FORMAT_VERSIONS,
+    path: 'contract.json',
+    bundledIn: inputs.extensionId,
   });
   const contract = blindCast<
     { readonly target?: unknown; readonly targetFamily?: unknown; readonly storage?: unknown },

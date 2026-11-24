@@ -171,6 +171,38 @@ describe('formatVersionErrorAt', () => {
   });
 });
 
+describe('a file an extension package ships', () => {
+  it('names the extension and the file, and says the extension must be upgraded or republished', () => {
+    const error = caught(() =>
+      readFormatVersion(
+        { schemaVersion: '1' },
+        { kind: 'contract', knownVersions: [1], path: 'contract.json', bundledIn: 'vectors' },
+      ),
+    );
+    expect(error).toMatchObject({
+      code: 'CONTRACT.FORMAT_VERSION_MISSING',
+      message: 'The contract file "contract.json" of the extension "vectors" has no format version',
+      fix: 'The extension "vectors" ships this file in its package, so the upgrade instructions cannot change it in your project. Upgrade the extension to a release built for this release of Prisma; if there is none, ask its author to republish it.',
+      meta: { bundledIn: 'vectors', path: 'contract.json' },
+    });
+  });
+
+  it('says a newer extension needs a newer Prisma, or a release of the extension built for this one', () => {
+    const error = caught(() =>
+      readFormatVersion(
+        { formatVersion: 2 },
+        { kind: 'ref', knownVersions: [1], path: 'refs/head.json', bundledIn: 'vectors' },
+      ),
+    );
+    expect(error).toMatchObject({
+      code: 'MIGRATION.FORMAT_VERSION_NEWER',
+      message:
+        'The ref file "refs/head.json" of the extension "vectors" was written by a newer release of Prisma',
+      fix: 'The extension "vectors" was built for a newer release of Prisma. Upgrade Prisma, or use a release of the extension built for this one.',
+    });
+  });
+});
+
 describe('isFormatVersionError', () => {
   it('is false for other errors', () => {
     expect(isFormatVersionError(new Error('x'))).toBe(false);

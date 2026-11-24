@@ -91,6 +91,7 @@ const vectorControlPlaneHooks: CodecControlHooks = {
 };
 
 const pgvectorContractSpace = contractSpaceFromJson<Contract<SqlStorage>>({
+  spaceId: PGVECTOR_SPACE_ID,
   contractJson,
   migrations: [
     { dirName: PGVECTOR_BASELINE_MIGRATION_NAME, metadata: baselineMetadata, ops: baselineOps },

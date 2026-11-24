@@ -13,16 +13,18 @@ const PARSERS: Readonly<
 export type RefDocument = RefDocumentV1;
 
 /**
- * The content of a ref file, or why it is invalid. Reads the format version before anything else and throws `MIGRATION.FORMAT_VERSION_NEWER` or `MIGRATION.FORMAT_VERSION_MISSING`, naming `path`, for a file this release cannot read.
+ * The content of a ref file, or why it is invalid. Reads the format version before anything else and throws `MIGRATION.FORMAT_VERSION_NEWER` or `MIGRATION.FORMAT_VERSION_MISSING`, naming `path` and the extension `bundledIn` that ships it, for a file this release cannot read.
  */
 export function parseRefDocument(
   document: unknown,
   path: string | undefined,
+  bundledIn?: string,
 ): Result<RefFileContent, string> {
   const formatVersion = readFormatVersion(document, {
     kind: 'ref',
     knownVersions: REF_FORMAT_VERSIONS,
     path,
+    bundledIn,
   });
   return PARSERS[formatVersion](document);
 }

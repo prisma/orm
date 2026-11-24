@@ -198,7 +198,14 @@ describe('assertDescriptorSelfConsistency', () => {
         ...SQL_HOOKS,
       }),
     ).toThrowError(
-      expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' }) as unknown as Error,
+      expect.objectContaining({
+        code: 'CONTRACT.FORMAT_VERSION_MISSING',
+        message:
+          'The contract file "contract.json" of the extension "test-extension" has no format version',
+        fix: expect.stringContaining(
+          'Upgrade the extension to a release built for this release of Prisma',
+        ),
+      }) as unknown as Error,
     );
   });
 });

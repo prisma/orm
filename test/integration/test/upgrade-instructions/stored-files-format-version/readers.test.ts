@@ -114,6 +114,7 @@ describe('the extension package after the script', () => {
 
   function bundledSpace(side: Side) {
     return contractSpaceFromJson({
+      spaceId: 'fixture-extension',
       contractJson: readJson(side, extension.contract),
       migrations: migrationDirs(side, extension.spaceDir).map((dirName) => ({
         dirName,

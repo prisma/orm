@@ -20,6 +20,8 @@ export interface ReadFormatVersionOptions<TVersion extends number> {
   readonly kind: StoredFileKind;
   readonly knownVersions: readonly TVersion[];
   readonly path?: string | undefined;
+  /** The extension whose package ships the file, for a file the application cannot change itself. */
+  readonly bundledIn?: string | undefined;
 }
 
 type FormatVersionProblem =
@@ -32,6 +34,7 @@ interface FormatVersionErrorFacts {
   readonly kind: StoredFileKind;
   readonly knownVersions: readonly number[];
   readonly path: string | undefined;
+  readonly bundledIn: string | undefined;
   readonly problem: FormatVersionProblem;
 }
 
@@ -82,6 +85,7 @@ export function readFormatVersion<TVersion extends number>(
     kind: options.kind,
     knownVersions: options.knownVersions,
     path: options.path,
+    bundledIn: options.bundledIn,
     problem: problemOf(document, options.knownVersions),
   });
 }
@@ -136,23 +140,31 @@ function isFormatVersionFacts(value: unknown): value is FormatVersionErrorFacts 
 }
 
 function formatVersionError(facts: FormatVersionErrorFacts): StructuredError {
-  const { kind, knownVersions, path, problem } = facts;
-  const file =
+  const { kind, knownVersions, path, bundledIn, problem } = facts;
+  const named =
     path === undefined ? `The ${FILE_LABELS[kind]}` : `The ${FILE_LABELS[kind]} "${path}"`;
+  const file = bundledIn === undefined ? named : `${named} of the extension "${bundledIn}"`;
   const meta = {
     fileKind: kind,
     knownFormatVersions: [...knownVersions],
     ...ifDefined('path', path),
+    ...ifDefined('bundledIn', bundledIn),
   };
   const error =
     problem.reason === 'newer'
       ? structuredError(CODES[kind].newer, `${file} was written by a newer release of Prisma`, {
           why: `It is in format version ${problem.formatVersion}, and this release of Prisma reads format ${versionsText(knownVersions)} only.`,
-          fix: 'Upgrade Prisma to the release that wrote the file, or a later one, and run the command again.',
+          fix:
+            bundledIn === undefined
+              ? 'Upgrade Prisma to the release that wrote the file, or a later one, and run the command again.'
+              : `The extension "${bundledIn}" was built for a newer release of Prisma. Upgrade Prisma, or use a release of the extension built for this one.`,
           nextActions: [
             {
               kind: 'user-choice',
-              label: 'Upgrade Prisma to the release that wrote the file, or a later one',
+              label:
+                bundledIn === undefined
+                  ? 'Upgrade Prisma to the release that wrote the file, or a later one'
+                  : `Upgrade Prisma, or use a release of the extension "${bundledIn}" built for this one`,
             },
           ],
           meta: { ...meta, formatVersion: problem.formatVersion },
@@ -161,14 +173,25 @@ function formatVersionError(facts: FormatVersionErrorFacts): StructuredError {
         })
       : structuredError(CODES[kind].missing, `${file} has no format version`, {
           why: missingWhy(problem),
-          fix: `A pre-release of Prisma 8 wrote this file. Follow the upgrade instructions of each release since the one that wrote it; they add the format version: ${UPGRADE_GUIDES_URL}`,
-          nextActions: [
-            {
-              kind: 'open-url',
-              label: 'Follow the upgrade instructions',
-              url: UPGRADE_GUIDES_URL,
-            },
-          ],
+          fix:
+            bundledIn === undefined
+              ? `A pre-release of Prisma 8 wrote this file. Follow the upgrade instructions of each release since the one that wrote it; they add the format version: ${UPGRADE_GUIDES_URL}`
+              : `The extension "${bundledIn}" ships this file in its package, so the upgrade instructions cannot change it in your project. Upgrade the extension to a release built for this release of Prisma; if there is none, ask its author to republish it.`,
+          nextActions:
+            bundledIn === undefined
+              ? [
+                  {
+                    kind: 'open-url',
+                    label: 'Follow the upgrade instructions',
+                    url: UPGRADE_GUIDES_URL,
+                  },
+                ]
+              : [
+                  {
+                    kind: 'user-choice',
+                    label: `Upgrade the extension "${bundledIn}", or ask its author to republish it`,
+                  },
+                ],
           meta,
           docsUrl: docsUrlFor(CODES[kind].missing),
           ...ifDefined('where', path === undefined ? undefined : { path }),

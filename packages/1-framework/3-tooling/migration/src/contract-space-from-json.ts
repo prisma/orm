@@ -41,6 +41,8 @@ import { parseRefDocument } from './formats/ref/versions';
  * `migration.json`'s version covers them and the runner checks them.
  */
 export function contractSpaceFromJson<TContract extends Contract = Contract>(inputs: {
+  /** The extension's id, which names it in an error about one of its files. */
+  readonly spaceId: string;
   readonly contractJson: unknown;
   readonly migrations: ReadonlyArray<{
     readonly dirName: string;
@@ -49,13 +51,16 @@ export function contractSpaceFromJson<TContract extends Contract = Contract>(inp
   }>;
   readonly headRef: unknown;
 }): ContractSpace<TContract> {
+  const { spaceId } = inputs;
   readFormatVersion(inputs.contractJson, {
     kind: 'contract',
     knownVersions: CONTRACT_FORMAT_VERSIONS,
+    path: 'contract.json',
+    bundledIn: spaceId,
   });
   const migrations: readonly MigrationPackage[] = inputs.migrations.map((m) => ({
     dirName: m.dirName,
-    metadata: bundledMigrationMetadata(m.dirName, m.metadata),
+    metadata: bundledMigrationMetadata(spaceId, m.dirName, m.metadata),
     ops: blindCast<
       readonly MigrationPlanOperation[],
       'the emit pipeline wrote ops.json; the runner validates each operation'
@@ -67,22 +72,27 @@ export function contractSpaceFromJson<TContract extends Contract = Contract>(inp
       'family.deserializeContract validates the bundled contract at control-stack construction'
     >(inputs.contractJson),
     migrations,
-    headRef: bundledHeadRef(inputs.headRef),
+    headRef: bundledHeadRef(spaceId, inputs.headRef),
   };
 }
 
-function bundledMigrationMetadata(dirName: string, document: unknown) {
-  const label = `${dirName}/migration.json`;
-  const metadata = parseMigrationMetadataDocument(document, undefined);
-  if (!metadata.ok) throw errorInvalidManifest(label, metadata.failure);
+function bundledFileLabel(spaceId: string, file: string): string {
+  return `${file} of the extension "${spaceId}"`;
+}
+
+function bundledMigrationMetadata(spaceId: string, dirName: string, document: unknown) {
+  const file = `${dirName}/migration.json`;
+  const metadata = parseMigrationMetadataDocument(document, file, spaceId);
+  if (!metadata.ok) throw errorInvalidManifest(bundledFileLabel(spaceId, file), metadata.failure);
   return metadata.value;
 }
 
-function bundledHeadRef(document: unknown): ContractSpaceHeadRef {
-  const content = parseRefDocument(document, undefined);
-  if (!content.ok) throw errorInvalidRefFile('refs/head.json', content.failure);
+function bundledHeadRef(spaceId: string, document: unknown): ContractSpaceHeadRef {
+  const file = 'refs/head.json';
+  const content = parseRefDocument(document, file, spaceId);
+  if (!content.ok) throw errorInvalidRefFile(bundledFileLabel(spaceId, file), content.failure);
   if (content.value.policies !== undefined) {
-    throw errorInvalidRefFile('refs/head.json', 'the head ref declares no policies');
+    throw errorInvalidRefFile(bundledFileLabel(spaceId, file), 'the head ref declares no policies');
   }
   return { hash: content.value.hash, invariants: content.value.invariants };
 }
