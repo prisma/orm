@@ -21,6 +21,7 @@ This package contains integration tests that verify the complete flow from contr
 - `test/*.helpers.ts` - Shared test helpers for related test files
 - `test/fixtures/` - Test fixtures (contract JSON, type definitions, CLI fixture apps)
 - `test/packaging/` - Tarball suites that `pnpm pack` real workspace packages
+- `test/saved-samples/` - Files and database records earlier releases wrote, and the tests that read them with the current code (see its README)
 
 ### Packaging suites run sequentially
 
