@@ -4,7 +4,7 @@
  *
  * Usage: node stored-files-format-version.ts [project-root]
  *
- * The project root defaults to the working directory. The script walks it, skipping `node_modules`, `dist`, `build` and directories whose name starts with a dot. It recognises a contract by its content (`targetFamily`, `storage` and `schemaVersion` at the top level) in any `*.json` file, a `migration.json` by its fields and by the `ops.json` next to it, and a ref file by its fields and by a `refs` directory above it. It edits each file's text in place, so the rest of the file keeps its bytes: the version goes first, except in a contract whose top-level keys are sorted (a snapshot), where it goes in sorted position, as Prisma writes them. No hash covers the version, so no hash changes.
+ * The project root defaults to the working directory. The script walks it, skipping `node_modules`, `dist`, `build` and directories whose name starts with a dot. It recognises a contract by its content (`targetFamily`, `storage` and `schemaVersion` at the top level) in any `*.json` file, a `migration.json` by its fields and by the `ops.json` next to it, and a ref file by where Prisma writes refs: `<migrations>/<space>/refs/` in an application, and `<migrations>/refs/` in an extension's own repository. A migrations directory is one named `migrations`, or one holding the `snapshots` store or a migration package, as a directory configured under another name does. A JSON file in any other `refs` directory is not Prisma's and is left alone. It edits each file's text in place, so the rest of the file keeps its bytes: the version goes first, except in a contract whose top-level keys are sorted (a snapshot), where it goes in sorted position, as Prisma writes them. No hash covers the version, so no hash changes.
  *
  * A ref file may have fields the format does not have; earlier releases ignored them when they read a ref and dropped them when they wrote one again. The script drops them too, and lists each one it dropped.
  *
@@ -29,6 +29,7 @@ interface JsonRecord {
 type StoredFileKind = 'contract' | 'migration' | 'ref';
 
 const SKIPPED_DIRECTORIES = new Set(['node_modules', 'dist', 'build']);
+const SPACE_ID = /^[a-z][a-z0-9_-]{0,63}$/;
 const BYTE_ORDER_MARK = '﻿';
 const MIGRATION_FIELDS = ['from', 'to', 'migrationHash', 'providedInvariants', 'createdAt'];
 const MIGRATION_KEYS = new Set(MIGRATION_FIELDS);
@@ -231,12 +232,48 @@ function refProblem(value: JsonRecord): string | undefined {
   return undefined;
 }
 
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function isMigrationPackage(dir: string): boolean {
+  return existsSync(join(dir, 'migration.json')) && existsSync(join(dir, 'ops.json'));
+}
+
+function isMigrationsDirectory(dir: string): boolean {
+  if (basename(dir) === 'migrations' || isDirectory(join(dir, 'snapshots'))) return true;
+  const entries = listDirectory(dir);
+  return (
+    typeof entries !== 'string' &&
+    entries.some((entry) => {
+      const path = join(dir, entry.name);
+      return isDirectory(path) && isMigrationPackage(path);
+    })
+  );
+}
+
+/** Whether `path` is where Prisma writes a ref: `refs/` in an application's space directory under the migrations directory, or directly in an extension's migrations directory. */
+function isRefLocation(root: string, path: string): boolean {
+  const segments = relative(root, dirname(path)).split(sep);
+  for (let i = segments.length - 1; i >= 0; i--) {
+    if (segments[i] !== 'refs') continue;
+    const owner = join(root, ...segments.slice(0, i));
+    if (isMigrationsDirectory(owner)) return true;
+    if (i > 0 && SPACE_ID.test(segments[i - 1] ?? '') && isMigrationsDirectory(dirname(owner)))
+      return true;
+  }
+  return false;
+}
+
 /** The kind of stored file `path` is by its name and place, before its content is read. */
 function expectedKind(root: string, path: string): StoredFileKind | undefined {
   const name = basename(path);
-  if (name === 'migration.json' && existsSync(join(dirname(path), 'ops.json'))) return 'migration';
-  if (!name.endsWith('.contract.json') && relative(root, dirname(path)).split(sep).includes('refs'))
-    return 'ref';
+  if (name === 'migration.json' && isMigrationPackage(dirname(path))) return 'migration';
+  if (!name.endsWith('.contract.json') && isRefLocation(root, path)) return 'ref';
   if (name === 'contract.json') return 'contract';
   return undefined;
 }
@@ -365,7 +402,7 @@ function isInside(dir: string, path: string): boolean {
 }
 
 /**
- * Reports a symbolic link to a file or folder outside the project root that holds a stored file the script would change or report. The script does not follow links: a link inside the root leads to files the walk reaches anyway, and one outside it leads to files that may belong to another project.
+ * Reports a symbolic link to a file or folder outside the project root that holds a stored file the script would change or report. The script does not follow links: a link inside the root leads to files the walk reaches anyway, a link to the root or a folder above it leads back to the project itself, and any other link leads to files that may belong to another project.
  */
 function handleLink(root: string, path: string, name: string, outcome: Outcome): void {
   let target: string;
@@ -375,7 +412,7 @@ function handleLink(root: string, path: string, name: string, outcome: Outcome):
     return;
   }
   const realRoot = realpathSync(root);
-  if (isInside(realRoot, target)) return;
+  if (isInside(realRoot, target) || isInside(target, realRoot)) return;
   const shown = relative(root, path);
   const targetShown = relative(realRoot, target);
   const probe = emptyOutcome();

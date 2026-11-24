@@ -146,16 +146,16 @@ describe('a stored file the script cannot rewrite', () => {
   });
 });
 
-describe('a stored file the script does not recognise', () => {
-  function runWith(files: Tree): {
-    readonly run: ReturnType<typeof runScript>;
-    readonly tree: Tree;
-  } {
-    const root = copyFixture('after');
-    for (const [path, content] of Object.entries(files)) writeFile(root, path, content);
-    return { run: runScript(root), tree: readTree(root) };
-  }
+function runWith(files: Tree): {
+  readonly run: ReturnType<typeof runScript>;
+  readonly tree: Tree;
+} {
+  const root = copyFixture('after');
+  for (const [path, content] of Object.entries(files)) writeFile(root, path, content);
+  return { run: runScript(root), tree: readTree(root) };
+}
 
+describe('a stored file the script does not recognise', () => {
   function leftUnchanged(path: string, reason: string) {
     return {
       status: 1,
@@ -261,6 +261,46 @@ describe('a stored file the script does not recognise', () => {
   });
 });
 
+describe('where a ref file is', () => {
+  it('leaves a JSON file in a refs folder that is not where Prisma keeps refs alone', () => {
+    const files = {
+      'app/src/i18n/refs/greeting.json': '{"en":"Hello"}\n',
+      'app/src/i18n/refs/languages.json': '["en"]\n',
+    };
+    expect(runWith(files)).toMatchObject({
+      run: { status: 0, stdout: NOTHING_CHANGED, stderr: '' },
+      tree: files,
+    });
+  });
+
+  it('rewrites a ref in a migrations folder configured under another name, in an application space and in an extension', () => {
+    const ref = '{"hash":"h","invariants":[]}\n';
+    const { run, tree } = runWith({
+      'app/db/history/snapshots/h/contract.json':
+        '{"formatVersion":1,"targetFamily":"sql","storage":{}}\n',
+      'app/db/history/app/refs/db.json': ref,
+      'ext/history/20260101T0000_init/migration.json':
+        '{"formatVersion":1,"from":null,"to":"h","migrationHash":"m","providedInvariants":[],"createdAt":"c"}\n',
+      'ext/history/20260101T0000_init/ops.json': '[]\n',
+      'ext/history/refs/head.json': ref,
+    });
+    const written = '{"formatVersion":1,"hash":"h","invariants":[]}\n';
+    expect({
+      run,
+      app: tree['app/db/history/app/refs/db.json'],
+      extension: tree['ext/history/refs/head.json'],
+    }).toEqual({
+      run: {
+        status: 0,
+        stdout: `Added the format version to 2 files:\n${changedList(['app/db/history/app/refs/db.json', 'ext/history/refs/head.json'])}`,
+        stderr: '',
+      },
+      app: written,
+      extension: written,
+    });
+  });
+});
+
 describe('a symbolic link', () => {
   it('reports a link to a folder outside the project that holds stored files without a format version, and does not follow it', () => {
     const root = copyFixture('before');
@@ -279,13 +319,12 @@ describe('a symbolic link', () => {
   it('reports a link to a stored file outside the project', () => {
     const root = copyFixture('after');
     writeFile(root, 'shared/db.json', '{"hash":"h","invariants":[]}');
-    mkdirSync(join(root, 'app/linked/refs'), { recursive: true });
-    symlinkSync(join(root, 'shared/db.json'), join(root, 'app/linked/refs/db.json'));
+    symlinkSync(join(root, 'shared/db.json'), join(root, 'app/migrations/app/refs/shared.json'));
     expect(runScript(join(root, 'app'))).toEqual({
       status: 1,
       stdout: NO_FILE_CHANGED,
       stderr:
-        'Left unchanged:\n  linked/refs/db.json: is a symbolic link to ../shared/db.json, a file outside the project that the script would change or report; the script does not follow links. Replace the link with the file, or add the format version to ../shared/db.json by hand\n',
+        'Left unchanged:\n  migrations/app/refs/shared.json: is a symbolic link to ../shared/db.json, a file outside the project that the script would change or report; the script does not follow links. Replace the link with the file, or add the format version to ../shared/db.json by hand\n',
     });
   });
 
@@ -302,10 +341,18 @@ describe('a symbolic link', () => {
     });
   });
 
-  it('does not loop on a link to a folder above it', () => {
+  it('ignores a link to the folder above the project, which holds the project itself', () => {
     const root = copyFixture('before');
-    symlinkSync(root, join(root, 'app/loop'));
-    expect(runScript(root).status).toBe(0);
+    symlinkSync('..', join(root, 'app/a-parent'));
+    const run = runScript(join(root, 'app'));
+    expect({ status: run.status, stderr: run.stderr }).toEqual({ status: 0, stderr: '' });
+  });
+
+  it('ignores a link to the project folder itself', () => {
+    const root = copyFixture('before');
+    symlinkSync('.', join(root, 'app/a-self'));
+    const run = runScript(join(root, 'app'));
+    expect({ status: run.status, stderr: run.stderr }).toEqual({ status: 0, stderr: '' });
   });
 });
 

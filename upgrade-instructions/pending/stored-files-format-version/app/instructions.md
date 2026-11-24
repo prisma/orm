@@ -41,7 +41,7 @@ node <path-to-this-guide>/scripts/stored-files-format-version/stored-files-forma
 Node 24 or later runs the TypeScript script directly; it needs no `tsx`. It reads and writes files only and needs no database. It walks the project, skipping `node_modules`, `dist`, `build` and directories whose name starts with a dot, and:
 
 - in every contract (any `*.json` file with `targetFamily`, `storage` and `schemaVersion` at the top level: the emitted `contract.json` and each snapshot's), replaces `"schemaVersion": "1"` with `"formatVersion": 1`;
-- in every `migration.json` that has an `ops.json` next to it, and every ref file in a `refs` directory, adds `"formatVersion": 1` as the first field.
+- in every `migration.json` that has an `ops.json` next to it, and every ref file under `<migrations>/<space>/refs/`, adds `"formatVersion": 1` as the first field. `<migrations>` is a folder named `migrations`, or one holding the `snapshots` store or a migration, so a migrations folder configured under another name is found too. A JSON file in any other `refs` folder is not Prisma's, and the script leaves it alone.
 
 It edits each file in place and keeps the rest of its bytes and layout. It prints each file it changed. A project already in the new form is left unchanged, and the script says nothing changed.
 
@@ -49,7 +49,7 @@ A ref file may have fields a ref does not have, for example a note added by hand
 
 The script leaves a file unchanged, says what is wrong with it and what to do, and exits 1 when it cannot tell the file is one a release of Prisma wrote: a `contract.json`, `migration.json` or ref file it cannot read or parse; a ref file without a `hash` or an `invariants` list; a `migration.json` next to an `ops.json` with a field the format does not have or without one it has; a contract with both `formatVersion` and `schemaVersion`; a `contract.json` holding a contract with neither; and a directory it cannot list. It still changes every other file. Fix each reported file by hand as the report says, then run the script again.
 
-The script does not follow symbolic links. A link to a file or folder inside the project leads to files it reaches anyway. A link to a file or folder outside the project, such as a migrations folder shared between packages, that holds a stored file the script would change or report is reported, and the script exits 1: run the script on that folder too.
+The script does not follow symbolic links. A link to a file or folder inside the project leads to files it reaches anyway, and a link to the project folder or a folder above it leads back to the project; the script ignores both. A link to a file or folder outside the project, such as a migrations folder shared between packages, that holds a stored file the script would change or report is reported, and the script exits 1: run the script on that folder too.
 
 No hash covers the format version: storage hashes, snapshot directory names and each `migrationHash` stay as they are, and no database needs signing again.
 
