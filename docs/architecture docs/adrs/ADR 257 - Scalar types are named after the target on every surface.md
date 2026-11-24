@@ -1,6 +1,6 @@
 # ADR 257 — Scalar types are named after the target on every surface
 
-> **Partially superseded by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) from `8.0.0`.** The rule that a renamed PSL name stays as a deprecated alias "for one release line, then is removed", and the reserved mechanism for a changed codec id, which ends with users emitting and signing again, hold until `8.0.0`. From `8.0.0` a deprecated name keeps working until the next major, and a contract and a database written by an earlier release are read as they are. The naming rules stand.
+> **Partially superseded by [ADR 329](ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md) from `8.0.0`.** The rule that a renamed PSL name stays as a deprecated alias "for one release line, then is removed", and the reserved mechanism for a changed codec id, which ends with users emitting and signing again, hold until `8.0.0`. From `8.0.0` a deprecated name keeps working until the next major, and a contract and a database written by an earlier release are read as they are. The naming rules stand.
 
 Status: **Accepted**
 

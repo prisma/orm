@@ -2,7 +2,7 @@
 
 This page states the minimum versions of each runtime, database, and tool that Prisma 8 supports. These are hard floors, not "tested with" suggestions: versions below the listed minimums are untested and unsupported.
 
-See [ADR 222](./architecture%20docs/adrs/ADR%20222%20-%20Version%20support%20policy.md) for the rationale. Until `8.0.0` a minimum may still be raised. From `8.0.0` a minimum rises only in a new major, or in a minor when its maker ends support for a version ([ADR 329](./architecture%20docs/adrs/ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md#supported-versions-of-what-prisma-runs-on)). The PostgreSQL floor was lowered from 17 to 15 by [ADR 248](./architecture%20docs/adrs/ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md), which also records what PostgreSQL 16 and 17 would offer and the market data behind the choice.
+See [ADR 222](./architecture%20docs/adrs/ADR%20222%20-%20Version%20support%20policy.md) for the rationale. Until `8.0.0` a minimum may still be raised. From `8.0.0` a minimum rises only in a new major, or in a minor when its maker ends support for a version ([ADR 329](./architecture%20docs/adrs/ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md#supported-versions-of-what-prisma-runs-on)). The PostgreSQL floor was lowered from 17 to 15 by [ADR 248](./architecture%20docs/adrs/ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md), which also records what PostgreSQL 16 and 17 would offer and the market data behind the choice.
 
 ## Runtime
 

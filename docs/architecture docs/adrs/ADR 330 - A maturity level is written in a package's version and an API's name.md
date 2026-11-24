@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-11-24
-**Related:** [ADR 329 — An application built on Prisma 8 upgrades within the major without changes](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md), which covers what is Generally Available
+**Related:** [ADR 329 — From 8.0.0, an application upgrades within Prisma 8 without changes](ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md), which covers what is Generally Available
 
 ---
 
@@ -30,7 +30,7 @@ Prisma 8 has one scale of maturity with three levels: Early Access, Preview and 
 A maturity level tells a user two things about a package or an API:
 
 - how far they can rely on it to work, and
-- whether the compatibility promise ([ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md)) covers it, so that a later release will not break their use of it.
+- whether the compatibility promise ([ADR 329](ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md)) covers it, so that a later release will not break their use of it.
 
 ### The scale
 
@@ -74,7 +74,7 @@ The version number uses the meaning Semantic Versioning gives a pre-release vers
 - The compatibility promise covers everything that is GA: every API of a GA package whose name carries no lower level.
 - A package or API below GA may change in any release.
 - Such a change never affects an application that does not use it.
-- The reference documentation covers GA and Preview packages ([ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md#the-reference-documentation-is-the-specification)).
+- The reference documentation covers GA and Preview packages ([ADR 329](ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md#the-reference-documentation-is-the-specification)).
 
 ### Until `8.0.0`
 
@@ -102,4 +102,4 @@ Each of these is recorded in a later record when it is decided.
 - **A separate word, such as `unstable_`, for an API that is not covered.** Rejected: it gives users two scales that say almost the same thing, and "unstable" suggests the behaviour is unreliable when we mean only that the API may change. React, for example, marks APIs with `unstable_` and `experimental_`, separately from its release channels, which it names Canary and Experimental.
 - **A maturity level on an entrypoint, written in the import path**, such as `@prisma/orm-toolchain/preview/config-loader`. Rejected: an entrypoint's exports already get their level from the package's version and from their own names. A third place to write a level adds a third thing to learn, and every import of the entrypoint would have to change when it reached GA.
 - **A file in the repository as the place a user learns what is covered.** Rejected: the package's version number and the API's name tell them.
-- **Feature flags for functionality that is not ready.** Rejected: see [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md#no-feature-flags).
+- **Feature flags for functionality that is not ready.** Rejected: see [ADR 329](ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md#no-feature-flags).

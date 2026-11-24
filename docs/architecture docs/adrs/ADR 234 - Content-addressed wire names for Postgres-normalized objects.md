@@ -1,6 +1,6 @@
 # ADR 234 — Content-addressed wire names for Postgres-normalized objects
 
-> **Partially superseded by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) from `8.0.0`.** Its "Normalizer stability" section handles a normalizer change by users emitting again and applying migrations again. That holds until `8.0.0`. From `8.0.0` a release does not change the normalizer in a way that gives an object whose authored definition is unchanged a different wire name, because that would make an upgrade change the user's database. The decision on content-addressed wire names stands.
+> **Partially superseded by [ADR 329](ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md) from `8.0.0`.** Its "Normalizer stability" section handles a normalizer change by users emitting again and applying migrations again. That holds until `8.0.0`. From `8.0.0` a release does not change the normalizer in a way that gives an object whose authored definition is unchanged a different wire name, because that would make an upgrade change the user's database. The decision on content-addressed wire names stands.
 
 Status: **Accepted**.
 

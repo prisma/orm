@@ -1,4 +1,4 @@
-# ADR 329 — An application built on Prisma 8 upgrades within the major without changes
+# ADR 329 — From 8.0.0, an application upgrades within Prisma 8 without changes
 
 **Status:** Accepted
 **Date:** 2026-11-24
@@ -28,7 +28,9 @@ It must be clear to a user what they can rely on and what they cannot, and the r
 
 ### When the rules start
 
-The promise starts at `8.0.0`. Until then every release is a release candidate, `8.0.0-rc.N`, and may contain breaking changes: to an API, to behaviour, and to any stored format. Each release ships upgrade instructions, and we provide upgrade instructions from the last release candidate to `8.0.0`.
+The promise starts at `8.0.0`. It does not cover the release candidates. Until `8.0.0` every release is a release candidate, `8.0.0-rc.N`, and may contain breaking changes: to an API, to behaviour, and to any stored format. Upgrading from one release candidate to the next, or from a release candidate to `8.0.0`, may need changes to the application's code, its generated files and its database. Each release candidate ships upgrade instructions, and we provide upgrade instructions from the last release candidate to `8.0.0`.
+
+In this record, a **release** of a major is `8.0.0` or any later release that shares its major number. A release candidate is not one. So "an earlier release" never means a release candidate: what a release candidate wrote is carried to `8.0.0` by the upgrade instructions, not read as it is.
 
 A choice that cannot be changed after `8.0.0` without breaking this promise is made before `8.0.0`: what each package exports, what each stored file records, and what each hash covers.
 
@@ -36,7 +38,7 @@ A choice that cannot be changed after `8.0.0` without breaking this promise is m
 
 Terms follow the [glossary](../../glossary.md), with two departures. This record uses **extension** more broadly than the glossary: here it includes a target and a family. It calls the package an application installs for its database the **facade**, the word [ADR 242](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md) uses, where the glossary says *target package*, to keep it apart from the `@prisma/orm-target-*` packages.
 
-- **Major**: all releases that share a major version number, such as every `8.x`.
+- **Major**: all releases that share a major version number, from its `.0.0` release on, such as `8.0.0` and every later `8.x`. The release candidates before it, such as `8.0.0-rc.N`, are not part of it.
 - **User**: an application developer, who builds an application on Prisma, or an extension author, who builds an extension.
 - **Extension**: anything built on the platform packages for applications to use: a target, a family, middleware, or support for a database feature. An **extension package** is a published package that contains one, such as `@prisma/orm-extension-pgvector`.
 - **Facade**: the package an application installs for its database, such as `@prisma/orm-postgres`.

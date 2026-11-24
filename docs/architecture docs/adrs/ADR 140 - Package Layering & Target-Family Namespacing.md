@@ -1,6 +1,6 @@
 # ADR 140 — Package Layering & Target-Family Namespacing
 
-> **Partially superseded by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) from `8.0.0`.** Its principle that no transitional shims are kept because "there are no external consumers" holds until `8.0.0`, while every release is a release candidate. From `8.0.0` what a Generally Available package exports under a plain name keeps working for the whole major. The layering, planes and naming rules stand.
+> **Partially superseded by [ADR 329](ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md) from `8.0.0`.** Its principle that no transitional shims are kept because "there are no external consumers" holds until `8.0.0`, while every release is a release candidate. From `8.0.0` what a Generally Available package exports under a plain name keeps working for the whole major. The layering, planes and naming rules stand.
 
 > **Directory layout amended by [ADR 278](./ADR%20278%20-%20Each%20database's%20packages%20live%20in%20one%20folder.md):** a database's target, adapter, driver and facade now live together in `packages/3-targets/<db>/`, and the SQL family folder is `packages/2-sql-family/`. The domains, layers, planes and naming rules below are unchanged.
 

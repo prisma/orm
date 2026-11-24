@@ -1,6 +1,6 @@
 # Upgrade instruction lifecycle
 
-This lifecycle serves the release candidates, which may break, and the step from the last release candidate to `8.0.0`. From `8.0.0` an upgrade within the major needs no changes, and where one of the exceptions ADR 329 lists, such as a security fix, does need a change, a deterministic tool makes it; a guide applied by an agent does not meet that requirement ([ADR 329](../docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md#upgrades-that-need-a-change-are-made-by-a-tool)).
+This lifecycle serves the release candidates, which may break, and the step from the last release candidate to `8.0.0`. From `8.0.0` an upgrade within the major needs no changes, and where one of the exceptions ADR 329 lists, such as a security fix, does need a change, a deterministic tool makes it; a guide applied by an agent does not meet that requirement ([ADR 329](../docs/architecture%20docs/adrs/ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md#upgrades-that-need-a-change-are-made-by-a-tool)).
 
 Feature PRs contribute independent, unversioned fragments. Release preparation turns them into the existing published upgrade guides. Pending work and archived originals stay outside package tarballs.
 

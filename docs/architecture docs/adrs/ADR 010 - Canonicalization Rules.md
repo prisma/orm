@@ -1,6 +1,6 @@
 # ADR 010 — Canonicalization Rules for contract.json
 
-> **Partially superseded by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) from `8.0.0`.** Its statement that a change to the canonicalization rules is handled by users emitting and signing again holds until `8.0.0`. From `8.0.0` the same stored content produces the same hash in every release of the major, so the rules do not change in a way that moves a hash. The canonicalization rules themselves stand.
+> **Partially superseded by [ADR 329](ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md) from `8.0.0`.** Its statement that a change to the canonicalization rules is handled by users emitting and signing again holds until `8.0.0`. From `8.0.0` the same stored content produces the same hash in every release of the major, so the rules do not change in a way that moves a hash. The canonicalization rules themselves stand.
 
 **Revised:** 2026-07-23 — hashes are represented as bare lowercase hex; the former `sha256:` algorithm prefix was dropped before the RC format freeze (TML-2756). The prefix carried no information — the algorithm never varies per hash — and a change to the hashing rules is signalled by re-emit, not by an in-band marker, the same no-in-band-version reasoning [ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md) records. Examples below use the bare form.
 

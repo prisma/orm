@@ -266,7 +266,7 @@ Key points:
 - Core owns contracts, plan model, and a target-agnostic runtime kernel.
 - Family packages (e.g., `sql/`) contain family-specific contract types/emitter hooks, lanes, and runtime implementation. Concrete adapters and targets live in the `targets/` domain.
 - CLI is family-agnostic: framework CLI reads config and calls family-provided helpers; pack assembly logic lives in family packages, not the framework CLI.
-- Until `8.0.0`, no transitional shims are maintained: a release candidate may break, and call sites are updated instead. From `8.0.0`, what a Generally Available package exports under a plain name keeps working for the whole major ([ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md)); code that no published package exports still changes directly, whatever package it lives in.
+- Until `8.0.0`, no transitional shims are maintained: a release candidate may break, and call sites are updated instead. From `8.0.0`, what a Generally Available package exports under a plain name keeps working for the whole major ([ADR 329](architecture%20docs/adrs/ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md)); code that no published package exports still changes directly, whatever package it lives in.
 
 Example layout (with numbered prefixes for visual hierarchy):
 
