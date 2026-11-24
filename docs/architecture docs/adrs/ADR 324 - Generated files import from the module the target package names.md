@@ -19,15 +19,25 @@ import type {
 } from '@prisma/orm-postgres/contract-types';
 ```
 
-The emitter has to write a module name there, and it must be one the application can resolve. This record decides where that name comes from.
+The emitter has to write a module name on the last line. This record decides where that name comes from.
 
-A **target** is the database an application uses, such as Postgres or MongoDB. A **target package** is the package an application installs to use that target, such as `@prisma/orm-postgres`. ADR 242 calls it a facade.
+Three facts make the question harder than it looks:
+
+- **An application can import only from packages it depends on directly.** The name must be a module of a package in the application's own `package.json`, not of a package that one is built from.
+- **Prisma does not write every package an application can use.** A **target** is the database an application uses, such as Postgres or MongoDB. A **target package** is the one package an application installs to use that target, such as `@prisma/orm-postgres`. Anyone can publish a target package, and the CLI cannot know its name in advance.
+- **A target package is built from several parts.** The framework says what a contract is. A **family** says what a kind of database adds: SQL, or documents. The target adds the types of its own columns and operations. The types in a `contract.d.ts` come from all three.
 
 ## Decision
 
 The name comes from the config, and the target package puts it there.
 
-An application imports `defineConfig` from its target package:
+```text
+target package ──── defineConfig ────┐
+                                     ▼
+extension packages ── extensions ──► config ──► emitter ──► contract.d.ts, migration.ts
+```
+
+Take a target package that Prisma did not write, `prisma-orm-acmedb`. An application imports `defineConfig` from it:
 
 ```ts
 // prisma.config.ts
@@ -39,14 +49,10 @@ export default defineConfig({
 });
 ```
 
-That `defineConfig` returns a config that names two modules:
+That `defineConfig` wraps the framework's and returns a config that names two modules:
 
 ```ts
-// prisma-orm-acmedb/config
-import { prismaContract } from '@prisma/orm-family-sql/contract-psl/provider';
-import { defineConfig as defineFrameworkConfig } from '@prisma/orm-framework/config/config-types';
-import { adapter, createNamespace, driver, family, pack, target } from './components';
-
+// prisma-orm-acmedb/config (abridged)
 export function defineConfig(options: { contract: string; output: string }) {
   return defineFrameworkConfig({
     family,
@@ -54,25 +60,29 @@ export function defineConfig(options: { contract: string; output: string }) {
     adapter,
     driver,
     contract: {
-      ...prismaContract(options.contract, {
-        output: options.output,
-        target: pack,
-        createNamespace,
-      }),
-      typesModule: 'prisma-orm-acmedb/contract-types',
+      ...contractSource(options), // stands for the package's own code that reads the contract
+      typesModule: 'prisma-orm-acmedb/contract-types', // contract.d.ts imports its types from here
     },
-    migrations: { module: 'prisma-orm-acmedb/migration' },
+    migrations: { module: 'prisma-orm-acmedb/migration' }, // migration.ts imports from here
   });
 }
 ```
 
-The emitter writes those names into the files it generates. It reads nothing else to choose them: not the application's `package.json`, and not a list of package names. Prisma's own target packages do exactly this, with no ability another author's package lacks.
+The emitter writes those two names into the files it generates. It reads nothing else to choose them: not the application's `package.json`, and not a list of package names. Prisma's own target packages do exactly this, with no ability another author's package lacks.
+
+A target package therefore has three obligations:
+
+1. a module that re-exports the contract types, named in `contract.typesModule`;
+2. a module for migration files, named in `migrations.module`;
+3. parts whose type declarations state its types module (see [Every component states where its types are](#every-component-states-where-its-types-are)).
+
+An application that uses no target package, and assembles its own stack from the framework, family and target packages, does the same in miniature. It writes a small module that re-exports their types, gives it a name private to its own package, and names that in its config.
 
 ## The two modules
 
 Prisma generates two kinds of file that import from a package.
 
-**Contract types.** `contract.d.ts`, and the copy of it kept beside each migration, import only types. They come from three places: the framework (what a contract is), the family (what a SQL or a document contract adds) and the target (its codec and operation types). `contract.typesModule` names one module that exports all of them. That module only re-exports:
+**Contract types.** `contract.d.ts` imports only types. So do the copies of it that Prisma keeps in the migrations folder, one for each contract the migrations record. `contract.typesModule` names one module that exports every type these files need, and that module only re-exports:
 
 ```ts
 // prisma-orm-acmedb/contract-types
@@ -84,6 +94,8 @@ export type * from './operation-types';
 
 It exports each type under its own name. The generated file imports a few under an alias, where the name would clash with a type the file itself exports: it exports its own `Contract`, `TypeMaps` and `CodecTypes`.
 
+One module means one namespace for the framework's, the family's and the target's type names. Two types with the same name from different modules cannot both be exported from it. A name added to the framework's or a family's contract types can therefore clash with a name in a target package, and that package's typecheck is what finds it.
+
 **Migration files.** A migration file written by `prisma migration plan` imports values that run: the migration base class, the command-line entry and the operation helpers.
 
 ```ts
@@ -91,95 +103,79 @@ It exports each type under its own name. The generated file imports a few under 
 import { col, Migration, MigrationCLI } from 'prisma-orm-acmedb/migration';
 ```
 
-`migrations.module` names that module. It is separate from the types module because it is loaded at run time and should carry only migration code. A target's migration renderer writes its imports from the module it is handed and names none itself.
+`migrations.module` names that module. It is separate from the types module because it is loaded at run time and should carry only migration code. The target's code that renders a migration file is handed this module, writes every import from it, and names no module itself.
 
-Both members sit in config sections that already describe the same artifacts: `contract` holds the contract's source and output paths, and `migrations` holds the migrations directory.
+The two config fields sit in sections that already describe the same artifacts: `contract` holds the contract's source and output paths, and `migrations` holds the migrations directory.
 
 ## Every component states where its types are
 
-A target, an adapter and an extension are the same kind of thing: a framework component. Each declares the types it contributes to `contract.d.ts` in the same form, a module, a name and an alias:
+The types module says where the target package's types can be imported from. It does not say which names a particular `contract.d.ts` needs, or under which alias. That comes from the parts the config is assembled from.
+
+A target, an **adapter** (the part that turns queries into what the database's driver accepts) and an **extension** (a separate package that adds types or operations, such as a vector column type) are the same kind of thing: a framework component. Each declares the types it contributes to `contract.d.ts` in the same form, a module, a name and an alias:
 
 ```ts
 { package: '@prisma/orm-extension-pgvector/codec-types', named: 'CodecTypes', alias: 'PgVectorTypes' }
 { package: '@prisma/orm-target-postgres/target/codec-types', named: 'CodecTypes', alias: 'PgTypes' }
 ```
 
-The module is always one that can be imported from outside this repository. A declaration in a published package never holds a private workspace name.
+The emitter imports each declared name from the module its declaration states, and treats all declarations alike. The module is always one that can be imported from outside the package's own repository.
 
-The emitter writes every declaration from the module it states and treats them all alike. An application imports only from packages it depends on directly, and that decides which module a declaration ends up stating:
+Which module a declaration states follows from the first fact in the introduction:
 
-- **An extension** is a package the application installs, so its declarations state its own package and are used as they are.
-- **A target and its adapter** are parts of a target package. They state their own published module, which an application that assembles its own stack depends on directly. An application on a target package does not depend on it, so the target package hands the config copies of the two descriptors whose declarations state its own types module:
+- **An extension** is a package the application installs, so its declarations state its own package and are used as they are. Its types are imported from its own package, not through a target package's types module.
+- **A target and its adapter** each state their own published module, as the second line above does. An application that assembles its own stack depends on those packages directly, so that is the right name for it.
+- **An application on a target package** does not depend on them directly. The target package therefore hands the config copies of its target and adapter whose declarations state its own types module:
 
 ```ts
 // prisma-orm-acmedb, the one file that assembles its components
 import { restateTypeDeclarations } from '@prisma/orm-framework/target-package-config/type-declarations';
 
-export const target = restateTypeDeclarations(dbTarget, 'prisma-orm-acmedb/contract-types');
-export const adapter = restateTypeDeclarations(dbAdapter, 'prisma-orm-acmedb/contract-types');
+export const target = restateTypeDeclarations(acmeTarget, 'prisma-orm-acmedb/contract-types');
+export const adapter = restateTypeDeclarations(acmeAdapter, 'prisma-orm-acmedb/contract-types');
 ```
 
-A target package assembles its family, target, adapter and driver in one place. Its `defineConfig` and its control client both build from that, so a command run through the CLI and a script that uses the control client are given the same components.
+This is how the opening example comes to import `CodecTypes as PgTypes` from `@prisma/orm-postgres/contract-types`: the Postgres target package restates the second declaration above onto its own types module. `restateTypeDeclarations` refuses when two declarations would import one name from two modules.
 
-## Imports are data
+A target package assembles its family, target, adapter and driver in one file. Its `defineConfig` and its control client, the client a script uses to inspect or migrate a database, both build from that file. A command run through the CLI and a script that uses the control client are therefore given the same components.
 
-No emitter writes an import statement as text. The framework emitter, each family emitter and each component's declaration produce import requirements: a module, a symbol and an optional alias. One helper renders them all:
+## Emitters pass imports as data
 
-- one statement per module, so everything a target package names comes out as one line, and each extension keeps its own;
-- names in order of their UTF-16 code units, so the output is the same on every machine;
-- a name declared twice written once.
+No emitter writes an import statement as text. The framework's emitter, each family's emitter and each component's declaration produce import requirements: a module, a symbol and an optional alias. A family's emitter is handed the types module and returns the requirements for the family's own types. One helper renders all of them, with one statement per module, so everything a target package names comes out as one statement and each extension keeps its own. A name declared twice is written once.
 
-A family emitter is handed the types module and returns the requirements for the family's own types:
-
-```ts
-getFamilyImports(typesModule: string): ReadonlyArray<ImportRequirement>;
-```
-
-The same ordering applies to every list of names an emitter writes into a generated file, not only to imports. No generated file depends on the locale of the machine that wrote it.
+Names in a generated file are ordered by their UTF-16 code units, in imports and in every other list an emitter writes. The same input gives the same file on every machine.
 
 ## A config must name its modules
 
 A config built through a target package always names them. A config assembled directly from the framework's `defineConfig` names them itself.
 
-- A command that must write a contract type file with no `contract.typesModule` stops before writing anything, with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`. That is `contract emit`, and every command that writes the copy kept beside a migration: `migration plan` and `migration new`, and `db migrate`, `db init`, `db update` and `db sign` when they advance a ref. A command that must write a migration file with no `migrations.module`, which is `migration plan` and `migration new`, stops with `CONFIG.MIGRATION_MODULE_MISSING`. The emitter never falls back to a default or works a name out.
-- A module is named the way a package is imported, such as `prisma-orm-acmedb/contract-types`, or by a name private to the package that holds the generated files, such as `#contract-types`. It is never empty, a path or a URL. Generated files are written into more than one folder, a contract's types beside the contract and a copy beside each migration, and a relative path is right for at most one of them. Each of these is refused when the config is validated.
-- An emitted contract holds no record of where a component's types are imported from. Nothing reads one, and an emitted artifact never holds a name the application cannot resolve.
+- **A missing module stops the command before it writes anything.** A command that must write a contract type file with no `contract.typesModule` stops with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`. That is `contract emit`, and every command that writes a copy into the migrations folder: `migration plan` and `migration new`, and `db migrate`, `db init`, `db update` and `db sign` when they record which contract a database has reached. A command that must write a migration file with no `migrations.module`, which is `migration plan` and `migration new`, stops with `CONFIG.MIGRATION_MODULE_MISSING`. The emitter never falls back to a default or works a name out.
+- **A module is named the way a package is imported**, such as `prisma-orm-acmedb/contract-types`. A config can also use a name private to the package that holds the generated files, declared in the `imports` field of that package's `package.json`, such as `#contract-types`. A module is never empty, a path or a URL: generated files are written into more than one folder, a contract's types beside the contract and copies in the migrations folder, and a relative path is right for at most one of them. Each of these is refused when the config is validated.
+- **An emitted contract does not record where a component's types are imported from.** An emitted artifact never holds a name the application cannot resolve.
 
 ## Why
 
 - **Every target package is treated the same.** A package Prisma did not write names its modules exactly as `@prisma/orm-postgres` does. Nothing in the CLI has to know the package exists.
 - **The config is the one input.** An application declares its target by importing a package in `prisma.config.ts`. The generated files follow from that declaration, with no second source that could disagree.
-- **The name cannot be wrong about what is installed.** The config imports the target package. If the package is missing, the config fails to load and nothing is generated.
+- **The name cannot disagree with what is installed.** The config imports the target package. If the package is missing, the config fails to load and nothing is generated.
 - **The application depends on one package.** Generated files name the target package, which re-exports what they need.
-- **A declaration is true wherever it is read.** It states a module that exists, so no reader needs a translation step.
+- **A declaration can be read as it stands.** It states a module that exists, so nothing that reads it has to translate the name first.
 
 ## How Prisma's own packages know their names
 
-This section concerns only the packages built in this repository.
-
-Their source is written against private workspace names, such as `@internal/postgres`. The published packages, such as `@prisma/orm-postgres`, are produced from that source by a build step that knows, for each workspace package, the published package it goes into and the entry it is published under.
-
-A workspace package's published module base is therefore a constant that the build fills in, one per workspace package: `@prisma/orm-postgres` for the Postgres target package, `@prisma/orm-target-postgres/target` for the Postgres target, `@prisma/orm-postgres-contrib/citext` for the citext extension. When the source is used directly inside this repository, the constant is not filled in and the package uses its workspace name, which resolves there. A component that states another workspace package's module, as the Postgres adapter states the target's codec types, reads that package's constant itself. No published package exports its base.
-
-The table that maps workspace packages to published packages is configuration for that build. It plays no part when a user's files are generated.
-
-Checks over the built published packages keep this honest: no package's output still contains an unfilled constant, every module a component declares and every module a config names is one of that package's own exports, and no declaration holds a workspace name.
+This section concerns only the packages built in Prisma's repository. Their source is written against private workspace names, such as `@internal/postgres`, and a build step produces the published packages, such as `@prisma/orm-postgres`, from it. That build fills in each package's published module name as a constant, so a component built there states a published name and never a workspace name. Checks over the built packages enforce this: no unfilled constant remains, every module a component declares or a config names is one of that package's own exports, and no declaration holds a workspace name. The build's table of names plays no part when a user's files are generated.
 
 ## Consequences
 
 - A target package from any author gets correct generated files with no change to the CLI and no entry in any list.
-- A target package has three obligations: a module that re-exports the contract types, a module for migration files, and components whose type declarations state its types module.
-- A generated file can be checked mechanically: every import is a module the config names, a module a component states for its own types, or a relative path.
-- An application that assembles its own stack from the framework, family and target packages writes a small module that re-exports their types, gives it a name private to its own package, and names that in its config.
+- A generated file can be checked mechanically: every import is a module the config names, a module a component states for its own types, or a relative path to another generated file.
 - The modules that generated files have named stay exported, so a generated file keeps working after the package that wrote it is upgraded.
-- The types module puts the framework's, the family's and the target's exported type names in one namespace. Two types with the same name from different modules cannot both be exported from it. Copying a descriptor's declarations onto a types module is refused when two of them would import one name from two modules. A name added to the framework's or a family's contract types can clash with a name in a target package, and that package's typecheck is what finds it.
-- The module a Prisma target or adapter states is filled in when the package is built, so its type is a template string type and no longer one string literal.
+- A target package's types module is a shared namespace, with the clash described under [The two modules](#the-two-modules).
 
 ## Alternatives considered
 
 ### Read the application's manifest
 
-The CLI reads the application's `package.json`, finds a known Prisma package among its dependencies and translates each private module name to a subpath of that package through a fixed table. The argument for it is that a setting could disagree with what is installed.
+The CLI would read the application's `package.json`, find a known Prisma package among its dependencies and translate each private module name to a subpath of that package through a fixed table. The argument for it is that a setting in the config could disagree with what is installed.
 
 Rejected. It works only for packages in the table, so a target package from another author gets names that do not resolve. And the argument does not hold against a name the target package supplies itself, because the config that carries the name fails to load when the package is missing.
 
@@ -189,7 +185,7 @@ The package would map each of Prisma's private module names to one of its own su
 
 ### Declarations hold workspace names and are translated when files are generated
 
-Each declaration names a private workspace module, and a function turns it into a published name at the moment a file is written. Rejected because a declaration then says something false wherever it is read, and every reader needs the function and the table behind it.
+Each declaration would name a private workspace module, and a function would turn it into a published name at the moment a file is written. Rejected because a declaration then says something false wherever it is read, and every reader needs the function and the table behind it.
 
 ### A target and its adapter declare no module
 
@@ -197,7 +193,7 @@ The types module named in the config would carry every name, so a target or adap
 
 ### Emitters hand each other import statements as text
 
-A family emitter would return finished `import` lines for the framework emitter to write out. Rejected because statements that name the same module could then be merged only by reading that text back.
+A family's emitter would return finished `import` lines for the framework's emitter to write out. Rejected because statements that name the same module could then be merged only by reading that text back.
 
 ### The target package republishes each source module under its own subpath
 
