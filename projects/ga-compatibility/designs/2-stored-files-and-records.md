@@ -1,6 +1,6 @@
 # Design: later releases read the files and database records of earlier releases
 
-The design for project 2 of the [plan](../plan.md). It holds only what has been agreed. So far that is the part about files: sections 6.1 and 6.2 of the [policy](../spec.md). Section 4 lists what is not yet discussed, including hashes, database records and the runtime marker check. Terms such as storage hash, ref file and marker are defined in section 2 of the policy.
+The design for project 2 of the [plan](../plan.md). It holds only what has been agreed. So far that is the part about files: sections 6.1 and 6.2 of the [policy](../spec.md). Section 5 lists what is not yet discussed, including hashes, database records and the runtime marker check. Terms such as storage hash, ref file and marker are defined in section 2 of the policy.
 
 ## 1. Format versions
 
@@ -88,15 +88,27 @@ Taking the format version out of the hash input changes every existing hash once
 - **Fixed answers.** A set of saved contracts, each with its expected hashes written in the test. Every release must compute the same hashes.
 - **Across format versions.** A contract written in one format version, then converted through each later version, keeps the same hashes.
 
-## 3. Alternatives rejected
+## 3. The marker in the database
+
+The marker, the record in the user's database of the contract it matches, follows the same pattern as the files. It records the version of its format, from `8.0.0`.
+
+- **Reading.** A command that would change the database reads the version first, and stops if it is higher than any it knows. The check a running application makes is different: it never stops the application (section 7 of the policy), so there a higher version produces a warning.
+- **Writing.** A release writes the oldest version that can hold the data. This matters more here than for files, because one database is read by application instances on different releases while a deploy is in progress.
+- **Hashing rules.** As for files, a change to the hashing rules comes with a new version, so the version says which rules the marker's hash was computed with.
+
+The ledger gets no version, as the policy says: nothing is decided from it.
+
+This reverses a statement in the decision record on canonicalization, that there is no version field in the stored data and a change to the rules is handled by emitting and signing again.
+
+## 4. Alternatives rejected
 
 - **A reader ignores the fields it does not know**, as Protocol Buffers readers do; they keep such fields and write them back. Rejected: it would apply a migration while ignoring part of it, and the policy requires a command to stop on a record it cannot interpret.
 - **Each addition says whether an older reader may ignore it.** Rejected: too complex. Someone would have to judge that correctly for every field ever added. The writing rule in section 1.3 serves the same case, an older release meeting a file from newer tooling, with no judgement for each field.
 
-## 4. Not yet discussed
+## 5. Not yet discussed
 
 - What a reader does with a file that has no format version, or has the old field name, as every file written by a release candidate does.
 - How `ops.json` is covered by a format version.
 - Whether today's hash input is tidied in the one change that every hash goes through at `8.0.0`.
-- Prisma's own records in the database, and the runtime check of the contract against the marker.
+- Whether a marker that cannot be read or decoded warns or stops the query, in the check a running application makes.
 - The saved samples of what `8.0.0` writes, and their tests.
