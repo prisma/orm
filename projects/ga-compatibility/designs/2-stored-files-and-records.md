@@ -1,6 +1,6 @@
 # Design: later releases read the files and database records of earlier releases
 
-The design for project 2 of the [plan](../plan.md). It holds only what has been agreed. So far that is the part about files: sections 6.1 and 6.2 of the [policy](../spec.md). Section 3 lists what is not yet discussed, including hashes, database records and the runtime marker check. Terms such as storage hash, ref file and marker are defined in section 2 of the policy.
+The design for project 2 of the [plan](../plan.md). It holds only what has been agreed. So far that is the part about files: sections 6.1 and 6.2 of the [policy](../spec.md). Section 4 lists what is not yet discussed, including hashes, database records and the runtime marker check. Terms such as storage hash, ref file and marker are defined in section 2 of the policy.
 
 ## 1. Format versions
 
@@ -55,16 +55,30 @@ For each version of each kind of file there is one unit of code with three parts
 - **In `8.0.0`:** each file in section 1.1 carries a format version, there is one unit of code for each kind of file, and every reader refuses a higher version. This cannot be added later, because an `8.0.0` reader stays in use for the life of the major version. The writing rule holds without any mechanism, because there is one version.
 - **With the first change to a format:** trying the versions in order when writing, and the conversion functions. These constrain only later releases.
 
-## 2. Alternatives rejected
+## 2. Hashes
+
+### 2.1 The requirement
+
+Changing a file's format version must not change a hash. A contract written in format version 1 and the same contract written in format version 2 have the same storage hash. If they did not, a release that changed the format would cut every migration off from the one before it and leave every database's marker not matching its contract.
+
+### 2.2 What a hash is computed from
+
+A hash is computed from the contract as it is in memory after reading, not from the file as written. The rules that turn the in-memory contract into the input of the hash do not depend on the format version, and they do not change within a major version.
+
+For each format version this is tested: read a file, write it in every other version that can hold it, and get the same hashes.
+
+Hashing the file as written, by the rules of its format version, was rejected: it breaks the requirement as soon as a format version lays out the `storage` section differently.
+
+## 3. Alternatives rejected
 
 - **A reader ignores the fields it does not know**, as Protocol Buffers readers do; they keep such fields and write them back. Rejected: it would apply a migration while ignoring part of it, and the policy requires a command to stop on a record it cannot interpret.
 - **Each addition says whether an older reader may ignore it.** Rejected: too complex. Someone would have to judge that correctly for every field ever added. The writing rule in section 1.3 serves the same case, an older release meeting a file from newer tooling, with no judgement for each field.
 
-## 3. Not yet discussed
+## 4. Not yet discussed
 
 - What a reader does with a file that has no format version, or has the old field name, as every file written by a release candidate does.
 - How `ops.json` is covered by a format version.
-- What the storage hash is computed from, once one contract can be on disk in two format versions.
+- Whether today's hash input is tidied in the one change that every hash goes through at `8.0.0`, and what happens if a mistake is found in the hashing rules later in the major version.
 - How an existing project and database move to the new hashes at `8.0.0`.
 - Prisma's own records in the database, and the runtime check of the contract against the marker.
 - The saved samples of what `8.0.0` writes, and their tests.
