@@ -1,6 +1,6 @@
 import type { MigrationPlannerConflict } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
-import type { CollectionControl } from './mongo-statement-planning';
+import type { CollectionControl } from './mongo-control-policy';
 import type { OpFactoryCall } from './op-factory-call';
 
 /**

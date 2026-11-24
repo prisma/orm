@@ -30,7 +30,7 @@ import {
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableKeyReason } from './migration-factories';
-import { collectionControlPolicy } from './mongo-control-policy';
+import { collectionControlOf, collectionControlPolicy } from './mongo-control-policy';
 import { modelCoordinates, sameModel } from './mongo-model-coordinates';
 import { fieldRenamesConflict } from './mongo-rename-conflicts';
 import {
@@ -38,7 +38,7 @@ import {
   type RewriteCollection,
   rewriteRefusals,
 } from './mongo-rewrite-refusals';
-import { collectionControlOf, modelAt } from './mongo-statement-planning';
+import { modelAt } from './mongo-statement-planning';
 import { renameRefused } from './mongo-storage-renames';
 import {
   type StoredPlace,

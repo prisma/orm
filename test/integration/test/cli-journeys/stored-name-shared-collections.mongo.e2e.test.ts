@@ -3,12 +3,18 @@
  *
  * A variant cannot gain its own `@@map`: MongoDB variants share their base model's collection, and the contract refuses a different one.
  *
- * - C1: one of two root models that share a collection moves to its own collection: its documents stay behind and are asked about, and the `--delete` route is followed with them deleted (both commands).
+ * - C1: one of two root models that share a collection moves to its own collection: planned as before this work, with no rename and no question; its documents stay in the shared collection, and the validator change stops on them (both commands).
  * - C2: two models in their own collections merge into one new collection: no rename, and the question about both old collections (both commands).
  */
 
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import {
+  engineError,
+  runDbUpdate,
+  runMigrate,
+  runMigrationPlan,
+} from '../utils/journey-test-helpers';
 import {
   apply,
   begin,
@@ -16,7 +22,9 @@ import {
   collections,
   documents,
   expectSettled,
+  operationLabels,
   refused,
+  update,
   useMongoJourneys,
   useSchema,
 } from '../utils/mongo-stored-name-journeys';
@@ -51,34 +59,42 @@ describe('Journeys (MongoDB): shared collections', {
   const project = useMongoJourneys('mongo-shared-collections');
 
   it.each(COMMANDS)(
-    'C1: one of two root models that share a collection moves to its own: no document moves, and the documents left behind are asked about (%s)',
+    'C1: one of two root models that share a collection moves to its own: no rename and no question, its documents stay where they are, and the validator change stops on them (%s)',
     async (command) => {
       const journey = project(`c1_${id(command)}`);
       await begin(journey, command, rootsPsl('people', 'people'), 'C1.01');
       await journey.db.collection('people').insertMany([{ admin: 'Root' }, { user: 'Ada' }]);
       await useSchema(journey, rootsPsl('people', 'users'), 'C1.02');
-      const question = await refused(journey, command, [], 'C1.03');
+      const labels =
+        command === 'db update'
+          ? await update(journey, ['--dry-run'], 'C1.03')
+          : operationLabels(
+              await runMigrationPlan(journey.ctx, [
+                '--name',
+                'move',
+                ...(journey.origin === undefined ? [] : ['--from', journey.origin]),
+                '--json',
+              ]),
+            );
+      const applied =
+        command === 'db update'
+          ? await runDbUpdate(journey.ctx, ['--no-interactive', '--json'])
+          : await runMigrate(journey.ctx, ['--json']);
       expect({
-        code: question.code,
-        unanswered: question.meta?.['unanswered'],
-        why: question.why,
-      }).toEqual({
-        code: 'CLI.CONSENT_REQUIRED',
-        unanswered: [{ subject: 'User', verbs: ['delete'] }],
-        why: 'Create collection users would lose the data of model "User". The origin stores models "Admin" and "User" in collection "people", and no discriminator tells their documents apart, so the plan cannot move the documents of model "User" to collection "users". They stay in collection "people", where model "Admin" still reads them, and model "User" starts with no documents. To keep them, write this change as a hand-written migration that moves them: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "users" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json. --delete User accepts that model "User" starts with no documents; it deletes nothing.',
-      });
-
-      await journey.db.collection('people').deleteMany({ user: { $exists: true } });
-      expect({
-        labels: await apply(journey, command, ['--delete', 'User'], 'C1.04'),
+        labels,
+        stopped: applied.exitCode !== 0,
+        code: engineError(applied)?.code,
         collections: await collections(journey.db),
         people: await documents(journey.db, 'people'),
+        users: await documents(journey.db, 'users'),
       }).toEqual({
         labels: ['Create collection users', 'Update validator on people (removed: user)'],
+        stopped: true,
+        code: 'MIGRATION.PRECHECK_FAILED',
         collections: ['people', 'users'],
-        people: [{ admin: 'Root' }],
+        people: [{ admin: 'Root' }, { user: 'Ada' }],
+        users: [],
       });
-      await expectSettled(journey, 'C1.05');
     },
   );
 

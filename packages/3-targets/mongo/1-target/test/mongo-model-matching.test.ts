@@ -43,6 +43,14 @@ const tasks = (variants: Readonly<Record<string, string>>): Record<string, Model
 });
 
 describe('destinationModelOf', () => {
+  it('pairs no root model by storage, even with the only new model stored like it', () => {
+    const input = match({ Note: plain }, { Article: plain });
+    expect([destinationModelOf(at('Note'), input), originModelOf(at('Article'), input)]).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+
   it('pairs no origin model with a new model that two origin models are stored like', () => {
     const input = match({ Note: plain, Task: plain }, { Article: plain });
 

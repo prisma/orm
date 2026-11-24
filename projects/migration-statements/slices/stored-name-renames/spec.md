@@ -68,7 +68,7 @@ A table, collection or column can be shared: SQL single-table variants share the
 
 **A table, collection or column is renamed only when both of these hold. One rename is planned for the storage, not one per model or field.**
 
-1. Every origin object stored in the old name that the destination keeps is paired with a destination object stored in the new name. An object the destination removes does not block the rename: its rows move with the storage and are asked about by `--delete` as usual. On MongoDB a root model the destination removes does block the rename of a collection it shares with no discriminator, since its documents would move with the collection as another model's.
+1. Every origin object stored in the old name that the destination keeps is paired with a destination object stored in the new name. An object the destination removes does not block the rename: its rows move with the storage and are asked about by `--delete` as usual.
 2. Every destination object stored in the new name is new or is paired with an origin object stored in the old name.
 
 A name freed by the rename may be taken by a new object, so the old name may still be used in the destination by something new; on MongoDB, not a collection name (see "Freed and reused").
@@ -247,7 +247,7 @@ Each pull request is one family: the rule, its refusals, its tests and journeys,
 | Model `@@map` changes and `--delete User.name` removes a field | Table renamed first, then the column drop is planned on the renamed table and asked about by its field name. |
 | The base of single-table or MongoDB variants changes `@@map` and the variants follow | One rename for the shared storage. |
 | A variant gains or loses its own `@@map`, in either family | Not a rename. Planned as today. |
-| One of two MongoDB root models that share a collection moves | Not a rename. The moving model is asked about on the operation that gives it its new storage, since its documents stay behind; the plan is refused when it has none. A root model the destination removes is not asked about. |
+| One of two MongoDB root models that share a collection moves | Not a rename. Planned as today. |
 | Two SQL single-table variant fields share a column and one changes `@map` | Not a rename. Planned as today. |
 | `--rename Bug:Defect` where the variant's storage is shared | Refused, with the shared-storage text. A fix of today's behaviour. |
 | MongoDB root models that share one collection, all moving together, one with a field `@map` change | The field rename is refused as a field statement on a shared collection is today, with its own text. |

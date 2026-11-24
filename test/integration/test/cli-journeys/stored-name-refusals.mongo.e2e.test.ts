@@ -14,6 +14,12 @@
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
+  engineError,
+  runDbUpdate,
+  runMigrate,
+  runMigrationPlan,
+} from '../utils/journey-test-helpers';
+import {
   apply,
   begin,
   type Command,
@@ -21,6 +27,7 @@ import {
   documents,
   expectSettled,
   type MongoJourney,
+  operationLabels,
   refused,
   useMongoJourneys,
   useSchema,
@@ -260,7 +267,7 @@ describe('Journeys (MongoDB): stored-name refusals and their routes', {
   );
 
   it.each(COMMANDS)(
-    'R6: --rename of a model that shares its collection with another root model is refused, and without it nothing is asked and the documents stay (%s)',
+    'R6: --rename of a model that shares its collection with another root model is refused, and without it nothing is asked, the validator change stops on the documents that stay, and under db update the run finishes once they are deleted (%s)',
     async (command) => {
       const journey = project(`r6_${id(command)}`);
       await begin(journey, command, modelsPsl({ Admin: 'users', User: 'users' }), 'R6.01');
@@ -278,25 +285,50 @@ describe('Journeys (MongoDB): stored-name refusals and their routes', {
             kind: 'statementRefused',
             summary:
               'Cannot rename model "User" to "Member": collection "users" also stores model "Admin"',
-            why: 'A collection rename moves every document of the collection, and the documents of model "Admin" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: model "User" is then removed and nothing is asked, since nothing is deleted: its documents stay in collection "users", where model "Admin" still reads them, and model "Member" starts with no documents. If the new validator of collection "users" does not accept them, its change stops the apply until you delete or move them in the database. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+            why: 'A collection rename moves every document of the collection, and the documents of model "Admin" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: model "User" is then removed and nothing is asked, since nothing is deleted: its documents stay in collection "users", where model "Admin" still reads them, and model "Member" starts with no documents. If the new validator of collection "users" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there. With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
           }),
         ],
         documents: [{ user: 'Ada' }],
       });
 
-      await journey.db.collection('users').deleteMany({ user: { $exists: true } });
+      const planned =
+        command === 'migration plan'
+          ? await runMigrationPlan(journey.ctx, [
+              '--name',
+              'leave-out',
+              ...(journey.origin === undefined ? [] : ['--from', journey.origin]),
+              '--json',
+            ])
+          : undefined;
+      const run = () =>
+        command === 'db update'
+          ? runDbUpdate(journey.ctx, ['--no-interactive', '--json'])
+          : runMigrate(journey.ctx, ['--json']);
+      const stopped = await run();
       expect({
-        labels: await apply(journey, command, [], 'R6.04'),
-        collections: await collections(journey.db),
+        planned: planned === undefined ? undefined : operationLabels(planned),
+        code: engineError(stopped)?.code,
         users: await documents(journey.db, 'users'),
-        members: await documents(journey.db, 'members'),
       }).toEqual({
-        labels: ['Create collection members', 'Update validator on users (removed: user)'],
-        collections: ['members', 'users'],
-        users: [],
-        members: [],
+        planned:
+          command === 'migration plan'
+            ? ['Create collection members', 'Update validator on users (removed: user)']
+            : undefined,
+        code: 'MIGRATION.PRECHECK_FAILED',
+        users: [{ user: 'Ada' }],
       });
-      await expectSettled(journey, 'R6.05');
+
+      if (command === 'db update') {
+        await journey.db.collection('users').deleteMany({ user: { $exists: true } });
+        const finished = await run();
+        expect({
+          exitCode: finished.exitCode,
+          collections: await collections(journey.db),
+          users: await documents(journey.db, 'users'),
+          members: await documents(journey.db, 'members'),
+        }).toEqual({ exitCode: 0, collections: ['members', 'users'], users: [], members: [] });
+        await expectSettled(journey, 'R6.05');
+      }
     },
   );
 

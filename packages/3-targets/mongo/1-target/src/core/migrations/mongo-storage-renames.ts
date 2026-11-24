@@ -9,10 +9,9 @@ import {
   type ResolvedModelRenameStatement,
   type ResolvedRenameStatement,
 } from '@internal/framework-components/control';
-import { collectionOfModel, embeddingModelOf, mongoModelsOf } from '@internal/mongo-contract';
 import { managedOnBothSides } from './mongo-control-policy';
-import { modelCoordinates, sameModel } from './mongo-model-coordinates';
-import { handWrittenMigrationSteps, modelsText } from './mongo-plan-text';
+import { documentCollectionOf, modelCoordinates, sameModel } from './mongo-model-coordinates';
+import { handWrittenRoute, modelsText } from './mongo-plan-text';
 
 /**
  * An origin model planned as a destination model: by a statement, or, when `statement` is
@@ -44,27 +43,16 @@ export interface CollectionChange {
 
 /**
  * Why a collection cannot be renamed whole: the origin models stored in it that move elsewhere
- * (`split`), the root models stored in it that the destination removes, whose documents no
- * discriminator selects (`removed`), or the origin models of destination models stored in the new
- * name that come from elsewhere (`merged`).
+ * (`split`), or the origin models of destination models stored in the new name that come from
+ * elsewhere (`merged`).
  */
 export interface SharedCollection {
-  readonly kind: 'split' | 'removed' | 'merged';
+  readonly kind: 'split' | 'merged';
   readonly objects: readonly ModelCoordinate[];
 }
 
 function hasModel(contract: ContractWithDomain, model: ModelCoordinate): boolean {
   return Object.hasOwn(contract.domain.namespaces[model.namespaceId]?.models ?? {}, model.model);
-}
-
-/** The collection whose top-level documents are the model's: `undefined` for an embedded model or one with no collection. */
-function documentCollectionOf(
-  contract: ContractWithDomain,
-  model: ModelCoordinate,
-): string | undefined {
-  return embeddingModelOf(contract.domain, model) === undefined
-    ? collectionOfModel(contract.domain, model)
-    : undefined;
 }
 
 /** The models of `contract` whose documents are the top-level documents of `collection`. */
@@ -142,10 +130,9 @@ export class CollectionRenames {
    * Why the documents of collection `from` cannot move whole to collection `to`: an origin model
    * stored in it that the destination keeps in another collection, or a destination model stored in
    * the new collection whose origin model is stored elsewhere. Models pair through the renames.
-   * `undefined` when the whole collection moves and nothing else moves there. A root model the
-   * destination removes blocks the rename, since no discriminator selects its documents to ask
-   * about them; a removed variant, whose documents are selected and asked about, and a new model
-   * block nothing.
+   * `undefined` when the whole collection moves and nothing else moves there. A model the
+   * destination removes, and a new model, block nothing: the models that remain read the documents
+   * they read before.
    */
   sharedCollection(change: Pick<CollectionChange, 'from' | 'to'>): SharedCollection | undefined {
     const split = modelsStoredIn(this.#fromContract, change.from).filter((model) => {
@@ -155,13 +142,6 @@ export class CollectionRenames {
       return destination !== undefined && destination !== change.to;
     });
     if (split.length > 0) return { kind: 'split', objects: split };
-    const removed = modelsStoredIn(this.#fromContract, change.from).filter(
-      (model) =>
-        !this.#models.some((each) => sameModel(each.from, model)) &&
-        mongoModelsOf(this.#fromContract.domain, model.namespaceId)[model.model]?.base ===
-          undefined,
-    );
-    if (removed.length > 0) return { kind: 'removed', objects: removed };
     const merged = modelsStoredIn(this.#contract, change.to).flatMap((model) => {
       const rename = this.#models.find((each) => sameModel(each.to, model));
       const origin =
@@ -213,15 +193,12 @@ export class CollectionRenames {
           `the documents of ${modelsText(moved)} into collection "${collection}"`,
       )
       .join(' and ');
-    if (shared.kind === 'removed') {
-      return `The origin stores ${modelsText(origin)} in collection "${change.from}", no discriminator tells their documents apart, and the destination removes ${modelsText(shared.objects)}, so their storage is being split. ${dataMigration(moves)}`;
-    }
     return `The origin stores ${modelsText(origin)} in collection "${change.from}", and the destination stores them in different collections, so their storage is being split. ${dataMigration(moves)}`;
   }
 }
 
 function dataMigration(moves: string): string {
-  return `Keeping their documents is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: ${handWrittenMigrationSteps(moves)}`;
+  return `Keeping their documents is a data migration, which a plan does not write. ${handWrittenRoute(moves)}`;
 }
 
 /** What a collection change does, in words: the statement that asks for it, or the contract change. */

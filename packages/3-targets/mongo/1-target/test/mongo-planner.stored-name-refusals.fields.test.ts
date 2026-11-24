@@ -363,8 +363,97 @@ describe('MongoMigrationPlanner, the routes field rename refusals give, followed
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename field "x" to "y" in collection "users": the documents already hold field "y"',
-        why: 'The stored name of field "User.a" changes from "x" to "y", and the documents already hold field "y", the stored name of embedded relation "User.notes". Without the rename the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first remove embedded relation "User.notes", and plan and apply that; then make this change and plan again. Or keep the stored name "x" of field "User.a" in the contract.',
+        why: 'The stored name of field "User.a" changes from "x" to "y", and the documents already hold field "y", the stored name of embedded relation "User.notes". Without the rename the plan would read the values of field "y" as values of field "User.a". Removing embedded relation "User.notes" does not free the name: it plans nothing, and its key stays in the documents. Keep the stored name "x" of field "User.a" in the contract.',
       },
     ]);
+  });
+});
+
+describe('MongoMigrationPlanner, why the removal of an embedded relation does not free its stored name', () => {
+  const geo = { field: 'g', model: 'Geo', cardinality: '1:1' } as const;
+  const addr = { field: 'addr', model: 'Address', cardinality: '1:1' } as const;
+  const labels = (result: ReturnType<typeof plan>) => planned(result).labels;
+
+  it('plans nothing for a nested or a top-level embedded relation the destination removes, so its key stays', () => {
+    const nested = plan({
+      from: contract(
+        'from',
+        {
+          User: { collection: 'users', fields: ['_id'], embeds: { addr } },
+          Address: {
+            owner: 'User',
+            fields: ['street'],
+            storedAs: { street: 's' },
+            embeds: { geo },
+          },
+          Geo: { owner: 'Address', fields: ['lat'] },
+        },
+        { users: {} },
+      ),
+      to: contract(
+        'to',
+        {
+          User: { collection: 'users', fields: ['_id'], embeds: { addr } },
+          Address: { owner: 'User', fields: ['street'], storedAs: { street: 's' } },
+        },
+        { users: {} },
+      ),
+      schema: [schemaCollection('users')],
+    });
+    const topLevel = plan({
+      from: contract(
+        'from',
+        {
+          User: { collection: 'users', fields: ['_id', 'a'], embeds: { notes: 'notes' } },
+          Note: { owner: 'User', fields: ['text'] },
+        },
+        { users: {} },
+      ),
+      to: contract('to', { User: { collection: 'users', fields: ['_id', 'a'] } }, { users: {} }),
+      schema: [schemaCollection('users')],
+    });
+    expect({ nested: labels(nested), topLevel: labels(topLevel) }).toEqual({
+      nested: [],
+      topLevel: [],
+    });
+  });
+
+  it('then plans the rename onto the key the relation still holds in the documents', () => {
+    const nested = plan({
+      from: contract(
+        'from',
+        {
+          User: { collection: 'users', fields: ['_id'], embeds: { addr } },
+          Address: { owner: 'User', fields: ['street'], storedAs: { street: 's' } },
+        },
+        { users: {} },
+      ),
+      to: contract(
+        'to',
+        {
+          User: { collection: 'users', fields: ['_id'], embeds: { addr } },
+          Address: { owner: 'User', fields: ['street'], storedAs: { street: 'g' } },
+        },
+        { users: {} },
+      ),
+      schema: [schemaCollection('users')],
+    });
+    const topLevel = plan({
+      from: contract(
+        'from',
+        { User: { collection: 'users', fields: ['_id', 'a'] } },
+        { users: {} },
+      ),
+      to: contract(
+        'to',
+        { User: { collection: 'users', fields: ['_id', 'a'], storedAs: { a: 'notes' } } },
+        { users: {} },
+      ),
+      schema: [schemaCollection('users')],
+    });
+    expect({ nested: labels(nested), topLevel: labels(topLevel) }).toEqual({
+      nested: ['Rename key "s" to "g" at path "$" in field addr of collection users'],
+      topLevel: ['Rename field a to notes in collection users'],
+    });
   });
 });

@@ -192,7 +192,7 @@ describe('MongoMigrationPlanner, a collection that variants share with their bas
           kind: 'statementRefused',
           summary:
             'Cannot rename model "Bug" to "Defect": collection "tasks" also stores models "Task" and "Epic"',
-          why: `A collection rename moves every document of the collection, and the documents of models "Task" and "Epic" do not move to collection "defects". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${LEAVE_OUT_SHARED('model "Bug"')} To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "Bug" into collection "defects" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
+          why: `A collection rename moves every document of the collection, and the documents of models "Task" and "Epic" do not move to collection "defects". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${LEAVE_OUT_SHARED('model "Bug"')} With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "Bug" into collection "defects" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
           refusedStatement: statement,
         },
       ],
@@ -214,7 +214,7 @@ describe('MongoMigrationPlanner, a collection that variants share with their bas
           kind: 'statementRefused',
           summary:
             'Cannot rename model "Bug" to "Defect": collection "tasks" also stores models "Task" and "Epic", whose documents are not in collection "bugs"',
-          why: `A collection rename moves the documents of one collection, and collection "tasks" would also store the documents of models "Task" and "Epic". Moving the documents of two collections into one is a data migration, which a plan does not write. ${LEAVE_OUT_SHARED('model "Bug"')} To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "Bug", and those of models "Task" and "Epic" that collection "tasks" does not already hold, into collection "tasks" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
+          why: `A collection rename moves the documents of one collection, and collection "tasks" would also store the documents of models "Task" and "Epic". Moving the documents of two collections into one is a data migration, which a plan does not write. ${LEAVE_OUT_SHARED('model "Bug"')} With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "Bug", and those of models "Task" and "Epic" that collection "tasks" does not already hold, into collection "tasks" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
           refusedStatement: statement,
         },
       ],
@@ -250,7 +250,7 @@ const liveUsers = [
 ];
 
 describe('MongoMigrationPlanner, a collection that several root models share', () => {
-  it('renames nothing when one of the root models moves to another collection, and asks about its documents, which stay behind', () => {
+  it('renames nothing when one of the root models moves to another collection, and moves no document of the other', () => {
     const result = plan({
       from: shared('from', { admin: 'users', user: 'users' }),
       to: shared('to', { admin: 'users', user: 'members' }),
@@ -260,16 +260,7 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
       labels: ['Create collection members'],
       classes: ['additive'],
       applied: [],
-      dataLoss: [
-        {
-          operationIndex: 0,
-          subject: { kind: 'model', namespaceId: NS, model: 'User' },
-          loss: 'drop',
-          label: 'Create collection members',
-          keepDataAdvice:
-            'The origin stores models "Admin" and "User" in collection "users", and no discriminator tells their documents apart, so the plan cannot move the documents of model "User" to collection "members". They stay in collection "users", where model "Admin" still reads them, and model "User" starts with no documents. To keep them, write this change as a hand-written migration that moves them: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json. --delete User accepts that model "User" starts with no documents; it deletes nothing.',
-        },
-      ],
+      dataLoss: [],
     });
   });
 
@@ -329,14 +320,11 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
       { [collection]: { required: ['level'] } },
     );
 
-  const REMOVED_ADVICE =
-    'The origin stores models "Admin" and "User" in collection "users", no discriminator tells their documents apart, and the destination removes model "Admin", so their storage is being split. Keeping their documents is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.';
-
   it.each([
     ['Admin first', ['Admin', 'User']],
     ['User first', ['User', 'Admin']],
   ] as const)(
-    'renames nothing when the destination removes one root model and moves the other, and asks about every model the drop loses (%s)',
+    'renames the collection when the destination removes one root model and moves the other, since the model that stays reads the documents it read before (%s)',
     (_, order) => {
       const from = contract(
         'from',
@@ -346,48 +334,30 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
         { users: { jsonSchema: sharedJsonSchema(['level'], ['level']) } },
       );
       expect(planned(plan({ from, to: userAlone('to', 'members'), schema: liveUsers }))).toEqual({
-        labels: ['Create collection members', 'Drop collection users'],
-        classes: ['additive', 'destructive'],
+        labels: ['Rename collection users to members', 'Update validator on members'],
+        classes: ['widening', 'widening'],
         applied: [],
-        dataLoss: [
-          {
-            operationIndex: 1,
-            subject: { kind: 'model', namespaceId: NS, model: 'Admin' },
-            loss: 'drop',
-            label: 'Drop collection users',
-          },
-          {
-            operationIndex: 1,
-            subject: { kind: 'model', namespaceId: NS, model: 'User' },
-            loss: 'drop',
-            label: 'Drop collection users',
-            keepDataAdvice: REMOVED_ADVICE,
-          },
-        ],
+        dataLoss: [],
       });
     },
   );
 
-  it('refuses a model rename statement on a collection whose other root model the destination removes', () => {
+  it('plans a model rename statement on a collection whose other root model the destination removes', () => {
     const statement = renameModel('User', 'Member');
     expect(
-      plan({
-        from: shared('from', { admin: 'users', user: 'users' }),
-        to: userAlone('to', 'members', 'Member'),
-        schema: liveUsers,
-        statements: [statement],
-      }),
+      planned(
+        plan({
+          from: shared('from', { admin: 'users', user: 'users' }),
+          to: userAlone('to', 'members', 'Member'),
+          schema: liveUsers,
+          statements: [statement],
+        }),
+      ),
     ).toEqual({
-      kind: 'failure',
-      conflicts: [
-        {
-          kind: 'statementRefused',
-          summary:
-            'Cannot rename model "User" to "Member": collection "users" also stores model "Admin", which the destination removes',
-          why: 'A collection rename moves every document of the collection, and no discriminator tells the documents of model "Admin" apart from those of model "User", so they would move to collection "members" as documents of model "User". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: the plan then drops collection "users" and asks about it, and --delete answers that question and deletes the data. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
-          refusedStatement: statement,
-        },
-      ],
+      labels: ['Rename collection users to members', 'Update validator on members'],
+      classes: ['widening', 'widening'],
+      applied: [[0]],
+      dataLoss: [],
     });
   });
 
@@ -423,7 +393,7 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
           kind: 'statementRefused',
           summary:
             'Cannot rename model "User" to "Member": collection "users" also stores model "Admin"',
-          why: `A collection rename moves every document of the collection, and the documents of model "Admin" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: model "User" is then removed and nothing is asked, since nothing is deleted: its documents stay in collection "users", where model "Admin" still reads them, and model "Member" starts with no documents. If the new validator of collection "users" does not accept them, its change stops the apply until you delete or move them in the database. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
+          why: `A collection rename moves every document of the collection, and the documents of model "Admin" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: model "User" is then removed and nothing is asked, since nothing is deleted: its documents stay in collection "users", where model "Admin" still reads them, and model "Member" starts with no documents. If the new validator of collection "users" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there. With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
           refusedStatement: statement,
         },
       ],

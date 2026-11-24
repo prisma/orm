@@ -35,3 +35,8 @@ export function handWrittenMigrationSteps(what: string): string {
 /** Why a MongoDB plan must be safe to run again: its operations run one at a time, and only the documents say which ran. */
 export const ONE_AT_A_TIME =
   "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents.";
+
+/** The route for keeping data a plan cannot keep: a hand-written migration, which only `migration plan` users write. */
+export function handWrittenRoute(what: string): string {
+  return `With migration plan, write this change as a hand-written migration instead: ${handWrittenMigrationSteps(what)}`;
+}

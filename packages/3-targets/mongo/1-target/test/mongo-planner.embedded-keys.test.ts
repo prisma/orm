@@ -358,7 +358,7 @@ describe('MongoMigrationPlanner, embedded keys that swap in a collection the pla
           kind: 'unsupportedOperation',
           summary:
             'Cannot rename key "s" to "g" of embedded model "Address": the objects of embedded model "Address" already hold key "g"',
-          why: 'The stored name of field "Address.street" changes from "s" to "g", and the objects of embedded model "Address" already hold key "g", the stored name of embedded relation "Address.geo". Without the rename the plan would read the values of key "g" as values of field "Address.street". Make the change in two plans: first remove embedded relation "Address.geo", and plan and apply that; then make this change and plan again. Or keep the stored name "s" of field "Address.street" in the contract.',
+          why: 'The stored name of field "Address.street" changes from "s" to "g", and the objects of embedded model "Address" already hold key "g", the stored name of embedded relation "Address.geo". Without the rename the plan would read the values of key "g" as values of field "Address.street". Removing embedded relation "Address.geo" does not free the name: it plans nothing, and its key stays in the documents. Keep the stored name "s" of field "Address.street" in the contract.',
         },
       ],
     });

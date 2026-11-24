@@ -40,8 +40,8 @@ import type {
 import { deepEqual, MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
+import { collectionControlOf } from './mongo-control-policy';
 import {
   backfillTransform,
   convertTransform,
@@ -59,19 +59,15 @@ import {
 } from './mongo-rewrite-overlaps';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import {
-  collectionControlOf,
   type FieldRemoval,
   keepCollectionByHandAdvice,
-  leftBehindAdvice,
-  leftBehindOf,
-  leftBehindText,
   type ModelMatchInput,
   planFieldRemovals,
   planStatements,
   planValidatorFieldRemovals,
   type StatementCalls,
 } from './mongo-statement-planning';
-import { type CollectionRenames, renameRefused } from './mongo-storage-renames';
+import type { CollectionRenames } from './mongo-storage-renames';
 import { planStoredKeyFills } from './mongo-stored-key-fills';
 import { planStoredKeyRewrites } from './mongo-stored-key-planning';
 import { suppressedCallWarning } from './mongo-suppressed-calls';
@@ -336,46 +332,6 @@ function collectionDrops(
       ...ifDefined('keepDataAdvice', adviceFor(model, call.collection)),
     }));
   });
-}
-
-/**
- * A question about each origin root model that moves out of a shared collection, on the operation
- * that gives it its new storage: the create of its new collection, else that collection's validator
- * change. With neither, the plan is refused, since there is no operation to ask on.
- */
-function leftBehindLosses(
-  calls: readonly OpFactoryCall[],
-  match: ModelMatchInput | undefined,
-): Result<readonly MigrationDataLoss[], readonly MigrationPlannerConflict[]> {
-  const losses: MigrationDataLoss[] = [];
-  const conflicts: MigrationPlannerConflict[] = [];
-  for (const left of match === undefined ? [] : leftBehindOf(match)) {
-    const operationIndex = [
-      calls.findIndex(
-        (call) => call instanceof CreateCollectionCall && call.collection === left.to,
-      ),
-      calls.findIndex((call) => call instanceof CollModCall && call.collection === left.to),
-    ].find((index) => index !== -1);
-    const call = operationIndex === undefined ? undefined : calls[operationIndex];
-    if (operationIndex === undefined || call === undefined) {
-      conflicts.push(
-        renameRefused(
-          undefined,
-          `Cannot move model "${modelDisplayName(left.model)}" out of collection "${left.collection}": no discriminator tells its documents apart from those of the other models stored there`,
-          `${leftBehindText(left)} The plan has no operation that gives the model its new storage to ask about this on. Keep the model in collection "${left.collection}", or move its documents with a hand-written migration first, and plan again.`,
-        ),
-      );
-      continue;
-    }
-    losses.push({
-      operationIndex,
-      subject: { kind: 'model', ...left.model },
-      loss: 'drop',
-      label: call.label,
-      keepDataAdvice: leftBehindAdvice(left),
-    });
-  }
-  return conflicts.length > 0 ? notOk(conflicts) : ok(losses);
 }
 
 /** The collection the destination stores `model` in, when the destination still has that model. */
@@ -1089,8 +1045,6 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
             ],
       ),
     ];
-    const leftBehind = leftBehindLosses(calls, match);
-    if (!leftBehind.ok) return { kind: 'failure', conflicts: [...leftBehind.failure] };
     return {
       kind: 'success',
       plan: new PlannerProducedMongoMigration(
@@ -1110,7 +1064,6 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           origin: schema,
           destination: destinationIR,
         }),
-        ...leftBehind.value,
         ...fieldLoss,
       ].sort((a, b) => a.operationIndex - b.operationIndex),
       accessChanges: [],
