@@ -19,11 +19,18 @@ changes:
         - '\bassertDescriptorSelfConsistency\s*\('
   - id: contract-space-from-json-reads-stored-files
     summary: |
-      `contractSpaceFromJson`, from `@prisma/orm-postgres/migration-tools/spaces` (and the same path in the other facades and `@prisma/orm-toolchain`), reads its `contractJson`, each migration's `metadata` and its `headRef` as the stored files they are: each must carry `formatVersion`, and a `migration.json` or head ref with a field it does not know is refused. `headRef` is typed `unknown`; pass the imported `refs/head.json`, not an object built in code.
+      `contractSpaceFromJson`, from `@prisma/orm-postgres/migration-tools/spaces` (and the same path in the other facades and `@prisma/orm-toolchain`), takes the extension's id as `spaceId`, which its errors name, and reads its `contractJson`, each migration's `metadata` and its `headRef` as the stored files they are: each must carry `formatVersion`, and a `migration.json` or head ref with a field it does not know is refused. `headRef` is typed `unknown`; pass the imported `refs/head.json`, not an object built in code.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '\bcontractSpaceFromJson\s*[<(]'
+  - id: canonicalize-contract-takes-version-from-serializer
+    summary: |
+      `canonicalizeContract` and `canonicalizeContractToObject`, from `@prisma/orm-framework/contract/hashing` (and `contract/hashing` in each facade), no longer take a `schemaVersion` option and write no version of their own. The canonical contract carries the `formatVersion` that the `serializeContract` you pass returns.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '\bcanonicalizeContract(ToObject)?\s*\([\s\S]*?\bschemaVersion\s*:'
   - id: contract-serializer-prints-version-1
     summary: |
       A target's contract serializer that extends `SqlContractSerializerBase` (from `@prisma/orm-family-sql/family/ir`) or `MongoContractSerializerBase` (from `@prisma/orm-family-mongo/family/ir`) overrides the protected `printContractV1` where it overrode `serializeContract`. The base class's `serializeContract` adds `formatVersion: 1` around what `printContractV1` returns, and `deserializeContract` reads the version before it parses the rest.
@@ -37,7 +44,7 @@ changes:
 
 ## `stored-files-format-version`
 
-Each file Prisma stores now says which version of its format it is in, so a later release can refuse a file written by a newer release instead of misreading it. An extension bundles stored files: its emitted `src/contract.json`, the `migration.json` of each of its migrations, `migrations/refs/head.json` and its contract snapshots. A descriptor imports them, and this release reads each one's version first. An extension built before this release therefore fails to load with `CONTRACT.FORMAT_VERSION_MISSING` (for the contract) or `MIGRATION.FORMAT_VERSION_MISSING` (for a `migration.json` or the head ref).
+Each file Prisma stores now says which version of its format it is in, so a later release can refuse a file written by a newer release instead of misreading it. An extension bundles stored files: its emitted `src/contract.json`, the `migration.json` of each of its migrations, `migrations/refs/head.json` and its contract snapshots. A descriptor imports them, and this release reads each one's version first. An extension built before this release therefore fails to load with `CONTRACT.FORMAT_VERSION_MISSING` (for the contract) or `MIGRATION.FORMAT_VERSION_MISSING` (for a `migration.json` or the head ref). The error names the extension and the file, and tells the application's developer to upgrade the extension, or to ask its author to republish it: the application cannot fix a file inside the extension's package.
 
 ```jsonc
 // contract.json, before
@@ -62,7 +69,7 @@ Commit your work first. Then run the script from the extension package's root:
 node <path-to-this-guide>/scripts/stored-files-format-version/stored-files-format-version.ts
 ```
 
-Node 24 or later runs the TypeScript script directly. It reads and writes files only. It walks the package, skipping `node_modules`, `dist`, `build` and directories whose name starts with a dot. In every contract (any `*.json` file with `targetFamily`, `storage` and `schemaVersion` at the top level) it replaces `"schemaVersion": "1"` with `"formatVersion": 1`. In every `migration.json` that has an `ops.json` next to it, and every ref file in a `refs` directory, it adds `"formatVersion": 1` as the first field. It keeps the rest of each file's bytes, prints each file it changed, and says so when nothing needed changing. It reports a `contract.json`, `migration.json` or ref file it cannot read or parse, leaves it unchanged and exits 1.
+Node 24 or later runs the TypeScript script directly. It reads and writes files only. It walks the package, skipping `node_modules`, `dist`, `build` and directories whose name starts with a dot. In every contract (any `*.json` file with `targetFamily`, `storage` and `schemaVersion` at the top level) it replaces `"schemaVersion": "1"` with `"formatVersion": 1`. In every `migration.json` that has an `ops.json` next to it, and every ref file in a `refs` directory, it adds `"formatVersion": 1` as the first field. It keeps the rest of each file's bytes, prints each file it changed, and says so when nothing needed changing. A field a ref file does not have, which earlier releases ignored and dropped when they wrote the ref again, it drops and lists. It leaves a file unchanged, says what is wrong with it and what to do, and exits 1 when it cannot tell the file is one a release of Prisma wrote: a `contract.json`, `migration.json` or ref file it cannot read or parse; a ref file without a `hash` or an `invariants` list; a `migration.json` next to an `ops.json` with a field the format does not have or without one it has; a contract with both `formatVersion` and `schemaVersion`, or a `contract.json` holding a contract with neither. It does not follow symbolic links, and reports a link to a file or folder outside the package that holds a stored file it would change or report.
 
 No hash covers the format version: the storage hash, the head ref's hash, snapshot directory names and each `migrationHash` stay as they are. Then re-emit the extension's contract with `prisma contract emit`, which writes the new form of `contract.json` and the head ref itself, rebuild the package and publish a release of it for this release of Prisma.
 
@@ -90,7 +97,7 @@ assertDescriptorSelfConsistency({
 
 ## `contract-space-from-json-reads-stored-files`
 
-No call changes when it passes the imported files, as an extension built by `prisma contract emit` does. A call that builds the head ref in code passes the file instead:
+Every call passes the extension's id as `spaceId`, the same id as the descriptor's `id`, so an error about a bundled file names the extension. A call that builds the head ref in code passes the file instead:
 
 ```ts
 // before
@@ -103,10 +110,29 @@ contractSpaceFromJson({
 // after
 import headRef from '../../migrations/refs/head.json' with { type: 'json' };
 
-contractSpaceFromJson({ contractJson, migrations, headRef });
+contractSpaceFromJson({ spaceId: 'my-extension', contractJson, migrations, headRef });
 ```
 
 A head ref may not declare `policies`; `contractSpaceFromJson` refuses one that does.
+
+## `canonicalize-contract-takes-version-from-serializer`
+
+Remove the `schemaVersion` option. The version comes from `serializeContract`: pass the target's contract serializer, whose `serializeContract` returns `formatVersion: 1`.
+
+```ts
+// before
+const canonical = canonicalizeContract(contract, {
+  schemaVersion: '1',
+  serializeContract: (c) => serializer.serializeContract(c),
+});
+
+// after
+const canonical = canonicalizeContract(contract, {
+  serializeContract: (c) => serializer.serializeContract(c),
+});
+```
+
+A `serializeContract` of your own that returns no `formatVersion` now produces a canonical contract without one, which this release refuses to read.
 
 ## `contract-serializer-prints-version-1`
 
