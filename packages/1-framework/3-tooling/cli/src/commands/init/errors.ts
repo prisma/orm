@@ -1,3 +1,4 @@
+import { ifDefined } from '@internal/utils/defined';
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { formatSourceDiagnostic } from '../../control-api/operations/load-contract-source';
 import { CliStructuredError } from '../../utils/cli-errors';
@@ -690,17 +691,39 @@ export function errorInitContributionUnavailable(options: {
 export function errorInitRequiredPeersNotInstalled(options: {
   readonly packageName: string;
   readonly missing: readonly string[];
-  readonly installCommand: string;
+  /** The command that adds the missing peers `package.json` does not list; `undefined` when it lists them all. */
+  readonly installCommand: string | undefined;
+  /** The missing peers `package.json` already lists, which an install puts in place without rewriting their lines. */
+  readonly listedMissing: readonly string[];
+  /** The package manager's own install command, for `listedMissing`. */
+  readonly restoreCommand: string;
 }): CliStructuredError {
-  const { packageName, missing } = options;
+  const { packageName, missing, listedMissing } = options;
+  const steps: string[] = [];
+  if (listedMissing.length > 0) {
+    steps.push(
+      `Run \`${options.restoreCommand}\` to install ${listed(listedMissing)}, which package.json already lists`,
+    );
+  }
+  if (options.installCommand !== undefined) {
+    steps.push(
+      `${listedMissing.length === 0 ? 'Add them' : 'add the others'} with \`${options.installCommand}\``,
+    );
+  }
   return new CliStructuredError(
     'CLI.INIT_REQUIRED_PEERS_NOT_INSTALLED',
     `${packageName} needs peer dependencies that are not installed`,
     {
       why: `${packageName} names ${listed(missing)} as required peer dependencies, and ${missing.length === 1 ? 'it cannot' : 'they cannot'} be found from the project or from where ${packageName} is installed. \`--skip-install\` forbids installing them. Nothing was changed.`,
-      fix: `Add them with \`${options.installCommand}\`, then run \`prisma orm init\` again.`,
+      fix: `${steps.join(', and ')}, then run \`prisma orm init\` again.`,
       docsUrl: docsUrlFor('CLI.INIT_REQUIRED_PEERS_NOT_INSTALLED'),
-      meta: { packageName, missing, installCommand: options.installCommand },
+      meta: {
+        packageName,
+        missing,
+        listedMissing,
+        ...ifDefined('installCommand', options.installCommand),
+        ...(listedMissing.length === 0 ? {} : { restoreCommand: options.restoreCommand }),
+      },
     },
   );
 }

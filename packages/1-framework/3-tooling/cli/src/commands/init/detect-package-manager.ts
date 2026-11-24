@@ -75,6 +75,11 @@ export function formatRunScriptCommand(pm: PackageManager, scriptName: string): 
   }
 }
 
+/** The command that installs what `package.json` already lists. */
+export function formatInstallCommand(pm: PackageManager): string {
+  return `${pm} install`;
+}
+
 export function formatRemoveCommand(pm: PackageManager, packages: readonly string[]): string {
   const verb = pm === 'npm' ? 'uninstall' : 'remove';
   return [pm, verb, ...packages].join(' ');

@@ -7,6 +7,7 @@ import { join, relative } from 'pathe';
 import { buildCatalogWarnings } from '../commands/init/catalog-warnings';
 import {
   formatAddArgs,
+  formatInstallCommand,
   formatRemoveCommand,
   type PackageManager,
 } from '../commands/init/detect-package-manager';
@@ -248,10 +249,17 @@ export function createTargetPackagePreparation(ctx: {
       (peer) => manifests.installedVersion(peer.name) === undefined,
     );
     if (!ctx.install && missing.length > 0) {
+      const declared = declaredPackages(ctx.cwd);
+      const toAdd = missing.filter((peer) => !declared.has(peer.name));
       throw errorInitRequiredPeersNotInstalled({
         packageName,
         missing: missing.map((peer) => peer.name),
-        installCommand: installCommand(ctx.packageManager, missing.map(requiredPeerSpecifier)),
+        installCommand:
+          toAdd.length === 0
+            ? undefined
+            : installCommand(ctx.packageManager, toAdd.map(requiredPeerSpecifier)),
+        listedMissing: missing.filter((peer) => declared.has(peer.name)).map((peer) => peer.name),
+        restoreCommand: formatInstallCommand(ctx.packageManager),
       });
     }
 

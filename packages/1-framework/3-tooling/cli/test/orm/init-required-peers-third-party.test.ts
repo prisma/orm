@@ -210,6 +210,40 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
   );
 
   it(
+    'says to run the install, not to add it, for a required peer the project lists but has not installed',
+    async () => {
+      installedTarget();
+      installed('pg');
+      writeManifest({ '@prisma/orm-postgres': VERSION, 'temporal-polyfill': 'catalog:' });
+
+      const run = await (await harness()).run([...POSTGRES, '--skip-install'], {
+        cwd: projectDir,
+      });
+
+      expect(initLoads).toBe(0);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_REQUIRED_PEERS_NOT_INSTALLED',
+          meta: {
+            missing: ['temporal-polyfill'],
+            listedMissing: ['temporal-polyfill'],
+            restoreCommand: 'pnpm install',
+          },
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label:
+                'Run `pnpm install` to install temporal-polyfill, which package.json already lists, then run `prisma orm init` again.',
+            }),
+          ]),
+        },
+      });
+      expect(JSON.stringify(envelopeOf(run))).not.toContain('pnpm add');
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
     'says which required peers are missing when the init entrypoint cannot be loaded',
     async () => {
       installedTarget();
