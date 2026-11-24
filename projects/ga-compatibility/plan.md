@@ -175,6 +175,8 @@ Projects 2 to 7 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are Later. W
 
 **How, where we know.** The project defines what the tool is, how a change that needs one gets its part of the tool, and how the tool replaces today's per-release upgrade guides (task 9).
 
+**Also in this project.** Update the upgrade skills, which today describe moving from one release candidate to the next, and probably retire the system of upgrade scripts under `upgrade-instructions/` with its coverage check. Both exist for releases that may break, and from `8.0.0` a release within the major may not.
+
 ### 11. Follow each maker's lifetime for supported versions of Node.js, TypeScript and databases, and test them in CI
 
 **Purpose.** A user knows which versions of Node.js, TypeScript, each database and each driver we support, and until when. We do not drop a version by our own choice within a major.

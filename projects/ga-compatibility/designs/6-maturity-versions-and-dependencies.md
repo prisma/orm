@@ -35,9 +35,13 @@ Until now every package has carried the suffix `rc`, whatever its real state. Fr
 | Level at `8.0.0` | Packages |
 | --- | --- |
 | GA | The PostgreSQL facade and everything it depends on, and pgvector and the other PostgreSQL extensions we maintain, except the two below |
-| Preview | The Supabase extension. We expect to change it, and need real use and feedback first, which is not the priority before GA |
+| Preview | MongoDB. The Supabase extension: we expect to change it, and need real use and feedback first, which is not the priority before GA |
 | Early Access | MySQL, MariaDB and SQLite |
 | Outside the scale | The ParadeDB extension. It is deleted from this repository before GA, and the ParadeDB team takes it into a repository of their own, where section 1.2 applies to it. While it is still here it is numbered `0.x` |
+
+### 2.1 Packages that move down from `rc`
+
+MySQL is published today as `8.0.0-rc.25`, and `8.0.0-ea.0` sorts below it. So the move is made once, at `8.0.0`: each such package is published at its real level, its earlier release candidates are marked as deprecated on the registry with a message that says where the package went, and the upgrade instructions say so. A deprecated version stays installable and prints its message at install.
 
 ## 3. How the packages depend on each other
 
@@ -90,8 +94,6 @@ The policy says an application depends on one facade, on the extension packages 
 
 ## 5. Not yet discussed
 
-- The level of MongoDB at `8.0.0`.
-- How the packages that move from `rc` to a lower level are numbered: `8.0.0-ea.0` sorts below the `8.0.0-rc.N` versions already published.
 - Whether the command-line tool must be at least as new as the library in the project.
 - A fix to a package below GA: whether it raises the suffix counter and not the patch number, so that a user's range selects it.
 - Which tag a package that has never had a GA release is published under.
