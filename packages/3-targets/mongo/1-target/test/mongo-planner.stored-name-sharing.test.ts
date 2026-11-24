@@ -267,13 +267,13 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
           loss: 'drop',
           label: 'Create collection members',
           keepDataAdvice:
-            'The origin stores models "Admin" and "User" in collection "users", and no discriminator tells their documents apart, so the plan cannot move to collection "members" the documents of model "User": they stay in collection "users", where they are read as documents of model "Admin". Keeping their documents is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json. Answered with --delete, the plan leaves them where they are; if the new validator of collection "users" does not accept them, its change stops the apply until you delete or move them in the database.',
+            'The origin stores models "Admin" and "User" in collection "users", and no discriminator tells their documents apart, so the plan cannot move the documents of model "User" to collection "members". They stay in collection "users", where model "Admin" still reads them, and model "User" starts with no documents. To keep them, write this change as a hand-written migration that moves them: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json. --delete User accepts that model "User" starts with no documents; it deletes nothing.',
         },
       ],
     });
   });
 
-  it('asks about a root model the destination removes from a collection another root model stays in, whose documents stay behind', () => {
+  it('asks nothing about a root model the destination removes from a collection another root model stays in, since nothing is deleted', () => {
     const result = plan({
       from: shared('from', { admin: 'users', user: 'users' }),
       to: shared('to', { admin: 'users', user: 'members' }, {}, 'Member'),
@@ -283,16 +283,7 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
       labels: ['Create collection members'],
       classes: ['additive'],
       applied: [],
-      dataLoss: [
-        {
-          operationIndex: 0,
-          subject: { kind: 'model', namespaceId: NS, model: 'User' },
-          loss: 'drop',
-          label: 'Create collection members',
-          keepDataAdvice:
-            'The origin stores models "Admin" and "User" in collection "users", and no discriminator tells their documents apart, so the plan cannot remove the documents of model "User": they stay in collection "users", where they are read as documents of model "Admin". Removing them is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json. Answered with --delete, the plan leaves them where they are; if the new validator of collection "users" does not accept them, its change stops the apply until you delete or move them in the database.',
-        },
-      ],
+      dataLoss: [],
     });
   });
 
@@ -432,7 +423,7 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
           kind: 'statementRefused',
           summary:
             'Cannot rename model "User" to "Member": collection "users" also stores model "Admin"',
-          why: `A collection rename moves every document of the collection, and the documents of model "Admin" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: the plan then asks about model "User", whose documents it can neither move nor remove, since no discriminator tells them apart from those of model "Admin". The question offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change, and the documents of model "User" stay in collection "users", where they are read as documents of model "Admin"; if the new validator of collection "users" does not accept them, its change stops the apply until you delete or move them in the database. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
+          why: `A collection rename moves every document of the collection, and the documents of model "Admin" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: model "User" is then removed and nothing is asked, since nothing is deleted: its documents stay in collection "users", where model "Admin" still reads them, and model "Member" starts with no documents. If the new validator of collection "users" does not accept them, its change stops the apply until you delete or move them in the database. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
           refusedStatement: statement,
         },
       ],

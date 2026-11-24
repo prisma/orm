@@ -657,3 +657,9 @@ When several root models of a shared collection rename one field to the same new
 **Found:** MongoDB stored-name renames, round 2 fixes, 2026-11-24.
 
 `enumType('Flag', type.Boolean(), member('YES', true), member('NO', false))` in a MongoDB TypeScript contract fails `contract emit` with `CONTRACT.VALIDATION_FAILED`: "domain.namespaces.__unbound__.enum.Flag.members[1].value must be … (was missing)". The contract canonicalization omits default values, and it treats every `false` as one (`isDefaultValue` in `packages/1-framework/0-foundation/contract/src/canonicalization.ts`, around line 83), so the member's `value: false` is dropped. PSL cannot write a boolean enum at all. So no user contract reaches the boolean enum refusals today, and no CLI journey can show them; planner tests cover them. Fixing it is a framework change: keep `false` under enum members.
+
+## A loss kind for data a plan leaves where it is
+
+**Found:** system design review of the MongoDB stored-name renames, round 2, 2026-11-24.
+
+A MongoDB root model that moves out of a collection it shares with other root models starts with no documents: they stay in the old collection, read by the models there. The plan asks about it as a `drop` loss, answered by `--delete`, although nothing is deleted (`leftBehindOf` and `leftBehindAdvice` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts`, `leftBehindLosses` in `mongo-planner.ts`). The question's text says so. A framework loss kind for data a plan leaves where it is, with its own answer, would say it without the text. That is a framework change.

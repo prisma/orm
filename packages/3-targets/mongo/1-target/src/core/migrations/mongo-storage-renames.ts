@@ -125,21 +125,6 @@ export function managedOnBothSides(
   );
 }
 
-/**
- * An origin root model whose documents stay in a collection it shares, with no discriminator, with
- * a root model that stays there: the model moves to collection `to`, or the destination removes it
- * (`to` is `undefined`).
- */
-export interface LeftBehind {
-  readonly model: ModelCoordinate;
-  readonly collection: string;
-  readonly to: string | undefined;
-}
-
-function isRootModel(contract: ContractWithDomain, model: ModelCoordinate): boolean {
-  return mongoModelsOf(contract.domain, model.namespaceId)[model.model]?.base === undefined;
-}
-
 /** The collections the model renames move, each with the renames that move it, in the order of the renames. */
 export class CollectionRenames {
   readonly changes: readonly CollectionChange[];
@@ -213,52 +198,6 @@ export class CollectionRenames {
     return merged.length > 0 ? { kind: 'merged', objects: merged } : undefined;
   }
 
-  #destinationCollectionOf(model: ModelCoordinate): string | undefined {
-    const rename = this.#models.find((each) => sameModel(each.from, model));
-    return rename === undefined ? undefined : documentCollectionOf(this.#contract, rename.to);
-  }
-
-  /**
-   * The origin root models that leave a collection another root model stays in. Nothing in their
-   * documents says which root model they belong to, so the plan can neither move nor remove them:
-   * they stay, and are read as documents of the models that stay.
-   */
-  leftBehind(): readonly LeftBehind[] {
-    const collections = new Set(
-      modelCoordinates(this.#fromContract).flatMap((model) => {
-        const collection = documentCollectionOf(this.#fromContract, model);
-        return collection === undefined ? [] : [collection];
-      }),
-    );
-    return [...collections].flatMap((collection) => {
-      const roots = modelsStoredIn(this.#fromContract, collection).filter((model) =>
-        isRootModel(this.#fromContract, model),
-      );
-      const stays = (model: ModelCoordinate) => this.#destinationCollectionOf(model) === collection;
-      if (!roots.some(stays)) return [];
-      return roots
-        .filter((model) => !stays(model))
-        .map((model) => ({ model, collection, to: this.#destinationCollectionOf(model) }));
-    });
-  }
-
-  /** Why the documents of a model left behind stay where they are, and how to move or remove them. */
-  leftBehindAdvice(left: LeftBehind): string {
-    const byName = (a: ModelCoordinate, b: ModelCoordinate) =>
-      modelDisplayName(a).localeCompare(modelDisplayName(b));
-    const roots = modelsStoredIn(this.#fromContract, left.collection)
-      .filter((model) => isRootModel(this.#fromContract, model))
-      .sort(byName);
-    const stays = roots.filter((model) => this.#destinationCollectionOf(model) === left.collection);
-    const moving = modelsText([left.model]);
-    const start = `The origin stores ${modelsText(roots)} in collection "${left.collection}", and no discriminator tells their documents apart, so the plan cannot ${left.to === undefined ? 'remove' : `move to collection "${left.to}"`} the documents of ${moving}: they stay in collection "${left.collection}", where they are read as documents of ${modelsText(stays)}.`;
-    const route =
-      left.to === undefined
-        ? `Removing them is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: ${handWrittenMigrationSteps(`the documents of ${moving}`)}`
-        : dataMigration(`the documents of ${moving} into collection "${left.to}"`);
-    return `${start} ${route} ${leftWhereTheyAre(left.collection)}`;
-  }
-
   /**
    * Why the documents of collection `from` cannot be kept by renaming it to `to`: the storage of
    * the models stored there is being split or merged. Keeping their documents is then a data
@@ -304,11 +243,6 @@ export class CollectionRenames {
     }
     return `The origin stores ${modelsText(origin)} in collection "${change.from}", and the destination stores them in different collections, so their storage is being split. ${dataMigration(moves)}`;
   }
-}
-
-/** What answering `--delete` for documents left behind in `collection` does. */
-function leftWhereTheyAre(collection: string): string {
-  return `Answered with --delete, the plan leaves them where they are; if the new validator of collection "${collection}" does not accept them, its change stops the apply until you delete or move them in the database.`;
 }
 
 function dataMigration(moves: string): string {

@@ -607,9 +607,14 @@ function leaveOutShared(moving: string): string {
   return `Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. A question about ${moving} offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change and deletes the data.`;
 }
 
-/** The leave-out route for root models whose documents no discriminator tells apart from those of the models that stay. */
-function leaveOutLeftBehind(moving: string, others: string, from: string): string {
-  return `Leave out this statement to plan the change without moving them: the plan then asks about ${moving}, whose documents it can neither move nor remove, since no discriminator tells them apart from those of ${others}. The question offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change, and the documents of ${moving} stay in collection "${from}", where they are read as documents of ${others}; if the new validator of collection "${from}" does not accept them, its change stops the apply until you delete or move them in the database.`;
+/** The leave-out route for root models whose documents no discriminator tells apart from those of the models that stay: without the statement they are removed, and nothing is asked. */
+function leaveOutLeftBehind(
+  moving: string,
+  others: readonly ModelCoordinate[],
+  renamedTo: string,
+  from: string,
+): string {
+  return `Leave out this statement to plan the change without moving them: ${moving} is then removed and nothing is asked, since nothing is deleted: its documents stay in collection "${from}", where ${modelsText(others)} still read${others.length === 1 ? 's' : ''} them, and ${renamedTo} starts with no documents. If the new validator of collection "${from}" does not accept them, its change stops the apply until you delete or move them in the database.`;
 }
 
 const HAND_WRITTEN_WITH_MIGRATION_PLAN =
@@ -621,6 +626,7 @@ function sharedCollectionRefusal(
   label: string,
   collections: CollectionRenames,
   models: readonly ModelRename[],
+  fromContract: ContractWithDomain,
 ): StatementOutcome | undefined {
   const rename = models.find((model) => model.statement === statement);
   const change = rename === undefined ? undefined : collections.changeOf(rename);
@@ -629,16 +635,18 @@ function sharedCollectionRefusal(
   const { from, to } = change;
   const moving = modelsText(change.renames.map((renamed) => renamed.from));
   const others = modelsText(shared.objects);
-  const leavesBehind = collections
-    .leftBehind()
-    .some((left) => change.renames.some((renamed) => sameModel(renamed.from, left.model)));
+  const leavesBehind = change.renames.every(
+    (renamed) =>
+      mongoModelsOf(fromContract.domain, renamed.from.namespaceId)[renamed.from.model]?.base ===
+      undefined,
+  );
   const moveSteps = `${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the documents of ${moving} into collection "${to}"`)}`;
   switch (shared.kind) {
     case 'split':
       return refusedOutcome(
         statement,
         `${label}: collection "${from}" also stores ${others}`,
-        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${leavesBehind ? leaveOutLeftBehind(moving, others, from) : leaveOutShared(moving)} ${moveSteps}`,
+        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${leavesBehind ? leaveOutLeftBehind(moving, shared.objects, modelsText(change.renames.map((renamed) => renamed.to)), from) : leaveOutShared(moving)} ${moveSteps}`,
       );
     case 'removed':
       return refusedOutcome(
@@ -681,7 +689,7 @@ function planModelStatement(
     );
   }
   if (from === to) return UNCHANGED;
-  const shared = sharedCollectionRefusal(statement, label, collections, models);
+  const shared = sharedCollectionRefusal(statement, label, collections, models, input.fromContract);
   if (shared !== undefined) return shared;
   if (renamedCollections.get(from) === to) return UNCHANGED;
   const policyRefusal = controlPolicyRefusal(statement, label, input.contract, to);
@@ -967,6 +975,74 @@ export function destinationModelOf(
   );
   const [only] = stored;
   return stored.length === 1 ? only : undefined;
+}
+
+/**
+ * An origin root model that moves out of a collection it shared with other root models, while the
+ * destination still stores models there: no discriminator tells its documents apart, so they stay
+ * in `collection`, where `readers` still read them, and the model starts with none in `to`.
+ */
+export interface LeftBehind {
+  readonly model: ModelCoordinate;
+  readonly collection: string;
+  readonly to: string;
+  readonly roots: readonly ModelCoordinate[];
+  readonly readers: readonly ModelCoordinate[];
+}
+
+function documentsCollectionOf(
+  contract: ContractWithDomain,
+  model: ModelCoordinate,
+): string | undefined {
+  return embeddingModelOf(contract.domain, model) === undefined
+    ? collectionOfModel(contract.domain, model)
+    : undefined;
+}
+
+/**
+ * The origin root models that leave a shared collection the destination keeps, paired as the rest
+ * of the plan pairs them (`destinationModelOf`). A root model the destination removes leaves
+ * nothing behind that anyone loses: the other models still read its documents, as before.
+ */
+export function leftBehindOf(match: ModelMatchInput): readonly LeftBehind[] {
+  const roots = modelCoordinates(match.fromContract).filter(
+    (model) =>
+      documentsCollectionOf(match.fromContract, model) !== undefined &&
+      mongoModelsOf(match.fromContract.domain, model.namespaceId)[model.model]?.base === undefined,
+  );
+  const byCollection = new Map<string, ModelCoordinate[]>();
+  for (const root of roots) {
+    const collection = documentsCollectionOf(match.fromContract, root);
+    if (collection !== undefined)
+      byCollection.set(collection, [...(byCollection.get(collection) ?? []), root]);
+  }
+  return [...byCollection].flatMap(([collection, shared]) => {
+    if (shared.length < 2) return [];
+    const readers = modelCoordinates(match.contract).filter(
+      (model) => documentsCollectionOf(match.contract, model) === collection,
+    );
+    if (readers.length === 0) return [];
+    return shared.flatMap((model) => {
+      const destination = destinationModelOf(model, match);
+      const to =
+        destination === undefined ? undefined : documentsCollectionOf(match.contract, destination);
+      return to === undefined || to === collection
+        ? []
+        : [{ model, collection, to, roots: shared, readers }];
+    });
+  });
+}
+
+/** What happens to the documents of a model left behind, and how to keep them. */
+export function leftBehindText(left: LeftBehind): string {
+  const moving = modelsText([left.model]);
+  return `The origin stores ${modelsText(left.roots)} in collection "${left.collection}", and no discriminator tells their documents apart, so the plan cannot move the documents of ${moving} to collection "${left.to}". They stay in collection "${left.collection}", where ${modelsText(left.readers)} still read${left.readers.length === 1 ? 's' : ''} them, and ${moving} starts with no documents. To keep them, write this change as a hand-written migration that moves them: ${handWrittenMigrationSteps(`the documents of ${moving} into collection "${left.to}"`)}`;
+}
+
+/** The question's advice about a model left behind: what happens to its documents, and what `--delete` accepts. */
+export function leftBehindAdvice(left: LeftBehind): string {
+  const moving = modelsText([left.model]);
+  return `${leftBehindText(left)} --delete ${modelDisplayName(left.model)} accepts that ${moving} starts with no documents; it deletes nothing.`;
 }
 
 /** Whether an origin model and a destination model are stored the same way: neither embedded, the same collection after renames, the same variant value. */

@@ -7,7 +7,7 @@
  * - R3: a collection rename onto the collection of a removed model: the model is removed first (both commands).
  * - R4: a chain between a collection rename and a model rename statement, in both directions (migration plan).
  * - R5: an enum value chain, through a value no member stores (both commands).
- * - R6: `--rename` of a model that shares its collection with another root model (both commands).
+ * - R6: `--rename` of a model that shares its collection with another root model, and its leave-out route: nothing is asked, and the documents stay (both commands).
  * - R7: the JSON error of a refusal with no statement carries no statement.
  */
 
@@ -260,7 +260,7 @@ describe('Journeys (MongoDB): stored-name refusals and their routes', {
   );
 
   it.each(COMMANDS)(
-    'R6: --rename of a model that shares its collection with another root model is refused (%s)',
+    'R6: --rename of a model that shares its collection with another root model is refused, and without it nothing is asked and the documents stay (%s)',
     async (command) => {
       const journey = project(`r6_${id(command)}`);
       await begin(journey, command, modelsPsl({ Admin: 'users', User: 'users' }), 'R6.01');
@@ -278,10 +278,25 @@ describe('Journeys (MongoDB): stored-name refusals and their routes', {
             kind: 'statementRefused',
             summary:
               'Cannot rename model "User" to "Member": collection "users" also stores model "Admin"',
+            why: 'A collection rename moves every document of the collection, and the documents of model "Admin" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: model "User" is then removed and nothing is asked, since nothing is deleted: its documents stay in collection "users", where model "Admin" still reads them, and model "Member" starts with no documents. If the new validator of collection "users" does not accept them, its change stops the apply until you delete or move them in the database. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
           }),
         ],
         documents: [{ user: 'Ada' }],
       });
+
+      await journey.db.collection('users').deleteMany({ user: { $exists: true } });
+      expect({
+        labels: await apply(journey, command, [], 'R6.04'),
+        collections: await collections(journey.db),
+        users: await documents(journey.db, 'users'),
+        members: await documents(journey.db, 'members'),
+      }).toEqual({
+        labels: ['Create collection members', 'Update validator on users (removed: user)'],
+        collections: ['members', 'users'],
+        users: [],
+        members: [],
+      });
+      await expectSettled(journey, 'R6.05');
     },
   );
 
