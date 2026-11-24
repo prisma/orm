@@ -2,7 +2,7 @@
 
 The concrete MongoDB target of Prisma 8: the target descriptor (migration rendering, codec types, control), the Mongo adapter, and the `mongodb`-based driver.
 
-Applications receive it as an exact-pinned dependency of `@prisma/orm-mongo`; app developers install that facade. Extension authors targeting MongoDB and decomposed installs (for example, replacing the adapter while keeping the target and driver) import this package directly.
+A MongoDB application lists this package beside `@prisma/orm-mongo`, at the same version, because that facade names it as a peer dependency; `prisma orm init` writes that list. Application code imports from the facade. Extension authors targeting MongoDB and decomposed installs (for example, replacing the adapter while keeping the target and driver) import this package directly.
 
 ## Entrypoints
 

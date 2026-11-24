@@ -2,7 +2,7 @@
 
 The concrete PostgreSQL target of Prisma 8: the target descriptor (DDL planning, codecs, migration rendering), the Postgres adapter, and the `pg`-based driver.
 
-Applications receive it as an exact-pinned dependency of `@prisma/orm-postgres`; app developers install that facade. Extension authors targeting Postgres and decomposed installs (for example, replacing the adapter with a custom one while keeping the target and driver) import this package directly.
+A PostgreSQL application lists this package beside `@prisma/orm-postgres`, at the same version, because that facade names it as a peer dependency; `prisma orm init` writes that list. Application code imports from the facade. Extension authors targeting Postgres and decomposed installs (for example, replacing the adapter with a custom one while keeping the target and driver) import this package directly.
 
 ## Entrypoints
 

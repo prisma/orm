@@ -1,9 +1,9 @@
 # @prisma/orm-postgres
 
-The one package a PostgreSQL application installs. It wires the framework, the SQL family, and the Postgres target into a single lazy client, and brings the rest of the stack along as exact-pinned dependencies:
+The package a PostgreSQL application installs for its database. It wires the framework, the SQL family, and the Postgres target into a single lazy client. It names the platform packages it is built on as peer dependencies, so the application lists them beside it, every one at the same version. `prisma orm init` writes that list. To install them by hand:
 
 ```sh
-pnpm add @prisma/orm-postgres pg
+pnpm add @prisma/orm-postgres @prisma/orm-framework @prisma/orm-family-sql @prisma/orm-target-postgres @prisma/orm-toolchain pg
 pnpm add -D @types/pg
 ```
 
@@ -14,6 +14,10 @@ pnpm add -D @types/pg
 ├── @prisma/orm-target-postgres target descriptor + adapter + driver
 └── @prisma/orm-toolchain       ORM command family for the `prisma` CLI, emitter, config loader
 ```
+
+The application lists the platform packages because it must hold exactly one copy of each: the runtime keeps its registries of codecs and operations in them, and a second copy would not see what the first one registered. A package manager never gives a package its own copy of a peer dependency; it uses the one the application lists, and it reports a version that does not match. Application code still imports only from `@prisma/orm-postgres` and from the extensions, never from a platform package. The decision record explains this in full: [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md).
+
+In a repository with several applications on different Prisma versions, npm workspaces and Bun with its hoisted linker can give one application two copies of a platform package without a warning. Keep the applications on one Prisma version, or use pnpm, Yarn, or Bun with its isolated linker.
 
 `pg` and `@types/pg` are peer dependencies: the driver is the application's, so a `pg.Pool` the application creates and the `pg` types Prisma 8 declares come from one copy. Prisma 8 supports `pg` 8.22.0 and later within major version 8.
 

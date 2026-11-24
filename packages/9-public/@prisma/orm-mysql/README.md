@@ -1,9 +1,9 @@
 # @prisma/orm-mysql
 
-The one package a MySQL application installs. It wires the framework, the SQL family, and the MySQL target together, and brings the rest of the stack along as exact-pinned dependencies:
+The package a MySQL application installs for its database. It wires the framework, the SQL family, and the MySQL target together. It names the platform packages it is built on as peer dependencies, so the application lists them beside it, every one at the same version. `prisma orm init` writes that list. To install them by hand:
 
 ```sh
-pnpm add @prisma/orm-mysql
+pnpm add @prisma/orm-mysql @prisma/orm-framework @prisma/orm-family-sql @prisma/orm-target-mysql @prisma/orm-toolchain
 ```
 
 ```
@@ -13,6 +13,10 @@ pnpm add @prisma/orm-mysql
 ├── @prisma/orm-target-mysql target descriptor + adapter + driver
 └── @prisma/orm-toolchain    ORM command family for the `prisma` CLI, emitter, config loader
 ```
+
+The application lists the platform packages because it must hold exactly one copy of each: the runtime keeps its registries of codecs and operations in them, and a second copy would not see what the first one registered. A package manager never gives a package its own copy of a peer dependency; it uses the one the application lists, and it reports a version that does not match. Application code still imports only from `@prisma/orm-mysql` and from the extensions, never from a platform package. The decision record explains this in full: [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md).
+
+In a repository with several applications on different Prisma versions, npm workspaces and Bun with its hoisted linker can give one application two copies of a platform package without a warning. Keep the applications on one Prisma version, or use pnpm, Yarn, or Bun with its isolated linker.
 
 MySQL support is early. It supports MySQL 8.4 and later. The package covers contracts and migrations (`prisma contract emit`, `prisma migration plan`, `prisma db migrate`, `prisma db verify` and `prisma db sign`) and queries: `mysql({ contract, url })` from `/runtime` runs ORM and SQL builder reads and writes, raw SQL and transactions. MySQL has no `RETURNING`, so an ORM write that returns rows reads them back by key with a `SELECT` in the same transaction. The `mariadb` package writes each value into the statement with its own escaping, so Prisma's code never puts a value into SQL. Row locks such as `FOR UPDATE`, `LATERAL` joins, `RETURNING` and skipping rows that collide with a unique constraint are refused as not supported on MySQL, and so is an update or delete whose filter, or a value it sets, reads the table it writes, which MySQL refuses. A SQL builder `update` reaches this through either; the ORM only through a filter. In the ORM, that is `updateAll`, `deleteAll`, `updateAndCount` and `deleteAndCount` on a variant stored in its own table or filtered through a relation from a model to itself, and an `update` or `delete` filtered through such a relation whose filter names a unique key. An `update` or `delete` whose filter names no unique key reads the row first and writes it by key, so it runs. Instead, read the keys of the rows, and any values the write takes from the table, with a query first, then update or delete those rows by key with those values (for a variant, one row at a time with `update` or `delete`). The filter is checked only when that query runs, so a row another transaction changes in between is still written. MariaDB runs these writes. The ORM cannot yet update a field stored only on a variant's own table, on any database: `update`, `updateAll` and `updateAndCount` refuse it with `ORM.FIELD_UNKNOWN` (a variant's `create` does set such fields).
 

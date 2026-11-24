@@ -1,6 +1,6 @@
 # @internal/mongo
 
-One-package MongoDB setup for Prisma 8. Install this single package to get config, runtime, contract authoring, control-plane access, and BSON value constructors — no reach-ins to internal packages required.
+MongoDB setup for Prisma 8, published as `@prisma/orm-mongo`. An application installs it beside the platform packages it names as peer dependencies (`@prisma/orm-framework`, `@prisma/orm-family-mongo`, `@prisma/orm-target-mongo` and `@prisma/orm-toolchain`, at the same version), and gets config, runtime, contract authoring, control-plane access, and BSON value constructors from it — no reach-ins to internal packages required.
 
 > **Breaking change:** the top-level `@internal/mongo` barrel (`import { ObjectId } from '@internal/mongo'`) has been removed. Move BSON constructor imports to `@internal/mongo/bson`:
 >
@@ -89,7 +89,7 @@ The contract carries no `$jsonSchema` validators, because a Prisma 6 database ha
 Both CLIs are published as `prisma`, so one package name cannot resolve to both. Keep Prisma 8 as `prisma` (`prisma.config.ts` imports its `prisma/config`) and install the Prisma 6 CLI under an npm alias, `prisma6`, at the version of your `@prisma/client` (6.19.3 here):
 
 ```sh
-pnpm add @prisma/orm-mongo@latest dotenv mongodb
+pnpm add @prisma/orm-mongo@latest @prisma/orm-framework@latest @prisma/orm-family-mongo@latest @prisma/orm-target-mongo@latest @prisma/orm-toolchain@latest dotenv mongodb
 pnpm add -D prisma@latest prisma6@npm:prisma@6.19.3
 ```
 

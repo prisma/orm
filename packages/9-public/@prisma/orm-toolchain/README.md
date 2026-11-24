@@ -2,7 +2,7 @@
 
 Prisma 8's development and build tooling: the ORM command family the unified `prisma` CLI mounts, the contract emitter, the config loader, the language server, CLI telemetry, and the Vite plugin. This package ships no bin.
 
-Applications get it as an exact-pinned dependency of their database facade (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mongo`); app developers install the facade, not this package. It is separate from `@prisma/orm-framework` so deployed applications never trace a compiler, formatter, or language server into their runtime bundle.
+Every application lists this package beside its database facade (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb`, `@prisma/orm-mongo`), at the same version, because the facade names it as a peer dependency; `prisma orm init` writes that list. Application code does not import it. It is separate from `@prisma/orm-framework` so deployed applications never trace a compiler, formatter, or language server into their runtime bundle.
 
 ## Entrypoints
 

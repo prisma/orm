@@ -2,7 +2,7 @@
 
 The target-agnostic core of Prisma 8: the contract model, the component/registry system, and the authoring surface that emitted contracts and application code reach at runtime.
 
-Most applications never install this package directly — it arrives as an exact-pinned dependency of a database facade (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mongo`), which is the package app developers should install. Extension authors and decomposed installs (applications replacing part of the default wiring) depend on it directly.
+Every application lists this package beside its database facade (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb`, `@prisma/orm-mongo`), at the same version, because the facade and every other Prisma package name it as a peer dependency; `prisma orm init` writes that list. Application code imports from the facade, not from this package. Extension authors and decomposed installs (applications replacing part of the default wiring) import it directly.
 
 ## Entrypoints
 

@@ -1,9 +1,9 @@
 # @prisma/orm-mariadb
 
-The one package a MariaDB application installs. It wires the framework, the SQL family and the MariaDB target together, and brings the rest of the stack along as exact-pinned dependencies:
+The package a MariaDB application installs for its database. It wires the framework, the SQL family and the MariaDB target together. It names the MySQL package and the platform packages it is built on as peer dependencies, so the application lists them beside it, every one at the same version. `prisma orm init` writes that list. To install them by hand:
 
 ```sh
-pnpm add @prisma/orm-mariadb
+pnpm add @prisma/orm-mariadb @prisma/orm-framework @prisma/orm-family-sql @prisma/orm-target-mariadb @prisma/orm-target-mysql @prisma/orm-mysql @prisma/orm-toolchain
 ```
 
 ```
@@ -15,6 +15,10 @@ pnpm add @prisma/orm-mariadb
 ├── @prisma/orm-mysql           MySQL's configuration, which MariaDB's builds on
 └── @prisma/orm-toolchain       ORM command family for the `prisma` CLI, emitter, config loader
 ```
+
+The application lists the platform packages because it must hold exactly one copy of each: the runtime keeps its registries of codecs and operations in them, and a second copy would not see what the first one registered. A package manager never gives a package its own copy of a peer dependency; it uses the one the application lists, and it reports a version that does not match. Application code still imports only from `@prisma/orm-mariadb` and from the extensions, never from a platform package. The decision record explains this in full: [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md).
+
+In a repository with several applications on different Prisma versions, npm workspaces and Bun with its hoisted linker can give one application two copies of a platform package without a warning. Keep the applications on one Prisma version, or use pnpm, Yarn, or Bun with its isolated linker.
 
 MariaDB support is early. The package covers contracts, migrations and queries on MariaDB 10.11 and later: `prisma contract emit`, `prisma migration plan`, `prisma db migrate`, `prisma db verify`, `prisma db sign`, and `mariadb({ contract, url })`, the query client, which reads and writes through the ORM, the SQL builder and raw SQL as `mysql()` does on MySQL. The contract is a `.prisma` schema or a TypeScript contract written with `defineContract` from `@prisma/orm-mariadb/contract-builder`.
 
