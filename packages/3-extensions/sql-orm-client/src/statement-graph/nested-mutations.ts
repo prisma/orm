@@ -63,6 +63,7 @@ import {
   createAllVariantGraph,
   requireOnlyCollidingKey,
   sameRowColumnsOf,
+  whereOf,
 } from './collection-graphs';
 import {
   type ConflictCall,
@@ -952,7 +953,7 @@ function addFilteredWrite(
     parent.node,
   );
   if (mutation.kind === 'deleteAll') {
-    addDeleteAll(b, related, keyFilters);
+    addDeleteAll(b, related, keyFilters, whereOf(related));
     return;
   }
   if (mutation.kind === 'delete') {
@@ -988,7 +989,7 @@ function addFilteredWrite(
     addUpdateFirst(b, related, set, keyFilters);
     return;
   }
-  addUpdateAll(b, related, set, keyFilters, 'count');
+  addUpdateAll(b, related, set, keyFilters, 'count', whereOf(related));
 }
 
 function keyFiltersOf(

@@ -115,18 +115,19 @@ describe('deleteAllGraph', () => {
     expect(returnedAt(graph, 0)).toEqual([]);
   });
 
-  it('builds a Find with the includes as the result and then a Delete of the rows it found by key when there are includes', () => {
+  it('builds a Find with the includes, a Delete of the rows it found by key, and keeps the found rows the Delete removed as the result when there are includes', () => {
     const graph = deleteAllGraph(targetWithIncludes, 'rows');
 
     expect(printGraph(graph)).toBe(
       [
         "n1 Find users where name = 'Ada' order by id asc",
         "n2 Delete users where name = 'Ada' <- FilterData n1 (id->id)",
-        'result: n1',
+        'n3 DeletedRows <- WholeRows n1, Rows n2',
+        'result: n3',
       ].join('\n'),
     );
     expect(returnedAt(graph, 0)).toEqual(['id', 'name', 'posts']);
-    expect(returnedAt(graph, 1)).toEqual([]);
+    expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
   });
 
   it('makes that Find also return the identity columns the Delete reads', () => {
@@ -224,31 +225,33 @@ describe('updateFirstGraph', () => {
 });
 
 describe('deleteFirstGraph', () => {
-  it('builds a Find of the first row as the result and a Delete of the row it finds, which returns nothing', () => {
+  it('builds a Find of the first row, a Delete of the row it finds that returns its columns, and keeps the found row the Delete removed as the result', () => {
     const graph = deleteFirstGraph(target);
 
     expect(printAsRun(graph)).toBe(
       [
         "n1 Find users where name = 'Ada' order by id asc limit 1",
         'n2 Delete users <- FilterData n1 (id->id)',
-        'result: n1',
+        'n3 DeletedRows <- WholeRows n1, Rows n2',
+        'result: n3',
       ].join('\n'),
     );
-    expect(returnedAt(graph, 1)).toEqual([]);
+    expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
   });
 
-  it('makes the Find carry the includes and be the result when there are includes', () => {
+  it('makes the Find carry the includes, and the Delete return the columns of the table only', () => {
     const graph = deleteFirstGraph(targetWithIncludes);
 
     expect(printGraph(graph)).toBe(
       [
         "n1 Find users where name = 'Ada' order by id asc limit 1",
         'n2 Delete users <- FilterData n1 (id->id)',
-        'result: n1',
+        'n3 DeletedRows <- WholeRows n1, Rows n2',
+        'result: n3',
       ].join('\n'),
     );
     expect(returnedAt(graph, 0)).toEqual(['id', 'name', 'posts']);
-    expect(returnedAt(graph, 1)).toEqual([]);
+    expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
   });
 
   it('makes that Find also return the identity columns the Delete reads', () => {
@@ -370,14 +373,15 @@ describe('updateFirstGraph and deleteFirstGraph by key', () => {
     });
   });
 
-  it('keeps a Find without a limit as the result and a Delete by key for delete() with includes', () => {
+  it('keeps a Find without a limit and a Delete by key for delete() with includes, and returns the found row the Delete removed', () => {
     const graph = deleteFirstGraph(targetOf(allUsers.where({ id: 1 }).include('posts').state));
 
     expect(printAsRun(graph)).toBe(
       [
         'n1 Find users where id = 1',
         'n2 Delete users where id = 1 <- FilterData n1 (id->id)',
-        'result: n1',
+        'n3 DeletedRows <- WholeRows n1, Rows n2',
+        'result: n3',
       ].join('\n'),
     );
     expect(returnedAt(graph, 0)).toEqual(['id', 'name', 'posts']);

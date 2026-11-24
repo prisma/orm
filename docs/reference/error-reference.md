@@ -1119,9 +1119,15 @@ An argument to an ORM client or query-builder method, including the input of a n
 
 The operation needs a contract capability the contract does not declare; the payload names it in `capability` and the operation in `action` or `method`.
 
+### ORM.COLUMN_AMBIGUOUS
+
+The `sql()` builder's `select`, `orderBy`, `groupBy` or `distinctOn` names a column by itself, and more than one joined table or alias has that name, so the builder cannot tell which one is meant. A name that two or more joined tables share is never a top-level field. An output name chosen in an earlier `select`, such as `id` in `select('id', (f) => f.users.id)`, is not affected in `orderBy` and `distinctOn`, which accept it by that name. `groupBy` does not: `groupBy('id')` passes the builder, but the database matches a table column before an output name in `GROUP BY` and refuses it as ambiguous; write `groupBy((f) => f.users.id)`. Thrown by the `select`, `orderBy`, `groupBy` or `distinctOn` call. `fix` lists the tables that have the name and gives the call with the table left as a placeholder for the user to choose, such as `select('id', (f) => f.<table>.id)` for `select`, or `orderBy((f) => f.<table>.id)` for the others. The suggestion replaces only that one name: `orderBy` keeps its options, and for the other three methods any other names go in a separate call, which adds to the earlier one. Payload: `column`, `candidates` (the tables or aliases that have it).
+
 ### ORM.COLUMN_UNKNOWN
 
 A mutation payload or where-expression references a column that does not exist on the resolved table. Thrown while compiling the query plan or binding the where clause, by the ORM client and by the `sql()` builder DSL. Payload: `namespaceId`, `tableName`, `column`.
+
+The `sql()` builder also raises it when `select`, `orderBy`, `groupBy` or `distinctOn` names a column by itself and no table in the query's scope has that name. Payload: `column`.
 
 ### ORM.CURSOR_VALUE_MISSING
 
