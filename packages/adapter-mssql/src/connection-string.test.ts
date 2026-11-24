@@ -122,6 +122,27 @@ describe('parseConnectionString', () => {
 
       expect(config.pool?.acquireTimeoutMillis).toBe(15000) // 15 seconds in milliseconds
     })
+
+    it('should parse poolIdleTimeout parameter correctly', () => {
+      const connectionString = 'sqlserver://localhost;database=testdb;poolIdleTimeout=15'
+      const { config } = parseConnectionString(connectionString)
+
+      expect(config.pool?.idleTimeoutMillis).toBe(15000) // 15 seconds in milliseconds
+    })
+
+    it('should parse poolMinConnections parameter correctly', () => {
+      const connectionString = 'sqlserver://localhost;database=testdb;poolMinConnections=2'
+      const { config } = parseConnectionString(connectionString)
+
+      expect(config.pool?.min).toBe(2)
+    })
+
+    it('should parse poolMaxConnections parameter correctly', () => {
+      const connectionString = 'sqlserver://localhost;database=testdb;poolMaxConnections=15'
+      const { config } = parseConnectionString(connectionString)
+
+      expect(config.pool?.max).toBe(15)
+    })
   })
 
   describe('timeout parameters', () => {
@@ -478,6 +499,28 @@ describe('parseConnectionString', () => {
       expect(() => {
         parseConnectionString(connectionString)
       }).toThrow('Server host is required in connection string')
+    })
+
+    describe('should not allow negative integers', () => {
+      it.each([
+        'connectionLimit',
+        'connectionTimeout',
+        'loginTimeout',
+        'socketTimeout',
+        'poolTimeout',
+        'poolIdleTimeout',
+        'poolMinConnections',
+      ])('should throw for negative value for %s', (parameter) => {
+        expect(() => {
+          parseConnectionString(`sqlserver://localhost:1433;database=testdb;${parameter}=-1`)
+        }).toThrow(/Invalid .*: -1/)
+      })
+
+      it('should throw for negative port', () => {
+        expect(() => {
+          parseConnectionString('sqlserver://localhost:-1;database=testdb')
+        }).toThrow(/Invalid .*: -1/)
+      })
     })
   })
 
