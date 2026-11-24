@@ -1,6 +1,9 @@
 type Kind$1 = "b" | "a";
+interface Extra$1 {
+  readonly more: string;
+}
 declare module "fixture-augment/registry" {
-  interface Registry {
+  interface Registry extends Extra$1 {
     readonly "fixture/size": number;
     label?: string;
     readonly mode: "write" | "read";
@@ -11,4 +14,4 @@ declare module "fixture-augment/registry" {
     describe(): string;
   }
 }
-export { Kind$1 as t };
+export { Kind$1 as t, Extra$1 as u };

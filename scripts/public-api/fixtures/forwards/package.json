@@ -6,6 +6,7 @@
     ".": "./lib/index.mjs",
     "./default": "./lib/default.mjs",
     "./named": "./lib/named.mjs",
+    "./types": "./lib/types.mjs",
     "./package.json": "./package.json"
   }
 }

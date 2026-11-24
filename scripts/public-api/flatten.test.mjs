@@ -158,6 +158,9 @@ describe('flattenPackage', () => {
         './named: export norm = normalize from pathe',
         './default: export paths = default from pathe',
         './named: export res = resolve from pathe',
+        './types: export type join from pathe',
+        './types: export type norm = normalize from pathe',
+        './types: export type res = resolve from pathe',
       ]),
     );
   });
@@ -166,7 +169,7 @@ describe('flattenPackage', () => {
     deepStrictEqual(
       linesOf('augment'),
       sorted([
-        '.: augments fixture-augment/registry interface Registry',
+        '.: augments fixture-augment/registry interface Registry extends Extra',
         '.: augments fixture-augment/registry interface Registry, optional property label?: string',
         '.: augments fixture-augment/registry interface Registry, optional property name?: string',
         '.: deprecated: augments fixture-augment/registry interface Registry, optional property name?: string',
@@ -176,6 +179,8 @@ describe('flattenPackage', () => {
         '.: augments fixture-augment/registry interface Registry, readonly required property spaced: "a  b"',
         '.: augments fixture-augment/registry interface Registry, required method describe(): string',
         '.: function plain(): void',
+        '.: interface Extra',
+        '.: interface Extra, readonly required property more: string',
         '.: type Kind = "a" | "b"',
         './registry: interface Registry',
         './registry: interface Registry, readonly required property base: string',
@@ -563,6 +568,31 @@ describe('flattenPackage', () => {
     throws(() => linesOf('statics', removeCount(false)), /member Counter\.count has no line/);
   });
 
+  it('finds an augmentation file the way the compiler resolves its import', () => {
+    deepStrictEqual(
+      linesOf('augment-js'),
+      sorted([
+        '.: augments fixture-augment-js/registry interface Registry',
+        '.: augments fixture-augment-js/registry interface Registry, readonly required property extra: string',
+        '.: function plain(): void',
+        './registry: interface Registry',
+        './registry: interface Registry, readonly required property base: string',
+      ]),
+    );
+  });
+
+  it('qualifies a type from elsewhere by its package when the package exports one of that name', () => {
+    deepStrictEqual(
+      linesOf('qualify'),
+      sorted([
+        '.: function check(errors: @ark/schema.ArkErrors): ArkErrors',
+        '.: function legacy(errors: arktype.ArkErrors): void',
+        '.: interface ArkErrors',
+        '.: interface ArkErrors, readonly required property own: true',
+      ]),
+    );
+  });
+
   it('sorts union members and prints import("…") references by name alone', () => {
     deepStrictEqual(
       linesOf('normalize'),
@@ -584,7 +614,7 @@ describe('flattenPackage', () => {
   it('fails when dropping an import("…") module makes two items give the same line', () => {
     throws(
       () => linesOf('import-duplicate'),
-      /two different items give the line "\.: function describe\(value: ParsedPath\): void"/,
+      /two different items give the line "\.: function describe\(value: ReadStream\): void"/,
     );
   });
 

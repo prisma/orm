@@ -127,7 +127,7 @@ function excerptText(item, nameOf, ownName) {
       text += token.text;
       continue;
     }
-    const local = nameOf(reference);
+    const local = nameOf(reference, token.text, text.endsWith('.'));
     const external = TOP_LEVEL_REFERENCE.exec(reference);
     text += local ?? (external && token.text.includes('$') ? external[2] : token.text);
   }
@@ -194,9 +194,12 @@ class LineSet {
 
 // Emits the lines of one item and its members. `ownName` is null for a member. With
 // `keepImportModules`, types keep the module of an `import("…")` reference, to compare declarations.
-function emitItem(item, { prefix, context, ownName, nameOf, origin, lines, keepImportModules }) {
+function emitItem(
+  item,
+  { prefix, context, ownName, nameOf, origin, lines, keepImportModules, qualify },
+) {
   const itemOrigin = `${origin} ${item.canonicalReference.toString()}`;
-  const options = { keepImportModules };
+  const options = { keepImportModules, qualify };
   let own;
   try {
     own =
@@ -222,6 +225,7 @@ function emitItem(item, { prefix, context, ownName, nameOf, origin, lines, keepI
       origin,
       lines,
       keepImportModules,
+      qualify,
     });
   }
 }
@@ -237,6 +241,14 @@ function loadModels(entryPoints) {
       shareKeysOfHalves(model.members);
       return { ...entryPoint, packageName: model.parent.name, items: model.members, byReference };
     });
+}
+
+// The package or module a canonical reference names: `mongodb` in `mongodb!MongoClient:class`,
+// `node:fs` in `!"\"node:fs\"".ReadStream:class`. A global type has none.
+function moduleOf(reference) {
+  const bang = reference.indexOf('!');
+  if (bang > 0) return reference.slice(0, bang);
+  return /^!"\\"([^"\\]+)\\""/.exec(reference)?.[1];
 }
 
 const AE_SIGNATURE_KEYS = {
@@ -393,9 +405,24 @@ function nameDeclarations(models, paths, packageName, problems) {
   }
 
   const sourceName = (item) => withoutBundlerSuffix(declaredName(item));
-  const nameOf = (model, names) => (reference) => {
+  // A type from elsewhere whose name this package also exports is printed with its package, so
+  // the two read differently.
+  const exportNames = new Set(
+    [...exportedByModel.values()].flatMap((exported) =>
+      [...exported.values()].flatMap((group) => group.names),
+    ),
+  );
+  const qualified = (reference, text, afterDot) => {
+    if (afterDot || reference.startsWith(`${packageName}!`)) return undefined;
+    const external = TOP_LEVEL_REFERENCE.exec(reference);
+    const name = external && text.includes('$') ? external[2] : text;
+    const module = moduleOf(reference);
+    if (!exportNames.has(name) || module === undefined) return undefined;
+    return `import("${module}").${name}`;
+  };
+  const nameOf = (model, names) => (reference, text, afterDot) => {
     const item = model.byReference.get(reference);
-    if (item === undefined) return undefined;
+    if (item === undefined) return qualified(reference, text, afterDot);
     const group = exportedByModel.get(model).get(item);
     if (group) return group.referenceName;
     const key = declarationKey(item);
@@ -416,7 +443,9 @@ function nameDeclarations(models, paths, packageName, problems) {
         prefix: '',
         context: '',
         ownName: sourceName(local.items[0]),
-        nameOf: compare ? (reference) => named(reference) ?? fullName(reference) : named,
+        nameOf: compare
+          ? (reference, text, afterDot) => fullName(reference) ?? named(reference, text, afterDot)
+          : named,
         origin: local.key,
         lines,
         keepImportModules: true,
@@ -514,7 +543,7 @@ function nameDeclarations(models, paths, packageName, problems) {
     local.sameAs = root === local.key ? undefined : locals.get(root);
   }
 
-  return { locals, localNames, nameOf: (model) => nameOf(model, localNames) };
+  return { locals, localNames, exportNames, nameOf: (model) => nameOf(model, localNames) };
 }
 
 export function portabilityProblems(lines, root) {
@@ -587,7 +616,12 @@ function augmentationNames({ checker, isOwn, model, info, packageGroups, localNa
 }
 
 function augmentationLines(augmentation, rename) {
-  const lines = [{ line: augmentation.head, deprecated: false }];
+  const heritage = augmentation.heritage
+    .map((clause) => oneLine(renderNode(clause, augmentation.file, { rename })))
+    .join(' ');
+  const lines = [
+    { line: heritage ? `${augmentation.head} ${heritage}` : augmentation.head, deprecated: false },
+  ];
   for (const member of augmentation.members) {
     const text = oneLine(renderNode(member, augmentation.file, { rename }))
       .replace(/;$/, '')
@@ -623,7 +657,12 @@ export function flattenPackage(packageDir, entryPoints) {
 function collectLines(models, { checker, paths, isOwn, containers, memberKeysOf }) {
   const problems = [];
   const packageName = models[0]?.packageName;
-  const { locals, localNames, nameOf } = nameDeclarations(models, paths, packageName, problems);
+  const { locals, localNames, exportNames, nameOf } = nameDeclarations(
+    models,
+    paths,
+    packageName,
+    problems,
+  );
   const lines = new LineSet();
   const covered = new Set();
   const cover = (subpath, name) => covered.add(`${subpath}\0${name}`);
@@ -638,6 +677,7 @@ function collectLines(models, { checker, paths, isOwn, containers, memberKeysOf 
         nameOf: nameOf(local.model),
         origin: local.key,
         lines,
+        qualify: exportNames,
       });
     }
   }
@@ -675,6 +715,7 @@ function collectLines(models, { checker, paths, isOwn, containers, memberKeysOf 
             nameOf: nameOf(model),
             origin: `${model.subpath} ${name}`,
             lines,
+            qualify: exportNames,
           });
           cover(model.subpath, name);
         }
@@ -693,7 +734,7 @@ function collectLines(models, { checker, paths, isOwn, containers, memberKeysOf 
     for (const name of info.starCovered) cover(model.subpath, name);
     for (const forward of info.namespaceForwards) {
       lines.add(
-        `${pathPrefix}export ${forward.exportName} = everything from ${forward.from}`,
+        `${pathPrefix}export ${forward.typeOnly ? 'type ' : ''}${forward.exportName} = everything from ${forward.from}`,
         `${model.subpath} namespace ${forward.exportName}`,
       );
       cover(model.subpath, forward.exportName);
@@ -702,7 +743,7 @@ function collectLines(models, { checker, paths, isOwn, containers, memberKeysOf 
       const original =
         forward.originalName !== forward.exportName ? ` = ${forward.originalName}` : '';
       lines.add(
-        `${pathPrefix}export ${forward.exportName}${original} from ${forward.from}`,
+        `${pathPrefix}export ${forward.typeOnly ? 'type ' : ''}${forward.exportName}${original} from ${forward.from}`,
         `${model.subpath} forward ${forward.exportName}`,
       );
       cover(model.subpath, forward.exportName);

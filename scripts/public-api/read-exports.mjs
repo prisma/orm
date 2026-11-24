@@ -1,7 +1,7 @@
 // What each import path of a package exports, as the TypeScript compiler sees it. This uses the
 // repository's TypeScript; API Extractor brings its own copy, which reads the same files.
 
-import { dirname, relative, resolve, sep } from 'node:path';
+import { relative, resolve, sep } from 'node:path';
 import { SourceMapper } from '@microsoft/api-extractor/lib/collector/SourceMapper';
 import ts from 'typescript';
 import { COMPILER_OPTIONS } from './compiler-options.mjs';
@@ -29,17 +29,38 @@ function moduleSpecifierOf(declaration) {
 
 // Follows an export through imports and re-exports to the first non-relative module it passes,
 // and the name it has there.
+function isTypeOnly(declaration) {
+  if (ts.isImportSpecifier(declaration)) {
+    return declaration.isTypeOnly || declaration.parent.parent.isTypeOnly;
+  }
+  if (ts.isExportSpecifier(declaration)) {
+    return declaration.isTypeOnly || declaration.parent.parent.isTypeOnly;
+  }
+  if (ts.isImportClause(declaration)) return declaration.isTypeOnly;
+  if (ts.isNamespaceImport(declaration)) return declaration.parent.isTypeOnly;
+  return false;
+}
+
+// Follows an export through imports and re-exports to the first non-relative module it passes:
+// that module, the name the export has there, and whether any step on the way is type-only.
 function traceForward(checker, symbol) {
   let current = symbol;
+  let typeOnly = false;
   const seen = new Set();
   while (current && current.flags & ts.SymbolFlags.Alias && !seen.has(current)) {
     seen.add(current);
     for (const declaration of current.declarations ?? []) {
+      typeOnly ||= isTypeOnly(declaration);
       const specifier = moduleSpecifierOf(declaration)?.text;
       if (specifier === undefined || !isBare(specifier)) continue;
-      if (ts.isImportClause(declaration)) return { from: specifier, originalName: 'default' };
-      if (ts.isNamespaceImport(declaration)) return { from: specifier, originalName: undefined };
-      return { from: specifier, originalName: (declaration.propertyName ?? declaration.name).text };
+      if (ts.isImportClause(declaration)) {
+        return { from: specifier, originalName: 'default', typeOnly };
+      }
+      if (ts.isNamespaceImport(declaration)) {
+        return { from: specifier, originalName: undefined, typeOnly };
+      }
+      const originalName = (declaration.propertyName ?? declaration.name).text;
+      return { from: specifier, originalName, typeOnly };
     }
     current = checker.getImmediateAliasedSymbol(current);
   }
@@ -138,6 +159,7 @@ function containersByLocation(program, checker, isOwn, packageDir) {
 }
 
 function reachableFiles(program, entry, packageDir) {
+  const options = program.getCompilerOptions();
   const seen = new Set([entry.fileName]);
   const stack = [entry];
   const files = [];
@@ -148,7 +170,18 @@ function reachableFiles(program, entry, packageDir) {
       const imports = ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement);
       const specifier = imports ? statement.moduleSpecifier?.text : undefined;
       if (!specifier?.startsWith('.')) continue;
-      const path = resolve(dirname(file.fileName), specifier.replace(/\.mjs$/, '.d.mts'));
+      const mode = program.getModeForUsageLocation(file, statement.moduleSpecifier);
+      const resolved = ts.resolveModuleName(
+        specifier,
+        file.fileName,
+        options,
+        ts.sys,
+        undefined,
+        undefined,
+        mode,
+      ).resolvedModule?.resolvedFileName;
+      if (resolved === undefined) continue;
+      const path = resolve(resolved);
       if (seen.has(path) || !path.startsWith(`${packageDir}${sep}`)) continue;
       seen.add(path);
       const next = program.getSourceFile(path);
@@ -178,6 +211,7 @@ function augmentationsOf(files, problems) {
         }
         found.push({
           head: `augments ${statement.name.text} interface ${declaration.name.text}`,
+          heritage: [...(declaration.heritageClauses ?? [])],
           members: [...declaration.members],
           file,
         });
@@ -251,12 +285,17 @@ function readPath(checker, program, file, packageDir) {
         `cannot list the export ${name}: it is neither declared in this package nor forwarded from another`,
       );
     } else if (forward.originalName === undefined) {
-      info.namespaceForwards.push({ exportName: name, from: forward.from });
+      info.namespaceForwards.push({
+        exportName: name,
+        from: forward.from,
+        typeOnly: forward.typeOnly,
+      });
     } else {
       info.namedForwards.push({
         exportName: name,
         originalName: forward.originalName,
         from: forward.from,
+        typeOnly: forward.typeOnly,
       });
     }
   }

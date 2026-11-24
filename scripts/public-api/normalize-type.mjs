@@ -5,6 +5,37 @@ import ts from 'typescript';
 
 export class TypeTextError extends Error {}
 
+// `import("x").A.B` written as an expression, as in a class's `extends` or `implements`.
+function importedName(node) {
+  if (!ts.isPropertyAccessExpression(node) || ts.isPropertyAccessExpression(node.parent)) {
+    return undefined;
+  }
+  const names = [];
+  let current = node;
+  while (ts.isPropertyAccessExpression(current)) {
+    names.unshift(current.name.text);
+    current = current.expression;
+  }
+  const isImportCall =
+    ts.isCallExpression(current) &&
+    current.expression.kind === ts.SyntaxKind.ImportKeyword &&
+    current.arguments.length === 1 &&
+    ts.isStringLiteral(current.arguments[0]);
+  return isImportCall ? { specifier: current.arguments[0].text, names } : undefined;
+}
+
+function checkSpecifier(specifier) {
+  if (/^(\.|\/|[A-Za-z]:)/.test(specifier)) {
+    throw new TypeTextError(
+      `import("${specifier}") names a file, not a package. Declarations must refer to another package by its name, so check how the declaration build wrote this type.`,
+    );
+  }
+}
+
+function leftmostName(name) {
+  return ts.isQualifiedName(name) ? leftmostName(name.left) : name;
+}
+
 export const compareCodeUnits = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 const CONTAINER_DECLARATION = /^(abstract class|class|const enum|enum|namespace|module) /;
@@ -36,10 +67,11 @@ function isTypeName(node) {
 }
 
 // Prints `node` with the members of every union sorted and `import("…").Name` as `Name`, or
-// with the module kept when `keepImportModules` is set. `rename` may give the printed name of an
+// with the module kept when `keepImportModules` is set, or as `module.Name` when `qualify` holds
+// the name. `rename` may give the printed name of an
 // identifier that names a type.
 export function renderNode(node, file, options = {}) {
-  const { rename = () => undefined, keepImportModules = false } = options;
+  const { rename = () => undefined, keepImportModules = false, qualify = new Set() } = options;
   if (isTypeName(node)) return rename(node) ?? node.getText(file);
   if (ts.isUnionTypeNode(node)) {
     return node.types
@@ -47,19 +79,23 @@ export function renderNode(node, file, options = {}) {
       .sort(compareCodeUnits)
       .join(' | ');
   }
-  if (ts.isImportTypeNode(node)) {
-    const specifier = node.argument.literal.text;
-    if (/^(\.|\/|[A-Za-z]:)/.test(specifier)) {
-      throw new TypeTextError(
-        `import("${specifier}") names a file, not a package. Declarations must refer to another package by its name, so check how the declaration build wrote this type.`,
-      );
-    }
+  const imported = importedName(node);
+  if (imported) {
+    checkSpecifier(imported.specifier);
+    if (keepImportModules) return node.getText(file);
+    const module = qualify.has(imported.names[0]) ? `${imported.specifier}.` : '';
+    return `${module}${imported.names.join('.')}`;
   }
+  if (ts.isImportTypeNode(node)) checkSpecifier(node.argument.literal.text);
   if (ts.isImportTypeNode(node) && node.qualifier && !keepImportModules) {
     const typeArguments = node.typeArguments
       ? `<${node.typeArguments.map((argument) => renderNode(argument, file, options)).join(', ')}>`
       : '';
-    return `${node.isTypeOf ? 'typeof ' : ''}${node.qualifier.getText(file)}${typeArguments}`;
+    const leftmost = ts.isQualifiedName(node.qualifier)
+      ? leftmostName(node.qualifier)
+      : node.qualifier;
+    const module = qualify.has(leftmost.text) ? `${node.argument.literal.text}.` : '';
+    return `${node.isTypeOf ? 'typeof ' : ''}${module}${node.qualifier.getText(file)}${typeArguments}`;
   }
   let text = '';
   let cursor = node.getStart(file);
@@ -71,7 +107,7 @@ export function renderNode(node, file, options = {}) {
 }
 
 // `context` says what `text` is: 'declaration', 'interface member', 'class member' or 'enum member'.
-export function normalizeTypes(text, context, { keepImportModules = false } = {}) {
+export function normalizeTypes(text, context, { keepImportModules = false, qualify } = {}) {
   const [prefix, suffix] = wrapperFor(text, context);
   const source = `${prefix}${text}${suffix}`;
   const file = ts.createSourceFile('type.d.ts', source, ts.ScriptTarget.Latest, true);
@@ -88,6 +124,6 @@ export function normalizeTypes(text, context, { keepImportModules = false } = {}
   ) {
     throw new TypeTextError(`cannot parse "${text}" as a ${context}`);
   }
-  const rendered = renderNode(statement, file, { keepImportModules });
+  const rendered = renderNode(statement, file, { keepImportModules, qualify });
   return rendered.slice(prefix.length, rendered.length - suffix.length);
 }

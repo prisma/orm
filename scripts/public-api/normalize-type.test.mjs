@@ -90,6 +90,26 @@ describe('normalizeTypes', () => {
     );
   });
 
+  it('prints import("…").Name in a class heritage clause by name, with the module when asked', () => {
+    strictEqual(
+      normalizeTypes(
+        'class A extends import("pkg").Base<1> implements import("other").Shape',
+        'declaration',
+      ),
+      'class A extends Base<1> implements Shape',
+    );
+    strictEqual(
+      normalizeTypes('class A extends import("pkg").Base<1>', 'declaration', {
+        qualify: new Set(['Base']),
+      }),
+      'class A extends pkg.Base<1>',
+    );
+    throws(
+      () => normalizeTypes('class A extends import("./chunk.mjs").Base', 'declaration'),
+      /names a file, not a package/,
+    );
+  });
+
   it('fails on text it cannot parse, naming the text', () => {
     throws(() => normalizeTypes('const x: {', 'declaration'), /cannot parse "const x: \{"/);
   });

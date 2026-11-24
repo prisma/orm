@@ -126,7 +126,7 @@ export function augmentsItself(packageDir, entryPoints) {
   const folders = new Set(entryPoints.map(({ declarationFile }) => dirname(declarationFile)));
   return [...folders].some((folder) =>
     readdirSync(folder)
-      .filter((file) => file.endsWith('.d.mts'))
+      .filter((file) => /\.d\.[cm]?ts$/.test(file))
       .some((file) => ownModule.test(readFileSync(join(folder, file), 'utf8'))),
   );
 }
