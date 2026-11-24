@@ -26,7 +26,7 @@ db.orm.users.preview_foo(...)          // Preview: the name says so, inside a GA
 
 Prisma has one scale of maturity with four levels: Early Access, Preview, Release Candidate and Generally Available (GA). "Below GA" means any of the first three. The scale applies to a package and to a single API. A level is written in a package's version number and at the start of an API's name, and nowhere else.
 
-All our packages share one release number, the major and the minor. The rest of a version is each package's own.
+All our packages share one release number, the major and the minor. The rest of a version is each package's own. One package is outside both: `@prisma/orm-extension-paradedb` has no level and its own version, starting at `0.1.0`, because its own team takes it over; it names our packages as any extension does.
 
 ### What a level tells a user
 
@@ -44,20 +44,23 @@ A level is defined by the least we do for a package or API at it, not by a descr
 | Preview | Its tests run and a failure blocks the release, for what it supports. Its reference documentation lists what it does not yet support; the maintainers decide that list. It may change in any release. |
 | Early Access | Released so that people can try it. We may release it with a failing test. It may change in any release. |
 
-While our packages are released together, a failing test of a GA, Release Candidate or Preview package blocks the release of all of them.
+Four points follow from these definitions and from the rule below that a package names only packages at its own level or above:
 
-A package that has no database of its own, such as the framework, has the level of the most mature package that needs it. The framework is GA when the first target package is.
+- **Which release a failing test blocks.** At each release number our packages are released together, so a failing test of a GA, Release Candidate or Preview package blocks that release for all of them. Early Access is the one level at which we may release with a failing test; nothing requires CI to allow it.
+- **Who decides what a Preview package supports.** Its maintainers, in the list its reference documentation carries. A package is not Preview until that list exists.
+- **A package that has no database of its own**, such as the framework, has the level of the most mature package that names it. The framework is GA when the first target package is.
+- **A level changes at a release number.** A package's version within one minor can only move forward, so within a minor a level can go up and not down.
 
 ### What has a level
 
-- **A package.** Every published package has a level. A target package and its target's platform package have the same level, so each database reaches GA on its own date.
+- **A package.** Every published package has a level. A database's level is the level of its target package, so each database reaches GA on its own date. A target package is never at a higher level than the platform packages it names.
 - **An API.** An API is an export, or a member of one, such as a method, a property or an option. An API has the level of its package unless its name starts with the word for a lower level. A member of an API below GA has at least that API's level.
 
 A name can only lower a level. A GA API cannot exist inside a package below GA, because the package's version already says that nothing in it is kept compatible.
 
 Nothing else has a level. An entrypoint (a path inside a package that code imports from, such as `@prisma/orm-toolchain/config-loader`) has none: everything it exports has the level of the package, or the lower level in its own name. A capability has the level of the package that publishes it.
 
-**A GA package of ours names only GA packages of ours.** A package cannot be relied on further than what it is built on. More generally, a package names only packages at its own level or above.
+**A GA package of ours names only GA packages of ours.** A package cannot be relied on further than what it is built on. For the same reason, a package at any level names only packages at its own level or above. The build checks it.
 
 ### How a level is written
 
@@ -75,26 +78,27 @@ When an API below GA becomes GA, the plain name is added, and the old name keeps
 ### Version numbers
 
 - **The major and minor are the release number.** Release `8.3` publishes every package at `8.3`.
-- **A GA package has its own patch number.** A fix to one GA package is published as that package alone, at `8.3.1`.
+- **A GA package has its own patch number.** A fix to one GA package raises that package's patch number, to `8.3.1`, and no other package's.
 - **A package below GA carries its level as a suffix, with its own counter.** A fix to it raises the counter, `8.3.0-preview.1`, and not the patch number, so that a user's range can select it.
 - **The suffix is what Semantic Versioning calls a pre-release.** A range such as `^8.0.0` never selects one, so a user gets a release below GA only by asking for it. The words sort in the right order: `ea`, `preview`, `rc`, then the plain version.
 
 ### Ranges between our packages
 
-The ranges are computed when a package is packed, from the release number and the levels. Nobody writes one by hand.
+The ranges are computed from the release number and the levels by the script that sets versions, and the build refuses a manifest that disagrees. Nobody writes one by hand.
 
 | From | To | Range |
 | --- | --- | --- |
 | A target package or a platform package | A GA package | Same minor, any patch: `~8.3.0` |
 | A target package or a platform package | A package below GA | The same, from that package's first version of the minor: `~8.3.0-ea.0` |
-| An extension or a library integration | Any package of ours | That release or any later one in the major version: `^8.3.0`, or `^8.3.0-ea.0` for a package below GA |
+| An extension or a library integration | A GA package | That release or any later one in the major version: `^8.3.0` |
+| An extension or a library integration | A package below GA | Within the minor, from that package's first version of it: `~8.3.0-ea.0` |
 
-An extension's range is wider than a target package's because of who must keep working. An extension built on release `8.1` has to work in an application on `8.4`, so it accepts any later release. The packages of one release are tested together, so among themselves they accept only that release.
+An extension's range on a GA package is wider than a target package's because of who must keep working. An extension built on release `8.1` has to work in an application on `8.4`, so it accepts any later release. The packages of one release are tested together, so among themselves they accept only that release. A package below GA may change in the next minor, so nothing accepts more than one minor of it.
 
 ### Tags
 
 - A GA release is published under the `latest` tag.
-- A release below GA is published under `latest` when the package has never had a GA release, so that a plain install works and the version shows the level. Otherwise it is published under a tag named after its level.
+- A release below GA is published under `latest` when the package has never had a GA release in any major version, so that a plain install works and the version shows the level. Otherwise it is published under a tag named after its level.
 
 ### What an application writes
 
@@ -133,7 +137,7 @@ A public issue on this repository describes three categories of support for a da
 
 - **ADR 017** (extension compatibility) gives the contract format, the plan model, the hook interface and each adapter separate version numbers. Only the contract's format version was built. The rest is replaced by this record: the platform packages share one release number.
 - **ADR 016** (SQL lowering) describes a feature flag for changes to generated SQL. There are no feature flags.
-- **ADR 242** said publishing is one operation over all packages at one version. The packages are still released together at each release number; a fix to one is published alone.
+- **ADR 242** said publishing is one operation over all packages at one version. The packages are still released together at each release number, each at its own version.
 
 ## Alternatives considered
 
