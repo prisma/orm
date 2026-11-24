@@ -384,10 +384,132 @@ describe('the packages init installs in a round', () => {
       installs,
     }).toEqual({
       packages: [
-        { name: '@prisma/orm-framework', version: '~8.1.0', outcome: 'installed' },
+        { name: '@prisma/orm-framework', version: '^8.1.0', outcome: 'installed' },
         { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
       ],
-      installs: [['@prisma/orm-framework@~8.1.0'], ['temporal-polyfill@^1.0.8']],
+      installs: [['@prisma/orm-framework@^8.1.0'], ['temporal-polyfill@^1.0.8']],
+    });
+  });
+});
+
+describe('the lines init writes for each line of releases', () => {
+  async function resolveFor(
+    targetVersion: string,
+    peers: Record<string, string>,
+    declared: Record<string, string> = {},
+  ) {
+    const installs: (readonly string[])[] = [];
+    const resolved = await resolveRequiredPeers({
+      packageName: '@prisma/orm-mysql',
+      ownsTarget: true,
+      installedElsewhere: new Set(),
+      declared: () => new Map(Object.entries(declared)),
+      installedVersion: () => undefined,
+      install: async (specifiers) => {
+        installs.push(specifiers);
+        return undefined;
+      },
+      read: async (name) =>
+        name === '@prisma/orm-mysql'
+          ? { version: targetVersion, peers: new Map(Object.entries(peers)) }
+          : { version: undefined, peers: new Map() },
+    });
+    return { resolved, installs };
+  }
+
+  it('writes the exact versions on the release candidates', async () => {
+    expect(
+      await resolveFor('8.0.0-rc.27', {
+        '@prisma/orm-framework': '8.0.0-rc.27',
+        'temporal-polyfill': '^1.0.8',
+      }),
+    ).toEqual({
+      resolved: {
+        target: '@prisma/orm-mysql@8.0.0-rc.27',
+        packages: [
+          { name: '@prisma/orm-framework', version: '8.0.0-rc.27', outcome: 'installed' },
+          { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
+        ],
+        unread: [],
+        warnings: [],
+      },
+      installs: [
+        [
+          '@prisma/orm-mysql@8.0.0-rc.27',
+          '@prisma/orm-framework@8.0.0-rc.27',
+          'temporal-polyfill@^1.0.8',
+        ],
+      ],
+    });
+  });
+
+  it('writes the exact versions for a development build', async () => {
+    const { installs } = await resolveFor('8.1.0-dev.4', {
+      '@prisma/orm-framework': '8.1.0-dev.4',
+    });
+
+    expect(installs).toEqual([
+      ['@prisma/orm-mysql@8.1.0-dev.4', '@prisma/orm-framework@8.1.0-dev.4'],
+    ]);
+  });
+
+  it('writes a caret on every line for a target package at a plain version', async () => {
+    const { resolved, installs } = await resolveFor('8.1.2', {
+      '@prisma/orm-framework': '~8.1.0',
+      'temporal-polyfill': '^1.0.8',
+    });
+
+    expect({ resolved, installs }).toMatchObject({
+      resolved: {
+        target: '@prisma/orm-mysql@^8.1.0',
+        packages: [
+          { name: '@prisma/orm-framework', version: '^8.1.0', outcome: 'installed' },
+          { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
+        ],
+      },
+      installs: [
+        ['@prisma/orm-mysql@^8.1.0', '@prisma/orm-framework@^8.1.0', 'temporal-polyfill@^1.0.8'],
+      ],
+    });
+  });
+
+  it('writes a tilde on every line for a target package at a pre-release', async () => {
+    const { resolved, installs } = await resolveFor('8.1.0-ea.1', {
+      '@prisma/orm-framework': '~8.1.0',
+      '@prisma/orm-target-mysql': '~8.1.0-ea.0',
+    });
+
+    expect({ resolved, installs }).toMatchObject({
+      resolved: {
+        target: '@prisma/orm-mysql@~8.1.0-ea.1',
+        packages: [
+          { name: '@prisma/orm-framework', version: '~8.1.0', outcome: 'installed' },
+          { name: '@prisma/orm-target-mysql', version: '~8.1.0-ea.0', outcome: 'installed' },
+        ],
+      },
+      installs: [
+        [
+          '@prisma/orm-mysql@~8.1.0-ea.1',
+          '@prisma/orm-framework@~8.1.0',
+          '@prisma/orm-target-mysql@~8.1.0-ea.0',
+        ],
+      ],
+    });
+  });
+
+  it('counts the line init would write as listed, and leaves the target line that already reads it', async () => {
+    const { resolved, installs } = await resolveFor(
+      '8.1.2',
+      { '@prisma/orm-framework': '~8.1.0' },
+      { '@prisma/orm-mysql': '^8.1.0', '@prisma/orm-framework': '^8.1.0' },
+    );
+
+    expect({ resolved, installs }).toMatchObject({
+      resolved: {
+        packages: [{ name: '@prisma/orm-framework', version: '^8.1.0', outcome: 'already-listed' }],
+        warnings: [],
+      },
+      installs: [],
     });
   });
 });
