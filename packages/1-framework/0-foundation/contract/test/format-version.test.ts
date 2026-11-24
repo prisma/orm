@@ -4,6 +4,7 @@ import {
   CONTRACT_FORMAT_VERSIONS,
   carriesFormatVersion,
   formatVersionErrorAt,
+  isContractBuiltInMemory,
   isFormatVersionError,
   readFormatVersion,
 } from '../src/format-version';
@@ -187,5 +188,33 @@ describe('carriesFormatVersion', () => {
     expect(carriesFormatVersion({ target: 'postgres' })).toBe(false);
     expect(carriesFormatVersion(null)).toBe(false);
     expect(carriesFormatVersion([])).toBe(false);
+  });
+});
+
+describe('isContractBuiltInMemory', () => {
+  class StorageNode {
+    readonly storageHash = 'sha256:x';
+  }
+
+  it('is true for a contract whose storage Prisma built as an object of a class', () => {
+    expect(isContractBuiltInMemory({ target: 'postgres', storage: new StorageNode() })).toBe(true);
+  });
+
+  it('is false for a contract read from a file, whose storage is a plain object', () => {
+    expect(isContractBuiltInMemory({ target: 'postgres', storage: { storageHash: 'x' } })).toBe(
+      false,
+    );
+    expect(isContractBuiltInMemory(JSON.parse('{"storage":{"storageHash":"x"}}'))).toBe(false);
+  });
+
+  it('is false for a value with a version field, whatever its storage', () => {
+    expect(isContractBuiltInMemory({ formatVersion: 1, storage: new StorageNode() })).toBe(false);
+    expect(isContractBuiltInMemory({ schemaVersion: '1', storage: new StorageNode() })).toBe(false);
+  });
+
+  it('is false for a value with no storage, and for anything that is not an object', () => {
+    expect(isContractBuiltInMemory({ target: 'postgres' })).toBe(false);
+    expect(isContractBuiltInMemory(null)).toBe(false);
+    expect(isContractBuiltInMemory([])).toBe(false);
   });
 });

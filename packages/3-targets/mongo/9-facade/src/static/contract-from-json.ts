@@ -1,4 +1,4 @@
-import { carriesFormatVersion } from '@internal/contract/format-version';
+import { isContractBuiltInMemory } from '@internal/contract/format-version';
 import { validateContractOnce } from '@internal/contract/validate-once';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import type {
@@ -42,7 +42,7 @@ export function validateMongoContract<
 >(contract: TContract): TContract {
   return validateContractOnce(contract, validator, () =>
     serializer.deserializeContract<TContract>(
-      carriesFormatVersion(contract) ? contract : serializer.serializeContract(contract),
+      isContractBuiltInMemory(contract) ? serializer.serializeContract(contract) : contract,
     ),
   );
 }

@@ -6,6 +6,7 @@ import {
   structuredError,
 } from '@internal/utils/structured-error';
 import { UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
+import { isPlainRecord } from './is-plain-record';
 
 /** The kinds of file Prisma writes into a repository and reads back, each of which says which version of its format it is in. */
 export type StoredFileKind = 'contract' | 'migration' | 'ref';
@@ -104,9 +105,18 @@ function problemOf(document: unknown, knownVersions: readonly number[]): FormatV
   return { reason: 'invalid', formatVersion };
 }
 
-/** Whether `value` carries a format version field, new or old, so it is a stored file rather than a contract in memory, which carries none. */
+/** Whether `value` carries a format version field, new or old. */
 export function carriesFormatVersion(value: unknown): boolean {
   return isJsonObject(value) && ('formatVersion' in value || 'schemaVersion' in value);
+}
+
+/**
+ * Whether `value` is a contract that Prisma built in memory, by the contract builder or by deserializing a file, rather than a stored contract document. Prisma builds `storage` as an object of an IR class; parsed JSON gives a plain object. A stored document must be read through its format version; only a contract built in memory may be printed again instead.
+ */
+export function isContractBuiltInMemory(value: unknown): boolean {
+  if (!isJsonObject(value) || carriesFormatVersion(value)) return false;
+  const storage = value['storage'];
+  return typeof storage === 'object' && storage !== null && !isPlainRecord(storage);
 }
 
 /** Whether `error` is one that {@link readFormatVersion} throws. */

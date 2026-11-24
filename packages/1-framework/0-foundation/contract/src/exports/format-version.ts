@@ -3,6 +3,7 @@ export {
   type ContractFormatVersion,
   carriesFormatVersion,
   formatVersionErrorAt,
+  isContractBuiltInMemory,
   isFormatVersionError,
   type ReadFormatVersionOptions,
   readFormatVersion,

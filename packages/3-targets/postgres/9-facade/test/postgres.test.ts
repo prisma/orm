@@ -1,6 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import { coreHash } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import { SqlStorage } from '@internal/sql-contract/types';
 import type { Runtime } from '@internal/sql-runtime';
 import { PostgresSchema } from '@internal/target-postgres/types';
 import { createContract } from '@repo/test-utils';
@@ -402,10 +402,10 @@ describe('postgres', () => {
 
     const twoNamespaceStorage = {
       ...contract,
-      storage: {
-        ...contract.storage,
+      storage: new SqlStorage({
+        storageHash: contract.storage.storageHash,
         namespaces: { public: publicNs, audit: auditNs },
-      },
+      }),
     };
 
     // A literal-keyed contract so `db.nativeEnums.public` and `.audit` resolve

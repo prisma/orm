@@ -54,6 +54,16 @@ describe('contractFromJson', () => {
       }),
     ).toThrow(expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_NEWER' }));
   });
+
+  it('refuses a stored contract with no format version passed straight to a client', () => {
+    const { formatVersion: _, ...withoutVersion } = fixtureContractJson;
+    expect(() => postgresStatic({ contract: withoutVersion as unknown as Contract })).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' }),
+    );
+    expect(() => postgres({ contract: withoutVersion as unknown as Contract })).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' }),
+    );
+  });
 });
 
 describe('validating a contract once', () => {

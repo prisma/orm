@@ -1,4 +1,4 @@
-import { carriesFormatVersion } from '@internal/contract/format-version';
+import { isContractBuiltInMemory } from '@internal/contract/format-version';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import {
   type AuthoringEntityTypeNamespace,
@@ -641,17 +641,17 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     assertContractMatchesStack(contract, stack);
     return contract;
   };
-  /** A contract the caller already deserialized is validated again from what it prints; a stored document is read as one. */
+  /** A contract Prisma built in memory is validated again from what it prints; anything else is a stored document, read through its format version. */
   const loadContractOrDocument = (contractOrJson: unknown): Contract<SqlStorage> =>
     loadContract(
-      carriesFormatVersion(contractOrJson)
-        ? contractOrJson
-        : contractSerializer.serializeContract(
+      isContractBuiltInMemory(contractOrJson)
+        ? contractSerializer.serializeContract(
             blindCast<
               Contract<SqlStorage>,
-              'a value without a format version field is a contract the caller already deserialized'
+              'isContractBuiltInMemory accepted it as a contract Prisma built'
             >(contractOrJson),
-          ),
+          )
+        : contractOrJson,
     );
 
   const contractHashesOf = (contract: SpaceToSign['contract']): MarkerHashes => {
