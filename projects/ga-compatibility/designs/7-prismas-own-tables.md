@@ -4,25 +4,29 @@ The design for project 7 of the [plan](../plan.md). It holds only what has been 
 
 Prisma keeps tables for itself in a user's database: the marker, which records the contract the database matches; the ledger, which lists the migrations applied; and the contract table.
 
-## 1. The tables are a contract space
+## 1. Each target keeps a contract and migrations for its own tables
 
-Prisma's own tables are described by a contract and changed by migrations, like the application's tables and each extension's. They form a contract space that the framework owns. This uses the concepts we already have for keeping a database in the form a contract describes, and adds no second mechanism.
+Prisma's own tables are described by a contract and changed by migrations, like the application's tables and each extension's. This uses the concepts we already have for keeping a database in the form a contract describes, and adds no second mechanism.
 
-The hash of that contract, recorded in the space's own marker row, says which form the tables are in. No version number is needed.
+Each target has its own tables, in its own database's terms, so each target package holds the contract and the ordered migrations for them. What SQL targets share sits in the SQL family.
 
-## 2. Where it differs from an extension's space
+The hash of that contract, recorded in the database, says which form the tables are in. No version number is needed. The target records it as a row in the marker table, under a reserved space name that no extension can take.
 
-**Nothing is copied into the user's repository.** An extension's contract and migrations are copied into the user's repository, and only those copies are read when migrations are applied. For the framework's space, the contract and migrations are read from the installed package.
+## 2. The framework does not see it
 
-The reason: these tables must match the release that is installed, not the repository. A user who upgrades Prisma and deploys without emitting first would otherwise apply an old copy, and the new release would then write to tables in the old form.
+Today each target's migration runner creates these tables itself when it starts, with statements its adapter supplies. The framework takes no part. That stays so: the runner brings the tables up to date at the same point, by executing its own migrations from the recorded hash to the newest.
 
-This is a stated exception to the decision record on contract spaces, which says that everything needed to apply and verify a database is in the user's repository.
+So this is not one of the contract spaces the framework assembles, orders and applies. Three things follow without any code:
 
-**It is not shown by default.** A user does not need to see or review changes to these tables, as with any other ORM. The command-line tool leaves this space out of what it displays, and shows it when asked.
+- **Nothing is copied into the user's repository.** The contract and migrations are read from the installed target package. These tables must match the release that is installed, not the repository: a user who upgrades Prisma and deploys without emitting first would otherwise apply an old copy, and the new release would then write to tables in the old form.
+- **It comes before every other space**, because the runner does it before it executes anything else.
+- **It is not displayed.** A user does not need to see or review changes to these tables, as with any other ORM.
+
+The framework's command-line code reads every marker row and refuses one whose space the project does not declare. The target's adapter does not report its own row there, so the framework needs no change.
 
 ## 3. When it is applied
 
-When migrations are executed, the framework goes through its own space as well as the application's. It does so before the first write to these tables, at the point where commands create them today, and in the same transaction where the database allows it.
+When migrations are executed, the target's runner brings its own tables up to date as well as applying the application's migrations. It does so before the first write to these tables, at the point where commands create them today, and in the same transaction where the database allows it.
 
 The user is not asked and writes nothing.
 
@@ -40,7 +44,6 @@ Without that row, a database could be in any earlier form, and a later release c
 
 ## 6. Not yet discussed
 
-- Each target has its own tables, in its own database's terms. Which package owns the space for each target.
 - How a database set up by a release candidate, whose tables may be in an older form, gets its starting row.
 - A change that is not an addition: the policy says the ORM stops and names the one command that makes it.
 - MongoDB, which keeps these records in one collection.
