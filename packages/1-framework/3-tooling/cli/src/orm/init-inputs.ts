@@ -924,7 +924,7 @@ export async function resolveInitInputs(ctx: {
   readonly warn: (text: string) => void;
   /** The manager the printed Prisma 6 setup names in its commands. */
   readonly packageManager: PackageManager;
-  /** The Prisma ORM peer packages of a target package, for the printed Prisma 6 setup. */
+  /** The required peers of a target package, for the printed Prisma 6 setup. */
   readonly requiredPeersFor: (packageName: string) => Promise<RequiredPeers>;
 }): Promise<ResolvedInitInputs> {
   const { cwd, flags, prompt } = ctx;
@@ -950,7 +950,7 @@ export async function resolveInitInputs(ctx: {
       const requiredPeers = await ctx.requiredPeersFor(prisma6.target.packageName);
       for (const unread of requiredPeers.unread) {
         ctx.warn(
-          `init could not read the peer dependencies of ${unread} from the registry, so the install command below leaves out the @prisma/orm-* packages it names as peers. Add each of them too, at the version of ${unread}: after installing it, its package.json lists them under peerDependencies.`,
+          `init could not read the peer dependencies of ${unread} from the registry, so the install command below leaves out the packages it needs as required peers. Add each of them too, at the version of ${unread}: after installing it, its package.json lists them under peerDependencies.`,
         );
       }
       throw prisma6SchemaFound(detection, prisma6, ctx.packageManager, requiredPeers);

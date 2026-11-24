@@ -227,7 +227,7 @@ describe(
           ]),
         },
         warnings: [
-          'init could not read the peer dependencies of @prisma/orm-mongo from the registry, so the install command below leaves out the @prisma/orm-* packages it names as peers. Add each of them too, at the version of @prisma/orm-mongo: after installing it, its package.json lists them under peerDependencies.',
+          'init could not read the peer dependencies of @prisma/orm-mongo from the registry, so the install command below leaves out the packages it needs as required peers. Add each of them too, at the version of @prisma/orm-mongo: after installing it, its package.json lists them under peerDependencies.',
         ],
       });
     });

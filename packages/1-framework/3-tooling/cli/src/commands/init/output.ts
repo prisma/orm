@@ -40,8 +40,10 @@ export const InitOutputSchema = type({
    * `devDeps` list what was installed: under `skipped`, and under a `failed`
    * first install, both are empty; when a later install fails, `deps` holds
    * what the first install, before the questions, put in place.
-   * `requiredPeers` says, for each `@prisma/orm-*` package the target
-   * package names as a peer, directly or through another, what init did:
+   * `requiredPeers` says, for each required peer of the target package (the
+   * `@prisma/orm-*` packages it names as peers, directly or through another,
+   * and the other required peers those name, such as `temporal-polyfill`),
+   * what init did:
    * installed it at `version`, found it already listed at that version, left
    * it at another version (and warned), or, under `--skip-install`, left it
    * for the application to install.

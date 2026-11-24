@@ -125,7 +125,7 @@ function besideTarget(cwd: string, targetPackage: string, name: string): ReadMan
 }
 
 /**
- * The Prisma ORM peer packages the printed Prisma 6 setup installs, read from the project's
+ * The required peers the printed Prisma 6 setup installs, read from the project's
  * installed manifests and, for a package the project has not installed, from the registry. Every
  * registry read shares one time limit. Nothing is installed.
  */
