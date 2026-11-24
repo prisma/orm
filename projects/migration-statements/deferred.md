@@ -651,3 +651,9 @@ The refusals of swaps, chains, takeovers and shared storage, and their two-plan 
 **Found:** system design review of the MongoDB stored-name renames, 2026-11-24.
 
 When several root models of a shared collection rename one field to the same new name, MongoDB plans one `$rename` by merging equal calls (`sameFieldRename` in `mongo-statement-planning.ts`), and each model's `FieldChange` is checked on its own. SQL groups them in one `ColumnChange` with `renames`. The result is the same today; grouping would make the type say it.
+
+## A boolean enum with a `false` member cannot be emitted
+
+**Found:** MongoDB stored-name renames, round 2 fixes, 2026-11-24.
+
+`enumType('Flag', type.Boolean(), member('YES', true), member('NO', false))` in a MongoDB TypeScript contract fails `contract emit` with `CONTRACT.VALIDATION_FAILED`: "domain.namespaces.__unbound__.enum.Flag.members[1].value must be … (was missing)". The contract canonicalization omits default values, and it treats every `false` as one (`isDefaultValue` in `packages/1-framework/0-foundation/contract/src/canonicalization.ts`, around line 83), so the member's `value: false` is dropped. PSL cannot write a boolean enum at all. So no user contract reaches the boolean enum refusals today, and no CLI journey can show them; planner tests cover them. Fixing it is a framework change: keep `false` under enum members.

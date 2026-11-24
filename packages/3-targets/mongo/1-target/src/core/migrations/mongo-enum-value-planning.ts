@@ -260,41 +260,22 @@ const NO_THIRD_BOOLEAN =
   'A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps.';
 
 /** How to make a change of the enum's stored values that one migration cannot make safely. */
-function enumTwoMigrationsAdvice(enums: EnumComparison, places: readonly EnumPlace[]): string {
+function enumTwoMigrationsAdvice(enums: EnumComparison): string {
   return isBooleanEnum(enums)
-    ? booleanSwapRoute(places, true)
+    ? booleanSwapAdvice(true)
     : inTwoSteps(
         'move every value they swap or chain to a stored value the enum does not use',
         'move them to their final values',
       );
 }
 
-/** The mongosh update that negates the boolean values of a root field, and touches no other value. */
-function negationUpdate(enumPlace: EnumPlace): string {
-  const { collection, field, variant } = enumPlace.place;
-  const selected = (selector: string) =>
-    `{ ${variant === undefined ? '' : `${JSON.stringify(variant.field)}: ${JSON.stringify(variant.value)}, `}${JSON.stringify(field)}: ${selector} }`;
-  const negated = (value: string) =>
-    `{ $cond: [{ $eq: [{ $type: ${value} }, "bool"] }, { $not: [${value}] }, ${value}] }`;
-  return enumPlace.many
-    ? `db.getCollection(${JSON.stringify(collection)}).updateMany(${selected('{ $type: "array" }')}, [{ $set: { ${JSON.stringify(field)}: { $map: { input: "$${field}", in: ${negated('"$$this"')} } } } }])`
-    : `db.getCollection(${JSON.stringify(collection)}).updateMany(${selected('{ $type: "bool" }')}, [{ $set: { ${JSON.stringify(field)}: { $not: ["$${field}"] } } }])`;
-}
-
 /**
- * The route for a boolean enum whose stored values trade places: no third value exists to move
- * through, so the enum leaves the fields, their values are swapped, touching only boolean values,
- * and the enum comes back with its new values. With `migration plan` the swap is a hand-written
- * migration, so every database that applies the migrations gets it; with `db update` it is run in
- * mongosh against the one database.
+ * Why a boolean enum whose two values trade places is refused with no route: there is no third
+ * value to move through, and a swap has no state a check can read, so no migration that makes it
+ * can run again after a stop. As on SQL, no hand-written rewrite of the values is offered.
  */
-function booleanSwapRoute(places: readonly EnumPlace[], withStatements: boolean): string {
-  const nested = places.find(({ path }) => path !== undefined);
-  if (nested !== undefined) {
-    return `${NO_THIRD_BOOLEAN} The enum is stored at path ${nested.path} of field ${JSON.stringify(nested.place.field)} of collection ${JSON.stringify(nested.place.collection)}, inside objects the plan cannot swap the values of, so keep the stored values of this enum in the contract.`;
-  }
-  const updates = places.map(negationUpdate).join('; ');
-  return `${NO_THIRD_BOOLEAN} Make it in three steps instead${withStatements ? ', without the statements that rename values of this enum' : ''}: first remove the enum and type the fields that hold it as plain booleans, and apply that; then swap their values, touching only boolean values so that missing and null values stay as they are, with these updates: ${updates}; then add the enum back with its new stored values, type the fields by it again, and apply that. With migration plan, make the second step a migration of its own, so that every database that applies the migrations swaps the values: run prisma migration new, and in the operations of the migration.ts it writes, add a dataTransform whose run makes each of these updates; then run that migration.ts to emit its ops.json, and apply it with db migrate. With db update, run the updates in mongosh.`;
+function booleanSwapAdvice(withStatements: boolean): string {
+  return `${NO_THIRD_BOOLEAN} A swap of the two values cannot be made so that a migration that stops part way can run again to finish, so keep the stored values of this enum in the contract${withStatements ? ', and leave out the statements that rename values of this enum' : ''}.`;
 }
 
 /** The expression that writes a stored value with the BSON type the enum's codec stores. */
@@ -536,7 +517,6 @@ function movesRefusal(
   moves: readonly MemberMove[],
   cycle: boolean,
   taken: readonly JsonValue[],
-  places: readonly EnumPlace[],
 ): MigrationPlannerConflict {
   const [first] = moves;
   const members = joinedList(moves.map(({ enumValue }) => memberText(enums, enumValue)));
@@ -547,7 +527,7 @@ function movesRefusal(
     cycle
       ? `Cannot change the stored values of enum "${enumName}": enum values ${members} move stored values in a cycle, ${listed}, and a rewrite of one would overwrite the other before it is read`
       : `Cannot change the stored values of enum "${enumName}": enum values ${members} move stored values along a chain, ${listed}, and a rewrite of one would write a value another still has to read`,
-    `${cycle ? CYCLE_WHY : CHAIN_WHY} ${isBooleanEnum(enums) ? booleanSwapRoute(places, false) : movesTwoPlans(enums, moves, taken)}`,
+    `${cycle ? CYCLE_WHY : CHAIN_WHY} ${isBooleanEnum(enums) ? booleanSwapAdvice(false) : movesTwoPlans(enums, moves, taken)}`,
   );
 }
 
@@ -581,7 +561,6 @@ function memberMovesRefusal(
   enums: EnumComparison,
   changes: readonly ValueChange[],
   taken: readonly JsonValue[],
-  places: readonly EnumPlace[],
 ): MigrationPlannerConflict | undefined {
   const moves = changes.flatMap((change): MemberMove[] =>
     change.statement === undefined && change.to !== undefined ? [{ ...change, to: change.to }] : [],
@@ -608,7 +587,7 @@ function memberMovesRefusal(
         ),
     );
     if (involvesStatement) continue;
-    return movesRefusal(enums, group.moves, group.cycle, taken, places);
+    return movesRefusal(enums, group.moves, group.cycle, taken);
   }
   return undefined;
 }
@@ -751,10 +730,9 @@ function planEnum(
   ];
   const conflicts = placeRefusals(enums, checked, live, input);
   if (conflicts.length > 0) return notOk(conflicts);
-  const moved =
-    managed.length === 0 ? undefined : memberMovesRefusal(enums, checked, taken, managed);
+  const moved = managed.length === 0 ? undefined : memberMovesRefusal(enums, checked, taken);
   if (moved !== undefined) return notOk([moved]);
-  const advice = enumTwoMigrationsAdvice(enums, managed);
+  const advice = enumTwoMigrationsAdvice(enums);
   const bsonTypes = bsonTypesOfCodec(destinationEnum.codecId, input.lookups) ?? [];
   const replacements: EnumValueReplacement[] = [];
   const removals: EnumValueRewrite<RemoveStoredValueCall>[] = [];

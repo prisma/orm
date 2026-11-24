@@ -225,12 +225,11 @@ export function useStatementsDatabase(dbName: string) {
     return { planned, result: await runOperations(operations, from, to) };
   }
 
-  /** Runs `operations`, serialized as `ops.json` holds them, as the migration from `from` to `to`, under `operationPolicy`. */
+  /** Runs `operations`, serialized as `ops.json` holds them, as the migration from `from` to `to`. */
   async function runOperations(
     operations: readonly AnyMongoMigrationOperation[],
     from: MongoContract,
     to: MongoContract,
-    operationPolicy: MigrationOperationPolicy = policy,
   ) {
     const plan: MigrationPlan = {
       targetId: 'mongo',
@@ -250,7 +249,7 @@ export function useStatementsDatabase(dbName: string) {
         }),
       ],
       destinationContract: to,
-      policy: operationPolicy,
+      policy,
       frameworkComponents: [],
     });
   }

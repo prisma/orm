@@ -1,10 +1,7 @@
 import { introspectSchema } from '@internal/adapter-mongo/control';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
-import { RawUpdateManyCommand } from '@internal/mongo-query-ast/execution';
 import { MongoMigrationPlanner } from '@internal/target-mongo/control';
-import { dataTransform } from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
-import type { Db } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { useStatementsDatabase } from './runner-statements-fixtures';
 import { contract, ORIGIN, user } from './runner-stored-name-fixtures';
@@ -17,36 +14,6 @@ function labels(planned: {
   return (planned.plan?.operations ?? []).map((operation) =>
     Reflect.get(Object(operation), 'label'),
   );
-}
-
-/** Quotes the keys of a mongosh object literal, so the printed text reads as JSON. */
-function asJson(text: string): unknown {
-  return JSON.parse(text.replace(/([{,]\s*)(\$?[A-Za-z_][\w]*)\s*:/g, '$1"$2":'));
-}
-
-/** The `db.getCollection(<name>).updateMany(<filter>, <pipeline>)` calls of a refusal's text, as printed. */
-function printedUpdates(text: string) {
-  return [...text.matchAll(/db\.getCollection\(("[^"]+")\)\.updateMany\((.*?\])\)(?=;|$)/g)].map(
-    ([, name, args]) => {
-      const [filter, pipeline] = asJson(`[${args}]`) as [
-        Record<string, unknown>,
-        Record<string, unknown>[],
-      ];
-      return { collection: String(JSON.parse(name ?? '""')), filter, pipeline };
-    },
-  );
-}
-
-/**
- * Runs, against `db`, each `db.getCollection(<name>).updateMany(<filter>, <pipeline>)` of a
- * refusal's text, exactly as printed.
- */
-async function runPrintedUpdates(db: Db, text: string): Promise<number> {
-  const printed = printedUpdates(text);
-  for (const { collection, filter, pipeline } of printed) {
-    await db.collection(collection).updateMany(filter, pipeline);
-  }
-  return printed.length;
 }
 
 describe('a db update that stopped part way, run again', {
@@ -257,92 +224,5 @@ describe('a db update that stopped part way, run again', {
       ok: true,
       documents: [{ email_address: 'a@example.com', status: 'retired', notes: [{ body: 'hi' }] }],
     });
-  });
-});
-
-describe('the updates a boolean enum swap refusal prints', {
-  timeout: timeouts.spinUpMongoMemoryServer,
-}, () => {
-  const { db, documents, initMarker, runOperations } = useStatementsDatabase(
-    'stored_name_boolean_swap',
-  );
-
-  const flags = (seed: string, members: Readonly<Record<string, boolean>>) =>
-    contract(
-      seed,
-      {
-        User: {
-          collection: 'users',
-          fields: { flag: 'flag', flags: 'flags' },
-          status: { flag: 'one', flags: 'many' },
-        },
-      },
-      members,
-      'mongo/bool@1',
-    );
-
-  const SEEDED = [
-    { flag: true, flags: [true, false, 'x'] },
-    { flag: false, flags: [] },
-    { flag: null },
-    { flag: 'yes' },
-    {},
-  ];
-  const SWAPPED = [
-    { flag: false, flags: [false, true, 'x'] },
-    { flag: true, flags: [] },
-    { flag: null },
-    { flag: 'yes' },
-    {},
-  ];
-
-  async function refusalText() {
-    const result = new MongoMigrationPlanner().plan({
-      contract: flags('to', { YES: false, NO: true }),
-      schema: await introspectSchema(db()),
-      policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
-      fromContract: flags('from', { YES: true, NO: false }),
-      origin: null,
-      statements: [],
-      frameworkComponents: [],
-      snapshotsImportPath: '../../snapshots',
-    });
-    if (result.kind !== 'failure') throw new Error('Expected the swap to be refused');
-    return String(result.conflicts[0]?.why);
-  }
-
-  it('swap only boolean values when run in mongosh as printed, for db update, and leave null, missing and other values alone', async () => {
-    await db()
-      .collection('users')
-      .insertMany(SEEDED.map((document) => ({ ...document })));
-    const ran = await runPrintedUpdates(db(), await refusalText());
-    expect({ ran, documents: await documents('users') }).toEqual({ ran: 2, documents: SWAPPED });
-  });
-
-  it('swap only boolean values when run as the dataTransform of a migration, for migration plan, and leave null, missing and other values alone', async () => {
-    await db()
-      .collection('users')
-      .insertMany(SEEDED.map((document) => ({ ...document })));
-    const plain = flags('plain', { YES: true, NO: false });
-    await initMarker(plain);
-    const operations: readonly AnyMongoMigrationOperation[] = printedUpdates(
-      await refusalText(),
-    ).map(({ collection, filter, pipeline }, index) =>
-      dataTransform(`swap-${index}`, {
-        run: () => ({
-          collection,
-          command: new RawUpdateManyCommand(collection, filter, pipeline),
-          meta: { target: 'mongo', storageHash: 'plain', lane: 'mongo-raw' },
-        }),
-      }),
-    );
-    const result = await runOperations(operations, plain, plain, {
-      allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
-    });
-    expect({
-      ok: result.ok,
-      operations: operations.length,
-      documents: await documents('users'),
-    }).toEqual({ ok: true, operations: 2, documents: SWAPPED });
   });
 });

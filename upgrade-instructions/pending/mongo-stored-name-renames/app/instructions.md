@@ -62,7 +62,7 @@ Cannot rename collection "accounts" to "users": collection "users" is renamed in
 
 Enum members are refused when they swap stored values, shift them along a chain (`A` takes `"b"` while `B` takes `"c"`), or take the stored value of another member of the origin. Before, a swap or chain was asked about, with advice to make the change in two migrations. MongoDB applies a migration's operations one at a time with no transaction, so a rewrite that reads a value another rewrite of the same migration writes is not safe to run again after a stop.
 
-Follow the message: make the change in two plans, each planned and applied before the next, through names or values nothing uses, such as `prisma_swap_users` or `prisma_swap`, or, for a takeover, by first removing the model or enum member that holds the name. A boolean enum has no third value, so for members that swap `true` and `false` the message gives three steps; with `migration plan` the middle step is a hand-written migration whose `dataTransform` runs the updates it prints, so every database gets the swap, and with `db update` you run them in `mongosh`.
+Follow the message: make the change in two plans, each planned and applied before the next, through names or values nothing uses, such as `prisma_swap_users` or `prisma_swap`, or, for a takeover, by first removing the model or enum member that holds the name. A boolean enum has no third value, so members that swap `true` and `false` are refused with no route: keep the stored values of the enum in the contract.
 
 A collection rename whose old name the change uses again, for a new model or another model's collection, is refused too: make the rename in one plan and add what uses the old name in the next.
 

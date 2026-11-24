@@ -69,9 +69,6 @@ const ENUM_TWO_MIGRATIONS =
 const NO_THIRD_BOOLEAN =
   'A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps.';
 
-const SWAP_FLAG =
-  'db.getCollection("users").updateMany({ "flag": { $type: "bool" } }, [{ $set: { "flag": { $not: ["$flag"] } } }])';
-
 /** The replacements of the plan's fields `status` and `tags`, as a refusal lists them. */
 const replacementsOf = (...moves: readonly (readonly [string, string])[]) =>
   moves
@@ -150,7 +147,7 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
     ]);
   });
 
-  it('refuses renames that swap the values of a boolean enum, with the route through plain booleans', () => {
+  it('refuses renames that swap the values of a boolean enum, offering only to keep its stored values', () => {
     const flags = (seed: string, members: Readonly<Record<string, unknown>>) =>
       users(seed, statuses(members, 'mongo/bool@1'), {
         flag: { codecId: 'mongo/bool@1', valueSet: 'Status' },
@@ -163,7 +160,7 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
     });
     expect(refusal(result).map(({ why }) => why)).toEqual([
       OVERLAP_WHY(
-        `${NO_THIRD_BOOLEAN} Make it in three steps instead, without the statements that rename values of this enum: first remove the enum and type the fields that hold it as plain booleans, and apply that; then swap their values, touching only boolean values so that missing and null values stay as they are, with these updates: ${SWAP_FLAG}; then add the enum back with its new stored values, type the fields by it again, and apply that. With migration plan, make the second step a migration of its own, so that every database that applies the migrations swaps the values: run prisma migration new, and in the operations of the migration.ts it writes, add a dataTransform whose run makes each of these updates; then run that migration.ts to emit its ops.json, and apply it with db migrate. With db update, run the updates in mongosh.`,
+        `${NO_THIRD_BOOLEAN} A swap of the two values cannot be made so that a migration that stops part way can run again to finish, so keep the stored values of this enum in the contract, and leave out the statements that rename values of this enum.`,
       ),
     ]);
   });

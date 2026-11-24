@@ -66,7 +66,7 @@ describe('MongoMigrationPlanner, enum values that keep their names and trade or 
     ]);
   });
 
-  it('refuses a boolean enum whose values trade places, with the route through plain booleans', () => {
+  it('refuses a boolean enum whose values trade places, offering only to keep its stored values', () => {
     expect(
       refused(
         plan({
@@ -80,7 +80,7 @@ describe('MongoMigrationPlanner, enum values that keep their names and trade or 
         kind: 'unsupportedOperation',
         summary:
           'Cannot change the stored values of enum "Status": enum values "Status.YES" and "Status.NO" move stored values in a cycle, true to false and false to true, and a rewrite of one would overwrite the other before it is read',
-        why: 'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle. A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps. Make it in three steps instead: first remove the enum and type the fields that hold it as plain booleans, and apply that; then swap their values, touching only boolean values so that missing and null values stay as they are, with these updates: db.getCollection("users").updateMany({ "flag": { $type: "bool" } }, [{ $set: { "flag": { $not: ["$flag"] } } }]); db.getCollection("users").updateMany({ "flags": { $type: "array" } }, [{ $set: { "flags": { $map: { input: "$flags", in: { $cond: [{ $eq: [{ $type: "$$this" }, "bool"] }, { $not: ["$$this"] }, "$$this"] } } } } }]); then add the enum back with its new stored values, type the fields by it again, and apply that. With migration plan, make the second step a migration of its own, so that every database that applies the migrations swaps the values: run prisma migration new, and in the operations of the migration.ts it writes, add a dataTransform whose run makes each of these updates; then run that migration.ts to emit its ops.json, and apply it with db migrate. With db update, run the updates in mongosh.',
+        why: 'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle. A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps. A swap of the two values cannot be made so that a migration that stops part way can run again to finish, so keep the stored values of this enum in the contract.',
       },
     ]);
   });
@@ -243,7 +243,7 @@ describe('MongoMigrationPlanner, a boolean enum swap the plan cannot give a hand
         kind: 'unsupportedOperation',
         summary:
           'Cannot change the stored values of enum "Status": enum values "Status.YES" and "Status.NO" move stored values in a cycle, true to false and false to true, and a rewrite of one would overwrite the other before it is read',
-        why: 'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle. A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps. The enum is stored at path $[*].flag of field "prefs" of collection "users", inside objects the plan cannot swap the values of, so keep the stored values of this enum in the contract.',
+        why: 'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle. A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps. A swap of the two values cannot be made so that a migration that stops part way can run again to finish, so keep the stored values of this enum in the contract.',
       },
     ]);
   });
