@@ -52,6 +52,9 @@ Trials on 2026-11-24 ran this over the built declarations of all 22 published pa
 - A type that a signature uses but that is not exported is listed once per package and marked `(not exported)`.
 - A path that forwards another package's path is one line that names that path. 140 of the 163 paths of `@prisma/orm-postgres` are of this kind.
 - Types are written in a normal form, so that the list depends on the code and not on how a particular build printed it. Two builds of the same source were found to print some inferred types differently. So the members of a union are sorted, and a type the build printed as `import("@prisma/x").Name` is written `Name`. The list shows what is importable; it does not decide what is a break, so this loses nothing it needs.
+- When a type from another package has the same name as a type this package exports, declared or re-exported, the outside type is written with the package users import it from (`mongodb.MongoClient` beside the package's own `MongoClient`; `pg.QueryResult`, not `@types/pg.QueryResult`). A global type in the same position is written `globalThis.Name`.
+- An export that is type-only, whether declared in the package or re-exported, is marked as such, so turning it into a value export changes its line. A renamed re-export reads `export <name> = <original> from <module>`.
+- A line break inside a literal type is written `\n`, so every item is one line.
 - Private members are left out.
 - The file is not published, because each package publishes only `dist` (and, for the facades, `skills`).
 
@@ -70,7 +73,7 @@ Microsoft's Fluid Framework does this. A generator writes one test for each expo
 - The previous release is installed from the registry beside the current build. The release process moves it forward at each release.
 - Only GA is checked: the package's version at the last release is a plain version with no pre-release part, and the export's name does not start with `preview_` or `ea_`. A GA package depends only on GA packages, so a path that a facade forwards is checked in the package that owns it.
 
-This is the one part not yet tried on our packages. Fluid found that some types do not fit themselves across two copies of a package (a class with private members, a `unique symbol`), and it works around them. A trial comes first. If it fails, the fallback is to compare the `api.txt` lines of the last release's git tag with today's and fail on a removed line, with an exceptions file, as Go does. That fallback is weaker than it was first designed: because the list writes `import("@prisma/x").Name` as `Name`, a type that changes to another package's type of the same name changes no line.
+This is the one part not yet tried on our packages. Fluid found that some types do not fit themselves across two copies of a package (a class with private members, a `unique symbol`), and it works around them. A trial comes first. If it fails, the fallback is to compare the `api.txt` lines of the last release's git tag with today's and fail on a removed line, with an exceptions file, as Go does. That fallback is weaker than it was first designed: because the list writes `import("@prisma/x").Name` as `Name` unless the name clashes with one of the package's own, a type that changes to another package's type of the same name changes no line.
 
 ### Result types: the last release's example apps
 
@@ -102,7 +105,7 @@ The list and the description check apply from the first day. They block no chang
 
 ## Known costs
 
-- **Noise in the list.** About 260 lines carry a name the script gives a non-exported type to keep it apart from another of the same name, such as `Options_2`. Adding a type with a name already in use, or an export name that sorts earlier, can change such lines without an API change. Since the list does not decide what is a break, this costs a longer diff and description, not a failed build. A tool upgrade that prints types differently has the same cost.
+- **Noise in the list.** About 260 lines carry a name the script gives a non-exported type to keep it apart from another of the same name, such as `Options_2`. Adding a type with a name already in use, or an export name that sorts earlier, can change such lines without an API change. So can adding an export whose name an outside type shares: the outside type then gains its package prefix. Since the list does not decide what is a break, this costs a longer diff and description, not a failed build. A tool upgrade that prints types differently has the same cost.
 - **Time.** About 70 seconds for the reading, plus the compile of the generated tests and of the last release's example apps. To be measured on a CI runner.
 - **Search.** About 30,000 generated lines match repository searches. The files are added to the ignore lists that search tools read.
 
