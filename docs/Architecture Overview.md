@@ -227,7 +227,7 @@ sequenceDiagram
   App->>Factory: Build plan (DSL/TypedSQL/Raw)
   Factory-->>App: Plan{sql,params,meta{storageHash,lane,annotations,refs}}
   App->>Runtime: execute(plan)
-  Runtime->>Runtime: Compare marker storageHash/profileHash (warn on a difference)
+  Runtime->>Runtime: SQL runtime only: compare marker storageHash/profileHash, warn on a difference
   Runtime->>Plugins: Lints and budgets (policy)
   alt auto mode selection
     Runtime->>DB: EXPLAIN or probe fetch
