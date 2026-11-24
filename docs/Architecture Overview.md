@@ -15,7 +15,7 @@ Prisma 8 also addresses the largest weakness in Prisma 7: a monolithic, tightly 
 ## Guiding Principles
 
 ### Contract-first
-The contract is the center of gravity. A single canonical `contract.json` defines what exists, what’s allowed, and what’s expected. Both planes ingest the same deterministic data and verify `storageHash` and `profileHash` against the database marker before acting. Contracts carry no executable logic; they are data that gates execution (ADR 006, ADR 010, ADR 021)
+The contract is the center of gravity. A single canonical `contract.json` defines what exists, what’s allowed, and what’s expected. Both planes ingest the same deterministic data. The control plane verifies `storageHash` and `profileHash` against the database marker before acting; the SQL runtime compares them and warns on a difference. Contracts carry no executable logic; they are data that gates execution (ADR 006, ADR 010, ADR 021)
 
 ### Plans are the product
 We don’t execute intent directly; we compile it into immutable Plans. Every query plan lowers to one statement for predictability and guardrails, and every migration is a contract→contract edge with verifiable pre and post conditions. Plans are hashable, auditable, and portable across environments (ADR 002, ADR 003, ADR 001, ADR 011)
@@ -42,7 +42,7 @@ Behavior comes from adapters, extension packs, and runtime plugins, not global f
 All packages are modular and composable with strict tree‑shakability: only imported components end up in the bundle. Exports are curated and side‑effect free with named, per‑module entry points. We ship ESM‑compatible packages and TypeScript source to maximize modern bundler support and DX.
 
 ### Feedback before execution
-Fast, targeted feedback at authoring, planning, and execution time. AST-first lints (SQL domain) and budgets inspect `plan.ast` when present; offline artifact checks in CI and marker checks catch risks early and explain what to fix. The runtime's marker check only warns; `prisma db verify` in the deploy is what stops on a mismatch (ADR 022, ADR 021, ADR 333, ADR 115, ADR 162)
+Fast, targeted feedback at authoring, planning, and execution time. AST-first lints (SQL domain) and budgets inspect `plan.ast` when present; offline artifact checks in CI and marker checks catch risks early and explain what to fix. The SQL runtime's marker check only warns; `prisma db verify` in the deploy is what stops on a mismatch (ADR 022, ADR 021, ADR 333, ADR 115, ADR 162)
 
 ## Architecture at a Glance
 
@@ -191,7 +191,7 @@ Notes
 
 **Verification**
 
-- Runtime compares the marker's `storageHash` and `profileHash` with the contract, warning on a difference, and applies lint rules and budgets configured by policy
+- The SQL runtime compares the marker's `storageHash` and `profileHash` with the contract, warning on a difference, and applies lint rules and budgets configured by policy
 - Extensible linting highlights potential issues before execution
  - Runtime validates declared codec `typeId` coverage: if the contract declares a per-column `typeId` (via extension decoration), a matching codec must be present in the composed registry or execution fails with a stable error
 
@@ -227,7 +227,7 @@ sequenceDiagram
   App->>Factory: Build plan (DSL/TypedSQL/Raw)
   Factory-->>App: Plan{sql,params,meta{storageHash,lane,annotations,refs}}
   App->>Runtime: execute(plan)
-  Runtime->>Runtime: Verify marker storageHash/profileHash
+  Runtime->>Runtime: Compare marker storageHash/profileHash (warn on a difference)
   Runtime->>Plugins: Lints and budgets (policy)
   alt auto mode selection
     Runtime->>DB: EXPLAIN or probe fetch
@@ -244,7 +244,7 @@ sequenceDiagram
 |------------------|------------------------------------------------------------------|-----------------------------------------------------------------|
 | Authoring        | Contract builders validate schema intent and capability usage.   | DSL annotations and TypedSQL expose capabilities and policies. |
 | Planning         | Planner simulates edges; hash-stamps preconditions and outcomes. | Plan factories attach lint/budget annotations. |
-| Verification     | `migration check` verifies artifacts offline; `db verify` reports live drift. | Runtime compares the marker with the contract, warns on a difference, and applies guardrail plugins. |
+| Verification     | `migration check` verifies artifacts offline; `db verify` reports live drift. | The SQL runtime compares the marker with the contract and warns on a difference; the MongoDB runtime makes no marker check. Both apply guardrail plugins. |
 | Execution        | Runner enforces idempotency, markers, and extension requirements. | Streaming execution monitored by guardrail plugins and budgets. |
 | Post-feedback    | PPg ledger, drift detectors, and diagnostics inform authors.     | Policy outcomes and drift indicators feed back to authoring tools. |
 ## Modularity and Extensibility
