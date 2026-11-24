@@ -397,6 +397,10 @@ function schemaFromConnectionString(connectionString: string | undefined): strin
     const schema = url.searchParams.get('schema')
     return typeof schema === 'string' && schema !== '' ? schema : undefined
   } catch {
+    if (!/^(postgres|postgresql):\/\//i.test(str)) {
+      return undefined
+    }
+
     const queryStart = str.indexOf('?')
     if (queryStart !== -1) {
       const fragmentStart = str.indexOf('#', queryStart)

@@ -62,4 +62,13 @@ describe('PrismaPostgresAdapter', () => {
 
     expect(connection.getConnectionInfo().schemaName).toBe('public')
   })
+
+  it('should not extract schema from keyword/value connection string when password contains ?schema=', async () => {
+    const adapter = new PrismaPostgresAdapter({
+      connectionString: 'host=localhost dbname=test user=test password=abc?schema=tenant',
+    })
+    const connection = await adapter.connect()
+
+    expect(connection.getConnectionInfo().schemaName).toBe('public')
+  })
 })

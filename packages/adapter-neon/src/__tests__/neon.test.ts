@@ -119,6 +119,15 @@ describe('PrismaNeonAdapterFactory', () => {
     await adapter.dispose()
   })
 
+  it('should not extract schema from keyword/value connection string when password contains ?schema=', async () => {
+    const factory = new PrismaNeonAdapterFactory('host=localhost dbname=test user=test password=abc?schema=tenant')
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBeUndefined()
+
+    await adapter.dispose()
+  })
+
   it('should default schemaName to undefined when no schema is present in URL or options', async () => {
     const factory = new PrismaNeonAdapterFactory('postgresql://test:test@localhost:5432/test')
     const adapter = await factory.connect()
