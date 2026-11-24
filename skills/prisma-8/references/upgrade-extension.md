@@ -21,7 +21,7 @@ This flow applies when the project **is** a Prisma 8 extension, a library integr
 
 An application never names a platform package as a peer, so a package that does is never an application.
 
-If the project additionally consumes Prisma 8 from its own app code, run [`upgrade-app.md`](upgrade-app.md) first, then this flow in the same session.
+If the repository also holds an application, in a `package.json` of its own, run [`upgrade-app.md`](upgrade-app.md) for it first, then this flow for the extension, in the same session.
 
 If detection is ambiguous, ask the user which role to operate under.
 
