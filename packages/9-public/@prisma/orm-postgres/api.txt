@@ -309,7 +309,7 @@
 ./runtime: class PostgresRuntimeImpl<TContract extends Contract<SqlStorage> = Contract<SqlStorage>> extends SqlRuntimeBase<TContract>
 ./runtime: const isPgClient: (pg: Client | Pool) => pg is Client
 ./runtime: const isPgPool: (pg: Client | Pool) => pg is Pool
-./runtime: export IsolationLevel from @prisma/orm-target-postgres/target/runtime (as postgresIsolationLevels)
+./runtime: export IsolationLevel = postgresIsolationLevels from @prisma/orm-target-postgres/target/runtime
 ./runtime: export PostgresFullTextMethods from @prisma/orm-target-postgres/target/full-text
 ./runtime: export default = function postgres<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses>(options: PostgresOptions<TContract, TCollections>): PostgresClient<TContract, TCollections>
 ./runtime: function buildNamespacedNativeEnums(storage: SqlStorage, domain: Contract['domain']): Record<string, Record<string, EnumAccessor>>
@@ -343,7 +343,7 @@
 ./runtime: type PostgresBinding = { readonly kind: 'pgClient'; readonly client: Client; } | { readonly kind: 'pgPool'; readonly pool: Pool; } | { readonly kind: 'url'; readonly url: string; }
 ./runtime: type PostgresOptions<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = PostgresBindingOptions & PostgresOptionsBase & { readonly contract: TContract; readonly collections?: TCollections; }
 ./schema-ir/types: everything from @prisma/orm-family-sql/schema-ir/types
-./serverless: export IsolationLevel from @prisma/orm-target-postgres/target/runtime (as postgresIsolationLevels)
+./serverless: export IsolationLevel = postgresIsolationLevels from @prisma/orm-target-postgres/target/runtime
 ./serverless: export PostgresFullTextMethods from @prisma/orm-target-postgres/target/full-text
 ./serverless: export default = function postgresServerless<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses>(options: PostgresServerlessOptions<TContract, TCollections>): PostgresServerlessClient<TContract, TCollections>
 ./serverless: interface PostgresCursorOptions

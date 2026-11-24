@@ -131,10 +131,10 @@
 ./relational-core/types: everything from @prisma/orm-family-sql/relational-core/types
 ./relational-core: everything from @prisma/orm-family-sql/relational-core
 ./runtime: export IsolationLevel from @prisma/orm-mysql/runtime
-./runtime: export MariadbBindingInput from @prisma/orm-mysql/runtime (as MysqlBindingInput)
-./runtime: export MariadbPoolOptions from @prisma/orm-mysql/runtime (as MysqlPoolOptions)
-./runtime: export MariadbRuntime from @prisma/orm-mysql/runtime (as MysqlRuntime)
-./runtime: export MariadbTransactionOptions from @prisma/orm-mysql/runtime (as MysqlTransactionOptions)
+./runtime: export MariadbBindingInput = MysqlBindingInput from @prisma/orm-mysql/runtime
+./runtime: export MariadbPoolOptions = MysqlPoolOptions from @prisma/orm-mysql/runtime
+./runtime: export MariadbRuntime = MysqlRuntime from @prisma/orm-mysql/runtime
+./runtime: export MariadbTransactionOptions = MysqlTransactionOptions from @prisma/orm-mysql/runtime
 ./runtime: export default = const mariadb: MysqlClientFactory<MariadbTargetId>
 ./runtime: type MariadbClient<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = MysqlClient<TContract, TCollections, MariadbTargetId>
 ./runtime: type MariadbOptions<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = MysqlOptions<TContract, TCollections, MariadbTargetId>
@@ -146,7 +146,7 @@
 ./runtime: type MariadbTransactionContext<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = MysqlTransactionContext<TContract, TCollections>
 ./schema-ir/types: everything from @prisma/orm-family-sql/schema-ir/types
 ./static: const contractFromJson: <TContract extends Contract<SqlStorage>>(json: unknown) => TContract
-./static: export MariadbStaticContext from @prisma/orm-mysql/static (as MysqlStaticContext)
+./static: export MariadbStaticContext = MysqlStaticContext from @prisma/orm-mysql/static
 ./static: export default = const mariadbStatic: MysqlStaticFactory<MariadbTargetId>
 ./target/control: everything from @prisma/orm-target-mariadb/target/control
 ./target/control: export default from @prisma/orm-target-mariadb/target/control

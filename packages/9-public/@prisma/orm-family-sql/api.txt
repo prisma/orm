@@ -6347,7 +6347,7 @@
 ./runtime: export ClientActivityKind from @prisma/orm-framework/components/runtime
 ./runtime: export ClientActivityResult from @prisma/orm-framework/components/runtime
 ./runtime: export ExecuteInterceptResult from @prisma/orm-framework/components/runtime
-./runtime: export Log from @prisma/orm-framework/components/runtime (as RuntimeLog)
+./runtime: export Log = RuntimeLog from @prisma/orm-framework/components/runtime
 ./runtime: export QueryInterceptResult from @prisma/orm-framework/components/runtime
 ./runtime: export RuntimeMode from @prisma/orm-framework/components/runtime
 ./runtime: export StartActivity from @prisma/orm-framework/components/runtime

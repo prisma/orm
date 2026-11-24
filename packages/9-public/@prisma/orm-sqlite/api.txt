@@ -180,7 +180,7 @@
 ./relational-core/types: everything from @prisma/orm-family-sql/relational-core/types
 ./relational-core: everything from @prisma/orm-family-sql/relational-core
 ./runtime: class SqliteRuntimeImpl<TContract extends Contract<SqlStorage> = Contract<SqlStorage>> extends SqlRuntimeBase<TContract>
-./runtime: export IsolationLevel from @prisma/orm-target-sqlite/target/runtime (as sqliteIsolationLevels)
+./runtime: export IsolationLevel = sqliteIsolationLevels from @prisma/orm-target-sqlite/target/runtime
 ./runtime: export default = function sqlite<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses>(options: SqliteOptions<TContract, TCollections>): SqliteClient<TContract, TCollections>
 ./runtime: interface SqliteClient, required method [Symbol.asyncDispose](): Promise<void>
 ./runtime: interface SqliteClient, required method close(): Promise<void>

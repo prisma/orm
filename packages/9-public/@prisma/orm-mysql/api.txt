@@ -191,7 +191,7 @@
 ./relational-core: everything from @prisma/orm-family-sql/relational-core
 ./runtime: class MysqlRuntimeImpl<TContract extends Contract<SqlStorage> = Contract<SqlStorage>> extends SqlRuntimeBase<TContract>
 ./runtime: const mysqlUrlSchemes: readonly string[]
-./runtime: export IsolationLevel from @prisma/orm-target-mysql/target/runtime (as mysqlIsolationLevels)
+./runtime: export IsolationLevel = mysqlIsolationLevels from @prisma/orm-target-mysql/target/runtime
 ./runtime: export MysqlPoolOptions from @prisma/orm-target-mysql/driver/runtime
 ./runtime: export default = const mysql: MysqlClientFactory<MysqlTargetId>
 ./runtime: function createMysqlClient<TargetId extends string, TAdapterInstance extends SqlRuntimeAdapterInstance<TargetId>>(components: MysqlClientComponents<TargetId, TAdapterInstance>): MysqlClientFactory<TargetId>
