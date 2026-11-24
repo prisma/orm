@@ -33,7 +33,7 @@ A team on `8.0.0` emits a contract and migrates a database. On `8.4`, with the s
 
 The family decides which capabilities the profile hash covers. The SQL family covers the requirements a contract's author declares, and none can be declared today, so every SQL contract of one target has the same profile hash. The MongoDB family covers the contract's `capabilities` section.
 
-A hash is computed from the contract as it is in memory after reading, never from the file as written. The file's `formatVersion` ([ADR 331](ADR%20331%20-%20Stored%20files%20carry%20a%20format%20version%2C%20and%20a%20reader%20refuses%20one%20it%20does%20not%20know.md)) is therefore not an input, and the same contract written in two format versions has the same hashes.
+A hash is computed from the contract as it is in memory after reading, never from the file as written. Where a hash is checked against a stored contract, such as a snapshot or the contract an extension package ships, the file is first read into a contract and the hash computed from that. The file's `formatVersion` ([ADR 331](ADR%20331%20-%20Stored%20files%20carry%20a%20format%20version%2C%20and%20a%20reader%20refuses%20one%20it%20does%20not%20know.md)) is therefore not an input, and the same contract written in two format versions has the same hashes.
 
 The section is canonicalized by the rules [ADR 010](ADR%20010%20-%20Canonicalization%20Rules.md) states: defaults are left out, keys are sorted, and the family or target decides which empty values are kept and how storage entries are ordered. A namespace's `kind` is left out of the storage hash.
 
@@ -57,7 +57,7 @@ The inputs this record removes did not describe what the hash identifies. The fo
 
 Removing those inputs changed every existing hash once, before `8.0.0`. A project that used a release candidate moves by the upgrade instructions for that release: a script rewrites the hashes in its files, and each database is signed again with `prisma db sign`. No mechanism in the migration system is built for this.
 
-A database whose change policy allows only migrations refuses `db sign` ([ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md)). For it, `prisma db sign --force` overrides that one refusal. It changes no schema, still checks that the database satisfies the contract before it writes the marker, and leaves the database's policies as they were. No error or advice offers the flag; the upgrade instructions do.
+Each database is first brought to the newest contract with the release it is on, and the upgrade ships in a release of its own; a database that is still behind is signed at the last migration it applied. A database whose change policy allows only migrations refuses `db sign` ([ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md)). For it, `prisma db sign --force` overrides that one refusal. It changes no schema, still checks that the database satisfies the contract before it writes the marker, and leaves the database's policies as they were. No error or advice offers the flag; the upgrade instructions do.
 
 The database's ledger keeps the migration hashes it recorded, and every migration hash changes with the hashes it covers. After the move, `migration status` therefore marks no earlier migration as applied. Nothing is applied or refused because of the ledger, so nothing else is affected.
 
