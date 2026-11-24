@@ -1,6 +1,9 @@
 // Reads the API of one published package with API Extractor, one run per import path.
+// API Extractor reads the declarations with the TypeScript it bundles (6.0.3 with 7.60.1); the
+// flattener's own reading (declarations.mjs) uses the repository's TypeScript.
 //
-// Output: <package>/dist-api/<declaration file name>.api.json for each path, and
+// Output: <package>/dist-api/<import path, with / as __>.api.json for each path (`index` for
+// the package root), and
 // <package>/dist-api/entry-points.json, which maps each import path to its model file.
 // Anything that needs a package's API in structured form reads these files after
 // `pnpm api:update` or `pnpm api:check`.
@@ -16,7 +19,7 @@ export class ApiReadError extends Error {}
 export function entryPointsOf(packageDir) {
   const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
   const entryPoints = [];
-  const modelFiles = new Set();
+  const modelFiles = new Map();
   for (const [subpath, target] of Object.entries(manifest.exports ?? {})) {
     if (subpath === './package.json') continue;
     if (typeof target !== 'string' || !target.endsWith('.mjs')) {
@@ -25,15 +28,15 @@ export function entryPointsOf(packageDir) {
       );
     }
     const declarationFile = join(packageDir, target.replace(/\.mjs$/, '.d.mts'));
-    const modelFile = join(
-      packageDir,
-      MODEL_FOLDER,
-      `${basename(declarationFile, '.d.mts')}.api.json`,
-    );
-    if (modelFiles.has(modelFile)) {
-      throw new ApiReadError(`${manifest.name}: two exports point at ${target}`);
+    const modelName = subpath === '.' ? 'index' : subpath.slice(2).replaceAll('/', '__');
+    const modelFile = join(packageDir, MODEL_FOLDER, `${modelName}.api.json`);
+    const sharing = modelFiles.get(modelFile);
+    if (sharing !== undefined) {
+      throw new ApiReadError(
+        `${manifest.name}: exports "${sharing}" and "${subpath}" would share the model file ${modelName}.api.json`,
+      );
     }
-    modelFiles.add(modelFile);
+    modelFiles.set(modelFile, subpath);
     entryPoints.push({ subpath, declarationFile, modelFile });
   }
   return entryPoints;

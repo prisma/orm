@@ -1,11 +1,12 @@
-import { deepStrictEqual, strictEqual, throws } from 'node:assert/strict';
-import { basename, dirname, join, resolve } from 'node:path';
+import { deepStrictEqual, match, strictEqual, throws } from 'node:assert/strict';
+import { basename, dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { apiText, listDifferences, publishedPackageDirs } from './api.mjs';
+import { apiText, listDifferences, main, publishedPackageDirs } from './api.mjs';
 import { readPackageApi } from './read-api.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
+const fixtures = join(here, 'fixtures');
 
 describe('apiText', () => {
   it('puts a header above the lines and ends with a newline', () => {
@@ -42,10 +43,64 @@ describe('listDifferences', () => {
 });
 
 describe('publishedPackageDirs', () => {
-  it('lists every package under packages/9-public/@prisma', () => {
-    const dirs = publishedPackageDirs(resolve(here, '..', '..'));
-    strictEqual(dirs.length, 22);
-    strictEqual(basename(dirs[0]), 'orm-better-auth');
+  it('lists the package folders, and apart from them folders that hold only an api.txt', () => {
+    const { packageDirs, leftovers } = publishedPackageDirs(join(fixtures, 'root-leftover'));
+    deepStrictEqual(
+      packageDirs.map((dir) => basename(dir)),
+      ['clean'],
+    );
+    deepStrictEqual(
+      leftovers.map((dir) => basename(dir)),
+      ['leftover'],
+    );
+  });
+});
+
+function output() {
+  let text = '';
+  return { write: (chunk) => (text += chunk), text: () => text };
+}
+
+describe('main', () => {
+  it('passes check when every list matches', async () => {
+    const stdout = output();
+    strictEqual(await main({ mode: 'check', root: join(fixtures, 'root-clean'), stdout }), 0);
+    strictEqual(stdout.text(), 'api:check: all 1 lists match the build\n');
+  });
+
+  it('fails check, naming a stale and a missing list and how to fix them', async () => {
+    const stderr = output();
+    strictEqual(await main({ mode: 'check', root: join(fixtures, 'root-stale'), stderr }), 1);
+    strictEqual(
+      stderr.text(),
+      [
+        'api:check: these API lists do not match the build:',
+        '',
+        'packages/9-public/@prisma/missing/api.txt',
+        '  + .: function absent(): void',
+        '',
+        'packages/9-public/@prisma/stale/api.txt',
+        '  - .: function ready(value: string): void',
+        '  + .: function ready(): void',
+        '',
+        'Run `pnpm build`, then `pnpm api:update`, and commit the changed api.txt files. Do not edit or hand-merge an api.txt.',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('fails on a folder that has an api.txt but no package.json', async () => {
+    const stderr = output();
+    strictEqual(await main({ mode: 'check', root: join(fixtures, 'root-leftover'), stderr }), 1);
+    match(
+      stderr.text(),
+      /packages\/9-public\/@prisma\/leftover has an api\.txt but no package\.json/,
+    );
+  });
+
+  it('rejects an unknown mode', async () => {
+    const stderr = output();
+    strictEqual(await main({ mode: 'write', root: join(fixtures, 'root-clean'), stderr }), 2);
   });
 });
 
