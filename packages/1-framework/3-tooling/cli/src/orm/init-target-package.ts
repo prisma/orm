@@ -27,7 +27,7 @@ import {
 } from '../commands/init/target-packages';
 import { chooseAction } from '../utils/next-actions';
 import { installProjectDependencies } from './init-packages';
-import { resolvePlatformPackages } from './init-platform-packages';
+import { installedPackages, resolvePlatformPackages } from './init-platform-packages';
 import { normalizeError } from './normalize-error';
 import { keywordsOf } from './package-manifest';
 import { type ImportFromProject, installedManifest } from './project-modules';
@@ -197,8 +197,8 @@ export function createTargetPackagePreparation(ctx: {
     }
 
     const platform = await resolvePlatformPackages({
-      cwd: ctx.cwd,
       packageName,
+      read: installedPackages(ctx.cwd),
       ownsTarget: installsTarget,
       declared: () => declaredPackages(ctx.cwd),
       install: ctx.install
@@ -212,7 +212,14 @@ export function createTargetPackagePreparation(ctx: {
         : undefined,
     });
     if (platform instanceof CliStructuredError) {
-      throw new TargetPackageInstallFailed(platform);
+      const addedBeforeFailure = manifestChanges(
+        ctx.packageManager,
+        declaredBefore,
+        declaredPackages(ctx.cwd),
+      );
+      throw addedBeforeFailure === undefined
+        ? new TargetPackageInstallFailed(platform)
+        : new TargetPackageRefusedAfterInstall(platform, addedBeforeFailure);
     }
     warnings.push(...platform.warnings);
     if (ctx.install) {

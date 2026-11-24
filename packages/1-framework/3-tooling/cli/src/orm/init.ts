@@ -31,12 +31,17 @@ import {
   resolveInitInputs,
 } from './init-inputs';
 import { engineDevDependencySpec, installProjectDependencies } from './init-packages';
+import { platformPackagesForSetup } from './init-platform-packages';
 import { createPrisma7SourceCheck } from './init-prisma7-check';
 import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold';
 import { createTargetPackagePreparation } from './init-target-package';
 import { normalizeError } from './normalize-error';
 import { type ImportFromProject, importFromProject } from './project-modules';
-import { type LookUpRegistryKeywords, lookUpRegistryKeywords } from './registry-keywords';
+import {
+  type LookUpRegistryKeywords,
+  lookUpRegistryKeywords,
+  lookUpRegistryPeers,
+} from './registry-keywords';
 
 /** Each of these is a finding on a completed run, not an error. */
 const INIT_EXIT_CODES = {
@@ -184,6 +189,11 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           }),
           warn,
           packageManager,
+          platformPackagesFor: platformPackagesForSetup({
+            cwd: ctx.cwd,
+            readPublished: (name, spec) =>
+              lookUpRegistryPeers(name, spec, { env: ctx.env, signal: ctx.signal }),
+          }),
         });
       } catch (error) {
         if (!(error instanceof InitInstallFailedBeforeWriting)) {

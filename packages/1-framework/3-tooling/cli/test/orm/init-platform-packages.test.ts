@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import type { MountedTree, PackageManagerRunner } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
@@ -6,6 +7,7 @@ import { dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
+import { platformPackagesForSetup } from '../../src/orm/init-platform-packages';
 import { type ImportFromProject, importFromProject } from '../../src/orm/project-modules';
 import { declareAddedPackages } from '../utils/fake-package-manager';
 import { fixtureContribution } from '../utils/fixture-contribution';
@@ -17,9 +19,11 @@ const VERSION = '8.1.0';
 let projectDir: string;
 let installs: (readonly string[])[];
 let onInstall: (args: readonly string[]) => void;
+let fails: (args: readonly string[]) => boolean;
 
 const runner: PackageManagerRunner = async (request) => {
   installs.push([...request.args]);
+  if (fails(request.args)) return { exitCode: 1, stderr: 'ETARGET no matching version' };
   declareAddedPackages(request);
   onInstall(request.args);
   return { exitCode: 0, stderr: '' };
@@ -29,6 +33,7 @@ beforeEach(() => {
   projectDir = createTestProjectDir('orm-init-platform-packages');
   installs = [];
   onInstall = () => {};
+  fails = () => false;
 });
 
 afterEach(() => {
@@ -325,4 +330,106 @@ describe('init lists the packages the target package names as peers', () => {
     },
     timeouts.coldTransformImport,
   );
+
+  it(
+    'says how to remove what it installed when installing a platform package fails',
+    async () => {
+      installedPostgresStack();
+      fails = (args) => args.includes(`@prisma/orm-framework@${VERSION}`);
+
+      const run = await (await harness('@prisma/orm-postgres')).run(POSTGRES, {
+        cwd: projectDir,
+      });
+
+      const terminal = run.json.at(-1);
+      expect(terminal === undefined ? undefined : Reflect.get(terminal, 'envelope')).toMatchObject({
+        ok: false,
+        error: {
+          meta: expect.objectContaining({
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv', 'pg'],
+          }),
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label:
+                'init installed @prisma/orm-postgres, dotenv and pg to read the init contribution of @prisma/orm-postgres; remove them with `pnpm remove @prisma/orm-postgres dotenv pg`.',
+            }),
+          ]),
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+});
+
+describe('the list the printed Prisma 6 setup names', () => {
+  const published = new Map<string, Record<string, string>>([
+    [
+      '@prisma/orm-mongo@latest',
+      { '@prisma/orm-framework': VERSION, '@prisma/orm-family-mongo': VERSION, mongodb: '^7' },
+    ],
+    [`@prisma/orm-family-mongo@${VERSION}`, { '@prisma/orm-framework': VERSION }],
+    [`@prisma/orm-framework@${VERSION}`, {}],
+  ]);
+  const asked: string[] = [];
+  const readPublished = async (name: string, spec: string) => {
+    asked.push(`${name}@${spec}`);
+    const peers = published.get(`${name}@${spec}`);
+    return peers === undefined
+      ? undefined
+      : { version: spec === 'latest' ? VERSION : spec, peerDependencies: peers };
+  };
+
+  // Outside the fixture app, whose own installed target packages would be found first.
+  let outsideDir: string;
+
+  beforeEach(() => {
+    asked.length = 0;
+    outsideDir = mkdtempSync(join(tmpdir(), 'orm-init-prisma6-list-'));
+  });
+
+  afterEach(() => {
+    rmSync(outsideDir, { recursive: true, force: true });
+  });
+
+  it('reads the published manifests of a database package that is not installed', async () => {
+    const list = await platformPackagesForSetup({ cwd: outsideDir, readPublished })(
+      '@prisma/orm-mongo',
+    );
+
+    expect({ list, asked }).toEqual({
+      list: [
+        `@prisma/orm-mongo@${VERSION}`,
+        `@prisma/orm-family-mongo@${VERSION}`,
+        `@prisma/orm-framework@${VERSION}`,
+      ],
+      asked: [
+        '@prisma/orm-mongo@latest',
+        `@prisma/orm-framework@${VERSION}`,
+        `@prisma/orm-family-mongo@${VERSION}`,
+      ],
+    });
+  });
+
+  it('reads the installed manifests first', async () => {
+    installed('@prisma/orm-mongo', { '@prisma/orm-framework': undefined });
+    installed('@prisma/orm-framework');
+
+    const list = await platformPackagesForSetup({ cwd: projectDir, readPublished })(
+      '@prisma/orm-mongo',
+    );
+
+    expect({ list, asked }).toEqual({
+      list: [`@prisma/orm-mongo@${VERSION}`, `@prisma/orm-framework@${VERSION}`],
+      asked: [],
+    });
+  });
+
+  it('names only the database package when the registry cannot be read', async () => {
+    const list = await platformPackagesForSetup({
+      cwd: outsideDir,
+      readPublished: async () => undefined,
+    })('@prisma/orm-mongo');
+
+    expect(list).toEqual(['@prisma/orm-mongo']);
+  });
 });

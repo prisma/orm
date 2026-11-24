@@ -868,6 +868,7 @@ function prisma6SchemaFound(
   detection: Prisma7Detection,
   { schema, target }: Prisma6Schema,
   packageManager: PackageManager,
+  targetPackages: readonly string[],
 ) {
   const { config, cli } = detection;
   const ownConfigPath =
@@ -884,7 +885,7 @@ function prisma6SchemaFound(
       packageManager,
       cliVersion: cli.kind === 'earlier' ? cli.version : undefined,
       ownConfigPath,
-      targetPackage: target.packageName,
+      targetPackages,
       peerPackages: target.peerPackages,
       targetConfigEntrypoint: `${target.packageName}/config`,
     }),
@@ -923,6 +924,8 @@ export async function resolveInitInputs(ctx: {
   readonly warn: (text: string) => void;
   /** The manager the printed Prisma 6 setup names in its commands. */
   readonly packageManager: PackageManager;
+  /** The target package and the Prisma ORM packages it names as peers, for the printed Prisma 6 setup. */
+  readonly platformPackagesFor: (packageName: string) => Promise<readonly string[]>;
 }): Promise<ResolvedInitInputs> {
   const { cwd, flags, prompt } = ctx;
 
@@ -944,7 +947,12 @@ export async function resolveInitInputs(ctx: {
     const detection = await detectPrisma7Project({ cwd, schemaPath: flags.fromPrisma7Schema });
     const prisma6 = prisma6Schema(detection.schema);
     if (prisma6 !== undefined) {
-      throw prisma6SchemaFound(detection, prisma6, ctx.packageManager);
+      throw prisma6SchemaFound(
+        detection,
+        prisma6,
+        ctx.packageManager,
+        await ctx.platformPackagesFor(prisma6.target.packageName),
+      );
     }
     if (await choosePrisma7Path({ flags, prompt, detection, flagTarget, warn: ctx.warn })) {
       return resolvePrisma7Inputs({

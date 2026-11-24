@@ -162,6 +162,36 @@ describe(
       expect(check.requests).toEqual([]);
     });
 
+    it('names the platform packages of the database package in the install command', async () => {
+      writePrisma6Project();
+      const { prompt } = scriptedPrompt();
+      const asked: string[] = [];
+
+      const error = await rejectionOf(
+        resolveInputs({
+          cwd: projectDir,
+          flags: flags(),
+          prompt,
+          packageManager: 'pnpm',
+          platformPackagesFor: async (packageName) => {
+            asked.push(packageName);
+            return [`${packageName}@8.1.0`, '@prisma/orm-framework@8.1.0'];
+          },
+        }),
+      );
+
+      expect(asked).toEqual(['@prisma/orm-mongo']);
+      expect(error).toMatchObject({
+        nextActions: expect.arrayContaining([
+          {
+            kind: 'run-command',
+            label: 'Install the Prisma 8 packages',
+            command: 'pnpm add @prisma/orm-mongo@8.1.0 @prisma/orm-framework@8.1.0 dotenv mongodb',
+          },
+        ]),
+      });
+    });
+
     it('finds a Prisma 6 schema that package.json names', async () => {
       writeManifest({ ...PRISMA6_MANIFEST, prisma: { schema: 'db/schema.prisma' } });
       write('db/schema.prisma', PRISMA6_SCHEMA);

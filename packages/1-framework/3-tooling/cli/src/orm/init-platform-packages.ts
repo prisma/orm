@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { installedManifest } from './project-modules';
+import type { PublishedPackage } from './registry-keywords';
 
 const PRISMA_ORM_PACKAGE_PREFIX = '@prisma/orm-';
 
@@ -17,6 +18,24 @@ interface InstalledPackage {
   readonly peers: ReadonlyMap<string, string>;
 }
 
+/** Reads a package's manifest; `range` is the range a dependent names it at, `undefined` for the target package. */
+type ReadPackage = (
+  name: string,
+  range: string | undefined,
+) => Promise<InstalledPackage | undefined>;
+
+function packageFrom(version: unknown, peerDependencies: unknown): InstalledPackage {
+  const peers = new Map<string, string>();
+  if (isRecord(peerDependencies)) {
+    for (const [peer, range] of Object.entries(peerDependencies)) {
+      if (peer.startsWith(PRISMA_ORM_PACKAGE_PREFIX) && typeof range === 'string') {
+        peers.set(peer, range);
+      }
+    }
+  }
+  return { version: typeof version === 'string' ? version : undefined, peers };
+}
+
 function readInstalled(cwd: string, name: string): InstalledPackage | undefined {
   const path = installedManifest(cwd, name);
   if (path === undefined) return undefined;
@@ -26,18 +45,43 @@ function readInstalled(cwd: string, name: string): InstalledPackage | undefined 
   } catch {
     return undefined;
   }
-  if (!isRecord(manifest)) return undefined;
-  const version = typeof manifest['version'] === 'string' ? manifest['version'] : undefined;
-  const peerDependencies = manifest['peerDependencies'];
-  const peers = new Map<string, string>();
-  if (isRecord(peerDependencies)) {
-    for (const [peer, range] of Object.entries(peerDependencies)) {
-      if (peer.startsWith(PRISMA_ORM_PACKAGE_PREFIX) && typeof range === 'string') {
-        peers.set(peer, range);
-      }
-    }
-  }
-  return { version, peers };
+  return isRecord(manifest)
+    ? packageFrom(manifest['version'], manifest['peerDependencies'])
+    : undefined;
+}
+
+/** Reads the manifests installed in the project at `cwd`. */
+export function installedPackages(cwd: string): ReadPackage {
+  return async (name) => readInstalled(cwd, name);
+}
+
+/**
+ * The list the printed Prisma 6 setup installs: the same packages `init` installs, read from the
+ * project's installed manifests, and from the registry for a package the project has not installed.
+ * Nothing is installed or reported; when the target package cannot be read it is named alone.
+ */
+export function platformPackagesForSetup(ctx: {
+  readonly cwd: string;
+  readonly readPublished: (name: string, spec: string) => Promise<PublishedPackage | undefined>;
+}): (packageName: string) => Promise<readonly string[]> {
+  const read: ReadPackage = async (name, range) => {
+    const local = readInstalled(ctx.cwd, name);
+    if (local !== undefined) return local;
+    const published = await ctx.readPublished(name, range ?? 'latest');
+    return published === undefined
+      ? undefined
+      : packageFrom(published.version, published.peerDependencies);
+  };
+  return async (packageName) => {
+    const resolved = await resolvePlatformPackages({
+      packageName,
+      ownsTarget: false,
+      declared: () => new Map(),
+      install: undefined,
+      read,
+    });
+    return resolved instanceof Error ? [packageName] : resolved.dependencies;
+  };
 }
 
 /**
@@ -47,7 +91,6 @@ function readInstalled(cwd: string, name: string): InstalledPackage | undefined 
  * on disk. A package the project lists at another range is left as it is and reported.
  */
 export async function resolvePlatformPackages(ctx: {
-  readonly cwd: string;
   readonly packageName: string;
   /** Whether init wrote the target package's line, so it may pin it to the installed version. */
   readonly ownsTarget: boolean;
@@ -55,8 +98,9 @@ export async function resolvePlatformPackages(ctx: {
   readonly install:
     | ((specifiers: readonly string[]) => Promise<CliStructuredError | undefined>)
     | undefined;
+  readonly read: ReadPackage;
 }): Promise<PlatformPackages | CliStructuredError> {
-  const target = readInstalled(ctx.cwd, ctx.packageName);
+  const target = await ctx.read(ctx.packageName, undefined);
   if (target === undefined || target.version === undefined || target.peers.size === 0) {
     return { dependencies: [ctx.packageName], warnings: [] };
   }
@@ -71,7 +115,8 @@ export async function resolvePlatformPackages(ctx: {
     const pending = unread;
     unread = [];
     for (let name = pending.shift(); name !== undefined; name = pending.shift()) {
-      const manifest = name === ctx.packageName ? target : readInstalled(ctx.cwd, name);
+      const manifest =
+        name === ctx.packageName ? target : await ctx.read(name, wanted.get(name)?.range);
       if (manifest === undefined) {
         unread.push(name);
         continue;

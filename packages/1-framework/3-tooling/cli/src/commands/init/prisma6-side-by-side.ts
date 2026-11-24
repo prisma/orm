@@ -36,7 +36,8 @@ export function prisma6SideBySideSetup(inputs: {
   readonly cliVersion: string | undefined;
   /** The project's own Prisma 6 `prisma.config.*`, when it has one. */
   readonly ownConfigPath: string | undefined;
-  readonly targetPackage: string;
+  /** The target package and the Prisma ORM packages it names as peers, as the application lists them. */
+  readonly targetPackages: readonly string[];
   /** The packages the target package declares as required peer dependencies. */
   readonly peerPackages: readonly string[];
   readonly targetConfigEntrypoint: string;
@@ -94,7 +95,11 @@ export function prisma6SideBySideSetup(inputs: {
         kind: 'run-command',
         label: 'Install the Prisma 8 packages',
         command: add(
-          formatAddArgs(packageManager, [inputs.targetPackage, 'dotenv', ...inputs.peerPackages]),
+          formatAddArgs(packageManager, [
+            ...inputs.targetPackages,
+            'dotenv',
+            ...inputs.peerPackages,
+          ]),
         ),
       },
       {

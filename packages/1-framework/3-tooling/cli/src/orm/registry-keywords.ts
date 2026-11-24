@@ -129,11 +129,23 @@ async function readLatest(
   return { status: response.status, ok: response.ok, text: await readBody(response, signal) };
 }
 
-export const lookUpRegistryKeywords: LookUpRegistryKeywords = async (packageName, options) => {
+/** A version's manifest, as the registry gave it, or why it could not be read. */
+type ManifestLookup =
+  | { readonly kind: 'read'; readonly registry: string; readonly manifest: Record<string, unknown> }
+  | Exclude<RegistryLookup, { readonly kind: 'read' }>;
+
+async function lookUpManifest(
+  packageName: string,
+  spec: string,
+  options: {
+    readonly env: Readonly<Record<string, string | undefined>>;
+    readonly signal: AbortSignal;
+  },
+): Promise<ManifestLookup> {
   const configured = registryOf(options.env);
   const registry = withoutCredentials(configured);
-  const url = `${registry}/${packageName.replace('/', '%2F')}/latest`;
-  const failed = (cause: string): RegistryLookup => ({
+  const url = `${registry}/${packageName.replace('/', '%2F')}/${encodeURIComponent(spec)}`;
+  const failed = (cause: string): ManifestLookup => ({
     kind: 'lookup-failed',
     registry,
     cause: redactUrlCredentials(cause),
@@ -180,5 +192,49 @@ export const lookUpRegistryKeywords: LookUpRegistryKeywords = async (packageName
   if (manifest instanceof type.errors) {
     return failed(`the registry's answer is not a package manifest: ${manifest.summary}`);
   }
-  return { kind: 'read', registry, keywords: keywordsOf(manifest) };
+  return { kind: 'read', registry, manifest };
+}
+
+export const lookUpRegistryKeywords: LookUpRegistryKeywords = async (packageName, options) => {
+  const lookup = await lookUpManifest(packageName, 'latest', options);
+  return lookup.kind === 'read'
+    ? { kind: 'read', registry: lookup.registry, keywords: keywordsOf(lookup.manifest) }
+    : lookup;
 };
+
+/**
+ * The version and `peerDependencies` the registry `env` names publishes for `spec` (a version or a
+ * dist-tag) of a package; `undefined` when it cannot be read.
+ */
+export async function lookUpRegistryPeers(
+  packageName: string,
+  spec: string,
+  options: {
+    readonly env: Readonly<Record<string, string | undefined>>;
+    readonly signal: AbortSignal;
+  },
+): Promise<PublishedPackage | undefined> {
+  const lookup = await lookUpManifest(packageName, spec, options);
+  if (lookup.kind !== 'read') {
+    return undefined;
+  }
+  const version = lookup.manifest['version'];
+  const peers = lookup.manifest['peerDependencies'];
+  return {
+    version: typeof version === 'string' ? version : undefined,
+    peerDependencies:
+      typeof peers === 'object' && peers !== null && !Array.isArray(peers)
+        ? Object.fromEntries(
+            Object.entries(peers).filter(
+              (entry): entry is [string, string] => typeof entry[1] === 'string',
+            ),
+          )
+        : {},
+  };
+}
+
+/** What a published version names as its version and peers. */
+export interface PublishedPackage {
+  readonly version: string | undefined;
+  readonly peerDependencies: Readonly<Record<string, string>>;
+}

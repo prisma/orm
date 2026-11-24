@@ -169,8 +169,13 @@ type ResolveContext = Parameters<typeof resolveInitInputs>[0];
 export function resolveInputs(
   ctx: Omit<
     ResolveContext,
-    'prepareTargetPackage' | 'checkPrisma7Source' | 'warn' | 'packageManager'
+    | 'prepareTargetPackage'
+    | 'checkPrisma7Source'
+    | 'warn'
+    | 'packageManager'
+    | 'platformPackagesFor'
   > & {
+    readonly platformPackagesFor?: ResolveContext['platformPackagesFor'];
     readonly prepareTargetPackage?: PrepareTargetPackage;
     readonly checkPrisma7Source?: CheckPrisma7Source;
     readonly warn?: ResolveContext['warn'];
@@ -182,6 +187,7 @@ export function resolveInputs(
     checkPrisma7Source: stubCheck(),
     warn: () => {},
     packageManager: 'pnpm',
+    platformPackagesFor: async (packageName) => [packageName],
     ...ctx,
   });
 }
