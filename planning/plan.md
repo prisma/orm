@@ -24,8 +24,8 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Query features | 10 of 11 (91%) | `█████████░` | 1 | 0 |
 | Docs and the new user's first hour | 2 of 5 (40%) | `████░░░░░░` | 2 | 1 |
 | Work found along the way | 4 of 9 (44%) | `████░░░░░░` | 1 | 4 |
-| Compatibility policy | 0 of 6 (0%) | `░░░░░░░░░░` | 2 | 4 |
-| **All streams** | **34 of 52 (65%)** | `███████░░░` | **7** | **11** |
+| Compatibility policy | 0 of 6 (0%) | `░░░░░░░░░░` | 3 | 3 |
+| **All streams** | **34 of 52 (65%)** | `███████░░░` | **8** | **10** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -143,7 +143,7 @@ Work found after the plan was made goes here, so the first five streams keep the
 
 ## Stream 7: Compatibility policy
 
-**GA readiness:** 0 of 6 Must projects done (0%). 2 in progress, 4 not started.
+**GA readiness:** 0 of 6 Must projects done (0%). 3 in progress, 3 not started.
 
 **Goal:** from `8.0.0`, an application built on Prisma 8 upgrades to any later `8.x` release with no changes to its code, its generated files or its database. Upgrading becomes routine, so users stay on the latest release and we maintain one release line for each major. It is always clear to a user what they can rely on. A project belongs in this stream when it removes a reason for a user to hesitate before upgrading.
 
@@ -158,7 +158,7 @@ Each project brings its code changes, its checks and its documentation together,
 | 3 | ⏳ | Minimize the exported TS APIs of GA packages and guarantee them until the next major version | Must | Will | Not started. Needs two decisions from Will | |
 | 4 | 🔄 | Catch breaking changes and accidental new exports in CI, by comparing each package's API with the last release | Must | Will | Design agreed 2026-11-24. First pull request, a committed list of each package's exports, is a draft: prisma/orm#31201 | |
 | 5 | ⏳ | Prevent new error codes, built-in names and builder methods from breaking user code | Must | Will | Not started | |
-| 6 | ⏳ | Show whether something is GA in a package's version and an API's name, and release each package at its own level | Must | Will | Not started. Needs one decision from Will | |
+| 6 | 🔄 | Show whether something is GA in a package's version and an API's name, and release each package at its own level | Must | Will | Design agreed and work started 2026-11-24. Replaces stream 6, row 4 | |
 | 7 | ⏳ | Bring Prisma's own database tables up to date in each release, so no upgrade fails on them | Must | Will | Not started. Design agreed 2026-11-24 | |
 | 8 | ⏳ | Define promised behaviour in reference documentation shipped inside each package | Later | Will | Not started | |
 | 9 | ⏳ | Classify every change to behaviour in its pull request, and list it by class in the release notes | Aim | Will | Not started | |
