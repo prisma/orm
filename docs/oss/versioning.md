@@ -99,6 +99,27 @@ The release cadence is one PR per release (on the RC line: one PR per `rc.N`). A
 
 If the publish needs to be re-run (transient registry failure, etc.), a maintainer can dispatch the [`Publish to npm`](../../.github/workflows/publish.yml) workflow from `main` with `dist-tag=latest` and `dry-run=false`; the workflow re-publishes the version currently committed at HEAD, including the `dev` follow-up — so recovering a failed release also recovers the `dev` dist-tag. This is the same path used to cut a hand-rolled `beta` (`dist-tag=beta`), which carries no dev follow-up.
 
+## Procedure: release `8.0.0`
+
+Several docs describe the release-candidate line and are true until `8.0.0`. The pull request that releases `8.0.0` rewrites each of them for the rules of [ADR 329](../architecture%20docs/adrs/ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md), and for the maturity levels of ADR 330:
+
+| File | What changes at `8.0.0` |
+| --- | --- |
+| [`README.md`](../../README.md) | The release-candidate banner, and the "experimental" labels on the ParadeDB and Supabase extensions, which become a maturity level written in each package's version |
+| [`SECURITY.md`](../../SECURITY.md) | The release-candidate section under "Supported versions", the supported-versions table, and the `@internal/*` package scope, which is `@prisma/orm-*` |
+| [`CONTRIBUTING.md`](../../CONTRIBUTING.md) | The "Status" section and the expected date of `8.0.0` |
+| [`docs/oss/governance.md`](./governance.md) | The paragraph on release-candidate status |
+| This page | The supported-versions table, "Release candidates", "The v8 RC line", the dist-tags (a release below GA is published under a tag other than `latest`), and the non-goals on maintaining older releases and on per-package versions |
+| [`.github/ISSUE_TEMPLATE/bug_report.yml`](../../.github/ISSUE_TEMPLATE/bug_report.yml) | "Only the latest release candidate receives fixes", which becomes the latest minor release |
+| [`skills/prisma-8/references/upgrade-extension.md`](../../skills/prisma-8/references/upgrade-extension.md), [`upgrade-app.md`](../../skills/prisma-8/references/upgrade-app.md) and [`build-a-target-package.md`](../../skills/prisma-8/references/build-a-target-package.md) | The rule that an extension pins every `@prisma/orm-*` package to one exact version, and the per-release upgrade chain |
+| [`packages/0-shared/extension-author-tools/README.md`](../../packages/0-shared/extension-author-tools/README.md) | The `prisma-8-check-pins` check, which enforces that exact pin |
+| [`packages/9-public/@prisma/orm-better-auth/README.md`](../../packages/9-public/@prisma/orm-better-auth/README.md) | Its release-candidate banner |
+| The MySQL and MariaDB package and example READMEs | "Support is early", which becomes a maturity level written in the package's version |
+| [`upgrade-instructions/README.md`](../../upgrade-instructions/README.md) and the `record-upgrade-instructions` skill | The per-release upgrade guides, which end after the step from the last release candidate to `8.0.0` |
+| [`docs/releases/README.md`](../releases/README.md) and the `draft-release-notes` skill | Release notes that lead with breaking changes, which become a list of each change to behaviour with its class |
+
+Some decision records describe code that does not meet ADR 329 yet. They are corrected in the pull requests that change that code, not at the release; ADR 329 lists them under "Earlier records".
+
 ## Procedure: patch the current minor
 
 **On the RC line there are no patch releases** — a fix ships as the next `rc.N` via the routine procedure above. This section applies only while releases are stable versions (before the RC transition, or after `8.0.0` final). Patches are not part of the routine cadence and only apply to the **current** minor; older minors are not maintained. If a freshly-published `latest` ships a regression that must be addressed before the next minor:
