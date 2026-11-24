@@ -98,14 +98,14 @@ An extension's range on a GA package is wider than a target package's because of
 ### Tags
 
 - A GA release is published under the `latest` tag.
-- A release below GA is published under `latest` when the package has never had a GA release in any major version, so that a plain install works and the version shows the level. Otherwise it is published under a tag named after its level.
+- A release below GA is published under `latest` when the package has never had a GA release in any major version, so that a plain install works and the version shows the level. The `0.x` versions published before `8.0.0` were not GA releases and do not count. Otherwise it is published under a tag named after its level.
 
 ### What an application writes
 
 - On a GA target package: a caret on every `@prisma/orm-*` line, `^8.3.0`. An update moves all of them to the next release together.
 - On a target package below GA: a tilde on every line, `~8.3.0-ea.0` and `~8.3.0`. A caret on a pre-release never selects the next minor's pre-release, so with carets the GA lines would move to `8.4` and the target package could not follow. At each new minor the user edits the lines or runs their package manager's command that updates to the latest version.
 
-`prisma orm init` writes the lines this way.
+`prisma orm init` writes the lines this way when it adds the target package itself. When the project already lists the target package, `init` leaves that line as the user wrote it and writes each platform package at the range the installed target package declares for it, so that it never installs a platform package the user's target package does not accept.
 
 ### Packages maintained outside this repository
 
