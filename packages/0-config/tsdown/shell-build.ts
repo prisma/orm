@@ -507,7 +507,10 @@ function plannedRanges(
       }),
     );
   } catch (cause) {
-    throw new ShellConfigError(`the release plan for ${rootVersion} cannot be made`, { cause });
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    throw new ShellConfigError(`the release plan for ${rootVersion} cannot be made: ${reason}`, {
+      cause,
+    });
   }
   return plan[shellName]?.ranges ?? {};
 }

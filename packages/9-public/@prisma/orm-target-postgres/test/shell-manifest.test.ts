@@ -1,4 +1,14 @@
-import { readFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { ShellConfigError, validateShellManifest } from '@repo/tsdown/shell-build';
 import { describe, expect, it } from 'vitest';
@@ -32,6 +42,14 @@ function facadeManifest(): Manifest {
     devDependencies[sibling] = `workspace:${manifest.version}`;
   }
   return { ...manifest, dependencies, peerDependencies, devDependencies };
+}
+
+/** Links every entry of `from` into `to`, except `except`, which `to` gets as an empty folder. */
+function linkAllBut(from: string, to: string, except: string): void {
+  mkdirSync(join(to, except), { recursive: true });
+  for (const entry of readdirSync(from)) {
+    if (entry !== except) symlinkSync(join(from, entry), join(to, entry));
+  }
 }
 
 function validate(manifest: Manifest): () => void {
@@ -143,5 +161,36 @@ describe('the shell build checks a shell manifest against its bundle', () => {
     ).toThrow(
       'peerDependencies["@prisma/orm-framework"] should be "workspace:~8.1.0", got "workspace:8.1.0"',
     );
+  });
+
+  it('names the pair and their levels when a package names one of ours at a lower level', () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'shell-manifest-levels-'));
+    try {
+      linkAllBut(repoRoot, scratch, 'packages');
+      linkAllBut(join(repoRoot, 'packages'), join(scratch, 'packages'), '9-public');
+      linkAllBut(
+        join(repoRoot, 'packages/9-public'),
+        join(scratch, 'packages/9-public'),
+        '@prisma',
+      );
+      const published = join(scratch, 'packages/9-public/@prisma');
+      for (const dir of readdirSync(join(repoRoot, 'packages/9-public/@prisma'))) {
+        mkdirSync(join(published, dir), { recursive: true });
+        cpSync(
+          join(repoRoot, 'packages/9-public/@prisma', dir, 'package.json'),
+          join(published, dir, 'package.json'),
+        );
+      }
+      const postgres = join(published, 'orm-postgres/package.json');
+      const manifest = JSON.parse(readFileSync(postgres, 'utf8'));
+      manifest.peerDependencies['@prisma/orm-mongo'] = `workspace:${manifest.version}`;
+      writeFileSync(postgres, JSON.stringify(manifest));
+
+      expect(() =>
+        validateShellManifest('@prisma/orm-postgres', facadeManifest(), scratch, '8.1.0'),
+      ).toThrow('@prisma/orm-postgres (ga) names @prisma/orm-mongo (preview)');
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 });
