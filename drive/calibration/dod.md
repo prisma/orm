@@ -120,9 +120,9 @@ Beyond the canonical project DoD items:
 
 ### Reached the user
 
-- [ ] The spec's opening example has been run as written, from published packages with no version forced, after the releases that carry the project. All slices merged is not this check. When users get the feature through the `prisma` CLI, two releases carry it: an ORM release, then a CLI release, because the CLI pins the toolchain to an exact version.
-- [ ] A report from the project's intended user during the project is answered, fixed or ticketed before close-out.
-- [ ] Upgrade instructions and release notes for a released version say only what its tag contains. Check the tag before writing that a release fixes something.
+- [ ] The spec's opening example has been run from published packages with no version forced, after the releases that carry the project, as written or with the closest stand-in a user can install when the example names a package we do not have; the close-out pull request says which. All slices merged is not this check: a change on `main` that no release carries has reached nobody. When users get the feature through the `prisma` CLI, two releases carry it: an ORM release, then a CLI release, because the CLI pins the toolchain to an exact version.
+- [ ] A report from the project's intended user during the project is answered, fixed or ticketed before close-out, because it is the only evidence that does not come from our own assumptions.
+- [ ] Upgrade instructions and release notes for a released version say only what its tag contains. Check the tag before writing that a release fixes something. (All three added 2026-11-24, external-target-integration: the project was reported finished with its changes merged and unreleased, and a release's upgrade guide described a fix the release did not carry.)
 
 ### Documentation & migration
 
