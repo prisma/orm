@@ -160,4 +160,55 @@ describe('buildReadAggregate', () => {
       where: { path: contractPath },
     });
   });
+
+  describe('a ref file that exists but is refused', () => {
+    async function writeRefFile(path: string, content: Record<string, unknown>): Promise<void> {
+      await mkdir(join(path, '..'), { recursive: true });
+      await writeFile(path, JSON.stringify(content));
+    }
+
+    it.each([
+      ['an app ref', join('app', 'refs', 'db.json')],
+      ['an extension head ref', join('pgvector', 'refs', 'head.json')],
+    ])('reports %s with a field the format does not know, naming the file', async (_, rel) => {
+      await writeContractFile(contractPath, CONTRACT_HASH);
+      await writeAppMigration(migrationsDir);
+      const refPath = join(migrationsDir, rel);
+      await writeRefFile(refPath, {
+        formatVersion: 1,
+        hash: CONTRACT_HASH,
+        invariants: [],
+        note: 'x',
+      });
+
+      const result = await buildReadAggregate(makeConfig(contractPath), { migrationsDir });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure).toMatchObject({
+        code: 'MIGRATION.INVALID_REF_FILE',
+        meta: { path: refPath },
+      });
+    });
+
+    it('loads with the refused ref left out when the caller reports every problem itself', async () => {
+      await writeContractFile(contractPath, CONTRACT_HASH);
+      await writeAppMigration(migrationsDir);
+      await writeRefFile(join(migrationsDir, 'app', 'refs', 'db.json'), {
+        formatVersion: 1,
+        hash: CONTRACT_HASH,
+        invariants: [],
+        note: 'x',
+      });
+
+      const result = await buildReadAggregate(makeConfig(contractPath), {
+        migrationsDir,
+        tolerateUnreadableRefs: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.aggregate.app.refs).toEqual({});
+    });
+  });
 });

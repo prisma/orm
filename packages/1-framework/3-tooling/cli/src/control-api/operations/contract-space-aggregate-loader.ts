@@ -223,6 +223,12 @@ export interface BuildAggregateInputs<TFamilyId extends string, TTargetId extend
    * target's canonicalization hooks.
    */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
+  /**
+   * Load with a ref file that exists but is refused left out of the aggregate, instead of
+   * refusing the load. Only for a caller that reports every unreadable ref itself
+   * (`migration check`); any other command would treat the ref as absent.
+   */
+  readonly tolerateUnreadableRefs?: boolean;
 }
 
 function declaredExtensionsFromInputs(
@@ -270,6 +276,13 @@ export async function loadContractSpaceAggregateForCli<
     appContract: inputs.appContract,
     ...ifDefined('verifySnapshotContent', inputs.verifySnapshotContent),
   });
+  if (inputs.tolerateUnreadableRefs !== true) {
+    const unreadableRef = mapIntegrityViolations(
+      aggregate.checkIntegrity().filter((violation) => violation.kind === 'refUnreadable'),
+      inputs.migrationsDir,
+    );
+    if (unreadableRef !== null) return notOk(unreadableRef);
+  }
   return ok(aggregate);
 }
 
@@ -391,6 +404,7 @@ export async function buildReadAggregate(
     readonly migrationsDir: string;
     /** Command-scoped verifier to share the verified-hash memo; defaults to one built from `config`. */
     readonly verifySnapshotContent?: SnapshotContentVerifier;
+    readonly tolerateUnreadableRefs?: boolean;
   },
 ): Promise<
   Result<
@@ -448,6 +462,7 @@ export async function buildReadAggregate(
         'verifySnapshotContent',
         options.verifySnapshotContent ?? snapshotVerifierFor(config),
       ),
+      ...ifDefined('tolerateUnreadableRefs', options.tolerateUnreadableRefs),
     });
     if (!loaded.ok) {
       return loaded;

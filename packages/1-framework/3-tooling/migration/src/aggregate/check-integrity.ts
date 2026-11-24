@@ -210,7 +210,8 @@ function contractViolations(input: IntegrityComputationInput): readonly Integrit
   const elementClaimedBy = new Map<string, string[]>();
   const elementLabel = new Map<string, string>();
 
-  for (const { space } of input.spaces) {
+  for (const { space, headRefProblem } of input.spaces) {
+    if (headRefProblem !== null) continue;
     let contract: ReturnType<AggregateContractSpace['contract']>;
     try {
       contract = space.contract();
