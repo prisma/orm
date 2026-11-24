@@ -330,4 +330,37 @@ describe('MongoMigrationPlanner, embedded keys that swap in a collection the pla
       labels: ['Create collection orders', 'Create collection quotes'],
     });
   });
+
+  it('refuses a key renamed onto the stored name of a nested embedded relation the destination removes, offering only to remove it or keep the key', () => {
+    const geo = { field: 'g', model: 'Geo', cardinality: '1:1' } as const;
+    const addr = { field: 'addr', model: 'Address', cardinality: '1:1' } as const;
+    const from = contract(
+      'from',
+      {
+        User: { collection: 'users', fields: ['_id'], embeds: { addr } },
+        Address: { owner: 'User', fields: ['street'], storedAs: { street: 's' }, embeds: { geo } },
+        Geo: { owner: 'Address', fields: ['lat'] },
+      },
+      { users: {} },
+    );
+    const to = contract(
+      'to',
+      {
+        User: { collection: 'users', fields: ['_id'], embeds: { addr } },
+        Address: { owner: 'User', fields: ['street'], storedAs: { street: 'g' } },
+      },
+      { users: {} },
+    );
+    expect(plan({ from, to, schema: [schemaCollection('users')] })).toEqual({
+      kind: 'failure',
+      conflicts: [
+        {
+          kind: 'unsupportedOperation',
+          summary:
+            'Cannot rename key "s" to "g" of embedded model "Address": the objects of embedded model "Address" already hold key "g"',
+          why: 'The stored name of field "Address.street" changes from "s" to "g", and the objects of embedded model "Address" already hold key "g", the stored name of embedded relation "Address.geo". Without the rename the plan would read the values of key "g" as values of field "Address.street". Make the change in two plans: first remove embedded relation "Address.geo", and plan and apply that; then make this change and plan again. Or keep the stored name "s" of field "Address.street" in the contract.',
+        },
+      ],
+    });
+  });
 });

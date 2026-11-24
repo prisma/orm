@@ -363,7 +363,7 @@ describe('MongoMigrationPlanner, the routes field rename refusals give, followed
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename field "x" to "y" in collection "users": the documents already hold field "y"',
-        why: 'The stored name of field "User.a" changes from "x" to "y", and the documents already hold field "y", the stored name of embedded relation "User.notes". Without the rename the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first remove embedded relation "User.notes", or keep it and change its field name to a name nothing uses, such as "prisma_swap_y", and plan and apply that; then make this change and plan again.',
+        why: 'The stored name of field "User.a" changes from "x" to "y", and the documents already hold field "y", the stored name of embedded relation "User.notes". Without the rename the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first remove embedded relation "User.notes", and plan and apply that; then make this change and plan again. Or keep the stored name "x" of field "User.a" in the contract.',
       },
     ]);
   });

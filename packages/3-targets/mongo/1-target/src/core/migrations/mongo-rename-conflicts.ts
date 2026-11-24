@@ -426,6 +426,29 @@ function holdersText(holders: readonly Holder[]): string {
   ]);
 }
 
+/**
+ * How the first of two plans frees a stored name its holders hold. An embedded relation's stored
+ * name cannot be changed in this release, so a relation is only removed; a field may also keep its
+ * place under a name nothing uses.
+ */
+function freeHeldName(
+  holders: readonly Holder[],
+  noun: 'field name' | 'key',
+  held: string,
+  unusedName: string,
+): string {
+  const fields = holders.filter((holder) => holder.kind === 'field');
+  const relations = holders.filter((holder) => holder.kind === 'relation');
+  if (fields.length === 0) return `remove ${holdersText(relations)}`;
+  const kept = freeName(
+    noun,
+    held,
+    { text: holdersText(fields), count: fields.length },
+    unusedName,
+  );
+  return relations.length === 0 ? kept : `remove ${holdersText(relations)}, and ${kept}`;
+}
+
 /** The stored names a model of `definition` holds in its documents: its fields', and its embedded relations'. */
 function ownHeldNamesOf(
   definition: Parameters<typeof ownStoredNamesOf>[0] & Parameters<typeof ownEmbedStoredNamesOf>[0],
@@ -533,7 +556,7 @@ function fieldRenameConflict(
     return renameRefused(
       undefined,
       `${label}: ${holding} already hold ${noun} "${change.to}"`,
-      `${text}, and ${holding} already hold ${noun} "${change.to}", the stored name of ${holdersText(holders)}. Without the rename the plan would read the ${misread(change.to)}. Make the change in two plans: first ${freeName(routeNoun(change.place), change.to, { text: holdersText(holders), count: holders.length }, unused(used, change.to))}, and plan and apply that; then make this change and plan again.`,
+      `${text}, and ${holding} already hold ${noun} "${change.to}", the stored name of ${holdersText(holders)}. Without the rename the plan would read the ${misread(change.to)}. Make the change in two plans: first ${freeHeldName(holders, routeNoun(change.place), change.to, unused(used, change.to))}, and plan and apply that; then make this change and plan again.${holders.every((holder) => holder.kind === 'relation') ? ` Or keep the stored name "${change.from}" of ${moving} in the contract.` : ''}`,
     );
   }
   const takes = others.find(
