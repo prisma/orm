@@ -32,6 +32,7 @@ ${bold('Options')}
   -h, --help   Display this help message
     --config   Custom path to your Prisma config file
     --schema   Custom path to your Prisma schema
+  --no-hints   Hides the hint messages but still outputs errors and warnings
 
 ${bold('Examples')}
 
@@ -74,6 +75,7 @@ export class MigrateCommand implements Command {
       '-h': '--help',
       '--config': String,
       '--preview-feature': Boolean,
+      '--no-hints': Boolean,
       '--telemetry-information': String,
     })
 
@@ -94,6 +96,10 @@ export class MigrateCommand implements Command {
       } else {
         const filteredArgs = args._.filter((item) => item !== '--preview-feature')
         argsForCmd = filteredArgs.slice(1)
+      }
+
+      if (args['--no-hints'] && (commandName === 'deploy' || commandName === 'status')) {
+        argsForCmd.push('--no-hints')
       }
 
       return cmd.parse(argsForCmd, config, baseDir)

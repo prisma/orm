@@ -8,5 +8,6 @@ export const migrateStatusCompletion: CommandCompletion = {
     { name: 'help', alias: 'h', description: 'Display this help message' },
     { name: 'schema', description: 'Custom path to your Prisma schema', values: completionSchemaPaths },
     { name: 'config', description: 'Custom path to your Prisma config file', values: completionConfigPaths },
+    { name: 'no-hints', description: 'Hides the hint messages but still outputs errors and warnings' },
   ],
 }
