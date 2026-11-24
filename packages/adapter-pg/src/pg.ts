@@ -394,10 +394,28 @@ function schemaFromConnectionString(connectionString: string | undefined): strin
 
   let schema: unknown
   try {
-    schema = parseConnectionString(connectionString).schema
+    schema = parseConnectionString(withoutTlsParameters(connectionString)).schema
   } catch {
     // `pg` rejects the malformed string itself when it connects.
     return undefined
   }
   return typeof schema === 'string' && schema !== '' ? schema : undefined
+}
+
+/**
+ * The parser reads the certificate files these parameters name and warns about some `sslmode`
+ * values. Neither affects the schema, and `pg` does both itself when it connects.
+ */
+const TLS_PARAMETERS = ['sslmode', 'sslcert', 'sslkey', 'sslrootcert']
+
+function withoutTlsParameters(connectionString: string): string {
+  const queryStart = connectionString.indexOf('?')
+  if (queryStart === -1) {
+    return connectionString
+  }
+  const params = new URLSearchParams(connectionString.slice(queryStart + 1))
+  for (const name of TLS_PARAMETERS) {
+    params.delete(name)
+  }
+  return `${connectionString.slice(0, queryStart)}?${params.toString()}`
 }

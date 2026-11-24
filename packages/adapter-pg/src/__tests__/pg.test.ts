@@ -221,6 +221,17 @@ describe('PrismaPgAdapterFactory', () => {
     await adapter.dispose()
   })
 
+  it('should extract the schema without reading the TLS files the URL names', async () => {
+    const factory = new PrismaPgAdapterFactory(
+      'postgresql://test:test@localhost:5432/test?sslmode=verify-ca&sslrootcert=/does/not/exist/ca.pem&sslcert=/does/not/exist/cert.pem&sslkey=/does/not/exist/key.pem&schema=app',
+    )
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('app')
+
+    await adapter.dispose()
+  })
+
   it('should not extract a schema from an empty schema parameter', async () => {
     const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost:5432/test?schema=')
     const adapter = await factory.connect()
