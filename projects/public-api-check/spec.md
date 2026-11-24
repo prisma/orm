@@ -35,10 +35,14 @@ A single step reads what each published package exports. Three things are made f
 
 Nothing reads the packages' API a second way.
 
-The reading is done by Microsoft's API Extractor, the established tool for it: Angular, Backstage, Firebase, the Azure SDK, Fluent UI, tldraw and Apollo Client all run it over their built type declarations. It handles one import path per run, so, like those projects, we run it once per path. It writes a structured description of the path's API. It leaves out two things, which a script reads from the declarations with the TypeScript compiler:
+The reading has two parts, joined by one function:
 
-- an import path that forwards another package's path, such as `export * from "@prisma/orm-family-sql/orm-client"`;
-- members that a package adds to another package's interface with `declare module`. `@prisma/orm-target-postgres` and `@prisma/orm-extension-pgvector` do this today.
+- **What each import path exports is decided by the TypeScript compiler** reading the built declarations: every export name, every member, forwards to another package's path (such as `export * from "@prisma/orm-family-sql/orm-client"`), and members a package adds to another package's interface with `declare module` (`@prisma/orm-target-postgres` and `@prisma/orm-extension-pgvector` do this today).
+- **How each declaration is written out is taken from Microsoft's API Extractor**, the established tool for this: Angular, Backstage, Firebase, the Azure SDK, Fluent UI, tldraw and Apollo Client all run it over their built type declarations. It handles one import path per run, so, like those projects, we run it once per path.
+
+API Extractor's own output alone is not the reading: it misses forwards, augmentations and second names of a declaration, and it renames exports that clash with global names (`Document_2`). The joined result is. The first slice builds the join inside the list generator; the next slice makes it a function that the list and the type-test generator both call.
+
+Every run checks the reading against the compiler: an export name or a member that the compiler sees and that has no line fails the run.
 
 Trials on 2026-11-24 ran this over the built declarations of all 22 published packages, 1,037 import paths. Every path succeeded, in about 70 seconds with four processes, and two runs gave identical output.
 
@@ -47,6 +51,7 @@ Trials on 2026-11-24 ran this over the built declarations of all 22 published pa
 - One line for each export of each import path, and one for each member: property, method, constructor, call signature, enum member. A member's line says whether it is required or optional.
 - A type that a signature uses but that is not exported is listed once per package and marked `(not exported)`.
 - A path that forwards another package's path is one line that names that path. 140 of the 163 paths of `@prisma/orm-postgres` are of this kind.
+- Types are written in a normal form, so that the list depends on the code and not on how a particular build printed it. Two builds of the same source were found to print some inferred types differently. So the members of a union are sorted, and a type the build printed as `import("@prisma/x").Name` is written `Name`. The list shows what is importable; it does not decide what is a break, so this loses nothing it needs.
 - Private members are left out.
 - The file is not published, because each package publishes only `dist` (and, for the facades, `skills`).
 
@@ -65,7 +70,7 @@ Microsoft's Fluid Framework does this. A generator writes one test for each expo
 - The previous release is installed from the registry beside the current build. The release process moves it forward at each release.
 - Only GA is checked: the package's version at the last release is a plain version with no pre-release part, and the export's name does not start with `preview_` or `ea_`. A GA package depends only on GA packages, so a path that a facade forwards is checked in the package that owns it.
 
-This is the one part not yet tried on our packages. Fluid found that some types do not fit themselves across two copies of a package (a class with private members, a `unique symbol`), and it works around them. A trial comes first. If it fails, the fallback is to compare the `api.txt` lines of the last release's git tag with today's and fail on a removed line, with an exceptions file, as Go does.
+This is the one part not yet tried on our packages. Fluid found that some types do not fit themselves across two copies of a package (a class with private members, a `unique symbol`), and it works around them. A trial comes first. If it fails, the fallback is to compare the `api.txt` lines of the last release's git tag with today's and fail on a removed line, with an exceptions file, as Go does. That fallback is weaker than it was first designed: because the list writes `import("@prisma/x").Name` as `Name`, a type that changes to another package's type of the same name changes no line.
 
 ### Result types: the last release's example apps
 
@@ -97,7 +102,7 @@ The list and the description check apply from the first day. They block no chang
 
 ## Known costs
 
-- **Noise in the list.** About 1,150 lines carry a name that a tool made up to avoid a clash, such as `Document_2`, and about 1,200 contain an inferred type printed with an `import("...")` reference. A refactor or a tool upgrade can change such lines without an API change. Since the list no longer decides what is a break, this costs a longer diff and description, not a failed build. API Extractor also has an open issue (microsoft/rushstack#1958) that an inferred union type can print in a different order from one build to the next; the first pull request checks whether that happens here.
+- **Noise in the list.** About 260 lines carry a name the script gives a non-exported type to keep it apart from another of the same name, such as `Options_2`. Adding a type with a name already in use, or an export name that sorts earlier, can change such lines without an API change. Since the list does not decide what is a break, this costs a longer diff and description, not a failed build. A tool upgrade that prints types differently has the same cost.
 - **Time.** About 70 seconds for the reading, plus the compile of the generated tests and of the last release's example apps. To be measured on a CI runner.
 - **Search.** About 30,000 generated lines match repository searches. The files are added to the ignore lists that search tools read.
 

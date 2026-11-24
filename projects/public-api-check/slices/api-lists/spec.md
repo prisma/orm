@@ -10,7 +10,7 @@ Each of the 22 packages under `packages/9-public/@prisma/` gets a generated, com
 
 The project spec's sections "One reading of each package's exports, three uses" and "The list: `api.txt`" are the design. In short:
 
-- API Extractor's doc model is generated once per key of each package's `exports`, from the built `.d.mts`, in parallel worker processes. The `.api.json` output is kept in a gitignored, documented location, because the generated type tests and the reference documentation will read it.
+- API Extractor's doc model is generated once per key of each package's `exports`, from the built `.d.mts`, in parallel worker processes. The `.api.json` output is kept in each package's gitignored `dist-api/`. It is only half of the reading: what each path exports is decided by the TypeScript compiler, and the two are joined inside the list generator.
 - A flattener prints the model as sorted lines. Forwarded paths, default exports and `declare module` augmentations are read with the TypeScript compiler API, because the doc model omits them.
 - A type that a signature uses but that is not exported is listed once per package, marked `(not exported)`.
 - Output is byte-identical on every run and machine.

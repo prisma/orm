@@ -13,7 +13,7 @@ Spike records are in [spikes/](spikes/).
 
 **Why first.** The files are what the next project in the compatibility work reviews when it removes exports.
 
-**Starts from.** The trial scripts `gen-model.mjs` and `flatten.mjs`, which are not in the repository; the slice rewrites them under `scripts/` with tests. The step that reads the packages keeps its structured output available for the generated type tests and, later, the reference documentation.
+**Starts from.** The trial scripts `gen-model.mjs` and `flatten.mjs`, which are not in the repository; the slice rewrites them under `scripts/` with tests. API Extractor's output is kept in each package's gitignored `dist-api/`, but it is only half of the reading; the join with what the compiler sees lives inside the list generator for now.
 
 **Hands to slice 2.** The files on `main`, so the next release's tag contains them.
 
@@ -21,6 +21,7 @@ Spike records are in [spikes/](spikes/).
 
 **Outcome.**
 
+- The joined reading of a package (what the compiler sees exported, written out by API Extractor) becomes one function that the list and the type-test generator both call, and it can write to a folder the caller chooses, so it can read the last release from the registry without writing into `node_modules`.
 - Generated type tests compare each export of the last release with the current build. A deliberate break is recorded as an expected failure.
 - CI compiles the last release's example apps, with their type tests, against the current build.
 - A pull request that changes an `api.txt` fails until its description names each added and removed export, and gets a comment listing them.
