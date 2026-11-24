@@ -73,7 +73,7 @@
 (not exported) type PostgresDefinition<DatabaseTypes extends DatabaseTypesConstraint, Models extends ModelsConstraint, Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined, Enums extends EnumsConstraint, Namespaces extends NamespacesConstraint, ForeignKeyDefaults extends ForeignKeyDefaultsConstraint> = PostgresBaseScaffold<Extensions, ForeignKeyDefaults> & { readonly databaseTypes?: DatabaseTypes; readonly models?: Models; readonly enums?: Enums; readonly namespaces?: Namespaces; }
 (not exported) type PostgresDriverCursorOptions = NonNullable<PostgresDriverCreateOptions['cursor']>
 (not exported) type PostgresHelpers = ComposedAuthoringHelpers<typeof sqlFamilyPack, typeof postgresPackRef, undefined>
-(not exported) type PostgresListDecoder = (wireValue: unknown, decodeElement: (value: unknown) => Promise<unknown>) => Promise<readonly unknown[]>
+(not exported) type PostgresListDecoder_2 = (wireValue: unknown, decodeElement: (value: unknown) => Promise<unknown>) => Promise<readonly unknown[]>
 (not exported) type PostgresPack = typeof postgresPackRef
 (not exported) type PostgresResult<DatabaseTypes extends DatabaseTypesConstraint, Models extends ModelsConstraint, Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined, Enums extends EnumsConstraint, Namespaces extends NamespacesConstraint, ForeignKeyDefaults extends ForeignKeyDefaultsConstraint = undefined> = ReturnType<typeof buildBoundContract<SqlFamily, PostgresPack, { readonly databaseTypes?: DatabaseTypes; readonly models?: Models; readonly extensions?: Extensions; readonly enums?: Enums; readonly namespaces?: Namespaces; readonly adapter: PostgresAdapter; readonly foreignKeyDefaults?: ForeignKeyDefaults; readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase; readonly codecLookup: CodecLookupWithDescriptors; readonly dataTypeLookup: DataTypeLookup; }>>
 (not exported) type PostgresScaffold<Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined, Enums extends EnumsConstraint, Namespaces extends NamespacesConstraint, ForeignKeyDefaults extends ForeignKeyDefaultsConstraint> = PostgresBaseScaffold<Extensions, ForeignKeyDefaults> & { readonly databaseTypes?: never; readonly models?: never; readonly enums?: Enums; readonly namespaces?: Namespaces; }
@@ -305,7 +305,7 @@
 ./relational-core/query-lane-context: everything from @prisma/orm-family-sql/relational-core/query-lane-context
 ./relational-core/types: everything from @prisma/orm-family-sql/relational-core/types
 ./relational-core: everything from @prisma/orm-family-sql/relational-core
-./runtime: class PostgresRuntimeImpl, protected required method getListDecoder(): PostgresListDecoder
+./runtime: class PostgresRuntimeImpl, protected required method getListDecoder(): PostgresListDecoder_2
 ./runtime: class PostgresRuntimeImpl<TContract extends Contract<SqlStorage> = Contract<SqlStorage>> extends SqlRuntimeBase<TContract>
 ./runtime: const isPgClient: (pg: Client | Pool) => pg is Client
 ./runtime: const isPgPool: (pg: Client | Pool) => pg is Pool

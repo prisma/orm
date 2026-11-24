@@ -21,6 +21,7 @@
 ./citext/codec-types: type CodecTypes = CodecTypes_2
 ./citext/column-types: const citextColumn: () => ColumnSpec<CitextCodec, undefined>
 ./citext/column-types: function citext(): ColumnTypeDescriptor<typeof CITEXT_CODEC_ID>
+./citext/control: const citextExtensionDescriptor: SqlControlExtensionDescriptor<'postgres'>
 ./citext/control: export default = const citextExtensionDescriptor: SqlControlExtensionDescriptor<'postgres'>
 ./citext/pack: export default = const citextPackMeta: typeof citextPackMetaBase & { readonly __codecTypes?: CodecTypes; }
 ./citext/pack: type CodecTypes = CodecTypes_2

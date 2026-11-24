@@ -1562,8 +1562,8 @@
 ./components/ir: class NamespaceBase, abstract readonly required property kind: string
 ./components/ir: class NamespaceBase, readonly required property get isUnbound(): boolean
 ./components/ir: const UNBOUND_NAMESPACE_ID: "__unbound__"
-./components/ir: function buildNamespacedEntities<TMap>(storage: Storage_2, builtinKinds: readonly string[]): TMap
-./components/ir: function buildSingleNamespaceView<TView>(storage: Storage_2, builtinKinds: readonly string[]): TView
+./components/ir: function buildNamespacedEntities<TMap>(storage: Storage, builtinKinds: readonly string[]): TMap
+./components/ir: function buildSingleNamespaceView<TView>(storage: Storage, builtinKinds: readonly string[]): TView
 ./components/ir: function changedElementCoordinates(from: Pick<StorageBase, 'namespaces'> | null, to: Pick<StorageBase, 'namespaces'>): EntityCoordinate[]
 ./components/ir: function coordinateKey(coordinate: Pick<EntityCoordinate, 'entityKind' | 'entityName' | 'namespaceId'>): string
 ./components/ir: function domainElementCoordinates(domain: Pick<ApplicationDomain, 'namespaces'>): Generator<EntityCoordinate>
@@ -1583,10 +1583,10 @@
 ./components/ir: interface Namespace, readonly optional property isUnbound?: boolean
 ./components/ir: interface Namespace, readonly required property entries: Readonly<Record<string, Readonly<Record<string, unknown>>>>
 ./components/ir: interface Namespace, readonly required property kind: string
+./components/ir: interface Storage extends IRNode
+./components/ir: interface Storage, readonly required property namespaces: Readonly<Record<string, Namespace>>
 ./components/ir: interface StorageType extends IRNode
 ./components/ir: interface StorageType, readonly required property kind: string
-./components/ir: interface Storage_2 extends IRNode
-./components/ir: interface Storage_2, readonly required property namespaces: Readonly<Record<string, Namespace>>
 ./components/ir: type AnyEntityKindDescriptor = EntityKindDescriptor<never, unknown>
 ./components/ir: type DefaultNamespaceEntries<TStorage extends { readonly namespaces: object; }> = TStorage['namespaces'] extends Record<typeof UNBOUND_NAMESPACE_ID, { readonly entries: infer E; }> ? E : never
 ./components/ir: type NamespacedEntities<TStorage extends { readonly namespaces: object; }, TBuiltinKinds extends string> = { readonly [Ns in keyof TStorage['namespaces']]: SingleNamespaceView<EntriesOf<TStorage['namespaces'][Ns]>, TBuiltinKinds>; }
@@ -2083,8 +2083,8 @@
 ./components: function authoringTypeConstructorArguments(descriptor: AuthoringTypeConstructorDescriptor, output: AuthoringTypeConstructorOutput): readonly unknown[] | undefined
 ./components: function authoringTypeConstructors(namespace: AuthoringTypeNamespace, path?: readonly string[]): Generator<{ readonly path: readonly string[]; readonly descriptor: AuthoringTypeConstructorDescriptor; }>
 ./components: function buildExtensionLoadOrder(extensions: ReadonlyArray<DependencyDeclaringDescriptor>): readonly string[]
-./components: function buildNamespacedEntities<TMap>(storage: Storage_2, builtinKinds: readonly string[]): TMap
-./components: function buildSingleNamespaceView<TView>(storage: Storage_2, builtinKinds: readonly string[]): TView
+./components: function buildNamespacedEntities<TMap>(storage: Storage, builtinKinds: readonly string[]): TMap
+./components: function buildSingleNamespaceView<TView>(storage: Storage, builtinKinds: readonly string[]): TView
 ./components: function canonicalizeJson(value: unknown): string
 ./components: function canonicalizeTaggedLiteralBody(resolved: string): TaggedLiteralCanonicalization
 ./components: function castTypedValue(support: DataTypeSupport, receivingType: DataTypeId, receivingParams: DataTypeParams, value: DataTypeValue): Result<DataTypeValue, CastRefusal>
@@ -3469,10 +3469,10 @@
 ./components: interface StatementOptions, readonly required property parent: ActivityParent | undefined
 ./components: interface StatementOptions, readonly required property plan: QueryPlan
 ./components: interface StatementOptions<TExec extends ExecutionPlan, TMutator extends ParamRefMutator, TContext extends ActivityContext>
+./components: interface Storage extends IRNode
+./components: interface Storage, readonly required property namespaces: Readonly<Record<string, Namespace>>
 ./components: interface StorageType extends IRNode
 ./components: interface StorageType, readonly required property kind: string
-./components: interface Storage_2 extends IRNode
-./components: interface Storage_2, readonly required property namespaces: Readonly<Record<string, Namespace>>
 ./components: interface StoredEnumMember
 ./components: interface StoredEnumMember, readonly required property name: string
 ./components: interface StoredEnumMember, readonly required property stored: JsonValue
@@ -3892,7 +3892,6 @@
 ./contract/enum-accessor: type EnumValues<A> = A extends { readonly values: ReadonlyArray<infer V>; } ? V : never
 ./contract/enum-accessor: type NamespaceEnumAccessors<TContract extends Contract, NsId extends keyof TContract['domain']['namespaces']> = EnumEntriesToAccessors<NamespaceEnumEntries<TContract['domain']['namespaces'][NsId]>>
 ./contract/enum-accessor: type NamespacedEnums<TContract extends Contract> = { readonly [Ns in keyof TContract['domain']['namespaces']]: NamespaceEnumAccessors<TContract, Ns>; }
-./contract/hashing-utils: export StorageSortPathSegment = type PathSegment = '*' | readonly string[] | string
 ./contract/hashing-utils: function compareByNameProperty(a: unknown, b: unknown): number
 ./contract/hashing-utils: function compareCodeUnits(a: string, b: string): number
 ./contract/hashing-utils: function createPreserveEmptyPredicate(patterns: readonly PathPattern[]): PreserveEmptyPredicate
@@ -3902,6 +3901,7 @@
 ./contract/hashing-utils: interface NamedArraySortTarget, readonly required property arrayKeys: readonly string[]
 ./contract/hashing-utils: interface NamedArraySortTarget, readonly required property path: readonly StorageSortPathSegment[]
 ./contract/hashing-utils: type PathPattern = readonly PreserveEmptyPathSegment[]
+./contract/hashing-utils: type PreserveEmptyPathSegment = '*' | readonly string[] | string
 ./contract/hashing-utils: type StorageSortPathSegment = '*' | string
 ./contract/hashing: function buildExecutionSection(input: { readonly target: string; readonly targetFamily: string; readonly defaults: ReadonlyArray<ExecutionMutationDefault>; }): ContractExecutionSection | undefined
 ./contract/hashing: function canonicalizeContract(contract: Contract, options: CanonicalizeContractOptions): string
@@ -4116,7 +4116,6 @@
 ./contract: const ContractValueObjectSchema: ObjectType<{ fields: { [x: string]: { nullable: boolean; type: { kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "union"; members: ({ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; })[]; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; }; many?: false | { elementNullable: boolean; }; dict?: true; valueSet?: { plane: "storage"; namespaceId: string; entityKind: "valueSet"; entityName: string; spaceId?: string; }; }; }; }, {}>
 ./contract: const CrossReferenceSchema: ObjectType<CrossReference, {}>
 ./contract: const UNBOUND_DOMAIN_NAMESPACE_ID: "__unbound__"
-./contract: export StorageSortPathSegment = type PathSegment = '*' | readonly string[] | string
 ./contract: function applySpecifierDefaultControlPolicy(contract: Contract, specifierDefault: ControlPolicy | undefined): Contract
 ./contract: function asNamespaceId(value: string): NamespaceId
 ./contract: function buildEnumsMapForNamespace(domain: { readonly namespaces: Readonly<Record<string, { readonly enum?: Readonly<Record<string, ContractEnum>>; }>>; }, namespaceId: string, codecFor: EnumMemberCodecFor): Record<string, EnumAccessor>
@@ -4328,6 +4327,7 @@
 ./contract: type NamespacedEnums<TContract extends Contract> = { readonly [Ns in keyof TContract['domain']['namespaces']]: NamespaceEnumAccessors<TContract, Ns>; }
 ./contract: type ParameterizedOutputType<TypeFunctions extends ParameterizedOutputTypesFunction, CodecId, TypeParams extends Record<string, unknown>, Plain> = [RefinedOutputType<TypeFunctions, CodecId, TypeParams>] extends [never] ? Plain : RefinedOutputType<TypeFunctions, CodecId, TypeParams>
 ./contract: type PathPattern = readonly PreserveEmptyPathSegment[]
+./contract: type PreserveEmptyPathSegment = '*' | readonly string[] | string
 ./contract: type PreserveEmptyPredicate = (path: readonly string[]) => boolean
 ./contract: type ProfileHashBase<THash extends string> = THash & Brand<'ProfileHash'>
 ./contract: type ReferenceRelationKeys<TModels extends Record<string, { readonly relations: Record<string, ContractRelation>; }>, ModelName extends string & keyof TModels> = { [K in keyof TModels[ModelName]['relations']]: TModels[ModelName]['relations'][K] extends ContractReferenceRelation ? K : never; }[keyof TModels[ModelName]['relations']]
@@ -4782,8 +4782,8 @@
 ./psl-parser/syntax: class SourceFile, required method offsetAt(position: Position): number
 ./psl-parser/syntax: class SourceFile, required method offsetToPslPosition(offset: number): PslSpan['start']
 ./psl-parser/syntax: class SourceFile, required method positionAt(offset: number): Position
-./psl-parser/syntax: class SourceFile, required method pslSpanToRange(span: PslSpan): Range_2
-./psl-parser/syntax: class SourceFile, required method rangeToPslSpan(range: Range_2): PslSpan
+./psl-parser/syntax: class SourceFile, required method pslSpanToRange(span: PslSpan): Range
+./psl-parser/syntax: class SourceFile, required method rangeToPslSpan(range: Range): PslSpan
 ./psl-parser/syntax: class StringLiteralExprAst implements AstNode
 ./psl-parser/syntax: class StringLiteralExprAst, constructor(syntax: SyntaxNode)
 ./psl-parser/syntax: class StringLiteralExprAst, readonly required property syntax: SyntaxNode
@@ -4912,9 +4912,9 @@
 ./psl-parser/syntax: interface Position
 ./psl-parser/syntax: interface Position, readonly required property character: number
 ./psl-parser/syntax: interface Position, readonly required property line: number
-./psl-parser/syntax: interface Range_2
-./psl-parser/syntax: interface Range_2, readonly required property end: Position
-./psl-parser/syntax: interface Range_2, readonly required property start: Position
+./psl-parser/syntax: interface Range
+./psl-parser/syntax: interface Range, readonly required property end: Position
+./psl-parser/syntax: interface Range, readonly required property start: Position
 ./psl-parser/syntax: type AttributeAst = FieldAttributeAst | ModelAttributeAst
 ./psl-parser/syntax: type BlockMemberAst = FieldDeclarationAst | MixinInclusionAst | ModelAttributeAst
 ./psl-parser/syntax: type DeclarationAst = NamespaceDeclarationAst | NamespaceMemberAst | TypesBlockAst
@@ -5313,7 +5313,7 @@
 ./psl-parser: interface PslDiagnostic, readonly required property code: string
 ./psl-parser: interface PslDiagnostic, readonly required property filename: string
 ./psl-parser: interface PslDiagnostic, readonly required property message: string
-./psl-parser: interface PslDiagnostic, readonly required property range: Range_2
+./psl-parser: interface PslDiagnostic, readonly required property range: Range
 ./psl-parser: interface PslDiagnosticCollector
 ./psl-parser: interface PslDiagnosticCollector, readonly required property length: number
 ./psl-parser: interface PslDiagnosticCollector, required method push(...diagnostics: readonly PslDiagnostic[]): void

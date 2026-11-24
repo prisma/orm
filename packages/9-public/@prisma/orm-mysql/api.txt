@@ -3,18 +3,18 @@
 (not exported) interface EnumMember, readonly required property name: Name
 (not exported) interface EnumMember, readonly required property value: Value
 (not exported) interface EnumMember<Name extends string, Value>
-(not exported) interface EnumTypeHandle, readonly required property [ENUM_TYPE_HANDLE_BRAND]: true
-(not exported) interface EnumTypeHandle, readonly required property codecId: CodecId
-(not exported) interface EnumTypeHandle, readonly required property enumMembers: readonly { readonly name: string; readonly value: Values[number]; }[]
-(not exported) interface EnumTypeHandle, readonly required property enumName: Name
-(not exported) interface EnumTypeHandle, readonly required property members: MembersMap
-(not exported) interface EnumTypeHandle, readonly required property names: Names
-(not exported) interface EnumTypeHandle, readonly required property values: Values
-(not exported) interface EnumTypeHandle, required method has(v: Values[number]): boolean
-(not exported) interface EnumTypeHandle, required method nameOf(v: Values[number]): string | undefined
-(not exported) interface EnumTypeHandle, required method ordinalOf(v: Values[number]): number
-(not exported) interface EnumTypeHandle<Name extends string = string, Values extends readonly unknown[] = readonly unknown[], Names extends readonly string[] = readonly string[], MembersMap extends Record<string, unknown> = Record<string, unknown>, CodecId extends string = string>
-(not exported) type BoundEnumType<CodecTypes extends CodecTypeMap> = <const Name extends string, const Codec extends Pick<ColumnTypeDescriptor, 'codecId'>, const Members extends readonly [EnumMember<string, CodecInput<CodecTypes, Codec>>, ...EnumMember<string, CodecInput<CodecTypes, Codec>>[]]>(name: Name, codec: Codec, ...members: Members) => EnumTypeHandle<Name, MembersToValues<[...Members]>, MembersToNames<[...Members]>, MembersAccessorMap<[...Members]>, Codec['codecId']>
+(not exported) interface EnumTypeHandle_2, readonly required property [ENUM_TYPE_HANDLE_BRAND]: true
+(not exported) interface EnumTypeHandle_2, readonly required property codecId: CodecId
+(not exported) interface EnumTypeHandle_2, readonly required property enumMembers: readonly { readonly name: string; readonly value: Values[number]; }[]
+(not exported) interface EnumTypeHandle_2, readonly required property enumName: Name
+(not exported) interface EnumTypeHandle_2, readonly required property members: MembersMap
+(not exported) interface EnumTypeHandle_2, readonly required property names: Names
+(not exported) interface EnumTypeHandle_2, readonly required property values: Values
+(not exported) interface EnumTypeHandle_2, required method has(v: Values[number]): boolean
+(not exported) interface EnumTypeHandle_2, required method nameOf(v: Values[number]): string | undefined
+(not exported) interface EnumTypeHandle_2, required method ordinalOf(v: Values[number]): number
+(not exported) interface EnumTypeHandle_2<Name extends string = string, Values extends readonly unknown[] = readonly unknown[], Names extends readonly string[] = readonly string[], MembersMap extends Record<string, unknown> = Record<string, unknown>, CodecId extends string = string>
+(not exported) type BoundEnumType<CodecTypes extends CodecTypeMap> = <const Name extends string, const Codec extends Pick<ColumnTypeDescriptor, 'codecId'>, const Members extends readonly [EnumMember<string, CodecInput<CodecTypes, Codec>>, ...EnumMember<string, CodecInput<CodecTypes, Codec>>[]]>(name: Name, codec: Codec, ...members: Members) => EnumTypeHandle_2<Name, MembersToValues<[...Members]>, MembersToNames<[...Members]>, MembersAccessorMap<[...Members]>, Codec['codecId']>
 (not exported) type CodecInput<CodecTypes extends CodecTypeMap, Codec extends { readonly codecId: string; }> = Codec['codecId'] extends keyof CodecTypes ? CodecTypes[Codec['codecId']] extends { readonly input: infer In; } ? In : unknown : unknown
 (not exported) type CodecTypeMap = Record<string, { readonly input?: unknown; }>
 (not exported) type DatabaseTypesConstraint = Record<string, AuthoredStorageTypeInstance>

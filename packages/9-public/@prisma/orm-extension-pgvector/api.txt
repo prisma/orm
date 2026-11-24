@@ -34,6 +34,7 @@
 ./column-types: function vector(): ColumnTypeDescriptor<typeof VECTOR_CODEC_ID> & { readonly typeParams: Record<never, never>; }
 ./column-types: function vector(length?: number): ColumnTypeDescriptor<typeof VECTOR_CODEC_ID> & { readonly typeParams: Record<never, never> | { readonly length: number; }; }
 ./column-types: function vector<N extends number>(length: N): ColumnTypeDescriptor<typeof VECTOR_CODEC_ID> & { readonly typeParams: { readonly length: N; }; }
+./control: const pgvectorExtensionDescriptor: SqlControlExtensionDescriptor<'postgres'>
 ./control: export default = const pgvectorExtensionDescriptor: SqlControlExtensionDescriptor<'postgres'>
 ./operation-types: interface QueryOperationTypesForCodecs extends QueryOperationTypesFunction
 ./operation-types: interface QueryOperationTypesForCodecs, readonly required property queryOperationTypes: QueryOperationTypes<this['codecTypes']>

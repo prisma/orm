@@ -6,6 +6,7 @@
 (not exported) interface ProximityStep, readonly required property term: ProximityTerm
 (not exported) type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown; }>
 (not exported) type ProximityTerm = unknown
+./control: const paradedbExtensionDescriptor: SqlControlExtensionDescriptor<'postgres'>
 ./control: const paradedbPackMeta: typeof paradedbPackMetaBase & { readonly __queryOperationTypes?: QueryOperationTypesForCodecs; }
 ./control: export default = const paradedbExtensionDescriptor: SqlControlExtensionDescriptor<'postgres'>
 ./index-types: const paradedbIndexTypes: IndexTypeBuilder<Record<never, never> & Record<"bm25", { readonly options: { key_field: string; }; }>>

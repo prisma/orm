@@ -199,6 +199,7 @@
 ./adapter/control: class MongoInspectionExecutor, constructor(db: Db)
 ./adapter/control: class MongoInspectionExecutor, required method listCollections(_cmd: ListCollectionsCommand): Promise<Document[]>
 ./adapter/control: class MongoInspectionExecutor, required method listIndexes(cmd: ListIndexesCommand): Promise<Document[]>
+./adapter/control: const mongoAdapterDescriptor: MongoControlAdapterDescriptor<'mongo'>
 ./adapter/control: export MongoControlDriverInstance from @prisma/orm-family-mongo/lowering
 ./adapter/control: export default = const mongoAdapterDescriptor: MongoControlAdapterDescriptor<'mongo'>
 ./adapter/control: function createMongoAdapter(codecs?: MongoCodecRegistry): MongoAdapter

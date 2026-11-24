@@ -153,8 +153,8 @@
 (not exported) type DerivedRootModels<Models extends Record<string, AnyModelBuilder>> = Simplify_2<{ readonly [K in keyof Models as RootModelCollection<Models[K]>]: CrossRefFor<RootModelName_2<Models[K]>>; }>
 (not exported) type DiscriminatorField<TContract extends MongoContract, ModelName extends string & keyof MongoModelsMap<TContract>> = MongoModelsMap<TContract>[ModelName] extends { readonly discriminator: { readonly field: infer F extends string; }; } ? F : never
 (not exported) type DiscriminatorKey = Extract<RefusalKey, { readonly kind: 'discriminator'; }>
-(not exported) type Document = Readonly<Record<string, unknown>>
 (not exported) type DocumentIdField<TContract extends MongoContract, ModelName extends string & keyof MongoModelsMap<TContract>> = OwnFieldStoredAs<TContract, ModelName, '_id'>
+(not exported) type Document_2 = Readonly<Record<string, unknown>>
 (not exported) type EmbedRelationKeys<TContract extends MongoContract, ModelName extends string & keyof MongoModelsMap<TContract>> = { [K in keyof ModelRelations<TContract, ModelName>]: ModelRelations<TContract, ModelName>[K] extends ContractReferenceRelation ? never : K; }[keyof ModelRelations<TContract, ModelName>]
 (not exported) type EmbedRelationRowType<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>, ModelName extends string & keyof MongoModelsMap<TContract>, RelKey extends keyof ModelRelations<TContract, ModelName>> = ModelRelations<TContract, ModelName>[RelKey] extends (infer R) ? R extends { readonly cardinality: infer C; } ? ModelRelations<TContract, ModelName>[RelKey] extends ContractReferenceRelation ? never : RelationTargetModel<TContract, R> extends (infer To extends string & keyof MongoModelsMap<TContract>) ? C extends '1:N' ? ResolvedOutputRow<TContract, To>[] : ResolvedOutputRow<TContract, To> : never : never : never
 (not exported) type EmptyObject = Record<never, never>
@@ -200,7 +200,7 @@
 (not exported) type MaybeOwner<Owner> = [Owner] extends [undefined] ? EmptyObject : { readonly owner: Owner & string; }
 (not exported) type MaybeStorageValueObjectsSection<ValueObjects extends Record<string, AnyValueObjectBuilder>> = keyof ValueObjects extends never ? EmptyObject : { readonly namespaces: { readonly [K in typeof UNBOUND_NAMESPACE_ID]: MongoStorageShape['namespaces'][string] & StorageValueObjectNamespaces<ValueObjects>[K]; }; }
 (not exported) type MaybeVariants<Variants> = [Variants] extends [undefined] ? EmptyObject : { readonly variants: { readonly [K in keyof Variants & string as Variants[K] extends { readonly value: infer Value extends string; } ? Value : never]: CrossRefFor<K>; }; }
-(not exported) type MergeExtensionCodecTypes<Packs extends Record<string, unknown>> = UnionToIntersection<{ [K in keyof Packs]: ExtractCodecTypesFromPack<Packs[K]>; }[keyof Packs]>
+(not exported) type MergeExtensionCodecTypes<Packs extends Record<string, unknown>> = UnionToIntersection_2<{ [K in keyof Packs]: ExtractCodecTypesFromPack<Packs[K]>; }[keyof Packs]>
 (not exported) type MergeExtensionCodecTypesSafe<Packs> = Packs extends Record<string, unknown> ? keyof Packs extends never ? Record<never, never> : MergeExtensionCodecTypes<Packs> : Record<never, never>
 (not exported) type MergeExtensionDataTypeArgumentTypes<Extensions> = Extensions extends Record<string, unknown> ? keyof Extensions extends never ? Record<never, never> : UnionToIntersection<{ [K in keyof Extensions]: ExtractDataTypeArgumentTypesFromPack<Extensions[K]>; }[keyof Extensions]> : Record<never, never>
 (not exported) type MergeExtensionEntityNamespaces<Extensions> = MergeExtensionAuthoringNamespaces<Extensions, 'entityTypes'>
@@ -290,7 +290,7 @@
 (not exported) type TypeHelperFunction<Descriptor extends AuthoringTypeConstructorDescriptor, ValueTypes extends DataTypeArgumentTypes> = Descriptor extends { readonly args: infer Args extends readonly AuthoringArgumentDescriptor[]; } ? <const Params extends TupleFromArgumentDescriptors<Args, ValueTypes>>(...args: Params) => FieldTypeFromDescriptor<Descriptor, CanonicalArguments<Args, Params, ValueTypes>> : () => FieldTypeFromDescriptor<Descriptor, readonly []>
 (not exported) type TypeHelpersFromNamespace<Namespace, ValueTypes extends DataTypeArgumentTypes> = { readonly [K in keyof Namespace as Namespace[K] extends { readonly deprecated: unknown; } ? never : K]: Namespace[K] extends AuthoringTypeConstructorDescriptor ? TypeHelperFunction<Namespace[K], ValueTypes> : Namespace[K] extends AuthoringTypeAliasDescriptor ? TypeAliasHelperFunction<Namespace[K]> : Namespace[K] extends AuthoringTypeChoiceDescriptor ? TypeChoiceHelperFunction<Namespace[K], Namespace, ValueTypes> : Namespace[K] extends Record<string, unknown> ? TypeHelpersFromNamespace<Namespace[K], ValueTypes> : never; }
 (not exported) type TypeHelpersOfPacks<Family, Target, Extensions> = TypeHelpersFromNamespace<ExtractTypeNamespaceFromPack<Family> & ExtractTypeNamespaceFromPack<Target> & MergeExtensionAuthoringNamespaces<Extensions, 'type'>, ExtractDataTypeArgumentTypesFromPack<Family> & ExtractDataTypeArgumentTypesFromPack<Target> & MergeExtensionDataTypeArgumentTypes<Extensions>>
-(not exported) type UnionToIntersection<Union> = (Union extends unknown ? (value: Union) => void : never) extends ((value: infer Intersection) => void) ? Intersection : never
+(not exported) type UnionToIntersection_2<Union> = (Union extends unknown ? (value: Union) => void : never) extends ((value: infer Intersection) => void) ? Intersection : never
 (not exported) type UnsupportedNameSubject = 'collection' | 'enum' | 'field' | 'model' | 'relation' | 'root' | 'valueObject' | 'valueObjectField'
 (not exported) type UnwrapArrayDocField<F extends DocField> = F
 (not exported) type VODotPaths<TContract extends MongoContract, Fields extends Record<string, ContractField>, Prefix extends string, Entered extends string> = { [K in VOScalarFieldKeys<Fields>]: `${Prefix}${K}`; }[VOScalarFieldKeys<Fields>] | { [K in VOValueObjectFieldKeys<Fields>]: Fields[K] extends { readonly type: infer Reference extends ValueObjectReference; } ? ValueObjectKey_2<Reference> extends Entered ? never : VODotPaths<TContract, VOFields<TContract, Reference>, `${Prefix}${K}.`, Entered | ValueObjectKey_2<Reference>> : never; }[VOValueObjectFieldKeys<Fields>]
@@ -868,7 +868,7 @@
 ./contract: function validatorRootShapesOf(jsonSchema: unknown): readonly ValidatorRootShape[]
 ./contract: function valueObjectKey(reference: EntityCoordinate<'storage', 'valueObject'>): string
 ./contract: function valueObjectStoredNamesOf(valueObject: Pick<ContractValueObject, 'fields'>): Readonly<Record<string, string>>
-./contract: function variantFilter(variant: SelectedVariant): Document
+./contract: function variantFilter(variant: SelectedVariant): Document_2
 ./contract: interface CollectionControlPolicies
 ./contract: interface CollectionControlPolicies, readonly required property collections: Readonly<Record<string, ControlPolicy | undefined>>
 ./contract: interface CollectionControlPolicies, readonly required property defaultControlPolicy: ControlPolicy | undefined
@@ -1301,15 +1301,15 @@
 ./orm: interface MongoRawClient, required method collection<K extends keyof TContract['roots'] & string>(rootName: K): RawMongoCollection
 ./orm: interface MongoRawClient<TContract extends MongoContract>
 ./orm: interface RawMongoCollection
-./orm: interface RawMongoCollection, required method aggregate<Row = Record<string, unknown>>(pipeline: ReadonlyArray<Document_2>): Buildable<Row, RawAggregateCommand>
-./orm: interface RawMongoCollection, required method deleteMany(filter: Document_2): Buildable<unknown, RawDeleteManyCommand>
-./orm: interface RawMongoCollection, required method deleteOne(filter: Document_2): Buildable<unknown, RawDeleteOneCommand>
-./orm: interface RawMongoCollection, required method findOneAndDelete(filter: Document_2): Buildable<unknown, RawFindOneAndDeleteCommand>
-./orm: interface RawMongoCollection, required method findOneAndUpdate(filter: Document_2, update: Document_2 | ReadonlyArray<Document_2>, options?: { upsert?: boolean; }): Buildable<unknown, RawFindOneAndUpdateCommand>
-./orm: interface RawMongoCollection, required method insertMany(documents: ReadonlyArray<Document_2>): Buildable<unknown, RawInsertManyCommand>
-./orm: interface RawMongoCollection, required method insertOne(document: Document_2): Buildable<unknown, RawInsertOneCommand>
-./orm: interface RawMongoCollection, required method updateMany(filter: Document_2, update: Document_2 | ReadonlyArray<Document_2>): Buildable<unknown, RawUpdateManyCommand>
-./orm: interface RawMongoCollection, required method updateOne(filter: Document_2, update: Document_2 | ReadonlyArray<Document_2>): Buildable<unknown, RawUpdateOneCommand>
+./orm: interface RawMongoCollection, required method aggregate<Row = Record<string, unknown>>(pipeline: ReadonlyArray<Document>): Buildable<Row, RawAggregateCommand>
+./orm: interface RawMongoCollection, required method deleteMany(filter: Document): Buildable<unknown, RawDeleteManyCommand>
+./orm: interface RawMongoCollection, required method deleteOne(filter: Document): Buildable<unknown, RawDeleteOneCommand>
+./orm: interface RawMongoCollection, required method findOneAndDelete(filter: Document): Buildable<unknown, RawFindOneAndDeleteCommand>
+./orm: interface RawMongoCollection, required method findOneAndUpdate(filter: Document, update: Document | ReadonlyArray<Document>, options?: { upsert?: boolean; }): Buildable<unknown, RawFindOneAndUpdateCommand>
+./orm: interface RawMongoCollection, required method insertMany(documents: ReadonlyArray<Document>): Buildable<unknown, RawInsertManyCommand>
+./orm: interface RawMongoCollection, required method insertOne(document: Document): Buildable<unknown, RawInsertOneCommand>
+./orm: interface RawMongoCollection, required method updateMany(filter: Document, update: Document | ReadonlyArray<Document>): Buildable<unknown, RawUpdateManyCommand>
+./orm: interface RawMongoCollection, required method updateOne(filter: Document, update: Document | ReadonlyArray<Document>): Buildable<unknown, RawUpdateOneCommand>
 ./orm: type CreateInput<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>, ModelName extends string & keyof MongoModelsMap<TContract>> = Omit<ResolvedInputRow<TContract, ModelName>, OptionalOnCreate<TContract, ModelName>> & Partial<Pick<ResolvedInputRow<TContract, ModelName>, OptionalOnCreate<TContract, ModelName> & keyof ResolvedInputRow<TContract, ModelName>>>
 ./orm: type DefaultModelRow<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>, ModelName extends string & keyof MongoModelsMap<TContract>> = ResolvedOutputRow<TContract, ModelName>
 ./orm: type DiscriminatorValues<TContract extends MongoContract, ModelName extends string & keyof MongoModelsMap<TContract>> = MongoModelsMap<TContract>[ModelName] extends { readonly variants: infer V extends Record<string, unknown>; } ? keyof V & string : never
@@ -1959,58 +1959,58 @@
 ./query-ast/execution: class MongoVectorSearchStage, required method accept<R>(visitor: MongoStageVisitor<R>): R
 ./query-ast/execution: class MongoVectorSearchStage, required method rewrite(_context: MongoStageRewriterContext): MongoPipelineStage
 ./query-ast/execution: class RawAggregateCommand extends MongoAstNode
-./query-ast/execution: class RawAggregateCommand, constructor(collection: string, pipeline: ReadonlyArray<Document_2>)
+./query-ast/execution: class RawAggregateCommand, constructor(collection: string, pipeline: ReadonlyArray<Document>)
 ./query-ast/execution: class RawAggregateCommand, readonly required property collection: string
 ./query-ast/execution: class RawAggregateCommand, readonly required property kind: "rawAggregate"
-./query-ast/execution: class RawAggregateCommand, readonly required property pipeline: ReadonlyArray<Document_2>
+./query-ast/execution: class RawAggregateCommand, readonly required property pipeline: ReadonlyArray<Document>
 ./query-ast/execution: class RawDeleteManyCommand extends MongoAstNode
-./query-ast/execution: class RawDeleteManyCommand, constructor(collection: string, filter: Document_2)
+./query-ast/execution: class RawDeleteManyCommand, constructor(collection: string, filter: Document)
 ./query-ast/execution: class RawDeleteManyCommand, readonly required property collection: string
-./query-ast/execution: class RawDeleteManyCommand, readonly required property filter: Document_2
+./query-ast/execution: class RawDeleteManyCommand, readonly required property filter: Document
 ./query-ast/execution: class RawDeleteManyCommand, readonly required property kind: "rawDeleteMany"
 ./query-ast/execution: class RawDeleteOneCommand extends MongoAstNode
-./query-ast/execution: class RawDeleteOneCommand, constructor(collection: string, filter: Document_2)
+./query-ast/execution: class RawDeleteOneCommand, constructor(collection: string, filter: Document)
 ./query-ast/execution: class RawDeleteOneCommand, readonly required property collection: string
-./query-ast/execution: class RawDeleteOneCommand, readonly required property filter: Document_2
+./query-ast/execution: class RawDeleteOneCommand, readonly required property filter: Document
 ./query-ast/execution: class RawDeleteOneCommand, readonly required property kind: "rawDeleteOne"
 ./query-ast/execution: class RawFindOneAndDeleteCommand extends MongoAstNode
-./query-ast/execution: class RawFindOneAndDeleteCommand, constructor(collection: string, filter: Document_2, sort?: Record<string, -1 | 1>)
+./query-ast/execution: class RawFindOneAndDeleteCommand, constructor(collection: string, filter: Document, sort?: Record<string, -1 | 1>)
 ./query-ast/execution: class RawFindOneAndDeleteCommand, readonly required property collection: string
-./query-ast/execution: class RawFindOneAndDeleteCommand, readonly required property filter: Document_2
+./query-ast/execution: class RawFindOneAndDeleteCommand, readonly required property filter: Document
 ./query-ast/execution: class RawFindOneAndDeleteCommand, readonly required property kind: "rawFindOneAndDelete"
 ./query-ast/execution: class RawFindOneAndDeleteCommand, readonly required property sort: Record<string, -1 | 1> | undefined
 ./query-ast/execution: class RawFindOneAndUpdateCommand extends MongoAstNode
-./query-ast/execution: class RawFindOneAndUpdateCommand, constructor(collection: string, filter: Document_2, update: Document_2 | ReadonlyArray<Document_2>, upsert?: boolean, sort?: Record<string, -1 | 1>, returnDocument?: 'after' | 'before')
+./query-ast/execution: class RawFindOneAndUpdateCommand, constructor(collection: string, filter: Document, update: Document | ReadonlyArray<Document>, upsert?: boolean, sort?: Record<string, -1 | 1>, returnDocument?: 'after' | 'before')
 ./query-ast/execution: class RawFindOneAndUpdateCommand, readonly required property collection: string
-./query-ast/execution: class RawFindOneAndUpdateCommand, readonly required property filter: Document_2
+./query-ast/execution: class RawFindOneAndUpdateCommand, readonly required property filter: Document
 ./query-ast/execution: class RawFindOneAndUpdateCommand, readonly required property kind: "rawFindOneAndUpdate"
 ./query-ast/execution: class RawFindOneAndUpdateCommand, readonly required property returnDocument: 'after' | 'before' | undefined
 ./query-ast/execution: class RawFindOneAndUpdateCommand, readonly required property sort: Record<string, -1 | 1> | undefined
-./query-ast/execution: class RawFindOneAndUpdateCommand, readonly required property update: Document_2 | ReadonlyArray<Document_2>
+./query-ast/execution: class RawFindOneAndUpdateCommand, readonly required property update: Document | ReadonlyArray<Document>
 ./query-ast/execution: class RawFindOneAndUpdateCommand, readonly required property upsert: boolean
 ./query-ast/execution: class RawInsertManyCommand extends MongoAstNode
-./query-ast/execution: class RawInsertManyCommand, constructor(collection: string, documents: ReadonlyArray<Document_2>)
+./query-ast/execution: class RawInsertManyCommand, constructor(collection: string, documents: ReadonlyArray<Document>)
 ./query-ast/execution: class RawInsertManyCommand, readonly required property collection: string
-./query-ast/execution: class RawInsertManyCommand, readonly required property documents: ReadonlyArray<Document_2>
+./query-ast/execution: class RawInsertManyCommand, readonly required property documents: ReadonlyArray<Document>
 ./query-ast/execution: class RawInsertManyCommand, readonly required property kind: "rawInsertMany"
 ./query-ast/execution: class RawInsertOneCommand extends MongoAstNode
-./query-ast/execution: class RawInsertOneCommand, constructor(collection: string, document: Document_2)
+./query-ast/execution: class RawInsertOneCommand, constructor(collection: string, document: Document)
 ./query-ast/execution: class RawInsertOneCommand, readonly required property collection: string
-./query-ast/execution: class RawInsertOneCommand, readonly required property document: Document_2
+./query-ast/execution: class RawInsertOneCommand, readonly required property document: Document
 ./query-ast/execution: class RawInsertOneCommand, readonly required property kind: "rawInsertOne"
 ./query-ast/execution: class RawUpdateManyCommand extends MongoAstNode
-./query-ast/execution: class RawUpdateManyCommand, constructor(collection: string, filter: Document_2, update: Document_2 | ReadonlyArray<Document_2>, options?: RawUpdateManyOptions)
+./query-ast/execution: class RawUpdateManyCommand, constructor(collection: string, filter: Document, update: Document | ReadonlyArray<Document>, options?: RawUpdateManyOptions)
 ./query-ast/execution: class RawUpdateManyCommand, readonly optional property bypassDocumentValidation?: boolean
 ./query-ast/execution: class RawUpdateManyCommand, readonly required property collection: string
-./query-ast/execution: class RawUpdateManyCommand, readonly required property filter: Document_2
+./query-ast/execution: class RawUpdateManyCommand, readonly required property filter: Document
 ./query-ast/execution: class RawUpdateManyCommand, readonly required property kind: "rawUpdateMany"
-./query-ast/execution: class RawUpdateManyCommand, readonly required property update: Document_2 | ReadonlyArray<Document_2>
+./query-ast/execution: class RawUpdateManyCommand, readonly required property update: Document | ReadonlyArray<Document>
 ./query-ast/execution: class RawUpdateOneCommand extends MongoAstNode
-./query-ast/execution: class RawUpdateOneCommand, constructor(collection: string, filter: Document_2, update: Document_2 | ReadonlyArray<Document_2>)
+./query-ast/execution: class RawUpdateOneCommand, constructor(collection: string, filter: Document, update: Document | ReadonlyArray<Document>)
 ./query-ast/execution: class RawUpdateOneCommand, readonly required property collection: string
-./query-ast/execution: class RawUpdateOneCommand, readonly required property filter: Document_2
+./query-ast/execution: class RawUpdateOneCommand, readonly required property filter: Document
 ./query-ast/execution: class RawUpdateOneCommand, readonly required property kind: "rawUpdateOne"
-./query-ast/execution: class RawUpdateOneCommand, readonly required property update: Document_2 | ReadonlyArray<Document_2>
+./query-ast/execution: class RawUpdateOneCommand, readonly required property update: Document | ReadonlyArray<Document>
 ./query-ast/execution: class UpdateManyCommand extends MongoAstNode
 ./query-ast/execution: class UpdateManyCommand, constructor(collection: string, filter: MongoFilterExpr, update: MongoUpdateSpec, upsert?: boolean)
 ./query-ast/execution: class UpdateManyCommand, readonly required property collection: string
@@ -2641,58 +2641,58 @@
 ./query-ast: class MongoVectorSearchStage, required method accept<R>(visitor: MongoStageVisitor<R>): R
 ./query-ast: class MongoVectorSearchStage, required method rewrite(_context: MongoStageRewriterContext): MongoPipelineStage
 ./query-ast: class RawAggregateCommand extends MongoAstNode
-./query-ast: class RawAggregateCommand, constructor(collection: string, pipeline: ReadonlyArray<Document_2>)
+./query-ast: class RawAggregateCommand, constructor(collection: string, pipeline: ReadonlyArray<Document>)
 ./query-ast: class RawAggregateCommand, readonly required property collection: string
 ./query-ast: class RawAggregateCommand, readonly required property kind: "rawAggregate"
-./query-ast: class RawAggregateCommand, readonly required property pipeline: ReadonlyArray<Document_2>
+./query-ast: class RawAggregateCommand, readonly required property pipeline: ReadonlyArray<Document>
 ./query-ast: class RawDeleteManyCommand extends MongoAstNode
-./query-ast: class RawDeleteManyCommand, constructor(collection: string, filter: Document_2)
+./query-ast: class RawDeleteManyCommand, constructor(collection: string, filter: Document)
 ./query-ast: class RawDeleteManyCommand, readonly required property collection: string
-./query-ast: class RawDeleteManyCommand, readonly required property filter: Document_2
+./query-ast: class RawDeleteManyCommand, readonly required property filter: Document
 ./query-ast: class RawDeleteManyCommand, readonly required property kind: "rawDeleteMany"
 ./query-ast: class RawDeleteOneCommand extends MongoAstNode
-./query-ast: class RawDeleteOneCommand, constructor(collection: string, filter: Document_2)
+./query-ast: class RawDeleteOneCommand, constructor(collection: string, filter: Document)
 ./query-ast: class RawDeleteOneCommand, readonly required property collection: string
-./query-ast: class RawDeleteOneCommand, readonly required property filter: Document_2
+./query-ast: class RawDeleteOneCommand, readonly required property filter: Document
 ./query-ast: class RawDeleteOneCommand, readonly required property kind: "rawDeleteOne"
 ./query-ast: class RawFindOneAndDeleteCommand extends MongoAstNode
-./query-ast: class RawFindOneAndDeleteCommand, constructor(collection: string, filter: Document_2, sort?: Record<string, -1 | 1>)
+./query-ast: class RawFindOneAndDeleteCommand, constructor(collection: string, filter: Document, sort?: Record<string, -1 | 1>)
 ./query-ast: class RawFindOneAndDeleteCommand, readonly required property collection: string
-./query-ast: class RawFindOneAndDeleteCommand, readonly required property filter: Document_2
+./query-ast: class RawFindOneAndDeleteCommand, readonly required property filter: Document
 ./query-ast: class RawFindOneAndDeleteCommand, readonly required property kind: "rawFindOneAndDelete"
 ./query-ast: class RawFindOneAndDeleteCommand, readonly required property sort: Record<string, -1 | 1> | undefined
 ./query-ast: class RawFindOneAndUpdateCommand extends MongoAstNode
-./query-ast: class RawFindOneAndUpdateCommand, constructor(collection: string, filter: Document_2, update: Document_2 | ReadonlyArray<Document_2>, upsert?: boolean, sort?: Record<string, -1 | 1>, returnDocument?: 'after' | 'before')
+./query-ast: class RawFindOneAndUpdateCommand, constructor(collection: string, filter: Document, update: Document | ReadonlyArray<Document>, upsert?: boolean, sort?: Record<string, -1 | 1>, returnDocument?: 'after' | 'before')
 ./query-ast: class RawFindOneAndUpdateCommand, readonly required property collection: string
-./query-ast: class RawFindOneAndUpdateCommand, readonly required property filter: Document_2
+./query-ast: class RawFindOneAndUpdateCommand, readonly required property filter: Document
 ./query-ast: class RawFindOneAndUpdateCommand, readonly required property kind: "rawFindOneAndUpdate"
 ./query-ast: class RawFindOneAndUpdateCommand, readonly required property returnDocument: 'after' | 'before' | undefined
 ./query-ast: class RawFindOneAndUpdateCommand, readonly required property sort: Record<string, -1 | 1> | undefined
-./query-ast: class RawFindOneAndUpdateCommand, readonly required property update: Document_2 | ReadonlyArray<Document_2>
+./query-ast: class RawFindOneAndUpdateCommand, readonly required property update: Document | ReadonlyArray<Document>
 ./query-ast: class RawFindOneAndUpdateCommand, readonly required property upsert: boolean
 ./query-ast: class RawInsertManyCommand extends MongoAstNode
-./query-ast: class RawInsertManyCommand, constructor(collection: string, documents: ReadonlyArray<Document_2>)
+./query-ast: class RawInsertManyCommand, constructor(collection: string, documents: ReadonlyArray<Document>)
 ./query-ast: class RawInsertManyCommand, readonly required property collection: string
-./query-ast: class RawInsertManyCommand, readonly required property documents: ReadonlyArray<Document_2>
+./query-ast: class RawInsertManyCommand, readonly required property documents: ReadonlyArray<Document>
 ./query-ast: class RawInsertManyCommand, readonly required property kind: "rawInsertMany"
 ./query-ast: class RawInsertOneCommand extends MongoAstNode
-./query-ast: class RawInsertOneCommand, constructor(collection: string, document: Document_2)
+./query-ast: class RawInsertOneCommand, constructor(collection: string, document: Document)
 ./query-ast: class RawInsertOneCommand, readonly required property collection: string
-./query-ast: class RawInsertOneCommand, readonly required property document: Document_2
+./query-ast: class RawInsertOneCommand, readonly required property document: Document
 ./query-ast: class RawInsertOneCommand, readonly required property kind: "rawInsertOne"
 ./query-ast: class RawUpdateManyCommand extends MongoAstNode
-./query-ast: class RawUpdateManyCommand, constructor(collection: string, filter: Document_2, update: Document_2 | ReadonlyArray<Document_2>, options?: RawUpdateManyOptions)
+./query-ast: class RawUpdateManyCommand, constructor(collection: string, filter: Document, update: Document | ReadonlyArray<Document>, options?: RawUpdateManyOptions)
 ./query-ast: class RawUpdateManyCommand, readonly optional property bypassDocumentValidation?: boolean
 ./query-ast: class RawUpdateManyCommand, readonly required property collection: string
-./query-ast: class RawUpdateManyCommand, readonly required property filter: Document_2
+./query-ast: class RawUpdateManyCommand, readonly required property filter: Document
 ./query-ast: class RawUpdateManyCommand, readonly required property kind: "rawUpdateMany"
-./query-ast: class RawUpdateManyCommand, readonly required property update: Document_2 | ReadonlyArray<Document_2>
+./query-ast: class RawUpdateManyCommand, readonly required property update: Document | ReadonlyArray<Document>
 ./query-ast: class RawUpdateOneCommand extends MongoAstNode
-./query-ast: class RawUpdateOneCommand, constructor(collection: string, filter: Document_2, update: Document_2 | ReadonlyArray<Document_2>)
+./query-ast: class RawUpdateOneCommand, constructor(collection: string, filter: Document, update: Document | ReadonlyArray<Document>)
 ./query-ast: class RawUpdateOneCommand, readonly required property collection: string
-./query-ast: class RawUpdateOneCommand, readonly required property filter: Document_2
+./query-ast: class RawUpdateOneCommand, readonly required property filter: Document
 ./query-ast: class RawUpdateOneCommand, readonly required property kind: "rawUpdateOne"
-./query-ast: class RawUpdateOneCommand, readonly required property update: Document_2 | ReadonlyArray<Document_2>
+./query-ast: class RawUpdateOneCommand, readonly required property update: Document | ReadonlyArray<Document>
 ./query-ast: class RenameCollectionCommand extends MongoAstNode
 ./query-ast: class RenameCollectionCommand, constructor(collection: string, to: string)
 ./query-ast: class RenameCollectionCommand, readonly required property collection: string
@@ -3337,7 +3337,7 @@
 ./value: type BsonInputValue = BsonScalar | ReadonlyArray<BsonInputValue> | Uint8Array | { readonly [key: string]: BsonInputValue; }
 ./value: type BsonScalar = Date | RegExp | boolean | null | number | string | { readonly _bsontype: 'BSONRegExp'; readonly pattern: string; readonly options: string; } | { readonly _bsontype: 'BSONSymbol'; valueOf(): string; } | { readonly _bsontype: 'Binary'; value(): Uint8Array; readonly sub_type: number; } | { readonly _bsontype: 'Code'; readonly code: string; readonly scope?: null | { readonly [key: string]: BsonValue; }; } | { readonly _bsontype: 'Decimal128'; toString(): string; } | { readonly _bsontype: 'Double'; valueOf(): number; } | { readonly _bsontype: 'Int32'; valueOf(): number; } | { readonly _bsontype: 'Long'; toBigInt(): bigint; } | { readonly _bsontype: 'MaxKey'; } | { readonly _bsontype: 'MinKey'; } | { readonly _bsontype: 'ObjectId'; toHexString(): string; } | { readonly _bsontype: 'Timestamp'; toBigInt(): bigint; }
 ./value: type BsonValue = BsonScalar | ReadonlyArray<BsonValue> | { readonly [key: string]: BsonValue; }
-./value: type Document_2 = Record<string, unknown>
+./value: type Document = Record<string, unknown>
 ./value: type LiteralValue = Date | boolean | null | number | string
 ./value: type MongoExpr = MongoDocument
 ./value: type MongoUpdateDocument = Record<string, MongoValue>
@@ -3382,12 +3382,12 @@
 ./wire: class CreateIndexWireCommand, readonly required property key: Record<string, MongoIndexKeyDirection>
 ./wire: class CreateIndexWireCommand, readonly required property kind: "createIndex"
 ./wire: class DeleteManyWireCommand extends MongoWireCommand
-./wire: class DeleteManyWireCommand, constructor(collection: string, filter: Document_2)
-./wire: class DeleteManyWireCommand, readonly required property filter: Document_2
+./wire: class DeleteManyWireCommand, constructor(collection: string, filter: Document)
+./wire: class DeleteManyWireCommand, readonly required property filter: Document
 ./wire: class DeleteManyWireCommand, readonly required property kind: "deleteMany"
 ./wire: class DeleteOneWireCommand extends MongoWireCommand
-./wire: class DeleteOneWireCommand, constructor(collection: string, filter: Document_2)
-./wire: class DeleteOneWireCommand, readonly required property filter: Document_2
+./wire: class DeleteOneWireCommand, constructor(collection: string, filter: Document)
+./wire: class DeleteOneWireCommand, readonly required property filter: Document
 ./wire: class DeleteOneWireCommand, readonly required property kind: "deleteOne"
 ./wire: class DropCollectionWireCommand extends MongoWireCommand
 ./wire: class DropCollectionWireCommand, constructor(collection: string)
@@ -3397,42 +3397,42 @@
 ./wire: class DropIndexWireCommand, readonly required property kind: "dropIndex"
 ./wire: class DropIndexWireCommand, readonly required property name: string
 ./wire: class FindOneAndDeleteWireCommand extends MongoWireCommand
-./wire: class FindOneAndDeleteWireCommand, constructor(collection: string, filter: Document_2, sort?: Record<string, -1 | 1>)
-./wire: class FindOneAndDeleteWireCommand, readonly required property filter: Document_2
+./wire: class FindOneAndDeleteWireCommand, constructor(collection: string, filter: Document, sort?: Record<string, -1 | 1>)
+./wire: class FindOneAndDeleteWireCommand, readonly required property filter: Document
 ./wire: class FindOneAndDeleteWireCommand, readonly required property kind: "findOneAndDelete"
 ./wire: class FindOneAndDeleteWireCommand, readonly required property sort: Record<string, -1 | 1> | undefined
 ./wire: class FindOneAndUpdateWireCommand extends MongoWireCommand
-./wire: class FindOneAndUpdateWireCommand, constructor(collection: string, filter: Document_2, update: Document_2 | ReadonlyArray<Document_2>, upsert?: boolean, sort?: Record<string, -1 | 1>, returnDocument?: 'after' | 'before')
-./wire: class FindOneAndUpdateWireCommand, readonly required property filter: Document_2
+./wire: class FindOneAndUpdateWireCommand, constructor(collection: string, filter: Document, update: Document | ReadonlyArray<Document>, upsert?: boolean, sort?: Record<string, -1 | 1>, returnDocument?: 'after' | 'before')
+./wire: class FindOneAndUpdateWireCommand, readonly required property filter: Document
 ./wire: class FindOneAndUpdateWireCommand, readonly required property kind: "findOneAndUpdate"
 ./wire: class FindOneAndUpdateWireCommand, readonly required property returnDocument: 'after' | 'before' | undefined
 ./wire: class FindOneAndUpdateWireCommand, readonly required property sort: Record<string, -1 | 1> | undefined
-./wire: class FindOneAndUpdateWireCommand, readonly required property update: Document_2 | ReadonlyArray<Document_2>
+./wire: class FindOneAndUpdateWireCommand, readonly required property update: Document | ReadonlyArray<Document>
 ./wire: class FindOneAndUpdateWireCommand, readonly required property upsert: boolean
 ./wire: class InsertManyWireCommand extends MongoWireCommand
-./wire: class InsertManyWireCommand, constructor(collection: string, documents: ReadonlyArray<Document_2>)
-./wire: class InsertManyWireCommand, readonly required property documents: ReadonlyArray<Document_2>
+./wire: class InsertManyWireCommand, constructor(collection: string, documents: ReadonlyArray<Document>)
+./wire: class InsertManyWireCommand, readonly required property documents: ReadonlyArray<Document>
 ./wire: class InsertManyWireCommand, readonly required property kind: "insertMany"
 ./wire: class InsertOneWireCommand extends MongoWireCommand
-./wire: class InsertOneWireCommand, constructor(collection: string, document: Document_2)
-./wire: class InsertOneWireCommand, readonly required property document: Document_2
+./wire: class InsertOneWireCommand, constructor(collection: string, document: Document)
+./wire: class InsertOneWireCommand, readonly required property document: Document
 ./wire: class InsertOneWireCommand, readonly required property kind: "insertOne"
 ./wire: class RenameCollectionWireCommand extends MongoWireCommand
 ./wire: class RenameCollectionWireCommand, constructor(collection: string, to: string)
 ./wire: class RenameCollectionWireCommand, readonly required property kind: "renameCollection"
 ./wire: class RenameCollectionWireCommand, readonly required property to: string
 ./wire: class UpdateManyWireCommand extends MongoWireCommand
-./wire: class UpdateManyWireCommand, constructor(collection: string, filter: Document_2, update: Document_2 | ReadonlyArray<Document_2>, upsert?: boolean, bypassDocumentValidation?: boolean)
+./wire: class UpdateManyWireCommand, constructor(collection: string, filter: Document, update: Document | ReadonlyArray<Document>, upsert?: boolean, bypassDocumentValidation?: boolean)
 ./wire: class UpdateManyWireCommand, readonly required property bypassDocumentValidation: boolean
-./wire: class UpdateManyWireCommand, readonly required property filter: Document_2
+./wire: class UpdateManyWireCommand, readonly required property filter: Document
 ./wire: class UpdateManyWireCommand, readonly required property kind: "updateMany"
-./wire: class UpdateManyWireCommand, readonly required property update: Document_2 | ReadonlyArray<Document_2>
+./wire: class UpdateManyWireCommand, readonly required property update: Document | ReadonlyArray<Document>
 ./wire: class UpdateManyWireCommand, readonly required property upsert: boolean
 ./wire: class UpdateOneWireCommand extends MongoWireCommand
-./wire: class UpdateOneWireCommand, constructor(collection: string, filter: Document_2, update: Document_2 | ReadonlyArray<Document_2>, upsert?: boolean)
-./wire: class UpdateOneWireCommand, readonly required property filter: Document_2
+./wire: class UpdateOneWireCommand, constructor(collection: string, filter: Document, update: Document | ReadonlyArray<Document>, upsert?: boolean)
+./wire: class UpdateOneWireCommand, readonly required property filter: Document
 ./wire: class UpdateOneWireCommand, readonly required property kind: "updateOne"
-./wire: class UpdateOneWireCommand, readonly required property update: Document_2 | ReadonlyArray<Document_2>
+./wire: class UpdateOneWireCommand, readonly required property update: Document | ReadonlyArray<Document>
 ./wire: class UpdateOneWireCommand, readonly required property upsert: boolean
 ./wire: function isDdlWireCommand(cmd: AnyMongoWireCommand): cmd is AnyMongoDdlWireCommand
 ./wire: interface InsertManyResult

@@ -27,6 +27,9 @@
 ./column-types: function arktypeJson<S extends Type<unknown>>(schema: S): ColumnSpec<ArktypeJsonCodecClass<S['infer']>, ArktypeJsonTypeParams>
 ./column-types: type ArktypeJsonCodec<TInferred> = ArktypeJsonCodecClass<TInferred>
 ./column-types: type ArktypeJsonTypeParams = { readonly expression: string; readonly jsonIr: object; }
+./control: const arktypeJsonExtensionDescriptor: SqlControlExtensionDescriptor<'postgres'>
 ./control: export default = const arktypeJsonExtensionDescriptor: SqlControlExtensionDescriptor<'postgres'>
+./pack: const arktypeJsonPackMeta: typeof arktypeJsonPackMetaBase & { readonly __codecTypes?: CodecTypes; }
 ./pack: export default = const arktypeJsonPackMeta: typeof arktypeJsonPackMetaBase & { readonly __codecTypes?: CodecTypes; }
+./runtime: const arktypeJsonRuntimeDescriptor: SqlRuntimeExtensionDescriptor<'postgres'>
 ./runtime: export default = const arktypeJsonRuntimeDescriptor: SqlRuntimeExtensionDescriptor<'postgres'>

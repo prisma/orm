@@ -20,11 +20,12 @@
 (not exported) type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown; }>
 (not exported) type CodecTypes_2 = ExtractCodecTypes<typeof codecDescriptorMap>
 (not exported) type GeometryParams = { readonly srid?: number; }
-./codec-types: export GeometryValue = type Geometry<_Srid extends number = number> = GeometryValue
 ./codec-types: type CodecTypes = CodecTypes_2
+./codec-types: type Geometry<_Srid extends number = number> = GeometryValue
 ./codec-types: type GeometryValue = GeometryLineString | GeometryMultiLineString | GeometryMultiPoint | GeometryMultiPolygon | GeometryPoint | GeometryPolygon
 ./column-types: const geometryColumn: { readonly codecId: "pg/geometry@1"; }
 ./column-types: function geometry<S extends number>(options: { readonly srid: S; }): ColumnTypeDescriptor<typeof POSTGIS_GEOMETRY_CODEC_ID> & { readonly typeParams: { readonly srid: S; }; }
+./control: const postgisExtensionDescriptor: SqlControlExtensionDescriptor<'postgres'>
 ./control: export default = const postgisExtensionDescriptor: SqlControlExtensionDescriptor<'postgres'>
 ./geojson: function bboxPolygon(bbox: readonly [number, number, number, number], srid?: number): GeometryPolygon
 ./geojson: function point(longitude: number, latitude: number, srid?: number): GeometryPoint

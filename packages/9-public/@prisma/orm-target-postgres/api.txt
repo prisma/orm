@@ -2079,6 +2079,7 @@
 ./target/pack: export default = const postgresTargetDescriptorMeta: typeof postgresTargetDescriptorMetaBase & { readonly __codecTypes?: CodecTypes; readonly __queryOperationTypes?: QueryOperationTypesForCodecs; readonly __parameterizedOutputTypes?: ParameterizedOutputTypesForTypeParams; readonly __dataTypeArguments?: { readonly 'pg/int4': { readonly argument: number; readonly parameter: number; }; }; }
 ./target/pack: type TsqueryParser = (text: TextArgument, options?: TsqueryParserOptions) => TsqueryExpression
 ./target/planner-ddl-builders: function buildColumnTypeSql(column: Pick<StorageColumn, 'codecId' | 'default' | 'many' | 'typeParams'>, types: TypeLookups, allowPseudoTypes?: boolean): string
+./target/planner-identity-values: function buildBuiltinIdentityValue(dataType: string, typeParams?: Record<string, unknown>): null | string
 ./target/planner-identity-values: function resolveIdentityValue(column: Pick<StorageColumn, 'codecId' | 'many' | 'typeParams'>, codecHooks: ReadonlyMap<string, CodecControlHooks>, types: TypeLookups): null | string
 ./target/planner-produced-postgres-migration: class TypeScriptRenderablePostgresMigration extends Migration implements MigrationPlanWithAuthoringSurface
 ./target/planner-produced-postgres-migration: class TypeScriptRenderablePostgresMigration, constructor(calls: readonly OpFactoryCall[], meta: MigrationMeta, spaceId: string, snapshotsImportPath: string, lowerer?: ExecuteRequestLowerer)
@@ -3746,6 +3747,7 @@
 ./target: function alterTypeCheck(type: string, dataTypes: readonly DataType[], where: string, raw?: boolean): ColumnTypeCheck
 ./target: function assemblePostgresCodecRegistry(components: ReadonlyArray<CodecContributor>, dataTypeLookup: Pick<DataTypeLookup, 'has'>): PostgresCodecRegistry
 ./target: function assemblePostgresCodecRegistryWithBuiltins(extensions: ReadonlyArray<CodecContributor>, dataTypeLookup: Pick<DataTypeLookup, 'has'>): PostgresCodecRegistry
+./target: function buildBuiltinIdentityValue(dataType: string, typeParams?: Record<string, unknown>): null | string
 ./target: function buildColumnTypeSql(column: Pick<StorageColumn, 'codecId' | 'default' | 'many' | 'typeParams'>, types: TypeLookups, allowPseudoTypes?: boolean): string
 ./target: function buildControlTableBootstrapQueries(): readonly DdlNode[]
 ./target: function buildPostgresCodecDescriptorRegistry(descriptors: ReadonlyArray<unknown>): PostgresCodecDescriptorRegistry

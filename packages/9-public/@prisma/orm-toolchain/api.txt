@@ -184,6 +184,7 @@
 (not exported) type MigrationListResult = typeof migrationListResultSchema.infer
 (not exported) type MigrationSpaceGraphEntry = typeof migrationSpaceGraphEntrySchema.infer
 (not exported) type MigrationSpaceListEntry = typeof migrationSpaceListEntrySchema.infer
+(not exported) type MigrationsToTarget = { readonly kind: 'at-target-missing-invariants'; readonly missingInvariants: readonly string[]; readonly newMigration?: { readonly from: string; readonly emitFirst: boolean; }; } | { readonly kind: 'none-needed'; } | { readonly kind: 'on-disk'; } | { readonly kind: 'plan-needed'; readonly missingInvariants: readonly string[]; }
 (not exported) type NamespaceAnswer = 'delete' | 'rename'
 (not exported) type SchemaEntityKindClassifier = (issue: SchemaDiffIssue) => string | undefined
 (not exported) type SchemaSubjectClassifier = (issue: SchemaDiffIssue) => DiffSubjectGranularity | undefined
@@ -612,6 +613,9 @@
 ./cli/control-api: interface MigrationCheckOutcome, readonly optional property result?: MigrationCheckResult
 ./cli/control-api: interface MigrationCheckOutcome, readonly required property exitCode: number
 ./cli/control-api: interface MigrationPlanArguments
+./cli/control-api: interface MigrationPlanArguments, readonly optional property migrationsToTarget?: MigrationsToTarget
+./cli/control-api: interface MigrationPlanArguments, readonly optional property position?: DatabasePosition
+./cli/control-api: interface MigrationPlanArguments, readonly optional property startsAfterUnapplied?: true
 ./cli/control-api: interface MigrationPlanArguments, readonly required property from: MigrationPlanArgument
 ./cli/control-api: interface MigrationPlanArguments, readonly required property to: MigrationPlanTargetArgument
 ./cli/control-api: interface MigrationPlanResult
