@@ -134,67 +134,14 @@ describe('PrismaPgAdapterFactory', () => {
     await adapter.dispose()
   })
 
-  describe('search path', () => {
+  it('should not add startup options to the pool config when a schema is provided', async () => {
     const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config, { schema: 'my_schema' })
+    const adapter = await factory.connect()
 
-    it('should set search_path at connection startup when a schema is provided', async () => {
-      const factory = new PrismaPgAdapterFactory(config, { schema: 'my_schema' })
-      const adapter = await factory.connect()
-      expect(adapter.underlyingDriver().options.options).toBe('-c search_path=my_schema,public')
-      await adapter.dispose()
-    })
+    expect(adapter.underlyingDriver().options.options).toBeUndefined()
 
-    it('should not set the options startup parameter when no schema is provided', async () => {
-      const factory = new PrismaPgAdapterFactory(config)
-      const adapter = await factory.connect()
-      expect(adapter.underlyingDriver().options.options).toBeUndefined()
-      await adapter.dispose()
-    })
-
-    it('should quote schema names that require quoting', async () => {
-      const factory = new PrismaPgAdapterFactory(config, { schema: 'MySchema' })
-      const adapter = await factory.connect()
-      expect(adapter.underlyingDriver().options.options).toBe('-c search_path="MySchema",public')
-      await adapter.dispose()
-    })
-
-    it('should escape quotes, whitespace and backslashes in schema names', async () => {
-      const factory = new PrismaPgAdapterFactory(config, { schema: 'my "weird"\\schema' })
-      const adapter = await factory.connect()
-      expect(adapter.underlyingDriver().options.options).toBe('-c search_path="my\\ ""weird""\\\\schema",public')
-      await adapter.dispose()
-    })
-
-    it('should append search_path to user-provided options', async () => {
-      const factory = new PrismaPgAdapterFactory(
-        { ...config, options: '-c statement_timeout=1000' },
-        { schema: 'my_schema' },
-      )
-      const adapter = await factory.connect()
-      expect(adapter.underlyingDriver().options.options).toBe(
-        '-c statement_timeout=1000 -c search_path=my_schema,public',
-      )
-      await adapter.dispose()
-    })
-
-    it.each(['-c search_path=a,b', '--search_path=a,b', '-c statement_timeout=1000 -csearch_path=a'])(
-      'should not override a search_path set in user-provided options (%s)',
-      async (options) => {
-        const factory = new PrismaPgAdapterFactory({ ...config, options }, { schema: 'my_schema' })
-        const adapter = await factory.connect()
-        expect(adapter.underlyingDriver().options.options).toBe(options)
-        await adapter.dispose()
-      },
-    )
-
-    it('should leave externally provided pools untouched', async () => {
-      const pool = new pg.Pool(config)
-      const factory = new PrismaPgAdapterFactory(pool, { schema: 'my_schema' })
-      const adapter = await factory.connect()
-      expect(adapter.underlyingDriver().options.options).toBeUndefined()
-      await adapter.dispose()
-      await pool.end()
-    })
+    await adapter.dispose()
   })
 
   it('should not pass name when statement name generator is not provided', async () => {
