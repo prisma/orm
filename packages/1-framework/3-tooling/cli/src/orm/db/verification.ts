@@ -218,17 +218,27 @@ export function schemaVerdictDiagnostic(inputs: {
 }
 
 /**
+ * How the database may be changed to match the contract: by `db update`, or, when its change policy does not permit `reconcile`, only by migrations. Then `signEarlier` is the `db sign` that signs the contract the database is at.
+ */
+export type SchemaDriftRecovery =
+  | { readonly kind: 'db-update' }
+  | { readonly kind: 'migrations'; readonly signEarlier: string };
+
+/**
  * What to do about schema drift, by the causes the issues name. A value the database may hold in a
- * form of its own is fixed in the contract when the two mean the same, and by `db update` when they
- * do not. `db update` is always offered; changing the contract to describe the database is offered
- * when some issue is not one the database may only have stored in its own form, or there is none.
+ * form of its own is fixed in the contract when the two mean the same. Otherwise the database is
+ * changed by the one recovery its change policy permits: `db update` where `reconcile` is permitted,
+ * else signing the earlier contract it is at or authoring migrations, then `db migrate`. Changing the
+ * contract to describe the database is offered when some issue is not one the database may only
+ * have stored in its own form, or there is none.
  */
 export function schemaDriftNextActions(inputs: {
   readonly verb: 'sign' | 'verify';
   readonly contractRef: string | undefined;
   readonly issues: readonly SchemaDiffIssue[];
+  readonly recovery: SchemaDriftRecovery;
 }): readonly NextAction[] {
-  const { verb, contractRef, issues } = inputs;
+  const { verb, contractRef, issues, recovery } = inputs;
   const retryAfterEmit =
     contractRef === undefined
       ? `${verb} again`
@@ -245,10 +255,22 @@ export function schemaDriftNextActions(inputs: {
           ),
         ]
       : []),
-    runCommandAction(
-      `Change the database to match the contract, then ${verb} again`,
-      contractRef === undefined ? '{bin} db update' : `{bin} db update --to "${contractRef}"`,
-    ),
+    ...(recovery.kind === 'db-update'
+      ? [
+          runCommandAction(
+            `Change the database to match the contract, then ${verb} again`,
+            contractRef === undefined ? '{bin} db update' : `{bin} db update --to "${contractRef}"`,
+          ),
+        ]
+      : [
+          runCommandAction(
+            'If the database is at an earlier contract, sign that contract, naming the last migration it applied, then run db migrate',
+            recovery.signEarlier,
+          ),
+          chooseAction(
+            'Otherwise author migrations that bring the database back onto the migration graph, then run db migrate',
+          ),
+        ]),
     ...(other
       ? [
           chooseAction(

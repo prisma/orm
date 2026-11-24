@@ -288,6 +288,52 @@ describe('db sign', () => {
       ]);
     });
 
+    it('offers no db update for a database whose change policy permits only migrations, and repeats --force', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(
+        ok({ spaces: [failedSpace('app', HASH_A)], changePolicy: ['migrate'] }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--force', '--json'], {
+        cwd: dir,
+      });
+
+      expect(run.exitCode).toBe(4);
+      expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
+        {
+          kind: 'run-command',
+          label:
+            'If the database is at an earlier contract, sign that contract, naming the last migration it applied, then run db migrate',
+          command: 'prisma-test db sign --contract <migration> --force',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'Otherwise author migrations that bring the database back onto the migration graph, then run db migrate',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'Or change the contract source to describe the database as it is, re-run contract emit, then sign again',
+        },
+      ]);
+    });
+
+    it('offers db update for a database whose change policy permits reconcile', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(
+        ok({ spaces: [failedSpace('app', HASH_A)], changePolicy: ['migrate', 'reconcile'] }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(diagnosticsOf(run)[0]?.nextActions?.[0]).toEqual({
+        kind: 'run-command',
+        label: 'Change the database to match the contract, then sign again',
+        command: 'prisma-test db update',
+      });
+    });
+
     it('draws the drift under the failed space and closes with the failing summary', async () => {
       const dir = await projectDir();
       appFailsExtensionSigns();

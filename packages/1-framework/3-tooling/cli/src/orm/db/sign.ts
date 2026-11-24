@@ -48,6 +48,7 @@ import {
   issueNodes,
   readEmittedContract,
   requireVerifyConnection,
+  type SchemaDriftRecovery,
   schemaDriftNextActions,
   schemaVerdictDiagnostic,
   verificationThrow,
@@ -67,6 +68,9 @@ const FINDINGS_EXIT_CODE = 4;
  * suppresses it.
  */
 const DEFAULT_ADVANCE_REF = 'db';
+
+/** What advice prints where the user names the last migration the database applied. */
+const MIGRATION_PLACEHOLDER = '<migration>';
 
 const CONTRACT_REF_BRIEF = `Contract reference (${RECORDED_CONTRACT_REF_FORMS})`;
 
@@ -659,6 +663,23 @@ export function createDbSignCommand(
           }
         }
         const migrate = cliCommand(cliInvocation(ctx, args.flags.db), 'db migrate');
+        const changePolicy = signed.value.changePolicy;
+        const recovery: SchemaDriftRecovery =
+          changePolicy === undefined || changePolicy.includes('reconcile')
+            ? { kind: 'db-update' }
+            : {
+                kind: 'migrations',
+                signEarlier: cliCommand(cliInvocation(ctx, args.flags.db), 'db sign', [
+                  '--contract',
+                  MIGRATION_PLACEHOLDER,
+                  ...signRerunArgs({
+                    contractRef: undefined,
+                    advanceRef: args.flags.advanceRef,
+                    noAdvanceRef: args.flags.noAdvanceRef,
+                    force: args.flags.force,
+                  }),
+                ]),
+              };
         const verdictDiagnostic = (space: string, schema: VerifyDatabaseSchemaResult) =>
           schemaVerdictDiagnostic({
             result: schema,
@@ -667,6 +688,7 @@ export function createDbSignCommand(
               verb: 'sign',
               contractRef,
               issues: schema.schema.issues,
+              recovery,
             }),
           });
         const diagnostics: Diagnostic[] = spaces.flatMap((outcome) => {

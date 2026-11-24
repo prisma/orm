@@ -336,6 +336,7 @@ function driftDiagnostics(inputs: {
           verb: 'verify',
           contractRef: undefined,
           issues: result.schema.issues,
+          recovery: { kind: 'db-update' },
         }),
       }),
     );

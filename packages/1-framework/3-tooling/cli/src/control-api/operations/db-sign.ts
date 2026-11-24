@@ -2,6 +2,7 @@ import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
 import { errorMarkerPoliciesCorrupt } from '@internal/errors/execution';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
+  ChangeStrategy,
   ControlDriverInstance,
   ControlExtensionDescriptor,
   ControlFamilyInstance,
@@ -77,6 +78,8 @@ export type DbSignSpaceOutcome =
 export interface ExecuteDbSignSuccess {
   /** The app space first, then each extension space in declaration order. */
   readonly spaces: readonly DbSignSpaceOutcome[];
+  /** The database's change policy in force, or `undefined` when it has no marker and so no policy. */
+  readonly changePolicy: readonly ChangeStrategy[] | undefined;
 }
 
 export type ExecuteDbSignResult = Result<ExecuteDbSignSuccess, CliStructuredError>;
@@ -282,5 +285,6 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
             ...(schema.ok ? {} : { schema }),
           };
     }),
+    changePolicy: inForce?.change,
   });
 }

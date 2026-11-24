@@ -323,6 +323,21 @@ describe('signContractSpaces', () => {
       });
     });
 
+    it('returns the change policy in force, so advice names only what it permits', async () => {
+      const family = familySigning(signedEverySpace, () => false, markers);
+
+      const result = await signContractSpaces({
+        driver,
+        familyInstance: family.familyInstance,
+        aggregate,
+        frameworkComponents: [],
+        invocation: INVOCATION,
+        force: true,
+      });
+
+      expect(result.assertOk().changePolicy).toEqual(['migrate']);
+    });
+
     it('still signs no space whose schema does not satisfy its contract', async () => {
       const family = familySigning(
         signedEverySpace,
@@ -363,7 +378,7 @@ describe('signContractSpaces', () => {
       invocation: INVOCATION,
     });
 
-    expect(result.ok).toBe(true);
+    expect(result.assertOk().changePolicy).toBeUndefined();
     expect(family.calls).toEqual(['readAllMarkers', 'introspect', 'signSpaces']);
   });
 });
