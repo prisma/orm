@@ -3,7 +3,6 @@
 **Status:** Accepted
 **Date:** 2026-11-24
 **Domain:** Runtime & Execution
-**In force from:** the first release candidate after `8.0.0-rc.25`
 **Supersedes:** in [ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md), the last sentence of the 2026-11-20 amendment ("A read that cannot reach the database still fails the call with `CONTRACT.MARKER_READ_FAILED`"), the strict-mode refusals under "Verification modes" and "Drift handling", and, for the runtime only, the statement that a singleton-shape marker fails when read
 
 ## At a glance
@@ -43,7 +42,9 @@ The check that compares a running application's contract with the database's mar
 
 The check runs once for each runtime instance, before the runtime's first statement or the first connection it takes to hold. A check that ends in any row of this table is that one check, including a marker that could not be read. It is not tried again.
 
-A database that cannot be reached is not an outcome of the check. When the read fails because no connection could be made, or because the runtime is not connected, the call rejects with the driver's own error, nothing is logged, and the next call makes the check. The runtime recognises this case by the error's type (`SqlConnectionError`) or code (`DRIVER.CONNECTION_FAILED`, `DRIVER.NOT_CONNECTED`), never by its message.
+A read that fails with a connection error is not an outcome of the check. A connection error is a `SqlConnectionError`, or a structured error coded `DRIVER.CONNECTION_FAILED` or `DRIVER.NOT_CONNECTED`; the runtime goes by the error's type or code, never by its message. The call rejects with that error, nothing is logged, and the next call makes the check.
+
+The drivers decide what is a connection error. A server that does not answer, a refused connection and a connection lost during the read are connection errors. So is a SQLite database that is busy or locked. A PostgreSQL or MySQL server that answers and refuses the sign-in, reports that the database does not exist, or has no connection to spare raises a statement error. That is a marker that cannot be read: the check warns once and is not tried again, and the user's query then fails with the server's own error.
 
 `verifyMarker: false` still skips the check.
 
@@ -53,9 +54,9 @@ The marker is a record Prisma keeps for itself. A later release of Prisma 8 must
 
 The check is a diagnostic, not a safeguard. A database that lacks a table or column the contract names fails the query that needs it, with the database's own error. A difference the database does not report, such as a changed nullability or type, runs unnoticed whether the check warns or fails. `prisma db verify` is the command that finds it.
 
-A read that reached the database and failed is not tried again on later calls. Such a failure rarely goes away by itself: a role with no `SELECT` on the marker table would add a failing read to every call.
+A read that failed with anything other than a connection error is not tried again on later calls. Such a failure rarely goes away by itself: a role with no `SELECT` on the marker table would add a failing read to every call.
 
-A database that cannot be reached is treated differently for two reasons. The user's query cannot succeed either, so rejecting with the driver's error stops nothing that would have worked, and it spares the call a second wait for the connection timeout. And an application that starts before its database does still gets its check, and its mismatch warning, once the database answers.
+A connection error is treated differently for two reasons. The user's query would most likely meet the same error, and rejecting at once spares the call a second wait for the connection timeout. And an application that starts before its database server does still gets its check, and its mismatch warning, once the server answers.
 
 A logger that throws does not fail the call either. The runtime discards an error from `log.warn` during the check.
 

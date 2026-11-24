@@ -308,7 +308,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   private readonly codecDescriptors: CodecDescriptorRegistry;
   private readonly sqlCtx: ActivityContextFields<SqlMiddlewareContext>;
   private readonly verifyMarkerOption: VerifyMarkerOption;
-  // Memoises the first verifyMarker() call so concurrent first calls share one read and one log line; a read that fails counts as that call and is not retried. `null` until the first call; pre-resolved when `verifyMarkerOption === false`.
+  // Memoises the first verifyMarker() call so concurrent first calls share one read and one log line; a read that fails counts as that call and is not retried, except that a connection error clears it so the next call reads again. `null` until the first call; pre-resolved when `verifyMarkerOption === false`.
   private verifyMarkerPromise: Promise<void> | null;
   private closePromise: Promise<void> | null;
   private readonly ownsDriver: boolean;
@@ -818,7 +818,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   /**
-   * Returns a raw driver connection, after the contract marker check has finished through the driver; the check only logs, so a marker that cannot be read never stops the connection being taken. Every connection the runtime or a subclass holds must come from here, so the check never waits for a connection its caller holds. SQL issued on it runs below the middleware/codec/telemetry pipeline. It carries its own lifecycle (`release`/`destroy`/`beginTransaction`); the caller owns disposal. It follows the runtime's close rule for connections: see {@link Runtime.close}. Pass the `activityParent` of the activity it is acquired for, so it is admitted after `close()` while that activity is open.
+   * Returns a raw driver connection, after the contract marker check has finished through the driver; the check only logs, so a marker that cannot be read never stops the connection being taken; when the check's read fails with a connection error, this rejects with that error and takes no connection. Every connection the runtime or a subclass holds must come from here, so the check never waits for a connection its caller holds. SQL issued on it runs below the middleware/codec/telemetry pipeline. It carries its own lifecycle (`release`/`destroy`/`beginTransaction`); the caller owns disposal. It follows the runtime's close rule for connections: see {@link Runtime.close}. Pass the `activityParent` of the activity it is acquired for, so it is admitted after `close()` while that activity is open.
    */
   protected async acquireRawConnection(
     options?: Pick<ActivityExecuteOptions, 'activityParent'>,

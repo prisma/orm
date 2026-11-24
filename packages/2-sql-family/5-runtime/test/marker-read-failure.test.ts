@@ -265,9 +265,11 @@ describe('when the marker read cannot reach the database', () => {
   it.each(connectionFailures)(
     'rejects the call with the driver error unchanged after %s and warns about nothing',
     async (_, driverError, readFailure) => {
-      const { runtime, log } = failingRuntime(readFailure, unreachableDriver(driverError));
+      const driver = unreachableDriver(driverError);
+      const { runtime, log } = failingRuntime(readFailure, driver);
 
       await expect(runtime.query(createPlan()).toArray()).rejects.toBe(driverError);
+      expect(driver.query).not.toHaveBeenCalled();
 
       expect(log.warn).not.toHaveBeenCalled();
     },
