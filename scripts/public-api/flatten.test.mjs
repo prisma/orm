@@ -586,9 +586,40 @@ describe('flattenPackage', () => {
       linesOf('qualify'),
       sorted([
         '.: function check(errors: @ark/schema.ArkErrors): ArkErrors',
-        '.: function legacy(errors: arktype.ArkErrors): void',
+        '.: function legacy(errors: @ark/schema.ArkErrors): void',
         '.: interface ArkErrors',
         '.: interface ArkErrors, readonly required property own: true',
+      ]),
+    );
+  });
+
+  it('qualifies an outside type one way, by its declaring package, whatever form the build wrote', () => {
+    deepStrictEqual(
+      linesOf('qualify-two-ways'),
+      sorted([
+        '.: function viaImport(errors: @ark/schema.ArkErrors): void',
+        '.: function viaNamed(errors: @ark/schema.ArkErrors): void',
+        '.: interface ArkErrors',
+        '.: interface ArkErrors, readonly required property own: true',
+      ]),
+    );
+  });
+
+  it('writes a line break inside a literal as \\n, so every item stays on one line', () => {
+    deepStrictEqual(
+      linesOf('multiline-literal'),
+      sorted(['.: const doc: `first line\\nsecond line`', '.: type Two = "a  b" | `c\\n  d`']),
+    );
+  });
+
+  it('qualifies a global type whose name the package also exports with globalThis', () => {
+    deepStrictEqual(
+      linesOf('global-clash'),
+      sorted([
+        '.: function render(target: globalThis.Document): void',
+        '.: function save(document: Document): void',
+        '.: interface Document',
+        '.: interface Document, readonly required property id: string',
       ]),
     );
   });

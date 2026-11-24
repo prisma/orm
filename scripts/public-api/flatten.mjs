@@ -15,13 +15,20 @@ export class ApiListError extends Error {}
 export { compareCodeUnits };
 
 const WHITESPACE = new Set([ts.SyntaxKind.WhitespaceTrivia, ts.SyntaxKind.NewLineTrivia]);
+const LITERALS = new Set([
+  ts.SyntaxKind.StringLiteral,
+  ts.SyntaxKind.NoSubstitutionTemplateLiteral,
+  ts.SyntaxKind.TemplateHead,
+  ts.SyntaxKind.TemplateMiddle,
+  ts.SyntaxKind.TemplateTail,
+]);
 const COMMENTS = new Set([
   ts.SyntaxKind.SingleLineCommentTrivia,
   ts.SyntaxKind.MultiLineCommentTrivia,
 ]);
 
 // Collapses whitespace between tokens to one space; the text of string and template literals is
-// kept as it is. Tokens are TypeScript's own: a `}` that closes a template's `${…}` is scanned
+// kept as it is, except that a line break in it is written `\n`, so every item stays on one line. Tokens are TypeScript's own: a `}` that closes a template's `${…}` is scanned
 // again as the rest of the template.
 export function oneLine(text) {
   const scanner = ts.createScanner(
@@ -52,7 +59,10 @@ export function oneLine(text) {
         if (token === ts.SyntaxKind.TemplateMiddle) open.push('template');
       }
     }
-    result += scanner.getTokenText();
+    const tokenText = scanner.getTokenText();
+    result += LITERALS.has(token)
+      ? tokenText.replaceAll('\r', '\\r').replaceAll('\n', '\\n')
+      : tokenText;
   }
   return result.trim();
 }
@@ -122,9 +132,16 @@ function excerptText(item, nameOf, ownName) {
       text += token.text;
       continue;
     }
-    const local = nameOf(reference, token.text, text.endsWith('.'));
+    const afterImport = /import\("[^"]*"\)\.$/.exec(text);
+    const local = nameOf(reference, token.text, {
+      afterDot: text.endsWith('.'),
+      afterImport: afterImport !== null,
+    });
+    if (local !== undefined && afterImport) text = text.slice(0, afterImport.index);
     const external = TOP_LEVEL_REFERENCE.exec(reference);
-    text += local ?? (external && token.text.includes('$') ? external[2] : token.text);
+    text +=
+      local ??
+      (external && token.text.includes('$') ? withoutBundlerSuffix(external[2]) : token.text);
   }
   text = oneLine(text)
     .replace(/^(export )?(declare )?/, '')
@@ -351,7 +368,8 @@ function externalNames(models, packageName) {
           token.kind === 'Reference' ? token.canonicalReference?.toString() : undefined;
         if (reference === undefined || reference.startsWith(`${packageName}!`)) continue;
         const external = TOP_LEVEL_REFERENCE.exec(reference);
-        const name = external && token.text.includes('$') ? external[2] : token.text;
+        const name =
+          external && token.text.includes('$') ? withoutBundlerSuffix(external[2]) : token.text;
         if (IDENTIFIER.test(name)) names.add(name);
       }
     });
@@ -407,17 +425,20 @@ function nameDeclarations(models, paths, packageName, problems) {
       [...exported.values()].flatMap((group) => group.names),
     ),
   );
-  const qualified = (reference, text, afterDot) => {
-    if (afterDot || reference.startsWith(`${packageName}!`)) return undefined;
+  // The module is the one API Extractor's reference names, the package that declares the type,
+  // whatever the build wrote, so one type is always spelled one way. A global is `globalThis.X`.
+  const qualified = (reference, text, { afterDot, afterImport }) => {
+    if ((afterDot && !afterImport) || reference.startsWith(`${packageName}!`)) return undefined;
     const external = TOP_LEVEL_REFERENCE.exec(reference);
-    const name = external && text.includes('$') ? external[2] : text;
+    const name = external && text.includes('$') ? withoutBundlerSuffix(external[2]) : text;
+    if (!exportNames.has(name)) return undefined;
+    if (/^![A-Za-z0-9_$]+:[a-z]+$/.test(reference)) return `globalThis.${name}`;
     const module = moduleOf(reference);
-    if (!exportNames.has(name) || module === undefined) return undefined;
-    return `import("${module}").${name}`;
+    return module === undefined ? undefined : `import("${module}").${name}`;
   };
-  const nameOf = (model, names) => (reference, text, afterDot) => {
+  const nameOf = (model, names) => (reference, text, position) => {
     const item = model.byReference.get(reference);
-    if (item === undefined) return qualified(reference, text, afterDot);
+    if (item === undefined) return qualified(reference, text, position);
     const group = exportedByModel.get(model).get(item);
     if (group) return group.referenceName;
     const key = declarationKey(item);
@@ -439,7 +460,7 @@ function nameDeclarations(models, paths, packageName, problems) {
         context: '',
         ownName: sourceName(local.items[0]),
         nameOf: compare
-          ? (reference, text, afterDot) => fullName(reference) ?? named(reference, text, afterDot)
+          ? (reference, text, position) => fullName(reference) ?? named(reference, text, position)
           : named,
         origin: local.key,
         lines,
