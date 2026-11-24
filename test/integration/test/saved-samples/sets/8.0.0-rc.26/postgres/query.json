@@ -1,0 +1,9 @@
+{
+  "model": "User",
+  "table": "user",
+  "row": {
+    "email": "ada@example.com",
+    "role": "ADMIN",
+    "displayName": "Ada"
+  }
+}

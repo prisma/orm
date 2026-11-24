@@ -1,0 +1,168 @@
+{
+  "tables": [
+    {
+      "name": "contract",
+      "columns": [
+        {
+          "name": "core_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "contract_json",
+          "type": "jsonb",
+          "nullable": false,
+          "default": null
+        }
+      ],
+      "primaryKey": [
+        "core_hash"
+      ]
+    },
+    {
+      "name": "ledger",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "default": "nextval('prisma_contract.ledger_id_seq'::regclass)"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "space",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "migration_name",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "migration_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "origin_core_hash",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "origin_profile_hash",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "destination_core_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "destination_profile_hash",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "operations",
+          "type": "jsonb",
+          "nullable": false,
+          "default": null
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ]
+    },
+    {
+      "name": "marker",
+      "columns": [
+        {
+          "name": "space",
+          "type": "text",
+          "nullable": false,
+          "default": "'app'::text"
+        },
+        {
+          "name": "core_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "profile_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "contract_json",
+          "type": "jsonb",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "canonical_version",
+          "type": "integer",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "app_tag",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "meta",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "'{}'::jsonb"
+        },
+        {
+          "name": "invariants",
+          "type": "text[]",
+          "nullable": false,
+          "default": "'{}'::text[]"
+        }
+      ],
+      "primaryKey": [
+        "space"
+      ]
+    }
+  ],
+  "sequences": [
+    {
+      "name": "ledger_id_seq",
+      "type": "bigint",
+      "table": "ledger",
+      "column": "id"
+    }
+  ]
+}

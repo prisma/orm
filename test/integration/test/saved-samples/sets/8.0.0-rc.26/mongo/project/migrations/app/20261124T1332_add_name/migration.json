@@ -1,0 +1,10 @@
+{
+  "formatVersion": 1,
+  "from": "ea6879cbcd8b40a55f8828cd02c5ce337f96a26e948d1d3f6444c4cf198cb33f",
+  "to": "6d56833967a6e635f5673044c3764af572bf5e6b064005889b780b19e1212f4d",
+  "providedInvariants": [
+    "backfill-user-name"
+  ],
+  "createdAt": "2026-11-24T13:32:12.878Z",
+  "migrationHash": "5e10d62bf55e75915955291b3fb3dc66b1369fcb900b12b3df62eba3770b3418"
+}

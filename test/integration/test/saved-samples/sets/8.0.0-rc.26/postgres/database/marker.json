@@ -1,0 +1,36 @@
+[
+  {
+    "meta": {
+      "policies": {
+        "change": [
+          "migrate"
+        ],
+        "dataProtection": {
+          "dataLoss": "data-loss-with-consent",
+          "accessWidening": "access-widening-with-consent"
+        }
+      }
+    },
+    "space": "app",
+    "app_tag": null,
+    "core_hash": "ca21ea32b59b3a7f9e4f7ec0305ffb05d788236e80b3f278add2574036b5159d",
+    "invariants": [
+      "backfill-user-display-name"
+    ],
+    "updated_at": "2026-11-24T13:32:10.684+00:00",
+    "profile_hash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
+    "contract_json": null,
+    "canonical_version": null
+  },
+  {
+    "meta": {},
+    "space": "pgvector",
+    "app_tag": null,
+    "core_hash": "d2c19e6a88b5b89e23e8ce4863844d40813bcf7712509e631d7cd29d405af27b",
+    "invariants": [],
+    "updated_at": "2026-11-24T13:32:09.977+00:00",
+    "profile_hash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
+    "contract_json": null,
+    "canonical_version": null
+  }
+]

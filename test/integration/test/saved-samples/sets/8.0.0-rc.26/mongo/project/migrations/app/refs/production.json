@@ -1,0 +1,12 @@
+{
+  "formatVersion": 1,
+  "hash": "6d56833967a6e635f5673044c3764af572bf5e6b064005889b780b19e1212f4d",
+  "invariants": [
+    "backfill-user-name"
+  ],
+  "policies": {
+    "change": [
+      "migrate"
+    ]
+  }
+}

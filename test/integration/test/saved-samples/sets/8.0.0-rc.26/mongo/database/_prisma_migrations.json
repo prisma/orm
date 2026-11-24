@@ -1,0 +1,869 @@
+[
+  {
+    "_id": "app",
+    "space": "app",
+    "storageHash": "6d56833967a6e635f5673044c3764af572bf5e6b064005889b780b19e1212f4d",
+    "profileHash": "8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69",
+    "contractJson": null,
+    "canonicalVersion": null,
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1795527133019"
+      }
+    },
+    "appTag": null,
+    "meta": {
+      "policies": {
+        "change": [
+          "migrate"
+        ],
+        "dataProtection": {
+          "dataLoss": "data-loss-with-consent",
+          "accessWidening": "access-widening-with-consent"
+        }
+      }
+    },
+    "invariants": [
+      "backfill-user-name"
+    ]
+  },
+  {
+    "_id": {
+      "$oid": "6b0591dcc91be239eb670611"
+    },
+    "type": "ledger",
+    "space": "app",
+    "edgeId": "empty->0d02e57cfb19bc2159e9838992c264133875f4d9565103d3838d91b20d95966d",
+    "from": "empty",
+    "to": "0d02e57cfb19bc2159e9838992c264133875f4d9565103d3838d91b20d95966d",
+    "migrationName": "20261124T1332_initial",
+    "migrationHash": "34cde625ef31ccd7d294fd2d7cbb29fa5025a0535452c667b67eae745bcf225d",
+    "operations": [
+      {
+        "id": "collection.users.create",
+        "label": "Create collection users",
+        "operationClass": "additive",
+        "precheck": [
+          {
+            "description": "collection users does not exist",
+            "source": {
+              "kind": "listCollections"
+            },
+            "filter": {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "users"
+            },
+            "expect": "notExists",
+            "object": "collection \"users\""
+          }
+        ],
+        "execute": [
+          {
+            "description": "create collection users",
+            "command": {
+              "kind": "createCollection",
+              "collection": "users",
+              "validator": {
+                "$jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "email": {
+                      "bsonType": "string"
+                    },
+                    "role": {
+                      "bsonType": "string",
+                      "enum": [
+                        "USER",
+                        "ADMIN"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "email",
+                    "role"
+                  ]
+                }
+              },
+              "validationLevel": "strict",
+              "validationAction": "error"
+            }
+          }
+        ],
+        "postcheck": []
+      },
+      {
+        "id": "index.users.create(email_1)",
+        "label": "Create index email_1 on users (email:1)",
+        "operationClass": "additive",
+        "precheck": [
+          {
+            "description": "no index named email_1 exists on users",
+            "source": {
+              "kind": "listIndexes",
+              "collection": "users"
+            },
+            "filter": {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "email_1"
+            },
+            "expect": "notExists",
+            "object": "an index named \"email_1\" in \"users\""
+          },
+          {
+            "description": "no index with the same keys and options exists on users",
+            "source": {
+              "kind": "listIndexes",
+              "collection": "users"
+            },
+            "filter": {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "email": {
+                      "$numberInt": "1"
+                    }
+                  }
+                },
+                {
+                  "kind": "field",
+                  "field": "unique",
+                  "op": "$eq",
+                  "value": true
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                }
+              ]
+            },
+            "expect": "notExists",
+            "object": "an index on { email: 1 } in \"users\""
+          }
+        ],
+        "execute": [
+          {
+            "description": "create index email_1 on users",
+            "command": {
+              "kind": "createIndex",
+              "collection": "users",
+              "keys": [
+                {
+                  "direction": {
+                    "$numberInt": "1"
+                  },
+                  "field": "email"
+                }
+              ],
+              "unique": true,
+              "name": "email_1"
+            }
+          }
+        ],
+        "postcheck": [
+          {
+            "description": "index email_1 exists on users",
+            "source": {
+              "kind": "listIndexes",
+              "collection": "users"
+            },
+            "filter": {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "name",
+                  "op": "$eq",
+                  "value": "email_1"
+                },
+                {
+                  "kind": "and",
+                  "exprs": [
+                    {
+                      "kind": "field",
+                      "field": "key",
+                      "op": "$eq",
+                      "value": {
+                        "email": {
+                          "$numberInt": "1"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "field",
+                      "field": "unique",
+                      "op": "$eq",
+                      "value": true
+                    },
+                    {
+                      "kind": "not",
+                      "expr": {
+                        "kind": "field",
+                        "field": "sparse",
+                        "op": "$eq",
+                        "value": true
+                      }
+                    },
+                    {
+                      "kind": "exists",
+                      "field": "expireAfterSeconds",
+                      "exists": false
+                    },
+                    {
+                      "kind": "exists",
+                      "field": "partialFilterExpression",
+                      "exists": false
+                    },
+                    {
+                      "kind": "exists",
+                      "field": "wildcardProjection",
+                      "exists": false
+                    },
+                    {
+                      "kind": "exists",
+                      "field": "collation",
+                      "exists": false
+                    }
+                  ]
+                }
+              ]
+            },
+            "expect": "exists"
+          }
+        ]
+      }
+    ],
+    "appliedAt": {
+      "$date": {
+        "$numberLong": "1795527132746"
+      }
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6b0591dcc91be239eb670612"
+    },
+    "type": "ledger",
+    "space": "app",
+    "edgeId": "0d02e57cfb19bc2159e9838992c264133875f4d9565103d3838d91b20d95966d->ea6879cbcd8b40a55f8828cd02c5ce337f96a26e948d1d3f6444c4cf198cb33f",
+    "from": "0d02e57cfb19bc2159e9838992c264133875f4d9565103d3838d91b20d95966d",
+    "to": "ea6879cbcd8b40a55f8828cd02c5ce337f96a26e948d1d3f6444c4cf198cb33f",
+    "migrationName": "20261124T1332_add_posts",
+    "migrationHash": "4dfc7b5218fa3a2d3aeee42be60c763737d284bc7307e1a59b7e62339a63d6c2",
+    "operations": [
+      {
+        "id": "collection.posts.create",
+        "label": "Create collection posts",
+        "operationClass": "additive",
+        "precheck": [
+          {
+            "description": "collection posts does not exist",
+            "source": {
+              "kind": "listCollections"
+            },
+            "filter": {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "posts"
+            },
+            "expect": "notExists",
+            "object": "collection \"posts\""
+          }
+        ],
+        "execute": [
+          {
+            "description": "create collection posts",
+            "command": {
+              "kind": "createCollection",
+              "collection": "posts",
+              "validator": {
+                "$jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "authorId": {
+                      "bsonType": "objectId"
+                    },
+                    "title": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "authorId",
+                    "title"
+                  ]
+                }
+              },
+              "validationLevel": "strict",
+              "validationAction": "error"
+            }
+          }
+        ],
+        "postcheck": []
+      },
+      {
+        "id": "index.posts.create(authorId_1)",
+        "label": "Create index authorId_1 on posts (authorId:1)",
+        "operationClass": "additive",
+        "precheck": [
+          {
+            "description": "no index named authorId_1 exists on posts",
+            "source": {
+              "kind": "listIndexes",
+              "collection": "posts"
+            },
+            "filter": {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "authorId_1"
+            },
+            "expect": "notExists",
+            "object": "an index named \"authorId_1\" in \"posts\""
+          },
+          {
+            "description": "no index with the same keys and options exists on posts",
+            "source": {
+              "kind": "listIndexes",
+              "collection": "posts"
+            },
+            "filter": {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "key",
+                  "op": "$eq",
+                  "value": {
+                    "authorId": {
+                      "$numberInt": "1"
+                    }
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "unique",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "not",
+                  "expr": {
+                    "kind": "field",
+                    "field": "sparse",
+                    "op": "$eq",
+                    "value": true
+                  }
+                },
+                {
+                  "kind": "exists",
+                  "field": "expireAfterSeconds",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "partialFilterExpression",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "wildcardProjection",
+                  "exists": false
+                },
+                {
+                  "kind": "exists",
+                  "field": "collation",
+                  "exists": false
+                }
+              ]
+            },
+            "expect": "notExists",
+            "object": "an index on { authorId: 1 } in \"posts\""
+          }
+        ],
+        "execute": [
+          {
+            "description": "create index authorId_1 on posts",
+            "command": {
+              "kind": "createIndex",
+              "collection": "posts",
+              "keys": [
+                {
+                  "direction": {
+                    "$numberInt": "1"
+                  },
+                  "field": "authorId"
+                }
+              ],
+              "name": "authorId_1"
+            }
+          }
+        ],
+        "postcheck": [
+          {
+            "description": "index authorId_1 exists on posts",
+            "source": {
+              "kind": "listIndexes",
+              "collection": "posts"
+            },
+            "filter": {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "name",
+                  "op": "$eq",
+                  "value": "authorId_1"
+                },
+                {
+                  "kind": "and",
+                  "exprs": [
+                    {
+                      "kind": "field",
+                      "field": "key",
+                      "op": "$eq",
+                      "value": {
+                        "authorId": {
+                          "$numberInt": "1"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "not",
+                      "expr": {
+                        "kind": "field",
+                        "field": "unique",
+                        "op": "$eq",
+                        "value": true
+                      }
+                    },
+                    {
+                      "kind": "not",
+                      "expr": {
+                        "kind": "field",
+                        "field": "sparse",
+                        "op": "$eq",
+                        "value": true
+                      }
+                    },
+                    {
+                      "kind": "exists",
+                      "field": "expireAfterSeconds",
+                      "exists": false
+                    },
+                    {
+                      "kind": "exists",
+                      "field": "partialFilterExpression",
+                      "exists": false
+                    },
+                    {
+                      "kind": "exists",
+                      "field": "wildcardProjection",
+                      "exists": false
+                    },
+                    {
+                      "kind": "exists",
+                      "field": "collation",
+                      "exists": false
+                    }
+                  ]
+                }
+              ]
+            },
+            "expect": "exists"
+          }
+        ]
+      }
+    ],
+    "appliedAt": {
+      "$date": {
+        "$numberLong": "1795527132848"
+      }
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6b0591ddc91be239eb670613"
+    },
+    "type": "ledger",
+    "space": "app",
+    "edgeId": "ea6879cbcd8b40a55f8828cd02c5ce337f96a26e948d1d3f6444c4cf198cb33f->6d56833967a6e635f5673044c3764af572bf5e6b064005889b780b19e1212f4d",
+    "from": "ea6879cbcd8b40a55f8828cd02c5ce337f96a26e948d1d3f6444c4cf198cb33f",
+    "to": "6d56833967a6e635f5673044c3764af572bf5e6b064005889b780b19e1212f4d",
+    "migrationName": "20261124T1332_add_name",
+    "migrationHash": "5e10d62bf55e75915955291b3fb3dc66b1369fcb900b12b3df62eba3770b3418",
+    "operations": [
+      {
+        "id": "data_transform.User.name",
+        "label": "Data transform: User.name",
+        "operationClass": "data",
+        "name": "User.name",
+        "invariantId": "backfill-user-name",
+        "precheck": [
+          {
+            "description": "Check for data transform: User.name",
+            "source": {
+              "collection": "users",
+              "command": {
+                "kind": "rawAggregate",
+                "collection": "users",
+                "pipeline": [
+                  {
+                    "$match": {
+                      "$expr": {
+                        "$in": [
+                          {
+                            "$type": "$name"
+                          },
+                          [
+                            "missing",
+                            "null"
+                          ]
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "$limit": {
+                      "$numberInt": "1"
+                    }
+                  }
+                ]
+              },
+              "meta": {
+                "target": "mongo",
+                "storageHash": "",
+                "lane": "mongo-raw"
+              }
+            },
+            "filter": {
+              "kind": "exists",
+              "field": "_id",
+              "exists": true
+            },
+            "expect": "exists"
+          }
+        ],
+        "run": [
+          {
+            "collection": "users",
+            "command": {
+              "kind": "rawUpdateMany",
+              "collection": "users",
+              "filter": {
+                "$expr": {
+                  "$in": [
+                    {
+                      "$type": "$name"
+                    },
+                    [
+                      "missing",
+                      "null"
+                    ]
+                  ]
+                }
+              },
+              "update": {
+                "$set": {
+                  "name": "unnamed"
+                }
+              },
+              "bypassDocumentValidation": true
+            },
+            "meta": {
+              "target": "mongo",
+              "storageHash": "",
+              "lane": "mongo-raw"
+            }
+          }
+        ],
+        "postcheck": [
+          {
+            "description": "Check for data transform: User.name",
+            "source": {
+              "collection": "users",
+              "command": {
+                "kind": "rawAggregate",
+                "collection": "users",
+                "pipeline": [
+                  {
+                    "$match": {
+                      "$expr": {
+                        "$in": [
+                          {
+                            "$type": "$name"
+                          },
+                          [
+                            "missing",
+                            "null"
+                          ]
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "$limit": {
+                      "$numberInt": "1"
+                    }
+                  }
+                ]
+              },
+              "meta": {
+                "target": "mongo",
+                "storageHash": "",
+                "lane": "mongo-raw"
+              }
+            },
+            "filter": {
+              "kind": "exists",
+              "field": "_id",
+              "exists": true
+            },
+            "expect": "notExists"
+          }
+        ]
+      },
+      {
+        "id": "validator.users.update",
+        "label": "Update validator on users (added: name)",
+        "operationClass": "widening",
+        "precheck": [
+          {
+            "description": "collection users exists",
+            "source": {
+              "kind": "listCollections"
+            },
+            "filter": {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "users"
+            },
+            "expect": "exists",
+            "object": "collection \"users\""
+          },
+          {
+            "description": "every document in users fits the new validator",
+            "source": {
+              "collection": "users",
+              "command": {
+                "kind": "rawAggregate",
+                "collection": "users",
+                "pipeline": [
+                  {
+                    "$match": {
+                      "$nor": [
+                        {
+                          "$jsonSchema": {
+                            "additionalProperties": false,
+                            "bsonType": "object",
+                            "properties": {
+                              "_id": {
+                                "bsonType": "objectId"
+                              },
+                              "email": {
+                                "bsonType": "string"
+                              },
+                              "name": {
+                                "bsonType": "string"
+                              },
+                              "role": {
+                                "bsonType": "string",
+                                "enum": [
+                                  "USER",
+                                  "ADMIN"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "_id",
+                              "email",
+                              "name",
+                              "role"
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "$limit": {
+                      "$numberInt": "1"
+                    }
+                  }
+                ]
+              },
+              "meta": {
+                "target": "mongo",
+                "storageHash": "",
+                "lane": "mongo-raw"
+              }
+            },
+            "filter": {
+              "kind": "exists",
+              "field": "_id",
+              "exists": true
+            },
+            "expect": "notExists"
+          }
+        ],
+        "execute": [
+          {
+            "description": "modify users",
+            "command": {
+              "kind": "collMod",
+              "collection": "users",
+              "validator": {
+                "$jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "email": {
+                      "bsonType": "string"
+                    },
+                    "name": {
+                      "bsonType": "string"
+                    },
+                    "role": {
+                      "bsonType": "string",
+                      "enum": [
+                        "USER",
+                        "ADMIN"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "email",
+                    "name",
+                    "role"
+                  ]
+                }
+              },
+              "validationLevel": "strict",
+              "validationAction": "error"
+            }
+          }
+        ],
+        "postcheck": [
+          {
+            "description": "validator applied on users",
+            "source": {
+              "kind": "listCollections"
+            },
+            "filter": {
+              "kind": "and",
+              "exprs": [
+                {
+                  "kind": "field",
+                  "field": "name",
+                  "op": "$eq",
+                  "value": "users"
+                },
+                {
+                  "kind": "field",
+                  "field": "options.validationLevel",
+                  "op": "$eq",
+                  "value": "strict"
+                },
+                {
+                  "kind": "field",
+                  "field": "options.validationAction",
+                  "op": "$eq",
+                  "value": "error"
+                },
+                {
+                  "kind": "field",
+                  "field": "options.validator.$jsonSchema",
+                  "op": "$eq",
+                  "value": {
+                    "additionalProperties": false,
+                    "bsonType": "object",
+                    "properties": {
+                      "_id": {
+                        "bsonType": "objectId"
+                      },
+                      "email": {
+                        "bsonType": "string"
+                      },
+                      "name": {
+                        "bsonType": "string"
+                      },
+                      "role": {
+                        "bsonType": "string",
+                        "enum": [
+                          "USER",
+                          "ADMIN"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "_id",
+                      "email",
+                      "name",
+                      "role"
+                    ]
+                  }
+                }
+              ]
+            },
+            "expect": "exists"
+          }
+        ]
+      }
+    ],
+    "appliedAt": {
+      "$date": {
+        "$numberLong": "1795527133025"
+      }
+    }
+  }
+]

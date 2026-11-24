@@ -1,0 +1,8 @@
+{
+  "root": "users",
+  "row": {
+    "email": "ada@example.com",
+    "role": "ADMIN",
+    "name": "Ada"
+  }
+}
