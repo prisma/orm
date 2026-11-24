@@ -6,7 +6,7 @@ This is the plan for stream 7 of the Prisma 8 GA plan. The policy it implements 
 
 From `8.0.0`, an application built on Prisma 8 upgrades to any later `8.x` release with no changes to its code, its generated files or its database.
 
-Upgrading becomes routine, so users stay on the latest release and we maintain one release line for each major. It is always clear to a user what they can rely on. Each project is judged by one question: would this make a user hesitate before upgrading?
+Upgrading becomes routine, so users stay on the latest release and we maintain one release line for each major. It is always clear to a user what they can rely on. A project belongs in this stream when it removes a reason for a user to hesitate before upgrading.
 
 ## How this plan is organised
 
