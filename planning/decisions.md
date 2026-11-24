@@ -94,6 +94,7 @@ Will, 2026-09-30: the emulator controls (start, stop, list, reset) are now urgen
 - Each stream 7 project is named as an instruction that says what is achieved and how, with the purpose in the user's terms and the means in ours (Will, 2026-11-24).
 - Stream 7's policy, research and plan are kept on the branch `ga-compatibility` under `projects/ga-compatibility/`. This plan keeps the goal, the projects and a pointer (Will, 2026-11-24).
 - Maturity per package (stream 6, row 4) is replaced by stream 7, project 6 (Will, 2026-11-24).
+- In stream 7, projects 1 to 6 are Must, 7, 9 and 12 are Aim, and 8, 10 and 11 are Later. They can be moved as the work goes on (Will, 2026-11-24).
 
 ## Changes of 2026-11-23
 

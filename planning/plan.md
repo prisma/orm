@@ -149,7 +149,7 @@ Work found after the plan was made goes here, so the first five streams keep the
 
 **More information:** the [policy](https://github.com/prisma/orm/blob/ga-compatibility/projects/ga-compatibility/spec.md), the [maturity levels](https://github.com/prisma/orm/blob/ga-compatibility/projects/ga-compatibility/maturity-levels.md) and the [plan](https://github.com/prisma/orm/blob/ga-compatibility/projects/ga-compatibility/plan.md), which gives each project's purpose and scope, are on the branch `ga-compatibility`.
 
-The GA column is proposed and not yet confirmed by Will. Project 4 comes before project 3, which needs it.
+Project 4 comes before project 3, which needs it.
 
 | # | Progress | Project | GA | Owner | Status | Next |
 | --- | --- | --- | --- | --- | --- | --- |
