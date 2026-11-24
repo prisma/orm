@@ -91,6 +91,7 @@ In addition to the canonical slice DoD:
 - [ ] Before enabling auto-merge: the PR's head commit on GitHub is the commit just pushed (`gh pr view <n> --json headRefOid`), because the queue tests whatever head it sees when the PR enters. And if the slice changes the text of a message, `test/integration` has been searched for the old text and the files that assert it have been run. (Added 2026-11-20, scalar-convenience-types: the queue dropped the SQLite slice for a head it read ten seconds after the push, and for a value-object test that asserted a reworded decimal error.)
 - [ ] Before enabling auto-merge: every review thread on the PR is resolved, by a fix or by a reply that says why not; bot reviewers count. The command that lists open threads is in [`pr/README.md § Merge queue needs every review thread resolved`](../pr/README.md#merge-queue-needs-every-review-thread-resolved). (Added 2026-10-27, mongo-authoring-structure: slice 1 merged with four open CodeRabbit threads, found only at close-out.)
 - [ ] If the slice changes code that `defineContract`, a pack descriptor or the runtime reaches: run `pnpm size:build` in `examples/bundle-size` (it builds the workspace, then bundles) on the branch and on the PR base ref (`main`, or the base branch of a stacked PR), compare the metafiles, and explain any growth in the PR description before CI's size report asks. (Added 2026-10-27, mongo-authoring-structure: both slices grew a client bundle and the cause was traced only after CI reported it.)
+- [ ] A follow-up ticket is written after reading the code it names, not from the pull request's summary. Example: four tickets written from a summary named the wrong places or described a mechanism the code does not have, and each was rewritten.
 
 ### QA-side items
 
@@ -116,6 +117,12 @@ Beyond the canonical project DoD items:
 - [ ] `pnpm fixtures:check` clean.
 - [ ] If the project introduces a new package: `architecture.config.json` updated; `pnpm lint:deps` passes the new layering.
 - [ ] If the project ships a feature that changes the demo or examples: demo runs end-to-end against the new feature.
+
+### Reached the user
+
+- [ ] The spec's opening example has been run as written, from published packages with no version forced, after the releases that carry the project. All slices merged is not this check. When users get the feature through the `prisma` CLI, two releases carry it: an ORM release, then a CLI release, because the CLI pins the toolchain to an exact version.
+- [ ] A report from the project's intended user during the project is answered, fixed or ticketed before close-out.
+- [ ] Upgrade instructions and release notes for a released version say only what its tag contains. Check the tag before writing that a release fixes something.
 
 ### Documentation & migration
 

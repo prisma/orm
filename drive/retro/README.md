@@ -19,6 +19,14 @@ When a retro lesson could land in multiple surfaces, the team's preference:
 
 One entry per finished project, newest first: what it delivered, then what went wrong or right, each with a link to where the lesson lives.
 
+- **2026-11-24 — External target integration.** `prisma orm init --target <package>` and `prisma contract emit` work for a target package that Prisma did not write, with nothing about that target in the CLI (ADR 324 "Generated files import from the module the target package names" and ADR 325 "`init` gets everything about a target from the target package").
+  - With every slice merged the project was reported as finished, while no release carried it and the outside team's first attempt had failed on a table named `constructor`; the close-out now checks the purpose against published packages first ([project checklist](../calibration/dod.md#reached-the-user)).
+  - That one report showed a class of defect (names such as `__proto__` used as object keys) that took three pull requests to fix, because each fixed the places its brief named ([dispatch checklist](../calibration/dor.md#dispatch-dor-overlay)).
+  - The upgrade guide for a published release said the release refused names it did not refuse, because it was written before checking the tag ([project checklist](../calibration/dod.md#reached-the-user)).
+  - A plan split one change so that the first dispatch broke applications until the second repaired them, and two briefs claimed nothing emitted would change when it did ([slice checklist](../calibration/dor.md#plan-side-items)).
+  - Four follow-up tickets written from a pull request's summary described the code wrongly ([slice checklist](../calibration/dod.md#pr-side-items)).
+  - A bare `git commit` in a worktree shared with a subagent took the subagent's staged files, three times ([dispatch checklist](../calibration/dor.md#dispatch-dor-overlay)).
+  - The close-out started from the plan's own checklist; this was the third project to do so ([close-out rule](../project/README.md#close-out-runs-the-close-out-procedure)).
 - **2026-11-20 — Scalar convenience types.** `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` and `Json` are convenience types on PostgreSQL, MongoDB, SQLite, MySQL and MariaDB, each choosing one explicit type named after what stores it (ADR 316 and ADR 322).
   - The merge queue dropped the SQLite pull request because auto-merge was turned on ten seconds after the push, and the queue tested the commit before it ([slice checklist](../calibration/dod.md#pr-side-items)).
   - It dropped it again on an integration test the slice never touched, which asserted an error message the slice had reworded; search `test/integration` for the old text of every changed message ([slice checklist](../calibration/dod.md#pr-side-items)).
