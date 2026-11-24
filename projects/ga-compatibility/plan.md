@@ -8,35 +8,25 @@ From `8.0.0`, an application built on Prisma 8 upgrades to any later `8.x` relea
 
 Upgrading becomes routine, so users stay on the latest release and we maintain one release line for each major. It is always clear to a user what they can rely on. A project belongs in this stream when it removes a reason for a user to hesitate before upgrading.
 
+## How the policy comes into force
+
+Each project brings three things together, in the same pull requests: the code changed to conform to its part of the policy, the checks that enforce it, and the documentation of it, including any decision record. Nothing that describes a part of the policy is merged to `main` before the code conforms. What is on `main` is therefore what is in force.
+
+A part is in force from the first release after its project merges. Until `8.0.0` that means we follow it by default and the checks enforce it, and we can still break it by a deliberate decision, with upgrade instructions. At `8.0.0` it becomes the promise to users.
+
+Some parts can only start at `8.0.0`. Nothing can be promised about exports until they are reduced, which project 3 does, and no package is GA before then.
+
 ## How to read this plan
 
 Each project is sized for one to four pull requests. Its design is written when it starts.
 
 New work joins a project only when it serves that project's purpose. Work that serves the goal and fits no project becomes a new project.
 
-Projects 1 to 7 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are Later. Will confirmed this on 2026-11-24; it is updated as we go. Project 1 comes first, and project 4 before project 3.
+Projects 2 to 7 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are Later. Will confirmed this on 2026-11-24; it is updated as we go. Project 4 comes before project 3. There is no project 1: it was to document the whole policy on `main` ahead of the code, and each project now documents its own part.
 
 "Task N" is the number a piece of work had before 2026-11-24. The reports under [research/](research/) use those numbers. The facts about the code were read on 2026-11-23 and are rechecked when a project starts.
 
 ## Projects that GA requires
-
-### 1. Document the compatibility policy in the repository
-
-**Purpose.** A contributor or agent who changes Prisma 8 learns the compatibility rules from the repository's own docs. Today the policy is only in this folder, and docs on `main` say the opposite in places.
-
-**What it achieves.**
-
-- The policy and the maturity levels are recorded on `main` as decision records.
-- No doc, rule or decision record on `main` contradicts them. Each one that did is corrected, or is superseded where it is a decision record.
-- The docs say when the rules start to apply. Until `8.0.0` a release candidate may still contain breaking changes.
-
-**How, where we know.**
-
-- The records to correct are listed in [analysis.md](analysis.md), under "Existing records the decided policy contradicts": the no-backward-compatibility rules in `CONTRIBUTING.md`, the architecture overview and the repository rules; decision records that handle a format or hash change by telling users to emit and sign again; the record that lists the format version as a storage hash input; the marker record's statement that the runtime refuses to execute on a mismatch; `docs/oss/versioning.md` and `SECURITY.md`; the rule that a renamed PSL name is removed after "one release line".
-- Project 1 corrects what a contributor reads as a rule today. A record that describes behaviour another project changes, such as the hash inputs or the marker check, is corrected by that project when the behaviour changes.
-- Revise the decision record on version support (`docs/architecture docs/adrs/ADR 222 - Version support policy.md`), which says "We raise floors freely", the project intent, which repeats it, and the header of `scripts/validate-typescript-peer.mjs` (part of task 6).
-
-**To decide when it starts.** Whether the policy is one decision record or several. The wording point in [open-questions.md](open-questions.md): whether the end of exact version pins at `8.0.0` covers the pins between our own packages.
 
 ### 2. Make later releases read the files and database records of earlier releases
 
@@ -131,7 +121,7 @@ Projects 1 to 7 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are Later. W
 
 - Turn the working definitions in [maturity-levels.md](maturity-levels.md) into exact requirements for a package to enter each level, and settle every point in its section 6: version numbers while packages are at different levels, what happens to the name `preview_foo` when the API reaches GA, and how a level is written where the name is not a TypeScript identifier. State how the levels relate to the support categories in prisma/orm#25843 (task 1).
 - Change the release scripts and workflow. Today they give every package one version, publish everything under `latest`, and cannot produce `8.0.0` without a hand edit. Decide the version ranges between our own packages from `8.0.0`, which are exact pins today, and change the publish step to write them. State the 12 months of fixes for the previous major in `SECURITY.md`, `docs/oss/versioning.md` and the docs (task 16).
-- Follow the procedure for releasing `8.0.0` in `docs/oss/versioning.md`, which lists the docs to rewrite on that day. It is added by prisma/orm#31194.
+- Write the procedure for releasing `8.0.0`, with the list of docs to rewrite on that day. A draft is in prisma/orm#31194, which was not merged.
 - Make the `prisma` tool or the toolchain read the installed library's version and stop on a different major. Nothing compares them today (task 17).
 
 **To decide when it starts.** One decision is Will's: which packages are GA at `8.0.0`. The points in section 6 of [maturity-levels.md](maturity-levels.md) are details for whoever takes the project. This project replaces stream 6, row 4 of the GA plan, "Maturity per package".
@@ -183,7 +173,7 @@ Projects 1 to 7 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are Later. W
 
 **How, where we know.**
 
-- State the event for Node.js, Bun, Deno, TypeScript, PostgreSQL, MongoDB, the other databases and each driver, and publish it on the supported-versions page (the rest of task 6; project 1 revises the decision record).
+- State the event for Node.js, Bun, Deno, TypeScript, PostgreSQL, MongoDB, the other databases and each driver, and publish it on the supported-versions page (task 6), and revise the decision record on version support, which says "We raise floors freely".
 - CI runs against each supported version of Node.js, each database and each driver, and against the newest and the next TypeScript release. Each package declares its Node.js minimum, and a check fails when a declared minimum rises (task 20). prisma/orm#30669, open since October, declares one Node.js range on every package.
 
 ### 12. Publish the compatibility policy in the user docs
