@@ -79,4 +79,14 @@ describe('a ref file outside a folder the script knows is a migrations folder', 
       tree: files,
     });
   });
+
+  it('leaves a file with the content of a ref alone when it is in no refs folder', () => {
+    const files = {
+      'src/config/pointer.json': `{"hash":"${HASH}","invariants":[]}\n`,
+    };
+    expect(runOnProject(files)).toEqual({
+      run: { status: 0, stdout: NOTHING_CHANGED, stderr: '' },
+      tree: files,
+    });
+  });
 });
