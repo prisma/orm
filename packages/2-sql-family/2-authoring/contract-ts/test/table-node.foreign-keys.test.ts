@@ -1,6 +1,7 @@
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import type { ColumnNode, ModelNode, TableNode } from '../src/contract-definition';
-import { build, definitionOf, field } from './table-node-helpers';
+import { build, definitionOf, field, targetPack } from './table-node-helpers';
 
 const user: ModelNode = {
   modelName: 'User',
@@ -92,6 +93,35 @@ describe('a foreign key that names its target table', () => {
           sourceNamespaceId: 'public',
           referencedTable: 'Ghost',
           namespaceId: 'public',
+        },
+      }),
+    );
+  });
+
+  it('leaves the namespace out of the refusal on a target without namespaces', () => {
+    expect(() =>
+      build({
+        ...definitionOf([user], {
+          tables: [
+            {
+              tableName: 'audit_rows',
+              columns: [idColumn],
+              foreignKeys: [{ columns: ['id'], references: { table: 'Ghost', columns: ['id'] } }],
+            },
+          ],
+        }),
+        target: { ...targetPack, defaultNamespaceId: UNBOUND_NAMESPACE_ID },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.TABLE_UNKNOWN',
+        message:
+          'Foreign key on table "audit_rows" references table "Ghost", which no model or table node declares. Declare the table with a model or a table node, or correct the name.',
+        meta: {
+          sourceTable: 'audit_rows',
+          sourceNamespaceId: UNBOUND_NAMESPACE_ID,
+          referencedTable: 'Ghost',
+          namespaceId: UNBOUND_NAMESPACE_ID,
         },
       }),
     );
