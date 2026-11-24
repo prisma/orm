@@ -24,9 +24,11 @@ db.orm.users.preview_foo(...)          // Preview: the name says so, inside a GA
 
 ## Decision
 
-Prisma has one scale of maturity with four levels: Early Access, Preview, Release Candidate and Generally Available (GA). "Below GA" means any of the first three. The scale applies to a package and to a single API. A level is written in a package's version number and at the start of an API's name, and nowhere else.
+Prisma has one scale of maturity with four levels: Early Access, Preview, Release Candidate and Generally Available (GA). "Below GA" means any of the first three. The scale applies to a package and to a single API. A level is decided in two places and nowhere else: a package's version number, and the start of an API's name. A README or a docs page may state a package's level, and a check keeps each README in step with the declaration; neither is where the level is decided.
 
-All our packages share one release number, the major and the minor. The rest of a version is each package's own. One package is outside both: `@prisma/orm-extension-paradedb` has no level and its own version, starting at `0.1.0`, because its own team takes it over; it names our packages as any extension does.
+Three kinds of package are named below. A **target package** is the one an application installs for its database, such as `@prisma/orm-postgres`. The **platform packages** are the ones extension authors build against: `@prisma/orm-framework`, `@prisma/orm-toolchain`, and the family and target packages such as `@prisma/orm-family-sql` and `@prisma/orm-target-postgres`. A **library integration** connects an outside library to an application's client, such as `@prisma/orm-better-auth`.
+
+All our packages share one release number, the major and the minor. The rest of a version is each package's own. One package is outside both: `@prisma/orm-extension-paradedb` has no level and its own version, starting at `0.1.0`. Its own team is to take it over and maintain it outside this repository, on a date that is not set. It names our packages as any extension does.
 
 ### What a level tells a user
 
@@ -44,13 +46,13 @@ A level is defined by the least we do for a package or API at it, not by a descr
 | Preview | Its tests run and a failure blocks the release, for what it supports. Its reference documentation lists what it does not yet support; the maintainers decide that list. It may change in any release. |
 | Early Access | Released so that people can try it. We may release it with a failing test. It may change in any release. |
 
-Four points follow from these definitions and from the rule below that a package names only packages at its own level or above:
+Four points follow from these definitions and from the rule below that a package names only packages at its own level or above. A fifth is not decided:
 
-- **Which release a failing test blocks.** At each release number our packages are released together, so a failing test of a GA, Release Candidate or Preview package blocks that release for all of them. Early Access is the one level at which we may release with a failing test; nothing requires CI to allow it.
+- **Which release a failing test blocks.** At each release number our packages are released together, so a failing test of a GA, Release Candidate or Preview package blocks that release for all of them. Early Access is the one level at which we may release with a failing test. That is permitted, not required: today every package's tests block.
 - **Who decides what a Preview package supports.** Its maintainers, in the list its reference documentation carries. The list for each package that is Preview at `8.0.0` is written before `8.0.0` is released.
 - **A package that has no database of its own**, such as the framework, has the level of the most mature package that names it. The framework is GA when the first target package is.
-- **When a level can change.** At a new release number, or within one, upwards: a package's version within one minor can only move forward, so within a minor a level can go up and not down.
-- **Whether a GA package can go below GA again is not decided.** It bears on what GA promises. Until it is decided, the release scripts refuse it.
+- **When a level can change.** A package below GA can move to a higher level in any release, and to a lower level only at a new release number, because its version within one minor can only move forward.
+- **Not decided: whether a GA package can go below GA again.** It bears on what GA promises. Until it is decided, the release scripts refuse it.
 
 ### What has a level
 
