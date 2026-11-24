@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { compareCodeUnits, flattenPackage, portabilityProblems } from './flatten.mjs';
+import { compareCodeUnits, flattenPackage, oneLine, portabilityProblems } from './flatten.mjs';
 import { readPackageApi } from './read-api.mjs';
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -173,6 +173,7 @@ describe('flattenPackage', () => {
         '.: augments fixture-augment/registry interface Registry, readonly required property "fixture/size": number',
         '.: augments fixture-augment/registry interface Registry, readonly required property kind: Kind',
         '.: augments fixture-augment/registry interface Registry, readonly required property mode: "read" | "write"',
+        '.: augments fixture-augment/registry interface Registry, readonly required property spaced: "a  b"',
         '.: augments fixture-augment/registry interface Registry, required method describe(): string',
         '.: function plain(): void',
         '.: type Kind = "a" | "b"',
@@ -421,7 +422,7 @@ describe('flattenPackage', () => {
   it('fails when API Extractor gives no item for a static member', () => {
     throws(
       () => linesOf('kinds', (model) => removeMember(model, 'Circle', 'unit')),
-      /member Circle\.unit has no line/,
+      /member Circle\.static unit has no line/,
     );
   });
 
@@ -531,6 +532,37 @@ describe('flattenPackage', () => {
     );
   });
 
+  it('keeps the spaces inside string and template literal types', () => {
+    deepStrictEqual(
+      linesOf('literals'),
+      sorted([
+        ".: const quoted: 'c\td'",
+        '.: type Commented = { readonly a: "x  y"; }',
+        '.: type Spaced = "a  b"',
+        '.: type Template = `x  \u0024{string}  y`',
+      ]),
+    );
+  });
+
+  it('checks a static member and an instance member of one name separately', () => {
+    deepStrictEqual(
+      linesOf('statics'),
+      sorted([
+        '.: class Counter',
+        '.: class Counter, required property count: number',
+        '.: class Counter, static required property count: number',
+      ]),
+    );
+    const removeCount = (isStatic) => (model) => {
+      const counter = membersOf(model).find((item) => item.name === 'Counter');
+      counter.members = counter.members.filter(
+        (member) => !(member.name === 'count' && member.isStatic === isStatic),
+      );
+    };
+    throws(() => linesOf('statics', removeCount(true)), /member Counter\.static count has no line/);
+    throws(() => linesOf('statics', removeCount(false)), /member Counter\.count has no line/);
+  });
+
   it('sorts union members and prints import("…") references by name alone', () => {
     deepStrictEqual(
       linesOf('normalize'),
@@ -565,6 +597,15 @@ describe('flattenPackage', () => {
 
   it('gives identical output on a second run', () => {
     deepStrictEqual(linesOf('shared'), linesOf('shared'));
+  });
+});
+
+describe('oneLine', () => {
+  it('collapses whitespace between tokens but not inside literals, and skips comments whole', () => {
+    strictEqual(
+      oneLine('type  A =\n  /* it\'s   here */  "x  y" |\n  `a  \u0024{"b  c"}  d`'),
+      'type A = /* it\'s here */ "x  y" | `a  \u0024{"b  c"}  d`',
+    );
   });
 });
 

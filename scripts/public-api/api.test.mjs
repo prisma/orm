@@ -1,10 +1,10 @@
 import { deepStrictEqual, match, strictEqual, throws } from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { apiText, main, publishedPackageDirs, workerStopped } from './api.mjs';
-import { readPackageApi } from './read-api.mjs';
+import { augmentsItself, entryPointsOf, readPackageApi } from './read-api.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(here, 'fixtures');
@@ -88,6 +88,17 @@ describe('main', () => {
     );
   });
 
+  it('writes the lists that did generate when another package fails, and no committed list', async () => {
+    const okList = join(fixtures, 'root-broken/packages/9-public/@prisma/ok/dist-api/api.txt');
+    rmSync(okList, { force: true });
+    await main({ mode: 'check', root: join(fixtures, 'root-broken'), stderr: output() });
+    strictEqual(readFileSync(okList, 'utf8'), apiText(['.: function fine(): void']));
+    strictEqual(
+      existsSync(join(fixtures, 'root-broken/packages/9-public/@prisma/ok/api.txt')),
+      false,
+    );
+  });
+
   it('fails on a folder that has an api.txt but no package.json', async () => {
     const stderr = output();
     strictEqual(await main({ mode: 'check', root: join(fixtures, 'root-leftover'), stderr }), 1);
@@ -113,6 +124,24 @@ describe('workerStopped', () => {
       workerStopped('/repo/packages/9-public/@prisma/a', '/repo', null, 'SIGKILL').message,
       'packages/9-public/@prisma/a: the worker stopped on signal SIGKILL before it reported',
     );
+  });
+});
+
+describe('entryPointsOf', () => {
+  it('fails on a package whose exports name no import path but ./package.json', () => {
+    throws(
+      () => entryPointsOf(join(fixtures, 'no-entry')),
+      /fixtures\/no-entry: package\.json exports no import path other than \.\/package\.json/,
+    );
+  });
+});
+
+describe('augmentsItself', () => {
+  it('finds a declare module of the package itself, indented or not', () => {
+    const packageDir = join(fixtures, 'indented-augment');
+    strictEqual(augmentsItself(packageDir, entryPointsOf(packageDir)), true);
+    const plain = join(fixtures, 'kinds');
+    strictEqual(augmentsItself(plain, entryPointsOf(plain)), false);
   });
 });
 

@@ -83,6 +83,13 @@ describe('normalizeTypes', () => {
     );
   });
 
+  it('decides that an import names a file from the value of the specifier, not its spelling', () => {
+    throws(
+      () => normalizeTypes('const x: import("\\u002e/chunk.mjs").T', 'declaration'),
+      /import\("\.\/chunk\.mjs"\) names a file, not a package/,
+    );
+  });
+
   it('fails on text it cannot parse, naming the text', () => {
     throws(() => normalizeTypes('const x: {', 'declaration'), /cannot parse "const x: \{"/);
   });

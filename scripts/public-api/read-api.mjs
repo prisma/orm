@@ -57,6 +57,11 @@ export function entryPointsOf(packageDir) {
     modelFiles.set(modelFile, subpath);
     entryPoints.push({ subpath, declarationFile, modelFile });
   }
+  if (entryPoints.length === 0) {
+    throw new ApiReadError(
+      `${where}: package.json exports no import path other than ./package.json`,
+    );
+  }
   return entryPoints;
 }
 
@@ -112,10 +117,10 @@ function namespaceForwardsIn(declarationFile) {
     );
 }
 
-function augmentsItself(packageDir, entryPoints) {
+export function augmentsItself(packageDir, entryPoints) {
   const { name } = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
   const ownModule = new RegExp(
-    `^declare module ["']${name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}["'/]`,
+    `^[ \\t]*declare module ["']${name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}["'/]`,
     'm',
   );
   const folders = new Set(entryPoints.map(({ declarationFile }) => dirname(declarationFile)));

@@ -106,6 +106,11 @@ export async function main({ mode, root, stdout = process.stdout, stderr = proce
       `${relative(root, leftover)} has an ${LIST_FILE} but no package.json. Delete the folder if the package is gone.`,
     );
   }
+  if (mode === 'check') {
+    for (const [packageDir, text] of texts) {
+      writeFileSync(join(packageDir, MODEL_FOLDER, LIST_FILE), text);
+    }
+  }
   if (failures.length > 0) {
     stderr.write(
       `api:${mode}: could not list the API of every package:\n\n${failures.join('\n\n')}\n`,
@@ -117,7 +122,6 @@ export async function main({ mode, root, stdout = process.stdout, stderr = proce
   for (const [packageDir, text] of [...texts].sort(([a], [b]) => compareCodeUnits(a, b))) {
     const file = join(packageDir, LIST_FILE);
     const committed = existsSync(file) ? readFileSync(file, 'utf8') : '';
-    if (mode === 'check') writeFileSync(join(packageDir, MODEL_FOLDER, LIST_FILE), text);
     if (committed === text) continue;
     stale.push({ file: relative(root, file), differences: listDifferences(committed, text) });
     if (mode === 'update') writeFileSync(file, text);

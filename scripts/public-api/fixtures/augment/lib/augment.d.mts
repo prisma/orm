@@ -5,6 +5,7 @@ declare module "fixture-augment/registry" {
     label?: string;
     readonly mode: "write" | "read";
     readonly kind: Kind$1;
+    readonly spaced: "a  b";
     /** @deprecated Use `label`. */
     name?: string;
     describe(): string;

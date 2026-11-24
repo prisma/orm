@@ -14,7 +14,54 @@ export class ApiListError extends Error {}
 
 export { compareCodeUnits };
 
-const oneLine = (text) => text.replace(/\s+/g, ' ').trim();
+// Collapses whitespace between tokens to one space; the text of string and template literals is
+// kept as it is. Comments are skipped over as a whole, so a quote inside one starts no literal.
+export function oneLine(text) {
+  let result = '';
+  let index = 0;
+  while (index < text.length) {
+    const character = text[index];
+    if (character === '"' || character === "'" || character === '`') {
+      const end = literalEnd(text, index);
+      result += text.slice(index, end);
+      index = end;
+    } else if (character === '/' && (text[index + 1] === '*' || text[index + 1] === '/')) {
+      const close =
+        text[index + 1] === '*' ? text.indexOf('*/', index + 2) + 2 : text.indexOf('\n', index);
+      const end = close <= index + 1 ? text.length : close;
+      result += text.slice(index, end).replace(/\s+/g, ' ');
+      index = end;
+    } else if (/\s/.test(character)) {
+      while (index < text.length && /\s/.test(text[index])) index++;
+      result += ' ';
+    } else {
+      result += character;
+      index++;
+    }
+  }
+  return result.trim();
+}
+
+// The index after the string or template literal that starts at `start`. A template's `${…}`
+// parts are kept whole too.
+function literalEnd(text, start) {
+  const quote = text[start];
+  let index = start + 1;
+  let depth = 0;
+  while (index < text.length) {
+    const character = text[index];
+    if (character === '\\') index += 2;
+    else if (quote === '`' && character === '$' && text[index + 1] === '{') {
+      depth++;
+      index += 2;
+    } else if (depth > 0 && character === '}') {
+      depth--;
+      index++;
+    } else if (depth === 0 && character === quote) return index + 1;
+    else index++;
+  }
+  return index;
+}
 const withoutBundlerSuffix = (name) => name.replace(/\$\d+$/, '');
 const IDENTIFIER = /^[A-Za-z0-9_$]+$/;
 const TOP_LEVEL_REFERENCE = /^(@?[^!]+)!~?([A-Za-z0-9_$]+):[a-z]+(\(\d+\))?$/;
@@ -200,7 +247,7 @@ const AE_SIGNATURE_KEYS = {
 };
 
 const memberKeyOf = (member) =>
-  AE_SIGNATURE_KEYS[member.kind] ?? member.displayName.replace(/^(["'])(.*)\1$/, '$2');
+  `${member.isStatic ? 'static ' : ''}${AE_SIGNATURE_KEYS[member.kind] ?? member.displayName.replace(/^(["'])(.*)\1$/, '$2')}`;
 
 function forEachItem(items, visit) {
   for (const item of items) {

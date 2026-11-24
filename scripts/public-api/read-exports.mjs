@@ -85,13 +85,15 @@ const CONTAINER_FLAGS = {
 function ownMemberKeys(symbol, kind, isOwn) {
   if (!(symbol.flags & CONTAINER_FLAGS[kind])) return undefined;
   const members = [];
+  const statics = new Set();
   if (kind === 'enum' || kind === 'namespace') members.push(...(symbol.exports?.values() ?? []));
   else {
     members.push(...(symbol.members?.values() ?? []));
     if (kind === 'class') {
       for (const member of symbol.exports?.values() ?? []) {
-        if (member.escapedName !== 'prototype') members.push(member);
+        if (member.declarations?.some(ts.isClassElement)) statics.add(member);
       }
+      members.push(...statics);
     }
   }
   const keys = new Set();
@@ -101,7 +103,7 @@ function ownMemberKeys(symbol, kind, isOwn) {
       (declaration) => isOwn(declaration) && !inAugmentation(declaration),
     );
     if (own.length === 0 || own.every(isPrivate)) continue;
-    keys.add(memberKey(member));
+    keys.add(`${statics.has(member) ? 'static ' : ''}${memberKey(member)}`);
   }
   return keys;
 }

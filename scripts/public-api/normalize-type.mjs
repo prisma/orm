@@ -48,7 +48,7 @@ export function renderNode(node, file, options = {}) {
       .join(' | ');
   }
   if (ts.isImportTypeNode(node)) {
-    const specifier = node.argument.getText(file).slice(1, -1);
+    const specifier = node.argument.literal.text;
     if (/^(\.|\/|[A-Za-z]:)/.test(specifier)) {
       throw new TypeTextError(
         `import("${specifier}") names a file, not a package. Declarations must refer to another package by its name, so check how the declaration build wrote this type.`,
