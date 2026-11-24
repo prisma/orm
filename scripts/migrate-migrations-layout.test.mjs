@@ -27,7 +27,7 @@ function fakeHash(seed) {
 }
 
 function fakeContractJson(storageHash, extra = {}) {
-  return { storage: { storageHash }, namespaces: {}, ...extra };
+  return { formatVersion: 1, storage: { storageHash }, namespaces: {}, ...extra };
 }
 
 const CONTRACT_DTS = 'export interface Contract {\n  readonly storageHash: string;\n}\n';
@@ -83,7 +83,7 @@ async function writeMigrationPackage(dir, { from, to, ts }) {
     createdAt: '2026-01-01T00:00:00.000Z',
   };
   const migrationHash = computeMigrationHash(metadataSansHash, ops);
-  const metadata = { ...metadataSansHash, migrationHash };
+  const metadata = { formatVersion: 1, ...metadataSansHash, migrationHash };
 
   await writeFile(join(dir, 'migration.json'), `${JSON.stringify(metadata, null, 2)}\n`);
   await writeFile(join(dir, 'ops.json'), `${JSON.stringify(ops, null, 2)}\n`);
@@ -126,7 +126,7 @@ async function buildFixture(root) {
   await mkdir(join(extDir, 'refs'), { recursive: true });
   await writeFile(
     join(extDir, 'refs', 'head.json'),
-    `${JSON.stringify({ hash: hashC, invariants: [] }, null, 2)}\n`,
+    `${JSON.stringify({ formatVersion: 1, hash: hashC, invariants: [] }, null, 2)}\n`,
   );
   await writeFile(join(extDir, 'contract.json'), `${JSON.stringify(fakeContractJson(hashC))}\n`);
   await writeFile(join(extDir, 'contract.d.ts'), CONTRACT_DTS);
@@ -137,7 +137,7 @@ async function buildFixture(root) {
 async function writeRefPair(refsDir, name, hash) {
   await writeFile(
     join(refsDir, `${name}.json`),
-    `${JSON.stringify({ hash, invariants: [] }, null, 2)}\n`,
+    `${JSON.stringify({ formatVersion: 1, hash, invariants: [] }, null, 2)}\n`,
   );
   await writeFile(
     join(refsDir, `${name}.contract.json`),
@@ -450,7 +450,7 @@ describe('migrateMigrationsRoots — ref-paired snapshot folding', () => {
       const hash = fakeHash('nodts');
       await writeFile(
         join(refsDir, 'nodts.json'),
-        `${JSON.stringify({ hash, invariants: [] }, null, 2)}\n`,
+        `${JSON.stringify({ formatVersion: 1, hash, invariants: [] }, null, 2)}\n`,
       );
       await writeFile(
         join(refsDir, 'nodts.contract.json'),
