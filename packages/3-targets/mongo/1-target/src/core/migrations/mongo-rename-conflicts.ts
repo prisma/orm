@@ -16,7 +16,7 @@ import {
   selectedVariantOf,
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
-import { modelCoordinates } from './mongo-model-coordinates';
+import { modelCoordinates, sameModel } from './mongo-model-coordinates';
 import {
   capitalized,
   fieldDisplayName,
@@ -503,6 +503,7 @@ function fieldRenameConflict(
   change: FieldChange,
   changes: readonly FieldChange[],
   contracts: Contracts,
+  removes: (model: ModelCoordinate) => boolean,
 ): MigrationPlannerConflict | undefined {
   const noun = nounOf(change.nameKind);
   const label = `Cannot rename ${noun} "${change.from}" to "${change.to}" ${whereText(change)}`;
@@ -523,6 +524,12 @@ function fieldRenameConflict(
   );
   const holders = originFieldsStoring(contracts.fromContract, change.rename.from, change.to);
   const relationHolders = holders.filter((holder) => holder.kind === 'relation');
+  const removedModels = holders
+    .map(({ coordinate }) => ({ namespaceId: coordinate.namespaceId, model: coordinate.model }))
+    .filter(
+      (model, index, all) =>
+        removes(model) && all.findIndex((other) => sameModel(other, model)) === index,
+    );
   if (holders.length > 0) {
     const moved = others.find((other) => other.from === change.to);
     if (moved !== undefined) {
@@ -540,7 +547,7 @@ function fieldRenameConflict(
     return renameRefused(
       undefined,
       `${label}: ${holding} already hold ${noun} "${change.to}"`,
-      `${text}, and ${holding} already hold ${noun} "${change.to}", the stored name of ${holdersText(holders)}. Without the rename the plan would read the ${misread(change.to)}. ${relationHolders.length > 0 ? `Removing ${holdersText(relationHolders)} does not free the name: it plans nothing, and its key stays in the documents. Keep the stored name "${change.from}" of ${moving} in the contract.` : `Make the change in two plans: first ${freeName(routeNoun(change.nameKind), change.to, { text: holdersText(holders), count: holders.length }, unused(used, change.to))}, and plan and apply that; then make this change and plan again.`}`,
+      `${text}, and ${holding} already hold ${noun} "${change.to}", the stored name of ${holdersText(holders)}. Without the rename the plan would read the ${misread(change.to)}. ${relationHolders.length > 0 ? `Removing ${holdersText(relationHolders)} does not free the name: it plans nothing, and its key stays in the documents. Keep the stored name "${change.from}" of ${moving} in the contract.` : removedModels.length > 0 ? `Make the change in two plans: first keep ${modelsText(removedModels)} and ${freeName(routeNoun(change.nameKind), change.to, { text: holdersText(holders), count: holders.length }, unused(used, change.to))}, and plan and apply that, which frees the name in the documents; then make this change and plan again. Removing ${modelsText(removedModels)} does not free the name: it plans nothing, and ${removedModels.length === 1 ? 'its' : 'their'} key stays in the documents. Or keep the stored name "${change.from}" of ${moving} in the contract.` : `Make the change in two plans: first ${freeName(routeNoun(change.nameKind), change.to, { text: holdersText(holders), count: holders.length }, unused(used, change.to))}, and plan and apply that; then make this change and plan again.`}`,
     );
   }
   const takes = others.find(
@@ -560,10 +567,11 @@ function fieldRenameConflict(
 export function fieldRenamesConflict(
   changes: readonly FieldChange[],
   contracts: Contracts,
+  removes: (model: ModelCoordinate) => boolean,
 ): MigrationPlannerConflict | undefined {
   for (const change of changes) {
     if (change.rename.statement !== undefined) continue;
-    const conflict = fieldRenameConflict(change, changes, contracts);
+    const conflict = fieldRenameConflict(change, changes, contracts, removes);
     if (conflict !== undefined) return conflict;
   }
   return undefined;

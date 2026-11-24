@@ -34,7 +34,12 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
 import { collectionControlPolicy, managedOnBothSides } from './mongo-control-policy';
-import { isRootModel, modelCoordinates, sameModel } from './mongo-model-coordinates';
+import {
+  documentCollectionOf,
+  isRootModel,
+  modelCoordinates,
+  sameModel,
+} from './mongo-model-coordinates';
 import { capitalized, handWrittenRoute, modelsText } from './mongo-plan-text';
 import {
   type FieldChange,
@@ -237,15 +242,16 @@ export function planStatements(input: {
     return rename.call;
   };
 
-  const kept = (model: ModelCoordinate) =>
-    destinationModelOf(model, {
-      statements: input.statements,
-      models,
-      fieldRenames: [],
-      fromContract: planning.fromContract,
-      contract: input.contract,
-      collectionAfterRenames: (collection) => renamedCollections.get(collection) ?? collection,
-    }) !== undefined;
+  const pairing: ModelMatchInput = {
+    statements: input.statements,
+    models,
+    fieldRenames: [],
+    fromContract: planning.fromContract,
+    contract: input.contract,
+    collectionAfterRenames: (name) => renamedCollections.get(name) ?? name,
+  };
+  const sharesCollection = (model: ModelCoordinate, collection: string) =>
+    sharesCollectionInDestination(model, collection, pairing);
   const stated = (change: CollectionChange) =>
     change.renames.some((rename) => rename.statement !== undefined);
   const plannedChanges = plannedCollectionChanges(
@@ -298,7 +304,7 @@ export function planStatements(input: {
                 schema,
                 fieldRenames,
                 planning,
-                kept,
+                sharesCollection,
               );
     if (outcome.kind === 'refused') {
       conflicts.push(outcome.conflict);
@@ -321,24 +327,8 @@ export function planStatements(input: {
   }
 
   if (input.fromContract !== null) {
-    conflicts.push(
-      ...embedRelationRefusals({
-        statements: input.statements,
-        models,
-        fieldRenames: [],
-        fromContract: input.fromContract,
-        contract: input.contract,
-        collectionAfterRenames: (collection) => renamedCollections.get(collection) ?? collection,
-      }),
-    );
-    const unstated = unstatedFieldRenamesOf({
-      statements: input.statements,
-      models,
-      fieldRenames: [],
-      fromContract: input.fromContract,
-      contract: input.contract,
-      collectionAfterRenames: (collection) => renamedCollections.get(collection) ?? collection,
-    });
+    conflicts.push(...embedRelationRefusals(pairing));
+    const unstated = unstatedFieldRenamesOf(pairing);
     for (const rename of unstated) {
       const outcome = planFieldRename(
         rename,
@@ -347,7 +337,7 @@ export function planStatements(input: {
         schema,
         [...fieldRenames, ...unstated],
         planning,
-        kept,
+        sharesCollection,
       );
       if (outcome.kind === 'refused') conflicts.push(outcome.conflict);
       if (outcome.kind === 'renameField') {
@@ -358,7 +348,15 @@ export function planStatements(input: {
     }
   }
   const fieldConflict =
-    conflicts.length > 0 ? undefined : fieldRenamesConflict(fieldChanges, planning);
+    conflicts.length > 0
+      ? undefined
+      : fieldRenamesConflict(
+          fieldChanges,
+          planning,
+          (model) =>
+            isRootModel(planning.fromContract, model) &&
+            destinationModelOf(model, pairing) === undefined,
+        );
   if (fieldConflict !== undefined) return notOk([fieldConflict]);
 
   return conflicts.length > 0
@@ -448,7 +446,7 @@ function unstatedFieldRenamesOf(match: ModelMatchInput): readonly FieldRename[] 
     );
   return modelCoordinates(match.fromContract).flatMap((origin) => {
     const pair = modelPairOf(origin, match);
-    if (pair === undefined || !pairRenamesWithNoStatement(origin, pair, match.fromContract)) {
+    if (pair === undefined || !givesRenamesWithNoStatement(origin, pair, match.fromContract)) {
       return [];
     }
     const { destination } = pair;
@@ -739,7 +737,7 @@ function planFieldRename(
   schema: MongoSchemaIR,
   renames: readonly FieldRename[],
   input: PlanningInput,
-  kept: (model: ModelCoordinate) => boolean,
+  sharesCollection: (model: ModelCoordinate, collection: string) => boolean,
 ): StatementOutcome {
   const { statement } = rename;
   if (statement !== undefined && statementLabel !== undefined) {
@@ -858,7 +856,11 @@ function planFieldRename(
     fromStored,
   ).filter(
     (name) =>
-      !renamedTogether.has(name) && kept({ namespaceId: rename.from.namespaceId, model: name }),
+      !renamedTogether.has(name) &&
+      sharesCollection(
+        { namespaceId: rename.from.namespaceId, model: name },
+        destinationCollection,
+      ),
   );
   if (others.length > 0) {
     const sharedWhy = `${sharedCollectionWhy(collection, others, 'renaming the field would rename it in the documents')} To change it, ${changed === undefined ? SEPARATE_THE_MODELS : `move the models to separate collections, or keep the stored name ${JSON.stringify(fromStored)} in the contract`}.`;
@@ -922,6 +924,24 @@ export function destinationModelOf(
   return modelPairOf(origin, input)?.destination;
 }
 
+/**
+ * Whether the destination stores origin model `model`'s pair in `collection`, the collection the
+ * origin stores it in after the plan's renames: the one test of which other models share a
+ * collection's documents after the plan. A model the destination removes, or stores elsewhere,
+ * does not share them, since the models that remain read the documents they read before.
+ * `rewriteRefusals` asks the same question of the destination contract directly.
+ */
+export function sharesCollectionInDestination(
+  model: ModelCoordinate,
+  collection: string,
+  match: ModelMatchInput,
+): boolean {
+  const destination = destinationModelOf(model, match);
+  return (
+    destination !== undefined && documentCollectionOf(match.contract, destination) === collection
+  );
+}
+
 /** The destination model an origin model became, and the rule that paired them. */
 export interface ModelPair {
   readonly destination: ModelCoordinate;
@@ -961,7 +981,7 @@ export function modelPairOf(
  * by the same coordinate, or a variant paired by storage, whose documents carry its discriminator
  * value. A root model paired only by storage gets none (ADR 324).
  */
-export function pairRenamesWithNoStatement(
+export function givesRenamesWithNoStatement(
   origin: ModelCoordinate,
   pair: ModelPair,
   fromContract: ContractWithDomain,

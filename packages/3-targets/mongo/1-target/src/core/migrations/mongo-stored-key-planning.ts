@@ -450,6 +450,7 @@ export function planStoredKeyRewrites(
           ];
     }),
     contracts,
+    () => false,
   );
   if (keyConflict !== undefined) return notOk([keyConflict]);
   const conflicts: MigrationPlannerConflict[] = [];

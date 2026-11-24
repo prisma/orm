@@ -31,7 +31,12 @@ import {
   sharedCollectionWhy,
   TIME_SERIES_UPDATES,
 } from './mongo-rewrite-refusals';
-import { destinationModelOf, modelAt } from './mongo-statement-planning';
+import {
+  destinationModelOf,
+  type ModelMatchInput,
+  modelAt,
+  sharesCollectionInDestination,
+} from './mongo-statement-planning';
 import { type FieldRename, type ModelRename, renameRefused } from './mongo-storage-renames';
 import { DeleteDocumentsCall, ReplaceStoredValueCall } from './op-factory-call';
 
@@ -115,7 +120,11 @@ function destinationOf(
   fromContract: ContractWithDomain,
   input: VariantInput,
 ): ModelCoordinate | undefined {
-  return destinationModelOf(origin, {
+  return destinationModelOf(origin, matchInputOf(fromContract, input));
+}
+
+function matchInputOf(fromContract: ContractWithDomain, input: VariantInput): ModelMatchInput {
+  return {
     statements: input.statements.filter(
       (statement): statement is ResolvedRenameStatement => statement.kind === 'rename',
     ),
@@ -124,7 +133,7 @@ function destinationOf(
     models: input.models,
     fieldRenames: input.fieldRenames,
     collectionAfterRenames: input.collectionAfterRenames,
-  });
+  };
 }
 
 function baseOf(contract: ContractWithDomain, model: ModelCoordinate): ModelCoordinate | undefined {
@@ -292,10 +301,12 @@ function sharedCollectionRefusal(
     originCollection,
     { field: change.originField, value: change.from },
     undefined,
-  ).filter(
-    (name) =>
-      destinationOf({ namespaceId: change.model.namespaceId, model: name }, fromContract, input) !==
-      undefined,
+  ).filter((name) =>
+    sharesCollectionInDestination(
+      { namespaceId: change.model.namespaceId, model: name },
+      input.collectionAfterRenames(originCollection),
+      matchInputOf(fromContract, input),
+    ),
   );
   if (others.length === 0) return undefined;
   const named = others.map(quoted).join(', ');
