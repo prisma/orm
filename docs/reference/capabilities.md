@@ -11,26 +11,26 @@ Adapter-reported features of the database runtime. These are not contract-owned;
 ### `sql`
 Common SQL features reported by adapters using the `sql` namespace. This is a naming convention for shared SQL keys, not a separate “SQL family” capability set.
 
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `lateral` | boolean | Supports LATERAL joins | Stable |
-| `returning` | boolean | Supports RETURNING clauses for DML operations (INSERT, UPDATE, DELETE) | Stable |
-| `jsonAgg` | boolean | Supports JSON aggregation functions. The ORM's one-query include needs it, with `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation` (see [Capabilities that choose how includes load](#capabilities-that-choose-how-includes-load)). | Stable |
-| `outerReferencesInDerivedTables` | boolean | Resolves a reference to the outer query from inside a derived table (`FROM (SELECT …) alias`) in a subquery. The ORM's one-query include needs it, because every row include reads from such a derived table. MariaDB does not report it. | Stable |
-| `jsonAggWithoutTruncation` | boolean | When the database aggregates rows into a JSON array that is too large, the query fails or the array cannot be decoded; it never returns a shorter valid array. The ORM's one-query include needs it. MariaDB does not report it: it cuts the array with only a warning. | Stable |
-| `enums` | boolean | Supports native enum storage types | Stable |
-| `foreignKeys` | boolean | Supports FOREIGN KEY constraint DDL | Stable |
-| `checkConstraint` | boolean | Supports CHECK constraint DDL. Gates the `@@check` authoring surface: a PSL contract declaring a check against an adapter that does not report this is refused at authoring. | Stable |
-| `autoIndexesForeignKeys` | boolean | Database automatically creates indexes for foreign keys | Stable |
-| `defaultInInsert` | boolean | Supports `DEFAULT` as a value in multi-row `INSERT ... VALUES` (e.g. `INSERT INTO t (a, b) VALUES (1, DEFAULT)`). When false, the ORM splits multi-row inserts by column signature so each statement has a uniform column list. | Stable |
-| `insertOnConflictSkip` | boolean | Can skip rows that collide with a unique constraint instead of failing the statement. Gates `createAll(rows, { onConflict: 'skip' })` and the same option on `createAndCount`. | Stable |
-| `insertOnConflictWithoutTarget` | boolean | Can skip colliding rows without naming the constraint that was violated. Gates the same option when `conflictOn` is omitted. It covers skipping only, not an upsert without conflict columns. | Stable |
-| `insertOnConflictTarget` | boolean | An insert's conflict clause applies only to the unique columns it names. MySQL's `ON DUPLICATE KEY UPDATE` fires on any unique key, so the MySQL adapter does not report it. When an adapter does not report it, the ORM sends an upsert as an insert whose update-on-conflict clause names no conflict columns, meaning any unique key; the adapter must render that clause as "any unique key" or refuse it. | Stable |
-| `forUpdate` | boolean | Can render the row-locking clause `FOR UPDATE` on a select. Gates `forUpdate()`. | Stable |
-| `forShare` | boolean | Can render `FOR SHARE` or its equivalent on a select. Gates `forShare()`. | Stable |
-| `lockOf` | boolean | Can limit a locking clause to named tables or aliases (`OF "t"`). Needed by the `of` option of the SQL builder's locking methods, and by all four ORM locking methods, which always render `OF` the model's table. | Stable |
-| `lockNowait` | boolean | Can make a locking clause fail at once on a locked row (`NOWAIT`). Gates the `nowait` option of the locking methods. | Stable |
-| `lockSkipLocked` | boolean | Can make a locking clause leave locked rows out of the result (`SKIP LOCKED`). Gates the `skipLocked` option of the locking methods. | Stable |
+| Capability | Type | Description |
+|------------|------|-------------|
+| `lateral` | boolean | Supports LATERAL joins |
+| `returning` | boolean | Supports RETURNING clauses for DML operations (INSERT, UPDATE, DELETE) |
+| `jsonAgg` | boolean | Supports JSON aggregation functions. The ORM's one-query include needs it, with `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation` (see [Capabilities that choose how includes load](#capabilities-that-choose-how-includes-load)). |
+| `outerReferencesInDerivedTables` | boolean | Resolves a reference to the outer query from inside a derived table (`FROM (SELECT …) alias`) in a subquery. The ORM's one-query include needs it, because every row include reads from such a derived table. MariaDB does not report it. |
+| `jsonAggWithoutTruncation` | boolean | When the database aggregates rows into a JSON array that is too large, the query fails or the array cannot be decoded; it never returns a shorter valid array. The ORM's one-query include needs it. MariaDB does not report it: it cuts the array with only a warning. |
+| `enums` | boolean | Supports native enum storage types |
+| `foreignKeys` | boolean | Supports FOREIGN KEY constraint DDL |
+| `checkConstraint` | boolean | Supports CHECK constraint DDL. Gates the `@@check` authoring surface: a PSL contract declaring a check against an adapter that does not report this is refused at authoring. |
+| `autoIndexesForeignKeys` | boolean | Database automatically creates indexes for foreign keys |
+| `defaultInInsert` | boolean | Supports `DEFAULT` as a value in multi-row `INSERT ... VALUES` (e.g. `INSERT INTO t (a, b) VALUES (1, DEFAULT)`). When false, the ORM splits multi-row inserts by column signature so each statement has a uniform column list. |
+| `insertOnConflictSkip` | boolean | Can skip rows that collide with a unique constraint instead of failing the statement. Gates `createAll(rows, { onConflict: 'skip' })` and the same option on `createAndCount`. |
+| `insertOnConflictWithoutTarget` | boolean | Can skip colliding rows without naming the constraint that was violated. Gates the same option when `conflictOn` is omitted. It covers skipping only, not an upsert without conflict columns. |
+| `insertOnConflictTarget` | boolean | An insert's conflict clause applies only to the unique columns it names. MySQL's `ON DUPLICATE KEY UPDATE` fires on any unique key, so the MySQL adapter does not report it. When an adapter does not report it, the ORM sends an upsert as an insert whose update-on-conflict clause names no conflict columns, meaning any unique key; the adapter must render that clause as "any unique key" or refuse it. |
+| `forUpdate` | boolean | Can render the row-locking clause `FOR UPDATE` on a select. Gates `forUpdate()`. |
+| `forShare` | boolean | Can render `FOR SHARE` or its equivalent on a select. Gates `forShare()`. |
+| `lockOf` | boolean | Can limit a locking clause to named tables or aliases (`OF "t"`). Needed by the `of` option of the SQL builder's locking methods, and by all four ORM locking methods, which always render `OF` the model's table. |
+| `lockNowait` | boolean | Can make a locking clause fail at once on a locked row (`NOWAIT`). Gates the `nowait` option of the locking methods. |
+| `lockSkipLocked` | boolean | Can make a locking clause leave locked rows out of the result (`SKIP LOCKED`). Gates the `skipLocked` option of the locking methods. |
 
 ### Capabilities that choose how includes load
 
@@ -39,34 +39,34 @@ The ORM client loads includes with the one-query include, a correlated subquery 
 ### `postgres`
 PostgreSQL-specific capabilities managed by the adapter.
 
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `partialIndex` | boolean | Supports partial/filtered indexes | Stable |
-| `deferrableConstraints` | boolean | Supports DEFERRABLE constraints | Stable |
-| `savepoints` | boolean | Supports savepoint transactions | Stable |
-| `transactionalDDL` | boolean | Supports transactional DDL | Stable |
-| `explainFormat` | enum | EXPLAIN output format (`text` \| `json`) | Stable |
-| `forNoKeyUpdate` | boolean | Can render the row-locking clause `FOR NO KEY UPDATE` on a select. Gates `forNoKeyUpdate()`. | Stable |
-| `forKeyShare` | boolean | Can render the row-locking clause `FOR KEY SHARE` on a select. Gates `forKeyShare()`. | Stable |
+| Capability | Type | Description |
+|------------|------|-------------|
+| `partialIndex` | boolean | Supports partial/filtered indexes |
+| `deferrableConstraints` | boolean | Supports DEFERRABLE constraints |
+| `savepoints` | boolean | Supports savepoint transactions |
+| `transactionalDDL` | boolean | Supports transactional DDL |
+| `explainFormat` | enum | EXPLAIN output format (`text` \| `json`) |
+| `forNoKeyUpdate` | boolean | Can render the row-locking clause `FOR NO KEY UPDATE` on a select. Gates `forNoKeyUpdate()`. |
+| `forKeyShare` | boolean | Can render the row-locking clause `FOR KEY SHARE` on a select. Gates `forKeyShare()`. |
 
 ### `mysql`
 MySQL-specific capabilities managed by the adapter.
 
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `jsonFunctions` | boolean | Supports JSON functions | Stable |
-| `generatedColumns` | boolean | Supports generated columns | Stable |
-| `checkConstraints` | boolean | Supports CHECK constraints | Stable |
-| `explainFormat` | enum | EXPLAIN output format (`text` \| `json`) | Stable |
+| Capability | Type | Description |
+|------------|------|-------------|
+| `jsonFunctions` | boolean | Supports JSON functions |
+| `generatedColumns` | boolean | Supports generated columns |
+| `checkConstraints` | boolean | Supports CHECK constraints |
+| `explainFormat` | enum | EXPLAIN output format (`text` \| `json`) |
 
 ### `sqlite`
 SQLite-specific capabilities managed by the adapter.
 
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `json1` | boolean | Supports JSON1 extension | Stable |
-| `fts5` | boolean | Supports FTS5 full-text search | Stable |
-| `rtree` | boolean | Supports R*Tree spatial indexing | Stable |
+| Capability | Type | Description |
+|------------|------|-------------|
+| `json1` | boolean | Supports JSON1 extension |
+| `fts5` | boolean | Supports FTS5 full-text search |
+| `rtree` | boolean | Supports R*Tree spatial indexing |
 
 ### Example adapter reports
 Postgres adapters should always report `sql.lateral: true` and `sql.returning: true`. The MySQL adapter reports neither.
@@ -102,29 +102,29 @@ Extension capabilities are prefixed by pack namespace to avoid collisions. These
 ### `pgvector`
 PostgreSQL vector extension capabilities.
 
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `ivfflat` | boolean | Supports IVFFlat indexing | Stable |
-| `hnsw` | boolean | Supports HNSW indexing | Stable |
-| `vector` | object | Vector type support with params | Stable |
+| Capability | Type | Description |
+|------------|------|-------------|
+| `ivfflat` | boolean | Supports IVFFlat indexing |
+| `hnsw` | boolean | Supports HNSW indexing |
+| `vector` | object | Vector type support with params |
 
 ### `postgis`
 PostGIS geospatial extension capabilities.
 
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `gist` | boolean | Supports GiST spatial indexing | Stable |
-| `geography` | boolean | Supports geography type | Stable |
-| `geometry` | boolean | Supports geometry type | Stable |
-| `srid` | array | Supported SRID values | Stable |
+| Capability | Type | Description |
+|------------|------|-------------|
+| `gist` | boolean | Supports GiST spatial indexing |
+| `geography` | boolean | Supports geography type |
+| `geometry` | boolean | Supports geometry type |
+| `srid` | array | Supported SRID values |
 
 ### `pg_trgm`
 PostgreSQL trigram extension capabilities.
 
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `trigram` | boolean | Supports trigram similarity | Stable |
-| `gin` | boolean | Supports GIN trigram indexes | Stable |
+| Capability | Type | Description |
+|------------|------|-------------|
+| `trigram` | boolean | Supports trigram similarity |
+| `gin` | boolean | Supports GIN trigram indexes |
 
 ## Reserved Namespaces
 
@@ -154,15 +154,14 @@ The following namespaces are reserved and cannot be used by extension packs:
 - Boolean capabilities use simple names: `lateral`, `savepoints`
 - Complex capabilities use descriptive names: `explainFormat`, `transactional_ddl`
 
-### Stability Contract
-- **Stable**: Core capabilities that cannot change meaning or be removed
-- **Deprecated**: Capabilities marked for removal with migration path
-- **Experimental**: New capabilities under evaluation
+### Maturity
+- A capability has no maturity level of its own: it has the level of the package that publishes it ([ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
+- There are no feature flags. A capability that is not ready ships in a package below Generally Available, or under a name that carries its level.
 
 ### Versioning
 - Capability keys are immutable once published
-- New capabilities can be added as stable
-- Breaking changes require new capability keys
+- A new capability can be added in any release
+- A change to what a published key means requires a new capability key
 
 ## Capability Negotiation
 
