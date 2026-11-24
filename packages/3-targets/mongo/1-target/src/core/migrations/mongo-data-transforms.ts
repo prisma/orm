@@ -131,7 +131,7 @@ export function convertTransform(
       model: change.destination,
       storedKey: undefined,
       keepAdvice: undefined,
-      statement: undefined,
+      renameStatement: undefined,
     },
   };
 }
@@ -242,7 +242,7 @@ export function backfillTransform(
       model: statement.field,
       storedKey: undefined,
       keepAdvice: undefined,
-      statement: undefined,
+      renameStatement: undefined,
     },
   };
 }

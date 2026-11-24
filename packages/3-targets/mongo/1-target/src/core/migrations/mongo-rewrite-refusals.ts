@@ -42,10 +42,10 @@ export interface PlannedRewrite {
   readonly model: ModelCoordinate | undefined;
   /** For a rewrite of a key inside the field: the field the key stores, in words, and the other models whose documents the same rewrite is planned for. */
   readonly storedKey: { readonly key: string; readonly together: readonly string[] } | undefined;
-  /** For a rewrite no statement asks for, how to leave the change out of the contract instead; `undefined` for a statement's rewrite. */
+  /** For a contract change no statement asks for, how to leave it out of the contract instead; `undefined` for a rewrite a statement asks for (`--rename`, `--convert`, `--backfill`). */
   readonly keepAdvice: string | undefined;
-  /** The statement that asks for the rewrite, which a refusal of a rename or a value replacement carries; `undefined` for a contract change. */
-  readonly statement: ResolvedMigrationStatement | undefined;
+  /** For a key rename or a value replacement, the rename statement that asks for it, which its refusal carries; `undefined` for a contract change, and for every other kind of rewrite, whose refusal kind does not depend on it. */
+  readonly renameStatement: ResolvedMigrationStatement | undefined;
 }
 
 interface RewriteWords {
@@ -202,7 +202,7 @@ function refusalOf(
 ): MigrationPlannerConflict {
   const { conflictKind } = WORDS[rewrite.kind];
   return conflictKind === undefined
-    ? renameRefused(rewrite.statement, summary, why)
+    ? renameRefused(rewrite.renameStatement, summary, why)
     : { kind: conflictKind, summary, why };
 }
 

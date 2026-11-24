@@ -247,7 +247,7 @@ describe('Journeys (MongoDB): stored-name refusals and their routes', {
         planningFailure({
           summary:
             'Cannot change the stored values of enum "Status": enum values "Status.A" and "Status.B" move stored values along a chain, "a" to "b" and "b" to "c", and a rewrite of one would write a value another still has to read',
-          why: 'MongoDB applies a migration\'s operations one at a time, without a transaction, and knows that an operation already ran only from the documents, so a rewrite of a value that another rewrite of the same migration writes would act on what that one wrote when the migration runs again after a later operation stops. Make the change in two plans: first give "Status.A" a stored value no member stores, such as "prisma_swap"; give "Status.B" the stored value "c"; and plan and apply that; then give "Status.A" the stored value "b"; and plan again.',
+          why: 'MongoDB applies a migration\'s operations one at a time, without a transaction, and knows that an operation already ran only from the documents. A rewrite of a value that another rewrite of the same migration writes would act on what that one wrote when the migration runs again after a later operation stops. Make the change in two plans: first give "Status.A" a stored value no member stores, such as "prisma_swap"; give "Status.B" the stored value "c"; and plan and apply that; then give "Status.A" the stored value "b"; and plan again.',
         }),
       );
       await useSchema(journey, statusPsl('prisma_swap', 'c'), 'R5.04');

@@ -34,7 +34,7 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import { type StoredValue, unrewritableKeyReason } from './migration-factories';
 import { collectionControlPolicy } from './mongo-control-policy';
 import { modelCoordinates } from './mongo-model-coordinates';
-import { joinedList } from './mongo-plan-text';
+import { joinedList, ONE_AT_A_TIME } from './mongo-plan-text';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import { renameRefused } from './mongo-storage-renames';
@@ -479,8 +479,7 @@ function linkedMoves(
 const CYCLE_WHY =
   'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle.';
 
-const CHAIN_WHY =
-  "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents, so a rewrite of a value that another rewrite of the same migration writes would act on what that one wrote when the migration runs again after a later operation stops.";
+const CHAIN_WHY = `${ONE_AT_A_TIME} A rewrite of a value that another rewrite of the same migration writes would act on what that one wrote when the migration runs again after a later operation stops.`;
 
 /**
  * The route through stored values no member stores, which works on both commands: a plan that
@@ -839,7 +838,7 @@ function placeRefusals(
           model: place.model,
           storedKey: { key: enumValueText(enums.fromContract, change.enumValue), together },
           keepAdvice: change.statement === undefined ? keepAdvice(enums, change) : undefined,
-          statement: change.statement,
+          renameStatement: change.statement,
         },
         input.contract,
         rewriteCollectionOf(input.schema, place.collection),

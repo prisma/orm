@@ -17,7 +17,13 @@ import {
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { modelCoordinates } from './mongo-model-coordinates';
-import { capitalized, fieldDisplayName, joinedList, modelsText } from './mongo-plan-text';
+import {
+  capitalized,
+  fieldDisplayName,
+  joinedList,
+  modelsText,
+  ONE_AT_A_TIME,
+} from './mongo-plan-text';
 import {
   type CollectionChange,
   collectionChangeText,
@@ -311,7 +317,7 @@ export function freedNameReusedConflict(
   return renameRefused(
     statement,
     `${label}: the destination ${holding}, the name the rename frees`,
-    `${text}, and the destination ${holding}. MongoDB applies a migration's operations one at a time, without a transaction, and a collection rename runs again only while its old collection exists and its new one does not. Once collection "${from}" exists again, a migration that stopped after the rename cannot be run again to finish it. Make the change in two plans: first rename collection "${from}" to "${to}" and leave collection "${from}" out of the contract, and plan and apply that${statement === undefined ? '' : ' with the same statement'}; then add what the destination stores in collection "${from}", and plan again${statement === undefined ? '' : ' without it'}.`,
+    `${text}, and the destination ${holding}. ${ONE_AT_A_TIME} A collection rename runs again only while its old collection exists and its new one does not. Once collection "${from}" exists again, a migration that stopped after the rename cannot be run again to finish it. Make the change in two plans: first rename collection "${from}" to "${to}" and leave collection "${from}" out of the contract, and plan and apply that${statement === undefined ? '' : ' with the same statement'}; then add what the destination stores in collection "${from}", and plan again${statement === undefined ? '' : ' without it'}.`,
   );
 }
 

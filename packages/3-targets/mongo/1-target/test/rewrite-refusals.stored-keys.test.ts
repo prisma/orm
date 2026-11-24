@@ -14,7 +14,7 @@ function timeSeriesRefusal(kind: 'renameStoredKey' | 'removeStoredKey' | 'fillSt
       model: undefined,
       storedKey: undefined,
       keepAdvice: undefined,
-      statement: undefined,
+      renameStatement: undefined,
     },
     noModels,
     { timeSeries: true, validator: undefined },

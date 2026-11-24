@@ -339,7 +339,7 @@ function plannedRewriteOf(
     variant: planned.place.variant,
     model: planned.place.model,
     storedKey: { key: fieldText(planned.change, contracts), together: planned.models },
-    statement: planned.change.statement,
+    renameStatement: planned.change.statement,
     keepAdvice:
       planned.change.statement !== undefined
         ? undefined
@@ -393,7 +393,7 @@ export function planStoredKeyRewrites(
           model: undefined,
           storedKey: { key: `key ${JSON.stringify(key)}`, together: [] },
           keepAdvice: 'keep the field in the contract',
-          statement: undefined,
+          renameStatement: undefined,
         },
         contract,
         rewriteCollectionOf(input.schema, call.options.collection),

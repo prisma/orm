@@ -6,6 +6,7 @@ import {
 } from '@internal/framework-components/control';
 import type { SelectedVariant } from '@internal/mongo-contract';
 import { InternalError } from '@internal/utils/internal-error';
+import { ONE_AT_A_TIME } from './mongo-plan-text';
 import { type FieldRename, renameRefused } from './mongo-storage-renames';
 import { type UnansweredChange, unansweredChangesAdvice } from './mongo-unanswered-changes';
 import type {
@@ -22,9 +23,6 @@ import type {
   UnsetFieldCall,
 } from './op-factory-call';
 import { jsonPathText, storedKeyPath } from './stored-key-path';
-
-export const ONE_AT_A_TIME =
-  "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents.";
 
 /** Advice to make a change as two changes to the contract, the first applied before the second is made. */
 export function inTwoSteps(first: string, second: string): string {

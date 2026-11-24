@@ -159,7 +159,7 @@ describe('Journeys (MongoDB): stored-name refusal routes', {
         planningFailure({
           summary:
             'Cannot rename collection "users" to "app_users": the destination stores model "Legacy" in collection "users", the name the rename frees',
-          why: 'The collection of model "User" changes from "users" to "app_users", and the destination stores model "Legacy" in collection "users". MongoDB applies a migration\'s operations one at a time, without a transaction, and a collection rename runs again only while its old collection exists and its new one does not. Once collection "users" exists again, a migration that stopped after the rename cannot be run again to finish it. Make the change in two plans: first rename collection "users" to "app_users" and leave collection "users" out of the contract, and plan and apply that; then add what the destination stores in collection "users", and plan again.',
+          why: 'The collection of model "User" changes from "users" to "app_users", and the destination stores model "Legacy" in collection "users". MongoDB applies a migration\'s operations one at a time, without a transaction, and knows that an operation already ran only from the documents. A collection rename runs again only while its old collection exists and its new one does not. Once collection "users" exists again, a migration that stopped after the rename cannot be run again to finish it. Make the change in two plans: first rename collection "users" to "app_users" and leave collection "users" out of the contract, and plan and apply that; then add what the destination stores in collection "users", and plan again.',
         }),
       );
       await useSchema(journey, modelsPsl({ User: 'app_users' }), 'T4.04');

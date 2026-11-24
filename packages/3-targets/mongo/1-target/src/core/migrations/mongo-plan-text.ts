@@ -31,3 +31,7 @@ export function capitalized(text: string): string {
 export function handWrittenMigrationSteps(what: string): string {
   return `run prisma migration new, and in the operations of the migration.ts it writes, rewrite ${what} yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`;
 }
+
+/** Why a MongoDB plan must be safe to run again: its operations run one at a time, and only the documents say which ran. */
+export const ONE_AT_A_TIME =
+  "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents.";
