@@ -2,6 +2,7 @@
  * Shared helpers for family.schema-verify tests.
  */
 import postgresAdapter from '@internal/adapter-postgres/control';
+import { isContractBuiltInMemory } from '@internal/contract/internal/format-version';
 import type { Contract } from '@internal/contract/types';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql, { type SqlControlFamilyInstance } from '@internal/family-sql/control';
@@ -109,8 +110,11 @@ export async function runSchemaVerify(
 ) {
   return withDriver(connectionString, async (driver) => {
     const familyInstance = createFamilyInstance(options.extensions);
-    const validatedContract = new PostgresContractSerializer().deserializeContract(
-      contract,
+    const serializer = new PostgresContractSerializer();
+    const validatedContract = serializer.deserializeContract(
+      isContractBuiltInMemory(contract)
+        ? serializer.serializeContract(contract as Contract<SqlStorage>)
+        : contract,
     ) as Contract<SqlStorage>;
     const frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', 'postgres'>> = [
       postgres,
