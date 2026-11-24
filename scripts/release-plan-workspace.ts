@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { packageKinds, packageLevels } from '../packages/0-shared/publish-surface/src/levels.ts';
 import {
   type DeclaredLevel,
-  isOwnVersion,
+  isNumberedOnItsOwn,
   type PublishedManifest,
   planInputFor,
   planRelease,
@@ -41,10 +41,57 @@ export function planWorkspace(
   rootVersion: string,
   everGa: ReadonlySet<string> = new Set(),
 ): ReleasePlan {
+  return planFrom([...readPublishedManifests(rootDir).values()], rootVersion, everGa);
+}
+
+/**
+ * The plan for a later release, reached from the workspace's manifests one release at a time: from
+ * the `8.0.0` release candidates through `8.0.0` and each minor after it, so a package's version at
+ * the asked release follows from the one it had at the release before, as it will when the releases
+ * are cut. For printing what a release will hold; `planWorkspace` plans the root version itself.
+ */
+export function planWorkspaceThrough(
+  rootDir: string,
+  rootVersion: string,
+  everGa: ReadonlySet<string> = new Set(),
+): { readonly plan: ReleasePlan; readonly previous: Readonly<Record<string, string>> } {
+  const target = releaseOfRootVersion(rootVersion);
+  let manifests: PublishedManifest[] = [...readPublishedManifests(rootDir).values()];
+  const first = releaseOfRootVersion(
+    manifests.find((manifest) => !isNumberedOnItsOwn(packageLevels.get(manifest.name)))?.version ??
+      rootVersion,
+  );
+  const steps: string[] = [];
+  if (first.line === 'release-candidates' && target.line === 'levels') {
+    for (let minor = 0; minor < target.release.minor; minor++) {
+      steps.push(`${target.release.major}.${minor}.0`);
+    }
+  }
+  for (const step of steps) {
+    const plan = planFrom(manifests, step, everGa);
+    manifests = manifests.map((manifest) => ({
+      ...manifest,
+      version: plan[manifest.name]?.version ?? manifest.version,
+    }));
+  }
+  return {
+    plan: planFrom(manifests, rootVersion, everGa),
+    previous:
+      steps.length === 0
+        ? {}
+        : Object.fromEntries(manifests.map((manifest) => [manifest.name, manifest.version])),
+  };
+}
+
+function planFrom(
+  manifests: readonly PublishedManifest[],
+  rootVersion: string,
+  everGa: ReadonlySet<string>,
+): ReleasePlan {
   return planRelease(
     planInputFor({
       rootVersion,
-      manifests: [...readPublishedManifests(rootDir).values()],
+      manifests,
       levels: packageLevels,
       kinds: packageKinds(publicShells),
       everGa,
@@ -56,8 +103,15 @@ export function levelOf(name: string): DeclaredLevel | undefined {
   return packageLevels.get(name);
 }
 
-/** A plan as a table: package, level, version, tag, and the range on each package it names. */
-export function formatPlanTable(plan: ReleasePlan): string {
+/**
+ * A plan as a table: package, level, version, tag, and the range on each package it names. A version
+ * the package already had at the release before is marked as already published: there is nothing new
+ * of it to publish.
+ */
+export function formatPlanTable(
+  plan: ReleasePlan,
+  previous: Readonly<Record<string, string>> = {},
+): string {
   const rows = Object.entries(plan)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([name, planned]) => {
@@ -67,8 +121,10 @@ export function formatPlanTable(plan: ReleasePlan): string {
         .map(([named, range]) => `${named} ${range}`);
       return [
         name,
-        level === undefined ? '?' : isOwnVersion(level) ? 'own-version' : level,
-        planned.version,
+        level === undefined ? '?' : isNumberedOnItsOwn(level) ? 'own-version' : level,
+        previous[name] === planned.version
+          ? `${planned.version} (already published)`
+          : planned.version,
         planned.tag,
         ranges.length === 0 ? '-' : ranges.join(', '),
       ];

@@ -1,7 +1,7 @@
 /**
  * What each published package is released as, for one release: its version, its dist-tag, and the
- * range it writes on each package of ours it names. Self-contained, with no imports, so a script
- * can load this file directly with Node as well as through the built package.
+ * range it writes on each package of ours it names. Scripts load this file from source, before the
+ * workspace is built, so it may import only types; it imports nothing.
  */
 
 /** Input a release cannot be planned from; the message names the package and the value. */
@@ -11,17 +11,17 @@ export class ReleasePlanError extends Error {}
 export type Level = 'ga' | 'rc' | 'preview' | 'ea';
 
 /**
- * A package numbered outside the release number. `ownVersion` is its version at the first release
- * with levels; after that it keeps whatever version it has.
+ * A package numbered outside the release number, with no level. `firstVersion` is its version at the
+ * first release with levels; after that it keeps its version, and a fix to it raises its patch.
  */
-export interface OwnVersion {
-  readonly ownVersion: string;
+export interface NumberedOnItsOwn {
+  readonly firstVersion: string;
 }
 
-/** A package's level, or its own version for a package numbered outside the release number. */
-export type DeclaredLevel = Level | OwnVersion;
+/** A package's level, or the first version of a package numbered outside the release number. */
+export type DeclaredLevel = Level | NumberedOnItsOwn;
 
-export function isOwnVersion(level: DeclaredLevel | undefined): level is OwnVersion {
+export function isNumberedOnItsOwn(level: DeclaredLevel | undefined): level is NumberedOnItsOwn {
   return typeof level === 'object';
 }
 
@@ -123,8 +123,8 @@ export function levelViolations(
       const namedLevel = levels.get(name);
       if (userLevel === undefined || namedLevel === undefined) continue;
       const refused =
-        isOwnVersion(namedLevel) ||
-        (!isOwnVersion(userLevel) && LEVEL_ORDER[namedLevel] < LEVEL_ORDER[userLevel]);
+        isNumberedOnItsOwn(namedLevel) ||
+        (!isNumberedOnItsOwn(userLevel) && LEVEL_ORDER[namedLevel] < LEVEL_ORDER[userLevel]);
       if (refused) violations.push({ user, userLevel, named: name, namedLevel });
     }
   }
@@ -234,7 +234,7 @@ function candidateVersions(
  * on its own still holds one `X.Y.0-rc.N` of the release's minor.
  */
 function isFirstReleaseWithLevels(input: ReleasePlanInput, names: readonly string[]): boolean {
-  const lockstep = names.filter((name) => !isOwnVersion(input.levels.get(name)));
+  const lockstep = names.filter((name) => !isNumberedOnItsOwn(input.levels.get(name)));
   const versions = new Set(lockstep.map((name) => input.current[name]));
   if (versions.size !== 1) return false;
   const [only] = [...versions];
@@ -256,13 +256,18 @@ function levelVersions(input: ReleasePlanInput, names: readonly string[]): Recor
     const level = input.levels.get(name);
     const text = input.current[name] ?? '';
     const current = parseCurrent(input, name);
-    if (isOwnVersion(level)) {
-      versions[name] = current.level?.name === 'rc' ? parseVersionOf(name, level.ownVersion) : text;
+    if (isNumberedOnItsOwn(level)) {
+      versions[name] =
+        current.level?.name === 'rc'
+          ? parseVersionOf(name, level.firstVersion)
+          : input.bump.includes(name)
+            ? formatVersion({ ...current, patch: current.patch + 1 })
+            : text;
       continue;
     }
     if (level === undefined) throw new ReleasePlanError(`${name} has no declared level`);
     versions[name] = first
-      ? firstWithLevels(major, minor, level, current)
+      ? firstVersionAfterReleaseCandidates({ major, minor }, level, current)
       : nextVersion(name, text, current, level, input);
   }
   return versions;
@@ -283,11 +288,13 @@ function nextVersion(
     );
   }
   if (order > 0) return firstOfMinor(major, minor, level);
-  if ((current.level?.name ?? 'ga') !== level) {
+  const currentLevel = current.level?.name ?? 'ga';
+  if (LEVEL_ORDER[level] < LEVEL_ORDER[currentLevel]) {
     throw new ReleasePlanError(
-      `${name}: its level is ${level} but its current version "${text}" is not; a level changes only at a new minor`,
+      `${name}: its level is ${level} but its current version "${text}" is ${currentLevel}; within a minor a level may go up, not down, because a version can only move forward`,
     );
   }
+  if (level !== currentLevel) return firstOfMinor(major, minor, level);
   if (!input.bump.includes(name)) return text;
   return formatVersion(
     current.level === undefined
@@ -297,18 +304,18 @@ function nextVersion(
 }
 
 /**
- * A package's version at the first release with levels. A package at `rc` continues the release
- * candidates' counter, so its version sorts above what was published; the others start their level.
+ * A package's version when it leaves the release candidates, at the first release with levels. A
+ * package at `rc` continues the release candidates' counter, so its version sorts above what was
+ * published; the others start their level. This is the one place that numbering is decided.
  */
-function firstWithLevels(
-  major: number,
-  minor: number,
+export function firstVersionAfterReleaseCandidates(
+  release: { readonly major: number; readonly minor: number },
   level: Level,
   current: ParsedVersion,
 ): string {
   return level === 'rc'
-    ? `${major}.${minor}.0-rc.${(current.level?.counter ?? 0) + 1}`
-    : firstOfMinor(major, minor, level);
+    ? `${release.major}.${release.minor}.0-rc.${(current.level?.counter ?? 0) + 1}`
+    : firstOfMinor(release.major, release.minor, level);
 }
 
 function firstOfMinor(major: number, minor: number, level: Level): string {
@@ -317,28 +324,29 @@ function firstOfMinor(major: number, minor: number, level: Level): string {
 
 function levelRange(input: ReleasePlanInput, user: string, named: string): string {
   const level = input.levels.get(named);
-  if (level === undefined || isOwnVersion(level)) {
+  if (level === undefined || isNumberedOnItsOwn(level)) {
     throw new ReleasePlanError(`${user} names ${named}, which is numbered on its own`);
   }
   const kind = input.kinds[user];
-  const operator =
-    isOwnVersion(input.levels.get(user)) || kind === 'extension' || kind === 'library-integration'
-      ? '^'
-      : '~';
+  const widens =
+    isNumberedOnItsOwn(input.levels.get(user)) ||
+    kind === 'extension' ||
+    kind === 'library-integration';
+  const operator = widens && level === 'ga' ? '^' : '~';
   return `${operator}${firstOfMinor(input.release.major, input.release.minor, level)}`;
 }
 
 function tagOf(input: ReleasePlanInput, name: string): string {
   if (input.dev !== undefined) return 'dev';
   const level = input.levels.get(name);
-  if (input.line === 'release-candidates' || level === 'ga' || isOwnVersion(level)) {
+  if (input.line === 'release-candidates' || level === 'ga' || isNumberedOnItsOwn(level)) {
     return 'latest';
   }
   return input.everGa.has(name) && level !== undefined ? level : 'latest';
 }
 
 function levelName(level: DeclaredLevel): string {
-  return isOwnVersion(level) ? `own version ${level.ownVersion}` : level;
+  return isNumberedOnItsOwn(level) ? `numbered on its own from ${level.firstVersion}` : level;
 }
 
 /** A declared own version, checked to be one this repository publishes. */
@@ -377,6 +385,11 @@ export function releaseOfRootVersion(version: string): RootRelease {
   const parsed = parseVersion(version);
   const release = { major: parsed.major, minor: parsed.minor };
   if (parsed.patch === 0 && parsed.level?.name === 'rc') {
+    if (parsed.major !== 8 || parsed.minor !== 0) {
+      throw new ReleasePlanError(
+        `root version "${version}" is a release candidate of ${parsed.major}.${parsed.minor}; only the 8.0.0 release candidates are planned, and a release-candidate line for another release is not built`,
+      );
+    }
     return {
       release,
       line: 'release-candidates',

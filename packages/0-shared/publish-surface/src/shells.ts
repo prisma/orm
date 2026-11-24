@@ -1,3 +1,5 @@
+// Scripts load this file from source, before the workspace is built, so it may import only types.
+
 /**
  * Canonical mapping of internal workspace packages to public publish shells
  * (ADR 242). Each internal package becomes a subpath entrypoint namespace of

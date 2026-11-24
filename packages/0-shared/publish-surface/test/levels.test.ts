@@ -44,7 +44,7 @@ describe('the declared level of each published package', () => {
       '@prisma/orm-better-auth': 'preview',
       '@prisma/orm-extension-arktype-json': 'ga',
       '@prisma/orm-extension-middleware-cache': 'preview',
-      '@prisma/orm-extension-paradedb': { ownVersion: '0.1.0' },
+      '@prisma/orm-extension-paradedb': { firstVersion: '0.1.0' },
       '@prisma/orm-extension-pgvector': 'ga',
       '@prisma/orm-extension-postgis': 'ga',
       '@prisma/orm-extension-supabase': 'preview',
@@ -106,15 +106,15 @@ describe('levelViolations', () => {
     ['two packages at one level', { a: 'ea', b: 'ea' }, { a: ['b'] }, []],
     [
       'an own-version package naming any level',
-      { a: { ownVersion: '0.1.0' }, b: 'ea' },
+      { a: { firstVersion: '0.1.0' }, b: 'ea' },
       { a: ['b'] },
       [],
     ],
     [
       'a package naming an own-version one',
-      { a: 'ga', b: { ownVersion: '0.1.0' } },
+      { a: 'ga', b: { firstVersion: '0.1.0' } },
       { a: ['b'] },
-      [{ user: 'a', userLevel: 'ga', named: 'b', namedLevel: { ownVersion: '0.1.0' } }],
+      [{ user: 'a', userLevel: 'ga', named: 'b', namedLevel: { firstVersion: '0.1.0' } }],
     ],
   ])('%s', (_case, levels, graph, violations) => {
     expect(

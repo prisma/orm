@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   type DeclaredLevel,
+  firstVersionAfterReleaseCandidates,
   formatVersion,
   type PackageKind,
   parseVersion,
@@ -28,7 +29,7 @@ const graph: Record<string, { level: DeclaredLevel; kind: PackageKind; uses: str
   mariadb: { level: 'ea', kind: 'facade', uses: ['mysql', 'target-mysql'] },
   supabase: { level: 'preview', kind: 'extension', uses: ['postgres'] },
   'better-auth': { level: 'preview', kind: 'library-integration', uses: ['framework'] },
-  paradedb: { level: { ownVersion: '0.1.0' }, kind: 'extension', uses: ['framework'] },
+  paradedb: { level: { firstVersion: '0.1.0' }, kind: 'extension', uses: ['framework'] },
 };
 
 const AT_8_1 = {
@@ -362,12 +363,62 @@ describe('planRelease', () => {
     );
   });
 
+  it.each([
+    ['rc', '8.1.0-rc.0 latest framework ~8.1.0'],
+    ['ga', '8.1.0 latest framework ~8.1.0'],
+  ])('lets a level go up to %s within a minor', (level, expected) => {
+    const plan = planRelease(input({ levelChanges: { mongo: level as DeclaredLevel } }));
+
+    expect(line(plan, 'mongo')).toBe(expected);
+  });
+
+  it('gives an extension a tilde within the minor on a package below GA, and a caret on a GA one', () => {
+    const plan = planRelease(
+      input({ uses: { ...input({}).uses, 'better-auth': ['framework', 'mongo'] } }),
+    );
+
+    expect(line(plan, 'better-auth')).toBe(
+      '8.1.0-preview.0 latest framework ^8.1.0 mongo ~8.1.0-preview.0',
+    );
+  });
+
+  describe('a package numbered on its own', () => {
+    it('keeps its version at a later release', () => {
+      expect(line(planRelease(input({ release: { major: 8, minor: 2 } })), 'paradedb')).toBe(
+        '0.1.0 latest framework ^8.2.0',
+      );
+    });
+
+    it('raises its patch when it gets a fix', () => {
+      expect(line(planRelease(input({ bump: ['paradedb'] })), 'paradedb')).toBe(
+        '0.1.1 latest framework ^8.1.0',
+      );
+    });
+  });
+
   it('starts an rc package at X.Y.0-rc.0 in a later minor', () => {
     const plan = planRelease(
       input({ release: { major: 8, minor: 2 }, levelChanges: { mongo: 'rc' } }),
     );
 
     expect(line(plan, 'mongo')).toBe('8.2.0-rc.0 latest framework ~8.2.0');
+  });
+});
+
+describe('firstVersionAfterReleaseCandidates', () => {
+  it.each([
+    ['ga', '8.0.0'],
+    ['preview', '8.0.0-preview.0'],
+    ['ea', '8.0.0-ea.0'],
+    ['rc', '8.0.0-rc.27'],
+  ] as const)('numbers a %s package', (level, expected) => {
+    expect(
+      firstVersionAfterReleaseCandidates(
+        { major: 8, minor: 0 },
+        level,
+        parseVersion('8.0.0-rc.26'),
+      ),
+    ).toBe(expected);
   });
 });
 
@@ -396,6 +447,12 @@ describe('releaseOfRootVersion', () => {
     ],
   ])('reads %s', (version, expected) => {
     expect(releaseOfRootVersion(version)).toEqual(expected);
+  });
+
+  it('refuses a release-candidate line of another release, saying only 8.0.0 has one', () => {
+    expect(() => releaseOfRootVersion('9.0.0-rc.1')).toThrow(
+      /9\.0\.0-rc\.1.*only the 8\.0\.0 release candidates/,
+    );
   });
 
   it.each(['8.1.0-preview.0', '8.1.0-ea.2', '8.1.2', '8.0.0-beta.1'])(

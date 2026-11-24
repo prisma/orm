@@ -1,10 +1,12 @@
+// Scripts load this file from source, before the workspace is built, so it may import only types.
 import type { DeclaredLevel, PackageKind } from './release-plan';
 
 /**
  * The maturity level of every package this repository publishes, as decided for `8.0.0`. A
  * package's version, tag and the ranges others write on it follow from its level; see
- * `planRelease`. `{ ownVersion }` marks a package numbered outside the release number, with its
- * version at the first release with levels.
+ * `planRelease`. `{ firstVersion }` marks a package numbered outside the release number, with no
+ * level: this is the one home of its version at the first release with levels; after that its
+ * version is in its manifest.
  *
  * `@prisma/orm-extension-middleware-cache` and `@prisma/orm-better-auth` are Preview until the
  * operator decides otherwise.
@@ -31,7 +33,7 @@ export const packageLevels: ReadonlyMap<string, DeclaredLevel> = new Map<string,
   ['@prisma/orm-target-mariadb', 'ea'],
   ['@prisma/orm-sqlite', 'ea'],
   ['@prisma/orm-target-sqlite', 'ea'],
-  ['@prisma/orm-extension-paradedb', { ownVersion: '0.1.0' }],
+  ['@prisma/orm-extension-paradedb', { firstVersion: '0.1.0' }],
 ]);
 
 /**
