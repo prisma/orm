@@ -2,7 +2,7 @@
 changes:
   - id: contract-hash-inputs
     summary: |
-      Every storage, profile and execution hash takes a new value, once: each now covers only the target, the family and its own section of the contract, and the rules that compute them do not change again within Prisma 8. Run the colocated script on the project: it rewrites every hash in the emitted contract, `contract.d.ts`, the snapshot directories, each `migration.json`, each ref file and each `migration.ts`. Then run `prisma db sign` against every database the project uses, and `prisma contract emit`.
+      Every storage, profile and execution hash takes a new value, once: each now covers only the target, the family and its own section of the contract, and the rules that compute them do not change again within Prisma 8. Run the colocated script on the project: it rewrites every hash in the emitted contract, `contract.d.ts`, the snapshot directories, each `migration.json` and `ops.json`, each ref file and each `migration.ts`. Then run `prisma db sign` against every database the project uses, and `prisma contract emit`.
     script: ./scripts/contract-hash-inputs/contract-hash-inputs.ts
 ---
 
@@ -12,7 +12,7 @@ changes:
 
 A contract has three hashes: the storage hash (`storage.storageHash`), which names the database schema the contract describes; the profile hash (`profileHash`); and the execution hash (`execution.executionHash`). Until this release each covered its own section inside a stand-in contract with a fixed `schemaVersion` and blank fields. Now each covers only the target, the family and its own section. So every hash in your project changes once, and from `8.0.0` the rules that compute them do not change within the major version.
 
-The storage hash names a contract everywhere Prisma refers to one: the snapshot directories under `migrations/snapshots/<hash>/`, the `from` and `to` of each `migration.json` (and so its `migrationHash`), the `hash` of each ref file, the snapshot imports and hash literals of each `migration.ts`, and the marker Prisma writes in each database. All of them must move to the new hashes together.
+The storage hash names a contract everywhere Prisma refers to one: the snapshot directories under `migrations/snapshots/<hash>/`, the `from` and `to` of each `migration.json` and the query plans of a data transform in its `ops.json` (and so its `migrationHash`), the `hash` of each ref file, the snapshot imports and hash literals of each `migration.ts`, and the marker Prisma writes in each database. All of them must move to the new hashes together.
 
 ### 1. Run the script
 
@@ -30,7 +30,7 @@ Then it computes each contract's new hashes and rewrites, keeping every other by
 
 - the storage, profile and execution hash in every contract, and the same hashes in the `contract.d.ts` beside it;
 - the name of each snapshot directory, `snapshots/<old>/` to `snapshots/<new>/`;
-- `from` and `to` in every `migration.json`, and its `migrationHash`, which covers them (the rule for the migration hash is unchanged);
+- `from` and `to` in every `migration.json`, each old storage hash in the `ops.json` beside it (a data transform's query plans carry the storage hash of the contract they were built for), and its `migrationHash`, which covers both (the rule for the migration hash is unchanged);
 - `hash` in every ref file;
 - each old storage hash in every `migration.ts`, which names its snapshots in its imports.
 
@@ -39,6 +39,7 @@ It prints each file it rewrote, each directory it renamed and each hash it repla
 The script exits 1 without changing that file when it cannot finish one:
 
 - A `migration.json` or ref file names a storage hash that no contract or snapshot in the project has, so the script cannot tell its new value. Prisma copies an extension's migrations into `migrations/<extension>/`, without a snapshot of every contract in between. For a migration there, delete its folder: after you upgrade the extension, `prisma contract emit` writes it again from the extension's new version, with the new hashes. Restore anything else from version control, or set a ref again with `prisma migration ref set` after the upgrade.
+- A `contract.json` has neither `formatVersion` nor `schemaVersion`, so no release of Prisma wrote it. The script leaves it alone.
 - A `contract.d.ts` names a hash that is not one of its contract's. Emit the contract again with `prisma contract emit` (or, for a snapshot, restore both files from version control) and run the script again.
 
 ### 2. Upgrade every extension with Prisma
