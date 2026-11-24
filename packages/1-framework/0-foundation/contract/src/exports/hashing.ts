@@ -14,6 +14,6 @@ export {
   computeProfileHash,
   computeStorageHash,
   type ExpectedContractHashes,
-  type ProfileCapabilities,
-  type SavedContractSections,
+  type HashedContractSections,
+  type ProfileHashCapabilities,
 } from '../hashing';

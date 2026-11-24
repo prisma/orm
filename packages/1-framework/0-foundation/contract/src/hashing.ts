@@ -103,9 +103,9 @@ export function computeProfileHash(args: {
 }
 
 /**
- * A contract as read from a saved `contract.json`. The `storageHash` and `executionHash` it stores are ignored.
+ * The sections of a saved `contract.json` that its hashes cover. The `storageHash` and `executionHash` it stores are ignored.
  */
-export interface SavedContractSections {
+export interface HashedContractSections {
   readonly target: string;
   readonly targetFamily: string;
   readonly storage: Record<string, unknown>;
@@ -115,14 +115,15 @@ export interface SavedContractSections {
 
 export interface ExpectedContractHashes {
   readonly name: string;
-  readonly contract: SavedContractSections;
+  readonly contract: HashedContractSections;
   readonly storageHash: string;
   readonly profileHash: string;
   readonly executionHash?: string;
 }
 
-export type ProfileCapabilities = (
-  contract: SavedContractSections,
+/** The capabilities a family computes a contract's profile hash from. */
+export type ProfileHashCapabilities = (
+  contract: HashedContractSections,
 ) => Record<string, Record<string, boolean>>;
 
 export interface AssertContractHashesOptions {
@@ -132,7 +133,7 @@ export interface AssertContractHashesOptions {
   /**
    * The capabilities the family computes the profile hash from. Defaults to the contract's `capabilities`.
    */
-  readonly profileCapabilities?: ProfileCapabilities;
+  readonly profileHashCapabilities?: ProfileHashCapabilities;
 }
 
 /**
@@ -184,7 +185,7 @@ function contractHashDifferences(
     computeProfileHash({
       target: contract.target,
       targetFamily: contract.targetFamily,
-      capabilities: options.profileCapabilities?.(contract) ?? contract.capabilities,
+      capabilities: options.profileHashCapabilities?.(contract) ?? contract.capabilities,
     }),
     expected.profileHash,
   );

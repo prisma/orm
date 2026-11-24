@@ -35,7 +35,7 @@ describe('SQL contract hashes', () => {
           },
         ],
         ...sqlContractCanonicalizationHooks,
-        profileCapabilities: sqlProfileHashCapabilities,
+        profileHashCapabilities: sqlProfileHashCapabilities,
       }),
     ).not.toThrow();
   });

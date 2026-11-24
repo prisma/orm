@@ -343,7 +343,7 @@ describe('assertContractHashes', () => {
           },
         ],
         ...SQL_HOOKS,
-        profileCapabilities: () => ({}),
+        profileHashCapabilities: () => ({}),
       }),
     ).not.toThrow();
   });

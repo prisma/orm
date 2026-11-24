@@ -59,7 +59,7 @@ const projects: readonly Project[] = [
 ];
 
 const HOOKS = {
-  sql: { ...sqlContractCanonicalizationHooks, profileCapabilities: sqlProfileHashCapabilities },
+  sql: { ...sqlContractCanonicalizationHooks, profileHashCapabilities: sqlProfileHashCapabilities },
   mongo: mongoContractCanonicalizationHooks,
 } as const;
 
