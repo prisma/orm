@@ -317,7 +317,7 @@ describe('joins', () => {
       fns.eq(f.users.id, f.posts.user_id),
     );
     expect(() => joined.select('id' as never)).toThrow(
-      expect.objectContaining({ code: 'ORM.COLUMN_UNKNOWN' }),
+      expect.objectContaining({ code: 'ORM.COLUMN_AMBIGUOUS' }),
     );
   });
 
@@ -327,7 +327,7 @@ describe('joins', () => {
       .innerJoin(d.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))
       .innerJoin(d.public.profiles, (f, fns) => fns.eq(f.users.id, f.profiles.user_id));
     expect(() => joined.select('id' as never)).toThrow(
-      expect.objectContaining({ code: 'ORM.COLUMN_UNKNOWN' }),
+      expect.objectContaining({ code: 'ORM.COLUMN_AMBIGUOUS' }),
     );
     const ast = getAst(joined.select((f) => ({ id: f.profiles.id, email: f.email })));
     expect(ast.projection.map((item) => item.expr)).toEqual([
@@ -388,7 +388,7 @@ describe('self-join via as()', () => {
       .innerJoin(d.public.users.as('u2'), (f, fns) => fns.eq(f.u1.id, f.u2.id))
       .innerJoin(d.public.users.as('u3'), (f, fns) => fns.eq(f.u1.id, f.u3.id));
     expect(() => joined.select('email' as never)).toThrow(
-      expect.objectContaining({ code: 'ORM.COLUMN_UNKNOWN' }),
+      expect.objectContaining({ code: 'ORM.COLUMN_AMBIGUOUS' }),
     );
     const ast = getAst(joined.select((f) => ({ email: f.u3.email })));
     expect(ast.projection.map((item) => item.expr)).toEqual([ColumnRef.of('u3', 'email')]);

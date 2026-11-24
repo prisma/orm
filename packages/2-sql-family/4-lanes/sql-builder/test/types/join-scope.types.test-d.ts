@@ -20,6 +20,22 @@ test('a column name three joined tables have is reached only through a table', (
   ).toEqualTypeOf<SqlQueryPlan<{ id: number; email: string; bio: string }>>();
 });
 
+test('the fix ORM.COLUMN_AMBIGUOUS suggests for select type-checks', () => {
+  const joined = db.public.users
+    .innerJoin(db.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))
+    .innerJoin(db.public.profiles, (f, fns) => fns.eq(f.users.id, f.profiles.user_id));
+
+  expectTypeOf(joined.select('id', (f) => f.users.id).build()).toEqualTypeOf<
+    SqlQueryPlan<{ id: number }>
+  >();
+  expectTypeOf(
+    joined
+      .select('email')
+      .orderBy((f) => f.users.id)
+      .build(),
+  ).toEqualTypeOf<SqlQueryPlan<{ email: string }>>();
+});
+
 test('a column name shared with the nullable side of an outer join is reached only through a table', () => {
   const joined = db.public.users
     .innerJoin(db.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))

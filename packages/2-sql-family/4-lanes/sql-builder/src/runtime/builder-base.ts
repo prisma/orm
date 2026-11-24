@@ -313,7 +313,7 @@ export function mergeScopes<A extends Scope, B extends Scope>(a: A, b: B): Merge
   );
 }
 
-function unknownColumnError(
+function columnScopeError(
   scope: Scope,
   column: string,
   method: string | undefined,
@@ -329,10 +329,16 @@ function unknownColumnError(
     });
   }
   const where = method === undefined ? '' : ` in ${method}`;
+  const tableRead = `(f) => f.${firstTable}.${column}`;
+  const suggestion =
+    method === undefined ? `select('${column}', ${tableRead})` : `${method}(${tableRead})`;
   return structuredError(
-    'ORM.COLUMN_UNKNOWN',
-    `Column "${column}"${where} is in more than one joined table (${tables.join(', ')}); name its table in a callback, such as (f) => f.${firstTable}.${column}`,
-    { meta: { column, tables } },
+    'ORM.COLUMN_AMBIGUOUS',
+    `Column "${column}"${where} is in more than one joined table (${tables.join(', ')})`,
+    {
+      fix: `Name the table the column comes from: ${suggestion}`,
+      meta: { column, candidates: tables },
+    },
   );
 }
 
@@ -420,7 +426,7 @@ export function resolveSelectArgs(
   if (typeof args[0] === 'string' && (args.length === 1 || typeof args[1] !== 'function')) {
     for (const colName of args as string[]) {
       const field = ownScopeField(scope.topLevel, colName);
-      if (!field) throw unknownColumnError(scope, colName, undefined);
+      if (!field) throw columnScopeError(scope, colName, undefined);
       projections.push(
         ProjectionItem.of(colName, IdentifierRef.of(colName), codecRefOf(field, ctx)),
       );
@@ -496,7 +502,7 @@ export function resolveOrderBy(
 
   if (typeof arg === 'string') {
     const combined = orderByScopeOf(scope, rowFields);
-    if (!Object.hasOwn(combined.topLevel, arg)) throw unknownColumnError(scope, arg, 'orderBy');
+    if (!Object.hasOwn(combined.topLevel, arg)) throw columnScopeError(scope, arg, 'orderBy');
     return toOrderByItem(IdentifierRef.of(arg));
   }
 
@@ -522,7 +528,7 @@ export function resolveGroupBy(
     const combined = orderByScopeOf(scope, rowFields);
     return (args as string[]).map((colName) => {
       if (!Object.hasOwn(combined.topLevel, colName))
-        throw unknownColumnError(scope, colName, 'groupBy');
+        throw columnScopeError(scope, colName, 'groupBy');
       return IdentifierRef.of(colName);
     });
   }
@@ -552,7 +558,7 @@ export function resolveDistinctOn(
   const combined = orderByScopeOf(scope, rowFields);
   return (args as string[]).map((colName) => {
     if (!Object.hasOwn(combined.topLevel, colName))
-      throw unknownColumnError(scope, colName, 'distinctOn');
+      throw columnScopeError(scope, colName, 'distinctOn');
     return IdentifierRef.of(colName);
   });
 }

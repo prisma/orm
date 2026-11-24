@@ -70,8 +70,8 @@ describe('sql() builder structured error codes', () => {
 
   describe('a column name several joined tables have', () => {
     const sharedId = {
-      code: 'ORM.COLUMN_UNKNOWN',
-      meta: { column: 'id', tables: ['users', 'posts', 'profiles'] },
+      code: 'ORM.COLUMN_AMBIGUOUS',
+      meta: { column: 'id', candidates: ['users', 'posts', 'profiles'] },
     };
     const joined = () => {
       const d = db();
@@ -86,15 +86,15 @@ describe('sql() builder structured error codes', () => {
         distinctOn(...args: string[]): unknown;
       };
 
-    it('names the tables in select', () => {
+    it('raises ORM.COLUMN_AMBIGUOUS in select, with the select call that names a table as its fix', () => {
       expect(capture(() => joined().select('id' as never))).toMatchObject({
         ...sharedId,
-        message:
-          'Column "id" is in more than one joined table (users, posts, profiles); name its table in a callback, such as (f) => f.users.id',
+        message: 'Column "id" is in more than one joined table (users, posts, profiles)',
+        fix: "Name the table the column comes from: select('id', (f) => f.users.id)",
       });
     });
 
-    it('names the tables in orderBy, groupBy and distinctOn', () => {
+    it('raises ORM.COLUMN_AMBIGUOUS in orderBy, groupBy and distinctOn, with a callback as its fix', () => {
       expect({
         orderBy: capture(() => selected().orderBy('id')),
         groupBy: capture(() => selected().groupBy('id')),
@@ -103,17 +103,20 @@ describe('sql() builder structured error codes', () => {
         orderBy: {
           ...sharedId,
           message:
-            'Column "id" in orderBy is in more than one joined table (users, posts, profiles); name its table in a callback, such as (f) => f.users.id',
+            'Column "id" in orderBy is in more than one joined table (users, posts, profiles)',
+          fix: 'Name the table the column comes from: orderBy((f) => f.users.id)',
         },
         groupBy: {
           ...sharedId,
           message:
-            'Column "id" in groupBy is in more than one joined table (users, posts, profiles); name its table in a callback, such as (f) => f.users.id',
+            'Column "id" in groupBy is in more than one joined table (users, posts, profiles)',
+          fix: 'Name the table the column comes from: groupBy((f) => f.users.id)',
         },
         distinctOn: {
           ...sharedId,
           message:
-            'Column "id" in distinctOn is in more than one joined table (users, posts, profiles); name its table in a callback, such as (f) => f.users.id',
+            'Column "id" in distinctOn is in more than one joined table (users, posts, profiles)',
+          fix: 'Name the table the column comes from: distinctOn((f) => f.users.id)',
         },
       });
     });
