@@ -18,7 +18,7 @@ export const auth = betterAuth({
 
 ## Install
 
-Install the adapter at the same version as your Prisma 8 database package, together with Better Auth 1.7.6 or a later 1.7 release:
+Install the adapter at the release your Prisma 8 database package is on, together with Better Auth 1.7.6 or a later 1.7 release:
 
 ```sh
 pnpm add @prisma/orm-better-auth@<version of @prisma/orm-postgres or @prisma/orm-sqlite> better-auth@~1.7.6
@@ -241,7 +241,7 @@ Model and field names: the adapter matches Better Auth's model names to your con
 
 ## Dependencies
 
-- `@prisma/orm-framework` and `@prisma/orm-family-sql`, as peers at the same version as your database package.
+- `@prisma/orm-framework` and `@prisma/orm-family-sql`, as peers, at the release your database package is on.
 - `@better-auth/core` 1.7.6 or a later 1.7 release, below 1.8, as a peer.
 
 The package imports only published entrypoints, so it works outside the Prisma repository. [DEVELOPING.md](DEVELOPING.md) has notes for people who change it.
