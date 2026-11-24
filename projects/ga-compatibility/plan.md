@@ -131,6 +131,7 @@ Projects 2 to 7 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are Later. W
 - Turn the working definitions in [maturity-levels.md](maturity-levels.md) into exact requirements for a package to enter each level, and settle every point in its section 6: version numbers while packages are at different levels, what happens to the name `preview_foo` when the API reaches GA, and how a level is written where the name is not a TypeScript identifier. State how the levels relate to the support categories in prisma/orm#25843 (task 1).
 - Change the release scripts and workflow. Today they give every package one version, publish everything under `latest`, and cannot produce `8.0.0` without a hand edit. Decide the version ranges between our own packages from `8.0.0`, which are exact pins today, and change the publish step to write them. State the 12 months of fixes for the previous major in `SECURITY.md`, `docs/oss/versioning.md` and the docs (task 16).
 - Take along five small corrections that are true of the code today and listed in that handover file: remove a stability scheme for capabilities that was never built from the Ecosystem subsystem doc and `docs/reference/capabilities.md`, note that the per-component version matrix in the decision record on versioning was never built, and three wording fixes in `docs/oss/versioning.md`, the decision record index and `AGENTS.md`.
+- Update the upgrade skills before GA. Today they describe moving from one release candidate to the next. From `8.0.0` an upgrade within the major needs no change, so skills that still describe release-candidate upgrades would tell users the opposite of the promise.
 - Write the procedure for releasing `8.0.0`, with the list of docs to rewrite on that day. A draft is in prisma/orm#31194, which was not merged.
 - Make the `prisma` tool or the toolchain read the installed library's version and stop on a different major. Nothing compares them today (task 17).
 
@@ -175,7 +176,7 @@ Projects 2 to 7 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are Later. W
 
 **How, where we know.** The project defines what the tool is, how a change that needs one gets its part of the tool, and how the tool replaces today's per-release upgrade guides (task 9).
 
-**Also in this project.** Update the upgrade skills, which today describe moving from one release candidate to the next, and probably retire the system of upgrade scripts under `upgrade-instructions/` with its coverage check. Both exist for releases that may break, and from `8.0.0` a release within the major may not.
+**Also in this project.** Probably retire the system of upgrade scripts under `upgrade-instructions/` with its coverage check. It exists for releases that may break, and from `8.0.0` a release within the major may not. Updating the upgrade skills is not here: it must happen before GA, and is in project 6.
 
 ### 11. Follow each maker's lifetime for supported versions of Node.js, TypeScript and databases, and test them in CI
 
