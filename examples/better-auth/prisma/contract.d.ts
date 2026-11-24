@@ -18,10 +18,10 @@ import type {
 } from '@prisma/orm-postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'762b1e1832399a80b4215ecb752a13b3f61d2b99f8ff2a01f7470f04b8bfd057'>;
+  StorageHashBase<'ca76abc62dd18fb0c405bf1a4b35f6b43cdb3d09eb588d26541378cafb5a2447'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
+  ProfileHashBase<'ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632'>;
 
 export type CodecTypes = PgTypes;
 export type LaneCodecTypes = CodecTypes;

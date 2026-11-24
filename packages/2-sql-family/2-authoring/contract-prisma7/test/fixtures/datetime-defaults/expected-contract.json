@@ -252,10 +252,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "5772a67257453bdad9ff5ce4e2b5098608b3719f70f3479194fe2bfd6b446050",
+    "storageHash": "a92f24ba97b80c58127584c2a0aa1592c2c1e0e025e9b08a67dcf373eb2fb131",
     "namespaces": {
       "public": {
         "id": "public",

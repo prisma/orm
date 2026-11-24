@@ -20,10 +20,10 @@ import type {
 import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-postgres/operation-types';
 
 export type StorageHash =
-  StorageHashBase<'2f851f453c95158df2c91c35cea6f70f3ac6c7504b26968eff8957ba5cf4e2dd'>;
+  StorageHashBase<'c0a6ee02605208a600342a3e61d7be2f208ad2b6af4ff4211c079c662dc63018'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
+  ProfileHashBase<'ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632'>;
 
 export type CodecTypes = PgTypes;
 export type LaneCodecTypes = CodecTypes;

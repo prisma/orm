@@ -54,10 +54,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "37ebc2920cbf480fcc253a3a33b4f45bea0a0c19accd7ccfae01a5892e257591",
+    "storageHash": "dd403ec448ad92436d81dbffd47b2b0fb4b3589a81407df4bbbbd5fd20e52d6a",
     "namespaces": {
       "public": {
         "id": "public",

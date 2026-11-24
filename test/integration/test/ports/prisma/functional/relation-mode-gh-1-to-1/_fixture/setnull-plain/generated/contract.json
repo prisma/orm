@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "roots": {
     "profileOneToOne": {
       "model": "ProfileOneToOne",
@@ -350,7 +350,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "a41b4097bac0ec507d871164ecbccac4b0ef3d8c2489353504035575e8e5208d"
+    "storageHash": "15c995f18f4c7a5db5bcbc55a22d7a3d90609b347db98bcc06784bc1cba5c1fe"
   },
   "capabilities": {
     "postgres": {

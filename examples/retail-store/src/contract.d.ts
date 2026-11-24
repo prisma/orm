@@ -18,10 +18,10 @@ import type {
 } from '@prisma/orm-mongo/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'1c73a5a88943362a9b01f6476e85fddc574031accb9ada12be61e9da24fe0fd8'>;
+  StorageHashBase<'928c3f2ba5154177dfa601d7ede1557dfc66ef1c93472d6feab47d4dd06345a7'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
+  ProfileHashBase<'8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69'>;
 
 export type CodecTypes = MongoCodecTypes;
 

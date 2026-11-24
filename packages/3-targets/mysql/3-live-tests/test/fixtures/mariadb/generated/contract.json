@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "mariadb",
-  "profileHash": "c3165876e6069b3fd8cde4fadadb0b534082345d678b2c81c8c83e9225ce21d8",
+  "profileHash": "97920f06f044001f3cb49cdd902a192e2b7e48ecbf2e7a0987f075ece0281a32",
   "roots": {
     "Account": {
       "model": "Account",
@@ -1680,7 +1680,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "4ac60b45c34e468ab20c6bfa9a22a2898ea50ac83b0ef69a77de85a8d4bafc2b"
+    "storageHash": "6e8a33a70cfc173ca9ca45838ca12ee27a4ffc462a7fce4dc84d8c2d78d979c9"
   },
   "capabilities": {
     "sql": {

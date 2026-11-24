@@ -134,10 +134,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "4ea1338cc36f076b61abe8ec42b11c58c8613d6e7a5925193b44d6aedf240ecc",
+    "storageHash": "f81af35318e7c89300a92551db32cf1fd002445b5c36e04466742521e9d50282",
     "namespaces": {
       "public": {
         "id": "public",

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "roots": {
     "event": {
       "model": "Event",
@@ -84,10 +84,10 @@
         "id": "public"
       }
     },
-    "storageHash": "2b929cf12564eaa530f1f62f87b8b2a75568466a845246d95fac73aca178ba11"
+    "storageHash": "95e922dcd2025bc0eae03384161eaa1a4f877c94b394777cec7bb59ac5703dfc"
   },
   "execution": {
-    "executionHash": "b2b06e21a052c25f7d62f168534bdcbc5f1fe16c8dba66c37a1b566581b7c113",
+    "executionHash": "b090981ff267fdc0b6e564d4073dcad9f6da7d8d77b03a4fe756c2db268dcadc",
     "mutations": {
       "defaults": [
         {

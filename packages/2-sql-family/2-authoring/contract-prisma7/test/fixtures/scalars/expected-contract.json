@@ -365,10 +365,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "1578dc0d71fb46e51ae88d63cbaad7cb666f0a37b99de9921ea55d88892603e7",
+    "storageHash": "18b4e7196e9add3658b711f752e5f836bb77e67005f2e3c6aad7400e07d82a7f",
     "namespaces": {
       "public": {
         "id": "public",

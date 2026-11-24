@@ -5,8 +5,8 @@ import {
   Migration,
   MigrationCLI,
 } from '@prisma/orm-mongo/target/migration';
-import type { Contract as End } from '../../snapshots/fb3df4c4899adcd423e9b75164870cef1be789fe6871a24b7fda64e707f324ad/contract';
-import endContract from '../../snapshots/fb3df4c4899adcd423e9b75164870cef1be789fe6871a24b7fda64e707f324ad/contract.json' with {
+import type { Contract as End } from '../../snapshots/eb748f8ff693da7604eef2fc642481cb4b855907df6f6ad48620d6eac7b7b7a8/contract';
+import endContract from '../../snapshots/eb748f8ff693da7604eef2fc642481cb4b855907df6f6ad48620d6eac7b7b7a8/contract.json' with {
   type: 'json',
 };
 

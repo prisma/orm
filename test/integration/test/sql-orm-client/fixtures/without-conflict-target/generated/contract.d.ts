@@ -20,10 +20,10 @@ import type {
 } from '@internal/target-postgres/codec-types';
 
 export type StorageHash =
-  StorageHashBase<'adc9c605ce5349fb142c9945e3bbb87d4b14850666c76f757de6969ea7fe07ee'>;
+  StorageHashBase<'2a7a34f768a2927916ed375c674c303ec47e96aded86f3156f87c61f02202d22'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
+  ProfileHashBase<'ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632'>;
 
 export type CodecTypes = PgTypes;
 export type LaneCodecTypes = CodecTypes;

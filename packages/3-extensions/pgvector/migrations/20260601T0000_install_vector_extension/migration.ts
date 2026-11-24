@@ -31,7 +31,7 @@ export default class M extends Migration {
   override describe() {
     return {
       from: null,
-      to: '4a96b488a4ce92b434e5f7d6607b6435c0955f0d36b0018077045787764240e6',
+      to: 'd44df6615dfdbbc238d80062762acdd8c3947ee0da46797f0ee464db94f32cc4',
     };
   }
 

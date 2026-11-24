@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
-  "from": "6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1",
-  "to": "4ae263c38bb0abf30b3daf57d2b002997c15260b0e5528bd924969c25f3d00bb",
+  "from": "345059ad82748235deff6cf12d40690f582d2420e63dccaf41c1c3fe654777b4",
+  "to": "94e3c5c3854604370ede65f7bf3a667cb020c97dd70a7542bb44da0c3e21ba40",
   "providedInvariants": [],
   "createdAt": "2026-06-02T07:58:27.627Z",
-  "migrationHash": "291faff81105d4e61e96229f8216297fff5b7c449f7313118735f47cf902a673"
+  "migrationHash": "ca1aa1f6e8033f3b347b36a92245e8c4c9bccfe41fb439a9c0194653f05b662f"
 }

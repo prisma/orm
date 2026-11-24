@@ -1,7 +1,7 @@
 #!/usr/bin/env -S node
 import { Migration, MigrationCLI } from '@internal/target-postgres/migration';
-import type { Contract as End } from '../snapshots/698fc52f21eb891517203ef4b229823d17c49c3f802e2374be292a9b6a560c97/contract';
-import endContract from '../snapshots/698fc52f21eb891517203ef4b229823d17c49c3f802e2374be292a9b6a560c97/contract.json' with {
+import type { Contract as End } from '../snapshots/87b5ae5ff69f2ac4065b9789ede636ad4092adb1b7a14387766c9d28e8e3b0ab/contract';
+import endContract from '../snapshots/87b5ae5ff69f2ac4065b9789ede636ad4092adb1b7a14387766c9d28e8e3b0ab/contract.json' with {
   type: 'json',
 };
 

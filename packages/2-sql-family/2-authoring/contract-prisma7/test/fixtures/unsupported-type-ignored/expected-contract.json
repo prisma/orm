@@ -40,10 +40,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "4933d945529da22c12fa7f7a1274b6dac3e86f335d894ba42d3d232d55f3e0d5",
+    "storageHash": "b9a30ee3b83ad79272ad92495960ba95f9f5db056cacd7bb43a5075993492f04",
     "namespaces": {
       "public": {
         "id": "public",

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "roots": {
     "audit_log_entries": {
       "model": "AuditLogEntries",
@@ -8516,7 +8516,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "543e8325f4b29b5b3269bbfe37b2aeed36746fac1bd2012499c4edfbace5cce7"
+    "storageHash": "5583624ba0b9afc0d6f519bca79a7cac4f1c37844545c985f67cfec97ed43441"
   },
   "capabilities": {
     "postgres": {

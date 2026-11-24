@@ -8,8 +8,8 @@ import {
   sql,
   unique,
 } from '@prisma/orm-mariadb/migration';
-import type { Contract as End } from '../../snapshots/a79b2f48d08a4ba5bd11c7307b331a418e1f63f4e922bd68fe767b90f28c16c2/contract';
-import endContract from '../../snapshots/a79b2f48d08a4ba5bd11c7307b331a418e1f63f4e922bd68fe767b90f28c16c2/contract.json' with {
+import type { Contract as End } from '../../snapshots/80adf21b93f914ac642ac9894d480c41403cca7d5e38c9dc2379796c918d1467/contract';
+import endContract from '../../snapshots/80adf21b93f914ac642ac9894d480c41403cca7d5e38c9dc2379796c918d1467/contract.json' with {
   type: 'json',
 };
 

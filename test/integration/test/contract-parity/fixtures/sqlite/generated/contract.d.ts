@@ -16,11 +16,11 @@ import type {
 } from '@internal/sqlite/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'958c7b7504888f565f5c6106efe3f30b30b93d8363dbd31434bd9fdb243aec1c'>;
+  StorageHashBase<'0efc14225d06d03457c3261fdb25c5f18104317d53929d4fe6b2733d4990585f'>;
 export type ExecutionHash =
-  ExecutionHashBase<'2fd552b8b15a3551234178e075fd25d6a5c4eff1d93bc4e236730b63e646f7d3'>;
+  ExecutionHashBase<'7823eaf8931bf3a123ef6073376bc442505dd7e1f0f8d4caef602e4e6208dda7'>;
 export type ProfileHash =
-  ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
+  ProfileHashBase<'595b5c7dd6da0c70556bef798d80d453ba856772e83382b1b62238623cbd8790'>;
 
 export type CodecTypes = SqliteTypes;
 export type LaneCodecTypes = CodecTypes;

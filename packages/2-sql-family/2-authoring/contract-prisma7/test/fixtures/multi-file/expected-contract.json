@@ -116,10 +116,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "110a9c16e5f6190230cf4b64cca1b85e9fade6a40622063bc3ced2f0744701bc",
+    "storageHash": "5e90ba5c58fec493f839d1de539e8d7f3307b9ec59af04591abd9d3dd07dec92",
     "namespaces": {
       "public": {
         "id": "public",

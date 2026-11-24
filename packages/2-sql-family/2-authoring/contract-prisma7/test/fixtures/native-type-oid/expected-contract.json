@@ -64,10 +64,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "4f5a91de0bb65e5cb5b5c0ed2c402e1281ede5a47f7efb69f935b715464a6cc5",
+    "storageHash": "6465712a327fa33d3e6287dffb1956ee4fdf12f69ed8ba876e3f8acd76866cec",
     "namespaces": {
       "public": {
         "id": "public",

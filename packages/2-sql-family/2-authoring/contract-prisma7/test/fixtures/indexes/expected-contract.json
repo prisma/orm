@@ -95,10 +95,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "5d488f49440bb02116faea2a14f76ab1ddd5f064a9523b8d7aa8961cb6859d38",
+    "storageHash": "53e968405c19f65f14de4f132cbe66443167b2d233d1017f19838dbc130e2f24",
     "namespaces": {
       "public": {
         "id": "public",

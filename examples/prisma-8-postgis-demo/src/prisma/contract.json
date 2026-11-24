@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "roots": {
     "cafe": {
       "model": "Cafe",
@@ -276,10 +276,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "28b5e5f98ce0e148f03e345518c9c53cb7a04a82e8e58de74a87c1b4ae08cf65"
+    "storageHash": "9d6ef365600513e08042aa1af4ca74df95573bb37a87818fdc663bfb4e86e508"
   },
   "execution": {
-    "executionHash": "73426d737fd7fe88107a86f2a5602ff842560bf4a193aaf5ae7355b79f511658",
+    "executionHash": "afce42e0db5ad8e5bec53e4e51f18d95bbac6ec77aa62d5aac6fed0795f4fb22",
     "mutations": {
       "defaults": [
         {

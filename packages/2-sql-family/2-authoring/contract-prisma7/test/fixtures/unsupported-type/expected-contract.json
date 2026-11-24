@@ -103,10 +103,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "f55c44e8854bc7fd6ea5134bc62b4d086a217d942a79f283ae7754caf6daf69a",
+    "storageHash": "2b3e7227f1cb6956dc44884893e870aca26d0238571b6b0150154e49c7863b99",
     "namespaces": {
       "public": {
         "id": "public",
