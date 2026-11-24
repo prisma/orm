@@ -436,6 +436,34 @@ describe("an application whose snapshot store already holds the extension's cont
   });
 });
 
+describe('a snapshot directory with the new name whose contract gives another storage hash', () => {
+  const root = copyFixture('before', 'mongo-app');
+  const earlier = `migrations/snapshots/${MONGO_EARLIER_SNAPSHOT_HASH}`;
+  const newHash = mongoStorageHashOf(join(root, earlier, 'contract.json'));
+  const occupied = `migrations/snapshots/${newHash}`;
+  mkdirSync(join(root, occupied));
+  writeFileSync(
+    join(root, occupied, 'contract.json'),
+    readFileSync(join(root, earlier, 'contract.json'), 'utf8')
+      .replace('"name":"timestamp_1"', '"name":"timestamp_named_by_a_step"')
+      .replace(MONGO_EARLIER_SNAPSHOT_HASH, newHash),
+  );
+  const edited = readTree(root);
+  const run = runScript(root);
+
+  it('is refused, keeping both directories', () => {
+    expect(mongoStorageHashOf(join(root, occupied, 'contract.json'))).not.toBe(newHash);
+    expect({ status: run.status, stdout: run.stdout, tree: readTree(root) }).toEqual({
+      status: 1,
+      stdout: '',
+      tree: edited,
+    });
+    expect(run.stderr).toContain(
+      `  ${earlier}: becomes snapshots/${newHash}/, which already exists with other content.`,
+    );
+  });
+});
+
 function mongoStorageHashOf(path: string, which: 'content' | 'stored' = 'content'): string {
   const contract = JSON.parse(readFileSync(path, 'utf8'));
   const { storageHash, ...storage } = contract.storage;

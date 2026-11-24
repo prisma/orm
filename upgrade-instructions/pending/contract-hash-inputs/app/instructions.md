@@ -74,7 +74,16 @@ prisma db migrate
 
 A database whose change policy permits only migrations, usually production, refuses `db sign` with "This database's change policy permits only migrations". For it, the first line is `prisma db sign --no-advance-ref --force`. `--force` overrides only the change policy's refusal: `db sign` changes no schema, still checks that the database matches the contract of the application and of each extension before it writes a marker, and leaves the database's policies as they were.
 
-A database created during or after that deploy, such as a preview or test database, has no marker and needs only `prisma db migrate`. Do not run `db sign` on it: it checks the contract against the empty database, which does not match, and exits with code 4, which stops a deploy script before `db migrate` runs. If the same deploy script also creates databases, run the `db sign` line only for the databases that existed before the release, for example by naming them in the script.
+A database created during or after that deploy, such as a preview or test database, has no marker and needs only `prisma db migrate`. Do not run `db sign` on it: it checks the contract against the empty database, which does not match, and exits with code 4, which stops a deploy script before `db migrate` runs. If the same deploy script also creates databases, let it tell the two apart: `prisma db verify --json` reports the code `CONTRACT.MARKER_MISSING` for a database with no marker, and `CONTRACT.MARKER_MISMATCH` for one signed at an old hash. Both exit with code 4, so read the code from the output:
+
+```sh
+verify=$(prisma db verify --marker-only --json || true)
+case "$verify" in
+  *'"code":"CONTRACT.MARKER_MISSING"'*) ;;
+  *) prisma db sign --no-advance-ref ;;
+esac
+prisma db migrate
+```
 
 Remove the `db sign` line once the release is deployed. Later deploys run `prisma db migrate` alone.
 
@@ -92,11 +101,11 @@ Add `--force` to the first line where the change policy permits only migrations.
 The directory must be that of the migration that brought the database to the contract it is at, usually the last one it applied. To find it, run two commands against the database:
 
 - `prisma migration status` warns "Database marker <hash> is not in the on-disk migration graph". That hash, shortened, is the contract the database is at, under the old hash rules.
-- `prisma migration log` lists the migrations the database applied, oldest first, each with its space, its directory name and the contracts it moved the database from and to, shortened and also under the old hashes. Take the directory of the last `app` row whose second hash is the marker's.
+- `prisma migration log` lists the migrations the database applied, oldest first, each with its directory name and the contracts it moved the database from and to, under the old hashes and shortened to their first 7 characters. It shows a Space column only when more than one space has run migrations on the database; without it, every row is the application's. Take the directory of the last application row whose second hash is the first 7 characters of the marker's.
 
-If no `app` row ends at the marker's hash, the database was moved at some point by `prisma db update` or `prisma db sign`, and its ledger of applied migrations does not show the contract it is at. Do not guess a directory: `db sign` ignores tables and columns the contract does not have, so it accepts a migration the database has already moved past, and `db migrate` then runs migrations the database already has.
+If no application row ends at the marker's hash, the database was moved at some point by `prisma db update` or `prisma db sign`, and its ledger of applied migrations does not show the contract it is at. Do not guess a directory: `db sign` ignores tables and columns the contract does not have, so it accepts a migration the database has already moved past, and `db migrate` then runs migrations the database already has.
 
-The route does not apply when an extension's migrations are pending on the database. Whatever contract you name for the application, `db sign` signs each extension at its newest contract, so that extension's pending migrations either make the signature fail or never run. Bring such a database, and one whose ledger does not show its contract, to the newest contract with the release you were on before the upgrade, as step 1 says, then sign it with the two lines above. A database whose change policy permits `db update`, such as a development database, can instead be brought to the newest contract with `prisma db update`, which does not run the migrations' data transforms.
+The route does not apply when an extension's migrations are pending on the database. Whatever contract you name for the application, `db sign` signs each extension at its newest contract, so that extension's pending migrations either make the signature fail or never run. To check after the upgrade that no extension is behind, look at each extension's rows in `prisma migration log`: the last one must end at the first 7 characters of the old hash that the script's output, under "Storage hashes (old -> new)", maps to the hash in `migrations/<extension>/refs/head.json`. Before the upgrade, `prisma migration status` lists the pending migrations of each space directly. Bring such a database, and one whose ledger does not show its contract, to the newest contract with the release you were on before the upgrade, as step 1 says, then sign it with the two lines above. A database whose change policy permits `db update`, such as a development database, can instead be brought to the newest contract with `prisma db update`, which does not run the migrations' data transforms.
 
 #### If you skip signing
 
