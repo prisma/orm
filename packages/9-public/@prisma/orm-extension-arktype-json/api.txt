@@ -8,7 +8,6 @@
 (not exported) const arktypeJsonPackMetaBase: { readonly kind: "extension"; readonly id: "arktype-json"; readonly familyId: "sql"; readonly targetId: "postgres"; readonly version: "0.0.1"; readonly capabilities: {}; readonly types: { readonly codecTypes: { readonly codecDescriptors: CodecDescriptor<unknown>[]; readonly import: { readonly package: `${string}/codec-types`; readonly named: "CodecTypes"; readonly alias: "ArktypeJsonTypes"; }; }; }; }
 (not exported) type ArktypeSchemaLike = ((value: unknown) => unknown) & { readonly expression: string; readonly json?: unknown; }
 ./codec-types: type CodecTypes = { readonly 'arktype/json@1': { readonly input: unknown; readonly output: unknown; readonly traits: 'equality'; }; }
-./codecs: class ArktypeJsonDescriptor extends PostgresCodecDescriptor<ArktypeJsonTypeParams>
 ./codecs: class ArktypeJsonDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./codecs: class ArktypeJsonDescriptor, readonly required property codecId: "arktype/json@1"
 ./codecs: class ArktypeJsonDescriptor, readonly required property dataType: DataTypeId
@@ -21,6 +20,7 @@
 ./codecs: const ARKTYPE_JSON_CODEC_ID: "arktype/json@1"
 ./codecs: const ARKTYPE_JSON_NATIVE_TYPE: "jsonb"
 ./codecs: const arktypeJsonCodecRegistry: CodecDescriptorRegistry
+./codecs: export type class ArktypeJsonDescriptor extends PostgresCodecDescriptor<ArktypeJsonTypeParams>
 ./codecs: function arktypeJsonColumn<S extends Type<unknown>>(schema: S): ColumnSpec<ArktypeJsonCodecClass<S['infer']>, ArktypeJsonTypeParams>
 ./codecs: type ArktypeJsonCodec<TInferred> = ArktypeJsonCodecClass<TInferred>
 ./codecs: type ArktypeJsonTypeParams = { readonly expression: string; readonly jsonIr: object; }

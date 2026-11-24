@@ -655,7 +655,7 @@
 ./driver/runtime: type PostgresBinding = { readonly kind: 'pgClient'; readonly client: Client; readonly ownedByDriver: boolean; } | { readonly kind: 'pgPool'; readonly pool: Pool; readonly ownedByDriver: boolean; } | { readonly kind: 'url'; readonly url: string; }
 ./driver/runtime: type PostgresDriverCreateOptions = Omit<PostgresDriverOptions, 'connect'>
 ./driver/runtime: type PostgresRuntimeDriver = RuntimeDriverInstance<'sql', 'postgres'> & SqlDriver<PostgresBinding>
-./driver/runtime: type QueryResult<T extends QueryResultRow = QueryResultRow> = @types/pg.QueryResult<T>
+./driver/runtime: type QueryResult<T extends QueryResultRow = QueryResultRow> = pg.QueryResult<T>
 ./driver: class PostgresControlDriver implements SqlControlDriverInstance<'postgres'>
 ./driver: class PostgresControlDriver, constructor(client: Client)
 ./driver: class PostgresControlDriver, readonly required property familyId: "sql"
@@ -669,7 +669,7 @@
 ./driver: type PostgresBinding = { readonly kind: 'pgClient'; readonly client: Client; readonly ownedByDriver: boolean; } | { readonly kind: 'pgPool'; readonly pool: Pool; readonly ownedByDriver: boolean; } | { readonly kind: 'url'; readonly url: string; }
 ./driver: type PostgresDriverCreateOptions = Omit<PostgresDriverOptions, 'connect'>
 ./driver: type PostgresRuntimeDriver = RuntimeDriverInstance<'sql', 'postgres'> & SqlDriver<PostgresBinding>
-./driver: type QueryResult<T extends QueryResultRow = QueryResultRow> = @types/pg.QueryResult<T>
+./driver: type QueryResult<T extends QueryResultRow = QueryResultRow> = pg.QueryResult<T>
 ./target/aggregates: const postgresAggregateDescriptors: readonly [{ readonly operation: "count"; readonly input: { readonly kind: "any"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/int8number@1"; }; readonly nullable: false; readonly emptyResultWire: "0"; }, { readonly operation: "countBigInt"; readonly input: { readonly kind: "any"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/int8@1"; }; readonly nullable: false; readonly emptyResultWire: "0"; readonly lower: SqlAggregateLowering; }, ...({ readonly lower: SqlAggregateLowering; readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/int2@1" | "pg/int4@1" | "pg/int8@1" | "pg/int8number@1" | "pg/int@1" | "pg/unboundedint@1" | "sql/int@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/float8@1"; }; readonly nullable: true; } | { readonly lower: SqlAggregateLowering; readonly operation: "avgDecimal"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/int2@1" | "pg/int4@1" | "pg/int8@1" | "pg/int8number@1" | "pg/int@1" | "pg/numeric@1" | "pg/unboundedint@1" | "sql/int@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/numeric@1"; }; readonly nullable: true; } | { readonly lower: SqlAggregateLowering; readonly operation: "sumBigInt"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/int2@1" | "pg/int4@1" | "pg/int@1" | "sql/int@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/int8@1"; }; readonly nullable: true; } | { readonly lower: SqlAggregateLowering; readonly operation: "sumBigInt"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/int8@1" | "pg/int8number@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/unboundedint@1"; }; readonly nullable: true; } | { readonly lower: SqlAggregateLowering; readonly operation: "sumBigInt"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/unboundedint@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/unboundedint@1"; }; readonly nullable: true; } | { readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/float4@1" | "pg/float8@1" | "pg/float@1" | "sql/float@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/float8@1"; }; readonly nullable: true; } | { readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/interval-string@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval-string@1"; }; readonly nullable: true; } | { readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly nullable: true; } | { readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/numeric@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/numeric@1"; }; readonly nullable: true; } | { readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/time-string@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly nullable: true; } | { readonly operation: "avg"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/time-temporal@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly nullable: true; } | { readonly operation: "max"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/date-string@1" | "pg/date-temporal@1" | "pg/enum@1" | "pg/inet@1" | "pg/interval-string@1" | "pg/interval@1" | "pg/money@1" | "pg/oid@1" | "pg/text-array@1" | "pg/time-string@1" | "pg/time-temporal@1" | "pg/timestamp-date@1" | "pg/timestamp-instant@1" | "pg/timestamp-string@1" | "pg/timestamp-temporal@1" | "pg/timestamptz-date@1" | "pg/timestamptz-string@1" | "pg/timestamptz-temporal@1" | "pg/timetz@1"; }; readonly output: { readonly kind: "self"; }; readonly nullable: true; } | { readonly operation: "max"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/varchar@1" | "sql/varchar@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/text@1"; }; readonly nullable: true; } | { readonly operation: "max"; readonly input: { readonly kind: "trait"; readonly trait: "numeric"; }; readonly output: { readonly kind: "self"; }; readonly nullable: true; } | { readonly operation: "max"; readonly input: { readonly kind: "trait"; readonly trait: "textual"; }; readonly output: { readonly kind: "self"; }; readonly nullable: true; } | { readonly operation: "min"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/date-string@1" | "pg/date-temporal@1" | "pg/enum@1" | "pg/inet@1" | "pg/interval-string@1" | "pg/interval@1" | "pg/money@1" | "pg/oid@1" | "pg/text-array@1" | "pg/time-string@1" | "pg/time-temporal@1" | "pg/timestamp-date@1" | "pg/timestamp-instant@1" | "pg/timestamp-string@1" | "pg/timestamp-temporal@1" | "pg/timestamptz-date@1" | "pg/timestamptz-string@1" | "pg/timestamptz-temporal@1" | "pg/timetz@1"; }; readonly output: { readonly kind: "self"; }; readonly nullable: true; } | { readonly operation: "min"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/varchar@1" | "sql/varchar@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/text@1"; }; readonly nullable: true; } | { readonly operation: "min"; readonly input: { readonly kind: "trait"; readonly trait: "numeric"; }; readonly output: { readonly kind: "self"; }; readonly nullable: true; } | { readonly operation: "min"; readonly input: { readonly kind: "trait"; readonly trait: "textual"; }; readonly output: { readonly kind: "self"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/float4@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/float4@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/float8@1" | "pg/float@1" | "sql/float@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/float8@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/int2@1" | "pg/int4@1" | "pg/int8@1" | "pg/int8number@1" | "pg/int@1" | "sql/int@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/int8number@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/interval-string@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval-string@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/money@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/money@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/numeric@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/numeric@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/time-string@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/time-temporal@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/interval@1"; }; readonly nullable: true; } | { readonly operation: "sum"; readonly input: { readonly kind: "codec"; readonly codecId: "pg/unboundedint@1"; }; readonly output: { readonly kind: "codec"; readonly codecId: "pg/unboundedint@1"; }; readonly nullable: true; })[]]
 ./target/codec-descriptor: abstract class PostgresCodecDescriptor<P = void> extends CodecDescriptorImpl<P> implements AnyPostgresCodecDescriptor
 ./target/codec-descriptor: class PostgresCodecDescriptor, abstract protected required method jsonProjection(expression: ProjectionExpr, params: P): ProjectionExpr
@@ -759,7 +759,6 @@
 ./target/codec-types: type Timetz<P extends number | undefined = undefined> = BrandedString<{ __timetzPrecision: P; }>
 ./target/codec-types: type VarBit<N extends number> = BrandedString<{ __varbitLength: N; }>
 ./target/codec-types: type Varchar<N extends number> = BrandedString<{ __varcharLength: N; }>
-./target/codecs: class PgBitDescriptor extends PostgresCodecDescriptor<LengthParams>
 ./target/codecs: class PgBitDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgBitDescriptor, readonly required property codecId: "pg/bit@1"
 ./target/codecs: class PgBitDescriptor, readonly required property dataType: DataTypeId
@@ -768,7 +767,6 @@
 ./target/codecs: class PgBitDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class PgBitDescriptor, required method factory(params: LengthParams): (ctx: CodecInstanceContext) => PgBitCodec
 ./target/codecs: class PgBitDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgBoolDescriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgBoolDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgBoolDescriptor, readonly required property codecId: "pg/bool@1"
 ./target/codecs: class PgBoolDescriptor, readonly required property dataType: DataTypeId
@@ -777,7 +775,6 @@
 ./target/codecs: class PgBoolDescriptor, readonly required property traits: readonly ["equality", "boolean"]
 ./target/codecs: class PgBoolDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgBoolCodec
 ./target/codecs: class PgBoolDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgCharDescriptor extends PostgresCodecDescriptor<LengthParams>
 ./target/codecs: class PgCharDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgCharDescriptor, readonly required property codecId: "pg/char@1"
 ./target/codecs: class PgCharDescriptor, readonly required property dataType: DataTypeId
@@ -786,12 +783,10 @@
 ./target/codecs: class PgCharDescriptor, readonly required property traits: readonly ["equality", "order", "textual"]
 ./target/codecs: class PgCharDescriptor, required method factory(params: LengthParams): (ctx: CodecInstanceContext) => SqlCharCodec
 ./target/codecs: class PgCharDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgEnumCodec extends CodecImpl<typeof PG_ENUM_CODEC_ID, readonly ['equality', 'order'], string, string>
 ./target/codecs: class PgEnumCodec, required method fromDataTypeValue(value: DataTypeValue<string>): string
 ./target/codecs: class PgEnumCodec, required method fromWire(wire: string, _ctx: CodecCallContext): Promise<string>
 ./target/codecs: class PgEnumCodec, required method toDataTypeValue(input: string): DataTypeValue
 ./target/codecs: class PgEnumCodec, required method toWire(value: string, _ctx: CodecCallContext): Promise<string>
-./target/codecs: class PgEnumDescriptor extends PostgresCodecDescriptor<PgEnumParams>
 ./target/codecs: class PgEnumDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgEnumDescriptor, readonly required property codecId: "pg/enum@1"
 ./target/codecs: class PgEnumDescriptor, readonly required property dataType: DataTypeId
@@ -803,7 +798,6 @@
 ./target/codecs: class PgEnumDescriptor, required method factory(params: PgEnumParams): (ctx: CodecInstanceContext) => PgEnumCodec
 ./target/codecs: class PgEnumDescriptor, required method qualifyNativeType(typeName: string, namespaceId: string): string
 ./target/codecs: class PgEnumDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgFloat4Descriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgFloat4Descriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgFloat4Descriptor, readonly required property codecId: "pg/float4@1"
 ./target/codecs: class PgFloat4Descriptor, readonly required property dataType: DataTypeId
@@ -812,7 +806,6 @@
 ./target/codecs: class PgFloat4Descriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class PgFloat4Descriptor, required method factory(): (ctx: CodecInstanceContext) => PgFloat4Codec
 ./target/codecs: class PgFloat4Descriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgFloat8Descriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgFloat8Descriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgFloat8Descriptor, readonly required property codecId: "pg/float8@1"
 ./target/codecs: class PgFloat8Descriptor, readonly required property dataType: DataTypeId
@@ -821,7 +814,6 @@
 ./target/codecs: class PgFloat8Descriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class PgFloat8Descriptor, required method factory(): (ctx: CodecInstanceContext) => PgFloat8Codec
 ./target/codecs: class PgFloat8Descriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgFloatDescriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgFloatDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgFloatDescriptor, readonly required property codecId: "pg/float@1"
 ./target/codecs: class PgFloatDescriptor, readonly required property dataType: DataTypeId
@@ -830,7 +822,6 @@
 ./target/codecs: class PgFloatDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class PgFloatDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgFloatCodec
 ./target/codecs: class PgFloatDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgInetDescriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgInetDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgInetDescriptor, readonly required property codecId: "pg/inet@1"
 ./target/codecs: class PgInetDescriptor, readonly required property dataType: DataTypeId
@@ -839,7 +830,6 @@
 ./target/codecs: class PgInetDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class PgInetDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgInetCodec
 ./target/codecs: class PgInetDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgInt2Descriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgInt2Descriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgInt2Descriptor, readonly required property codecId: "pg/int2@1"
 ./target/codecs: class PgInt2Descriptor, readonly required property dataType: DataTypeId
@@ -848,7 +838,6 @@
 ./target/codecs: class PgInt2Descriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class PgInt2Descriptor, required method factory(): (ctx: CodecInstanceContext) => PgInt2Codec
 ./target/codecs: class PgInt2Descriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgInt4Descriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgInt4Descriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgInt4Descriptor, readonly required property codecId: "pg/int4@1"
 ./target/codecs: class PgInt4Descriptor, readonly required property dataType: DataTypeId
@@ -857,7 +846,6 @@
 ./target/codecs: class PgInt4Descriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class PgInt4Descriptor, required method factory(): (ctx: CodecInstanceContext) => PgInt4Codec
 ./target/codecs: class PgInt4Descriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgInt8Descriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgInt8Descriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgInt8Descriptor, readonly required property codecId: "pg/int8@1"
 ./target/codecs: class PgInt8Descriptor, readonly required property dataType: DataTypeId
@@ -866,7 +854,6 @@
 ./target/codecs: class PgInt8Descriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class PgInt8Descriptor, required method factory(): (ctx: CodecInstanceContext) => PgInt8Codec
 ./target/codecs: class PgInt8Descriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgInt8NumberDescriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgInt8NumberDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgInt8NumberDescriptor, readonly required property codecId: "pg/int8number@1"
 ./target/codecs: class PgInt8NumberDescriptor, readonly required property dataType: DataTypeId
@@ -875,7 +862,6 @@
 ./target/codecs: class PgInt8NumberDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class PgInt8NumberDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgInt8NumberCodec
 ./target/codecs: class PgInt8NumberDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgIntDescriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgIntDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgIntDescriptor, readonly required property codecId: "pg/int@1"
 ./target/codecs: class PgIntDescriptor, readonly required property dataType: DataTypeId
@@ -884,7 +870,6 @@
 ./target/codecs: class PgIntDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class PgIntDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgIntCodec
 ./target/codecs: class PgIntDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgIntervalDescriptor extends PostgresCodecDescriptor<PrecisionParams>
 ./target/codecs: class PgIntervalDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgIntervalDescriptor, readonly required property codecId: "pg/interval@1"
 ./target/codecs: class PgIntervalDescriptor, readonly required property dataType: DataTypeId
@@ -907,7 +892,6 @@
 ./target/codecs: class PgIntervalStringDescriptor, readonly required property paramsSchema: ObjectType<{ precision?: number; }, {}>
 ./target/codecs: class PgIntervalStringDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class PgIntervalStringDescriptor, required method factory(params: PrecisionParams): (ctx: CodecInstanceContext) => PgIntervalStringCodec
-./target/codecs: class PgJsonDescriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgJsonDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgJsonDescriptor, readonly required property codecId: "pg/json@1"
 ./target/codecs: class PgJsonDescriptor, readonly required property dataType: DataTypeId
@@ -916,7 +900,6 @@
 ./target/codecs: class PgJsonDescriptor, readonly required property paramsSchema: undefined
 ./target/codecs: class PgJsonDescriptor, readonly required property traits: readonly []
 ./target/codecs: class PgJsonDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgJsonCodec
-./target/codecs: class PgJsonbDescriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgJsonbDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgJsonbDescriptor, readonly required property codecId: "pg/jsonb@1"
 ./target/codecs: class PgJsonbDescriptor, readonly required property dataType: DataTypeId
@@ -925,7 +908,6 @@
 ./target/codecs: class PgJsonbDescriptor, readonly required property paramsSchema: undefined
 ./target/codecs: class PgJsonbDescriptor, readonly required property traits: readonly ["equality"]
 ./target/codecs: class PgJsonbDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgJsonbCodec
-./target/codecs: class PgMoneyDescriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgMoneyDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgMoneyDescriptor, readonly required property codecId: "pg/money@1"
 ./target/codecs: class PgMoneyDescriptor, readonly required property dataType: DataTypeId
@@ -934,7 +916,6 @@
 ./target/codecs: class PgMoneyDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class PgMoneyDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgMoneyCodec
 ./target/codecs: class PgMoneyDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgNumericDescriptor extends PostgresCodecDescriptor<NumericParams>
 ./target/codecs: class PgNumericDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgNumericDescriptor, readonly required property codecId: "pg/numeric@1"
 ./target/codecs: class PgNumericDescriptor, readonly required property dataType: DataTypeId
@@ -943,7 +924,6 @@
 ./target/codecs: class PgNumericDescriptor, readonly required property paramsSchema: ObjectType<{ precision?: number; scale?: number; }, {}>
 ./target/codecs: class PgNumericDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class PgNumericDescriptor, required method factory(params: NumericParams): (ctx: CodecInstanceContext) => PgNumericCodec
-./target/codecs: class PgOidDescriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgOidDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgOidDescriptor, readonly required property codecId: "pg/oid@1"
 ./target/codecs: class PgOidDescriptor, readonly required property dataType: DataTypeId
@@ -952,7 +932,6 @@
 ./target/codecs: class PgOidDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class PgOidDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgOidCodec
 ./target/codecs: class PgOidDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgTextDescriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgTextDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgTextDescriptor, readonly required property codecId: "pg/text@1"
 ./target/codecs: class PgTextDescriptor, readonly required property dataType: DataTypeId
@@ -987,7 +966,6 @@
 ./target/codecs: class PgTimestamptzDateDescriptor, readonly required property paramsSchema: ObjectType<{ precision?: number; }, {}>
 ./target/codecs: class PgTimestamptzDateDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class PgTimestamptzDateDescriptor, required method factory(params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimestamptzDateCodec
-./target/codecs: class PgTimetzDescriptor extends PostgresCodecDescriptor<PrecisionParams>
 ./target/codecs: class PgTimetzDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgTimetzDescriptor, readonly required property codecId: "pg/timetz@1"
 ./target/codecs: class PgTimetzDescriptor, readonly required property dataType: DataTypeId
@@ -996,7 +974,6 @@
 ./target/codecs: class PgTimetzDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class PgTimetzDescriptor, required method factory(params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimetzCodec
 ./target/codecs: class PgTimetzDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgUnboundedIntDescriptor extends PostgresCodecDescriptor<NumericParams>
 ./target/codecs: class PgUnboundedIntDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgUnboundedIntDescriptor, readonly required property codecId: "pg/unboundedint@1"
 ./target/codecs: class PgUnboundedIntDescriptor, readonly required property dataType: DataTypeId
@@ -1005,7 +982,6 @@
 ./target/codecs: class PgUnboundedIntDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class PgUnboundedIntDescriptor, required method factory(params?: NumericParams): (ctx: CodecInstanceContext) => PgUnboundedIntCodec
 ./target/codecs: class PgUnboundedIntDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgUuidDescriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgUuidDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgUuidDescriptor, readonly required property codecId: "pg/uuid@1"
 ./target/codecs: class PgUuidDescriptor, readonly required property dataType: DataTypeId
@@ -1014,7 +990,6 @@
 ./target/codecs: class PgUuidDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class PgUuidDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgUuidCodec
 ./target/codecs: class PgUuidDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgVarbitDescriptor extends PostgresCodecDescriptor<LengthParams>
 ./target/codecs: class PgVarbitDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgVarbitDescriptor, readonly required property codecId: "pg/varbit@1"
 ./target/codecs: class PgVarbitDescriptor, readonly required property dataType: DataTypeId
@@ -1023,7 +998,6 @@
 ./target/codecs: class PgVarbitDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class PgVarbitDescriptor, required method factory(params: LengthParams): (ctx: CodecInstanceContext) => PgVarbitCodec
 ./target/codecs: class PgVarbitDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgVarcharDescriptor extends PostgresCodecDescriptor<LengthParams>
 ./target/codecs: class PgVarcharDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgVarcharDescriptor, readonly required property codecId: "pg/varchar@1"
 ./target/codecs: class PgVarcharDescriptor, readonly required property dataType: DataTypeId
@@ -1032,7 +1006,6 @@
 ./target/codecs: class PgVarcharDescriptor, readonly required property traits: readonly ["equality", "order", "textual"]
 ./target/codecs: class PgVarcharDescriptor, required method factory(params: LengthParams): (ctx: CodecInstanceContext) => SqlVarcharCodec
 ./target/codecs: class PgVarcharDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target/codecs: class PgXmlDescriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: class PgXmlDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class PgXmlDescriptor, readonly required property codecId: "pg/xml@1"
 ./target/codecs: class PgXmlDescriptor, readonly required property dataType: DataTypeId
@@ -1075,6 +1048,33 @@
 ./target/codecs: const pgXmlColumn: () => ColumnSpec<PgXmlCodec, undefined>
 ./target/codecs: const postgresCodecDescriptorRegistry: PostgresCodecDescriptorRegistry
 ./target/codecs: const postgresCodecRegistry: CodecDescriptorRegistry
+./target/codecs: export type class PgBitDescriptor extends PostgresCodecDescriptor<LengthParams>
+./target/codecs: export type class PgBoolDescriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgCharDescriptor extends PostgresCodecDescriptor<LengthParams>
+./target/codecs: export type class PgEnumCodec extends CodecImpl<typeof PG_ENUM_CODEC_ID, readonly ['equality', 'order'], string, string>
+./target/codecs: export type class PgEnumDescriptor extends PostgresCodecDescriptor<PgEnumParams>
+./target/codecs: export type class PgFloat4Descriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgFloat8Descriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgFloatDescriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgInetDescriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgInt2Descriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgInt4Descriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgInt8Descriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgInt8NumberDescriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgIntDescriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgIntervalDescriptor extends PostgresCodecDescriptor<PrecisionParams>
+./target/codecs: export type class PgJsonDescriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgJsonbDescriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgMoneyDescriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgNumericDescriptor extends PostgresCodecDescriptor<NumericParams>
+./target/codecs: export type class PgOidDescriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgTextDescriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgTimetzDescriptor extends PostgresCodecDescriptor<PrecisionParams>
+./target/codecs: export type class PgUnboundedIntDescriptor extends PostgresCodecDescriptor<NumericParams>
+./target/codecs: export type class PgUuidDescriptor extends PostgresCodecDescriptor<void>
+./target/codecs: export type class PgVarbitDescriptor extends PostgresCodecDescriptor<LengthParams>
+./target/codecs: export type class PgVarcharDescriptor extends PostgresCodecDescriptor<LengthParams>
+./target/codecs: export type class PgXmlDescriptor extends PostgresCodecDescriptor<void>
 ./target/codecs: function assemblePostgresCodecRegistry(components: ReadonlyArray<CodecContributor>, dataTypeLookup: Pick<DataTypeLookup, 'has'>): PostgresCodecRegistry
 ./target/codecs: function assemblePostgresCodecRegistryWithBuiltins(extensions: ReadonlyArray<CodecContributor>, dataTypeLookup: Pick<DataTypeLookup, 'has'>): PostgresCodecRegistry
 ./target/codecs: function createPostgresBuiltinCodecLookup(): PostgresCodecRegistry
@@ -2073,10 +2073,10 @@
 ./target/operation-types: type FullTextSearchLanguage = (typeof POSTGRES_TEXT_SEARCH_LANGUAGES)[number]
 ./target/operation-types: type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTypes<CT, { readonly ilike: { readonly self: TextualSelfSpec; readonly impl: (self: NullableTextualSelf<CT>, pattern: TextOperand<CT>) => Expression<{ codecId: 'pg/bool@1'; nullable: false; }>; }; readonly fullTextMatches: { readonly self: TextualSelfSpec; readonly impl: { (index: FullTextIndexReference<CT>, query: TsqueryArgument<CT>, options?: WithoutLanguage<FullTextMatchesOptions>): Expression<{ codecId: 'pg/bool@1'; nullable: false; }>; (document: FullTextDocument | NullableTextualSelf<CT>, query: TsqueryArgument<CT>, options?: FullTextMatchesOptions): Expression<{ codecId: 'pg/bool@1'; nullable: false; }>; }; }; readonly fullTextRank: { readonly self: TextualSelfSpec; readonly impl: { (index: FullTextIndexReference<CT>, query: TsqueryArgument<CT>, options?: WithoutLanguage<FullTextRankOptions>): Expression<{ codecId: 'pg/float4@1'; nullable: false; }>; (document: FullTextDocument | TextualSelf<CT>, query: TsqueryArgument<CT>, options?: FullTextRankOptions): Expression<{ codecId: 'pg/float4@1'; nullable: false; }>; }; }; readonly fullTextHeadline: { readonly self: TextualSelfSpec; readonly impl: (self: TextualSelf<CT>, query: TsqueryArgument<CT>, options?: FullTextHeadlineOptions) => Expression<{ codecId: 'pg/text@1'; nullable: false; }>; }; readonly websearchToTsquery: TsqueryParserOperation; readonly toTsquery: TsqueryParserOperation; readonly plaintoTsquery: TsqueryParserOperation; readonly phrasetoTsquery: TsqueryParserOperation; }>
 ./target/operation-types: type TsqueryArgument<CT extends CodecTypesBase> = CodecExpression<'pg/tsquery@1', false, CT>
-./target/pack: class FullTextDocument
 ./target/pack: class FullTextDocument, readonly required property weightGroups: FullTextWeightGroups<FullTextDocumentColumn>
 ./target/pack: class FullTextDocument, static required method of(groups: FullTextDocumentGroups): FullTextDocument
 ./target/pack: export default = const postgresTargetDescriptorMeta: typeof postgresTargetDescriptorMetaBase & { readonly __codecTypes?: CodecTypes; readonly __queryOperationTypes?: QueryOperationTypesForCodecs; readonly __parameterizedOutputTypes?: ParameterizedOutputTypesForTypeParams; readonly __dataTypeArguments?: { readonly 'pg/int4': { readonly argument: number; readonly parameter: number; }; }; }
+./target/pack: export type class FullTextDocument
 ./target/pack: type TsqueryParser = (text: TextArgument, options?: TsqueryParserOptions) => TsqueryExpression
 ./target/planner-ddl-builders: function buildColumnTypeSql(column: Pick<StorageColumn, 'codecId' | 'default' | 'many' | 'typeParams'>, types: TypeLookups, allowPseudoTypes?: boolean): string
 ./target/planner-identity-values: function buildBuiltinIdentityValue(dataType: string, typeParams?: Record<string, unknown>): null | string
@@ -2818,7 +2818,6 @@
 ./target: class Migration, readonly required property get endContract(): PostgresContractView<End>
 ./target: class Migration, readonly required property get startContract(): PostgresContractView<Start> | null
 ./target: class Migration, readonly required property targetId: "postgres"
-./target: class PgBitDescriptor extends PostgresCodecDescriptor<LengthParams>
 ./target: class PgBitDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgBitDescriptor, readonly required property codecId: "pg/bit@1"
 ./target: class PgBitDescriptor, readonly required property dataType: DataTypeId
@@ -2827,7 +2826,6 @@
 ./target: class PgBitDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class PgBitDescriptor, required method factory(params: LengthParams): (ctx: CodecInstanceContext) => PgBitCodec
 ./target: class PgBitDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgBoolDescriptor extends PostgresCodecDescriptor<void>
 ./target: class PgBoolDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgBoolDescriptor, readonly required property codecId: "pg/bool@1"
 ./target: class PgBoolDescriptor, readonly required property dataType: DataTypeId
@@ -2836,7 +2834,6 @@
 ./target: class PgBoolDescriptor, readonly required property traits: readonly ["equality", "boolean"]
 ./target: class PgBoolDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgBoolCodec
 ./target: class PgBoolDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgCharDescriptor extends PostgresCodecDescriptor<LengthParams>
 ./target: class PgCharDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgCharDescriptor, readonly required property codecId: "pg/char@1"
 ./target: class PgCharDescriptor, readonly required property dataType: DataTypeId
@@ -2845,12 +2842,10 @@
 ./target: class PgCharDescriptor, readonly required property traits: readonly ["equality", "order", "textual"]
 ./target: class PgCharDescriptor, required method factory(params: LengthParams): (ctx: CodecInstanceContext) => SqlCharCodec
 ./target: class PgCharDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgEnumCodec extends CodecImpl<typeof PG_ENUM_CODEC_ID, readonly ['equality', 'order'], string, string>
 ./target: class PgEnumCodec, required method fromDataTypeValue(value: DataTypeValue<string>): string
 ./target: class PgEnumCodec, required method fromWire(wire: string, _ctx: CodecCallContext): Promise<string>
 ./target: class PgEnumCodec, required method toDataTypeValue(input: string): DataTypeValue
 ./target: class PgEnumCodec, required method toWire(value: string, _ctx: CodecCallContext): Promise<string>
-./target: class PgEnumDescriptor extends PostgresCodecDescriptor<PgEnumParams>
 ./target: class PgEnumDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgEnumDescriptor, readonly required property codecId: "pg/enum@1"
 ./target: class PgEnumDescriptor, readonly required property dataType: DataTypeId
@@ -2862,7 +2857,6 @@
 ./target: class PgEnumDescriptor, required method factory(params: PgEnumParams): (ctx: CodecInstanceContext) => PgEnumCodec
 ./target: class PgEnumDescriptor, required method qualifyNativeType(typeName: string, namespaceId: string): string
 ./target: class PgEnumDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgFloat4Descriptor extends PostgresCodecDescriptor<void>
 ./target: class PgFloat4Descriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgFloat4Descriptor, readonly required property codecId: "pg/float4@1"
 ./target: class PgFloat4Descriptor, readonly required property dataType: DataTypeId
@@ -2871,7 +2865,6 @@
 ./target: class PgFloat4Descriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class PgFloat4Descriptor, required method factory(): (ctx: CodecInstanceContext) => PgFloat4Codec
 ./target: class PgFloat4Descriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgFloat8Descriptor extends PostgresCodecDescriptor<void>
 ./target: class PgFloat8Descriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgFloat8Descriptor, readonly required property codecId: "pg/float8@1"
 ./target: class PgFloat8Descriptor, readonly required property dataType: DataTypeId
@@ -2880,7 +2873,6 @@
 ./target: class PgFloat8Descriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class PgFloat8Descriptor, required method factory(): (ctx: CodecInstanceContext) => PgFloat8Codec
 ./target: class PgFloat8Descriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgFloatDescriptor extends PostgresCodecDescriptor<void>
 ./target: class PgFloatDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgFloatDescriptor, readonly required property codecId: "pg/float@1"
 ./target: class PgFloatDescriptor, readonly required property dataType: DataTypeId
@@ -2889,7 +2881,6 @@
 ./target: class PgFloatDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class PgFloatDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgFloatCodec
 ./target: class PgFloatDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgInetDescriptor extends PostgresCodecDescriptor<void>
 ./target: class PgInetDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgInetDescriptor, readonly required property codecId: "pg/inet@1"
 ./target: class PgInetDescriptor, readonly required property dataType: DataTypeId
@@ -2898,7 +2889,6 @@
 ./target: class PgInetDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class PgInetDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgInetCodec
 ./target: class PgInetDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgInt2Descriptor extends PostgresCodecDescriptor<void>
 ./target: class PgInt2Descriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgInt2Descriptor, readonly required property codecId: "pg/int2@1"
 ./target: class PgInt2Descriptor, readonly required property dataType: DataTypeId
@@ -2907,7 +2897,6 @@
 ./target: class PgInt2Descriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class PgInt2Descriptor, required method factory(): (ctx: CodecInstanceContext) => PgInt2Codec
 ./target: class PgInt2Descriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgInt4Descriptor extends PostgresCodecDescriptor<void>
 ./target: class PgInt4Descriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgInt4Descriptor, readonly required property codecId: "pg/int4@1"
 ./target: class PgInt4Descriptor, readonly required property dataType: DataTypeId
@@ -2916,7 +2905,6 @@
 ./target: class PgInt4Descriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class PgInt4Descriptor, required method factory(): (ctx: CodecInstanceContext) => PgInt4Codec
 ./target: class PgInt4Descriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgInt8Descriptor extends PostgresCodecDescriptor<void>
 ./target: class PgInt8Descriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgInt8Descriptor, readonly required property codecId: "pg/int8@1"
 ./target: class PgInt8Descriptor, readonly required property dataType: DataTypeId
@@ -2925,7 +2913,6 @@
 ./target: class PgInt8Descriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class PgInt8Descriptor, required method factory(): (ctx: CodecInstanceContext) => PgInt8Codec
 ./target: class PgInt8Descriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgInt8NumberDescriptor extends PostgresCodecDescriptor<void>
 ./target: class PgInt8NumberDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgInt8NumberDescriptor, readonly required property codecId: "pg/int8number@1"
 ./target: class PgInt8NumberDescriptor, readonly required property dataType: DataTypeId
@@ -2934,7 +2921,6 @@
 ./target: class PgInt8NumberDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class PgInt8NumberDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgInt8NumberCodec
 ./target: class PgInt8NumberDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgIntDescriptor extends PostgresCodecDescriptor<void>
 ./target: class PgIntDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgIntDescriptor, readonly required property codecId: "pg/int@1"
 ./target: class PgIntDescriptor, readonly required property dataType: DataTypeId
@@ -2943,7 +2929,6 @@
 ./target: class PgIntDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class PgIntDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgIntCodec
 ./target: class PgIntDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgIntervalDescriptor extends PostgresCodecDescriptor<PrecisionParams>
 ./target: class PgIntervalDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgIntervalDescriptor, readonly required property codecId: "pg/interval@1"
 ./target: class PgIntervalDescriptor, readonly required property dataType: DataTypeId
@@ -2966,7 +2951,6 @@
 ./target: class PgIntervalStringDescriptor, readonly required property paramsSchema: ObjectType<{ precision?: number; }, {}>
 ./target: class PgIntervalStringDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class PgIntervalStringDescriptor, required method factory(params: PrecisionParams): (ctx: CodecInstanceContext) => PgIntervalStringCodec
-./target: class PgJsonDescriptor extends PostgresCodecDescriptor<void>
 ./target: class PgJsonDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgJsonDescriptor, readonly required property codecId: "pg/json@1"
 ./target: class PgJsonDescriptor, readonly required property dataType: DataTypeId
@@ -2975,7 +2959,6 @@
 ./target: class PgJsonDescriptor, readonly required property paramsSchema: undefined
 ./target: class PgJsonDescriptor, readonly required property traits: readonly []
 ./target: class PgJsonDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgJsonCodec
-./target: class PgJsonbDescriptor extends PostgresCodecDescriptor<void>
 ./target: class PgJsonbDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgJsonbDescriptor, readonly required property codecId: "pg/jsonb@1"
 ./target: class PgJsonbDescriptor, readonly required property dataType: DataTypeId
@@ -2984,7 +2967,6 @@
 ./target: class PgJsonbDescriptor, readonly required property paramsSchema: undefined
 ./target: class PgJsonbDescriptor, readonly required property traits: readonly ["equality"]
 ./target: class PgJsonbDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgJsonbCodec
-./target: class PgMoneyDescriptor extends PostgresCodecDescriptor<void>
 ./target: class PgMoneyDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgMoneyDescriptor, readonly required property codecId: "pg/money@1"
 ./target: class PgMoneyDescriptor, readonly required property dataType: DataTypeId
@@ -2993,7 +2975,6 @@
 ./target: class PgMoneyDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class PgMoneyDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgMoneyCodec
 ./target: class PgMoneyDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgNumericDescriptor extends PostgresCodecDescriptor<NumericParams>
 ./target: class PgNumericDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgNumericDescriptor, readonly required property codecId: "pg/numeric@1"
 ./target: class PgNumericDescriptor, readonly required property dataType: DataTypeId
@@ -3002,7 +2983,6 @@
 ./target: class PgNumericDescriptor, readonly required property paramsSchema: ObjectType<{ precision?: number; scale?: number; }, {}>
 ./target: class PgNumericDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class PgNumericDescriptor, required method factory(params: NumericParams): (ctx: CodecInstanceContext) => PgNumericCodec
-./target: class PgOidDescriptor extends PostgresCodecDescriptor<void>
 ./target: class PgOidDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgOidDescriptor, readonly required property codecId: "pg/oid@1"
 ./target: class PgOidDescriptor, readonly required property dataType: DataTypeId
@@ -3011,7 +2991,6 @@
 ./target: class PgOidDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class PgOidDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgOidCodec
 ./target: class PgOidDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgTextDescriptor extends PostgresCodecDescriptor<void>
 ./target: class PgTextDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgTextDescriptor, readonly required property codecId: "pg/text@1"
 ./target: class PgTextDescriptor, readonly required property dataType: DataTypeId
@@ -3046,7 +3025,6 @@
 ./target: class PgTimestamptzDateDescriptor, readonly required property paramsSchema: ObjectType<{ precision?: number; }, {}>
 ./target: class PgTimestamptzDateDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class PgTimestamptzDateDescriptor, required method factory(params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimestamptzDateCodec
-./target: class PgTimetzDescriptor extends PostgresCodecDescriptor<PrecisionParams>
 ./target: class PgTimetzDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgTimetzDescriptor, readonly required property codecId: "pg/timetz@1"
 ./target: class PgTimetzDescriptor, readonly required property dataType: DataTypeId
@@ -3055,7 +3033,6 @@
 ./target: class PgTimetzDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class PgTimetzDescriptor, required method factory(params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimetzCodec
 ./target: class PgTimetzDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgUnboundedIntDescriptor extends PostgresCodecDescriptor<NumericParams>
 ./target: class PgUnboundedIntDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgUnboundedIntDescriptor, readonly required property codecId: "pg/unboundedint@1"
 ./target: class PgUnboundedIntDescriptor, readonly required property dataType: DataTypeId
@@ -3064,7 +3041,6 @@
 ./target: class PgUnboundedIntDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class PgUnboundedIntDescriptor, required method factory(params?: NumericParams): (ctx: CodecInstanceContext) => PgUnboundedIntCodec
 ./target: class PgUnboundedIntDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgUuidDescriptor extends PostgresCodecDescriptor<void>
 ./target: class PgUuidDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgUuidDescriptor, readonly required property codecId: "pg/uuid@1"
 ./target: class PgUuidDescriptor, readonly required property dataType: DataTypeId
@@ -3073,7 +3049,6 @@
 ./target: class PgUuidDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class PgUuidDescriptor, required method factory(): (ctx: CodecInstanceContext) => PgUuidCodec
 ./target: class PgUuidDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgVarbitDescriptor extends PostgresCodecDescriptor<LengthParams>
 ./target: class PgVarbitDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgVarbitDescriptor, readonly required property codecId: "pg/varbit@1"
 ./target: class PgVarbitDescriptor, readonly required property dataType: DataTypeId
@@ -3082,7 +3057,6 @@
 ./target: class PgVarbitDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class PgVarbitDescriptor, required method factory(params: LengthParams): (ctx: CodecInstanceContext) => PgVarbitCodec
 ./target: class PgVarbitDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgVarcharDescriptor extends PostgresCodecDescriptor<LengthParams>
 ./target: class PgVarcharDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgVarcharDescriptor, readonly required property codecId: "pg/varchar@1"
 ./target: class PgVarcharDescriptor, readonly required property dataType: DataTypeId
@@ -3091,7 +3065,6 @@
 ./target: class PgVarcharDescriptor, readonly required property traits: readonly ["equality", "order", "textual"]
 ./target: class PgVarcharDescriptor, required method factory(params: LengthParams): (ctx: CodecInstanceContext) => SqlVarcharCodec
 ./target: class PgVarcharDescriptor, required method renderValueLiteral(value: JsonValue): string | undefined
-./target: class PgXmlDescriptor extends PostgresCodecDescriptor<void>
 ./target: class PgXmlDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class PgXmlDescriptor, readonly required property codecId: "pg/xml@1"
 ./target: class PgXmlDescriptor, readonly required property dataType: DataTypeId
@@ -3739,6 +3712,33 @@
 ./target: export primaryKey from @prisma/orm-family-sql/relational-core/contract-free
 ./target: export sql from @prisma/orm-family-sql/contract/sql-expression
 ./target: export type JsonValue from @prisma/orm-framework/contract/types
+./target: export type class PgBitDescriptor extends PostgresCodecDescriptor<LengthParams>
+./target: export type class PgBoolDescriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgCharDescriptor extends PostgresCodecDescriptor<LengthParams>
+./target: export type class PgEnumCodec extends CodecImpl<typeof PG_ENUM_CODEC_ID, readonly ['equality', 'order'], string, string>
+./target: export type class PgEnumDescriptor extends PostgresCodecDescriptor<PgEnumParams>
+./target: export type class PgFloat4Descriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgFloat8Descriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgFloatDescriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgInetDescriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgInt2Descriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgInt4Descriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgInt8Descriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgInt8NumberDescriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgIntDescriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgIntervalDescriptor extends PostgresCodecDescriptor<PrecisionParams>
+./target: export type class PgJsonDescriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgJsonbDescriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgMoneyDescriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgNumericDescriptor extends PostgresCodecDescriptor<NumericParams>
+./target: export type class PgOidDescriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgTextDescriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgTimetzDescriptor extends PostgresCodecDescriptor<PrecisionParams>
+./target: export type class PgUnboundedIntDescriptor extends PostgresCodecDescriptor<NumericParams>
+./target: export type class PgUuidDescriptor extends PostgresCodecDescriptor<void>
+./target: export type class PgVarbitDescriptor extends PostgresCodecDescriptor<LengthParams>
+./target: export type class PgVarcharDescriptor extends PostgresCodecDescriptor<LengthParams>
+./target: export type class PgXmlDescriptor extends PostgresCodecDescriptor<void>
 ./target: export unique from @prisma/orm-family-sql/relational-core/contract-free
 ./target: function addColumnAction(column: DdlColumn): AddColumnAction
 ./target: function addConstraintAction(constraint: DdlTableConstraint): AddConstraintAction

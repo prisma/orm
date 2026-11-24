@@ -3135,8 +3135,8 @@
 ./runtime: class MongoPreparedParamRef, readonly required property codecId: CodecId
 ./runtime: class MongoPreparedParamRef, readonly required property name: string
 ./runtime: class MongoPreparedParamRef, readonly required property nullable: Nullable
-./runtime: class MongoPreparedParamRef<CodecId extends string = string, Nullable extends boolean = boolean>
 ./runtime: export type RuntimeTargetInstance from @prisma/orm-framework/components/execution
+./runtime: export type class MongoPreparedParamRef<CodecId extends string = string, Nullable extends boolean = boolean>
 ./runtime: function createMongoExecutionContext<TContract extends MongoContract = MongoContract, TTargetId extends string = 'mongo'>(options: { readonly contract: TContract; readonly stack: MongoExecutionStack<TTargetId>; }): MongoExecutionContext<TContract>
 ./runtime: function createMongoExecutionStack<TTargetId extends string = 'mongo'>(options: MongoExecutionStackOptions<TTargetId> & { readonly driver: MongoExecutionStackWithDriver<TTargetId>['driver']; }): MongoExecutionStackWithDriver<TTargetId>
 ./runtime: function createMongoExecutionStack<TTargetId extends string = 'mongo'>(options: MongoExecutionStackOptions<TTargetId>): MongoExecutionStack<TTargetId>

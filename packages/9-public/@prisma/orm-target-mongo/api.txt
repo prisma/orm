@@ -341,7 +341,7 @@
 ./target/control: class MongoTargetUnboundDatabase, required method qualifier(): string
 ./target/control: class MongoTargetUnboundDatabase, required method qualifyCollection(collectionName: string): string
 ./target/control: class MongoTargetUnboundDatabase, static readonly required property instance: MongoTargetUnboundDatabase
-./target/control: class PlannerProducedMongoMigration extends Migration<AnyMongoMigrationOperation> implements MigrationPlanWithAuthoringSurface
+./target/control: class PlannerProducedMongoMigration extends @prisma/orm-toolchain.Migration<AnyMongoMigrationOperation> implements MigrationPlanWithAuthoringSurface
 ./target/control: class PlannerProducedMongoMigration, constructor(calls: readonly OpFactoryCall[], meta: MigrationMeta, snapshotsImportPath: string)
 ./target/control: class PlannerProducedMongoMigration, readonly required property get operations(): readonly (AnyMongoMigrationOperation | Promise<AnyMongoMigrationOperation>)[]
 ./target/control: class PlannerProducedMongoMigration, readonly required property targetId: "mongo"
@@ -552,7 +552,7 @@
 ./target: class MongoTargetUnboundDatabase, required method qualifier(): string
 ./target: class MongoTargetUnboundDatabase, required method qualifyCollection(collectionName: string): string
 ./target: class MongoTargetUnboundDatabase, static readonly required property instance: MongoTargetUnboundDatabase
-./target: class PlannerProducedMongoMigration extends Migration<AnyMongoMigrationOperation> implements MigrationPlanWithAuthoringSurface
+./target: class PlannerProducedMongoMigration extends @prisma/orm-toolchain.Migration<AnyMongoMigrationOperation> implements MigrationPlanWithAuthoringSurface
 ./target: class PlannerProducedMongoMigration, constructor(calls: readonly OpFactoryCall[], meta: MigrationMeta, snapshotsImportPath: string)
 ./target: class PlannerProducedMongoMigration, readonly required property get operations(): readonly (AnyMongoMigrationOperation | Promise<AnyMongoMigrationOperation>)[]
 ./target: class PlannerProducedMongoMigration, readonly required property targetId: "mongo"

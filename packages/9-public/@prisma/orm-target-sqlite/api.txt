@@ -933,7 +933,6 @@
 ./target/codec-ids: export SQL_VARCHAR_CODEC_ID from @prisma/orm-family-sql/relational-core/ast
 ./target/codec-types: type CodecTypes = Resolve<ExtractCodecTypes<typeof codecDescriptorMap>>
 ./target/codec-types: type JsonValue = boolean | null | number | readonly JsonValue[] | string | { readonly [key: string]: JsonValue; }
-./target/codecs: class SqliteBigintDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteBigintDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteBigintDescriptor, readonly required property codecId: "sqlite/bigint@1"
 ./target/codecs: class SqliteBigintDescriptor, readonly required property dataType: DataTypeId
@@ -942,7 +941,6 @@
 ./target/codecs: class SqliteBigintDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class SqliteBigintDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteBigintCodec
 ./target/codecs: class SqliteBigintDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target/codecs: class SqliteBigintNumberDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteBigintNumberDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteBigintNumberDescriptor, readonly required property codecId: "sqlite/bigintnumber@1"
 ./target/codecs: class SqliteBigintNumberDescriptor, readonly required property dataType: DataTypeId
@@ -951,7 +949,6 @@
 ./target/codecs: class SqliteBigintNumberDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class SqliteBigintNumberDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteBigintNumberCodec
 ./target/codecs: class SqliteBigintNumberDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target/codecs: class SqliteBlobDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteBlobDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteBlobDescriptor, readonly required property codecId: "sqlite/blob@1"
 ./target/codecs: class SqliteBlobDescriptor, readonly required property dataType: DataTypeId
@@ -959,7 +956,6 @@
 ./target/codecs: class SqliteBlobDescriptor, readonly required property paramsSchema: undefined
 ./target/codecs: class SqliteBlobDescriptor, readonly required property traits: readonly ["equality"]
 ./target/codecs: class SqliteBlobDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteBlobCodec
-./target/codecs: class SqliteBooleanDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteBooleanDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteBooleanDescriptor, readonly required property codecId: "sqlite/boolean@1"
 ./target/codecs: class SqliteBooleanDescriptor, readonly required property dataType: DataTypeId
@@ -968,7 +964,6 @@
 ./target/codecs: class SqliteBooleanDescriptor, readonly required property traits: readonly ["equality", "boolean"]
 ./target/codecs: class SqliteBooleanDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteBooleanCodec
 ./target/codecs: class SqliteBooleanDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target/codecs: class SqliteDateStringDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteDateStringDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteDateStringDescriptor, readonly required property codecId: "sqlite/date-string@1"
 ./target/codecs: class SqliteDateStringDescriptor, readonly required property dataType: DataTypeId
@@ -976,14 +971,12 @@
 ./target/codecs: class SqliteDateStringDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class SqliteDateStringDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDateStringCodec
 ./target/codecs: class SqliteDateStringDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target/codecs: class SqliteDateTemporalDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteDateTemporalDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteDateTemporalDescriptor, readonly required property codecId: "sqlite/date-temporal@1"
 ./target/codecs: class SqliteDateTemporalDescriptor, readonly required property dataType: DataTypeId
 ./target/codecs: class SqliteDateTemporalDescriptor, readonly required property paramsSchema: undefined
 ./target/codecs: class SqliteDateTemporalDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class SqliteDateTemporalDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDateTemporalCodec
-./target/codecs: class SqliteDatetimeDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteDatetimeDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteDatetimeDescriptor, readonly required property codecId: "sqlite/datetime@1"
 ./target/codecs: class SqliteDatetimeDescriptor, readonly required property dataType: DataTypeId
@@ -991,7 +984,6 @@
 ./target/codecs: class SqliteDatetimeDescriptor, readonly required property paramsSchema: undefined
 ./target/codecs: class SqliteDatetimeDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class SqliteDatetimeDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDatetimeCodec
-./target/codecs: class SqliteDatetimeStringDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteDatetimeStringDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteDatetimeStringDescriptor, readonly required property codecId: "sqlite/datetime-string@1"
 ./target/codecs: class SqliteDatetimeStringDescriptor, readonly required property dataType: DataTypeId
@@ -999,14 +991,12 @@
 ./target/codecs: class SqliteDatetimeStringDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class SqliteDatetimeStringDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDatetimeStringCodec
 ./target/codecs: class SqliteDatetimeStringDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target/codecs: class SqliteDatetimeTemporalDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteDatetimeTemporalDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteDatetimeTemporalDescriptor, readonly required property codecId: "sqlite/datetime-temporal@1"
 ./target/codecs: class SqliteDatetimeTemporalDescriptor, readonly required property dataType: DataTypeId
 ./target/codecs: class SqliteDatetimeTemporalDescriptor, readonly required property paramsSchema: undefined
 ./target/codecs: class SqliteDatetimeTemporalDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class SqliteDatetimeTemporalDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDatetimeTemporalCodec
-./target/codecs: class SqliteDecimalDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteDecimalDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteDecimalDescriptor, readonly required property codecId: "sqlite/decimal@1"
 ./target/codecs: class SqliteDecimalDescriptor, readonly required property dataType: DataTypeId
@@ -1015,7 +1005,6 @@
 ./target/codecs: class SqliteDecimalDescriptor, readonly required property traits: readonly ["equality"]
 ./target/codecs: class SqliteDecimalDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDecimalCodec
 ./target/codecs: class SqliteDecimalDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target/codecs: class SqliteDurationStringDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteDurationStringDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteDurationStringDescriptor, readonly required property codecId: "sqlite/duration-string@1"
 ./target/codecs: class SqliteDurationStringDescriptor, readonly required property dataType: DataTypeId
@@ -1023,7 +1012,6 @@
 ./target/codecs: class SqliteDurationStringDescriptor, readonly required property traits: readonly ["equality"]
 ./target/codecs: class SqliteDurationStringDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDurationStringCodec
 ./target/codecs: class SqliteDurationStringDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target/codecs: class SqliteIntegerDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteIntegerDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteIntegerDescriptor, readonly required property codecId: "sqlite/integer@1"
 ./target/codecs: class SqliteIntegerDescriptor, readonly required property dataType: DataTypeId
@@ -1032,7 +1020,6 @@
 ./target/codecs: class SqliteIntegerDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class SqliteIntegerDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteIntegerCodec
 ./target/codecs: class SqliteIntegerDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target/codecs: class SqliteJsonDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteJsonDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteJsonDescriptor, readonly required property codecId: "sqlite/json@1"
 ./target/codecs: class SqliteJsonDescriptor, readonly required property dataType: DataTypeId
@@ -1041,7 +1028,6 @@
 ./target/codecs: class SqliteJsonDescriptor, readonly required property traits: readonly ["equality"]
 ./target/codecs: class SqliteJsonDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteJsonCodec
 ./target/codecs: class SqliteJsonDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target/codecs: class SqliteRealDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteRealDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteRealDescriptor, readonly required property codecId: "sqlite/real@1"
 ./target/codecs: class SqliteRealDescriptor, readonly required property dataType: DataTypeId
@@ -1050,7 +1036,6 @@
 ./target/codecs: class SqliteRealDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target/codecs: class SqliteRealDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteRealCodec
 ./target/codecs: class SqliteRealDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target/codecs: class SqliteTextDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteTextDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteTextDescriptor, readonly required property codecId: "sqlite/text@1"
 ./target/codecs: class SqliteTextDescriptor, readonly required property dataType: DataTypeId
@@ -1059,7 +1044,6 @@
 ./target/codecs: class SqliteTextDescriptor, readonly required property traits: readonly ["equality", "order", "textual"]
 ./target/codecs: class SqliteTextDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteTextCodec
 ./target/codecs: class SqliteTextDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target/codecs: class SqliteTimeStringDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteTimeStringDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteTimeStringDescriptor, readonly required property codecId: "sqlite/time-string@1"
 ./target/codecs: class SqliteTimeStringDescriptor, readonly required property dataType: DataTypeId
@@ -1067,7 +1051,6 @@
 ./target/codecs: class SqliteTimeStringDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target/codecs: class SqliteTimeStringDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteTimeStringCodec
 ./target/codecs: class SqliteTimeStringDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target/codecs: class SqliteTimeTemporalDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: class SqliteTimeTemporalDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target/codecs: class SqliteTimeTemporalDescriptor, readonly required property codecId: "sqlite/time-temporal@1"
 ./target/codecs: class SqliteTimeTemporalDescriptor, readonly required property dataType: DataTypeId
@@ -1095,6 +1078,23 @@
 ./target/codecs: const sqliteTextColumn: () => ColumnSpec<SqliteTextCodec, undefined>
 ./target/codecs: const sqliteTimeStringColumn: () => ColumnSpec<SqliteTimeStringCodec, undefined>
 ./target/codecs: const sqliteTimeTemporalColumn: () => ColumnSpec<SqliteTimeTemporalCodec, undefined>
+./target/codecs: export type class SqliteBigintDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteBigintNumberDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteBlobDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteBooleanDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteDateStringDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteDateTemporalDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteDatetimeDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteDatetimeStringDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteDatetimeTemporalDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteDecimalDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteDurationStringDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteIntegerDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteJsonDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteRealDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteTextDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteTimeStringDescriptor extends SqliteCodecDescriptor<void>
+./target/codecs: export type class SqliteTimeTemporalDescriptor extends SqliteCodecDescriptor<void>
 ./target/codecs: function assembleSqliteCodecRegistry(target: CodecContributor, extensions: ReadonlyArray<CodecContributor>): SqliteCodecRegistry
 ./target/codecs: function createSqliteBuiltinCodecLookup(): SqliteCodecRegistry
 ./target/codecs: function createSqliteCodecRegistryWithBuiltins(codecDescriptors?: readonly AnySqliteCodecDescriptor[]): SqliteCodecRegistry
@@ -1690,7 +1690,6 @@
 ./target: class ReplaceStoredValueCall, required method importRequirements(): readonly ImportRequirement[]
 ./target: class ReplaceStoredValueCall, required method renderTypeScript(): string
 ./target: class ReplaceStoredValueCall, required method toOp(): Promise<Op>
-./target: class SqliteBigintDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteBigintDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteBigintDescriptor, readonly required property codecId: "sqlite/bigint@1"
 ./target: class SqliteBigintDescriptor, readonly required property dataType: DataTypeId
@@ -1699,7 +1698,6 @@
 ./target: class SqliteBigintDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class SqliteBigintDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteBigintCodec
 ./target: class SqliteBigintDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target: class SqliteBigintNumberDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteBigintNumberDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteBigintNumberDescriptor, readonly required property codecId: "sqlite/bigintnumber@1"
 ./target: class SqliteBigintNumberDescriptor, readonly required property dataType: DataTypeId
@@ -1708,7 +1706,6 @@
 ./target: class SqliteBigintNumberDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class SqliteBigintNumberDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteBigintNumberCodec
 ./target: class SqliteBigintNumberDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target: class SqliteBlobDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteBlobDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteBlobDescriptor, readonly required property codecId: "sqlite/blob@1"
 ./target: class SqliteBlobDescriptor, readonly required property dataType: DataTypeId
@@ -1716,7 +1713,6 @@
 ./target: class SqliteBlobDescriptor, readonly required property paramsSchema: undefined
 ./target: class SqliteBlobDescriptor, readonly required property traits: readonly ["equality"]
 ./target: class SqliteBlobDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteBlobCodec
-./target: class SqliteBooleanDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteBooleanDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteBooleanDescriptor, readonly required property codecId: "sqlite/boolean@1"
 ./target: class SqliteBooleanDescriptor, readonly required property dataType: DataTypeId
@@ -1741,7 +1737,6 @@
 ./target: class SqliteCreateTable, readonly required property schema: string | undefined
 ./target: class SqliteCreateTable, readonly required property table: string
 ./target: class SqliteCreateTable, required method accept<R>(visitor: SqliteDdlVisitor<R>): R
-./target: class SqliteDateStringDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteDateStringDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteDateStringDescriptor, readonly required property codecId: "sqlite/date-string@1"
 ./target: class SqliteDateStringDescriptor, readonly required property dataType: DataTypeId
@@ -1749,14 +1744,12 @@
 ./target: class SqliteDateStringDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class SqliteDateStringDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDateStringCodec
 ./target: class SqliteDateStringDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target: class SqliteDateTemporalDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteDateTemporalDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteDateTemporalDescriptor, readonly required property codecId: "sqlite/date-temporal@1"
 ./target: class SqliteDateTemporalDescriptor, readonly required property dataType: DataTypeId
 ./target: class SqliteDateTemporalDescriptor, readonly required property paramsSchema: undefined
 ./target: class SqliteDateTemporalDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class SqliteDateTemporalDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDateTemporalCodec
-./target: class SqliteDatetimeDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteDatetimeDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteDatetimeDescriptor, readonly required property codecId: "sqlite/datetime@1"
 ./target: class SqliteDatetimeDescriptor, readonly required property dataType: DataTypeId
@@ -1764,7 +1757,6 @@
 ./target: class SqliteDatetimeDescriptor, readonly required property paramsSchema: undefined
 ./target: class SqliteDatetimeDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class SqliteDatetimeDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDatetimeCodec
-./target: class SqliteDatetimeStringDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteDatetimeStringDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteDatetimeStringDescriptor, readonly required property codecId: "sqlite/datetime-string@1"
 ./target: class SqliteDatetimeStringDescriptor, readonly required property dataType: DataTypeId
@@ -1772,7 +1764,6 @@
 ./target: class SqliteDatetimeStringDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class SqliteDatetimeStringDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDatetimeStringCodec
 ./target: class SqliteDatetimeStringDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target: class SqliteDatetimeTemporalDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteDatetimeTemporalDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteDatetimeTemporalDescriptor, readonly required property codecId: "sqlite/datetime-temporal@1"
 ./target: class SqliteDatetimeTemporalDescriptor, readonly required property dataType: DataTypeId
@@ -1780,7 +1771,6 @@
 ./target: class SqliteDatetimeTemporalDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class SqliteDatetimeTemporalDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDatetimeTemporalCodec
 ./target: class SqliteDdlNode, abstract required method accept<R>(visitor: SqliteDdlVisitor<R>): R
-./target: class SqliteDecimalDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteDecimalDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteDecimalDescriptor, readonly required property codecId: "sqlite/decimal@1"
 ./target: class SqliteDecimalDescriptor, readonly required property dataType: DataTypeId
@@ -1789,7 +1779,6 @@
 ./target: class SqliteDecimalDescriptor, readonly required property traits: readonly ["equality"]
 ./target: class SqliteDecimalDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDecimalCodec
 ./target: class SqliteDecimalDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target: class SqliteDurationStringDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteDurationStringDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteDurationStringDescriptor, readonly required property codecId: "sqlite/duration-string@1"
 ./target: class SqliteDurationStringDescriptor, readonly required property dataType: DataTypeId
@@ -1797,7 +1786,6 @@
 ./target: class SqliteDurationStringDescriptor, readonly required property traits: readonly ["equality"]
 ./target: class SqliteDurationStringDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteDurationStringCodec
 ./target: class SqliteDurationStringDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target: class SqliteIntegerDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteIntegerDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteIntegerDescriptor, readonly required property codecId: "sqlite/integer@1"
 ./target: class SqliteIntegerDescriptor, readonly required property dataType: DataTypeId
@@ -1806,7 +1794,6 @@
 ./target: class SqliteIntegerDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class SqliteIntegerDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteIntegerCodec
 ./target: class SqliteIntegerDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target: class SqliteJsonDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteJsonDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteJsonDescriptor, readonly required property codecId: "sqlite/json@1"
 ./target: class SqliteJsonDescriptor, readonly required property dataType: DataTypeId
@@ -1819,7 +1806,6 @@
 ./target: class SqliteMigrationPlanner, constructor(lowerer: ExecuteRequestLowerer)
 ./target: class SqliteMigrationPlanner, required method emptyMigration(context: MigrationScaffoldContext, spaceId: string): TypeScriptRenderableSqliteMigration
 ./target: class SqliteMigrationPlanner, required method plan(options: { readonly contract: unknown; readonly schema: unknown; readonly policy: MigrationOperationPolicy; readonly fromContract: Contract | null; readonly origin: PlanOrigin | null; readonly statements: readonly ResolvedMigrationStatement[]; readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>; readonly spaceId: string; readonly ownership?: SchemaOwnership; readonly snapshotsImportPath: string; }): SqlitePlanResult
-./target: class SqliteRealDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteRealDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteRealDescriptor, readonly required property codecId: "sqlite/real@1"
 ./target: class SqliteRealDescriptor, readonly required property dataType: DataTypeId
@@ -1828,7 +1814,6 @@
 ./target: class SqliteRealDescriptor, readonly required property traits: readonly ["equality", "order", "numeric"]
 ./target: class SqliteRealDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteRealCodec
 ./target: class SqliteRealDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target: class SqliteTextDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteTextDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteTextDescriptor, readonly required property codecId: "sqlite/text@1"
 ./target: class SqliteTextDescriptor, readonly required property dataType: DataTypeId
@@ -1837,7 +1822,6 @@
 ./target: class SqliteTextDescriptor, readonly required property traits: readonly ["equality", "order", "textual"]
 ./target: class SqliteTextDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteTextCodec
 ./target: class SqliteTextDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target: class SqliteTimeStringDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteTimeStringDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteTimeStringDescriptor, readonly required property codecId: "sqlite/time-string@1"
 ./target: class SqliteTimeStringDescriptor, readonly required property dataType: DataTypeId
@@ -1845,7 +1829,6 @@
 ./target: class SqliteTimeStringDescriptor, readonly required property traits: readonly ["equality", "order"]
 ./target: class SqliteTimeStringDescriptor, required method factory(): (ctx: CodecInstanceContext) => SqliteTimeStringCodec
 ./target: class SqliteTimeStringDescriptor, required method renderValueLiteral(value: @prisma/orm-framework.JsonValue): string | undefined
-./target: class SqliteTimeTemporalDescriptor extends SqliteCodecDescriptor<void>
 ./target: class SqliteTimeTemporalDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./target: class SqliteTimeTemporalDescriptor, readonly required property codecId: "sqlite/time-temporal@1"
 ./target: class SqliteTimeTemporalDescriptor, readonly required property dataType: DataTypeId
@@ -1942,6 +1925,23 @@
 ./target: export placeholder from @prisma/orm-framework/errors/migration
 ./target: export primaryKey from @prisma/orm-family-sql/relational-core/contract-free
 ./target: export sql from @prisma/orm-family-sql/contract/sql-expression
+./target: export type class SqliteBigintDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteBigintNumberDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteBlobDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteBooleanDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteDateStringDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteDateTemporalDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteDatetimeDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteDatetimeStringDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteDatetimeTemporalDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteDecimalDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteDurationStringDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteIntegerDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteJsonDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteRealDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteTextDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteTimeStringDescriptor extends SqliteCodecDescriptor<void>
+./target: export type class SqliteTimeTemporalDescriptor extends SqliteCodecDescriptor<void>
 ./target: export unique from @prisma/orm-family-sql/relational-core/contract-free
 ./target: function assembleSqliteCodecRegistry(target: CodecContributor, extensions: ReadonlyArray<CodecContributor>): SqliteCodecRegistry
 ./target: function buildControlTableBootstrapQueries(): readonly DdlNode[]

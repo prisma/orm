@@ -3922,13 +3922,13 @@
 ./contract/resolve-domain-model: interface ResolvedDomainModel
 ./contract/resolve-domain-model: interface ResolvedDomainModel, readonly required property model: ContractModelBase
 ./contract/resolve-domain-model: interface ResolvedDomainModel, readonly required property namespaceId: string
-./contract/types: const $: unique symbol
 ./contract/types: const ContractExecutionSectionSchema: ObjectType<ContractExecutionSection, {}>
 ./contract/types: const ContractFieldTypeSchema: ObjectType<{ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "union"; members: ({ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; })[]; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; }, {}>
 ./contract/types: const ContractValueObjectFieldSchema: ObjectType<{ nullable: boolean; type: { kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "union"; members: ({ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; })[]; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; }; many?: false | { elementNullable: boolean; }; dict?: true; valueSet?: { plane: "storage"; namespaceId: string; entityKind: "valueSet"; entityName: string; spaceId?: string; }; }, {}>
 ./contract/types: const ContractValueObjectSchema: ObjectType<{ fields: { [x: string]: { nullable: boolean; type: { kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "union"; members: ({ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; })[]; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; }; many?: false | { elementNullable: boolean; }; dict?: true; valueSet?: { plane: "storage"; namespaceId: string; entityKind: "valueSet"; entityName: string; spaceId?: string; }; }; }; }, {}>
 ./contract/types: const CrossReferenceSchema: ObjectType<CrossReference, {}>
 ./contract/types: const UNBOUND_DOMAIN_NAMESPACE_ID: "__unbound__"
+./contract/types: export type const $: unique symbol
 ./contract/types: function asNamespaceId(value: string): NamespaceId
 ./contract/types: function coreHash<const T extends string>(value: T): StorageHashBase<T>
 ./contract/types: function crossRef(model: string, namespace?: string, space?: string): CrossReference
@@ -4109,13 +4109,13 @@
 ./contract: class ContractValidationError, readonly required property code = "CONTRACT.VALIDATION_FAILED"
 ./contract: class ContractValidationError, readonly required property meta: Readonly<Record<string, unknown>> | undefined
 ./contract: class ContractValidationError, readonly required property phase: ContractValidationPhase
-./contract: const $: unique symbol
 ./contract: const ContractExecutionSectionSchema: ObjectType<ContractExecutionSection, {}>
 ./contract: const ContractFieldTypeSchema: ObjectType<{ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "union"; members: ({ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; })[]; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; }, {}>
 ./contract: const ContractValueObjectFieldSchema: ObjectType<{ nullable: boolean; type: { kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "union"; members: ({ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; })[]; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; }; many?: false | { elementNullable: boolean; }; dict?: true; valueSet?: { plane: "storage"; namespaceId: string; entityKind: "valueSet"; entityName: string; spaceId?: string; }; }, {}>
 ./contract: const ContractValueObjectSchema: ObjectType<{ fields: { [x: string]: { nullable: boolean; type: { kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "union"; members: ({ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; })[]; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; }; many?: false | { elementNullable: boolean; }; dict?: true; valueSet?: { plane: "storage"; namespaceId: string; entityKind: "valueSet"; entityName: string; spaceId?: string; }; }; }; }, {}>
 ./contract: const CrossReferenceSchema: ObjectType<CrossReference, {}>
 ./contract: const UNBOUND_DOMAIN_NAMESPACE_ID: "__unbound__"
+./contract: export type const $: unique symbol
 ./contract: function applySpecifierDefaultControlPolicy(contract: Contract, specifierDefault: ControlPolicy | undefined): Contract
 ./contract: function asNamespaceId(value: string): NamespaceId
 ./contract: function buildEnumsMapForNamespace(domain: { readonly namespaces: Readonly<Record<string, { readonly enum?: Readonly<Record<string, ContractEnum>>; }>>; }, namespaceId: string, codecFor: EnumMemberCodecFor): Record<string, EnumAccessor>
@@ -4935,7 +4935,6 @@
 ./psl-parser/tokenizer: interface Token, readonly required property kind: TokenKind
 ./psl-parser/tokenizer: interface Token, readonly required property text: string
 ./psl-parser/tokenizer: type TokenKind = 'At' | 'Colon' | 'Comma' | 'Comment' | 'Dot' | 'DoubleAt' | 'Eof' | 'Equals' | 'Ident' | 'Invalid' | 'LBrace' | 'LBracket' | 'LParen' | 'Newline' | 'NumberLiteral' | 'Plus' | 'Question' | 'RBrace' | 'RBracket' | 'RParen' | 'StringLiteral' | 'Whitespace'
-./psl-parser: abstract class Scope
 ./psl-parser: class Scope, abstract protected required method ownNames(): Iterable<string>
 ./psl-parser: class Scope, abstract required method lookup(name: string): ScopeResolution | undefined
 ./psl-parser: class Scope, constructor(parent: Scope | undefined)
@@ -4945,6 +4944,7 @@
 ./psl-parser: const NAME_THE_PSL_SOURCE_LOSES = "__proto__"
 ./psl-parser: const PSL_UNRESOLVED_REFERENCE = "PSL_UNRESOLVED_REFERENCE"
 ./psl-parser: const TYPE_ALIAS_ATTRIBUTE_NAMES: ReadonlySet<string>
+./psl-parser: export type abstract class Scope
 ./psl-parser: function assembleAttributeSpecs(contributions: AssembledAuthoringContributions): AssembledAttributeSpecs
 ./psl-parser: function blockAttribute<const Pos extends readonly PositionalParam<unknown, BlockAttributeCtx>[] = readonly [], const Named extends Record<string, Param<unknown, BlockAttributeCtx>> = Record<never, never>>(name: string, config: BlockAttributeConfig<Pos, Named>): AttributeSpec<AttributeOut<Pos, Named>, BlockAttributeCtx>
 ./psl-parser: function blockSpecContext(input: { readonly symbols: SymbolTable; readonly dataTypes: DataTypeSupport; }): BlockSpecContext
