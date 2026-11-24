@@ -24,6 +24,7 @@ import {
   type TransactionActivityRun,
 } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { SqlConnectionError } from '@internal/sql-errors';
 import type {
   Adapter,
   AnyQueryAst,
@@ -872,7 +873,10 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   private ensureMarkerChecked(): Promise<void> {
-    this.verifyMarkerPromise ??= this.verifyMarker();
+    this.verifyMarkerPromise ??= this.verifyMarker().catch((error: unknown) => {
+      this.verifyMarkerPromise = null;
+      throw error;
+    });
     return this.verifyMarkerPromise;
   }
 
@@ -1604,8 +1608,11 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     try {
       readResult = await this.familyAdapter.markerReader.readMarker(this.driver);
     } catch (error) {
+      if (isConnectionFailure(error)) {
+        throw error;
+      }
       const corrupt = isStructuredError(error) && error.code === 'CONTRACT.MARKER_ROW_CORRUPT';
-      this.sqlCtx.log.warn({
+      this.warnAboutMarker({
         code: corrupt ? 'CONTRACT.MARKER_ROW_CORRUPT' : 'CONTRACT.MARKER_READ_FAILED',
         scope: 'marker-verification',
         expected,
@@ -1619,7 +1626,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     }
 
     if (readResult.kind !== 'present') {
-      this.sqlCtx.log.warn({
+      this.warnAboutMarker({
         code: 'CONTRACT.MARKER_MISSING',
         scope: 'marker-verification',
         expected,
@@ -1635,13 +1642,21 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       expectedProfileHash === null || marker.profileHash === expectedProfileHash;
 
     if (!storageHashMatch || !profileHashMatch) {
-      this.sqlCtx.log.warn({
+      this.warnAboutMarker({
         code: 'CONTRACT.MARKER_MISMATCH',
         scope: 'marker-verification',
         expected,
         actual: { storageHash: marker.storageHash, profileHash: marker.profileHash ?? null },
         message: 'Contract marker hash does not match runtime contract',
       });
+    }
+  }
+
+  private warnAboutMarker(entry: Record<string, unknown>): void {
+    try {
+      this.sqlCtx.log.warn(entry);
+    } catch {
+      // A logger that fails must not stop the application.
     }
   }
 
@@ -1693,6 +1708,14 @@ function transactionAlreadyOpenError(
 
 // Rows of a handle's statement, refused at the first read when the handle no longer accepts children, before the route takes a connection or session.
 function noWork(): void {}
+
+function isConnectionFailure(error: unknown): boolean {
+  return (
+    SqlConnectionError.is(error) ||
+    (isStructuredError(error) &&
+      (error.code === 'DRIVER.NOT_CONNECTED' || error.code === 'DRIVER.CONNECTION_FAILED'))
+  );
+}
 
 function describeMarkerReadError(error: unknown): {
   readonly message: string;

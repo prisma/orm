@@ -1,4 +1,5 @@
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
+import { SqlConnectionError } from '@internal/sql-errors';
 import type {
   MarkerReadResult,
   SqlConnection,
@@ -247,6 +248,53 @@ describe('the contract marker check before a connection is taken', () => {
 
       await expect(runtime.close()).resolves.toBeUndefined();
       expect(driver.close).toHaveBeenCalledOnce();
+    });
+
+    describe('because the database cannot be reached', () => {
+      const unreachable = new SqlConnectionError('connect ECONNREFUSED 127.0.0.1:5432');
+
+      it.each(acquiringCalls)(
+        'rejects %s with the driver error, takes no connection, and the next call reads again',
+        async (_, open) => {
+          const readMarker = vi
+            .fn<ReadMarker>()
+            .mockRejectedValueOnce(unreachable)
+            .mockResolvedValue({ kind: 'absent' });
+          const { runtime, acquireConnection, log } = setup({ readMarker });
+
+          await expect(open(runtime)).rejects.toBe(unreachable);
+          expect(acquireConnection).not.toHaveBeenCalled();
+
+          await (await runtime.connection()).release();
+          expect(readMarker).toHaveBeenCalledTimes(2);
+          expect(acquireConnection).toHaveBeenCalledOnce();
+          expect(log.warn.mock.calls).toEqual([
+            [
+              {
+                code: 'CONTRACT.MARKER_MISSING',
+                scope: 'marker-verification',
+                expected: { storageHash: 'marker-before-connection', profileHash: 'testprofile' },
+                actual: null,
+                message: 'Contract marker not found in database',
+              },
+            ],
+          ]);
+        },
+      );
+
+      it.each(acquiringCalls)(
+        'leaves nothing for close() to wait for after it rejects %s',
+        async (_, open) => {
+          const { runtime, driver } = setup({
+            readMarker: vi.fn<ReadMarker>().mockRejectedValue(unreachable),
+          });
+
+          await expect(open(runtime)).rejects.toBe(unreachable);
+
+          await expect(runtime.close()).resolves.toBeUndefined();
+          expect(driver.close).toHaveBeenCalledOnce();
+        },
+      );
     });
   });
 });
