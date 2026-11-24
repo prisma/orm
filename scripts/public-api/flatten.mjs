@@ -50,8 +50,25 @@ function declaredName(item) {
 }
 
 // A declaration is identified by the file API Extractor records for it and its declared name,
-// so the halves of a merged declaration (a class and an interface of one name) are one.
-const declarationKey = (item) => `${item.fileUrlPath ?? ''}\0${declaredName(item)}`;
+// so the halves of a merged declaration (a class and an interface of one name) are one. Items
+// whose canonical references differ only in their kind are halves of one declaration too, even
+// when the source maps give them different files; loadModels gives them one key.
+const sharedKeys = new WeakMap();
+const ownKey = (item) => `${item.fileUrlPath ?? ''}\0${declaredName(item)}`;
+const declarationKey = (item) => sharedKeys.get(item) ?? ownKey(item);
+const withoutKind = (reference) => reference.replace(/:[a-z]+(\(\d+\))?$/, '');
+
+function shareKeysOfHalves(items) {
+  const halves = new Map();
+  for (const item of items) {
+    const reference = withoutKind(item.canonicalReference.toString());
+    halves.set(reference, [...(halves.get(reference) ?? []), item]);
+  }
+  for (const group of halves.values()) {
+    const key = group.map(ownKey).sort(compareCodeUnits)[0];
+    for (const item of group) sharedKeys.set(item, key);
+  }
+}
 
 // Prints an item's declaration text. `nameOf` gives the printed name of a top-level item of
 // this package from its canonical reference, and `ownName` the name this item is printed under.
@@ -170,6 +187,7 @@ function loadModels(entryPoints) {
       const byReference = new Map(
         model.members.map((item) => [item.canonicalReference.toString(), item]),
       );
+      shareKeysOfHalves(model.members);
       return { ...entryPoint, packageName: model.parent.name, items: model.members, byReference };
     });
 }
@@ -295,8 +313,8 @@ const hash = (text) => createHash('sha256').update(text).digest('hex');
 // name unique in the package, with `_2`, `_3` for names that clash.
 //
 // Non-exported declarations with the same name are ordered by a key that does not depend on
-// assigned names: their text with source names, then the same for what they refer to, a few
-// levels deep. Declarations that print identically once what they refer to has its final name
+// assigned names: their text with source names, then their text with the full names of types
+// from elsewhere, then the same for what they refer to, a few levels deep. Declarations that print identically once what they refer to has its final name
 // are one declaration copied into two files and share one name; merges are only ever added, so
 // the rounds end.
 function nameDeclarations(models, paths, packageName, problems) {
@@ -336,14 +354,22 @@ function nameDeclarations(models, paths, packageName, problems) {
     const key = declarationKey(item);
     return exportedNames.get(key) ?? (names ? names.get(key) : sourceName(item));
   };
-  const contentOf = (local, names) => {
+  // To break ties in the order and to decide merges, a type from elsewhere prints as its canonical
+  // reference, which names its package, so declarations that import different types of one name
+  // stay apart.
+  const fullName = (reference) =>
+    reference.startsWith(`${packageName}!`)
+      ? undefined
+      : `External_${Buffer.from(reference).toString('hex')}`;
+  const contentOf = (local, names, compare = false) => {
     const lines = new LineSet();
+    const named = nameOf(local.model, names);
     for (const item of local.items) {
       emitItem(item, {
         prefix: '',
         context: '',
         ownName: sourceName(local.items[0]),
-        nameOf: nameOf(local.model, names),
+        nameOf: compare ? (reference) => named(reference) ?? fullName(reference) : named,
         origin: local.key,
         lines,
         keepImportModules: true,
@@ -354,6 +380,7 @@ function nameDeclarations(models, paths, packageName, problems) {
 
   for (const local of locals.values()) {
     local.source = contentOf(local, undefined);
+    local.identity = contentOf(local, undefined, true);
     local.references = [];
     forEachItem(local.items, (item) => {
       for (const token of item.excerpt?.spannedTokens ?? []) {
@@ -388,6 +415,7 @@ function nameDeclarations(models, paths, packageName, problems) {
       .sort(
         (a, b) =>
           compareCodeUnits(a.source, b.source) ||
+          compareCodeUnits(a.identity, b.identity) ||
           compareCodeUnits(keys.get(a.key), keys.get(b.key)),
       ),
   }));
@@ -421,7 +449,7 @@ function nameDeclarations(models, paths, packageName, problems) {
     for (const { group } of ordered) {
       const seen = new Map();
       for (const local of group) {
-        const content = contentOf(local, localNames);
+        const content = contentOf(local, localNames, true);
         const root = find(local.key);
         const earlier = seen.get(content);
         if (earlier !== undefined && earlier !== root) {
@@ -625,9 +653,9 @@ function collectLines(models, { checker, paths, isOwn, containers, memberKeysOf 
     }
     for (const forward of info.namedForwards) {
       const original =
-        forward.originalName !== forward.exportName ? ` (as ${forward.originalName})` : '';
+        forward.originalName !== forward.exportName ? ` = ${forward.originalName}` : '';
       lines.add(
-        `${pathPrefix}export ${forward.exportName} from ${forward.from}${original}`,
+        `${pathPrefix}export ${forward.exportName}${original} from ${forward.from}`,
         `${model.subpath} forward ${forward.exportName}`,
       );
       cover(model.subpath, forward.exportName);

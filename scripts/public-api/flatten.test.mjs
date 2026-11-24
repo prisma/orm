@@ -155,9 +155,9 @@ describe('flattenPackage', () => {
       sorted([
         '.: everything from pathe/utils',
         './named: export join from pathe',
-        './named: export norm from pathe (as normalize)',
-        './default: export paths from pathe (as default)',
-        './named: export res from pathe (as resolve)',
+        './named: export norm = normalize from pathe',
+        './default: export paths = default from pathe',
+        './named: export res = resolve from pathe',
       ]),
     );
   });
@@ -499,6 +499,35 @@ describe('flattenPackage', () => {
           if (base) base.fileUrlPath = 'lib/elsewhere.d.mts';
         }),
       /\(not exported\) Base has no declaration this script can find in lib\/elsewhere\.d\.mts, the file API Extractor records for it\. If API Extractor changed how it names that file/,
+    );
+  });
+
+  it('keeps apart declarations whose types differ only by the module a name is imported from', () => {
+    deepStrictEqual(
+      linesOf('extmerge-named'),
+      sorted([
+        '(not exported) interface Holder',
+        '(not exported) interface Holder, readonly required property stream: ReadStream',
+        '(not exported) interface Holder_2',
+        '(not exported) interface Holder_2, readonly required property stream: ReadStream',
+        '.: function fromFile(holder: Holder): void',
+        '.: function fromTerminal(holder: Holder_2): void',
+      ]),
+    );
+  });
+
+  it('gives a constant and a type of one name one name, whatever file each is recorded in', () => {
+    deepStrictEqual(
+      linesOf('split-halves', (model) => {
+        const constant = membersOf(model).find((item) => item.kind === 'Variable');
+        if (constant) constant.fileUrlPath = 'lib/elsewhere.d.mts';
+      }),
+      sorted([
+        '(not exported) const Role: readonly ["a", "b"]',
+        '(not exported) type Role = (typeof Role)[number]',
+        '.: function all(): typeof Role',
+        '.: function pick(role: Role): void',
+      ]),
     );
   });
 
