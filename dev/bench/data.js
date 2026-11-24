@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795431787750,
+  "lastUpdate": 1795484608022,
   "repoUrl": "https://github.com/prisma/orm",
   "entries": {
     "Benchmark.js Benchmark": [
@@ -462155,6 +462155,401 @@ window.BENCHMARK_DATA = {
             "range": "±1.13%",
             "unit": "ops/sec",
             "extra": "86 samples"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "w.a.madden+machine@gmail.com",
+            "name": "willbot",
+            "username": "wmadden-electric"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4c3db4a2cdb6db5c30fe885a981ff0dbad437226",
+          "message": "fix(adapter-pg, adapter-neon, adapter-ppg): read money values in any currency (#31149)\n\nA database with `lc_monetary = 'en_GB.UTF-8'` and a `money` column:\n\n```sql\nSET lc_monetary = 'en_GB.UTF-8';\nSELECT 999.50::money;  -- £999.50\n```\n\nReading that column through `@prisma/adapter-pg`, `@prisma/adapter-neon`\nor `@prisma/adapter-ppg` (an `_sum` on the column, or `$queryRaw`)\nthrows today:\n\n```\nUnsupported money format \"£999.50\": only the default lc_monetary format, such as -$1,234.50, is supported\n```\n\nAfter this change it returns `999.50`, as it did before #30979.\n\n## What changed\n\n#30979 fixed negative and thousands-separated values, which were misread\nbefore, but it also made the parser accept only `$` values with exactly\ntwo decimals. Postgres formats `money` with the database's `lc_monetary`\nsetting, so other locales print other symbols: `£1,234.50` (en_GB),\n`￥1,234` with no decimals (ja_JP), `₹1,234.50` (en_IN), `HK$1,234.50`\n(zh_HK). Before #30979 the parser dropped the first character and the\ncommas, so a one-character symbol such as `£999.50` or `€5.00` read\ncorrectly and now throws: a running app could start failing on an\nupgrade. Longer symbols such as `HK$` never read correctly.\n\nThe parser now accepts:\n\n- a currency symbol in front: one or more letters or Unicode currency\nsigns (`$`, `£`, `￥`, `HK$`, `CHF`);\n- an ASCII `-` before the symbol (`-$120.00`, `-£120.00`, the default\nand most locales) or directly after it (`HK$-120.00`, `￥-120`);\n- `,` thousands separators;\n- an optional `.` decimal part.\n\nThe three adapters keep identical copies of the check.\n\n## What is still refused, and why\n\nEach of these would be read as a wrong number, so throwing is the safe\nchoice:\n\n- A `,` decimal point or `.` thousands separator: `5,00 €`, `$1.234,50`,\n`₺1.234,00`, `€ 5,00`, `R$ 1.234,00`.\n- A symbol after the amount, or a space between symbol and amount:\n`1,234.00₪`, `kr 1 234,00`.\n- Any sign other than the ASCII `-`: a Unicode minus (`−$120.00`, which\nsome locales use), parentheses (`($120.00)`), a `+`, or a trailing sign.\nThe parser builds the number from the parts it matched, so a character\nit does not recognise can never be dropped silently.\n- Swiss francs as de_CH prints positive values, `CHF 15.00`, because of\nthe space.\n- A three-digit decimal part, `$1.234`: it could be 1234 in a locale\nwith a `.` thousands separator and no decimals.\n\nOne assumption remains: `,` always separates thousands. `￥1,234` reads\nas 1234, which is what this change exists to support. A locale that\nprinted a symbol in front, a `,` decimal point and three decimals would\nbe misread; I found none.\n\nThe error message now says what is expected: a currency symbol directly\nfollowed by an amount with `,` thousands separators and a `.` decimal\npoint.\n\n## How it was checked\n\n- Two independent reviewers simulated Postgres's money output across the\nmacOS UTF-8 locales; no accepted value parsed to a wrong number. Linux\nlocale data was not checked.\n- I printed `1234567.5`, `-1234` and `1234` as `money` in all 85 UTF-8\nlocales on macOS with a local Postgres 15. The new pattern accepts 60 of\nthose values and refuses 192, and every accepted value parses to the\nright number.\n- New unit tests in each adapter's conversion tests cover `£999.50`,\n`¥500`, `￥1,234,568`, `₹1,234.50`, `€5.00`, `HK$1,234.50`, `-£120.00`,\n`CHF-120.00`, `￥-120`, and the refused forms, including the Unicode\nminus and `CHF 15.00`. The accepted cases failed before the fix and pass\nafter it.\n\nAgent: eeyore-69\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\n\n<!-- This is an auto-generated comment: release notes by coderabbit.ai\n-->\n\n<!-- coderabbit-ai-generated:v1 -->\n\n## Summary by CodeRabbit\n\n* **New Features**\n* Money values now support additional currencies, including pounds, yen,\nyuan, rupees, euros, Hong Kong dollars, and Swiss francs.\n* Comma-grouped amounts, negative values, and decimal fractions with\nvarying numbers of digits are supported across payment integrations.\n\n* **Bug Fixes**\n* Ambiguous or malformed money formats, such as conflicting separators,\nunsupported signs, and incomplete values, continue to be rejected.\n\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->\n\n---------\n\nSigned-off-by: willbot <w.a.madden+machine@gmail.com>\nSigned-off-by: Will Madden <madden@prisma.io>\nCo-authored-by: Claude Fable 5.2 <noreply@anthropic.com>",
+          "timestamp": "2026-11-24T02:33:54+01:00",
+          "tree_id": "ab60640f01f1b20ea5c4e992f26fc86cb21db9cf",
+          "url": "https://github.com/prisma/orm/commit/4c3db4a2cdb6db5c30fe885a981ff0dbad437226"
+        },
+        "date": 1795484574515,
+        "tool": "benchmarkjs",
+        "benches": [
+          {
+            "name": "interpreter: simple select",
+            "value": 168190,
+            "range": "±0.73%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "interpreter: findUnique",
+            "value": 151956,
+            "range": "±0.70%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "interpreter: join (1:N)",
+            "value": 85612,
+            "range": "±1.68%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "interpreter: sequence",
+            "value": 88545,
+            "range": "±1.93%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "interpreter: deep nested join",
+            "value": 29419,
+            "range": "±0.45%",
+            "unit": "ops/sec",
+            "extra": "92 samples"
+          },
+          {
+            "name": "serializer: 10 rows x 3 cols",
+            "value": 1822814,
+            "range": "±0.37%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "serializer: 50 rows x 8 cols",
+            "value": 149475,
+            "range": "±0.84%",
+            "unit": "ops/sec",
+            "extra": "92 samples"
+          },
+          {
+            "name": "serializer: 100 rows x 8 cols",
+            "value": 78962,
+            "range": "±0.32%",
+            "unit": "ops/sec",
+            "extra": "96 samples"
+          },
+          {
+            "name": "getBinaryTargetForCurrentPlatform",
+            "value": 1326,
+            "range": "±1.07%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "client generation ~50 Models",
+            "value": 1.61,
+            "range": "±18.75%",
+            "unit": "ops/sec",
+            "extra": "14 samples"
+          },
+          {
+            "name": "typescript compilation ~50 Models",
+            "value": 1.18,
+            "range": "±14.87%",
+            "unit": "ops/sec",
+            "extra": "11 samples"
+          },
+          {
+            "name": "@prisma/client size",
+            "value": 71.06571197509766,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client size",
+            "value": 10.426462173461914,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.d.ts size",
+            "value": 2.372147560119629,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.js size",
+            "value": 0.17815494537353516,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "dotPlusAtPrismaClientFolder.zip size",
+            "value": 28.726604461669922,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "client generation 100 models with relations",
+            "value": 0.5,
+            "range": "±11.99%",
+            "unit": "ops/sec",
+            "extra": "7 samples"
+          },
+          {
+            "name": "compile findUnique (uncached baseline)",
+            "value": 12113,
+            "range": "±12.53%",
+            "unit": "ops/sec",
+            "extra": "98 samples"
+          },
+          {
+            "name": "compile findMany filtered (uncached baseline)",
+            "value": 9111,
+            "range": "±1.92%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "compile blog post page (uncached baseline)",
+            "value": 2269,
+            "range": "±0.27%",
+            "unit": "ops/sec",
+            "extra": "96 samples"
+          },
+          {
+            "name": "parameterize findUnique",
+            "value": 592182,
+            "range": "±0.74%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "parameterize findMany",
+            "value": 294579,
+            "range": "±0.46%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "parameterize blog post page query",
+            "value": 209144,
+            "range": "±0.29%",
+            "unit": "ops/sec",
+            "extra": "97 samples"
+          },
+          {
+            "name": "findUnique by id",
+            "value": 6817,
+            "range": "±1.78%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "findFirst with simple where",
+            "value": 7678,
+            "range": "±0.73%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findMany 10 records",
+            "value": 7164,
+            "range": "±1.41%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "findMany with orderBy",
+            "value": 6875,
+            "range": "±0.97%",
+            "unit": "ops/sec",
+            "extra": "91 samples"
+          },
+          {
+            "name": "findMany with filter",
+            "value": 7144,
+            "range": "±0.43%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "findMany with pagination",
+            "value": 7890,
+            "range": "±0.79%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findUnique with 1:1 include",
+            "value": 4041,
+            "range": "±1.33%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "findUnique with 1:N include",
+            "value": 3561,
+            "range": "±1.77%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findUnique with nested includes",
+            "value": 1899,
+            "range": "±1.73%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findMany with includes",
+            "value": 1829,
+            "range": "±1.05%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "findMany with select",
+            "value": 11555,
+            "range": "±0.69%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "findMany with nested select",
+            "value": 5507,
+            "range": "±1.52%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "findMany with OR filter",
+            "value": 6061,
+            "range": "±1.05%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findMany with complex filters",
+            "value": 4688,
+            "range": "±1.03%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findMany with contains filter",
+            "value": 5456,
+            "range": "±1.34%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "count all",
+            "value": 12552,
+            "range": "±0.75%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "count with filter",
+            "value": 10185,
+            "range": "±1.59%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "aggregate sum/avg",
+            "value": 10003,
+            "range": "±0.76%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "groupBy with count",
+            "value": 10072,
+            "range": "±0.65%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "create single record",
+            "value": 4709,
+            "range": "±0.90%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "create with nested",
+            "value": 2504,
+            "range": "±1.74%",
+            "unit": "ops/sec",
+            "extra": "80 samples"
+          },
+          {
+            "name": "update single record",
+            "value": 6197,
+            "range": "±1.93%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "updateMany",
+            "value": 8585,
+            "range": "±0.71%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "transaction sequential",
+            "value": 2281,
+            "range": "±1.92%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "transaction batch",
+            "value": 2376,
+            "range": "±1.31%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "blog post page query",
+            "value": 1456,
+            "range": "±1.31%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "blog listing page query",
+            "value": 1919,
+            "range": "±1.49%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "user profile page query",
+            "value": 1935,
+            "range": "±0.97%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "order history query",
+            "value": 2929,
+            "range": "±1.28%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "product search query",
+            "value": 5199,
+            "range": "±0.92%",
+            "unit": "ops/sec",
+            "extra": "92 samples"
           }
         ]
       }
