@@ -353,7 +353,7 @@ export function planStatements(input: {
       : fieldRenamesConflict(
           fieldChanges,
           planning,
-          (root) => destinationModelOf(root, pairing) === undefined,
+          (root) => !destinationKeepsModel(root, pairing),
         );
   if (fieldConflict !== undefined) return notOk([fieldConflict]);
 
@@ -572,11 +572,11 @@ function leaveOutShared(moving: string): string {
 
 /**
  * The route that keeps the documents of root models a leave-out plan leaves behind, for `migration
- * plan` only: add their move to the migration.ts that plan writes, before the validator change of
- * the collection they leave, which would otherwise stop on them.
+ * plan` only: add their move to the migration.ts that plan writes, right after the creation of the
+ * new collection, so no later rewrite of the collection they leave reaches them first.
  */
 function moveInLeftOutPlan(moving: string, from: string, to: string): string {
-  return `With migration plan, keep the documents by moving them in the migration that plan writes: plan the change without this statement, and in the operations of the migration.ts it writes, before the validator change of collection "${from}", add a dataTransform whose run copies the documents of ${moving} into collection "${to}", such as rawAggregate(${JSON.stringify(from)}, [{ $match: <a filter that selects only those documents> }, { $merge: { into: ${JSON.stringify(to)} } }]), and a deleteDocuments({ collection: ${JSON.stringify(from)}, filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart, such as a field only ${moving} stores.`;
+  return `With migration plan, keep the documents by moving them in the migration that plan writes: plan the change without this statement, and in the operations of the migration.ts it writes, right after the creation of collection "${to}" and before any other operation on collection "${from}", add a dataTransform whose run copies the documents of ${moving} into collection "${to}", such as rawAggregate(${JSON.stringify(from)}, [{ $match: <a filter that selects only those documents> }, { $merge: { into: ${JSON.stringify(to)} } }]), and a deleteDocuments({ collection: ${JSON.stringify(from)}, filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart, such as a field only ${moving} stores. If the apply stops after collection "${to}" is created, do not drop it, since it holds the moved documents: remove its creation from that migration.ts, run the file again, fix what stopped the apply, and run db migrate again.`;
 }
 
 /** The leave-out route for root models whose documents no discriminator tells apart from those of the models that stay: without the statement they are removed, and nothing is asked. */
@@ -932,21 +932,22 @@ export function destinationModelOf(
 }
 
 /**
- * Whether the destination keeps origin model `model`, wherever it stores it: the test of which other
- * models' documents an operation that selects documents by a discriminator value (a variant delete
- * or a discriminator replacement) could reach. A model that moves out of a collection leaves its
- * documents in it, so it counts there; a model the destination removes does not. Renames and value
- * replacements use `sharesCollectionInDestination` instead, since they rewrite the documents as the
- * models that stay read them.
+ * Whether the destination keeps origin model `model`, wherever it stores it. A variant delete or a
+ * discriminator replacement counts every model the destination keeps as sharing the collection's
+ * documents: they select documents by a discriminator value, a model that moves out leaves its
+ * documents behind where they can match it, and this is the check these operations had before,
+ * narrowed only by the models the destination removes. A takeover asks it of a holder's root model.
  */
-export function keepsDocumentsOf(model: ModelCoordinate, match: ModelMatchInput): boolean {
+export function destinationKeepsModel(model: ModelCoordinate, match: ModelMatchInput): boolean {
   return destinationModelOf(model, match) !== undefined;
 }
 
 /**
  * Whether the destination stores origin model `model`'s pair in `collection`, the collection the
  * origin stores it in after the plan's renames: the test of which other models share a collection's
- * documents for a field or key rename and a stored value replacement. A model the destination removes, or stores elsewhere,
+ * documents for a field rename. Every rewrite `rewriteRefusals` checks (key renames, value
+ * replacements, removals, casts, fills) counts the same models, the destination's in that
+ * collection, as it always has. A model the destination removes, or stores elsewhere,
  * does not share them, since the models that remain read the documents they read before.
  * `rewriteRefusals` asks the same question of the destination contract directly.
  */

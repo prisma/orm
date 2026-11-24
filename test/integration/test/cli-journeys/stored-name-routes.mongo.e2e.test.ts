@@ -6,6 +6,7 @@
  * - T3: two collections that move along a chain with no statement, through names nothing uses (both commands).
  * - T4: a new model takes the collection name a rename frees: the rename comes first (both commands).
  * - T5: `--rename` of a model that shares its collection with another root model: the route that plans without the statement and moves the documents in that plan's `migration.ts`, followed to the end (`migration plan`).
+ * - T6: the same route with a field `@map` change of the model that stays: the move goes right after the create, so the rename does not reach the moved documents; and a stop after the create is finished by removing the create, as the route says (`migration plan`).
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -60,6 +61,37 @@ model ${model} {
 `,
   )
   .join('')}`;
+
+/** Where the call that creates `collection` ends in a `migration.ts`, after its trailing comma. */
+function createCallRange(text: string, collection: string): { start: number; end: number } {
+  const start = text.indexOf(`createCollection('${collection}'`);
+  if (start === -1) throw new Error(`migration.ts creates no collection ${collection}`);
+  let depth = 0;
+  for (let index = text.indexOf('(', start); index < text.length; index += 1) {
+    if (text[index] === '(') depth += 1;
+    if (text[index] === ')') depth -= 1;
+    if (depth === 0) return { start, end: text.indexOf(',', index) + 1 };
+  }
+  throw new Error('unbalanced createCollection call');
+}
+
+/** Adds, right after the creation of `to`, the move the route describes: copy the documents `filter` selects from `from` into `to`, then delete them from `from`. */
+function withMoveAfterCreate(text: string, from: string, to: string, filter: string): string {
+  const imported = text.replace(
+    /import \{([^}]*)\} from '([^']*migration)';/,
+    (_, names: string, module: string) =>
+      `import { ${names.trim().replace(/,$/, '')}, dataTransform, deleteDocuments, rawAggregate } from '${module}';`,
+  );
+  const { end } = createCallRange(imported, to);
+  const move = `\n      dataTransform('move documents to ${to}', { run: () => rawAggregate('${from}', [{ $match: ${filter} }, { $merge: { into: '${to}' } }]) }),\n      deleteDocuments({ collection: '${from}', filter: ${filter} }),`;
+  return `${imported.slice(0, end)}${move}${imported.slice(end)}`;
+}
+
+/** Removes the creation of `collection` from a `migration.ts`, as the route says to do when the apply stopped after it. */
+function withoutCreate(text: string, collection: string): string {
+  const { start, end } = createCallRange(text, collection);
+  return `${text.slice(0, start)}${text.slice(end)}`;
+}
 
 describe('Journeys (MongoDB): stored-name refusal routes', {
   timeout: timeouts.spinUpMongoMemoryServer,
@@ -221,17 +253,7 @@ model ${user} {
     const dir = join(journey.ctx.testDir, 'migrations/app', latestMigrationDirName(journey.ctx));
     const path = join(dir, 'migration.ts');
     const filter = '{ user: { $exists: true } }';
-    const written = readFileSync(path, 'utf-8')
-      .replace(
-        /import \{([^}]*)\} from '([^']*migration)';/,
-        (_, names: string, from: string) =>
-          `import {${names}, dataTransform, deleteDocuments, rawAggregate } from '${from}';`,
-      )
-      .replace(
-        /(\n\s*)collMod\(/,
-        (_, indent: string) =>
-          `${indent}dataTransform('move User documents to members', { run: () => rawAggregate('users', [{ $match: ${filter} }, { $merge: { into: 'members' } }]) }),${indent}deleteDocuments({ collection: 'users', filter: ${filter} }),${indent}collMod(`,
-      );
+    const written = withMoveAfterCreate(readFileSync(path, 'utf-8'), 'users', 'members', filter);
     writeFileSync(path, written);
     const emitted = await selfEmitMigration(journey.ctx, ['--dir', dir]);
     expect(emitted.exitCode, `T5.05: ${emitted.stdout}${emitted.stderr}`).toBe(0);
@@ -242,5 +264,66 @@ model ${user} {
       members: await documents(journey.db, 'members'),
     }).toEqual({ users: [{ admin: 'Root' }], members: [{ user: 'Ada' }] });
     await expectSettled(journey, 'T5.07');
+  });
+
+  it('T6: the documents move right after the create, before a rename of the staying model reaches them, and a stop after the create is finished by removing the create', async () => {
+    const journey = project('t6_plan');
+    const shared = (user: string, collection: string, adminEmail: string) => `// use prisma-8
+
+model Admin {
+  id    ObjectId @id @map("_id")
+  admin String
+  email String  @map("${adminEmail}")
+
+  @@map("users")
+}
+
+model ${user} {
+  id    ObjectId @id @map("_id")
+  user  String
+  email String
+
+  @@map("${collection}")
+}
+`;
+    await begin(journey, 'migration plan', shared('User', 'users', 'email'), 'T6.01');
+    await journey.db.collection('users').insertMany([
+      { admin: 'Root', email: 'root@example.com' },
+      { user: 'Ada', email: 'ada@example.com' },
+    ]);
+    await journey.db
+      .collection('users')
+      .insertOne({ stray: true }, { bypassDocumentValidation: true });
+    await useSchema(journey, shared('Member', 'members', 'mail'), 'T6.02');
+    const planned = await runMigrationPlan(journey.ctx, [
+      '--name',
+      'move',
+      ...(journey.origin === undefined ? [] : ['--from', journey.origin]),
+      '--json',
+    ]);
+    expect(planned.exitCode, `T6.03: ${planned.stderr}`).toBe(0);
+    const dir = join(journey.ctx.testDir, 'migrations/app', latestMigrationDirName(journey.ctx));
+    const path = join(dir, 'migration.ts');
+    const filter = '{ user: { $exists: true } }';
+    writeFileSync(
+      path,
+      withMoveAfterCreate(readFileSync(path, 'utf-8'), 'users', 'members', filter),
+    );
+    expect((await selfEmitMigration(journey.ctx, ['--dir', dir])).exitCode, 'T6.04').toBe(0);
+
+    const stopped = await runMigrate(journey.ctx);
+    expect(stopped.exitCode, 'T6.05: the validator change stops on the stray document').not.toBe(0);
+    await journey.db.collection('users').deleteMany({ stray: true });
+    writeFileSync(path, withoutCreate(readFileSync(path, 'utf-8'), 'members'));
+    expect((await selfEmitMigration(journey.ctx, ['--dir', dir])).exitCode, 'T6.06').toBe(0);
+    const finished = await runMigrate(journey.ctx);
+    expect(finished.exitCode, `T6.07: ${finished.stdout}${finished.stderr}`).toBe(0);
+    expect({
+      users: await documents(journey.db, 'users'),
+      members: await documents(journey.db, 'members'),
+    }).toEqual({
+      users: [{ admin: 'Root', mail: 'root@example.com' }],
+      members: [{ user: 'Ada', email: 'ada@example.com' }],
+    });
   });
 });

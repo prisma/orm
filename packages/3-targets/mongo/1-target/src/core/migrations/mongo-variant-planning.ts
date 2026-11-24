@@ -25,6 +25,7 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import { collectionControlPolicy } from './mongo-control-policy';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
 import { modelCoordinates, sameModel } from './mongo-model-coordinates';
+import { capitalized } from './mongo-plan-text';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
 import {
   SEPARATE_THE_MODELS,
@@ -32,8 +33,8 @@ import {
   TIME_SERIES_UPDATES,
 } from './mongo-rewrite-refusals';
 import {
+  destinationKeepsModel,
   destinationModelOf,
-  keepsDocumentsOf,
   type ModelMatchInput,
   modelAt,
   sharesCollectionInDestination,
@@ -236,9 +237,12 @@ function variantText(model: ModelCoordinate): string {
 }
 
 function changeLabel(change: VariantChange, input: VariantInput, fromContract: ContractWithDomain) {
-  return change.statement === undefined
+  if (change.statement !== undefined) {
+    return `Cannot ${describeMigrationStatement(change.statement, fromContract, input.contract)}`;
+  }
+  return change.to === undefined
     ? `Cannot delete the documents of ${variantText(change.model)}`
-    : `Cannot ${describeMigrationStatement(change.statement, fromContract, input.contract)}`;
+    : `Cannot replace the discriminator value ${quoted(change.from)} of ${variantText(change.model)}`;
 }
 
 function refusedChange(
@@ -284,6 +288,30 @@ function collectionRefusal(
 }
 
 /**
+ * How to make a variant change that other root models' documents block. A model that stays in the
+ * collection can only be moved apart, or the change carried out by hand; a model that moves out
+ * leaves its documents behind, so its move goes first, in a plan of its own, with its documents,
+ * since the refusal is decided from the contracts and planning the same change again would refuse
+ * it again.
+ */
+function variantRoute(
+  change: VariantChange,
+  moving: readonly string[],
+  staying: readonly string[],
+): string {
+  const keep = `keep ${change.to === undefined ? variantText(change.model) : `the discriminator value ${quoted(change.from)}`} in the contract`;
+  const movingText = `model${moving.length === 1 ? '' : 's'} ${moving.map(quoted).join(', ')}`;
+  const firstMove = `first move ${movingText} to ${moving.length === 1 ? 'its' : 'their'} new collection and keep ${variantText(change.model)} as it is, plan and apply that, and move the documents of ${movingText} out of collection ${quoted(change.collection)}: in the migration.ts that migration plan writes, right after the creation of the new collection, or by hand under db update`;
+  if (staying.length === 0) {
+    return `A model that moves out of collection ${quoted(change.collection)} leaves its documents in it, so make the change in two plans: ${firstMove}; then make the change to ${variantText(change.model)} and plan again. Or ${keep}.`;
+  }
+  const stayAdvice = `To change only the documents of ${variantText(change.model)}, ${change.statement === undefined ? `move the models to separate collections, or ${keep}` : SEPARATE_THE_MODELS}.`;
+  return moving.length === 0
+    ? stayAdvice
+    : `${stayAdvice} ${capitalized(movingText)} also ${moving.length === 1 ? 'moves' : 'move'} out of collection ${quoted(change.collection)} but ${moving.length === 1 ? 'leaves its' : 'leave their'} documents in it, so that move goes in a plan of its own before this change: ${firstMove}.`;
+}
+
+/**
  * The refusal of a change whose documents another root model stored in the same collection can
  * share: a model with the same discriminator field and value, whose documents the delete or
  * replacement would reach too.
@@ -303,7 +331,7 @@ function sharedCollectionRefusal(
     { field: change.originField, value: change.from },
     undefined,
   ).filter((name) =>
-    keepsDocumentsOf(
+    destinationKeepsModel(
       { namespaceId: change.model.namespaceId, model: name },
       matchInputOf(fromContract, input),
     ),
@@ -317,6 +345,7 @@ function sharedCollectionRefusal(
         matchInputOf(fromContract, input),
       ),
   );
+  const staying = others.filter((name) => !moving.includes(name));
   const named = others.map(quoted).join(', ');
   const effect =
     change.to === undefined
@@ -326,7 +355,7 @@ function sharedCollectionRefusal(
     change,
     label,
     `the documents of model ${named} in collection ${quoted(change.collection)} can hold ${change.originField} ${quoted(change.from)}`,
-    `${sharedCollectionWhy(change.collection, others, effect)} ${moving.length > 0 ? `A model that moves out of collection ${quoted(change.collection)} leaves its documents in it, so the documents of model ${moving.map(quoted).join(', ')} stay there: change only the documents of ${variantText(change.model)} after they are moved, with a hand-written migration under migration plan or by hand under db update, and plan this change again; or ` : `To change only the documents of ${variantText(change.model)}, `}${change.statement === undefined ? `${moving.length > 0 ? '' : 'move the models to separate collections, or '}keep ${change.to === undefined ? variantText(change.model) : `the discriminator value ${quoted(change.from)}`} in the contract` : moving.length > 0 ? 'carry out the change yourself, with a filter that selects only its documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh' : SEPARATE_THE_MODELS}.`,
+    `${sharedCollectionWhy(change.collection, others, effect)} ${variantRoute(change, moving, staying)}`,
   );
 }
 

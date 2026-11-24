@@ -284,7 +284,7 @@ describe('MongoMigrationPlanner, a variant rewrite in a collection whose other r
             kind: 'unsupportedOperation',
             summary:
               'Cannot delete the documents of variant "Bug": the documents of model "Admin" in collection "tasks" can hold type "bug"',
-            why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so deleting the documents with that value would delete the documents of "Admin" too. A model that moves out of collection "tasks" leaves its documents in it, so the documents of model "Admin" stay there: change only the documents of variant "Bug" after they are moved, with a hand-written migration under migration plan or by hand under db update, and plan this change again; or keep variant "Bug" in the contract.',
+            why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so deleting the documents with that value would delete the documents of "Admin" too. A model that moves out of collection "tasks" leaves its documents in it, so make the change in two plans: first move model "Admin" to its new collection and keep variant "Bug" as it is, plan and apply that, and move the documents of model "Admin" out of collection "tasks": in the migration.ts that migration plan writes, right after the creation of the new collection, or by hand under db update; then make the change to variant "Bug" and plan again. Or keep variant "Bug" in the contract.',
           },
         ],
       },
@@ -295,7 +295,7 @@ describe('MongoMigrationPlanner, a variant rewrite in a collection whose other r
             kind: 'statementRefused',
             summary:
               'Cannot convert variant "Bug": the documents of model "Admin" in collection "tasks" can hold type "bug"',
-            why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so replacing the value would replace it in the documents of "Admin" too. A model that moves out of collection "tasks" leaves its documents in it, so the documents of model "Admin" stay there: change only the documents of variant "Bug" after they are moved, with a hand-written migration under migration plan or by hand under db update, and plan this change again; or carry out the change yourself, with a filter that selects only its documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.',
+            why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so replacing the value would replace it in the documents of "Admin" too. A model that moves out of collection "tasks" leaves its documents in it, so make the change in two plans: first move model "Admin" to its new collection and keep variant "Bug" as it is, plan and apply that, and move the documents of model "Admin" out of collection "tasks": in the migration.ts that migration plan writes, right after the creation of the new collection, or by hand under db update; then make the change to variant "Bug" and plan again. Or keep the discriminator value "bug" in the contract.',
             refusedStatement: convert[0],
           },
         ],
