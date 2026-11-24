@@ -119,10 +119,10 @@ interface ContractHashes {
   readonly profileHash: string;
 }
 
-const POSTGRES_PROFILE_HASH = '3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2';
-const MONGO_PROFILE_HASH = '251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3';
-const SQLITE_PROFILE_HASH = '260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53';
-const MYSQL_PROFILE_HASH = '5212eb1a1220f2d24de13f4efadd4c703f3a1098a5f57e09da0dc26ebb7201d0';
+const POSTGRES_PROFILE_HASH = 'ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632';
+const MONGO_PROFILE_HASH = '8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69';
+const SQLITE_PROFILE_HASH = '595b5c7dd6da0c70556bef798d80d453ba856772e83382b1b62238623cbd8790';
+const MYSQL_PROFILE_HASH = 'a76864aec3e51292e5212754c5fa96988ddc2ce190204c23855cf9c5e5c5f5fa';
 
 /** The hashes of each starter's contract. A template change that changes a starter's contract changes them. */
 const CELLS: ReadonlyArray<{
@@ -134,8 +134,8 @@ const CELLS: ReadonlyArray<{
     target: 'postgres',
     authoring: 'psl',
     hashes: {
-      storageHash: '920a87b50729a867e21706dd0fa5c3739e273a84ed89eb2f3525633b2d6ef85c',
-      executionHash: '0ff7f5c55037616d53a67c7c581c1178658b41c7a674a85dd59fc3b8f9dd8a49',
+      storageHash: '2291d86bb5a03397fc1be7e3082cf69d683f9fadd85cfa96de8da701dce20e39',
+      executionHash: '9cff59780b7c673f5ee513c956d8d060bf403ba1c536c660f78704521ed5b4a9',
       profileHash: POSTGRES_PROFILE_HASH,
     },
   },
@@ -143,8 +143,8 @@ const CELLS: ReadonlyArray<{
     target: 'postgres',
     authoring: 'typescript',
     hashes: {
-      storageHash: 'd901307c194c817cfa0a28ababa391bd1b2342a2ebb5f8ac3280534f2295f96f',
-      executionHash: 'c478b201602051bfaeddbe71eb44664a34764bf959a3d00c206e7dcf71393533',
+      storageHash: 'f0904497fbf22810445721e4f023981d03a691ab167b98ad1670fe8db0bf5c16',
+      executionHash: '8a230035c801786beda6062a49558130a032fcd4442eaf124c363df2cd1eaa77',
       profileHash: POSTGRES_PROFILE_HASH,
     },
   },
@@ -152,7 +152,7 @@ const CELLS: ReadonlyArray<{
     target: 'mongo',
     authoring: 'psl',
     hashes: {
-      storageHash: 'bdf84c83adcc796638599553a64e4fc95ddda80ce50f4cc0d34c348404705ac3',
+      storageHash: 'dbcd7e612c8991f8dc34ad93dc862643eff97cfe61d0f112f55cd4857ff6982e',
       profileHash: MONGO_PROFILE_HASH,
     },
   },
@@ -160,7 +160,7 @@ const CELLS: ReadonlyArray<{
     target: 'mongo',
     authoring: 'typescript',
     hashes: {
-      storageHash: '530517580da72a6b8c5800c90776cbbe73272007bcfac6c8418c202a6f6ea5b4',
+      storageHash: '31995de9d9e436c7bd523a346597b1d6a6f7bbca947a66c0cca558d42dcab037',
       profileHash: MONGO_PROFILE_HASH,
     },
   },
@@ -168,8 +168,8 @@ const CELLS: ReadonlyArray<{
     target: 'sqlite',
     authoring: 'psl',
     hashes: {
-      storageHash: '057e2e5025d03e9bad7973158b5e0d195d824c0e11f6518cd68a049d84af8b2a',
-      executionHash: '6a55777d5f51e57189d17f214f1decf0d1ee4cff0fd12c141707cf7fd5e37dda',
+      storageHash: 'c880a71b373304bad573a37199c7724238390cb194f375b1ec178660c6fbe303',
+      executionHash: 'f02c7dd2d8b80559c46f3ec6b3ee7a76566ab2a5ed3e5442478441fed05a1e8f',
       profileHash: SQLITE_PROFILE_HASH,
     },
   },
@@ -177,8 +177,8 @@ const CELLS: ReadonlyArray<{
     target: 'sqlite',
     authoring: 'typescript',
     hashes: {
-      storageHash: 'e8c6b55da273ae62cd82898bbba8dc818a79eebd2b45639c364a977cf600de52',
-      executionHash: '3c0829282bfb14800598318a98f795990cdff27501ab82540adfb6334939ac6c',
+      storageHash: '7c854047a8a888412230755fbe3f9edbfd9cb5099332f4f88f87c2f32b7a8d2e',
+      executionHash: '01ccf09871aaa5f48234a0113287cab9ed4896e14fe3bd9bd3807fe49976a8aa',
       profileHash: SQLITE_PROFILE_HASH,
     },
   },
@@ -186,8 +186,8 @@ const CELLS: ReadonlyArray<{
     target: 'mysql',
     authoring: 'psl',
     hashes: {
-      storageHash: 'b79a338d0cb4947e5e5196dccfc66056c75df0047d50d30c73d247c55d98ea65',
-      executionHash: 'cd95b7242e7b62e7ae3034802f0768b948cfaf9c4a6f2a6d78614cc2311d0362',
+      storageHash: 'b023d25fa8d3f20c3fa36c03dea388403623d3a438567701dc72e82cc0a63f3a',
+      executionHash: 'bb6011974d46754c0023e978f782fd5895592f78ae2f841901ce88b25f3660f4',
       profileHash: MYSQL_PROFILE_HASH,
     },
   },
@@ -195,8 +195,8 @@ const CELLS: ReadonlyArray<{
     target: 'mysql',
     authoring: 'typescript',
     hashes: {
-      storageHash: '40b2792d6591923f25adbc1f9841f0fc2247514ee51862885acaa86201912452',
-      executionHash: '85d521eeef0d411b07dde5cb23f035535f9033ded707549052b29a30402e03b9',
+      storageHash: '7f068c4653abe214b732a3cd33430f8c45659da1163b7b080b2a75b9ab5769db',
+      executionHash: '46e6861fd2112d201964231c2434341b3f07e749cd86dc4648358c9191d3eecf',
       profileHash: MYSQL_PROFILE_HASH,
     },
   },

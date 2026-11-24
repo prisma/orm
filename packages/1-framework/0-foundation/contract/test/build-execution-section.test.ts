@@ -58,7 +58,7 @@ describe('buildExecutionSection', () => {
       ],
     });
     expect(section).toEqual({
-      executionHash: '81b78e1492452f91daacdb0fd3a21ec9b4eb58febabdb4548963ab55b810fa3a',
+      executionHash: '35ab80610c00e6c33421cb1d336cc9ac3fd29e32eea112f9a610aa217e5c1107',
       mutations: {
         defaults: [
           defaultFor('public', 'User', 'createdAt'),

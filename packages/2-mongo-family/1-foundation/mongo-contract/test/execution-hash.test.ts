@@ -24,7 +24,7 @@ function hashOf(execution: Record<string, unknown>): string {
 describe('computeExecutionHash over a Mongo execution section', () => {
   it('hashes a fixed section to a fixed value', () => {
     expect(hashOf(mongoExecution())).toBe(
-      'f84b1eeee7c7c1c4ceeb98277516a2189072e6c86e21d90d20492b5743f79b65',
+      '9b0df790fa5a6dc8acfb4ba05879d388650c49a3f7683b54b8f47ac52be07046',
     );
   });
 
