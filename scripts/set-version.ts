@@ -5,10 +5,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { planWorkspace, releaseOfRootVersion } from './release-plan-workspace.ts';
 import {
   participatesInLockstep,
   restampExtensionVersion,
-  rewriteWorkspaceDeps,
+  rewriteWorkspaceDepsByPlan,
   stampSkillMetadata,
 } from './set-version-utils.ts';
 
@@ -50,21 +51,30 @@ const previousVersion: string = JSON.parse(
 
 let updatedCount = 0;
 
-// Every workspace package — publishable, private, and the workspace
-// root — gets the same version. Lockstep is the invariant that lets a
-// single read of the root `package.json` answer "what version are we
-// shipping right now?"; if private packages drifted, that invariant
-// would be silently violated by direct invocations of this script.
+// Each published package's version and its specifiers on ours come from the release plan, read
+// from the manifests before anything is rewritten. On the 8.0.0 release candidates that is the root
+// version everywhere, as it always was. Private packages, examples, apps and the root follow the
+// root version, so a single read of the root `package.json` still says which release this is.
+const plan = planWorkspace(rootDir, version);
+const { line } = releaseOfRootVersion(version);
+const published = new Set(Object.keys(plan));
+
 for (const pkg of workspacePackages) {
   const packageJsonPath = path.join(pkg.path, 'package.json');
   const content = await fs.readFile(packageJsonPath, 'utf-8');
   const packageJson: PackageJson = JSON.parse(content);
+  const planned = plan[packageJson.name];
 
-  packageJson.version = version;
-  rewriteWorkspaceDeps(packageJson, version);
+  packageJson.version = planned?.version ?? version;
+  rewriteWorkspaceDepsByPlan(packageJson, {
+    rootVersion: version,
+    line,
+    published,
+    ranges: planned?.ranges,
+  });
   await fs.writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
-  console.log(`Updated ${pkg.name} to ${version}`);
+  console.log(`Updated ${pkg.name} to ${packageJson.version}`);
   updatedCount++;
 }
 
@@ -87,7 +97,12 @@ for (const manifestPath of trackedManifests) {
   const packageJson: PackageJson = JSON.parse(await fs.readFile(manifestPath, 'utf-8'));
   if (!participatesInLockstep(packageJson)) continue;
   packageJson.version = version;
-  rewriteWorkspaceDeps(packageJson, version);
+  rewriteWorkspaceDepsByPlan(packageJson, {
+    rootVersion: version,
+    line,
+    published,
+    ranges: undefined,
+  });
   await fs.writeFile(manifestPath, `${JSON.stringify(packageJson, null, 2)}\n`);
   console.log(
     `Updated ${path.relative(rootDir, manifestPath)} (project-boundary manifest) to ${version}`,

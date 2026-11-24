@@ -51,6 +51,52 @@ export function rewriteWorkspaceDeps(packageJson: MutablePackageJson, version: s
   }
 }
 
+export interface PlanSpecifierRule {
+  /** The root version, `-dev.N` included for a development build. */
+  readonly rootVersion: string;
+  readonly line: 'release-candidates' | 'levels';
+  /** The names of the published packages. */
+  readonly published: ReadonlySet<string>;
+  /**
+   * The range the release plan gives this manifest's package on each published package it names;
+   * `undefined` for a package that is not published.
+   */
+  readonly ranges: Readonly<Record<string, string>> | undefined;
+}
+
+/**
+ * Rewrite every workspace dep spec in `packageJson` from the release plan. Mutates in place.
+ *
+ * A published package's specifier on a package of ours it names is the plan's range, under
+ * `peerDependencies` and `devDependencies` alike: `workspace:8.0.0-rc.26` on the release candidates,
+ * `workspace:~8.1.0` or `workspace:^8.1.0-preview.0` on the levels line, and pnpm publishes it as
+ * written without the protocol. Any other specifier on a published package is the root version on
+ * the release candidates, as one version for all wrote it, and `workspace:*` on the levels line,
+ * which the local package satisfies whatever its own version. A specifier on a private package,
+ * aliased ones included, is the root version, which private packages follow.
+ */
+export function rewriteWorkspaceDepsByPlan(
+  packageJson: MutablePackageJson,
+  rule: PlanSpecifierRule,
+): void {
+  for (const field of DEP_FIELDS) {
+    const deps = packageJson[field];
+    if (!deps) continue;
+    for (const [name, spec] of Object.entries(deps)) {
+      if (typeof spec !== 'string' || !spec.startsWith('workspace:')) continue;
+      const alias = /^workspace:((?:@[^/@]+\/)?[^@]+)@/.exec(spec)?.[1];
+      const range = rule.ranges?.[name];
+      deps[name] = alias
+        ? `workspace:${alias}@${rule.rootVersion}`
+        : range !== undefined
+          ? `workspace:${range}`
+          : rule.published.has(name) && rule.line === 'levels'
+            ? 'workspace:*'
+            : `workspace:${rule.rootVersion}`;
+    }
+  }
+}
+
 /**
  * Whether a manifest that is NOT a workspace member still versions in
  * lockstep with the workspace. A `workspace:` dep spec is the tell:

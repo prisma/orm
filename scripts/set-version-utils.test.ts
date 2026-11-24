@@ -6,6 +6,7 @@ import {
   participatesInLockstep,
   restampExtensionVersion,
   rewriteWorkspaceDeps,
+  rewriteWorkspaceDepsByPlan,
   stampSkillMetadata,
 } from './set-version-utils.ts';
 
@@ -282,5 +283,84 @@ describe('restampExtensionVersion', () => {
   it('is idempotent', () => {
     const once = restampExtensionVersion(contractDts, '8.0.0-rc.9', '8.0.0-rc.10');
     assert.equal(restampExtensionVersion(once, '8.0.0-rc.9', '8.0.0-rc.10'), once);
+  });
+});
+
+describe('rewriteWorkspaceDepsByPlan', () => {
+  const published = new Set(['@prisma/orm-framework', '@prisma/orm-postgres']);
+
+  function shell(): MutablePackageJson {
+    return {
+      name: '@prisma/orm-postgres',
+      version: '8.0.0-rc.25',
+      peerDependencies: { '@prisma/orm-framework': 'workspace:8.0.0-rc.25', pg: '^8.22.0' },
+      devDependencies: {
+        '@internal/postgres': 'workspace:8.0.0-rc.25',
+        '@prisma/orm-framework': 'workspace:8.0.0-rc.25',
+      },
+    };
+  }
+
+  function example(): MutablePackageJson {
+    return {
+      name: 'example',
+      version: '8.0.0-rc.25',
+      dependencies: {
+        '@prisma/orm-postgres': 'workspace:8.0.0-rc.25',
+        '@prisma/orm-mongo': 'workspace:@internal/mongo@8.0.0-rc.25',
+        '@internal/utils': 'workspace:8.0.0-rc.25',
+      },
+    };
+  }
+
+  it('writes on the release candidates exactly what one version for all wrote', () => {
+    for (const make of [shell, example]) {
+      const byPlan = make();
+      const lockstep = make();
+      rewriteWorkspaceDepsByPlan(byPlan, {
+        rootVersion: '8.0.0-rc.26',
+        line: 'release-candidates',
+        published,
+        ranges:
+          byPlan.name === '@prisma/orm-postgres'
+            ? { '@prisma/orm-framework': '8.0.0-rc.26' }
+            : undefined,
+      });
+      rewriteWorkspaceDeps(lockstep, '8.0.0-rc.26');
+      assert.deepEqual(byPlan, lockstep);
+    }
+  });
+
+  it("writes a published package's specifiers on ours from the plan, peers and development copies alike", () => {
+    const manifest = shell();
+    rewriteWorkspaceDepsByPlan(manifest, {
+      rootVersion: '8.1.0',
+      line: 'levels',
+      published,
+      ranges: { '@prisma/orm-framework': '~8.1.0' },
+    });
+    assert.deepEqual(manifest, {
+      ...shell(),
+      peerDependencies: { '@prisma/orm-framework': 'workspace:~8.1.0', pg: '^8.22.0' },
+      devDependencies: {
+        '@internal/postgres': 'workspace:8.1.0',
+        '@prisma/orm-framework': 'workspace:~8.1.0',
+      },
+    });
+  });
+
+  it('writes workspace:* on a published package from a private one on the levels line, and the root version on private ones', () => {
+    const manifest = example();
+    rewriteWorkspaceDepsByPlan(manifest, {
+      rootVersion: '8.1.0',
+      line: 'levels',
+      published,
+      ranges: undefined,
+    });
+    assert.deepEqual(manifest.dependencies, {
+      '@prisma/orm-postgres': 'workspace:*',
+      '@prisma/orm-mongo': 'workspace:@internal/mongo@8.1.0',
+      '@internal/utils': 'workspace:8.1.0',
+    });
   });
 });

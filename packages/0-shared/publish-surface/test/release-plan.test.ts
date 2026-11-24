@@ -424,7 +424,7 @@ describe('planInputFor', () => {
           { name: '@prisma/orm-framework', version: '8.1.0' },
           {
             name: '@prisma/orm-postgres',
-            version: '8.1.0',
+            version: '8.1.0-dev.3',
             peerDependencies: { '@prisma/orm-framework': 'workspace:~8.1.0', pg: '^8.22.0' },
           },
         ],

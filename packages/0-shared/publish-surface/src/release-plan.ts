@@ -402,7 +402,8 @@ const OUR_SCOPE = '@prisma/orm-';
 
 /**
  * The plan input for a root version, read from the published packages' manifests: each package's
- * current version, and the packages of ours it names as peers.
+ * current version, and the packages of ours it names as peers. A tree stamped for a development
+ * build plans from the versions it was stamped from.
  */
 export function planInputFor(options: {
   readonly rootVersion: string;
@@ -413,7 +414,9 @@ export function planInputFor(options: {
 }): ReleasePlanInput {
   return {
     ...releaseOfRootVersion(options.rootVersion),
-    current: Object.fromEntries(options.manifests.map((m) => [m.name, m.version])),
+    current: Object.fromEntries(
+      options.manifests.map((m) => [m.name, m.version.replace(/-dev\.\d+$/, '')]),
+    ),
     uses: Object.fromEntries(
       options.manifests.map((m) => [
         m.name,
