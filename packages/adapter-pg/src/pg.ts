@@ -134,6 +134,7 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
 class PgTransaction extends PgQueryable<TransactionClient> implements Transaction {
   private closed = false
   private runningStatements = 0
+  private connectionTainted = false
 
   constructor(
     client: pg.PoolClient,
@@ -152,9 +153,24 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
       })
     }
 
+    const isCloseStatement = isTransactionCloseSql(query.sql)
+
     this.runningStatements++
     try {
-      return await super.performIO(query)
+      const result = await super.performIO(query)
+      if (isCloseStatement) {
+        this.connectionTainted = false
+      }
+      return result
+    } catch (error) {
+      // Release with an error on close() if COMMIT/ROLLBACK did not complete
+      // cleanly, or if a query timed out client-side while still potentially
+      // active on the wire (e.g., pg's `query_timeout`), so pg-pool evicts the
+      // connection instead of lending it out still inside a transaction.
+      if (isCloseStatement || isUnsettledClientTimeout(error, this.client)) {
+        this.connectionTainted = true
+      }
+      throw error
     } finally {
       this.runningStatements--
     }
@@ -163,8 +179,9 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
   /**
    * Closes the transaction at most once. Once the pool has lent the client to
    * a new owner, a second `release()` would corrupt the pool's bookkeeping, so
-   * it is skipped. A client with a statement still running is released with an
-   * error so the pool destroys it instead of lending out a busy connection.
+   * it is skipped. A client with a statement still running, a failed close
+   * statement, or an unsettled client-side query timeout is released with an
+   * error so the pool destroys it instead of lending out a dirty connection.
    */
   private close(): void {
     if (this.closed) {
@@ -177,6 +194,8 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
     } finally {
       if (this.runningStatements > 0) {
         this.client.release(new Error('Transaction closed with a statement still running'))
+      } else if (this.connectionTainted || hasActiveWireQuery(this.client)) {
+        this.client.release(new Error('Transaction closed without a clean completion'))
       } else {
         this.client.release()
       }
@@ -377,4 +396,20 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
       await client.end()
     })
   }
+}
+
+const TRANSACTION_CLOSE_SQL_RE = /^(?:COMMIT|ROLLBACK)(?:\s+(?:TRANSACTION|WORK))?$/i
+
+/** Returns true for top-level transaction termination SQL statements (not savepoints). */
+function isTransactionCloseSql(sql: string): boolean {
+  const normalized = sql.trim().replace(/;+$/, '').trim()
+  return TRANSACTION_CLOSE_SQL_RE.test(normalized)
+}
+
+function hasActiveWireQuery(client: TransactionClient): boolean {
+  return (client as unknown as { activeQuery?: unknown }).activeQuery != null
+}
+
+function isUnsettledClientTimeout(error: unknown, client: TransactionClient): boolean {
+  return hasActiveWireQuery(client) || (error instanceof Error && error.message === 'Query read timeout')
 }

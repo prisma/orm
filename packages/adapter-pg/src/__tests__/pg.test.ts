@@ -279,4 +279,132 @@ describe('PgTransaction', () => {
     expect(releases).toEqual([expect.any(Error)])
     expect(pool.totalCount).toBe(0)
   })
+
+  it('should destroy the connection when ROLLBACK fails after a query timeout (#31144)', async () => {
+    const { pool, adapter, releases } = await setup((text) => {
+      if (text === 'INSERT INTO t VALUES (1)' || text === 'ROLLBACK') {
+        return Promise.reject(new Error('Query read timeout'))
+      }
+      return undefined
+    })
+    const acquired: pg.PoolClient[] = []
+    pool.on('acquire', (client) => acquired.push(client))
+
+    const tx = await adapter.startTransaction()
+
+    await expect(tx.executeRaw({ sql: 'INSERT INTO t VALUES (1)', args: [], argTypes: [] })).rejects.toThrow(
+      'Query read timeout',
+    )
+    await expect(tx.executeRaw({ sql: 'ROLLBACK', args: [], argTypes: [] })).rejects.toThrow('Query read timeout')
+    await tx.rollback()
+
+    expect(releases).toEqual([expect.any(Error)])
+    expect(pool.totalCount).toBe(0)
+
+    // Subsequent caller acquires a fresh connection instead of reusing the aborted transaction socket.
+    const nextOwner = await pool.connect()
+    expect(acquired).toHaveLength(2)
+    expect(acquired[1]).not.toBe(acquired[0])
+    await expect(nextOwner.query('INSERT INTO t VALUES (2)')).resolves.toMatchObject({ rowCount: 0 })
+    nextOwner.release()
+    expect(pool.idleCount).toBe(1)
+  })
+
+  it('should destroy the connection when COMMIT fails and rollback() closes without ROLLBACK SQL', async () => {
+    const { pool, adapter, releases } = await setup((text) => {
+      if (text === 'COMMIT') {
+        return Promise.reject(new Error('Query read timeout'))
+      }
+      return undefined
+    })
+    const tx = await adapter.startTransaction()
+
+    await expect(tx.executeRaw({ sql: 'COMMIT', args: [], argTypes: [] })).rejects.toThrow('Query read timeout')
+    await tx.rollback()
+
+    expect(releases).toEqual([expect.any(Error)])
+    expect(pool.totalCount).toBe(0)
+  })
+
+  it('should destroy the connection if a client query times out and rollback() is called directly', async () => {
+    const { pool, adapter, releases } = await setup((text) => {
+      if (text === 'SELECT slow') {
+        return Promise.reject(new Error('Query read timeout'))
+      }
+      return undefined
+    })
+    const tx = await adapter.startTransaction()
+
+    await expect(tx.executeRaw({ sql: 'SELECT slow', args: [], argTypes: [] })).rejects.toThrow('Query read timeout')
+    await tx.rollback()
+
+    expect(releases).toEqual([expect.any(Error)])
+    expect(pool.totalCount).toBe(0)
+  })
+
+  it('should reuse the connection when ROLLBACK succeeds after a client query timeout recovers', async () => {
+    const { pool, adapter, releases } = await setup((text) => {
+      if (text === 'SELECT slow') {
+        return Promise.reject(new Error('Query read timeout'))
+      }
+      return undefined
+    })
+    const tx = await adapter.startTransaction()
+
+    await expect(tx.executeRaw({ sql: 'SELECT slow', args: [], argTypes: [] })).rejects.toThrow('Query read timeout')
+    await expect(tx.executeRaw({ sql: 'ROLLBACK', args: [], argTypes: [] })).resolves.toBe(0)
+    await tx.rollback()
+
+    expect(releases).toEqual([undefined])
+    expect(pool.idleCount).toBe(1)
+    expect(pool.totalCount).toBe(1)
+  })
+
+  it('should reuse the connection after a PostgreSQL DatabaseError followed by clean ROLLBACK', async () => {
+    const dbError = new DatabaseError('duplicate key value violates unique constraint', 0, 'error')
+    dbError.code = '23505'
+    dbError.severity = 'ERROR'
+
+    const { pool, adapter, releases } = await setup((text) => {
+      if (text === 'INSERT INTO t VALUES (1)') {
+        return Promise.reject(dbError)
+      }
+      return undefined
+    })
+    const tx = await adapter.startTransaction()
+
+    await expect(tx.executeRaw({ sql: 'INSERT INTO t VALUES (1)', args: [], argTypes: [] })).rejects.toMatchObject({
+      name: 'DriverAdapterError',
+      cause: { kind: 'UniqueConstraintViolation' },
+    })
+    await expect(tx.executeRaw({ sql: 'ROLLBACK', args: [], argTypes: [] })).resolves.toBe(0)
+    await tx.rollback()
+
+    expect(releases).toEqual([undefined])
+    expect(pool.idleCount).toBe(1)
+    expect(pool.totalCount).toBe(1)
+  })
+
+  it('should not treat ROLLBACK TO SAVEPOINT as closing the outer transaction', async () => {
+    const dbError = new DatabaseError('savepoint does not exist', 0, 'error')
+    dbError.code = '3B001'
+    dbError.severity = 'ERROR'
+
+    const { pool, adapter, releases } = await setup((text) => {
+      if (text === 'ROLLBACK TO SAVEPOINT sp_1') {
+        return Promise.reject(dbError)
+      }
+      return undefined
+    })
+    const tx = await adapter.startTransaction()
+
+    await expect(tx.rollbackToSavepoint!('sp_1')).rejects.toMatchObject({
+      name: 'DriverAdapterError',
+      cause: { kind: 'postgres', code: '3B001' },
+    })
+    await tx.rollback()
+
+    expect(releases).toEqual([undefined])
+    expect(pool.idleCount).toBe(1)
+  })
 })
