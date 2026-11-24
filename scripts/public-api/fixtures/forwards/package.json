@@ -1,0 +1,10 @@
+{
+  "name": "fixture-forwards",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./named": "./lib/named.mjs",
+    "./package.json": "./package.json"
+  }
+}

@@ -102,6 +102,13 @@
       "formatter": { "enabled": false },
       "assist": { "enabled": false }
     },
+    // Declaration files written the way the bundler writes them, as input to scripts/public-api.
+    {
+      "includes": ["scripts/public-api/fixtures/**"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false },
+      "assist": { "enabled": false }
+    },
     {
       "includes": ["**/*.config.ts"],
       "linter": {
