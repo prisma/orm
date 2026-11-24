@@ -4,6 +4,8 @@
  * `pnpm publish` subprocesses.
  */
 
+import { parseVersion } from '../packages/0-shared/publish-surface/src/release-plan.ts';
+
 /**
  * npm's error wording when republishing a version number that already
  * exists on the registry. Surfaces both for "version is currently
@@ -56,4 +58,36 @@ export function classifyPublishResult({ code, output }) {
     return { ok: false, alreadyPublished: false, retryable: true };
   }
   return { ok: false, alreadyPublished: false, retryable: false };
+}
+
+/**
+ * The dist-tag one package is published under. A `latest` publish is a
+ * release, and each package goes under the tag the release plan gives it:
+ * on the release candidates that is `latest` for every package, and on the
+ * levels line a package below GA that has ever been GA goes under its
+ * level's name. Any other tag the workflow passes (`dev`, `beta`, a pull
+ * request's tag) applies to every package as before.
+ */
+export function publishTagFor(passedTag, plannedTag) {
+  if (passedTag !== 'latest') return passedTag;
+  if (plannedTag === undefined) {
+    throw new Error('a latest publish needs the release plan to give the package a tag');
+  }
+  return plannedTag;
+}
+
+/**
+ * Whether a package was ever GA in a major: a plain `X.Y.Z` of that major
+ * is among its published versions.
+ */
+export function wasEverGa(publishedVersions, major) {
+  return publishedVersions.some((version) => {
+    let parsed;
+    try {
+      parsed = parseVersion(version);
+    } catch {
+      return false;
+    }
+    return parsed.major === major && parsed.level === undefined && parsed.dev === undefined;
+  });
 }

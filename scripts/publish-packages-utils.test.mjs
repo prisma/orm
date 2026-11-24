@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 
-import { classifyPublishResult } from './publish-packages-utils.mjs';
+import { classifyPublishResult, publishTagFor, wasEverGa } from './publish-packages-utils.mjs';
 
 describe('classifyPublishResult', () => {
   it('treats exit 0 as ok and not already-published', () => {
@@ -53,5 +53,38 @@ describe('classifyPublishResult', () => {
       output: 'spawn error: ENOENT',
     });
     assert.deepEqual(result, { ok: false, alreadyPublished: false, retryable: false });
+  });
+});
+
+describe('publishTagFor', () => {
+  it('publishes a release under the tag the plan gives each package', () => {
+    assert.equal(publishTagFor('latest', 'latest'), 'latest');
+    assert.equal(publishTagFor('latest', 'preview'), 'preview');
+  });
+
+  it('publishes every package under any other tag the workflow passes', () => {
+    assert.equal(publishTagFor('dev', 'preview'), 'dev');
+    assert.equal(publishTagFor('beta', undefined), 'beta');
+  });
+
+  it('refuses a release for a package the plan does not cover', () => {
+    assert.throws(() => publishTagFor('latest', undefined), /release plan/);
+  });
+});
+
+describe('wasEverGa', () => {
+  it('is true when a plain version of the major was published', () => {
+    assert.equal(wasEverGa(['8.0.0-rc.3', '8.0.0', '8.1.0-preview.0'], 8), true);
+  });
+
+  it('is false when only pre-releases, development builds or other majors were published', () => {
+    assert.equal(
+      wasEverGa(['8.0.0-rc.25', '8.0.0-rc.25-dev.3', '8.1.0-preview.0', '0.17.0'], 8),
+      false,
+    );
+  });
+
+  it('ignores versions this repository does not publish', () => {
+    assert.equal(wasEverGa(['8.0.0-beta.1', '0.0.0-pr.12'], 8), false);
   });
 });

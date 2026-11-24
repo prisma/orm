@@ -227,7 +227,7 @@ jobs:
         run: |
           PRERELEASE_FLAG=""
           case "$VERSION" in
-            *-rc.*) PRERELEASE_FLAG="--prerelease" ;;
+            *-rc.*|*-preview.*|*-ea.*) PRERELEASE_FLAG="--prerelease" ;;
           esac
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             gh release edit "v$VERSION" \
