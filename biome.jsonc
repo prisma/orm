@@ -20,7 +20,9 @@
       "!**/mongo-contract.json",
       "!**/migrations/*/*/migration.json",
       "!**/migrations/*/*/ops.json",
-      "!**/planner-golden/fixtures/*/planned.golden.json"
+      "!**/planner-golden/fixtures/*/planned.golden.json",
+      // Declaration files written the way the bundler writes them, as input to scripts/public-api.
+      "!scripts/public-api/fixtures/**/*.d.mts"
     ]
   },
   "formatter": {
@@ -100,13 +102,6 @@
     {
       "includes": ["**/upgrade-instructions/*/fixtures/**"],
       "formatter": { "enabled": false },
-      "assist": { "enabled": false }
-    },
-    // Declaration files written the way the bundler writes them, as input to scripts/public-api.
-    {
-      "includes": ["scripts/public-api/fixtures/**"],
-      "formatter": { "enabled": false },
-      "linter": { "enabled": false },
       "assist": { "enabled": false }
     },
     {
