@@ -199,5 +199,49 @@ describe('QueryPlanCache', () => {
       expect(cache.getBatch('batch')).toBeUndefined()
       expect(cache.size).toBe(0)
     })
+
+    it('evicts oldest batch entries when the size limit is exceeded', () => {
+      const cache = new QueryPlanCache(100, 400)
+      const makeResponse = (id: number) => ({
+        type: 'multi' as const,
+        plans: [{ type: 'value' as const, args: { data: 'x'.repeat(100) } }],
+      })
+
+      cache.setBatch('key1', makeResponse(1))
+      cache.setBatch('key2', makeResponse(2))
+      cache.setBatch('key3', makeResponse(3))
+
+      expect(cache.getBatch('key1')).toBeUndefined()
+      expect(cache.getBatch('key2')).toBeDefined()
+      expect(cache.getBatch('key3')).toBeDefined()
+    })
+
+    it('does not store a batch entry that exceeds the size limit on its own', () => {
+      const cache = new QueryPlanCache(100, 300)
+      const small = { type: 'multi' as const, plans: [] }
+      const large = {
+        type: 'multi' as const,
+        plans: [{ type: 'value' as const, args: { data: 'x'.repeat(500) } }],
+      }
+
+      cache.setBatch('small', small)
+      cache.setBatch('large', large)
+
+      expect(cache.getBatch('small')).toBe(small)
+      expect(cache.getBatch('large')).toBeUndefined()
+      expect(cache.batchCacheSize).toBe(1)
+    })
+
+    it('still bounds batch entries by count under the size limit', () => {
+      const cache = new QueryPlanCache(2)
+      const response = { type: 'multi' as const, plans: [] }
+
+      cache.setBatch('key1', response)
+      cache.setBatch('key2', response)
+      cache.setBatch('key3', response)
+
+      expect(cache.getBatch('key1')).toBeUndefined()
+      expect(cache.batchCacheSize).toBe(2)
+    })
   })
 })
