@@ -31,6 +31,10 @@ export interface PrismaPostgresAdapterConfig {
    * Use the PRISMA_DIRECT_TCP_URL from your database connection details.
    */
   connectionString: string | URL
+  /**
+   * The PostgreSQL schema to use for generated queries.
+   */
+  schema?: string
 }
 
 /**
@@ -71,6 +75,7 @@ export class PrismaPostgresAdapter implements SqlDriverAdapterFactory {
  */
 class PrismaPostgresConnection implements SqlDriverAdapter {
   readonly #client: Client
+  readonly #schemaName: string
 
   readonly adapterName = '@prisma/ppg-adapter'
   readonly provider = 'postgres'
@@ -81,6 +86,7 @@ class PrismaPostgresConnection implements SqlDriverAdapter {
       ...config,
       parsers: [...existingParsers, ...builtinParsers],
     })
+    this.#schemaName = config.schema ?? schemaFromConnectionString(config.connectionString) ?? 'public'
   }
 
   async dispose(): Promise<void> {
@@ -92,7 +98,7 @@ class PrismaPostgresConnection implements SqlDriverAdapter {
     // PostgreSQL supports up to 65535 parameters, but we use a conservative limit
     return {
       maxBindValues: 16 << 10,
-      schemaName: 'public',
+      schemaName: this.#schemaName,
       supportsRelationJoins: true,
     }
   }
@@ -249,5 +255,32 @@ async function executeRawStatement(executor: Statements, params: SqlQuery): Prom
     return affected
   } catch (error) {
     throw convertDriverError(error)
+  }
+}
+
+/**
+ * Reads `?schema=` from the connection URL when no explicit schema option is provided.
+ * Non-URL strings yield undefined without error.
+ */
+function schemaFromConnectionString(connectionString: string | URL | undefined): string | undefined {
+  if (connectionString === undefined) {
+    return undefined
+  }
+
+  const str = typeof connectionString === 'string' ? connectionString : connectionString.toString()
+  try {
+    const url = new URL(str)
+    const schema = url.searchParams.get('schema')
+    return typeof schema === 'string' && schema !== '' ? schema : undefined
+  } catch {
+    const queryStart = str.indexOf('?')
+    if (queryStart !== -1) {
+      const fragmentStart = str.indexOf('#', queryStart)
+      const queryEnd = fragmentStart === -1 ? str.length : fragmentStart
+      const params = new URLSearchParams(str.slice(queryStart + 1, queryEnd))
+      const schema = params.get('schema')
+      return typeof schema === 'string' && schema !== '' ? schema : undefined
+    }
+    return undefined
   }
 }

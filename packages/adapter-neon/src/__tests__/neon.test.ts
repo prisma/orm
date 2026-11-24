@@ -76,6 +76,57 @@ describe('PrismaNeonAdapterFactory', () => {
 
     await adapter.dispose()
   })
+
+  it('should extract schema from connection string URL when not provided in options', async () => {
+    const connectionString = 'postgresql://test:test@localhost:5432/test?schema=custom_schema'
+    const factory = new PrismaNeonAdapterFactory(connectionString)
+    const adapter = await factory.connect()
+
+    const connectionInfo = adapter.getConnectionInfo()
+    expect(connectionInfo.schemaName).toBe('custom_schema')
+
+    await adapter.dispose()
+  })
+
+  it('should prefer schema from options over connection string URL', async () => {
+    const connectionString = 'postgresql://test:test@localhost:5432/test?schema=url_schema'
+    const factory = new PrismaNeonAdapterFactory(connectionString, { schema: 'options_schema' })
+    const adapter = await factory.connect()
+
+    const connectionInfo = adapter.getConnectionInfo()
+    expect(connectionInfo.schemaName).toBe('options_schema')
+
+    await adapter.dispose()
+  })
+
+  it('should extract schema from PoolConfig connectionString when not provided in options', async () => {
+    const factory = new PrismaNeonAdapterFactory({
+      connectionString: 'postgresql://test:test@localhost:5432/test?schema=url_schema',
+    })
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBe('url_schema')
+
+    await adapter.dispose()
+  })
+
+  it('should accept a libpq-style connection string without extracting a schema', async () => {
+    const factory = new PrismaNeonAdapterFactory('host=localhost port=5432 dbname=test user=test password=test')
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBeUndefined()
+
+    await adapter.dispose()
+  })
+
+  it('should default schemaName to undefined when no schema is present in URL or options', async () => {
+    const factory = new PrismaNeonAdapterFactory('postgresql://test:test@localhost:5432/test')
+    const adapter = await factory.connect()
+
+    expect(adapter.getConnectionInfo().schemaName).toBeUndefined()
+
+    await adapter.dispose()
+  })
 })
 
 describe('NeonTransaction', () => {
