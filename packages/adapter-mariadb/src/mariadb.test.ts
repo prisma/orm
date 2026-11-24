@@ -531,3 +531,79 @@ describe('transaction connection management', () => {
     expect(connNoRelease.end).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('transaction rolled back by the server', () => {
+  const sqlError = (errno: number, sqlMessage: string) =>
+    Object.assign(new Error(sqlMessage), { errno, sqlMessage, sqlState: '40001' })
+
+  function setup(failure: Error) {
+    const conn = {
+      on: vi.fn(),
+      off: vi.fn(),
+      release: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn().mockResolvedValue({ meta: [], affectedRows: 0 }),
+      execute: vi.fn().mockRejectedValueOnce(failure).mockResolvedValue({ meta: [], affectedRows: 1 }),
+    }
+    const pool = { getConnection: vi.fn().mockResolvedValue(conn) } as unknown as mariadb.Pool
+    const adapter = new PrismaMariaDbAdapter(pool, { supportsRelationJoins: true })
+    const sentQueries = () => conn.query.mock.calls.map(([req]) => req.sql)
+    return { adapter, conn, sentQueries }
+  }
+
+  const update = { sql: 'UPDATE account SET balance = balance - 10 WHERE id = 2', args: [], argTypes: [] }
+  const insert = { sql: 'INSERT INTO item (name) VALUES ("after")', args: [], argTypes: [] }
+
+  test.each([
+    [1213, 'Deadlock found when trying to get lock; try restarting transaction'],
+    [1206, 'The total number of locks exceeds the lock table size'],
+  ])('after error %i, refuses further statements and fails the commit', async (errno, message) => {
+    const { adapter, conn, sentQueries } = setup(sqlError(errno, message))
+    const tx = await adapter.startTransaction()
+
+    await expect(tx.executeRaw(update)).rejects.toMatchObject({ cause: { originalCode: String(errno) } })
+    await expect(tx.executeRaw(insert)).rejects.toMatchObject({ cause: { originalCode: String(errno) } })
+    await expect(tx.createSavepoint?.('s1')).rejects.toMatchObject({ cause: { originalCode: String(errno) } })
+    await expect(tx.commit()).rejects.toMatchObject({ cause: { originalCode: String(errno) } })
+
+    expect(conn.execute).toHaveBeenCalledTimes(1)
+    expect(sentQueries()).toEqual(['BEGIN'])
+    expect(conn.release).toHaveBeenCalledTimes(1)
+  })
+
+  test('a statement sent while a deadlocking statement is running is not executed', async () => {
+    const { adapter, conn } = setup(
+      sqlError(1213, 'Deadlock found when trying to get lock; try restarting transaction'),
+    )
+    const tx = await adapter.startTransaction()
+
+    const [first, second] = await Promise.allSettled([tx.executeRaw(update), tx.executeRaw(insert)])
+
+    expect(first).toMatchObject({ status: 'rejected', reason: { cause: { originalCode: '1213' } } })
+    expect(second).toMatchObject({ status: 'rejected', reason: { cause: { originalCode: '1213' } } })
+    expect(conn.execute).toHaveBeenCalledTimes(1)
+  })
+
+  test('a statement-level error leaves the transaction usable', async () => {
+    const { adapter, conn, sentQueries } = setup(sqlError(1062, "Duplicate entry '1' for key 'PRIMARY'"))
+    const tx = await adapter.startTransaction()
+
+    await expect(tx.executeRaw(update)).rejects.toMatchObject({ cause: { kind: 'UniqueConstraintViolation' } })
+    await expect(tx.executeRaw(insert)).resolves.toBe(1)
+    await tx.commit()
+
+    expect(conn.execute).toHaveBeenCalledTimes(2)
+    expect(sentQueries()).toEqual(['BEGIN', 'COMMIT'])
+  })
+
+  test('rollback after the server rolled back still releases the connection', async () => {
+    const { adapter, conn } = setup(
+      sqlError(1213, 'Deadlock found when trying to get lock; try restarting transaction'),
+    )
+    const tx = await adapter.startTransaction()
+
+    await expect(tx.executeRaw(update)).rejects.toMatchObject({ cause: { kind: 'TransactionWriteConflict' } })
+    await tx.rollback()
+
+    expect(conn.release).toHaveBeenCalledTimes(1)
+  })
+})
