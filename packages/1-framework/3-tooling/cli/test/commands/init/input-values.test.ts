@@ -49,7 +49,7 @@ describe('resolveTarget', () => {
       expect.objectContaining({
         message: 'Invalid value for --target',
         why: expect.stringContaining('is not one of the short names (postgres, mongodb)'),
-        fix: 'Pass a short name (--target postgres, --target mongodb) or the full name of a target package (`--target <package>`).',
+        fix: 'Pass a short name (--target postgres, --target mongodb) or the full name of a facade (`--target <package>`).',
       }),
     );
   });
@@ -58,11 +58,11 @@ describe('resolveTarget', () => {
     expect(() => resolveTargetName('../outside', 'prompt')).toThrow(
       expect.objectContaining({
         code: 'CLI.INIT_INVALID_FLAG_VALUE',
-        message: 'Invalid target package name',
+        message: 'Invalid facade name',
         why: expect.stringMatching(
-          /^`\.\.\/outside`, typed as the name of the target package, is not taken as a package name: /,
+          /^`\.\.\/outside`, typed as the name of the facade, is not taken as a package name: /,
         ),
-        fix: expect.stringContaining('type the target package'),
+        fix: expect.stringContaining("type the facade's name"),
       }),
     );
   });

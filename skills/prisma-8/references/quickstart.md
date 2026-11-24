@@ -186,7 +186,7 @@ pnpm dlx prisma@latest orm init --yes --target postgres --authoring psl
 
 The flags `init` accepts (run `prisma orm init --help` for the source of truth):
 
-- `--target <package>` — `postgres`, `mongodb`, or the name of another target package, such as `@prisma/orm-sqlite`.
+- `--target <package>` — `postgres`, `mongodb`, or the name of another facade, such as `@prisma/orm-sqlite`.
 - `--authoring <style>` — `psl` or `typescript`.
 - `--schema-path <path>` — where to write the starter schema. Defaults to `src/prisma/contract.prisma` (or `src/prisma/contract.ts` with `--authoring typescript`), the canonical layout above. The extension must agree with `--authoring` (`CLI.INIT_AUTHORING_SCHEMA_PATH_MISMATCH` otherwise).
 - `--confirm <directory name>` — grant the reinit consent non-interactively. Re-running init in a scaffolded directory asks you to type the directory name back before it overwrites; non-interactive runs pass the name with this flag instead (`--yes` does not grant it).
@@ -194,7 +194,7 @@ The flags `init` accepts (run `prisma orm init --help` for the source of truth):
 - `--probe-db` — connect to `DATABASE_URL` once and check the server version against the target's minimum.
 - `--strict-probe` — fail init if the probe fails (errors without `--probe-db`).
 - `--skip-install` — skip dependency install + initial contract emit.
-- `--keep-previous-facade` — when re-running init to switch targets, keep the previous target package in `package.json`.
+- `--keep-previous-facade` — when re-running init to switch targets, keep the previous facade in `package.json`.
 
 `init` does not install agent skills and has no `--skip-skills` flag: the `prisma-8` skill ships inside the `@prisma/orm-*` package the project installs, and the family-level `prisma init` / `prisma skills sync` commands copy it into the agent harness directories.
 

@@ -162,7 +162,7 @@ describe(
       expect(check.requests).toEqual([]);
     });
 
-    it('names the Prisma ORM peer packages of the target package in the install command', async () => {
+    it('names the Prisma ORM peer packages of the facade in the install command', async () => {
       writePrisma6Project();
       const { prompt } = scriptedPrompt();
       const asked: string[] = [];
@@ -176,7 +176,7 @@ describe(
           requiredPeersFor: async (packageName) => {
             asked.push(packageName);
             return {
-              target: `${packageName}@8.1.0`,
+              facade: `${packageName}@8.1.0`,
               packages: [
                 { name: '@prisma/orm-framework', version: '8.1.0', outcome: 'to-install' },
               ],
@@ -212,7 +212,7 @@ describe(
           packageManager: 'pnpm',
           warn: (text) => warnings.push(text),
           requiredPeersFor: async (packageName) => ({
-            target: packageName,
+            facade: packageName,
             packages: [],
             unread: [packageName],
             warnings: [],
@@ -245,7 +245,7 @@ describe(
           packageManager: 'pnpm',
           warn: (text) => warnings.push(text),
           requiredPeersFor: async (packageName) => ({
-            target: packageName,
+            facade: packageName,
             packages: [],
             unread: [],
             warnings: ['@prisma/orm-framework is installed at 8.0.0'],

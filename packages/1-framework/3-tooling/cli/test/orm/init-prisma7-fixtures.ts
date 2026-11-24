@@ -126,7 +126,7 @@ export function preparedTarget(
 ): PreparedTargetPackage {
   return {
     contribution: STUB_CONTRIBUTION,
-    requiredPeers: { target: '@prisma/orm-postgres', packages: [], unread: [], warnings: [] },
+    requiredPeers: { facade: '@prisma/orm-postgres', packages: [], unread: [], warnings: [] },
     installed: [],
     added: undefined,
     warnings: [],
@@ -165,7 +165,7 @@ export function stubCheck(
 
 type ResolveContext = Parameters<typeof resolveInitInputs>[0];
 
-/** Input resolution with a stub target package, a check that reads every schema and no warning sink, unless the test supplies its own. */
+/** Input resolution with a stub facade, a check that reads every schema and no warning sink, unless the test supplies its own. */
 export function resolveInputs(
   ctx: Omit<
     ResolveContext,
@@ -184,7 +184,7 @@ export function resolveInputs(
     warn: () => {},
     packageManager: 'pnpm',
     requiredPeersFor: async (packageName) => ({
-      target: packageName,
+      facade: packageName,
       packages: [],
       unread: [],
       warnings: [],

@@ -13,14 +13,14 @@ changes:
 
 ## `prisma-packages-are-peer-dependencies`
 
-An extension used to hold `@prisma/orm-framework`, its family (`@prisma/orm-family-sql` or `@prisma/orm-family-mongo`) and `@prisma/orm-toolchain` as ordinary dependencies, and only the target, such as `@prisma/orm-target-postgres`, as a peer dependency. Now every `@prisma/orm-*` package it uses is a peer dependency. The application lists those packages itself, beside its target package, and a package manager never gives a package its own copy of a peer dependency, so the extension shares the application's one copy of each. A version that does not match the application's is reported at install, instead of becoming a second copy whose values the application's copy does not recognise. When the packages that disagree are ones the application lists itself, npm refuses the install, and pnpm, Yarn and Bun install and print a peer dependency warning. A successful install does not prove the versions match, so read the peer warnings it prints. A monorepo whose applications are on different Prisma versions can still get two copies under npm workspaces and Bun's hoisted linker; keep such applications on one version, or use pnpm, Yarn or Bun's isolated linker.
+An extension used to hold `@prisma/orm-framework`, its family (`@prisma/orm-family-sql` or `@prisma/orm-family-mongo`) and `@prisma/orm-toolchain` as ordinary dependencies, and only the target, such as `@prisma/orm-target-postgres`, as a peer dependency. Now every `@prisma/orm-*` package it uses is a peer dependency. The application lists those packages itself, beside its facade, and a package manager never gives a package its own copy of a peer dependency, so the extension shares the application's one copy of each. A version that does not match the application's is reported at install, instead of becoming a second copy whose values the application's copy does not recognise. When the packages that disagree are ones the application lists itself, npm refuses the install, and pnpm, Yarn and Bun install and print a peer dependency warning. A successful install does not prove the versions match, so read the peer warnings it prints. A monorepo whose applications are on different Prisma versions can still get two copies under npm workspaces and Bun's hoisted linker; keep such applications on one version, or use pnpm, Yarn or Bun's isolated linker.
 
 In the extension's `package.json`, for every `@prisma/orm-*` entry under `dependencies` or `optionalDependencies`, an `@prisma/orm-extension-*` package included:
 
 1. Move it to `peerDependencies`, keeping its exact version.
 2. Add the same entry, at the same version, to `devDependencies`, so the extension's own build and tests install it. Add any entry already under `peerDependencies` to `devDependencies` too, if it is not there.
 
-A package of ours that only the extension's tests use, such as a target package the tests run against, stays under `devDependencies` alone, at the same version; it is not a peer.
+A package of ours that only the extension's tests use, such as a facade the tests run against, stays under `devDependencies` alone, at the same version; it is not a peer.
 
 Before:
 

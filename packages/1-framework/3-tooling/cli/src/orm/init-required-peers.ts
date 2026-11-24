@@ -25,16 +25,16 @@ export interface RequiredPeer {
 }
 
 /**
- * The required peers of a target package: every `@prisma/orm-*` package it names as a peer
- * dependency, directly or through another such package (the list can hold another target package:
+ * The required peers of a facade: every `@prisma/orm-*` package it names as a peer
+ * dependency, directly or through another such package (the list can hold another facade:
  * MariaDB's names MySQL's), and every other required peer dependency those packages name, such as
  * `temporal-polyfill`, whose own peers are not followed. A peer marked optional in
  * `peerDependenciesMeta` is not required. An application lists each of them beside the target
  * package, so it loads under a package manager that installs no peer dependencies.
  */
 export interface RequiredPeers {
-  /** The target package as the application lists it: `name@version` when it names `@prisma/orm-*` peers, otherwise its bare name. */
-  readonly target: string;
+  /** The facade as the application lists it: `name@version` when it names `@prisma/orm-*` peers, otherwise its bare name. */
+  readonly facade: string;
   readonly packages: readonly RequiredPeer[];
   /** Packages whose own manifest could not be read, so their peers are missing from `packages`. */
   readonly unread: readonly string[];
@@ -51,7 +51,7 @@ interface ReadManifest {
   readonly peers: ReadonlyMap<string, string>;
 }
 
-/** Reads a package's manifest; `range` is the range a dependent names it at, `undefined` for the target package. */
+/** Reads a package's manifest; `range` is the range a dependent names it at, `undefined` for the facade. */
 type ReadPackage = (name: string, range: string | undefined) => Promise<ReadManifest | undefined>;
 
 function manifestFrom(
@@ -93,35 +93,35 @@ function readManifestAt(path: string | undefined): ReadManifest | undefined {
 
 /**
  * Reads the manifests installed for the project at `cwd`: found from the project, or from the
- * target package's own real folder, where its imports resolve. pnpm installs the peers it adds
- * itself beside the target package under `node_modules/.pnpm`, not at the project's root, and the
- * target package's `init` entrypoint finds them there.
+ * facade's own real folder, where its imports resolve. pnpm installs the peers it adds
+ * itself beside the facade under `node_modules/.pnpm`, not at the project's root, and the
+ * facade's `init` entrypoint finds them there.
  */
 export function installedManifests(
   cwd: string,
-  targetPackage: string,
+  facade: string,
 ): {
   readonly read: ReadPackage;
   readonly installedVersion: (name: string) => string | undefined;
 } {
   const find = (name: string): ReadManifest | undefined =>
-    readInstalled(cwd, name) ?? besideTarget(cwd, targetPackage, name);
+    readInstalled(cwd, name) ?? besideFacade(cwd, facade, name);
   return {
     read: async (name) => find(name),
     installedVersion: (name) => find(name)?.version,
   };
 }
 
-function besideTarget(cwd: string, targetPackage: string, name: string): ReadManifest | undefined {
-  const targetManifest = installedManifest(cwd, targetPackage);
-  if (targetManifest === undefined) return undefined;
-  let targetFolder: string;
+function besideFacade(cwd: string, facade: string, name: string): ReadManifest | undefined {
+  const facadeManifest = installedManifest(cwd, facade);
+  if (facadeManifest === undefined) return undefined;
+  let facadeFolder: string;
   try {
-    targetFolder = realpathSync(dirname(targetManifest));
+    facadeFolder = realpathSync(dirname(facadeManifest));
   } catch {
     return undefined;
   }
-  return readManifestAt(installedManifest(targetFolder, name));
+  return readManifestAt(installedManifest(facadeFolder, name));
 }
 
 /**
@@ -168,7 +168,7 @@ export function requiredPeersForSetup(ctx: {
     try {
       resolved = await resolveRequiredPeers({
         packageName,
-        ownsTarget: false,
+        ownsFacadeLine: false,
         installedElsewhere: ctx.installedElsewhere,
         declared: () => new Map(),
         installedVersion: () => undefined,
@@ -179,13 +179,13 @@ export function requiredPeersForSetup(ctx: {
       clearTimeout(timer);
     }
     return resolved instanceof Error
-      ? { target: packageName, packages: [], unread: [packageName], warnings: [] }
+      ? { facade: packageName, packages: [], unread: [packageName], warnings: [] }
       : resolved;
   };
 }
 
 /**
- * Collects the required peers of the target package: every `@prisma/orm-*` package its manifest
+ * Collects the required peers of the facade: every `@prisma/orm-*` package its manifest
  * names as a peer, then the peers those name, until no new name appears, and every other required
  * peer those manifests name, whose own peers are not followed. With `install`,
  * it installs what the project does not list yet and reads again every package it installed, since
@@ -196,8 +196,8 @@ export function requiredPeersForSetup(ctx: {
  */
 export async function resolveRequiredPeers(ctx: {
   readonly packageName: string;
-  /** Whether init wrote the target package's line, so it may pin it to the installed version. */
-  readonly ownsTarget: boolean;
+  /** Whether init wrote the facade's line, so it may pin it to the installed version. */
+  readonly ownsFacadeLine: boolean;
   /** Packages init installs another way, such as the CLI's engine, which the list leaves out. */
   readonly installedElsewhere: ReadonlySet<string>;
   readonly declared: () => ReadonlyMap<string, string>;
@@ -207,28 +207,28 @@ export async function resolveRequiredPeers(ctx: {
     | undefined;
   readonly read: ReadPackage;
 }): Promise<RequiredPeers | CliStructuredError> {
-  const target = await ctx.read(ctx.packageName, undefined);
+  const facade = await ctx.read(ctx.packageName, undefined);
   if (
-    target === undefined ||
-    target.version === undefined ||
-    ![...target.peers.keys()].some(isPrismaOrmPackage)
+    facade === undefined ||
+    facade.version === undefined ||
+    ![...facade.peers.keys()].some(isPrismaOrmPackage)
   ) {
     return {
-      target: ctx.packageName,
+      facade: ctx.packageName,
       packages: [],
-      unread: target === undefined ? [ctx.packageName] : [],
+      unread: facade === undefined ? [ctx.packageName] : [],
       warnings: [],
     };
   }
-  const targetSpecifier = `${ctx.packageName}@${target.version}`;
+  const facadeSpecifier = `${ctx.packageName}@${facade.version}`;
   const wanted = new Map<string, { readonly range: string; readonly by: string }>();
   const outcomes = new Map<string, RequiredPeerOutcome>();
   const warnings: string[] = [];
   let unread: string[] = [];
   let level: { readonly name: string; readonly manifest: ReadManifest | undefined }[] = [
-    { name: ctx.packageName, manifest: target },
+    { name: ctx.packageName, manifest: facade },
   ];
-  let pinTarget = ctx.ownsTarget;
+  let pinFacade = ctx.ownsFacadeLine;
   const atAnotherVersion = new Map<
     string,
     { readonly installed: string; readonly range: string; readonly by: string }
@@ -271,10 +271,10 @@ export async function resolveRequiredPeers(ctx: {
 
     const declared = ctx.declared();
     const toInstall: string[] = [];
-    if (pinTarget && declared.get(ctx.packageName) !== target.version) {
-      toInstall.push(targetSpecifier);
+    if (pinFacade && declared.get(ctx.packageName) !== facade.version) {
+      toInstall.push(facadeSpecifier);
     }
-    pinTarget = false;
+    pinFacade = false;
     for (const [name, { range, by }] of byName(wanted)) {
       if (outcomes.has(name)) continue;
       const listed = declared.get(name);
@@ -321,7 +321,7 @@ export async function resolveRequiredPeers(ctx: {
   }
 
   return {
-    target: targetSpecifier,
+    facade: facadeSpecifier,
     packages: byName(wanted).map(([name, { range }]) => ({
       name,
       version: range,

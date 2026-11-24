@@ -86,7 +86,7 @@ function writeManifest(dependencies: Record<string, string>): void {
   );
 }
 
-/** A target package with the peers `@prisma/orm-postgres` has: platform packages, the driver, `temporal-polyfill`, and an optional `typescript`. */
+/** A facade with the peers `@prisma/orm-postgres` has: platform packages, the driver, `temporal-polyfill`, and an optional `typescript`. */
 function installedTarget(): void {
   installed(
     '@prisma/orm-postgres',
@@ -307,7 +307,7 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
   );
 
   it(
-    'goes on under --skip-install when the required peers sit beside the target package, as pnpm installs them',
+    'goes on under --skip-install when the required peers sit beside the facade, as pnpm installs them',
     async () => {
       const real = 'node_modules/.pnpm/@prisma+orm-postgres@8.1.0/node_modules';
       writeProjectFile(
@@ -528,7 +528,7 @@ describe('init --skip-install with a required version written with a v prefix', 
 });
 
 describe('a required peer that is not a Prisma ORM package', () => {
-  function targetNaming(peers: Record<string, string>): void {
+  function facadeNaming(peers: Record<string, string>): void {
     writeProjectFile(
       'node_modules/@prisma/orm-postgres/package.json',
       JSON.stringify({
@@ -548,7 +548,7 @@ describe('a required peer that is not a Prisma ORM package', () => {
   it(
     'under --skip-install, says to change a line that lists another exact version than the one required',
     async () => {
-      targetNaming({ 'left-pad': '1.3.0' });
+      facadeNaming({ 'left-pad': '1.3.0' });
       installedAt('left-pad', '1.2.0');
       writeManifest({
         '@prisma/orm-postgres': VERSION,
@@ -581,7 +581,7 @@ describe('a required peer that is not a Prisma ORM package', () => {
   it(
     'leaves a line the project lists alone when the requirement is a range',
     async () => {
-      targetNaming({ 'temporal-polyfill': '^1.0.8' });
+      facadeNaming({ 'temporal-polyfill': '^1.0.8' });
       installedAt('temporal-polyfill', '1.0.0');
       writeManifest({
         '@prisma/orm-postgres': VERSION,

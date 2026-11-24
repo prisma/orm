@@ -1,6 +1,6 @@
-# Build a target package
+# Build a facade for a new database
 
-This reference is for the author of a package that adds a database target to Prisma 8, outside Prisma's repository. An application installs the package, imports `defineConfig` from it in `prisma.config.ts`, and runs `prisma orm init --target <your package>` and `prisma contract emit` exactly as an application on `@prisma/orm-postgres` does. Prisma's own target packages use the mechanisms below, with no path an outside package lacks.
+This reference is for the author of a package that adds a database target to Prisma 8, outside Prisma's repository. An application installs the package, imports `defineConfig` from it in `prisma.config.ts`, and runs `prisma orm init --target <your package>` and `prisma contract emit` exactly as an application on `@prisma/orm-postgres` does. Prisma's own facades use the mechanisms below, with no path an outside package lacks.
 
 `prisma-orm-acmedb` stands for your package throughout.
 

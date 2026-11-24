@@ -2,7 +2,7 @@
 
 The SQL family domain of Prisma 8: the SQL contract surface, schema IR, query lanes, SQL builder, and the SQL runtime shared by every SQL target (Postgres, SQLite).
 
-An application on a SQL database lists this package beside its target package (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb`), at the same version, because the target package names it as a peer dependency; `prisma orm init` writes that list. Application code imports from the target package. Extension authors and decomposed installs building against the SQL family import it directly.
+An application on a SQL database lists this package beside its facade (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb`), at the same version, because the facade names it as a peer dependency; `prisma orm init` writes that list. Application code imports from the facade. Extension authors and decomposed installs building against the SQL family import it directly.
 
 ## Entrypoints
 

@@ -74,7 +74,7 @@ const PLATFORM = {
   ],
 } as const;
 
-/** Each target package's required peers: its platform packages, then the others at their ranges. */
+/** Each facade's required peers: its platform packages, then the others at their ranges. */
 const expected: Readonly<
   Record<
     string,
@@ -94,7 +94,7 @@ const expected: Readonly<
   },
 };
 
-describe("the required peers of this repository's target packages", () => {
+describe("the required peers of this repository's facades", () => {
   it.each(Object.entries(expected))(
     'lists those of %s',
     async (packageName, { platform, others }) => {
@@ -103,7 +103,7 @@ describe("the required peers of this repository's target packages", () => {
 
       const resolved = await resolveRequiredPeers({
         packageName,
-        ownsTarget: false,
+        ownsFacadeLine: false,
         installedElsewhere: new Set([ENGINE_PACKAGE]),
         declared: () => new Map(),
         installedVersion: manifests.installedVersion,
@@ -112,7 +112,7 @@ describe("the required peers of this repository's target packages", () => {
       });
 
       expect(resolved).toEqual({
-        target: `${packageName}@${version}`,
+        facade: `${packageName}@${version}`,
         packages: [
           ...platform.map((name) => ({
             name,

@@ -4,9 +4,9 @@ Work this project found and did not do, with the reason and where it is recorded
 
 ## The init contribution's driver list repeats the manifest
 
-A target package names its database driver twice: as a required peer dependency in its `package.json`, and in the `peerPackages` field of the init contribution it exports. Since slice 1, `prisma orm init` adds every required peer from the manifest, so for every target package in this repository the field adds nothing after the target package is installed. `init` still needs a driver's name before the target package is installed, and it gets that from its list of known target packages, not from the contribution.
+A facade names its database driver twice: as a required peer dependency in its `package.json`, and in the `peerPackages` field of the init contribution it exports. Since slice 1, `prisma orm init` adds every required peer from the manifest, so for every facade in this repository the field adds nothing after the facade is installed. `init` still needs a driver's name before the facade is installed, and it gets that from its list of known facades, not from the contribution.
 
-Removing the field changes an interface that target packages outside this repository implement. That is a decision for the operator, not a clean-up. Raised when slice 1 was handed over.
+Removing the field changes an interface that facades outside this repository implement. That is a decision for the operator, not a clean-up. Raised when slice 1 was handed over.
 
 ## `prisma orm init` under Yarn Plug'n'Play
 
