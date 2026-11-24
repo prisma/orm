@@ -90,15 +90,24 @@ The policy says an application depends on one facade, on the extension packages 
 
 - **It runs independently.** It may be run outside a project, so it carries its own copy of the packages it needs.
 - **It accepts anything that satisfies its interfaces.** Its copy and the project's copy meet when it loads the project's config file. What crosses there is accepted by its shape, not by which copy made it. The repository's guidance against `instanceof` and identity checks exists for this reason.
+- **It has the same major and minor as the library in the project.** When they differ, it stops and says which version to install. The policy said only the same major. The reason for the minor: the tool's own copy emits the contract and its types, which the project's library then reads, and the tool reads what the project's config produces. If the tool is newer, the library reads what a later release wrote. If the tool is older, the tool does. Neither direction is promised. With the same major and minor, every direction is covered. The patch may differ.
 - **It reports newer versions.** It checks whether newer versions of any Prisma package exist within the ranges the user has written, and says so.
 
-## 5. Not yet discussed
+A consequence: the `prisma` package, which is released from another repository on its own numbers today, takes the release number's major and minor.
 
-- Whether the command-line tool must be at least as new as the library in the project.
-- A fix to a package below GA: whether it raises the suffix counter and not the patch number, so that a user's range selects it.
-- Which tag a package that has never had a GA release is published under.
-- A release of an older major version naming its tag explicitly.
-- A check at run time that reports a value from one copy being handed to another that cannot accept it.
-- An outside package that uses an API below GA.
-- The points listed as not yet decided in section 6 of [maturity-levels.md](../maturity-levels.md).
-- Packages below GA, and a monorepo with applications on different minors: the trial did not cover them.
+## 5. Details
+
+- **A fix to a package below GA raises its suffix counter**, `8.3.0-preview.1`, and not its patch number. A user's range can then select it.
+- **A package that has never had a GA release** has its newest release under the `latest` tag, so that a plain install works and the version shows its level.
+- **A release of an older major version always names its tag**, so that it cannot take `latest` back from the current major.
+- **An outside package that uses an API below GA** declares a range within one minor on the package that has it.
+- **A level on something that is not a TypeScript name**, such as a command-line flag or a config option, uses the same word with that thing's own separator: `--preview-foo`, `previewFoo`.
+- **When an API below GA becomes GA**, the plain name is added, and the old name keeps working until the next major version.
+- **Updating the upgrade skills** happens before GA, as the [plan](../plan.md) says.
+
+These settle the points that section 6 of [maturity-levels.md](../maturity-levels.md) lists as not decided, except the full definition of each level and how the levels relate to the support categories in prisma/orm#25843, which are this project's work.
+
+## 6. Left to the project
+
+- Running the install trial again for packages below GA, with their suffixed versions, and for a monorepo with applications on different minors.
+- A check at run time that reports a value from one copy being handed to another that cannot accept it. A ticket for it exists.
