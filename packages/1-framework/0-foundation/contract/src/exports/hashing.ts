@@ -7,4 +7,11 @@ export {
   type SerializeContract,
   type StorageSort,
 } from '../canonicalization';
-export { computeExecutionHash, computeProfileHash, computeStorageHash } from '../hashing';
+export {
+  assertContractHashes,
+  computeExecutionHash,
+  computeProfileHash,
+  computeStorageHash,
+  type ExpectedContractHashes,
+  type SavedContractSections,
+} from '../hashing';

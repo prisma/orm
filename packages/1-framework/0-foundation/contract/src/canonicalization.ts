@@ -284,18 +284,26 @@ export function canonicalizeContractToObject(
     ...ifDefined('defaultControlPolicy', serialized['defaultControlPolicy']),
     meta: serialized['meta'],
   };
+  return orderTopLevel(canonicalizeSections(normalized, options));
+}
+
+/**
+ * Applies the canonicalization rules to top-level contract sections, keyed by their contract names (`storage`, `capabilities`, `execution`, ...): defaults dropped, the family's `shouldPreserveEmpty` and `sortStorage` applied, and every key sorted.
+ */
+export function canonicalizeSections(
+  sections: Record<string, unknown>,
+  hooks: Pick<CanonicalizeContractOptions, 'shouldPreserveEmpty' | 'sortStorage'>,
+): Record<string, unknown> {
   const withDefaultsOmitted = blindCast<
     Record<string, unknown>,
     'canonicalization starts from a record and preserves its outer object shape'
-  >(omitDefaults(normalized, [], options.shouldPreserveEmpty));
-  const withSortedStorage = options.sortStorage
-    ? { ...withDefaultsOmitted, storage: options.sortStorage(withDefaultsOmitted['storage']) }
+  >(omitDefaults(sections, [], hooks.shouldPreserveEmpty));
+  const withSortedStorage = hooks.sortStorage
+    ? { ...withDefaultsOmitted, storage: hooks.sortStorage(withDefaultsOmitted['storage']) }
     : withDefaultsOmitted;
-  const withSortedKeys = blindCast<
-    Record<string, unknown>,
-    'sorting a record preserves its outer object shape'
-  >(sortObjectKeys(withSortedStorage));
-  return orderTopLevel(withSortedKeys);
+  return blindCast<Record<string, unknown>, 'sorting a record preserves its outer object shape'>(
+    sortObjectKeys(withSortedStorage),
+  );
 }
 
 export function canonicalizeContract(
