@@ -40,7 +40,11 @@ The extensions name a subset of the PostgreSQL list, except `@prisma/orm-extensi
 }
 ```
 
-Besides the `@prisma/orm-*` packages, check the other required peer dependencies the target package and those packages name, the ones `peerDependenciesMeta` does not mark optional: `temporal-polyfill` for every target package, `pg` and `@types/pg` for `@prisma/orm-postgres`, and `mongodb` for `@prisma/orm-mongo`. A package manager that installs no peer dependencies, such as Yarn, leaves out any the application does not list, and the application then cannot load. Add each one the application does not list yet, at the range its manifest gives. `@prisma/cli-engine`, which `@prisma/orm-toolchain` names, stays where the project already lists it, as a development dependency.
+Besides the `@prisma/orm-*` packages, check the other required peer dependencies the target package and those packages name, the ones `peerDependenciesMeta` does not mark optional: `temporal-polyfill` for every target package, `pg` and `@types/pg` for `@prisma/orm-postgres`, and `mongodb` for `@prisma/orm-mongo`. A package manager that installs no peer dependencies, such as Yarn, leaves out any the application does not list, and the application then cannot load. Add each one the application does not list yet, at the range its manifest gives. `@prisma/orm-toolchain` also names `@prisma/cli-engine` as a peer, and the project must list it, as a development dependency. If the project does not list it yet, add it as a development dependency at the version `@prisma/orm-toolchain`'s manifest names, which this prints from the project folder after the install:
+
+```sh
+node -p 'require(require.resolve("@prisma/orm-toolchain/package.json",{paths:[process.cwd()]})).peerDependencies["@prisma/cli-engine"]'
+```
 
 To read the names from the installed packages instead of the table, run this from the project folder after the install, naming the target package and each `@prisma/orm-*` extension the project lists. It prints every package they need as a required peer: the `@prisma/orm-*` ones followed through the peers of those, and the others with the range their manifest gives. It leaves out the names the command was given and `@prisma/cli-engine`, and exits with an error when it cannot find one of them:
 
