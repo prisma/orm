@@ -16,6 +16,8 @@ A part is in force from the first release after its project merges. Until `8.0.0
 
 Some parts can only start at `8.0.0`. Nothing can be promised about exports until they are reduced, which project 3 does, and no package is GA before then.
 
+Drafts exist for most of the documentation: decision records for the policy and the maturity levels, and corrections to the docs that contradict them. They are on the branch `docs/compatibility-policy-records`, from the closed pull request prisma/orm#31194. The file `projects/ga-compatibility-records/handover.md` on that branch says which project takes each one.
+
 ## How to read this plan
 
 Each project is sized for one to four pull requests. Its design is written when it starts.
@@ -121,6 +123,7 @@ Projects 2 to 7 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are Later. W
 
 - Turn the working definitions in [maturity-levels.md](maturity-levels.md) into exact requirements for a package to enter each level, and settle every point in its section 6: version numbers while packages are at different levels, what happens to the name `preview_foo` when the API reaches GA, and how a level is written where the name is not a TypeScript identifier. State how the levels relate to the support categories in prisma/orm#25843 (task 1).
 - Change the release scripts and workflow. Today they give every package one version, publish everything under `latest`, and cannot produce `8.0.0` without a hand edit. Decide the version ranges between our own packages from `8.0.0`, which are exact pins today, and change the publish step to write them. State the 12 months of fixes for the previous major in `SECURITY.md`, `docs/oss/versioning.md` and the docs (task 16).
+- Take along five small corrections that are true of the code today and listed in that handover file: remove a stability scheme for capabilities that was never built from the Ecosystem subsystem doc and `docs/reference/capabilities.md`, note that the per-component version matrix in the decision record on versioning was never built, and three wording fixes in `docs/oss/versioning.md`, the decision record index and `AGENTS.md`.
 - Write the procedure for releasing `8.0.0`, with the list of docs to rewrite on that day. A draft is in prisma/orm#31194, which was not merged.
 - Make the `prisma` tool or the toolchain read the installed library's version and stop on a different major. Nothing compares them today (task 17).
 
