@@ -14,6 +14,15 @@ const EXACT_VERSION = /^[v=]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-
 const RELEASE_NUMBER = /^[~^]?(\d+\.\d+)\./;
 
 /**
+ * The version a spec names when it is one exact version, in one form (`v8.0.0` and `=8.0.0` read
+ * as `8.0.0`), so a required version, a `package.json` line and an installed version compare as
+ * equal when they name the same version; `undefined` for a range or any other spec.
+ */
+export function exactVersionOf(spec: string): string | undefined {
+  return EXACT_VERSION.exec(spec.trim())?.[1];
+}
+
+/**
  * A target package that names its `@prisma/orm-*` peers at exact versions, as on the `8.0.0`
  * release candidates and in a development build, gets those versions; inside this repository a
  * `workspace:` specifier on an exact version counts as one. One that names them with
@@ -50,9 +59,10 @@ export function versionLines(
  * copy decides, and with nothing installed it counts as standing for the version.
  */
 function exactLineStandsFor(line: string, version: string, installed: string | undefined): boolean {
-  const exact = EXACT_VERSION.exec(line.trim());
-  if (exact !== null) return exact[1] === version;
-  return installed === undefined || installed === version;
+  const exact = exactVersionOf(line);
+  const required = exactVersionOf(version) ?? version;
+  if (exact !== undefined) return exact === required;
+  return installed === undefined || (exactVersionOf(installed) ?? installed) === required;
 }
 
 /**
@@ -61,8 +71,8 @@ function exactLineStandsFor(line: string, version: string, installed: string | u
  * `undefined` for any other range, which this cannot judge.
  */
 export function requirementAdmits(requirement: string, version: string): boolean | undefined {
-  const exact = EXACT_VERSION.exec(requirement.trim());
-  if (exact !== null) return exact[1] === version;
+  const exact = exactVersionOf(requirement);
+  if (exact !== undefined) return exact === (exactVersionOf(version) ?? version);
   const release = RELEASE_NUMBER.exec(requirement.trim())?.[1];
   if (release === undefined) return undefined;
   return RELEASE_NUMBER.exec(version)?.[1] === release;

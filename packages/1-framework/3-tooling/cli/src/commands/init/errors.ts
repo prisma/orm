@@ -1,6 +1,7 @@
 import { ifDefined } from '@internal/utils/defined';
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { formatSourceDiagnostic } from '../../control-api/operations/load-contract-source';
+import { exactVersionOf } from '../../orm/init-version-lines';
 import { CliStructuredError } from '../../utils/cli-errors';
 import type { PackageManager } from './detect-package-manager';
 import type { Prisma6SideBySideSetup } from './prisma6-side-by-side';
@@ -728,8 +729,6 @@ export function errorInitRequiredPeersNotInstalled(options: {
   );
 }
 
-const EXACT_VERSION_LINE = /^[v=]?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
-
 export interface RequiredPeerAtAnotherVersion {
   readonly name: string;
   /** The version of the copy the project resolves. */
@@ -754,7 +753,7 @@ export function errorInitRequiredPeersAtAnotherVersion(options: {
   const { packageName, packages, listedAtRequired } = options;
   const relisted = packages.filter((pkg) => pkg.listed !== undefined);
   const steps: string[] = relisted.map((pkg) =>
-    pkg.listed !== undefined && !EXACT_VERSION_LINE.test(pkg.listed.trim())
+    pkg.listed !== undefined && exactVersionOf(pkg.listed) === undefined
       ? `Make the line for ${pkg.name} in package.json resolve to ${pkg.required} (it is \`${pkg.listed}\` now, so change the version where it points, such as the catalog entry or the workspace package) and run \`${options.restoreCommand}\``
       : `Change the line for ${pkg.name} in package.json from ${pkg.listed} to ${pkg.required} and run \`${options.restoreCommand}\``,
   );

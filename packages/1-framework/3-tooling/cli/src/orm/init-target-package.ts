@@ -32,13 +32,12 @@ import { chooseAction } from '../utils/next-actions';
 import { ENGINE_PACKAGE, installProjectDependencies } from './init-packages';
 import {
   installedManifests,
-  isExactVersion,
   type RequiredPeer,
   type RequiredPeers,
   requiredPeerSpecifier,
   resolveRequiredPeers,
 } from './init-required-peers';
-import { requirementAdmits } from './init-version-lines';
+import { exactVersionOf, requirementAdmits } from './init-version-lines';
 import { normalizeError } from './normalize-error';
 import { keywordsOf } from './package-manifest';
 import { type ImportFromProject, installedManifest } from './project-modules';
@@ -299,19 +298,21 @@ function refuseRequiredPeersAtAnotherVersion(
   const declared = declaredPackages(ctx.cwd);
   const wrong = peers.flatMap((peer) => {
     const found = installedVersion(peer.name);
-    const checked = isExactVersion(peer.version) || peer.name.startsWith('@prisma/orm-');
+    const required = exactVersionOf(peer.version) ?? peer.version;
+    const checked =
+      exactVersionOf(peer.version) !== undefined || peer.name.startsWith('@prisma/orm-');
     return found === undefined || !checked || requirementAdmits(peer.version, found) !== false
       ? []
-      : [{ peer, found }];
+      : [{ peer, found, required }];
   });
   if (wrong.length === 0) return;
   const toAdd = wrong.filter(({ peer }) => peer.outcome === 'to-install').map(({ peer }) => peer);
   throw errorInitRequiredPeersAtAnotherVersion({
     packageName,
-    packages: wrong.map(({ peer, found }) => ({
+    packages: wrong.map(({ peer, found, required }) => ({
       name: peer.name,
       found,
-      required: peer.version,
+      required,
       listed: peer.outcome === 'left-at-another-version' ? declared.get(peer.name) : undefined,
     })),
     installCommand:

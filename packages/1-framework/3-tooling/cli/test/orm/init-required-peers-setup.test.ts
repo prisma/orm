@@ -513,3 +513,25 @@ describe('the lines init writes for each line of releases', () => {
     });
   });
 });
+
+describe('a required version written with a v prefix', () => {
+  it('stands for the same version listed and installed without it', async () => {
+    const resolved = await resolveRequiredPeers({
+      packageName: '@prisma/orm-postgres',
+      ownsTarget: false,
+      installedElsewhere: new Set(),
+      declared: () => new Map([['@prisma/orm-framework', VERSION]]),
+      installedVersion: () => VERSION,
+      install: undefined,
+      read: async (name) =>
+        name === '@prisma/orm-postgres'
+          ? { version: VERSION, peers: new Map([['@prisma/orm-framework', `v${VERSION}`]]) }
+          : { version: VERSION, peers: new Map() },
+    });
+
+    expect(resolved).toMatchObject({
+      packages: [{ name: '@prisma/orm-framework', outcome: 'already-listed' }],
+      warnings: [],
+    });
+  });
+});

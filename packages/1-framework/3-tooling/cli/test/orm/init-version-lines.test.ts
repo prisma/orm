@@ -77,6 +77,8 @@ describe('whether a requirement admits an installed version', () => {
   it.each([
     ['8.0.0-rc.27', '8.0.0-rc.27', true],
     ['8.0.0-rc.27', '8.0.0-rc.26', false],
+    ['v8.0.0-rc.27', '8.0.0-rc.27', true],
+    ['=8.0.0-rc.27', 'v8.0.0-rc.27', true],
     ['~8.1.0', '8.1.5', true],
     ['~8.1.0', '8.0.4', false],
     ['^8.1.0', '8.2.0', false],

@@ -1,7 +1,7 @@
 import { readFileSync, realpathSync } from 'node:fs';
 import type { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { dirname } from 'pathe';
-import { requirementAdmits, versionLines } from './init-version-lines';
+import { exactVersionOf, requirementAdmits, versionLines } from './init-version-lines';
 import { installedManifest } from './project-modules';
 import { type PublishedPackage, REGISTRY_LOOKUP_TIMEOUT_MILLIS } from './registry-keywords';
 
@@ -316,7 +316,8 @@ export async function resolveRequiredPeers(ctx: {
     level = await Promise.all(reread.map(readWanted));
   }
 
-  for (const [name, { installed: installedAt, range, by }] of atAnotherVersion) {
+  for (const [name, { installed: installedAt, range: asked, by }] of atAnotherVersion) {
+    const range = exactVersionOf(asked) ?? asked;
     unread = unread.filter((unreadName) => unreadName !== name);
     warnings.push(
       `${name} is installed at ${installedAt}, but ${by} needs ${range}, so init could not work out the packages ${name} needs as required peers. Once ${name}@${range} is installed, add each package its package.json lists under peerDependencies, at the range listed there.`,
@@ -334,13 +335,6 @@ export async function resolveRequiredPeers(ctx: {
     warnings,
   };
 }
-
-/** Whether a required peer's version is one exact version, not a range. */
-export function isExactVersion(spec: string): boolean {
-  return EXACT_VERSION_LINE.test(spec.trim());
-}
-
-const EXACT_VERSION_LINE = /^[v=]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/;
 
 function isPrismaOrmPackage(name: string): boolean {
   return name.startsWith(PRISMA_ORM_PACKAGE_PREFIX);

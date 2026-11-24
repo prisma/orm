@@ -551,3 +551,40 @@ describe('init --skip-install on a target package that names its peers with rang
     timeouts.coldTransformImport,
   );
 });
+
+describe('init --skip-install with a required version written with a v prefix', () => {
+  it(
+    'goes on when the installed copy is that version',
+    async () => {
+      writeProjectFile(
+        'node_modules/@prisma/orm-postgres/package.json',
+        JSON.stringify({
+          name: '@prisma/orm-postgres',
+          version: VERSION,
+          peerDependencies: {
+            '@prisma/orm-framework': `v${VERSION}`,
+            pg: '^8.22.0',
+            'temporal-polyfill': '^1.0.8',
+          },
+        }),
+      );
+      installed('@prisma/orm-framework');
+      installed('pg');
+      installed('temporal-polyfill');
+      writeManifest({
+        '@prisma/orm-postgres': VERSION,
+        '@prisma/orm-framework': VERSION,
+        'temporal-polyfill': '^1.0.8',
+        pg: '^8.22.0',
+      });
+
+      const run = await (await harness()).run([...POSTGRES, '--skip-install'], { cwd: projectDir });
+
+      expect({
+        wrote: existsSync(join(projectDir, 'prisma.config.ts')),
+        code: Reflect.get(envelopeOf(run)?.error ?? {}, 'code'),
+      }).toEqual({ wrote: true, code: undefined });
+    },
+    timeouts.coldTransformImport,
+  );
+});
