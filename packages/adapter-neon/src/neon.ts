@@ -226,6 +226,12 @@ export class PrismaNeonAdapter extends NeonWsQueryable<neon.Pool> implements Sql
     private options?: PrismaNeonOptions,
   ) {
     super(pool)
+    const poolConnectionString = (pool as unknown as { options?: { connectionString?: string } }).options
+      ?.connectionString
+    const schema = options?.schema ?? schemaFromConnectionString(poolConnectionString)
+    if (schema !== undefined) {
+      this.options = { ...options, schema }
+    }
   }
 
   executeScript(_script: string): Promise<void> {
@@ -292,10 +298,18 @@ export class PrismaNeonAdapterFactory implements SqlDriverAdapterFactory {
   readonly provider = 'postgres'
   readonly adapterName = packageName
 
-  constructor(
-    private readonly config: neon.PoolConfig,
-    private options?: PrismaNeonOptions,
-  ) {}
+  private readonly config: neon.PoolConfig
+  private options?: PrismaNeonOptions
+
+  constructor(config: neon.PoolConfig | string, options?: PrismaNeonOptions) {
+    this.config = typeof config === 'string' ? { connectionString: config } : config
+    const schema = options?.schema ?? schemaFromConnectionString(this.config.connectionString)
+    if (schema !== undefined) {
+      this.options = { ...options, schema }
+    } else {
+      this.options = options
+    }
+  }
 
   async connect(): Promise<PrismaNeonAdapter> {
     const pool = new neon.Pool(this.config)
@@ -365,5 +379,36 @@ export class PrismaNeonHttpAdapterFactory implements SqlDriverAdapterFactory {
 
   async connect(): Promise<SqlDriverAdapter> {
     return new PrismaNeonHttpAdapter(neon.neon(this.connectionString, this.options))
+  }
+}
+
+/**
+ * Reads `?schema=` from the connection URL when no explicit schema option is provided.
+ * Non-URL strings yield undefined without error.
+ */
+function schemaFromConnectionString(connectionString: string | undefined): string | undefined {
+  if (connectionString === undefined) {
+    return undefined
+  }
+
+  const str = connectionString
+  try {
+    const url = new URL(str)
+    const schema = url.searchParams.get('schema')
+    return typeof schema === 'string' && schema !== '' ? schema : undefined
+  } catch {
+    if (!/^(postgres|postgresql):\/\//i.test(str)) {
+      return undefined
+    }
+
+    const queryStart = str.indexOf('?')
+    if (queryStart !== -1) {
+      const fragmentStart = str.indexOf('#', queryStart)
+      const queryEnd = fragmentStart === -1 ? str.length : fragmentStart
+      const params = new URLSearchParams(str.slice(queryStart + 1, queryEnd))
+      const schema = params.get('schema')
+      return typeof schema === 'string' && schema !== '' ? schema : undefined
+    }
+    return undefined
   }
 }

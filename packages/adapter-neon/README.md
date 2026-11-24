@@ -43,6 +43,18 @@ const prisma = new PrismaClient({ adapter })
 
 You can now use Prisma Client as you normally would with full type-safety. Your Prisma Client instance now uses Neon's serverless driver to connect to your database. This comes with benefits such as WebSocket connections and [message pipelining](https://neon.tech/blog/quicker-serverless-postgres).
 
+### Schema selection
+
+The `schema` option sets the PostgreSQL schema used in generated queries:
+
+```ts
+const adapter = new PrismaNeon({ connectionString }, { schema: 'myschema' })
+```
+
+When the option is not set, the `?schema=` parameter of the connection string is used, whether you pass the string directly or as `connectionString` in a pool config. An explicit `schema` option wins over the URL. A pre-built `neon.Pool` is read the same way: the `?schema=` of its `connectionString` is used, and the pool itself is not changed.
+
+Raw queries (`$queryRaw`, `$executeRaw`) are not affected by the schema: they resolve unqualified names through the connection's `search_path`. Qualify names in raw SQL (`"myschema"."User"`), or set the search path on the database role (`ALTER ROLE ... SET search_path = myschema`).
+
 ## Feedback
 
 We encourage you to create an issue if you find something missing or run into a bug.
