@@ -326,4 +326,91 @@ model ${user} {
       members: [{ user: 'Ada', email: 'ada@example.com' }],
     });
   });
+
+  it("T7: a variant delete beside a model that moves out is refused, and following the two plans moves that model's documents, even those holding the variant's value, before the delete", async () => {
+    const journey = project('t7_plan');
+    const tasks = (admins: string, bug: boolean) => `// use prisma-8
+
+model Admin {
+  id    ObjectId @id @map("_id")
+  admin String
+  type  String
+
+  @@map("${admins}")
+}
+
+model Task {
+  id   ObjectId @id @map("_id")
+  type String
+
+  @@discriminator(type)
+  @@map("tasks")
+}
+${
+  bug
+    ? `
+model Bug {
+  id  ObjectId @id @map("_id")
+  sev String
+
+  @@base(Task, "bug")
+}
+`
+    : ''
+}
+model Feat {
+  id   ObjectId @id @map("_id")
+  area String
+
+  @@base(Task, "feat")
+}
+`;
+    await begin(journey, 'migration plan', tasks('tasks', true), 'T7.01');
+    await journey.db.collection('tasks').insertMany([
+      { type: 'bug', sev: 'high' },
+      { type: 'feat', area: 'ui' },
+      { type: 'bug', admin: 'Root' },
+    ]);
+    await useSchema(journey, tasks('admins', false), 'T7.02');
+    const error = await refused(journey, 'migration plan', ['--delete', 'Bug'], 'T7.03');
+    expect(error.meta?.['conflicts']).toEqual([
+      {
+        kind: 'unsupportedOperation',
+        summary:
+          'Cannot delete the documents of variant "Bug": the documents of model "Admin" in collection "tasks" can hold type "bug"',
+        why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so deleting the documents with that value would delete the documents of "Admin" too. A model that moves out of collection "tasks" leaves its documents in it, so make the change in two plans. First move model "Admin" to collection "admins", keep variant "Bug" as it is, and plan that with migration plan: in the operations of the migration.ts it writes, right after the creation of collection "admins" and before any other operation on collection "tasks", add a dataTransform whose run copies the documents of model "Admin" into collection "admins", such as rawAggregate("tasks", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "admins" } }]), and a deleteDocuments({ collection: "tasks", filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart from the other documents of collection "tasks", which can hold the same values in the fields they share, such as a discriminator value: filter by a field only model "Admin" stores. If the apply stops after collection "admins" is created, do not drop it, since it holds the moved documents: remove its creation from that migration.ts, run the file again, fix what stopped the apply, and run db migrate again. Under db update, apply that change, then move the documents out of collection "tasks" by hand. Then make the change to variant "Bug" and plan again. Or keep variant "Bug" in the contract.',
+      },
+    ]);
+
+    await useSchema(journey, tasks('admins', true), 'T7.04');
+    const planned = await runMigrationPlan(journey.ctx, [
+      '--name',
+      'move',
+      ...(journey.origin === undefined ? [] : ['--from', journey.origin]),
+      '--json',
+    ]);
+    expect(planned.exitCode, `T7.05: ${planned.stderr}`).toBe(0);
+    const dir = join(journey.ctx.testDir, 'migrations/app', latestMigrationDirName(journey.ctx));
+    const path = join(dir, 'migration.ts');
+    const filter = '{ admin: { $exists: true } }';
+    writeFileSync(
+      path,
+      withMoveAfterCreate(readFileSync(path, 'utf-8'), 'tasks', 'admins', filter),
+    );
+    expect((await selfEmitMigration(journey.ctx, ['--dir', dir])).exitCode, 'T7.06').toBe(0);
+    const moved = await runMigrate(journey.ctx);
+    expect(moved.exitCode, `T7.07: ${moved.stdout}${moved.stderr}`).toBe(0);
+    journey.origin = latestMigrationDirName(journey.ctx);
+
+    await useSchema(journey, tasks('admins', false), 'T7.08');
+    await apply(journey, 'migration plan', ['--delete', 'Bug'], 'T7.09');
+    expect({
+      tasks: await documents(journey.db, 'tasks'),
+      admins: await documents(journey.db, 'admins'),
+    }).toEqual({
+      tasks: [{ type: 'feat', area: 'ui' }],
+      admins: [{ type: 'bug', admin: 'Root' }],
+    });
+    await expectSettled(journey, 'T7.10');
+  });
 });

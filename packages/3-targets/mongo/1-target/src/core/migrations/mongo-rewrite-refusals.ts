@@ -10,6 +10,7 @@ import {
   validatorRootShapesOf,
 } from '@internal/mongo-contract';
 import type { MongoFieldRewriteMeta } from '@internal/mongo-query-ast/control';
+import { modelNamesText, quotedList } from './mongo-plan-text';
 import { renameRefused } from './mongo-storage-renames';
 
 export const SEPARATE_THE_MODELS =
@@ -20,8 +21,7 @@ export function sharedCollectionWhy(
   others: readonly string[],
   change: string,
 ): string {
-  const names = others.map((name) => JSON.stringify(name)).join(', ');
-  return `Collection ${JSON.stringify(collection)} stores several models and no discriminator tells their documents apart, so ${change} of ${names} too.`;
+  return `Collection ${JSON.stringify(collection)} stores several models and no discriminator tells their documents apart, so ${change} of ${quotedList(others)} too.`;
 }
 
 export const TIME_SERIES_UPDATES =
@@ -175,10 +175,6 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
   },
 };
 
-function quoted(names: readonly string[]): string {
-  return names.map((name) => JSON.stringify(name)).join(', ');
-}
-
 /** What a rewrite's refusals read about its collection: whether it is a time-series collection, and its validator before the change. */
 export interface RewriteCollection {
   readonly timeSeries: boolean;
@@ -252,11 +248,11 @@ function sharedCollectionRefusal(
     words.reaches === 'holding' ? field : undefined,
   ).filter((name) => !(rewrite.storedKey?.together.includes(name) ?? false));
   if (others.length === 0) return undefined;
-  const named = quoted(others);
+  const named = quotedList(others);
   const modelName = JSON.stringify(model.model);
   return refusalOf(
     rewrite,
-    `Cannot ${action(rewrite)} field ${JSON.stringify(field)} of model ${modelName} ${words.preposition} collection ${JSON.stringify(collection)}: model ${named} ${words.reaches === 'holding' ? 'stores it' : 'is stored'} in the same collection`,
+    `Cannot ${action(rewrite)} field ${JSON.stringify(field)} of model ${modelName} ${words.preposition} collection ${JSON.stringify(collection)}: ${modelNamesText(others)} ${words.reaches === 'holding' ? (others.length === 1 ? 'stores it' : 'store it') : others.length === 1 ? 'is stored' : 'are stored'} in the same collection`,
     `${sharedCollectionWhy(collection, others, words.sharedChange)} ${words.sharedGoal(modelName, named)}, ${rewrite.keepAdvice === undefined ? SEPARATE_THE_MODELS : `move the models to separate collections, or ${rewrite.keepAdvice}`}.`,
   );
 }

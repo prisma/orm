@@ -24,8 +24,13 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { collectionControlPolicy } from './mongo-control-policy';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
-import { modelCoordinates, sameModel } from './mongo-model-coordinates';
-import { capitalized } from './mongo-plan-text';
+import {
+  documentCollectionOf,
+  hasCollection,
+  modelCoordinates,
+  sameModel,
+} from './mongo-model-coordinates';
+import { capitalized, documentMoveSteps, joinedList, modelNamesText } from './mongo-plan-text';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
 import {
   SEPARATE_THE_MODELS,
@@ -287,6 +292,14 @@ function collectionRefusal(
   );
 }
 
+/** The root models that move out of a variant's collection into one other collection. */
+interface MovingModels {
+  readonly names: readonly string[];
+  readonly to: string;
+  /** Whether the plan creates collection `to`. */
+  readonly created: boolean;
+}
+
 /**
  * How to make a variant change that other root models' documents block. A model that stays in the
  * collection can only be moved apart, or the change carried out by hand; a model that moves out
@@ -296,19 +309,31 @@ function collectionRefusal(
  */
 function variantRoute(
   change: VariantChange,
-  moving: readonly string[],
+  moves: readonly MovingModels[],
   staying: readonly string[],
 ): string {
   const keep = `keep ${change.to === undefined ? variantText(change.model) : `the discriminator value ${quoted(change.from)}`} in the contract`;
-  const movingText = `model${moving.length === 1 ? '' : 's'} ${moving.map(quoted).join(', ')}`;
-  const firstMove = `first move ${movingText} to ${moving.length === 1 ? 'its' : 'their'} new collection and keep ${variantText(change.model)} as it is, plan and apply that, and move the documents of ${movingText} out of collection ${quoted(change.collection)}: in the migration.ts that migration plan writes, right after the creation of the new collection, or by hand under db update`;
+  const moving = moves.flatMap((move) => move.names);
+  const destinations = joinedList(
+    moves.map((move) => `${modelNamesText(move.names)} to collection ${quoted(move.to)}`),
+  );
+  const steps = moves.map((move) => {
+    const text = documentMoveSteps({
+      moving: modelNamesText(move.names),
+      from: change.collection,
+      to: move.to,
+      created: move.created,
+    });
+    return moves.length === 1 ? text : `For ${modelNamesText(move.names)}, ${text}`;
+  });
+  const firstMove = `First move ${destinations}, keep ${variantText(change.model)} as it is, and plan that with migration plan${moves.length === 1 ? `: ${steps.join(' ')}` : `. ${steps.join(' ')}`} Under db update, apply that change, then move the documents out of collection ${quoted(change.collection)} by hand.`;
   if (staying.length === 0) {
-    return `A model that moves out of collection ${quoted(change.collection)} leaves its documents in it, so make the change in two plans: ${firstMove}; then make the change to ${variantText(change.model)} and plan again. Or ${keep}.`;
+    return `A model that moves out of collection ${quoted(change.collection)} leaves its documents in it, so make the change in two plans. ${firstMove} Then make the change to ${variantText(change.model)} and plan again. Or ${keep}.`;
   }
   const stayAdvice = `To change only the documents of ${variantText(change.model)}, ${change.statement === undefined ? `move the models to separate collections, or ${keep}` : SEPARATE_THE_MODELS}.`;
   return moving.length === 0
     ? stayAdvice
-    : `${stayAdvice} ${capitalized(movingText)} also ${moving.length === 1 ? 'moves' : 'move'} out of collection ${quoted(change.collection)} but ${moving.length === 1 ? 'leaves its' : 'leave their'} documents in it, so that move goes in a plan of its own before this change: ${firstMove}.`;
+    : `${stayAdvice} ${capitalized(modelNamesText(moving))} also ${moving.length === 1 ? 'moves' : 'move'} out of collection ${quoted(change.collection)} but ${moving.length === 1 ? 'leaves its' : 'leave their'} documents in it, so that move goes in a plan of its own before this change. ${firstMove}`;
 }
 
 /**
@@ -337,16 +362,31 @@ function sharedCollectionRefusal(
     ),
   );
   if (others.length === 0) return undefined;
+  const matchInput = matchInputOf(fromContract, input);
+  const destinationOf = (name: string) => {
+    const model = destinationModelOf(
+      { namespaceId: change.model.namespaceId, model: name },
+      matchInput,
+    );
+    return model === undefined ? undefined : documentCollectionOf(input.contract, model);
+  };
   const moving = others.filter(
     (name) =>
+      destinationOf(name) !== undefined &&
       !sharesCollectionInDestination(
         { namespaceId: change.model.namespaceId, model: name },
         input.collectionAfterRenames(originCollection),
-        matchInputOf(fromContract, input),
+        matchInput,
       ),
   );
   const staying = others.filter((name) => !moving.includes(name));
-  const named = others.map(quoted).join(', ');
+  const moves = [...new Set(moving.map(destinationOf))]
+    .filter((to): to is string => to !== undefined)
+    .map((to) => ({
+      names: moving.filter((name) => destinationOf(name) === to),
+      to,
+      created: !hasCollection(fromContract, to),
+    }));
   const effect =
     change.to === undefined
       ? 'deleting the documents with that value would delete the documents'
@@ -354,8 +394,8 @@ function sharedCollectionRefusal(
   return refusedChange(
     change,
     label,
-    `the documents of model ${named} in collection ${quoted(change.collection)} can hold ${change.originField} ${quoted(change.from)}`,
-    `${sharedCollectionWhy(change.collection, others, effect)} ${variantRoute(change, moving, staying)}`,
+    `the documents of ${modelNamesText(others)} in collection ${quoted(change.collection)} can hold ${change.originField} ${quoted(change.from)}`,
+    `${sharedCollectionWhy(change.collection, others, effect)} ${variantRoute(change, moves, staying)}`,
   );
 }
 

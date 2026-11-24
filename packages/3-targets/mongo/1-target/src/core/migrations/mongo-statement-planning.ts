@@ -36,11 +36,19 @@ import { unrewritableFieldNameReason } from './migration-factories';
 import { collectionControlPolicy, managedOnBothSides } from './mongo-control-policy';
 import {
   documentCollectionOf,
+  hasCollection,
   isRootModel,
   modelCoordinates,
   sameModel,
 } from './mongo-model-coordinates';
-import { capitalized, handWrittenRoute, modelsText } from './mongo-plan-text';
+import {
+  capitalized,
+  type DocumentMove,
+  documentMoveSteps,
+  handWrittenRoute,
+  modelNamesText,
+  modelsText,
+} from './mongo-plan-text';
 import {
   type FieldChange,
   fieldChangeText,
@@ -572,11 +580,10 @@ function leaveOutShared(moving: string): string {
 
 /**
  * The route that keeps the documents of root models a leave-out plan leaves behind, for `migration
- * plan` only: add their move to the migration.ts that plan writes, right after the creation of the
- * new collection, so no later rewrite of the collection they leave reaches them first.
+ * plan` only: add their move to the migration.ts that plan writes, as `documentMoveSteps` says.
  */
-function moveInLeftOutPlan(moving: string, from: string, to: string): string {
-  return `With migration plan, keep the documents by moving them in the migration that plan writes: plan the change without this statement, and in the operations of the migration.ts it writes, right after the creation of collection "${to}" and before any other operation on collection "${from}", add a dataTransform whose run copies the documents of ${moving} into collection "${to}", such as rawAggregate(${JSON.stringify(from)}, [{ $match: <a filter that selects only those documents> }, { $merge: { into: ${JSON.stringify(to)} } }]), and a deleteDocuments({ collection: ${JSON.stringify(from)}, filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart, such as a field only ${moving} stores. If the apply stops after collection "${to}" is created, do not drop it, since it holds the moved documents: remove its creation from that migration.ts, run the file again, fix what stopped the apply, and run db migrate again.`;
+function moveInLeftOutPlan(move: DocumentMove): string {
+  return `With migration plan, keep the documents by moving them in the migration that plan writes: plan the change without this statement, and ${documentMoveSteps(move)}`;
 }
 
 /** The leave-out route for root models whose documents no discriminator tells apart from those of the models that stay: without the statement they are removed, and nothing is asked. */
@@ -584,9 +591,14 @@ function leaveOutRemoved(
   moving: string,
   others: readonly ModelCoordinate[],
   renamedTo: string,
+  readers: readonly ModelCoordinate[],
   from: string,
 ): string {
-  return `Leave out this statement to plan the change without moving them: ${moving} is then removed and nothing is asked, since nothing is deleted: its documents stay in collection "${from}", where ${modelsText(others)} still read${others.length === 1 ? 's' : ''} them, and ${renamedTo} starts with no documents. If the new validator of collection "${from}" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there.`;
+  const start =
+    readers.length === 0
+      ? `${renamedTo} starts with no documents`
+      : `${renamedTo} reads the documents of ${modelsText(readers)} already stored in its collection, since no discriminator tells them apart`;
+  return `Leave out this statement to plan the change without moving them: ${moving} is then removed and nothing is asked, since nothing is deleted: its documents stay in collection "${from}", where ${modelsText(others)} still read${others.length === 1 ? 's' : ''} them, and ${start}. If the new validator of collection "${from}" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there.`;
 }
 
 /** The refusal of a model rename statement whose collection holds other models that do not move with it, or whose new collection holds models from elsewhere. */
@@ -595,7 +607,7 @@ function sharedCollectionRefusal(
   label: string,
   collections: CollectionRenames,
   models: readonly ModelRename[],
-  fromContract: ContractWithDomain,
+  { fromContract, contract }: PlanningInput,
 ): StatementOutcome | undefined {
   const rename = models.find((model) => model.statement === statement);
   const change = rename === undefined ? undefined : collections.changeOf(rename);
@@ -605,13 +617,20 @@ function sharedCollectionRefusal(
   const moving = modelsText(change.renames.map((renamed) => renamed.from));
   const others = modelsText(shared.objects);
   const leavesBehind = change.renames.every((renamed) => isRootModel(fromContract, renamed.from));
+  const readersIn = (collection: string) =>
+    modelCoordinates(contract).filter(
+      (model) =>
+        documentCollectionOf(contract, model) === collection &&
+        isRootModel(contract, model) &&
+        !change.renames.some((renamed) => sameModel(renamed.to, model)),
+    );
   const moveSteps = handWrittenRoute(`the documents of ${moving} into collection "${to}"`);
   switch (shared.kind) {
     case 'split':
       return refusedOutcome(
         statement,
         `${label}: collection "${from}" also stores ${others}`,
-        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${leavesBehind ? `${leaveOutRemoved(moving, shared.objects, modelsText(change.renames.map((renamed) => renamed.to)), from)} ${moveInLeftOutPlan(moving, from, to)}` : `${leaveOutShared(moving)} ${moveSteps}`}`,
+        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${leavesBehind ? `${leaveOutRemoved(moving, shared.objects, modelsText(change.renames.map((renamed) => renamed.to)), readersIn(to), from)} ${moveInLeftOutPlan({ moving, from, to, created: !hasCollection(fromContract, to) })}` : `${leaveOutShared(moving)} ${moveSteps}`}`,
       );
     case 'merged':
       return refusedOutcome(
@@ -648,7 +667,7 @@ function planModelStatement(
     );
   }
   if (from === to) return UNCHANGED;
-  const shared = sharedCollectionRefusal(statement, label, collections, models, input.fromContract);
+  const shared = sharedCollectionRefusal(statement, label, collections, models, input);
   if (shared !== undefined) return shared;
   if (renamedCollections.get(from) === to) return UNCHANGED;
   const policyRefusal = controlPolicyRefusal(statement, label, input.contract, to);
@@ -872,7 +891,7 @@ function planFieldRename(
   if (others.length > 0) {
     const sharedWhy = `${sharedCollectionWhy(collection, others, 'renaming the field would rename it in the documents')} To change it, ${changed === undefined ? SEPARATE_THE_MODELS : `move the models to separate collections, or keep the stored name ${JSON.stringify(fromStored)} in the contract`}.`;
     return refuse(
-      `model ${others.map((name) => JSON.stringify(name)).join(', ')} stores field ${JSON.stringify(fromStored)} in the same collection, ${JSON.stringify(collection)}`,
+      `${modelNamesText(others)} ${others.length === 1 ? 'stores' : 'store'} field ${JSON.stringify(fromStored)} in the same collection, ${JSON.stringify(collection)}`,
       changed === undefined ? sharedWhy : `${changed}. ${sharedWhy}`,
     );
   }

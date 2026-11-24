@@ -393,7 +393,7 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
           kind: 'statementRefused',
           summary:
             'Cannot rename model "User" to "Member": collection "users" also stores model "Admin"',
-          why: `A collection rename moves every document of the collection, and the documents of model "Admin" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: model "User" is then removed and nothing is asked, since nothing is deleted: its documents stay in collection "users", where model "Admin" still reads them, and model "Member" starts with no documents. If the new validator of collection "users" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there. With migration plan, keep the documents by moving them in the migration that plan writes: plan the change without this statement, and in the operations of the migration.ts it writes, right after the creation of collection "members" and before any other operation on collection "users", add a dataTransform whose run copies the documents of model "User" into collection "members", such as rawAggregate("users", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "members" } }]), and a deleteDocuments({ collection: "users", filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart, such as a field only model "User" stores. If the apply stops after collection "members" is created, do not drop it, since it holds the moved documents: remove its creation from that migration.ts, run the file again, fix what stopped the apply, and run db migrate again.`,
+          why: 'A collection rename moves every document of the collection, and the documents of model "Admin" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: model "User" is then removed and nothing is asked, since nothing is deleted: its documents stay in collection "users", where model "Admin" still reads them, and model "Member" starts with no documents. If the new validator of collection "users" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there. With migration plan, keep the documents by moving them in the migration that plan writes: plan the change without this statement, and in the operations of the migration.ts it writes, right after the creation of collection "members" and before any other operation on collection "users", add a dataTransform whose run copies the documents of model "User" into collection "members", such as rawAggregate("users", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "members" } }]), and a deleteDocuments({ collection: "users", filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart from the other documents of collection "users", which can hold the same values in the fields they share, such as a discriminator value: filter by a field only model "User" stores. If the apply stops after collection "members" is created, do not drop it, since it holds the moved documents: remove its creation from that migration.ts, run the file again, fix what stopped the apply, and run db migrate again.',
           refusedStatement: statement,
         },
       ],
@@ -415,6 +415,44 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
           summary:
             'Cannot rename field "level" to "rank" in collection "people": model "Admin" stores field "level" in the same collection, "people"',
           why: 'The stored name of field "User.level" changes from "level" to "rank". Collection "people" stores several models and no discriminator tells their documents apart, so renaming the field would rename it in the documents of "Admin" too. To change it, move the models to separate collections, or keep the stored name "level" in the contract.',
+        },
+      ],
+    });
+  });
+
+  it('puts the move first, and names the documents the renamed model reads, when it moves into a collection that already exists', () => {
+    const statement = renameModel('User', 'Member');
+    const result = plan({
+      from: contract(
+        'from',
+        {
+          Admin: { collection: 'users', fields: ['_id', 'admin'] },
+          User: { collection: 'users', fields: ['_id', 'user'] },
+          Guest: { collection: 'members', fields: ['_id', 'guest'] },
+        },
+        { users: {}, members: {} },
+      ),
+      to: contract(
+        'to',
+        {
+          Admin: { collection: 'users', fields: ['_id', 'admin'] },
+          Member: { collection: 'members', fields: ['_id', 'user'] },
+          Guest: { collection: 'members', fields: ['_id', 'guest'] },
+        },
+        { users: {}, members: {} },
+      ),
+      schema: [schemaCollection('users'), schemaCollection('members')],
+      statements: [statement],
+    });
+    expect(result).toEqual({
+      kind: 'failure',
+      conflicts: [
+        {
+          kind: 'statementRefused',
+          summary:
+            'Cannot rename model "User" to "Member": collection "users" also stores model "Admin"',
+          why: 'A collection rename moves every document of the collection, and the documents of model "Admin" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: model "User" is then removed and nothing is asked, since nothing is deleted: its documents stay in collection "users", where model "Admin" still reads them, and model "Member" reads the documents of model "Guest" already stored in its collection, since no discriminator tells them apart. If the new validator of collection "users" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there. With migration plan, keep the documents by moving them in the migration that plan writes: plan the change without this statement, and at the start of the operations of the migration.ts it writes, before any other operation on collection "users", add a dataTransform whose run copies the documents of model "User" into collection "members", such as rawAggregate("users", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "members" } }]), and a deleteDocuments({ collection: "users", filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart from the other documents of collection "users", which can hold the same values in the fields they share, such as a discriminator value: filter by a field only model "User" stores.',
+          refusedStatement: statement,
         },
       ],
     });

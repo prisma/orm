@@ -101,8 +101,8 @@ describe('MongoMigrationPlanner, a variant change beside a root model that moves
         {
           kind: 'unsupportedOperation',
           summary:
-            'Cannot delete the documents of variant "Bug": the documents of model "Admin", "Guest" in collection "tasks" can hold type "bug"',
-          why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so deleting the documents with that value would delete the documents of "Admin", "Guest" too. To change only the documents of variant "Bug", move the models to separate collections, or keep variant "Bug" in the contract. Model "Admin" also moves out of collection "tasks" but leaves its documents in it, so that move goes in a plan of its own before this change: first move model "Admin" to its new collection and keep variant "Bug" as it is, plan and apply that, and move the documents of model "Admin" out of collection "tasks": in the migration.ts that migration plan writes, right after the creation of the new collection, or by hand under db update.',
+            'Cannot delete the documents of variant "Bug": the documents of models "Admin" and "Guest" in collection "tasks" can hold type "bug"',
+          why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so deleting the documents with that value would delete the documents of "Admin" and "Guest" too. To change only the documents of variant "Bug", move the models to separate collections, or keep variant "Bug" in the contract. Model "Admin" also moves out of collection "tasks" but leaves its documents in it, so that move goes in a plan of its own before this change. First move model "Admin" to collection "admins", keep variant "Bug" as it is, and plan that with migration plan: in the operations of the migration.ts it writes, right after the creation of collection "admins" and before any other operation on collection "tasks", add a dataTransform whose run copies the documents of model "Admin" into collection "admins", such as rawAggregate("tasks", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "admins" } }]), and a deleteDocuments({ collection: "tasks", filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart from the other documents of collection "tasks", which can hold the same values in the fields they share, such as a discriminator value: filter by a field only model "Admin" stores. If the apply stops after collection "admins" is created, do not drop it, since it holds the moved documents: remove its creation from that migration.ts, run the file again, fix what stopped the apply, and run db migrate again. Under db update, apply that change, then move the documents out of collection "tasks" by hand.',
         },
       ],
     });
@@ -140,5 +140,36 @@ describe('MongoMigrationPlanner, a variant change beside a root model that moves
     ).toEqual([
       'Cannot replace the discriminator value "bug" of variant "Bug": the documents of model "Admin" in collection "tasks" can hold type "bug"',
     ]);
+  });
+
+  it('puts the move first when the model moves into a collection that already exists', () => {
+    const world = (seed: string, admin: string, bug: boolean) =>
+      contract(
+        seed,
+        {
+          Admin: { collection: admin, fields: ['_id', 'type'] },
+          Guest: { collection: 'people', fields: ['_id', 'type'] },
+          Task: task(bug ? { Bug: 'bug', Feat: 'feat' } : { Feat: 'feat' }),
+          ...variants(bug),
+        },
+        { tasks: {}, people: {} },
+      );
+    expect(
+      plan({
+        from: world('from', 'tasks', true),
+        to: world('to', 'people', false),
+        schema: [...tasks, schemaCollection('people')],
+      }),
+    ).toEqual({
+      kind: 'failure',
+      conflicts: [
+        {
+          kind: 'unsupportedOperation',
+          summary:
+            'Cannot delete the documents of variant "Bug": the documents of model "Admin" in collection "tasks" can hold type "bug"',
+          why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so deleting the documents with that value would delete the documents of "Admin" too. A model that moves out of collection "tasks" leaves its documents in it, so make the change in two plans. First move model "Admin" to collection "people", keep variant "Bug" as it is, and plan that with migration plan: at the start of the operations of the migration.ts it writes, before any other operation on collection "tasks", add a dataTransform whose run copies the documents of model "Admin" into collection "people", such as rawAggregate("tasks", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "people" } }]), and a deleteDocuments({ collection: "tasks", filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart from the other documents of collection "tasks", which can hold the same values in the fields they share, such as a discriminator value: filter by a field only model "Admin" stores. Under db update, apply that change, then move the documents out of collection "tasks" by hand. Then make the change to variant "Bug" and plan again. Or keep variant "Bug" in the contract.',
+        },
+      ],
+    });
   });
 });

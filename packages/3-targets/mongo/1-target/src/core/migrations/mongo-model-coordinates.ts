@@ -42,3 +42,10 @@ export function rootModelOf(contract: ContractWithDomain, model: ModelCoordinate
   }
   return { namespaceId: model.namespaceId, model: current };
 }
+
+/** Whether `contract` declares collection `name`. */
+export function hasCollection(contract: ContractWithDomain, name: string): boolean {
+  return Object.values(contract.storage.namespaces).some((namespace) =>
+    Object.hasOwn(namespace.entries['collection'] ?? {}, name),
+  );
+}

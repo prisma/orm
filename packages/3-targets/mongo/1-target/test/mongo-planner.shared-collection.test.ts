@@ -274,7 +274,7 @@ describe('MongoMigrationPlanner, field changes in a collection that stores sever
           }),
         ),
       ).toEqual([
-        'Cannot remove field "level" of model "SuperAdmin" from collection "users": model "Member", "SuperMember" stores it in the same collection',
+        'Cannot remove field "level" of model "SuperAdmin" from collection "users": models "Member" and "SuperMember" store it in the same collection',
       ]);
     });
 
