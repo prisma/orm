@@ -6,14 +6,17 @@
  *
  * The project root defaults to the working directory. The script reads and writes files only; it needs no database. It walks the root, skipping `node_modules`, `dist`, `build` and directories whose name starts with a dot, and finds stored files the way the `stored-files-format-version` script does: a contract by its content (`targetFamily` and `storage`) in any `*.json` file, a `migration.json` by the `ops.json` next to it, and a ref file by where Prisma writes refs or by its content.
  *
- * First it checks every contract: each stored `storageHash`, `profileHash` and `executionHash`, and each snapshot directory's name, must be the hash the old rules or the new rules give the contract's content. Then it checks each `migration.json` against its `migrationHash`, and that each `from`, `to` and ref `hash` names a contract of the project. If any check fails, or a stored file has no `formatVersion`, it changes no file, prints one line per problem and exits 1. A hash that does not match the content means the file was edited by hand or comes from another release; fix that first.
+ * First it checks every contract: each stored `storageHash`, `profileHash` and `executionHash`, and each snapshot directory's name, must be the hash the old rules or the new rules give the contract's content. Two exceptions: a snapshot's profile and execution hash may come from an earlier release's rules, and a MongoDB snapshot may keep the storage hash it had before an earlier upgrade step rewrote its content; both get the hashes their content gives. Then it checks each `migration.json` against its `migrationHash`, and that each `from`, `to` and ref `hash` names a contract of the project. If any check fails, or a stored file has no `formatVersion`, it changes no file, prints one line per problem and exits 1. A hash that does not match the content means the file was edited by hand or comes from another release; fix that first.
  *
- * Otherwise it rewrites: the three hashes in every contract; the same hashes in the `contract.d.ts` beside it; each snapshot directory's name; `from`, `to` and `migrationHash` in every `migration.json`; `hash` in every ref file; and every old storage hash in every `migration.ts` (snapshot import paths and hash literals). It edits each file's text in place, so every other byte stays. It prints what it changed and each hash it replaced. A `contract.d.ts` whose hashes it cannot match with its contract is reported, left unchanged, and makes it exit 1. A second run changes nothing.
+ * A contract that is not a snapshot and whose storage hash no migration, ref or snapshot names, such as a hand-made test fixture, does not stop the upgrade when its hashes are wrong: it is reported, left unchanged, and makes the script exit 1.
+ *
+ * Otherwise it rewrites: the three hashes in every contract; the same hashes in the `contract.d.ts` beside it; each snapshot directory's name; `from`, `to` and `migrationHash` in every `migration.json`, and the storage hashes in the `ops.json` beside it; `hash` in every ref file; and every old storage hash in every `migration.ts` (snapshot import paths and hash literals). It edits each file's text, so every other byte stays, including a leading byte order mark, and replaces each file in one rename, so a run that stops partway can be run again to finish. It prints what it changed and each hash it replaced. A `contract.d.ts` whose hashes it cannot match with its contract, or a migration or ref naming a hash it cannot tell the new value of, is reported, left unchanged, and makes it exit 1. A second run changes nothing.
  *
  * The hash rules, old and new, the families' canonicalization hooks and the migration hash rule are copied from Prisma's packages, because a project's strict `node_modules` does not expose them.
  */
 import { createHash } from 'node:crypto';
 import {
+  chmodSync,
   type Dirent,
   existsSync,
   readdirSync,
@@ -41,6 +44,8 @@ const REF_HASH = /^(empty|[0-9a-f]{64})$/;
 const BYTE_ORDER_MARK = '﻿';
 const UNKNOWN_HASH =
   'is a storage hash no contract or snapshot in the project has, so the script cannot tell its new value.';
+const TEMPORARY_SUFFIX = '.contract-hash-inputs-tmp';
+const REMOVED_SUFFIX = '.contract-hash-inputs-removed';
 const FORMAT_VERSION_STEP =
   'run the `stored-files-format-version` script of the earlier upgrade step first, then this script again';
 
@@ -443,21 +448,36 @@ interface ProjectFiles {
   readonly refs: StoredText[];
   readonly migrationTs: string[];
   readonly unversioned: string[];
+  /** Files and directories an interrupted run of this script left behind. */
+  readonly leftovers: string[];
 }
 
 function emptyFiles(): ProjectFiles {
-  return { contracts: [], migrations: [], refs: [], migrationTs: [], unversioned: [] };
+  return {
+    contracts: [],
+    migrations: [],
+    refs: [],
+    migrationTs: [],
+    unversioned: [],
+    leftovers: [],
+  };
+}
+
+/** A file's text without a leading byte order mark, and the mark, so a rewrite can keep it. */
+function readText(path: string): { readonly bom: string; readonly text: string } {
+  const raw = readFileSync(path, 'utf8');
+  const bom = raw.startsWith(BYTE_ORDER_MARK) ? BYTE_ORDER_MARK : '';
+  return { bom, text: raw.slice(bom.length) };
 }
 
 function readStored(path: string): StoredText | string {
-  let raw: string;
+  let bom: string;
+  let text: string;
   try {
-    raw = readFileSync(path, 'utf8');
+    ({ bom, text } = readText(path));
   } catch (error) {
     return `cannot be read (${errorText(error)})`;
   }
-  const bom = raw.startsWith(BYTE_ORDER_MARK) ? BYTE_ORDER_MARK : '';
-  const text = raw.slice(bom.length);
   let value: Json;
   try {
     value = JSON.parse(text);
@@ -523,7 +543,11 @@ function visit(root: string, dir: string, files: ProjectFiles, stops: string[]):
     const path = join(dir, entry.name);
     const shown = relative(root, path);
     if (entry.isDirectory()) {
-      if (isWalked(entry.name)) visit(root, path, files, stops);
+      if (entry.name.startsWith('.') && entry.name.endsWith(REMOVED_SUFFIX))
+        files.leftovers.push(path);
+      else if (isWalked(entry.name)) visit(root, path, files, stops);
+    } else if (entry.isFile() && entry.name.endsWith(TEMPORARY_SUFFIX)) {
+      files.leftovers.push(path);
     } else if (entry.isFile() && entry.name.endsWith('.json')) {
       classify(root, path, files, stops, shown);
     } else if (entry.isFile() && entry.name === 'migration.ts' && isMigrationPackage(dir)) {
@@ -609,6 +633,8 @@ interface ContractPlan {
   readonly oldHashes: HashSet;
   readonly newHashes: HashSet;
   readonly snapshotHash: string | undefined;
+  /** The hash a MongoDB snapshot is named by when an earlier upgrade step rewrote its content and kept the hash. */
+  readonly keptStorageHash: string | undefined;
 }
 
 class HashMap {
@@ -636,23 +662,68 @@ class HashMap {
   resolve(hash: string): string | undefined {
     return this.all.get(hash) ?? (this.newValues.has(hash) ? hash : undefined);
   }
+
+  age(hash: string): 'old' | 'new' | 'unknown' {
+    if (this.all.has(hash)) return 'old';
+    return this.newValues.has(hash) ? 'new' : 'unknown';
+  }
+}
+
+/**
+ * A MongoDB snapshot may hold a storage hash its content does not give: the index-name and field-storage-name upgrade steps rewrote snapshots in place and kept their hashes, because database markers, the ledger and migrations name a snapshot by its hash. Such a snapshot's directory name is the hash it was kept under. Its stored hash is that hash too, or already the new one when a run of this script stopped before it renamed the directory.
+ */
+function keptStorageHash(
+  family: Family,
+  snapshotHash: string | undefined,
+  stored: unknown,
+  oldHash: string | undefined,
+  newHash: string | undefined,
+): string | undefined {
+  if (family !== 'mongo' || snapshotHash === undefined) return undefined;
+  if (snapshotHash === oldHash || snapshotHash === newHash) return undefined;
+  return stored === snapshotHash || stored === newHash ? snapshotHash : undefined;
+}
+
+function hashList(hashes: HashSet): string {
+  const kinds = (['storage', 'profile', 'execution'] as const).filter(
+    (kind) => hashes[kind] !== undefined,
+  );
+  const join = (items: readonly string[]) =>
+    items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
+  return `${join(kinds)} hashes to ${join(kinds.map((kind) => hashes[kind] ?? ''))}`;
+}
+
+interface ContractChecks {
+  readonly stops: string[];
+  /** Contracts the script leaves unchanged and reports, without refusing the project. */
+  readonly left: string[];
+  /** Snapshots whose profile or execution hash an earlier release wrote by other rules. */
+  readonly notes: string[];
+  /** Every storage hash a migration, ref or snapshot names. */
+  readonly named: ReadonlySet<string>;
 }
 
 function planContract(
   file: StoredText,
   shown: string,
-  stops: string[],
-  notes: string[],
+  checks: ContractChecks,
 ): ContractPlan | undefined {
   const sections = sectionsOf(file.value);
   if (typeof sections === 'string') {
-    stops.push(`${shown}: ${sections}`);
+    checks.stops.push(`${shown}: ${sections}`);
     return undefined;
   }
   const oldHashes = contractHashes(sections, oldHash);
   const newHashes = contractHashes(sections, newHash);
   const stored = storedHashes(file.value);
   const snapshotHash = snapshotDirectoryHash(file.path);
+  const kept = keptStorageHash(
+    sections.family,
+    snapshotHash,
+    stored.storage,
+    oldHashes.storage,
+    newHashes.storage,
+  );
   const problems: string[] = [];
   const stale: string[] = [];
   for (const kind of ['storage', 'profile', 'execution'] as const) {
@@ -660,6 +731,7 @@ function planContract(
     const expectedOld = oldHashes[kind];
     if (expectedOld === undefined) continue;
     if (value === expectedOld || value === newHashes[kind]) continue;
+    if (kind === 'storage' && kept !== undefined && value === kept) continue;
     if (value === undefined) problems.push(`it has no ${KIND_LABEL[kind]}`);
     else if (kind !== 'storage' && snapshotHash !== undefined) stale.push(KIND_LABEL[kind]);
     else
@@ -669,6 +741,7 @@ function planContract(
   }
   if (
     snapshotHash !== undefined &&
+    kept === undefined &&
     snapshotHash !== oldHashes.storage &&
     snapshotHash !== newHashes.storage
   )
@@ -676,13 +749,77 @@ function planContract(
       `its snapshot directory is named ${snapshotHash}, which is not the storage hash its content gives, ${oldHashes.storage}`,
     );
   if (problems.length > 0) {
-    stops.push(
-      `${shown}: ${problems.join('; ')}. The file was edited by hand or comes from another release: restore it from version control, or emit it again, and run the script again`,
-    );
+    const isNamed = typeof stored.storage === 'string' && checks.named.has(stored.storage);
+    if (snapshotHash === undefined && !isNamed)
+      checks.left.push(
+        `${shown}: ${problems.join('; ')}. It is not a snapshot, and no migration, ref or snapshot names its hashes, so the script leaves it alone. If Prisma emits it, emit it again with \`prisma contract emit\`; otherwise set its ${hashList(newHashes)}, the hashes its content gives`,
+      );
+    else
+      checks.stops.push(
+        `${shown}: ${problems.join('; ')}. The file was edited by hand or comes from another release: restore it from version control, or emit it again, and run the script again`,
+      );
     return undefined;
   }
-  if (stale.length > 0) notes.push(`${shown} (${stale.join(' and ')})`);
-  return { file, oldHashes, newHashes, snapshotHash };
+  if (stale.length > 0) checks.notes.push(`${shown} (${stale.join(' and ')})`);
+  return { file, oldHashes, newHashes, snapshotHash, keptStorageHash: kept };
+}
+
+/** Every storage hash a migration's `from` or `to`, a ref, or a snapshot's directory name or stored hash names. */
+function namedHashes(files: ProjectFiles): Set<string> {
+  const named = new Set<string>();
+  const add = (hash: unknown) => {
+    if (typeof hash === 'string') named.add(hash);
+  };
+  for (const { value } of files.migrations) {
+    add(value['from']);
+    add(value['to']);
+  }
+  for (const { value } of files.refs) add(value['hash']);
+  for (const { path, value } of files.contracts) {
+    const snapshotHash = snapshotDirectoryHash(path);
+    if (snapshotHash === undefined) continue;
+    add(snapshotHash);
+    add(storedHashes(value).storage);
+  }
+  return named;
+}
+
+/**
+ * The hashes no contract of the project has that a migration links, through the `from` and `to` of other migrations, only to hashes that already have their new value. Prisma copies an extension's migrations into an application without a snapshot of each contract in between, and after `prisma contract emit` writes them again from an upgraded extension, they name those contracts by their new hashes.
+ */
+function unknownHashesAlreadyNew(migrations: readonly StoredText[], hashes: HashMap): Set<string> {
+  const neighbours = new Map<string, string[]>();
+  for (const { value } of migrations) {
+    const ends = [value['from'], value['to']].filter(
+      (hash): hash is string => typeof hash === 'string' && HASH.test(hash),
+    );
+    for (const hash of ends) if (!neighbours.has(hash)) neighbours.set(hash, []);
+    const [from, to] = ends;
+    if (from !== undefined && to !== undefined) {
+      neighbours.get(from)?.push(to);
+      neighbours.get(to)?.push(from);
+    }
+  }
+  const alreadyNew = new Set<string>();
+  const seen = new Set<string>();
+  for (const start of neighbours.keys()) {
+    if (seen.has(start)) continue;
+    const component: string[] = [];
+    const pending = [start];
+    seen.add(start);
+    for (let hash = pending.pop(); hash !== undefined; hash = pending.pop()) {
+      component.push(hash);
+      for (const next of neighbours.get(hash) ?? [])
+        if (!seen.has(next)) {
+          seen.add(next);
+          pending.push(next);
+        }
+    }
+    const ages = new Set(component.map((hash) => hashes.age(hash)));
+    if (ages.has('new') && !ages.has('old'))
+      for (const hash of component) if (hashes.age(hash) === 'unknown') alreadyNew.add(hash);
+  }
+  return alreadyNew;
 }
 
 /** `text` with each quoted occurrence of a key of `replacements` replaced by its value. */
@@ -713,15 +850,17 @@ function withHashes(value: JsonRecord, hashes: HashSet): JsonRecord {
   };
 }
 
-/** Each hash the contract stores, and the old hash its content gives, mapped to the new hash its content gives. */
+/** Each hash the contract stores, the old hash its content gives, and a snapshot's directory name, mapped to the new hash its content gives. */
 function storedReplacements(plan: ContractPlan): Map<string, string> {
   const stored = storedHashes(plan.file.value);
   const replacements = new Map<string, string>();
   for (const kind of ['storage', 'profile', 'execution'] as const) {
     const to = plan.newHashes[kind];
     if (to === undefined) continue;
-    for (const from of [stored[kind], plan.oldHashes[kind]])
-      if (typeof from === 'string' && from !== to) replacements.set(from, to);
+    const from = [stored[kind], plan.oldHashes[kind]];
+    if (kind === 'storage') from.push(plan.snapshotHash);
+    for (const hash of from)
+      if (typeof hash === 'string' && hash !== to) replacements.set(hash, to);
   }
   return replacements;
 }
@@ -768,6 +907,7 @@ interface Plan {
   readonly renames: [string, string][];
   readonly removals: string[];
   readonly notes: string[];
+  readonly kept: string[];
   readonly merged: string[];
   readonly problems: string[];
 }
@@ -789,48 +929,67 @@ function main(args: readonly string[]): number {
   if (stops.length > 0) return refuse(stops);
 
   const contracts: ContractPlan[] = [];
-  const notes: string[] = [];
+  const checks: ContractChecks = {
+    stops,
+    left: [...files.unversioned],
+    notes: [],
+    named: namedHashes(files),
+  };
   for (const file of files.contracts) {
-    const plan = planContract(file, shown(file.path), stops, notes);
+    const plan = planContract(file, shown(file.path), checks);
     if (plan !== undefined) contracts.push(plan);
   }
   const hashes = new HashMap();
-  for (const plan of contracts)
+  const kept: string[] = [];
+  for (const plan of contracts) {
     for (const kind of ['storage', 'profile', 'execution'] as const) {
       const from = plan.oldHashes[kind];
       const to = plan.newHashes[kind];
       if (from !== undefined && to !== undefined) hashes.add(kind, from, to, stops);
     }
+    const to = plan.newHashes.storage;
+    if (plan.keptStorageHash === undefined || to === undefined) continue;
+    hashes.add('storage', plan.keptStorageHash, to, stops);
+    kept.push(`${shown(plan.file.path)} (${plan.keptStorageHash} -> ${to})`);
+  }
   if (stops.length > 0) return refuse(stops);
 
   const plan: Plan = {
     writes: new Map(),
     renames: [],
     removals: [],
-    notes,
+    notes: checks.notes,
+    kept,
     merged: [],
-    problems: [...files.unversioned],
+    problems: checks.left,
   };
-  planMigrations(files, hashes, plan, stops, shown);
-  planRefs(files, hashes, plan, shown);
+  const alreadyNew = unknownHashesAlreadyNew(files.migrations, hashes);
+  const newValueOf = (hash: string) =>
+    hashes.resolve(hash) ?? (alreadyNew.has(hash) ? hash : undefined);
+  planMigrations(files, hashes, newValueOf, plan, stops, shown);
+  planRefs(files, newValueOf, plan, shown);
   planContracts(contracts, plan, stops, shown);
   if (stops.length > 0) return refuse(stops);
   for (const path of files.migrationTs) {
-    const text = readFileSync(path, 'utf8');
+    const { text } = readText(path);
     const next = replaceTokens(text, hashes.byKind.storage);
     if (next !== text) plan.writes.set(path, next);
   }
 
   const written: string[] = [];
   try {
+    for (const path of files.leftovers) rmSync(path, { recursive: true, force: true });
     for (const [path, text] of plan.writes) {
-      const current = readFileSync(path, 'utf8');
-      const bom = current.startsWith(BYTE_ORDER_MARK) ? BYTE_ORDER_MARK : '';
-      if (bom + text === current || text === current) continue;
-      writeFileSync(path, bom + text);
+      const current = readText(path);
+      if (current.text === text) continue;
+      replaceFile(path, current.bom + text);
       written.push(path);
     }
-    for (const dir of plan.removals) rmSync(dir, { recursive: true, force: true });
+    for (const dir of plan.removals) {
+      const removed = join(dirname(dir), `.${basename(dir)}${REMOVED_SUFFIX}`);
+      renameSync(dir, removed);
+      rmSync(removed, { recursive: true, force: true });
+    }
     for (const [from, to] of plan.renames) renameSync(from, to);
   } catch (error) {
     process.stderr.write(
@@ -849,6 +1008,14 @@ function main(args: readonly string[]): number {
   return 1;
 }
 
+/** Writes the new text beside the file and renames it over the file, so a run that stops leaves each file either as it was or as it should be. */
+function replaceFile(path: string, text: string): void {
+  const temporary = `${path}${TEMPORARY_SUFFIX}`;
+  writeFileSync(temporary, text);
+  chmodSync(temporary, statSync(path).mode & 0o7777);
+  renameSync(temporary, path);
+}
+
 function refuse(stops: readonly string[]): number {
   process.stderr.write(
     `Changed no file, because:\n${[...new Set(stops)].map((line) => `  ${line}\n`).join('')}`,
@@ -856,9 +1023,13 @@ function refuse(stops: readonly string[]): number {
   return 1;
 }
 
+/**
+ * Plans each migration's new `from`, `to`, `ops.json` and `migrationHash`. The script writes a `migration.json` before the `ops.json` beside it, so a run that stopped between the two leaves a `migrationHash` that covers the new `ops.json`; such a migration is finished, not refused.
+ */
 function planMigrations(
   files: ProjectFiles,
   hashes: HashMap,
+  newValueOf: (hash: string) => string | undefined,
   plan: Plan,
   stops: string[],
   shown: (path: string) => string,
@@ -869,14 +1040,17 @@ function planMigrations(
     let opsText: string;
     let ops: Json;
     try {
-      opsText = readFileSync(opsPath, 'utf8');
+      opsText = readText(opsPath).text;
       ops = JSON.parse(opsText);
     } catch (error) {
       stops.push(`${shown(opsPath)}: cannot be read as JSON (${errorText(error)})`);
       continue;
     }
     const stored = value['migrationHash'];
-    if (stored !== computeMigrationHash(value, ops)) {
+    const nextOpsText = replaceQuoted(opsText, hashes.byKind.storage);
+    const opsLeftBehind =
+      nextOpsText !== opsText && stored === computeMigrationHash(value, JSON.parse(nextOpsText));
+    if (stored !== computeMigrationHash(value, ops) && !opsLeftBehind) {
       stops.push(
         `${shown(file.path)}: its "migrationHash" is not the hash of the migration; it was edited by hand. Restore it from version control, or plan the migration again, and run the script again`,
       );
@@ -887,7 +1061,7 @@ function planMigrations(
     for (const field of ['from', 'to'] as const) {
       const hash = value[field];
       if (typeof hash !== 'string' || !HASH.test(hash)) continue;
-      const resolved = hashes.resolve(hash);
+      const resolved = newValueOf(hash);
       if (resolved === undefined) unknown.push(`its "${field}", ${hash}`);
       else next[field] = resolved;
     }
@@ -897,7 +1071,6 @@ function planMigrations(
       );
       continue;
     }
-    const nextOpsText = replaceQuoted(opsText, hashes.byKind.storage);
     if (next['from'] === value['from'] && next['to'] === value['to'] && nextOpsText === opsText)
       continue;
     const nextOps: Json = JSON.parse(nextOpsText);
@@ -924,14 +1097,14 @@ function planMigrations(
 
 function planRefs(
   files: ProjectFiles,
-  hashes: HashMap,
+  newValueOf: (hash: string) => string | undefined,
   plan: Plan,
   shown: (path: string) => string,
 ): void {
   for (const file of files.refs) {
     const hash = file.value['hash'];
     if (typeof hash !== 'string' || !HASH.test(hash)) continue;
-    const resolved = hashes.resolve(hash);
+    const resolved = newValueOf(hash);
     if (resolved === undefined) {
       plan.problems.push(
         `${shown(file.path)}: its "hash", ${hash}, ${UNKNOWN_HASH} If the ref is migrations/<extension>/refs/head.json, \`prisma contract emit\` writes it again from the upgraded extension. Otherwise set the ref again with \`prisma migration ref set\` after the upgrade`,
@@ -963,7 +1136,7 @@ function planContracts(
     const dtsPath = dtsPathOf(path);
     let dtsText: string | undefined;
     if (existsSync(dtsPath)) {
-      const dts = rewrittenDts(readFileSync(dtsPath, 'utf8'), contract);
+      const dts = rewrittenDts(readText(dtsPath).text, contract);
       if (typeof dts === 'string') {
         plan.writes.set(dtsPath, dts);
         dtsText = dts;
@@ -1006,7 +1179,7 @@ function snapshotContent(
   const entries = listDirectory(dir);
   if (typeof entries === 'string') return '';
   const files = entries
-    .filter((entry) => entry.isFile())
+    .filter((entry) => entry.isFile() && !entry.name.endsWith(TEMPORARY_SUFFIX))
     .map((entry) => {
       const path = join(dir, entry.name);
       const text =
@@ -1014,7 +1187,7 @@ function snapshotContent(
           ? contractJson
           : entry.name === 'contract.d.ts' && dts !== undefined
             ? dts
-            : readFileSync(path, 'utf8');
+            : readText(path).text;
       return [entry.name, text];
     });
   return JSON.stringify(files);
@@ -1055,9 +1228,14 @@ function report(
       lines.push(...changed.map(([from, to]) => `  ${from} -> ${to}`));
     }
   }
+  if (plan.kept.length > 0)
+    lines.push(
+      'MongoDB snapshots whose content an earlier upgrade step rewrote without changing their storage hash. They now have the storage hash their content gives, and so does every file that names them:',
+      ...plan.kept.map((note) => `  ${note}`),
+    );
   if (plan.notes.length > 0)
     lines.push(
-      'Snapshots whose profile or execution hash an earlier release wrote by other rules. They now have the hashes their content gives; no command reads these two hashes from a snapshot:',
+      "Snapshots whose profile or execution hash an earlier release wrote by other rules, which no version of the files corrects. They now have the hashes their content gives, so `prisma db sign <contract reference>`, which copies a snapshot's profile hash into the database marker, copies the right one:",
       ...plan.notes.map((note) => `  ${note}`),
     );
   if (plan.merged.length > 0)

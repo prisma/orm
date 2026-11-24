@@ -66,3 +66,17 @@ export function runScript(root: string, audience: Audience = 'app'): Run {
   });
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
+
+/** Runs the script and stops it, as a crash would, just before the `skip`-th file operation whose `<write|rename|remove> <path>` matches `pattern`. */
+export function runScriptStoppedBefore(root: string, pattern: string, skip = 0): Run {
+  const result = spawnSync(
+    process.execPath,
+    ['--import', join(here, 'stop-before.mjs'), join(repoRoot, SCRIPT_PATHS.app), root],
+    { encoding: 'utf8', env: { ...process.env, STOP_BEFORE: pattern, STOP_SKIP: String(skip) } },
+  );
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+export function copyInto(root: string, side: Side, from: string, to: string): void {
+  cpSync(join(fixturesDir, side, from), join(root, to), { recursive: true });
+}

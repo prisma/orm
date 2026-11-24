@@ -1,9 +1,13 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { computeStorageHash } from '@internal/contract/hashing';
+import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
 import { join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
   copyFixture,
+  copyInto,
   editFile,
+  fixturesDir,
   fixtureTree,
   readTree,
   removeWorkDirs,
@@ -25,6 +29,9 @@ const BACKFILL_HASH = '5b423686089e2ada5ece2b224849ac73ce6b998fb062e88217d2f30a1
 const BACKFILL_HASH_NEW_VALUE = 'f6146e922053633f815e208705396f57f232a93ac6a95e78b39ee7fb695d0d70';
 const MONGO_CONTRACT = 'mongo-app/src/contract.json';
 const MONGO_STORAGE_HASH = '1c73a5a88943362a9b01f6476e85fddc574031accb9ada12be61e9da24fe0fd8';
+const MONGO_EARLIER_SNAPSHOT_HASH =
+  'fb3df4c4899adcd423e9b75164870cef1be789fe6871a24b7fda64e707f324ad';
+const SQL_SNAPSHOT_HASH = '10cdd020e0f2e31ec61d010c58b77fbed5fae1c1919e21839ba1d2bb82b6aef6';
 
 function rewrittenFiles(): string[] {
   const before = fixtureTree('before');
@@ -97,26 +104,27 @@ describe('the extension copy of the script', () => {
 });
 
 describe('a project the script refuses, changing no file', () => {
-  it('names a contract whose storage hash its content does not give', () => {
+  it('names the emitted contract when its content does not give the storage hash its snapshot is named by', () => {
     const root = copyFixture('before');
-    editFile(root, MONGO_CONTRACT, (text) => text.replace(MONGO_STORAGE_HASH, 'a'.repeat(64)));
+    editFile(root, MONGO_CONTRACT, (text) => text.replace('"timestamp_1"', '"timestamp_edited"'));
     const edited = readTree(root);
-    expect({ run: runScript(root), tree: readTree(root) }).toEqual({
-      run: {
-        status: 1,
-        stdout: '',
-        stderr: `Changed no file, because:\n  ${MONGO_CONTRACT}: its storage hash "${'a'.repeat(64)}" is not the one its content gives, ${MONGO_STORAGE_HASH}. The file was edited by hand or comes from another release: restore it from version control, or emit it again, and run the script again\n`,
-      },
+    const run = runScript(root);
+    expect({ status: run.status, stdout: run.stdout, tree: readTree(root) }).toEqual({
+      status: 1,
+      stdout: '',
       tree: edited,
     });
+    expect(run.stderr).toMatch(
+      new RegExp(
+        `^Changed no file, because:\\n  ${MONGO_CONTRACT}: its storage hash "${MONGO_STORAGE_HASH}" is not the one its content gives, [0-9a-f]{64}\\. The file was edited by hand or comes from another release: restore it from version control, or emit it again, and run the script again\\n$`,
+      ),
+    );
   });
 
-  it('names a snapshot directory whose name is not its contract storage hash', () => {
-    const root = copyFixture('before', 'mongo-app');
-    const snapshot = `migrations/snapshots/${MONGO_STORAGE_HASH}/contract.json`;
-    editFile(root, snapshot, (text) =>
-      text.replace('"collection":{', '"collection":{"added_by_hand":{},'),
-    );
+  it('names a SQL snapshot whose content does not give its storage hash and directory name', () => {
+    const root = copyFixture('before', 'postgres-app');
+    const snapshot = `migrations/snapshots/${SQL_SNAPSHOT_HASH}/contract.json`;
+    editFile(root, snapshot, (text) => text.replaceAll('"nullable":true', '"nullable":false'));
     const edited = readTree(root);
     const run = runScript(root);
     expect({ status: run.status, stdout: run.stdout, tree: readTree(root) }).toEqual({
@@ -125,10 +133,44 @@ describe('a project the script refuses, changing no file', () => {
       tree: edited,
     });
     expect(run.stderr).toContain(
-      `  ${snapshot}: its storage hash "${MONGO_STORAGE_HASH}" is not the one its content gives,`,
+      `  ${snapshot}: its storage hash "${SQL_SNAPSHOT_HASH}" is not the one its content gives,`,
     );
     expect(run.stderr).toContain(
-      `its snapshot directory is named ${MONGO_STORAGE_HASH}, which is not the storage hash its content gives,`,
+      `its snapshot directory is named ${SQL_SNAPSHOT_HASH}, which is not the storage hash its content gives,`,
+    );
+  });
+
+  it('names a MongoDB snapshot whose stored storage hash is neither its directory name nor a hash of its content', () => {
+    const root = copyFixture('before', 'mongo-app');
+    const snapshot = `migrations/snapshots/${MONGO_STORAGE_HASH}/contract.json`;
+    editFile(root, snapshot, (text) => text.replace(MONGO_STORAGE_HASH, 'b'.repeat(64)));
+    const edited = readTree(root);
+    const run = runScript(root);
+    expect({ status: run.status, stdout: run.stdout, tree: readTree(root) }).toEqual({
+      status: 1,
+      stdout: '',
+      tree: edited,
+    });
+    expect(run.stderr).toContain(
+      `  ${snapshot}: its storage hash "${'b'.repeat(64)}" is not the one its content gives,`,
+    );
+  });
+
+  it('names a contract that is not a snapshot when a migration names its hash', () => {
+    const root = copyFixture('before', 'mongo-app');
+    mkdirSync(join(root, 'test'));
+    writeFileSync(
+      join(root, 'test/contract.json'),
+      readFileSync(join(root, MONGO_CONTRACT.replace('mongo-app/', '')), 'utf8').replace(
+        '"timestamp_1"',
+        '"timestamp_edited"',
+      ),
+    );
+    const edited = readTree(root);
+    const run = runScript(root);
+    expect({ status: run.status, tree: readTree(root) }).toEqual({ status: 1, tree: edited });
+    expect(run.stderr).toContain(
+      `  test/contract.json: its storage hash "${MONGO_STORAGE_HASH}" is not the one its content gives,`,
     );
   });
 
@@ -218,3 +260,118 @@ describe('a contract.json with no format version of either kind', () => {
     });
   });
 });
+
+describe('a MongoDB snapshot whose content an earlier upgrade step rewrote, keeping its hash', () => {
+  const root = copyFixture('before', 'mongo-app');
+  const snapshot = `migrations/snapshots/${MONGO_EARLIER_SNAPSHOT_HASH}/contract.json`;
+  editFile(root, snapshot, (text) =>
+    text.replace('"name":"timestamp_1"', '"name":"timestamp_named_by_a_step"'),
+  );
+  const naming = Object.keys(readTree(root)).filter((path) =>
+    readTree(root)[path]?.includes(MONGO_EARLIER_SNAPSHOT_HASH),
+  );
+  const contentHash = mongoStorageHashOf(join(root, snapshot));
+  const run = runScript(root);
+  const tree = readTree(root);
+
+  it('takes the storage hash its content gives, and so does every file that names it', () => {
+    expect(naming.length).toBeGreaterThan(2);
+    expect({
+      status: run.status,
+      stderr: run.stderr,
+      stillNaming: Object.keys(tree).filter((path) =>
+        tree[path]?.includes(MONGO_EARLIER_SNAPSHOT_HASH),
+      ),
+      snapshotStores: mongoStorageHashOf(
+        join(root, `migrations/snapshots/${contentHash}/contract.json`),
+        'stored',
+      ),
+      renamedNaming: naming
+        .map((path) => path.replace(MONGO_EARLIER_SNAPSHOT_HASH, contentHash))
+        .every((path) => tree[path]?.includes(contentHash)),
+    }).toEqual({
+      status: 0,
+      stderr: '',
+      stillNaming: [],
+      snapshotStores: contentHash,
+      renamedNaming: true,
+    });
+  });
+
+  it('is listed in the report', () => {
+    expect(run.stdout).toContain(
+      `MongoDB snapshots whose content an earlier upgrade step rewrote without changing their storage hash. They now have the storage hash their content gives, and so does every file that names them:\n  ${snapshot} (${MONGO_EARLIER_SNAPSHOT_HASH} -> ${contentHash})\n`,
+    );
+  });
+
+  it('changes nothing on a second run', () => {
+    expect(runScript(root)).toEqual({ status: 0, stdout: NOTHING_CHANGED, stderr: '' });
+  });
+});
+
+describe('a contract that is not a snapshot, whose hashes nothing in the project names', () => {
+  it('is left unchanged and reported when its hash is not the one its content gives, and the rest of the project is upgraded', () => {
+    const root = copyFixture('before');
+    const fixture = 'mongo-app/test/fixtures/hand-made.json';
+    mkdirSync(join(root, 'mongo-app/test/fixtures'), { recursive: true });
+    const text = readFileSync(join(root, MONGO_CONTRACT), 'utf8').replace(
+      MONGO_STORAGE_HASH,
+      'c'.repeat(64),
+    );
+    writeFileSync(join(root, fixture), text);
+    const run = runScript(root);
+    const { [fixture]: left, ...rest } = readTree(root);
+    expect({ status: run.status, left, rest }).toEqual({
+      status: 1,
+      left: text,
+      rest: fixtureTree('after'),
+    });
+    expect(run.stderr).toMatch(
+      new RegExp(
+        `^Left unchanged:\\n  ${fixture}: its storage hash "${'c'.repeat(64)}" is not the one its content gives, ${MONGO_STORAGE_HASH}\\. It is not a snapshot, and no migration, ref or snapshot names its hashes, so the script leaves it alone\\. If Prisma emits it, emit it again with \`prisma contract emit\`; otherwise set its storage and profile hashes to [0-9a-f]{64} and [0-9a-f]{64}, the hashes its content gives\\n$`,
+      ),
+    );
+  });
+});
+
+describe("an application's copy of an extension's migrations, which has no snapshot of the contracts in between", () => {
+  function withExtensionCopy(side: 'before' | 'after'): string {
+    const root = copyFixture(side, 'postgres-app');
+    const migrations = join(fixturesDir, side, 'extension/migrations');
+    for (const entry of readdirSync(migrations))
+      if (entry !== 'snapshots')
+        copyInto(root, side, `extension/migrations/${entry}`, `migrations/pgvector/${entry}`);
+    const head: string = JSON.parse(readFileSync(join(migrations, 'refs/head.json'), 'utf8')).hash;
+    copyInto(root, side, `extension/migrations/snapshots/${head}`, `migrations/snapshots/${head}`);
+    return root;
+  }
+
+  it('is reported with the old hashes, since the script cannot tell their new values', () => {
+    const run = runScript(withExtensionCopy('before'));
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      '  migrations/pgvector/20261029T1342_declare_vector_extension/migration.json: its "from", ',
+    );
+  });
+
+  it('is accepted once `prisma contract emit` has written it again from the upgraded extension', () => {
+    const root = withExtensionCopy('after');
+    const tree = readTree(root);
+    expect({ run: runScript(root), tree: readTree(root) }).toEqual({
+      run: { status: 0, stdout: NOTHING_CHANGED, stderr: '' },
+      tree,
+    });
+  });
+});
+
+function mongoStorageHashOf(path: string, which: 'content' | 'stored' = 'content'): string {
+  const contract = JSON.parse(readFileSync(path, 'utf8'));
+  const { storageHash, ...storage } = contract.storage;
+  if (which === 'stored') return storageHash;
+  return computeStorageHash({
+    target: contract.target,
+    targetFamily: contract.targetFamily,
+    storage,
+    ...mongoContractCanonicalizationHooks,
+  });
+}
