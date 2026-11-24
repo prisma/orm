@@ -38,3 +38,16 @@ Found on 2026-11-24 by the reviews of prisma/orm#31194, which records the policy
 6. **Bun and Deno.** The policy covers "the other runtimes", and `docs/Supported Versions.md` says best effort.
 7. **A change to Prisma's own tables that is not additive** needs a command the user runs, and that is not among the listed exceptions to "no changes". Affects project 7.
 8. **Driver types.** One decision record re-exports the database driver's types and says that works with one major version of the driver only. If `8.0.0` exports them, how they are exposed must be decided before `8.0.0`. Affects project 3.
+
+## More gaps, found by a reader with no context
+
+Found on 2026-11-24 by a review of a summary of the policy written for the team. None is decided. Where a design agreed since then answers one in part, that is noted.
+
+9. **"A tool makes any change an upgrade needs" cannot hold for the listed exceptions.** No tool can fix code that relied on a bug, or on unspecified detail such as row order. And the release candidates ship written upgrade instructions, which the same section says do not count. Affects project 10.
+10. **Two rules about input disagree.** "A source one release accepts, every later release accepts" and "a release may reject input that an earlier release accepted" cannot both hold if the contract source counts as input.
+11. **A later release that emits a different `contract.json` for the same contract source.** The policy says a new storage hash is then acceptable, but the marker no longer matches after the user emits. The design for project 2 covers the case where only the format or the hashing rules would differ. It does not cover a release that derives different storage content from the same source.
+12. **A deploy in progress, and going back to the earlier release.** "An earlier release may fail on what a later one wrote" together with "the ORM brings its own tables up to date" could make earlier instances fail while a deploy is in progress. The design for project 7 answers this for Prisma's own tables: within a major version their migrations only add. Going back to an earlier release after a later one has run is not addressed.
+13. **A Preview option or argument on a GA method.** The points not yet decided in `maturity-levels.md` cover flags, config options, attributes and error codes, and not arguments or fields. Affects project 6.
+14. **Changes to inferred types.** How "code that compiles keeps compiling" is checked for a change that no exported declaration shows. Project 4's design is taking this up with generated type tests.
+15. **Work for the next major version.** Where it lives, given one release line.
+
