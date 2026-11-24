@@ -1,4 +1,4 @@
-import { isContractBuiltInMemory } from '@internal/contract/format-version';
+import { isContractBuiltInMemory } from '@internal/contract/internal/format-version';
 import type { Contract } from '@internal/contract/types';
 import { validateContractOnce } from '@internal/contract/validate-once';
 import type { SqlStorage } from '@internal/sql-contract/types';

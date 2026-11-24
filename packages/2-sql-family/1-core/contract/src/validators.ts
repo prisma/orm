@@ -1,9 +1,6 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
-import {
-  CONTRACT_FORMAT_VERSIONS,
-  carriesFormatVersion,
-  readFormatVersion,
-} from '@internal/contract/format-version';
+import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
+import { carriesFormatVersion } from '@internal/contract/internal/format-version';
 import {
   type Contract,
   ContractExecutionSectionSchema,

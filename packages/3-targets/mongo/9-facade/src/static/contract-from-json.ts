@@ -1,4 +1,4 @@
-import { isContractBuiltInMemory } from '@internal/contract/format-version';
+import { isContractBuiltInMemory } from '@internal/contract/internal/format-version';
 import { validateContractOnce } from '@internal/contract/validate-once';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import type {

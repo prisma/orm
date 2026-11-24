@@ -1,5 +1,6 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import { isContractBuiltInMemory, isFormatVersionError } from '@internal/contract/format-version';
+import { isFormatVersionError } from '@internal/contract/format-version';
+import { isContractBuiltInMemory } from '@internal/contract/internal/format-version';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { emit as emitContractArtifacts } from '@internal/emitter';
 import { CliStructuredError } from '@internal/errors/control';

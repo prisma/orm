@@ -1,4 +1,4 @@
-import { isContractBuiltInMemory } from '@internal/contract/format-version';
+import { isContractBuiltInMemory } from '@internal/contract/internal/format-version';
 import { MongoStorage } from '@internal/mongo-contract';
 import { describe, expect, it } from 'vitest';
 import { MongoContractSerializer } from '../src/core/ir/mongo-contract-serializer';

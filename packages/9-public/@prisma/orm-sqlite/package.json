@@ -76,6 +76,7 @@
     "./contract/format-version": "./dist/contract__format-version.mjs",
     "./contract/hashing": "./dist/contract__hashing.mjs",
     "./contract/hashing-utils": "./dist/contract__hashing-utils.mjs",
+    "./contract/internal/format-version": "./dist/contract__internal__format-version.mjs",
     "./contract/is-plain-record": "./dist/contract__is-plain-record.mjs",
     "./contract/resolve-domain-model": "./dist/contract__resolve-domain-model.mjs",
     "./contract/types": "./dist/contract__types.mjs",

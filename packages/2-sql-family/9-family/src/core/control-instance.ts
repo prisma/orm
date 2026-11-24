@@ -1,4 +1,4 @@
-import { isContractBuiltInMemory } from '@internal/contract/format-version';
+import { isContractBuiltInMemory } from '@internal/contract/internal/format-version';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import {
   type AuthoringEntityTypeNamespace,
