@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
 import { CONTRACT_SNAPSHOTS_DIRNAME, storageHashHex } from '@internal/framework-components/control';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { blindCast } from '@internal/utils/casts';
@@ -224,6 +225,9 @@ export async function writeContractSnapshot(
 }
 
 /**
+ * The snapshot's format version is read first: a version this release cannot
+ * read throws a format version error naming the file.
+ *
  * When `verifyContent` is supplied, the parsed snapshot's content is checked
  * against the hash it was addressed by before being returned — the store is
  * content-addressed, and a snapshot edited in place under an unchanged hash
@@ -252,6 +256,11 @@ export async function readContractSnapshotJson(
   } catch (e) {
     throw errorInvalidJson(jsonPath, e instanceof Error ? e.message : String(e));
   }
+  readFormatVersion(parsed, {
+    kind: 'contract',
+    knownVersions: CONTRACT_FORMAT_VERSIONS,
+    path: jsonPath,
+  });
   verifyContent?.assertSnapshotContentMatches(parsed, storageHash, jsonPath);
   return parsed;
 }
@@ -267,7 +276,8 @@ export async function readContractSnapshotJson(
  * package. When `verifyContent` is supplied, an entry whose content does not
  * recompute to its address also resolves to `undefined` — tampered content
  * must not flow onward, and the strict store reads report the same file
- * loudly as `MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH`.
+ * loudly as `MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH`. A format version
+ * this release cannot read is never treated as absent: it throws.
  */
 export async function readContractSnapshotJsonTolerant(
   migrationsDir: string,
@@ -300,6 +310,11 @@ export async function readContractSnapshotJsonTolerant(
   if (parsed === null) {
     return undefined;
   }
+  readFormatVersion(parsed, {
+    kind: 'contract',
+    knownVersions: CONTRACT_FORMAT_VERSIONS,
+    path: jsonPath,
+  });
   try {
     verifyContent?.assertSnapshotContentMatches(parsed, storageHash, jsonPath);
   } catch (error) {

@@ -49,6 +49,7 @@ const TEST_HEAD_HASH = '00000000000000000000000000000000000000000000000000000000
 const TEST_INVARIANT = 'test-contract-space:create-test_box-v1';
 
 const testContract = {
+  formatVersion: 1,
   storage: { storageHash: TEST_HEAD_HASH },
   tables: { test_box: { columns: { x: 'int', y: 'int' } } },
 };
@@ -232,7 +233,7 @@ describe('aggregate pipeline (loader → planner → verifier) against deleted n
     });
     headHash = spaceContract.storage.storageHash;
     await emitContractSpaceArtifacts(migrationsDir, TEST_SPACE_ID, {
-      contract: spaceContract as unknown as Record<string, unknown>,
+      contract: { formatVersion: 1, ...spaceContract },
       contractDts: '// rendered .d.ts\nexport interface Contract {}\n',
       headRef: { hash: headHash, invariants: [] },
     });

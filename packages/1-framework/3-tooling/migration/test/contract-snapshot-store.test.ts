@@ -16,7 +16,7 @@ const STORAGE_HASH = HASH_HEX;
 const OTHER_HASH = 'b'.repeat(64);
 
 function contractFixture(storageHash: string) {
-  return { storage: { storageHash }, target: 'postgres' };
+  return { formatVersion: 1, storage: { storageHash }, target: 'postgres' };
 }
 
 describe('writeContractSnapshot', () => {
@@ -42,7 +42,7 @@ describe('writeContractSnapshot', () => {
     const json = await readFile(join(result.dir, 'contract.json'), 'utf-8');
     // Canonicalized: object keys sorted lexicographically at every level.
     expect(json).toBe(
-      '{"storage":{"storageHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"target":"postgres"}\n',
+      '{"formatVersion":1,"storage":{"storageHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"target":"postgres"}\n',
     );
 
     const dts = await readFile(join(result.dir, 'contract.d.ts'), 'utf-8');
@@ -97,7 +97,7 @@ describe('writeContractSnapshot', () => {
     );
 
     const second = await writeContractSnapshot(migrationsDir, STORAGE_HASH, {
-      contractJson: { storage: { storageHash: STORAGE_HASH }, target: 'sqlite' },
+      contractJson: { formatVersion: 1, storage: { storageHash: STORAGE_HASH }, target: 'sqlite' },
       contractDts: 'export type Contract = { different: true };',
     });
 

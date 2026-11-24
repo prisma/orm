@@ -1,3 +1,4 @@
+import { isFormatVersionError } from '@internal/contract/format-version';
 import { coordinateKey, elementCoordinates } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
 import { EMPTY_CONTRACT_HASH } from '../constants';
@@ -214,6 +215,7 @@ function contractViolations(input: IntegrityComputationInput): readonly Integrit
     try {
       contract = space.contract();
     } catch (error) {
+      if (isFormatVersionError(error)) throw error;
       out.push({ kind: 'contractUnreadable', spaceId: space.spaceId, detail: detailOf(error) });
       continue;
     }

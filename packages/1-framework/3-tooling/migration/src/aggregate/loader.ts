@@ -1,3 +1,4 @@
+import { isFormatVersionError } from '@internal/contract/format-version';
 import type { Contract } from '@internal/contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import type { SnapshotContentVerifier } from '../contract-snapshot-store';
@@ -262,6 +263,7 @@ async function readRawContractDeferred(
     const raw = await readContractSnapshotJson(migrationsDir, headRef.hash, verifySnapshotContent);
     return () => raw;
   } catch (error) {
+    if (isFormatVersionError(error)) throw error;
     return () => {
       throw error;
     };

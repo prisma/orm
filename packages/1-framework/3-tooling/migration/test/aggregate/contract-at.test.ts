@@ -18,7 +18,7 @@ function sampleContractDts(label: string): string {
 
 function sampleContractJson(storageHash: string): unknown {
   return {
-    schemaVersion: '1',
+    formatVersion: 1,
     targetFamily: 'sql',
     target: 'postgres',
     profileHash: `${'p'.repeat(64)}`,

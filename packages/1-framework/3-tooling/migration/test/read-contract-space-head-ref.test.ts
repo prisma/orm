@@ -57,7 +57,10 @@ describe('readContractSpaceHeadRef', () => {
   it('throws when refs/head.json is missing the invariants array', async () => {
     const dir = join(migrationsDir, 'cipherstash', 'refs');
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'head.json'), `${canonicalizeJson({ hash: 'abc' })}\n`);
+    await writeFile(
+      join(dir, 'head.json'),
+      `${canonicalizeJson({ formatVersion: 1, hash: 'abc' })}\n`,
+    );
 
     let captured: unknown;
     try {
@@ -66,6 +69,43 @@ describe('readContractSpaceHeadRef', () => {
       captured = err;
     }
     expect(MigrationToolsError.is(captured)).toBe(true);
+  });
+
+  describe('format version', () => {
+    const headPath = () => join(migrationsDir, 'cipherstash', 'refs', 'head.json');
+    async function writeHead(content: Record<string, unknown>): Promise<void> {
+      await mkdir(join(migrationsDir, 'cipherstash', 'refs'), { recursive: true });
+      await writeFile(headPath(), JSON.stringify(content));
+    }
+
+    it('refuses a head ref written by a newer release, naming the file', async () => {
+      await writeHead({ formatVersion: 2, hash: 'abc', invariants: [] });
+      await expect(readContractSpaceHeadRef(migrationsDir, 'cipherstash')).rejects.toMatchObject({
+        code: 'MIGRATION.FORMAT_VERSION_NEWER',
+        where: { path: headPath() },
+      });
+    });
+
+    it('refuses a head ref with no format version', async () => {
+      await writeHead({ hash: 'abc', invariants: [] });
+      await expect(readContractSpaceHeadRef(migrationsDir, 'cipherstash')).rejects.toMatchObject({
+        code: 'MIGRATION.FORMAT_VERSION_MISSING',
+      });
+    });
+
+    it('refuses a head ref with a field it does not know', async () => {
+      await writeHead({ formatVersion: 1, hash: 'abc', invariants: [], note: 'x' });
+      await expect(readContractSpaceHeadRef(migrationsDir, 'cipherstash')).rejects.toMatchObject({
+        code: 'MIGRATION.INVALID_REF_FILE',
+      });
+    });
+
+    it('refuses a head ref that declares policies', async () => {
+      await writeHead({ formatVersion: 1, hash: 'abc', invariants: [], policies: {} });
+      await expect(readContractSpaceHeadRef(migrationsDir, 'cipherstash')).rejects.toMatchObject({
+        code: 'MIGRATION.INVALID_REF_FILE',
+      });
+    });
   });
 
   it('rejects an invalid space id', async () => {

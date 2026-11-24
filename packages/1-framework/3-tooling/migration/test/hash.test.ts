@@ -25,6 +25,17 @@ describe('computeMigrationHash', () => {
     expect(computeMigrationHash(metadata, ops)).toBe(computeMigrationHash(withMigrationHash, ops));
   });
 
+  it('leaves the format version out, as it leaves out migrationHash', () => {
+    const metadata = createTestMetadata();
+    const ops = createTestOps();
+    expect(computeMigrationHash({ formatVersion: 1, ...metadata }, ops)).toBe(
+      computeMigrationHash(metadata, ops),
+    );
+    expect(computeMigrationHash({ formatVersion: 2, ...metadata }, ops)).toBe(
+      computeMigrationHash(metadata, ops),
+    );
+  });
+
   it('changes when a metadata field changes', () => {
     const ops = createTestOps();
     const id1 = computeMigrationHash(createTestMetadata({ from: null }), ops);

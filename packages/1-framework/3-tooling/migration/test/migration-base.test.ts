@@ -147,7 +147,7 @@ describe('buildMigrationArtifacts', () => {
     expect(metadata.migrationHash).toMatch(/^[a-f0-9]{64}$/);
     expect(metadata.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
-    expect(JSON.parse(metadataJson)).toEqual(metadata);
+    expect(JSON.parse(metadataJson)).toEqual({ formatVersion: 1, ...metadata });
   });
 
   it('begins each read of the operations before building, so each build reads them from the start', async () => {

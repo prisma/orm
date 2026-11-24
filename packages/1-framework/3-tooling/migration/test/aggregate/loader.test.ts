@@ -75,13 +75,16 @@ describe('loadContractSpaceAggregate', () => {
   ): Promise<void> {
     const refsDir = join(migrationsDir, spaceId, 'refs');
     await mkdir(refsDir, { recursive: true });
-    await writeFile(join(refsDir, 'head.json'), JSON.stringify(headRef, null, 2));
+    await writeFile(
+      join(refsDir, 'head.json'),
+      JSON.stringify({ formatVersion: 1, ...headRef }, null, 2),
+    );
   }
 
   /** Write a contract snapshot store entry keyed by `storageHash`. */
   async function writeContractSnapshotEntry(storageHash: string, contract: unknown): Promise<void> {
     await writeContractSnapshot(migrationsDir, storageHash, {
-      contractJson: contract,
+      contractJson: { formatVersion: 1, ...(contract as Record<string, unknown>) },
       contractDts: 'export type Contract = unknown;\n',
     });
   }

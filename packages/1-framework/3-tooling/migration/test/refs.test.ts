@@ -8,6 +8,7 @@ import {
   deleteRef,
   readRef,
   readRefs,
+  readRefsTolerant,
   resolveRef,
   resolveRefsByContractHash,
   validateRefName,
@@ -20,6 +21,10 @@ const HASH_B = `${'b'.repeat(64)}`;
 
 const ENTRY_A: RefEntry = { hash: HASH_A, invariants: [] };
 const ENTRY_B: RefEntry = { hash: HASH_B, invariants: ['split-user-name'] };
+
+function refFile(content: Record<string, unknown>): string {
+  return JSON.stringify({ formatVersion: 1, ...content });
+}
 
 describe('validateRefName', () => {
   it('accepts simple alphanumeric names', () => {
@@ -124,19 +129,19 @@ describe('writeRef', () => {
   it('creates ref file with correct JSON', async () => {
     await writeRef(refsDir, 'staging', ENTRY_A);
     const content = JSON.parse(await readFile(join(refsDir, 'staging.json'), 'utf-8'));
-    expect(content).toEqual({ hash: HASH_A, invariants: [] });
+    expect(content).toEqual({ formatVersion: 1, hash: HASH_A, invariants: [] });
   });
 
   it('creates ref file with invariants', async () => {
     await writeRef(refsDir, 'production', ENTRY_B);
     const content = JSON.parse(await readFile(join(refsDir, 'production.json'), 'utf-8'));
-    expect(content).toEqual({ hash: HASH_B, invariants: ['split-user-name'] });
+    expect(content).toEqual({ formatVersion: 1, hash: HASH_B, invariants: ['split-user-name'] });
   });
 
   it('creates parent directories for slashed names', async () => {
     await writeRef(refsDir, 'envs/staging', ENTRY_A);
     const content = JSON.parse(await readFile(join(refsDir, 'envs', 'staging.json'), 'utf-8'));
-    expect(content).toEqual({ hash: HASH_A, invariants: [] });
+    expect(content).toEqual({ formatVersion: 1, hash: HASH_A, invariants: [] });
   });
 
   it('creates deeply nested directories for multi-segment names', async () => {
@@ -144,14 +149,14 @@ describe('writeRef', () => {
     const content = JSON.parse(
       await readFile(join(refsDir, 'team', 'backend', 'prod.json'), 'utf-8'),
     );
-    expect(content).toEqual({ hash: HASH_B, invariants: ['split-user-name'] });
+    expect(content).toEqual({ formatVersion: 1, hash: HASH_B, invariants: ['split-user-name'] });
   });
 
   it('overwrites existing ref file', async () => {
     await writeRef(refsDir, 'staging', ENTRY_A);
     await writeRef(refsDir, 'staging', ENTRY_B);
     const content = JSON.parse(await readFile(join(refsDir, 'staging.json'), 'utf-8'));
-    expect(content).toEqual({ hash: HASH_B, invariants: ['split-user-name'] });
+    expect(content).toEqual({ formatVersion: 1, hash: HASH_B, invariants: ['split-user-name'] });
   });
 
   it('rejects invalid ref names', async () => {
@@ -188,14 +193,14 @@ describe('readRef', () => {
   });
 
   it('reads a valid ref file', async () => {
-    await writeFile(join(refsDir, 'staging.json'), JSON.stringify(ENTRY_A));
+    await writeFile(join(refsDir, 'staging.json'), refFile(ENTRY_A));
     const entry = await readRef(refsDir, 'staging');
     expect(entry).toEqual(ENTRY_A);
   });
 
   it('reads a ref with slashed name', async () => {
     await mkdir(join(refsDir, 'envs'), { recursive: true });
-    await writeFile(join(refsDir, 'envs', 'staging.json'), JSON.stringify(ENTRY_A));
+    await writeFile(join(refsDir, 'envs', 'staging.json'), refFile(ENTRY_A));
     const entry = await readRef(refsDir, 'envs/staging');
     expect(entry).toEqual(ENTRY_A);
   });
@@ -233,7 +238,7 @@ describe('readRef', () => {
   });
 
   it('throws INVALID_REF_FILE when file has invalid hash', async () => {
-    await writeFile(join(refsDir, 'staging.json'), JSON.stringify({ hash: 'bad', invariants: [] }));
+    await writeFile(join(refsDir, 'staging.json'), refFile({ hash: 'bad', invariants: [] }));
     try {
       await readRef(refsDir, 'staging');
       expect.fail('expected error');
@@ -244,7 +249,7 @@ describe('readRef', () => {
   });
 
   it('throws INVALID_REF_FILE when file is missing invariants', async () => {
-    await writeFile(join(refsDir, 'staging.json'), JSON.stringify({ hash: HASH_A }));
+    await writeFile(join(refsDir, 'staging.json'), refFile({ hash: HASH_A }));
     try {
       await readRef(refsDir, 'staging');
       expect.fail('expected error');
@@ -292,38 +297,38 @@ describe('readRefs', () => {
 
   it('reads multiple ref files', async () => {
     await mkdir(refsDir, { recursive: true });
-    await writeFile(join(refsDir, 'staging.json'), JSON.stringify(ENTRY_A));
-    await writeFile(join(refsDir, 'production.json'), JSON.stringify(ENTRY_B));
+    await writeFile(join(refsDir, 'staging.json'), refFile(ENTRY_A));
+    await writeFile(join(refsDir, 'production.json'), refFile(ENTRY_B));
     const refs = await readRefs(refsDir);
     expect(refs).toEqual({ staging: ENTRY_A, production: ENTRY_B });
   });
 
   it('reconstructs slashed names from subdirectories', async () => {
     await mkdir(join(refsDir, 'envs'), { recursive: true });
-    await writeFile(join(refsDir, 'envs', 'staging.json'), JSON.stringify(ENTRY_A));
-    await writeFile(join(refsDir, 'envs', 'production.json'), JSON.stringify(ENTRY_B));
+    await writeFile(join(refsDir, 'envs', 'staging.json'), refFile(ENTRY_A));
+    await writeFile(join(refsDir, 'envs', 'production.json'), refFile(ENTRY_B));
     const refs = await readRefs(refsDir);
     expect(refs).toEqual({ 'envs/staging': ENTRY_A, 'envs/production': ENTRY_B });
   });
 
   it('reads deeply nested refs', async () => {
     await mkdir(join(refsDir, 'team', 'backend'), { recursive: true });
-    await writeFile(join(refsDir, 'team', 'backend', 'prod.json'), JSON.stringify(ENTRY_A));
+    await writeFile(join(refsDir, 'team', 'backend', 'prod.json'), refFile(ENTRY_A));
     const refs = await readRefs(refsDir);
     expect(refs).toEqual({ 'team/backend/prod': ENTRY_A });
   });
 
   it('mixes top-level and nested refs', async () => {
     await mkdir(join(refsDir, 'envs'), { recursive: true });
-    await writeFile(join(refsDir, 'head.json'), JSON.stringify(ENTRY_A));
-    await writeFile(join(refsDir, 'envs', 'staging.json'), JSON.stringify(ENTRY_B));
+    await writeFile(join(refsDir, 'head.json'), refFile(ENTRY_A));
+    await writeFile(join(refsDir, 'envs', 'staging.json'), refFile(ENTRY_B));
     const refs = await readRefs(refsDir);
     expect(refs).toEqual({ head: ENTRY_A, 'envs/staging': ENTRY_B });
   });
 
   it('ignores non-json files', async () => {
     await mkdir(refsDir, { recursive: true });
-    await writeFile(join(refsDir, 'staging.json'), JSON.stringify(ENTRY_A));
+    await writeFile(join(refsDir, 'staging.json'), refFile(ENTRY_A));
     await writeFile(join(refsDir, 'README.md'), '# Refs');
     const refs = await readRefs(refsDir);
     expect(refs).toEqual({ staging: ENTRY_A });
@@ -331,7 +336,7 @@ describe('readRefs', () => {
 
   it('ignores paired contract snapshot json files', async () => {
     await mkdir(refsDir, { recursive: true });
-    await writeFile(join(refsDir, 'db.json'), JSON.stringify(ENTRY_A));
+    await writeFile(join(refsDir, 'db.json'), refFile(ENTRY_A));
     await writeFile(
       join(refsDir, 'db.contract.json'),
       JSON.stringify({
@@ -375,7 +380,7 @@ describe('deleteRef', () => {
   });
 
   it('deletes a ref file', async () => {
-    await writeFile(join(refsDir, 'staging.json'), JSON.stringify(ENTRY_A));
+    await writeFile(join(refsDir, 'staging.json'), refFile(ENTRY_A));
     await deleteRef(refsDir, 'staging');
     const refs = await readRefs(refsDir);
     expect(refs).toEqual({});
@@ -383,7 +388,7 @@ describe('deleteRef', () => {
 
   it('deletes a nested ref and cleans empty parent directories', async () => {
     await mkdir(join(refsDir, 'envs'), { recursive: true });
-    await writeFile(join(refsDir, 'envs', 'staging.json'), JSON.stringify(ENTRY_A));
+    await writeFile(join(refsDir, 'envs', 'staging.json'), refFile(ENTRY_A));
     await deleteRef(refsDir, 'envs/staging');
     const refs = await readRefs(refsDir);
     expect(refs).toEqual({});
@@ -398,8 +403,8 @@ describe('deleteRef', () => {
 
   it('does not delete sibling refs when deleting a nested ref', async () => {
     await mkdir(join(refsDir, 'envs'), { recursive: true });
-    await writeFile(join(refsDir, 'envs', 'staging.json'), JSON.stringify(ENTRY_A));
-    await writeFile(join(refsDir, 'envs', 'production.json'), JSON.stringify(ENTRY_B));
+    await writeFile(join(refsDir, 'envs', 'staging.json'), refFile(ENTRY_A));
+    await writeFile(join(refsDir, 'envs', 'production.json'), refFile(ENTRY_B));
     await deleteRef(refsDir, 'envs/staging');
     const refs = await readRefs(refsDir);
     expect(refs).toEqual({ 'envs/production': ENTRY_B });
@@ -533,5 +538,56 @@ describe('resolveRefsByContractHash', () => {
 
     expect(map.get(HASH_BRANCH_A)).toEqual(['production', 'staging']);
     expect(map.get(HASH_POSTGIS)).toEqual(['db']);
+  });
+});
+
+describe('ref file format version', () => {
+  let refsDir: string;
+
+  beforeEach(() => {
+    refsDir = join(
+      tmpdir(),
+      `test-refs-format-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+  });
+
+  afterEach(async () => {
+    await rm(refsDir, { recursive: true, force: true });
+  });
+
+  async function writeRefFile(name: string, content: Record<string, unknown>): Promise<string> {
+    const filePath = join(refsDir, `${name}.json`);
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, JSON.stringify(content));
+    return filePath;
+  }
+
+  it('readRef refuses a ref written by a newer release, naming the file', async () => {
+    const filePath = await writeRefFile('staging', { formatVersion: 2, ...ENTRY_A });
+    await expect(readRef(refsDir, 'staging')).rejects.toMatchObject({
+      code: 'MIGRATION.FORMAT_VERSION_NEWER',
+      where: { path: filePath },
+    });
+  });
+
+  it('readRefs refuses a ref with no format version', async () => {
+    await writeRefFile('staging', { ...ENTRY_A });
+    await expect(readRefs(refsDir)).rejects.toMatchObject({
+      code: 'MIGRATION.FORMAT_VERSION_MISSING',
+    });
+  });
+
+  it('readRefsTolerant does not tolerate a ref written by a newer release', async () => {
+    await writeRefFile('staging', { formatVersion: 2, ...ENTRY_A });
+    await expect(readRefsTolerant(refsDir)).rejects.toMatchObject({
+      code: 'MIGRATION.FORMAT_VERSION_NEWER',
+    });
+  });
+
+  it('refuses a ref with a field it does not know', async () => {
+    await writeRefFile('staging', { formatVersion: 1, ...ENTRY_A, note: 'x' });
+    await expect(readRef(refsDir, 'staging')).rejects.toMatchObject({
+      code: 'MIGRATION.INVALID_REF_FILE',
+    });
   });
 });
