@@ -4,21 +4,19 @@
 import { dirname, relative, resolve, sep } from 'node:path';
 import { SourceMapper } from '@microsoft/api-extractor/lib/collector/SourceMapper';
 import ts from 'typescript';
+import { COMPILER_OPTIONS } from './compiler-options.mjs';
 
 const isBare = (specifier) => !specifier.startsWith('.') && !specifier.startsWith('/');
 const SIGNATURE_MEMBERS = new Set(['__call', '__new', '__index', '__constructor']);
 
-function compilerOptions() {
-  return {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    lib: ['lib.es2023.d.ts', 'lib.dom.d.ts'],
-    strict: true,
-    skipLibCheck: true,
-    types: ['node'],
-    noEmit: true,
-  };
+export class CompilerOptionsError extends Error {}
+
+function compilerOptions(packageDir) {
+  const { options, errors } = ts.convertCompilerOptionsFromJson(COMPILER_OPTIONS, packageDir);
+  if (errors.length > 0) {
+    throw new CompilerOptionsError(ts.flattenDiagnosticMessageText(errors[0].messageText, ' '));
+  }
+  return { ...options, noEmit: true };
 }
 
 function moduleSpecifierOf(declaration) {
@@ -266,8 +264,8 @@ function readPath(checker, program, file, packageDir) {
 
 // Returns, for each path, its export names, the package's own exported declarations grouped by
 // symbol, its forwards and its augmentations, plus the checker that resolves names in them.
-export function readDeclarations(packageDir, entryPoints) {
-  const options = compilerOptions();
+export function readExports(packageDir, entryPoints) {
+  const options = compilerOptions(packageDir);
   const program = ts.createProgram(
     entryPoints.map(({ declarationFile }) => declarationFile),
     options,

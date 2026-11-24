@@ -1,5 +1,5 @@
 // Turns one package's API into the sorted lines of its api.txt. The TypeScript compiler
-// (declarations.mjs) says what each import path exports, under which names; API Extractor's
+// (read-exports.mjs) says what each import path exports, under which names; API Extractor's
 // models give the declarations' text and their members, and the types signatures use.
 
 import { createHash } from 'node:crypto';
@@ -7,8 +7,8 @@ import { existsSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { ApiItemKind, ApiPackage } from '@microsoft/api-extractor-model';
 import ts from 'typescript';
-import { readDeclarations } from './declarations.mjs';
 import { compareCodeUnits, normalizeTypes, renderNode, TypeTextError } from './normalize-type.mjs';
+import { readExports } from './read-exports.mjs';
 
 export class ApiListError extends Error {}
 
@@ -240,7 +240,7 @@ function memberProblems(items, symbols, label, memberKeysOf, location = undefine
   };
   if (symbols.length === 0) {
     const where = location
-      ? ` in ${location}, the file API Extractor records for it. If API Extractor changed how it names that file, update containersByLocation in scripts/public-api/declarations.mjs`
+      ? ` in ${location}, the file API Extractor records for it. If API Extractor changed how it names that file, update containersByLocation in scripts/public-api/read-exports.mjs`
       : '';
     return [`${label} has no declaration this script can find${where}`];
   }
@@ -527,7 +527,7 @@ function augmentationLines(augmentation, rename) {
 
 export function flattenPackage(packageDir, entryPoints) {
   const where = relative(process.cwd(), packageDir);
-  const declarations = readDeclarations(packageDir, entryPoints);
+  const declarations = readExports(packageDir, entryPoints);
   const problems = [...declarations.paths].flatMap(([subpath, info]) =>
     info.problems.map((problem) => `${subpath}: ${problem}`),
   );

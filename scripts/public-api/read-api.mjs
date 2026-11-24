@@ -1,6 +1,6 @@
 // Reads the API of one published package with API Extractor, one run per import path.
 // API Extractor reads the declarations with the TypeScript it bundles (6.0.3 with 7.60.1); the
-// flattener's own reading (declarations.mjs) uses the repository's TypeScript.
+// flattener's own reading (read-exports.mjs) uses the repository's TypeScript.
 //
 // Output: <package>/dist-api/<import path, with / as __>.api.json for each path (`index` for
 // the package root), and
@@ -12,6 +12,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { basename, dirname, join, relative } from 'node:path';
 import { CompilerState, Extractor, ExtractorConfig } from '@microsoft/api-extractor';
 import ts from 'typescript';
+import { COMPILER_OPTIONS } from './compiler-options.mjs';
 
 export const MODEL_FOLDER = 'dist-api';
 
@@ -51,15 +52,7 @@ function extractorConfig(packageDir, { declarationFile, modelFile }) {
       bundledPackages: [],
       compiler: {
         overrideTsconfig: {
-          compilerOptions: {
-            target: 'es2022',
-            module: 'nodenext',
-            moduleResolution: 'nodenext',
-            lib: ['es2023', 'dom'],
-            strict: true,
-            skipLibCheck: true,
-            types: ['node'],
-          },
+          compilerOptions: COMPILER_OPTIONS,
           files: [declarationFile],
         },
       },
