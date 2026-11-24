@@ -1,5 +1,7 @@
 # ADR 016 — Adapter SPI for lowering relational AST
 
+> **Note ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)):** the feature flag that "Versioning policy" offers for a bug fix that changes SQL does not exist, and Prisma 8 has no feature flags. The capabilities it calls "capability flags" are unaffected.
+
 ## Context
 
 The SQL DSL and optional ORM produce a dialect-agnostic relational AST. Relationship traversal is represented by first-class, projection-scoped nodes (`nestArray`, `joinFlat`, including M:N via junction). We need a clear, stable SPI where dialect logic lowers these nodes so lanes stay portable and the core remains thin. Lowering must be deterministic to support plan hashing, golden tests, and agent predictability.

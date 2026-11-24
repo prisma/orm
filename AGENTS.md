@@ -133,4 +133,4 @@ See [`docs/architecture docs/subsystems/`](docs/architecture%20docs/subsystems/)
 
 ---
 
-**Remember**: This is a prototype. Focus on clear docs that reflect implemented behavior.
+**Remember**: Focus on clear docs that reflect implemented behavior.

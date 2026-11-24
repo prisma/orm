@@ -2,6 +2,8 @@
 
 **Amended by [ADR 274](ADR%20274%20-%20A%20client%20takes%20a%20typed%20contract%20value%2C%20so%20every%20other%20option%20is%20inferred.md):** the clients no longer accept `contractJson`. They take a contract value, and emitted JSON becomes that value through `contractFromJson<Contract>(json)`.
 
+> **Note ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)):** the separate versions that "Versioning and compatibility matrix" gives the Plan model, the hook API and each adapter's SPI were never built, and neither was the matrix. Only the contract's format version exists. ADR 330 records how packages are versioned: they share one release number, and each has its own patch number or level counter.
+
 ## Context
 
 - Prisma Next intentionally supports multiple query authoring lanes and invites third parties to add new lanes or even alternate runtimes
