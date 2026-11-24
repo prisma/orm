@@ -1,6 +1,6 @@
 # Later releases read the files and database records of earlier releases
 
-Project 2 of the Prisma 8 compatibility stream. The policy it implements is the decision record "From 8.0.0, an application upgrades within Prisma 8 without changes" (sections on stored data and on the runtime marker check). The design was agreed on 2026-11-24 and is in `projects/ga-compatibility/designs/2-stored-files-and-records.md` on the branch `ga-compatibility`; this spec restates what it requires and records the details it left open.
+Project 2 of the Prisma 8 compatibility stream. It implements the stored-data and runtime-marker-check parts of the compatibility policy: from `8.0.0`, an application upgrades within Prisma 8 with no change to its code, its generated files or its database. Each pull request carries the code, the checks and the decision record for exactly what it implements, and says from which release it is in force. The design was agreed on 2026-11-24 and is in `projects/ga-compatibility/designs/2-stored-files-and-records.md` on the branch `ga-compatibility`; this spec restates what it requires and records the details it left open.
 
 ## Purpose
 
