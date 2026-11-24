@@ -20,7 +20,9 @@
       "!**/mongo-contract.json",
       "!**/migrations/*/*/migration.json",
       "!**/migrations/*/*/ops.json",
-      "!**/planner-golden/fixtures/*/planned.golden.json"
+      "!**/planner-golden/fixtures/*/planned.golden.json",
+      // A saved sample set holds the files and records a release wrote, byte for byte.
+      "!**/saved-samples/*"
     ]
   },
   "formatter": {
