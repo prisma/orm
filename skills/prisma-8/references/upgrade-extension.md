@@ -1,6 +1,6 @@
 # Upgrade Prisma 8 (extension)
 
-This reference upgrades a project that **is** a Prisma 8 extension — a package that consumes the framework SPI (`@prisma/orm-framework`, `@prisma/orm-family-sql` or `@prisma/orm-family-mongo`, `@prisma/orm-toolchain`, with a `@prisma/orm-target-*` peer) and exposes contract / middleware / codec / migration surfaces that downstream apps install via `prisma.config.ts`.
+This reference upgrades a project that **is** a Prisma 8 extension — a package that consumes the framework SPI (`@prisma/orm-framework`, `@prisma/orm-family-sql` or `@prisma/orm-family-mongo`, `@prisma/orm-toolchain`, `@prisma/orm-target-*`, each a peer dependency) and exposes contract / middleware / codec / migration surfaces that downstream apps install via `prisma.config.ts`.
 
 If the project you are upgrading is a consumer **app** (it depends on `@prisma/orm-postgres`, `@prisma/orm-mongo`, or `@prisma/orm-sqlite` from its application code), use [`upgrade-app.md`](upgrade-app.md) instead — or both, if the repo contains both a consumer app and an extension package, in which case run the app flow first then this one in the same session.
 
@@ -16,7 +16,7 @@ Do the version bump first (step 1 of the per-step flow below), re-sync the skill
 
 This flow applies when the project **is** a Prisma 8 extension. Heuristics:
 
-- `package.json` declares `@prisma/orm-framework` (or another `@prisma/orm-*` SPI package) under `dependencies` or `peerDependencies`, and
+- `package.json` declares `@prisma/orm-framework` (or another `@prisma/orm-*` SPI package) under `peerDependencies`, or under `dependencies` with no database package (`@prisma/orm-postgres`, `@prisma/orm-mongo`, …) beside it, as an extension written for an earlier release does, and
 - the package's `name` matches `^@.*/extension-` (the convention used by `@prisma/orm-extension-pgvector`, etc.), or
 - the package is referenced as an `extensions` entry from a sibling app's `prisma.config.ts` in the same monorepo.
 
@@ -49,14 +49,14 @@ This flow assumes you are an **external extension author** — your extension li
 
 For each `(from, to)` step in the chain:
 
-1. **Bump `@prisma/orm-*` deps.** Rewrite every `@prisma/orm-*` entry other than `@prisma/orm-extension-*` in the extension's `package.json` to the exact `<to>` version (e.g. `"8.0.0-rc.11"` — no caret, no tilde, no range, no `workspace:` specifier; the exact-pin rule below details why). All entries advance to the same version. Cover whichever dep field(s) the extension uses today — `dependencies` and/or `peerDependencies` — and any `optionalDependencies`. The skill itself ships inside the Prisma packages, so bumping them is what updates it; there is no separate skill package to bump.
+1. **Bump `@prisma/orm-*` deps.** Rewrite every `@prisma/orm-*` entry other than `@prisma/orm-extension-*` in the extension's `package.json` to the exact `<to>` version (e.g. `"8.0.0-rc.11"` — no caret, no tilde, no range, no `workspace:` specifier; the exact-pin rule below details why). All entries advance to the same version. Every such entry belongs under `peerDependencies` and again under `devDependencies`, at the same version. Move any entry still under `dependencies` or `optionalDependencies` there: an extension written for an earlier release held the framework, the family and the toolchain as ordinary dependencies. The skill itself ships inside the Prisma packages, so bumping them is what updates it; there is no separate skill package to bump.
 
 2. **Install.** Run `pnpm install` (or the project's lockfile-managing command). The extension's source is now broken against the new SPI — the upgrade instructions for `<from> → <to>` exist to fix it.
 
-3. **Check pins.** Every `@prisma/orm-*` entry other than `@prisma/orm-extension-*` across `dependencies`, `peerDependencies`, and `optionalDependencies` must now be the single exact string `<to>`. This prints any entry that is not, and exits 1:
+3. **Check pins.** Every `@prisma/orm-*` entry other than `@prisma/orm-extension-*` must now be under `peerDependencies` and `devDependencies` as the single exact string `<to>`, and none under `dependencies` or `optionalDependencies`. This prints any entry that is not, and exits 1:
 
    ```bash
-   node -e 'const p=require("./package.json");const to=process.argv[1];const bad=[];for(const f of ["dependencies","peerDependencies","optionalDependencies"])for(const [n,v] of Object.entries(p[f]??{}))if(n.startsWith("@prisma/orm-")&&!n.startsWith("@prisma/orm-extension-")&&v!==to)bad.push(f+": "+n+"@"+v);if(bad.length){console.error(bad.join("\n"));process.exit(1)}' <to>
+   node -e 'const p=require("./package.json");const to=process.argv[1];const ours=(n)=>n.startsWith("@prisma/orm-")&&!n.startsWith("@prisma/orm-extension-");const bad=[];for(const f of ["dependencies","optionalDependencies"])for(const n of Object.keys(p[f]??{}))if(ours(n))bad.push(f+": "+n+" belongs in peerDependencies");for(const f of ["peerDependencies","devDependencies"])for(const [n,v] of Object.entries(p[f]??{}))if(ours(n)&&v!==to)bad.push(f+": "+n+"@"+v);for(const n of Object.keys(p.peerDependencies??{}))if(ours(n)&&!(n in (p.devDependencies??{})))bad.push("devDependencies: "+n+" is missing");if(bad.length){console.error(bad.join("\n"));process.exit(1)}' <to>
    ```
 
    If it fails, the bump step did not rewrite every spec — fix the offending entries and re-run before proceeding.
@@ -89,9 +89,9 @@ Move on to the next step. Repeat.
 
 ## Exact-pin rule
 
-Prisma 8 extensions pin every `@prisma/orm-*` SPI dependency (everything except `@prisma/orm-extension-*`) to a single **exact** version (no `^`, no `~`, no range, no wildcard, no `workspace:` specifier in the published `package.json`). All of those entries share the same version. The pin advances after each successful upgrade step, release-candidate steps included.
+A Prisma 8 extension names every `@prisma/orm-*` package it uses (everything except `@prisma/orm-extension-*`) as a **peer dependency** at a single **exact** version (no `^`, no `~`, no range, no wildcard, no `workspace:` specifier in the published `package.json`), and lists the same packages under `devDependencies` at that version, so its own build and tests install them. None of them is an ordinary dependency. All of those entries share the same version. The pin advances after each successful upgrade step, release-candidate steps included.
 
-The version is the one the application's database package (`@prisma/orm-postgres`, `@prisma/orm-mongo`, …) uses. Values and registries made by one copy of Prisma ORM are not recognised by another, so they must never cross between copies. A host may load two copies on purpose, as Prisma Composer's boot wrapper does beside the application bundle, but the application, its extensions and the `prisma` CLI must share one. When an extension pins a different version, the package manager installs a second copy beside the application's, and the extension's values then cross between copies. The target package (such as `@prisma/orm-target-postgres`) is therefore a **peer dependency**, so npm refuses a mismatched install instead of adding a copy. The framework and family packages are ordinary dependencies at the same version. pnpm and bun only warn about a mismatched peer, so a second copy can still be installed. `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework` lists every copy and the package that brought it.
+The version is the one the application's database package (`@prisma/orm-postgres`, `@prisma/orm-mongo`, …) uses. Values and registries made by one copy of Prisma ORM are not recognised by another, so they must never cross between copies. A host may load two copies on purpose, as Prisma Composer's boot wrapper does beside the application bundle, but the application, its extensions and the `prisma` CLI must share one. A package manager gives a package its own copy of an ordinary dependency whenever the version differs from the one already installed, but it never gives a package its own copy of a peer dependency: it uses the copy the application lists. So when every Prisma package an extension uses is a peer, the application's list is the only place a copy can come from, and a version that does not match is reported at install instead of becoming a second copy: npm refuses the install, and pnpm, Yarn and Bun report the mismatch. The application lists the platform packages beside its database package for the same reason. The decision record explains this in full: [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md). `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework` lists every copy and the package that brought it.
 
 The one-line check in step 3 of the per-step flow enforces the rule; the `prisma-8-check-pins` guard the monorepo uses for its own extensions is not published. Wire the check into the extension's CI alongside the build/test step so an accidental range pin fails the PR before it lands.
 

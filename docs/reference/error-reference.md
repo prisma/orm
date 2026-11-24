@@ -1420,7 +1420,7 @@ Statistics execution was requested for a Mongo command that does not expose affe
 
 Retired. 8.0.0-rc.22 raised this when Prisma ORM was loaded from more than one folder, and commands and clients refused to start. Later releases removed the check, because a host that loads the ORM in two module instances, such as Prisma Composer's boot wrapper beside the application bundle, cannot satisfy it. Nothing raises this code.
 
-A second copy still breaks values and registries that cross between copies. Install the same version of every `@prisma/orm-*` package and a `prisma` CLI that runs it. `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework` shows which package brought each copy.
+A second copy still breaks values and registries that cross between copies. List the database package and every `@prisma/orm-*` package it and each extension name as peer dependencies in the application's `package.json`, all at the same version, with a `prisma` CLI that runs it; `prisma orm init` writes that list. `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework` shows which package brought each copy.
 
 ### RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING
 

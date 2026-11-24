@@ -22,7 +22,7 @@ CI guard for extension packages. Asserts that every `@internal/*` entry under th
 
 This is the invariant the [extension-upgrade flow](../../../skills/prisma-8/references/upgrade-extension.md) relies on at upgrade time: extension authors pin every `@internal/*` peer to a single exact version per release of their extension, so the skill can mechanically advance both the framework deps and the extension's published version in lockstep.
 
-One version matters beyond the upgrade flow: a pin that differs from the application's installs a second copy of Prisma ORM, and values made by one copy are not recognised by the other. The [exact-pin rule](../../../skills/prisma-8/references/upgrade-extension.md#exact-pin-rule) says which package is a peer dependency and why.
+One version matters beyond the upgrade flow. An extension names every `@prisma/orm-*` package it uses as a peer dependency at that version, and again as a development dependency for its own build and tests; none is an ordinary dependency. An application on another version then gets a mismatch reported at install, instead of a second copy of Prisma ORM whose values the first copy does not recognise. The [exact-pin rule](../../../skills/prisma-8/references/upgrade-extension.md#exact-pin-rule) says why.
 
 Run from the extension's repository root:
 
