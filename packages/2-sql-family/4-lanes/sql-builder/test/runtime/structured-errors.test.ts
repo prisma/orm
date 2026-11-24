@@ -90,7 +90,7 @@ describe('sql() builder structured error codes', () => {
       expect(capture(() => joined().select('id' as never))).toMatchObject({
         ...sharedId,
         message: 'Column "id" is in more than one joined table (users, posts, profiles)',
-        fix: "Name the table the column comes from (users, posts or profiles) and keep the call's other arguments: select('id', (f) => f.<table>.id)",
+        fix: "Name the table the column comes from (users, posts or profiles); name any other columns in a separate select call: select('id', (f) => f.<table>.id)",
       });
     });
 
@@ -104,19 +104,19 @@ describe('sql() builder structured error codes', () => {
           ...sharedId,
           message:
             'Column "id" in orderBy is in more than one joined table (users, posts, profiles)',
-          fix: "Name the table the column comes from (users, posts or profiles) and keep the call's other arguments: orderBy((f) => f.<table>.id)",
+          fix: 'Name the table the column comes from (users, posts or profiles); keep its options: orderBy((f) => f.<table>.id)',
         },
         groupBy: {
           ...sharedId,
           message:
             'Column "id" in groupBy is in more than one joined table (users, posts, profiles)',
-          fix: "Name the table the column comes from (users, posts or profiles) and keep the call's other arguments: groupBy((f) => f.<table>.id)",
+          fix: 'Name the table the column comes from (users, posts or profiles); name any other columns in a separate groupBy call: groupBy((f) => f.<table>.id)',
         },
         distinctOn: {
           ...sharedId,
           message:
             'Column "id" in distinctOn is in more than one joined table (users, posts, profiles)',
-          fix: "Name the table the column comes from (users, posts or profiles) and keep the call's other arguments: distinctOn((f) => f.<table>.id)",
+          fix: 'Name the table the column comes from (users, posts or profiles); name any other columns in a separate distinctOn call: distinctOn((f) => f.<table>.id)',
         },
       });
     });
@@ -129,7 +129,7 @@ describe('sql() builder structured error codes', () => {
       );
       expect(error).toMatchObject({
         ...sharedId,
-        fix: "Name the table the column comes from (users, posts or profiles) and keep the call's other arguments: select('id', (f) => f.<table>.id)",
+        fix: "Name the table the column comes from (users, posts or profiles); name any other columns in a separate select call: select('id', (f) => f.<table>.id)",
       });
     });
 
@@ -144,7 +144,7 @@ describe('sql() builder structured error codes', () => {
       expect(error).toMatchObject({
         code: 'ORM.COLUMN_AMBIGUOUS',
         meta: { column: 'email', candidates: ['u-1', 'u-2'] },
-        fix: "Name the table the column comes from (u-1 or u-2) and keep the call's other arguments: select('email', (f) => f['<table>'].email)",
+        fix: "Name the table the column comes from (u-1 or u-2); name any other columns in a separate select call: select('email', (f) => f['<table>'].email)",
       });
     });
 
@@ -159,7 +159,7 @@ describe('sql() builder structured error codes', () => {
       expect(error).toMatchObject({
         code: 'ORM.COLUMN_AMBIGUOUS',
         meta: { column: 'email', candidates: ['inviter', 'u-2'] },
-        fix: "Name the table the column comes from (inviter or u-2) and keep the call's other arguments: select('email', (f) => f['<table>'].email)",
+        fix: "Name the table the column comes from (inviter or u-2); name any other columns in a separate select call: select('email', (f) => f['<table>'].email)",
       });
     });
   });

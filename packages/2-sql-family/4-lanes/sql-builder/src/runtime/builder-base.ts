@@ -334,11 +334,15 @@ function columnScopeError(
     method === undefined
       ? `select(${stringLiteral(column)}, ${tableRead})`
       : `${method}(${tableRead})`;
+  const restOfCall =
+    method === 'orderBy'
+      ? 'keep its options'
+      : `name any other columns in a separate ${method ?? 'select'} call`;
   return structuredError(
     'ORM.COLUMN_AMBIGUOUS',
     `Column "${column}"${where} is in more than one joined table (${tables.join(', ')})`,
     {
-      fix: `Name the table the column comes from (${listOfAlternatives(tables)}) and keep the call's other arguments: ${suggestion}`,
+      fix: `Name the table the column comes from (${listOfAlternatives(tables)}); ${restOfCall}: ${suggestion}`,
       meta: { column, candidates: tables },
     },
   );
