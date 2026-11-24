@@ -212,7 +212,7 @@
 (not exported) type ModelInputRow<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>, ModelName extends string> = ModelName extends keyof MongoUnboundFieldInputTypes<TContract> ? MongoUnboundFieldInputTypes<TContract>[ModelName] : Record<never, never>
 (not exported) type ModelKey = Extract<RefusalKey, { readonly kind: 'model'; }>
 (not exported) type ModelNameInput = AnyModelBuilder | string
-(not exported) type ModelOriginBrand_2 = typeof ModelOriginBrand
+(not exported) type ModelOriginBrand = typeof ModelOriginBrand
 (not exported) type ModelOriginBranded<ModelName extends string> = { readonly [ModelOriginBrand]?: ModelName; }
 (not exported) type ModelRelations<TContract extends MongoContract, ModelName extends string & keyof MongoModelsMap<TContract>> = NonNullable<MongoModelsMap<TContract>[ModelName]['relations']>
 (not exported) type ModelStorageRelationsSection<T> = ExtractModelStorageRelations<T> extends Record<string, StorageRelationSpec> ? keyof ExtractModelStorageRelations<T> extends never ? EmptyObject : { readonly relations: ExtractModelStorageRelations<T>; } : EmptyObject
