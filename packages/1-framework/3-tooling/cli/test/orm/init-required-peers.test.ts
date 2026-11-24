@@ -283,7 +283,7 @@ describe('init lists the packages the target package names as peers', () => {
       expect(run.exitCode).toBe(0);
       expect(installs).toEqual([]);
       expect(JSON.stringify(run.json)).toContain(
-        `Install the project dependencies with your package manager: ${[...POSTGRES_STACK, 'dotenv', 'pg'].join(', ')}`,
+        `Install the project dependencies with your package manager: ${[...POSTGRES_STACK, 'dotenv', '\\"pg@^8.22.0\\"'].join(', ')} (and`,
       );
     },
     timeouts.coldTransformImport,

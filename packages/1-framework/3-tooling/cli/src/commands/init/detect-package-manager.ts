@@ -80,16 +80,30 @@ export function formatRemoveCommand(pm: PackageManager, packages: readonly strin
   return [pm, verb, ...packages].join(' ');
 }
 
-export function formatAddArgs(pm: PackageManager, packages: string[]): string[] {
-  if (pm === 'deno') {
-    return ['add', ...packages.map((p) => `npm:${p}`)];
-  }
-  return ['add', ...packages];
+const SHELL_SPECIAL = /[\s<>|&^*"'`$;()]|^~|@~/;
+
+/**
+ * A package spec as a printed command carries it: in double quotes when a shell would read one of
+ * its characters (a space, `<`, `>`, `|`, `&`, `^`, `*`, a quote, or a leading `~`), as in a range
+ * such as `>=1.7.6 <1.8.0` or `^8.20.0`. Double quotes work in POSIX shells, `cmd.exe` and
+ * PowerShell. A plain name or version stays as it is.
+ */
+export function quoteSpec(spec: string): string {
+  return SHELL_SPECIAL.test(spec) ? `"${spec.replaceAll('"', '\\"')}"` : spec;
 }
 
+/** The arguments of a printed add command; each spec is quoted with {@link quoteSpec}. */
+export function formatAddArgs(pm: PackageManager, packages: string[]): string[] {
+  if (pm === 'deno') {
+    return ['add', ...packages.map((p) => quoteSpec(`npm:${p}`))];
+  }
+  return ['add', ...packages.map(quoteSpec)];
+}
+
+/** The arguments of a printed add command for development dependencies, quoted as {@link formatAddArgs} quotes them. */
 export function formatAddDevArgs(pm: PackageManager, packages: string[]): string[] {
   if (pm === 'deno') {
-    return ['add', '--dev', ...packages.map((p) => `npm:${p}`)];
+    return ['add', '--dev', ...packages.map((p) => quoteSpec(`npm:${p}`))];
   }
-  return ['add', '-D', ...packages];
+  return ['add', '-D', ...packages.map(quoteSpec)];
 }

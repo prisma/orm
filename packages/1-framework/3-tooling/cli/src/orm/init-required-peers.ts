@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import type { CliStructuredError } from '@prisma/cli-engine/protocol';
+import { dirname } from 'pathe';
 import { installedManifest } from './project-modules';
 import { type PublishedPackage, REGISTRY_LOOKUP_TIMEOUT_MILLIS } from './registry-keywords';
 
@@ -70,7 +71,10 @@ function manifestFrom(
 }
 
 function readInstalled(cwd: string, name: string): ReadManifest | undefined {
-  const path = installedManifest(cwd, name);
+  return readManifestAt(installedManifest(cwd, name));
+}
+
+function readManifestAt(path: string | undefined): ReadManifest | undefined {
   if (path === undefined) return undefined;
   let manifest: unknown;
   try {
@@ -87,15 +91,37 @@ function readInstalled(cwd: string, name: string): ReadManifest | undefined {
     : undefined;
 }
 
-/** Reads the manifests installed in the project at `cwd`. */
-export function installedManifests(cwd: string): {
+/**
+ * Reads the manifests installed for the project at `cwd`: found from the project, or from the
+ * target package's own real folder, where its imports resolve. pnpm installs the peers it adds
+ * itself beside the target package under `node_modules/.pnpm`, not at the project's root, and the
+ * target package's `init` entrypoint finds them there.
+ */
+export function installedManifests(
+  cwd: string,
+  targetPackage: string,
+): {
   readonly read: ReadPackage;
   readonly installedVersion: (name: string) => string | undefined;
 } {
+  const find = (name: string): ReadManifest | undefined =>
+    readInstalled(cwd, name) ?? besideTarget(cwd, targetPackage, name);
   return {
-    read: async (name) => readInstalled(cwd, name),
-    installedVersion: (name) => readInstalled(cwd, name)?.version,
+    read: async (name) => find(name),
+    installedVersion: (name) => find(name)?.version,
   };
+}
+
+function besideTarget(cwd: string, targetPackage: string, name: string): ReadManifest | undefined {
+  const targetManifest = installedManifest(cwd, targetPackage);
+  if (targetManifest === undefined) return undefined;
+  let targetFolder: string;
+  try {
+    targetFolder = realpathSync(dirname(targetManifest));
+  } catch {
+    return undefined;
+  }
+  return readManifestAt(installedManifest(targetFolder, name));
 }
 
 /**

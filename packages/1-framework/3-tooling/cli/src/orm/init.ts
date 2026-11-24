@@ -4,6 +4,7 @@ import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
 import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
 import { type } from 'arktype';
 import { buildCatalogWarnings } from '../commands/init/catalog-warnings';
+import { quoteSpec } from '../commands/init/detect-package-manager';
 import { errorInitProbeFailed } from '../commands/init/errors';
 import {
   buildNextSteps,
@@ -427,7 +428,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       } else {
         extraActions.push(
           chooseAction(
-            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} plus @prisma/cli-engine at the version prisma declares as its dependency, as development dependencies)`,
+            `Install the project dependencies with your package manager: ${deps.map(quoteSpec).join(', ')} (and ${devDeps.map(quoteSpec).join(', ')} plus @prisma/cli-engine at the version prisma declares as its dependency, as development dependencies)`,
           ),
         );
       }

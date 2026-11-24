@@ -99,7 +99,7 @@ describe("the required peers of this repository's target packages", () => {
     'lists those of %s',
     async (packageName, { platform, others }) => {
       const version = versionOf(packageName);
-      const manifests = installedManifests(projectDir);
+      const manifests = installedManifests(projectDir, packageName);
 
       const resolved = await resolveRequiredPeers({
         packageName,

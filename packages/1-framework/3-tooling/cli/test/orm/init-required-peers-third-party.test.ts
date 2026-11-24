@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import type { MountedTree, PackageManagerRunner } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
@@ -194,12 +194,12 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
           meta: {
             packageName: '@prisma/orm-postgres',
             missing: ['temporal-polyfill'],
-            installCommand: 'pnpm add temporal-polyfill@^1.0.8',
+            installCommand: 'pnpm add "temporal-polyfill@^1.0.8"',
           },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
               label: expect.stringContaining(
-                'pnpm add temporal-polyfill@^1.0.8`, then run `prisma orm init` again',
+                'pnpm add "temporal-polyfill@^1.0.8"`, then run `prisma orm init` again',
               ),
             }),
           ]),
@@ -234,6 +234,51 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
           ]),
         },
       });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'goes on under --skip-install when the required peers sit beside the target package, as pnpm installs them',
+    async () => {
+      const real = 'node_modules/.pnpm/@prisma+orm-postgres@8.1.0/node_modules';
+      writeProjectFile(
+        `${real}/@prisma/orm-postgres/package.json`,
+        JSON.stringify({
+          name: '@prisma/orm-postgres',
+          version: VERSION,
+          peerDependencies: {
+            '@prisma/orm-framework': VERSION,
+            pg: '^8.22.0',
+            'temporal-polyfill': '^1.0.8',
+          },
+        }),
+      );
+      writeProjectFile(
+        `${real}/@prisma/orm-framework/package.json`,
+        JSON.stringify({ name: '@prisma/orm-framework', version: VERSION }),
+      );
+      writeProjectFile(
+        `${real}/temporal-polyfill/package.json`,
+        JSON.stringify({ name: 'temporal-polyfill', version: '1.0.8' }),
+      );
+      mkdirSync(join(projectDir, 'node_modules', '@prisma'), { recursive: true });
+      symlinkSync(
+        join(projectDir, real, '@prisma', 'orm-postgres'),
+        join(projectDir, 'node_modules', '@prisma', 'orm-postgres'),
+        'dir',
+      );
+      writeManifest({ '@prisma/orm-postgres': VERSION, pg: '^8.22.0' });
+
+      const run = await (await harness()).run([...POSTGRES, '--skip-install'], {
+        cwd: projectDir,
+      });
+
+      expect(run.exitCode).toBe(0);
+      expect(initLoads).toBe(1);
+      expect(JSON.stringify(run.json)).toContain(
+        `Install the project dependencies with your package manager: @prisma/orm-postgres@${VERSION}, @prisma/orm-framework@${VERSION}, dotenv, pg, \\"temporal-polyfill@^1.0.8\\"`,
+      );
     },
     timeouts.coldTransformImport,
   );

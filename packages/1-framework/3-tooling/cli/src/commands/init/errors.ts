@@ -1,6 +1,7 @@
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { formatSourceDiagnostic } from '../../control-api/operations/load-contract-source';
 import { CliStructuredError } from '../../utils/cli-errors';
+import type { PackageManager } from './detect-package-manager';
 import type { Prisma6SideBySideSetup } from './prisma6-side-by-side';
 import {
   KNOWN_TARGET_PACKAGES,
@@ -498,18 +499,24 @@ export function errorInitTargetPackageNotInstalled(options: {
   readonly ranCommand: string | undefined;
   /** The package is in no list, so the value was taken as a package name. */
   readonly unlisted: boolean;
+  /** The project's package manager; under Yarn the fix says what to do about Plug'n'Play. */
+  readonly packageManager: PackageManager;
 }): CliStructuredError {
   const { packageName, ranCommand } = options;
+  const plugNPlay =
+    options.packageManager === 'yarn'
+      ? " `prisma orm init` does not support Yarn Plug'n'Play: set `nodeLinker: node-modules` in `.yarnrc.yml`, run `yarn install`, then run `prisma orm init` again."
+      : '';
   const why =
     ranCommand !== undefined
       ? `\`${ranCommand}\` succeeded, but ${packageName} cannot be found from the project, so init cannot read its init contribution. No scaffold file was written.`
       : `init writes the project from ${packageName}, and \`--skip-install\` forbids installing it. Nothing was changed.`;
   const fix =
     ranCommand !== undefined
-      ? `Check that \`${options.installCommand}\` makes ${packageName} resolvable from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`
+      ? `Check that \`${options.installCommand}\` makes ${packageName} resolvable from this directory, then run \`prisma orm init\` again.${plugNPlay}`
       : options.unlisted
-        ? `Run \`prisma orm init\` again without \`--skip-install\`: it checks that ${packageName} lists the keyword \`${PRISMA_ORM_PACKAGE_KEYWORD}\` before installing it.`
-        : `Install it with \`${options.installCommand}\`, then run \`prisma orm init\` again, or run it without \`--skip-install\`.`;
+        ? `Run \`prisma orm init\` again without \`--skip-install\`: it checks that ${packageName} lists the keyword \`${PRISMA_ORM_PACKAGE_KEYWORD}\` before installing it.${plugNPlay}`
+        : `Install it with \`${options.installCommand}\`, then run \`prisma orm init\` again, or run it without \`--skip-install\`.${plugNPlay}`;
   return new CliStructuredError(
     'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
     ranCommand !== undefined
@@ -690,7 +697,7 @@ export function errorInitRequiredPeersNotInstalled(options: {
     'CLI.INIT_REQUIRED_PEERS_NOT_INSTALLED',
     `${packageName} needs peer dependencies that are not installed`,
     {
-      why: `${packageName} names ${listed(missing)} as required peer dependencies, and ${missing.length === 1 ? 'it is' : 'they are'} not installed, so its init entrypoint cannot load. \`--skip-install\` forbids installing them. Nothing was changed.`,
+      why: `${packageName} names ${listed(missing)} as required peer dependencies, and ${missing.length === 1 ? 'it cannot' : 'they cannot'} be found from the project or from where ${packageName} is installed. \`--skip-install\` forbids installing them. Nothing was changed.`,
       fix: `Add them with \`${options.installCommand}\`, then run \`prisma orm init\` again.`,
       docsUrl: docsUrlFor('CLI.INIT_REQUIRED_PEERS_NOT_INSTALLED'),
       meta: { packageName, missing, installCommand: options.installCommand },

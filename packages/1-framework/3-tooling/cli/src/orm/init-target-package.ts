@@ -204,7 +204,7 @@ export function createTargetPackagePreparation(ctx: {
       ranCommand = deps.length === 0 ? undefined : installCommand(ctx.packageManager, deps);
     }
 
-    const manifests = installedManifests(ctx.cwd);
+    const manifests = installedManifests(ctx.cwd, packageName);
     const requiredPeers = await resolveRequiredPeers({
       packageName,
       read: manifests.read,
@@ -381,6 +381,7 @@ async function loadContribution(
         ]),
         ranCommand,
         unlisted,
+        packageManager: ctx.packageManager,
       });
     case 'not-exported':
       throw errorInitContributionUnavailable({
