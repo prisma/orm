@@ -30,6 +30,7 @@ type StoredFileKind = 'contract' | 'migration' | 'ref';
 
 const SKIPPED_DIRECTORIES = new Set(['node_modules', 'dist', 'build']);
 const SPACE_ID = /^[a-z][a-z0-9_-]{0,63}$/;
+const STORAGE_HASH = /^[0-9a-f]{64}$/;
 const BYTE_ORDER_MARK = '﻿';
 const MIGRATION_FIELDS = ['from', 'to', 'migrationHash', 'providedInvariants', 'createdAt'];
 const MIGRATION_KEYS = new Set(MIGRATION_FIELDS);
@@ -244,16 +245,27 @@ function isMigrationPackage(dir: string): boolean {
   return existsSync(join(dir, 'migration.json')) && existsSync(join(dir, 'ops.json'));
 }
 
-function isMigrationsDirectory(dir: string): boolean {
-  if (basename(dir) === 'migrations' || isDirectory(join(dir, 'snapshots'))) return true;
+function hasSubdirectory(dir: string, holds: (path: string, name: string) => boolean): boolean {
   const entries = listDirectory(dir);
   return (
     typeof entries !== 'string' &&
     entries.some((entry) => {
       const path = join(dir, entry.name);
-      return isDirectory(path) && isMigrationPackage(path);
+      return isDirectory(path) && holds(path, entry.name);
     })
   );
+}
+
+function isSnapshotStore(dir: string): boolean {
+  return hasSubdirectory(
+    dir,
+    (path, name) => STORAGE_HASH.test(name) && existsSync(join(path, 'contract.json')),
+  );
+}
+
+/** Whether `dir` holds what Prisma writes to a migrations directory: its contract snapshot store, or a migration package. */
+function isMigrationsDirectory(dir: string): boolean {
+  return isSnapshotStore(join(dir, 'snapshots')) || hasSubdirectory(dir, isMigrationPackage);
 }
 
 /** Whether `path` is where Prisma writes a ref: `refs/` in an application's space directory under the migrations directory, or directly in an extension's migrations directory. */

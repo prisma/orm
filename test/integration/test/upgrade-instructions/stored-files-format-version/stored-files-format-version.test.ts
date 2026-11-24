@@ -273,10 +273,33 @@ describe('where a ref file is', () => {
     });
   });
 
+  it('leaves a JSON file in a refs folder next to a snapshots folder that another tool keeps alone', () => {
+    const files = {
+      'app/test/snapshots/user.test.ts.md': '# Snapshot report\n',
+      'app/test/snapshots/user.test.ts.snap': 'AVA snapshot\n',
+      'app/test/fixtures/refs/user.json': '{"name":"Ada"}\n',
+    };
+    expect(runWith(files)).toMatchObject({
+      run: { status: 0, stdout: NOTHING_CHANGED, stderr: '' },
+      tree: files,
+    });
+  });
+
+  it('leaves a JSON file in a refs folder under another tool’s folder named migrations alone', () => {
+    const files = {
+      'app/db/migrations/20240101_create_users.js': 'exports.up = () => {};\n',
+      'app/db/migrations/seeds/refs/user.json': '{"name":"Ada"}\n',
+    };
+    expect(runWith(files)).toMatchObject({
+      run: { status: 0, stdout: NOTHING_CHANGED, stderr: '' },
+      tree: files,
+    });
+  });
+
   it('rewrites a ref in a migrations folder configured under another name, in an application space and in an extension', () => {
     const ref = '{"hash":"h","invariants":[]}\n';
     const { run, tree } = runWith({
-      'app/db/history/snapshots/h/contract.json':
+      'app/db/history/snapshots/269d0430c7c70fa502e75feb52d9219c0339daa041c6cc9fb4ecb5ad8d0373b6/contract.json':
         '{"formatVersion":1,"targetFamily":"sql","storage":{}}\n',
       'app/db/history/app/refs/db.json': ref,
       'ext/history/20260101T0000_init/migration.json':
@@ -368,7 +391,7 @@ describe('the final message', () => {
 });
 
 describe('the layout of a rewritten file', () => {
-  function rewritten(content: string, path = 'migrations/app/refs/db.json'): string {
+  function rewritten(content: string, path = 'app/migrations/app/refs/db.json'): string {
     const root = copyFixture('after');
     writeFile(root, path, content);
     runScript(root);
