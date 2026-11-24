@@ -1,6 +1,6 @@
 # Upgrade Prisma 8 (user app)
 
-This reference upgrades a project that **consumes** Prisma 8 via the public package API (`@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, the contract files in `prisma/`, etc.). Package names below are the published `@prisma/orm-*` names, which is what `package.json`, the lockfile, and the registry use. The other references in this skill use the same names. If the project is itself a Prisma 8 *extension*, use [`upgrade-extension.md`](upgrade-extension.md) instead — or both, if the repo contains both an app and an extension package.
+This reference upgrades a project that **consumes** Prisma 8 via the public package API (a target package, `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` or `@prisma/orm-mariadb`, the contract files in `prisma/`, etc.). Package names below are the published `@prisma/orm-*` names, which is what `package.json`, the lockfile, and the registry use. The other references in this skill use the same names. If the project is itself a Prisma 8 *extension*, use [`upgrade-extension.md`](upgrade-extension.md) instead — or both, if the repo contains both an app and an extension package.
 
 The per-transition instructions this reference reads live under [`../upgrading/app/upgrades/`](../upgrading/app/upgrades/).
 
@@ -33,7 +33,7 @@ If `prisma.config.ts` is absent or names no extensions, skip the pre-flight.
 
 This flow applies when the project **consumes** Prisma 8:
 
-- `package.json` declares `@prisma/orm-postgres`, `@prisma/orm-mongo`, or `@prisma/orm-sqlite` under `dependencies` / `devDependencies`, and
+- `package.json` declares a target package, `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` or `@prisma/orm-mariadb`, under `dependencies` / `devDependencies`, and
 - the package is *not* itself an extension (no `@prisma/orm-framework` or other platform package under `peerDependencies`; an application lists them under `dependencies` beside its target package; name does not match `^@.*/extension-`; not referenced from a sibling app's `prisma.config.ts`).
 
 If the project also matches the extension-author role, run **this** flow first and then [`upgrade-extension.md`](upgrade-extension.md) in the same session. If detection is ambiguous, ask the user.

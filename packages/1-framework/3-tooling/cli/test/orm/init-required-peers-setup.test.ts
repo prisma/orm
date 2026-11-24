@@ -535,3 +535,32 @@ describe('a required version written with a v prefix', () => {
     });
   });
 });
+
+describe('a required peer that is not a Prisma ORM package, listed at another exact version', () => {
+  it('is left at that version with a warning that says to change the line', async () => {
+    const resolved = await resolveRequiredPeers({
+      packageName: '@prisma/orm-postgres',
+      ownsTarget: false,
+      installedElsewhere: new Set(),
+      declared: () => new Map([['left-pad', '1.2.0']]),
+      installedVersion: () => '1.2.0',
+      install: async () => undefined,
+      read: async () => ({
+        version: VERSION,
+        peers: new Map([
+          ['@prisma/orm-framework', VERSION],
+          ['left-pad', '1.3.0'],
+        ]),
+      }),
+    });
+
+    expect(resolved).toMatchObject({
+      packages: expect.arrayContaining([
+        { name: 'left-pad', version: '1.3.0', outcome: 'left-at-another-version' },
+      ]),
+      warnings: [
+        'package.json lists left-pad at 1.2.0, installed at 1.2.0, but @prisma/orm-postgres needs 1.3.0; init left it as it is. Change the line to 1.3.0 and install.',
+      ],
+    });
+  });
+});

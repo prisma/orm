@@ -35,34 +35,21 @@ export function versionLines(
   ormPeerRanges: readonly string[],
 ): VersionLines {
   if (ormPeerRanges.every((range) => EXACT_VERSION.test(range.trim().replace(/^workspace:/, '')))) {
-    return { target: targetVersion, ormPackage: (range) => range, standsFor: exactLineStandsFor };
+    return { target: targetVersion, ormPackage: (range) => range, standsFor: lineStandsFor };
   }
   if (targetVersion.includes('-')) {
     return {
       target: `~${targetVersion}`,
       ormPackage: (range) => range,
-      standsFor: rangedLineStandsFor,
+      standsFor: lineStandsFor,
     };
   }
   const [major, minor] = targetVersion.split('.');
   return {
     target: `^${major}.${minor}.0`,
     ormPackage: (range) => (range.startsWith('~') ? `^${range.slice(1)}` : range),
-    standsFor: rangedLineStandsFor,
+    standsFor: lineStandsFor,
   };
-}
-
-/**
- * An exact version is judged by its text, since the next clean install follows it whatever is
- * installed now. Any other line (a range, a dist-tag, or a `workspace:`, `catalog:`, `link:`,
- * `file:` or alias line) cannot be judged from its text without resolving it, so the installed
- * copy decides, and with nothing installed it counts as standing for the version.
- */
-function exactLineStandsFor(line: string, version: string, installed: string | undefined): boolean {
-  const exact = exactVersionOf(line);
-  const required = exactVersionOf(version) ?? version;
-  if (exact !== undefined) return exact === required;
-  return installed === undefined || (exactVersionOf(installed) ?? installed) === required;
 }
 
 /**
@@ -79,16 +66,16 @@ export function requirementAdmits(requirement: string, version: string): boolean
 }
 
 /**
- * The line `init` writes stands for itself. Any other line is judged by the installed copy: with
- * nothing installed it counts as standing, and otherwise the copy must be of the release the
- * written range starts at, its major and minor.
+ * Whether a line the project already lists stands for `written`, the line `init` writes, by one
+ * rule for every required peer. The written line stands for itself. An exact line stands when the
+ * requirement admits that version, since the next clean install follows the line whatever is
+ * installed now. Any other line (a range, a dist-tag, or a `workspace:`, `catalog:`, `link:`,
+ * `file:` or alias line) cannot be judged from its text, so the installed copy decides, and with
+ * nothing installed it counts as standing.
  */
-function rangedLineStandsFor(
-  line: string,
-  written: string,
-  installed: string | undefined,
-): boolean {
+function lineStandsFor(line: string, written: string, installed: string | undefined): boolean {
   if (line.trim() === written) return true;
+  if (exactVersionOf(line) !== undefined) return requirementAdmits(written, line) !== false;
   if (installed === undefined) return true;
   return requirementAdmits(written, installed) === true;
 }
