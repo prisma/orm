@@ -79,7 +79,7 @@ A mistake found in the rules after `8.0.0` therefore stays until the next major 
 
 ### 2.4 Moving existing projects to the new hashes at `8.0.0`
 
-Taking the format version out of the hash input changes every existing hash once, at `8.0.0`. A project that used a release candidate moves by the upgrade instructions for that release: its files are rewritten, and each database is signed again with `db sign`. No mechanism in the migration system is built for this.
+Taking the format version out of the hash input changes every existing hash once, at `8.0.0`. A project that used a release candidate moves by the upgrade instructions for that release: its files are rewritten, and each database is signed again with `prisma db sign --force`, followed by `prisma db migrate`. The `--force` form exists so that a production database whose change policy allows only migrations can make this one move. No mechanism in the migration system is built for this.
 
 ### 2.5 Tests
 
