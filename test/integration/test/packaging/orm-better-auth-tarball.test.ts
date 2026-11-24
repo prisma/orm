@@ -145,10 +145,10 @@ function printedMessage(run: AuthRun): string {
 // package's version, and Better Auth with its `auth` program from the
 // registry, both at the lowest version the adapter's peer range admits, so
 // they share one copy and the oldest supported release is the one tested. The
-// database package's platform shells are declared too, as an application
+// target package's platform shells are declared too, as an application
 // lists them; the adapter's two Prisma peers are among them, and the one-copy
-// assertion below checks it shares them with the database package.
-describe('the Better Auth adapter installed next to the SQLite database package', () => {
+// assertion below checks it shares them with the target package.
+describe('the Better Auth adapter installed next to the SQLite target package', () => {
   let scratch: string;
 
   beforeAll(() => {

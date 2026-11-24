@@ -7,7 +7,7 @@
  */
 
 export type ShellKind =
-  /** Listed by every application, as a peer of the packages that use it. */
+  /** Listed by every application that uses it, as a peer of the packages that use it. */
   | 'platform'
   /** The package for one database; names the platform shells it uses as peers. */
   | 'facade'
@@ -129,9 +129,10 @@ export type ShellName =
 /**
  * Surfaces every facade republishes regardless of family.
  *
- * An application depends on one facade and nothing else (ADR 242), so
- * everything it reaches — hand-written and generated alike — has to have a
- * name under the facade. These are the target-agnostic ones: the contract and
+ * Application code imports only from its facade and its extensions, never
+ * from a platform shell, even though the application lists the platform
+ * shells (ADR 329), so everything it reaches — hand-written and generated
+ * alike — has to have a name under the facade. These are the target-agnostic ones: the contract and
  * component surfaces emitted files import, the shared helpers, and the Vite
  * plugin.
  *

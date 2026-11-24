@@ -1,9 +1,9 @@
 # @prisma/orm-mongo
 
-The package a MongoDB application installs for its database. It wires the framework, the Mongo family, and the Mongo target into a single lazy client. It names the platform packages it is built on as peer dependencies, so the application lists them beside it, every one at the same version. `prisma orm init` writes that list. To install them by hand:
+The package a MongoDB application installs for its database. It wires the framework, the Mongo family, and the Mongo target into a single lazy client. It names the platform packages it is built on as peer dependencies, so the application lists them beside it, every one at the same exact version. `prisma orm init` writes that list. To install them by hand (`--save-exact` writes the exact version, not a range):
 
 ```sh
-pnpm add @prisma/orm-mongo @prisma/orm-framework @prisma/orm-family-mongo @prisma/orm-target-mongo @prisma/orm-toolchain mongodb
+pnpm add --save-exact @prisma/orm-mongo @prisma/orm-framework @prisma/orm-family-mongo @prisma/orm-target-mongo @prisma/orm-toolchain mongodb
 ```
 
 ```
@@ -36,7 +36,7 @@ In a repository with several applications on different Prisma versions, npm work
 | `/migration`, `/control` | migration planning and the control client |
 | `/init` | the init contribution `prisma orm init` writes a project from |
 
-A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so an application never has to depend on a package it did not install:
+A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so application code imports from the facade alone, even though the application lists those packages too:
 
 | Namespace | Forwards |
 | --- | --- |

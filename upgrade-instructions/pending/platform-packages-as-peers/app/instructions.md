@@ -2,7 +2,7 @@
 changes:
   - id: list-the-platform-packages
     summary: |
-      The database package (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb` or `@prisma/orm-mongo`) and every extension now name the Prisma packages they are built on, the platform packages, as peer dependencies instead of bringing them along. List each of them in the application's `package.json`, at the same exact version as the database package. Nothing in application code changes.
+      The target package (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb` or `@prisma/orm-mongo`) and every extension now name the Prisma packages they are built on, the platform packages, as peer dependencies instead of bringing them along. List each of them in the application's `package.json`, at the same exact version as the target package. Nothing in application code changes.
     detection:
       glob: "**/package.json"
       matches:
@@ -13,13 +13,13 @@ changes:
 
 ## `list-the-platform-packages`
 
-The database package no longer brings `@prisma/orm-framework`, its family, its target and `@prisma/orm-toolchain` along as its own dependencies. It names them as peer dependencies, and so does every extension. A package manager never gives a package its own copy of a peer dependency: it uses the copy the application lists. So the application now lists them, and holds exactly one copy of each. Yarn installs no peer dependencies at all, so an application under Yarn that does not list them cannot load the database package. npm and pnpm install a missing peer by themselves, which hides the gap until the project moves to another package manager.
+The target package, such as `@prisma/orm-postgres`, no longer brings `@prisma/orm-framework`, its family, its target and `@prisma/orm-toolchain` along as its own dependencies. It names them as peer dependencies, and so does every extension. A package manager never gives a package its own copy of a peer dependency: it uses the copy the application lists. So the application now lists them, and holds exactly one copy of each. Yarn installs no peer dependencies at all, so an application under Yarn that does not list them cannot load the target package. npm and pnpm install a missing peer by themselves, which hides the gap until the project moves to another package manager.
 
-For each `package.json` that lists a database package, add every `@prisma/orm-*` package that the database package and each installed `@prisma/orm-*` extension name as peer dependencies. Put them in the same field as the database package (usually `dependencies`), each at the same exact version as the database package: no caret, no tilde. Leave entries the file already has.
+For each `package.json` that lists a target package, add every `@prisma/orm-*` package that the target package and each installed `@prisma/orm-*` extension name as peer dependencies. Put them in the same field as the target package (usually `dependencies`), each at the same exact version as the target package: no caret, no tilde. Leave entries the file already has.
 
-These are the packages each database package names:
+These are the packages each target package names:
 
-| Database package | Add |
+| Target package | Add |
 | --- | --- |
 | `@prisma/orm-postgres` | `@prisma/orm-framework`, `@prisma/orm-family-sql`, `@prisma/orm-target-postgres`, `@prisma/orm-toolchain` |
 | `@prisma/orm-sqlite` | `@prisma/orm-framework`, `@prisma/orm-family-sql`, `@prisma/orm-target-sqlite`, `@prisma/orm-toolchain` |
@@ -40,7 +40,7 @@ The extensions name a subset of the PostgreSQL list, except `@prisma/orm-extensi
 }
 ```
 
-To read the names from the installed packages instead of the table, run this from the project folder after the install, naming the database package and each `@prisma/orm-*` extension the project lists. It prints every `@prisma/orm-*` name they name as peer dependencies, followed through the peers of those, and leaves out the names the command was given:
+To read the names from the installed packages instead of the table, run this from the project folder after the install, naming the target package and each `@prisma/orm-*` extension the project lists. It prints every `@prisma/orm-*` name they name as peer dependencies, followed through the peers of those, and leaves out the names the command was given:
 
 ```sh
 node -e 'const given=process.argv.slice(1);const read=(n)=>{try{return require(require.resolve(n+"/package.json",{paths:[process.cwd()]}))}catch{return {}}};const seen=new Set(given);const todo=[...given];const found=[];while(todo.length){const n=todo.shift();for(const p of Object.keys(read(n).peerDependencies??{}))if(p.startsWith("@prisma/orm-")&&!seen.has(p)){seen.add(p);found.push(p);todo.push(p)}}console.log(found.join(" "))' @prisma/orm-postgres @prisma/orm-extension-pgvector
@@ -48,4 +48,4 @@ node -e 'const given=process.argv.slice(1);const read=(n)=>{try{return require(r
 
 Under Yarn, which installs no peer dependencies, a package the project does not list yet is not on disk, so its own peers are not read. Add the names it printed, install, and run it again until it prints no name the project does not list.
 
-Application code does not change: it still imports only from the database package and the extensions, never from a platform package. Generated files are unchanged too.
+Application code does not change: it still imports only from the target package and the extensions, never from a platform package. Generated files are unchanged too.

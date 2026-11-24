@@ -4,7 +4,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma 8 for Postgres: the one package a Postgres application installs",
+  "description": "Prisma 8 for Postgres: the package a Postgres application installs for its database, beside the platform packages it names as peers",
   "keywords": [
     "prisma-orm-extension"
   ],

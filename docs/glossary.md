@@ -79,7 +79,11 @@ Which specific database you're using — Postgres, MySQL, MongoDB, etc. Each tar
 
 ### Target package
 
-The package an application installs to use a target, such as `@prisma/orm-postgres`. Its `defineConfig` assembles the family, target, adapter and driver, and it exports everything the application imports. ADR 242 and some older code call it a *facade*.
+The package an application installs to use a target, such as `@prisma/orm-postgres`. Its `defineConfig` assembles the family, target, adapter and driver, and it exports everything the application imports. ADR 242 and some older code call it a *facade*. An application lists it together with the platform packages it names as peer dependencies ([ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)).
+
+### Platform package
+
+One of the packages extension authors build against: `@prisma/orm-framework`, `@prisma/orm-toolchain`, `@prisma/orm-family-*` and `@prisma/orm-target-*`. An application lists the ones its target package names as peer dependencies, at the target package's version, so it holds one copy of each, but application code imports from the target package and the extensions, not from a platform package. `@prisma/orm-target-postgres` is the PostgreSQL target's platform package, not a target package.
 
 ### Init contribution
 

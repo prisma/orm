@@ -89,7 +89,7 @@ The contract carries no `$jsonSchema` validators, because a Prisma 6 database ha
 Both CLIs are published as `prisma`, so one package name cannot resolve to both. Keep Prisma 8 as `prisma` (`prisma.config.ts` imports its `prisma/config`) and install the Prisma 6 CLI under an npm alias, `prisma6`, at the version of your `@prisma/client` (6.19.3 here):
 
 ```sh
-pnpm add @prisma/orm-mongo@latest @prisma/orm-framework@latest @prisma/orm-family-mongo@latest @prisma/orm-target-mongo@latest @prisma/orm-toolchain@latest dotenv mongodb
+pnpm add --save-exact @prisma/orm-mongo@latest @prisma/orm-framework@latest @prisma/orm-family-mongo@latest @prisma/orm-target-mongo@latest @prisma/orm-toolchain@latest dotenv mongodb
 pnpm add -D prisma@latest prisma6@npm:prisma@6.19.3
 ```
 

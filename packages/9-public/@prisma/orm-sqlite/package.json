@@ -4,7 +4,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma 8 for SQLite: the one package a SQLite application installs",
+  "description": "Prisma 8 for SQLite: the package a SQLite application installs for its database, beside the platform packages it names as peers",
   "keywords": [
     "prisma-orm-extension"
   ],

@@ -12,7 +12,7 @@ Do the version bump first (step 1 of the per-step flow below), re-sync the skill
 
 ## Pre-flight — extension compatibility
 
-Before changing any code, refuse to upgrade past any installed extension's pinned Prisma 8 version. Extensions in Prisma 8 name every `@prisma/orm-*` package they use as a peer dependency at a single exact version (no carets, no ranges); that pin is the highest version the extension has been validated against. Upgrading the user app past that pin would silently desynchronise the extension's type identity from the app's.
+Before changing any code, refuse to upgrade past any installed extension's pinned Prisma 8 version. Extensions in Prisma 8 name every `@prisma/orm-*` package they use as a peer dependency at a single exact version (no carets, no ranges); that pin is the highest version the extension has been validated against. Upgrading the user app past that pin makes the extension's peer dependencies disagree with the app's list: the install is refused, or reported as a mismatch, until the extension catches up.
 
 Steps:
 
@@ -32,7 +32,7 @@ If `prisma.config.ts` is absent or names no extensions, skip the pre-flight.
 This flow applies when the project **consumes** Prisma 8:
 
 - `package.json` declares `@prisma/orm-postgres`, `@prisma/orm-mongo`, or `@prisma/orm-sqlite` under `dependencies` / `devDependencies`, and
-- the package is *not* itself an extension (no `@prisma/orm-framework` or other SPI package under `peerDependencies`; an application lists them under `dependencies` beside its database package; name does not match `^@.*/extension-`; not referenced from a sibling app's `prisma.config.ts`).
+- the package is *not* itself an extension (no `@prisma/orm-framework` or other platform package under `peerDependencies`; an application lists them under `dependencies` beside its target package; name does not match `^@.*/extension-`; not referenced from a sibling app's `prisma.config.ts`).
 
 If the project also matches the extension-author role, run **this** flow first and then [`upgrade-extension.md`](upgrade-extension.md) in the same session. If detection is ambiguous, ask the user.
 
@@ -61,7 +61,7 @@ The chain order does not depend on which extensions are installed; the pre-fligh
 
 For each `(from, to)` step in the chain:
 
-1. **Bump the app's Prisma packages.** Rewrite every `@prisma/orm-*` entry other than `@prisma/orm-extension-*` in the project's `package.json` (the database package, such as `@prisma/orm-postgres`, and the platform packages it names as peer dependencies) to the exact `<to>` version (no caret, no tilde). All entries advance to the same version. Cover `dependencies` and `devDependencies`. If the database package at `<to>` names a `@prisma/orm-*` peer dependency the project does not list, add it at `<to>`: the application lists every one, so it holds one copy of each. Leave `@prisma/orm-extension-*` entries unchanged: each extension pins its own Prisma version, and the pre-flight has already confirmed every installed extension supports `<to>`. The skill itself ships inside the Prisma packages, so bumping them is what updates it; there is no separate skill package to bump.
+1. **Bump the app's Prisma packages.** Rewrite every `@prisma/orm-*` entry other than `@prisma/orm-extension-*` in the project's `package.json` (the target package, such as `@prisma/orm-postgres`, and the platform packages it names as peer dependencies) to the exact `<to>` version (no caret, no tilde). All entries advance to the same version. Cover `dependencies` and `devDependencies`. If the target package at `<to>` names a `@prisma/orm-*` peer dependency the project does not list, add it at `<to>`: the application lists every one, so it holds one copy of each. Leave `@prisma/orm-extension-*` entries unchanged: each extension pins its own Prisma version, and the pre-flight has already confirmed every installed extension supports `<to>`. The skill itself ships inside the Prisma packages, so bumping them is what updates it; there is no separate skill package to bump.
 
 2. **Install.** Run `pnpm install` (or the project's lockfile-managing command). The project's code is now broken against the new types — the upgrade instructions for `<from> → <to>` exist to fix it.
 

@@ -1,9 +1,9 @@
 # @prisma/orm-mysql
 
-The package a MySQL application installs for its database. It wires the framework, the SQL family, and the MySQL target together. It names the platform packages it is built on as peer dependencies, so the application lists them beside it, every one at the same version. `prisma orm init` writes that list. To install them by hand:
+The package a MySQL application installs for its database. It wires the framework, the SQL family, and the MySQL target together. It names the platform packages it is built on as peer dependencies, so the application lists them beside it, every one at the same exact version. `prisma orm init` writes that list. To install them by hand (`--save-exact` writes the exact version, not a range):
 
 ```sh
-pnpm add @prisma/orm-mysql @prisma/orm-framework @prisma/orm-family-sql @prisma/orm-target-mysql @prisma/orm-toolchain
+pnpm add --save-exact @prisma/orm-mysql @prisma/orm-framework @prisma/orm-family-sql @prisma/orm-target-mysql @prisma/orm-toolchain
 ```
 
 ```
@@ -34,7 +34,7 @@ MySQL support is early. It supports MySQL 8.4 and later. The package covers cont
 | `/static` | `contractFromJson` and the statically composed runtime |
 | `/init` | the init contribution `prisma orm init --target @prisma/orm-mysql` writes a project from |
 
-A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so an application never has to depend on a package it did not install:
+A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so application code imports from the facade alone, even though the application lists those packages too:
 
 | Namespace | Forwards |
 | --- | --- |
