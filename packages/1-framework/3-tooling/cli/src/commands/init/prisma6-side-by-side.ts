@@ -99,7 +99,9 @@ export function prisma6SideBySideSetup(inputs: {
             inputs.requiredPeers.target,
             ...inputs.requiredPeers.packages.map(requiredPeerSpecifier),
             'dotenv',
-            ...inputs.peerPackages,
+            ...inputs.peerPackages.filter(
+              (name) => !inputs.requiredPeers.packages.some((peer) => peer.name === name),
+            ),
           ]),
         ),
       },

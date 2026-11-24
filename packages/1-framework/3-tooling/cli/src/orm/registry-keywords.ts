@@ -232,6 +232,7 @@ export const lookUpRegistryPeers: LookUpRegistryPeers = async (packageName, spec
             ),
           )
         : {},
+    peerDependenciesMeta: lookup.manifest['peerDependenciesMeta'],
   };
 };
 
@@ -239,4 +240,6 @@ export const lookUpRegistryPeers: LookUpRegistryPeers = async (packageName, spec
 export interface PublishedPackage {
   readonly version: string | undefined;
   readonly peerDependencies: Readonly<Record<string, string>>;
+  /** Its `peerDependenciesMeta`, as published, which says which peers are optional. */
+  readonly peerDependenciesMeta: unknown;
 }

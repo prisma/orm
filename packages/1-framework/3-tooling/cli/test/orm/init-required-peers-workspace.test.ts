@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync 
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'pathe';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ENGINE_PACKAGE } from '../../src/orm/init-packages';
 import { installedManifests, resolveRequiredPeers } from '../../src/orm/init-required-peers';
 
 const publishedRoot = resolve(import.meta.dirname, '../../../../../9-public/@prisma');
@@ -38,26 +39,26 @@ function versionOf(packageName: string): string {
   ).version;
 }
 
-const expected: Readonly<Record<string, readonly string[]>> = {
-  '@prisma/orm-postgres': [
+const PLATFORM = {
+  postgres: [
     '@prisma/orm-family-sql',
     '@prisma/orm-framework',
     '@prisma/orm-target-postgres',
     '@prisma/orm-toolchain',
   ],
-  '@prisma/orm-sqlite': [
+  sqlite: [
     '@prisma/orm-family-sql',
     '@prisma/orm-framework',
     '@prisma/orm-target-sqlite',
     '@prisma/orm-toolchain',
   ],
-  '@prisma/orm-mysql': [
+  mysql: [
     '@prisma/orm-family-sql',
     '@prisma/orm-framework',
     '@prisma/orm-target-mysql',
     '@prisma/orm-toolchain',
   ],
-  '@prisma/orm-mariadb': [
+  mariadb: [
     '@prisma/orm-family-sql',
     '@prisma/orm-framework',
     '@prisma/orm-mysql',
@@ -65,37 +66,68 @@ const expected: Readonly<Record<string, readonly string[]>> = {
     '@prisma/orm-target-mysql',
     '@prisma/orm-toolchain',
   ],
-  '@prisma/orm-mongo': [
+  mongo: [
     '@prisma/orm-family-mongo',
     '@prisma/orm-framework',
     '@prisma/orm-target-mongo',
     '@prisma/orm-toolchain',
   ],
+} as const;
+
+/** Each target package's required peers: its platform packages, then the others at their ranges. */
+const expected: Readonly<
+  Record<
+    string,
+    { readonly platform: readonly string[]; readonly others: Readonly<Record<string, string>> }
+  >
+> = {
+  '@prisma/orm-postgres': {
+    platform: PLATFORM.postgres,
+    others: { '@types/pg': '^8.20.0', pg: '^8.22.0', 'temporal-polyfill': '^1.0.8' },
+  },
+  '@prisma/orm-sqlite': { platform: PLATFORM.sqlite, others: { 'temporal-polyfill': '^1.0.8' } },
+  '@prisma/orm-mysql': { platform: PLATFORM.mysql, others: { 'temporal-polyfill': '^1.0.8' } },
+  '@prisma/orm-mariadb': { platform: PLATFORM.mariadb, others: { 'temporal-polyfill': '^1.0.8' } },
+  '@prisma/orm-mongo': {
+    platform: PLATFORM.mongo,
+    others: { mongodb: '^7.0.0', 'temporal-polyfill': '^1.0.8' },
+  },
 };
 
-describe("the Prisma ORM peer packages of this repository's target packages", () => {
-  it.each(Object.entries(expected))('lists those of %s', async (packageName, names) => {
-    const version = versionOf(packageName);
-    const manifests = installedManifests(projectDir);
+describe("the required peers of this repository's target packages", () => {
+  it.each(Object.entries(expected))(
+    'lists those of %s',
+    async (packageName, { platform, others }) => {
+      const version = versionOf(packageName);
+      const manifests = installedManifests(projectDir);
 
-    const resolved = await resolveRequiredPeers({
-      packageName,
-      ownsTarget: false,
-      declared: () => new Map(),
-      installedVersion: manifests.installedVersion,
-      install: undefined,
-      read: manifests.read,
-    });
+      const resolved = await resolveRequiredPeers({
+        packageName,
+        ownsTarget: false,
+        installedElsewhere: new Set([ENGINE_PACKAGE]),
+        declared: () => new Map(),
+        installedVersion: manifests.installedVersion,
+        install: undefined,
+        read: manifests.read,
+      });
 
-    expect(resolved).toEqual({
-      target: `${packageName}@${version}`,
-      packages: names.map((name) => ({
-        name,
-        version: `workspace:${version}`,
-        outcome: 'to-install',
-      })),
-      unread: [],
-      warnings: [],
-    });
-  });
+      expect(resolved).toEqual({
+        target: `${packageName}@${version}`,
+        packages: [
+          ...platform.map((name) => ({
+            name,
+            version: `workspace:${version}`,
+            outcome: 'to-install',
+          })),
+          ...Object.entries(others).map(([name, range]) => ({
+            name,
+            version: range,
+            outcome: 'to-install',
+          })),
+        ],
+        unread: [],
+        warnings: [],
+      });
+    },
+  );
 });

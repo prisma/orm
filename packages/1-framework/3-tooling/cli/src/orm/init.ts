@@ -30,7 +30,11 @@ import {
   type ResolvedInitInputs,
   resolveInitInputs,
 } from './init-inputs';
-import { engineDevDependencySpec, installProjectDependencies } from './init-packages';
+import {
+  ENGINE_PACKAGE,
+  engineDevDependencySpec,
+  installProjectDependencies,
+} from './init-packages';
 import { createPrisma7SourceCheck } from './init-prisma7-check';
 import { requiredPeerSpecifier, requiredPeersForSetup } from './init-required-peers';
 import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold';
@@ -193,6 +197,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           packageManager,
           requiredPeersFor: requiredPeersForSetup({
             cwd: ctx.cwd,
+            installedElsewhere: new Set([ENGINE_PACKAGE]),
             signal: ctx.signal,
             readPublished: (name, spec, signal) =>
               injected.lookUpRegistryPeers(name, spec, { env: ctx.env, signal }),
@@ -258,13 +263,22 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // A client the project never declared, or one it links through a
       // workspace or catalog, is left alone: only a declared major below 7 moves.
       const moveClient = movePackages !== null && clientMajor !== undefined && clientMajor < 7;
+      const peers = inputs.requiredPeers.packages.filter(
+        (peer) => peer.outcome !== 'left-at-another-version',
+      );
+      const ormPeers = peers.filter((peer) => peer.name.startsWith('@prisma/orm-'));
+      const otherPeers = peers.filter((peer) => !peer.name.startsWith('@prisma/orm-'));
+      const drivers = inputs.contribution.peerPackages.filter(
+        (name) => !inputs.requiredPeers.packages.some((peer) => peer.name === name),
+      );
       const deps = [
         inputs.requiredPeers.target,
-        ...inputs.requiredPeers.packages
-          .filter((peer) => peer.outcome !== 'left-at-another-version')
-          .map(requiredPeerSpecifier),
+        ...ormPeers.map(requiredPeerSpecifier),
         'dotenv',
-        ...inputs.contribution.peerPackages,
+        ...drivers,
+        ...otherPeers.map((peer) =>
+          peer.outcome === 'already-listed' ? peer.name : requiredPeerSpecifier(peer),
+        ),
         ...(moveClient ? ['@prisma/client@7'] : []),
       ];
       const depsToInstall = deps.filter((dep) => !inputs.preinstalled.includes(dep));

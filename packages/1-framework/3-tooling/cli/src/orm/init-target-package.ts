@@ -13,6 +13,7 @@ import {
 import {
   errorInitContributionUnavailable,
   errorInitInvalidManifest,
+  errorInitRequiredPeersNotInstalled,
   errorInitTargetPackageNotInstalled,
   errorInitTargetPackageNotVerified,
   type InstallReason,
@@ -26,9 +27,10 @@ import {
   type TargetPackage,
 } from '../commands/init/target-packages';
 import { chooseAction } from '../utils/next-actions';
-import { installProjectDependencies } from './init-packages';
+import { ENGINE_PACKAGE, installProjectDependencies } from './init-packages';
 import {
   installedManifests,
+  type RequiredPeer,
   type RequiredPeers,
   requiredPeerSpecifier,
   resolveRequiredPeers,
@@ -111,6 +113,12 @@ export interface PreparedTargetPackage {
   readonly added: PackagesAdded | undefined;
   readonly warnings: readonly string[];
 }
+
+/**
+ * Packages init installs another way, left out of the target package's required peers: the engine,
+ * which the CLI installs as a development dependency at the version `prisma` names.
+ */
+const INSTALLED_ELSEWHERE: ReadonlySet<string> = new Set([ENGINE_PACKAGE]);
 
 /** Installs the target package with `dotenv` and the drivers the list names, then loads its init contribution. */
 export type PrepareTargetPackage = (target: TargetPackage) => Promise<PreparedTargetPackage>;
@@ -202,6 +210,7 @@ export function createTargetPackagePreparation(ctx: {
       read: manifests.read,
       installedVersion: manifests.installedVersion,
       ownsTarget: installsTarget,
+      installedElsewhere: INSTALLED_ELSEWHERE,
       declared: () => declaredPackages(ctx.cwd),
       install: ctx.install
         ? (specifiers) =>
@@ -229,14 +238,25 @@ export function createTargetPackagePreparation(ctx: {
         ...new Set([
           ...installed,
           requiredPeers.target,
-          ...requiredPeers.packages.map(requiredPeerSpecifier),
+          ...requiredPeers.packages.flatMap((peer) => [peer.name, requiredPeerSpecifier(peer)]),
         ]),
       ];
       added = manifestChanges(ctx.packageManager, declaredBefore, declaredPackages(ctx.cwd));
     }
 
+    const missing = requiredPeers.packages.filter(
+      (peer) => manifests.installedVersion(peer.name) === undefined,
+    );
+    if (!ctx.install && missing.length > 0) {
+      throw errorInitRequiredPeersNotInstalled({
+        packageName,
+        missing: missing.map((peer) => peer.name),
+        installCommand: installCommand(ctx.packageManager, missing.map(requiredPeerSpecifier)),
+      });
+    }
+
     try {
-      const contribution = await loadContribution(ctx, target, ranCommand);
+      const contribution = await loadContribution(ctx, target, ranCommand, missing);
       return {
         contribution,
         requiredPeers,
@@ -345,6 +365,8 @@ async function loadContribution(
   target: TargetPackage,
   /** The install command init ran and that exited successfully; `undefined` under `--skip-install`. */
   ranCommand: string | undefined,
+  /** Required peers of the target package that are not installed, which a failed load names. */
+  missing: readonly RequiredPeer[],
 ): Promise<InitContribution> {
   const { packageName } = target;
   const unlisted = target.listed === undefined;
@@ -366,6 +388,8 @@ async function loadContribution(
         reason: 'no-entrypoint',
         detail: undefined,
         unlisted,
+        missingPeers: [],
+        missingPeersCommand: undefined,
       });
     case 'unloadable':
       throw errorInitContributionUnavailable({
@@ -373,6 +397,11 @@ async function loadContribution(
         reason: 'unloadable',
         detail: causeMessage(entrypoint.cause),
         unlisted,
+        missingPeers: missing.map((peer) => peer.name),
+        missingPeersCommand:
+          missing.length === 0
+            ? undefined
+            : installCommand(ctx.packageManager, missing.map(requiredPeerSpecifier)),
       });
     case 'loaded':
       break;
@@ -384,6 +413,8 @@ async function loadContribution(
       reason: 'invalid-shape',
       detail: contributionProblems(contribution),
       unlisted,
+      missingPeers: [],
+      missingPeersCommand: undefined,
     });
   }
   return contribution;

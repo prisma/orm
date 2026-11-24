@@ -63,6 +63,8 @@ export function createPrisma7SourceCheck(ctx: {
         reason: 'invalid-shape',
         detail: `${contribution.configModule} exports prisma7Schema, but not a defineConfig function`,
         unlisted: false,
+        missingPeers: [],
+        missingPeersCommand: undefined,
       });
       throw broken;
     }
@@ -73,6 +75,8 @@ export function createPrisma7SourceCheck(ctx: {
         reason: 'invalid-shape',
         detail: `${contribution.configModule} exports prisma7Schema, but the contribution has no prisma7QuickReference`,
         unlisted: false,
+        missingPeers: [],
+        missingPeersCommand: undefined,
       });
       throw missing;
     }

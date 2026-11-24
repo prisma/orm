@@ -24,12 +24,15 @@ export interface RequiredPeer {
 }
 
 /**
- * The Prisma ORM peer packages of a target package: every `@prisma/orm-*` package it names as a
- * peer dependency, directly or through another such package. An application lists each of them
- * beside the target package. The list can hold another target package: MariaDB's names MySQL's.
+ * The required peers of a target package: every `@prisma/orm-*` package it names as a peer
+ * dependency, directly or through another such package (the list can hold another target package:
+ * MariaDB's names MySQL's), and every other required peer dependency those packages name, such as
+ * `temporal-polyfill`, whose own peers are not followed. A peer marked optional in
+ * `peerDependenciesMeta` is not required. An application lists each of them beside the target
+ * package, so it loads under a package manager that installs no peer dependencies.
  */
 export interface RequiredPeers {
-  /** The target package as the application lists it: `name@version` when it has Prisma ORM peer packages, otherwise its bare name. */
+  /** The target package as the application lists it: `name@version` when it names `@prisma/orm-*` peers, otherwise its bare name. */
   readonly target: string;
   readonly packages: readonly RequiredPeer[];
   /** Packages whose own manifest could not be read, so their peers are missing from `packages`. */
@@ -43,18 +46,22 @@ export function requiredPeerSpecifier(peer: RequiredPeer): string {
 
 interface ReadManifest {
   readonly version: string | undefined;
-  /** The `@prisma/orm-*` names in its `peerDependencies`, with their ranges. */
+  /** Its required peer dependencies, with their ranges. */
   readonly peers: ReadonlyMap<string, string>;
 }
 
 /** Reads a package's manifest; `range` is the range a dependent names it at, `undefined` for the target package. */
 type ReadPackage = (name: string, range: string | undefined) => Promise<ReadManifest | undefined>;
 
-function manifestFrom(version: unknown, peerDependencies: unknown): ReadManifest {
+function manifestFrom(
+  version: unknown,
+  peerDependencies: unknown,
+  peerDependenciesMeta: unknown,
+): ReadManifest {
   const peers = new Map<string, string>();
   if (isRecord(peerDependencies)) {
     for (const [peer, range] of Object.entries(peerDependencies)) {
-      if (peer.startsWith(PRISMA_ORM_PACKAGE_PREFIX) && typeof range === 'string') {
+      if (typeof range === 'string' && !isOptional(peerDependenciesMeta, peer)) {
         peers.set(peer, range);
       }
     }
@@ -72,7 +79,11 @@ function readInstalled(cwd: string, name: string): ReadManifest | undefined {
     return undefined;
   }
   return isRecord(manifest)
-    ? manifestFrom(manifest['version'], manifest['peerDependencies'])
+    ? manifestFrom(
+        manifest['version'],
+        manifest['peerDependencies'],
+        manifest['peerDependenciesMeta'],
+      )
     : undefined;
 }
 
@@ -94,6 +105,8 @@ export function installedManifests(cwd: string): {
  */
 export function requiredPeersForSetup(ctx: {
   readonly cwd: string;
+  /** Packages init or the printed setup installs another way, which the list leaves out. */
+  readonly installedElsewhere: ReadonlySet<string>;
   readonly signal: AbortSignal;
   readonly readPublished: (
     name: string,
@@ -115,7 +128,11 @@ export function requiredPeersForSetup(ctx: {
         const published = await ctx.readPublished(name, range ?? 'latest', signal);
         return published === undefined
           ? undefined
-          : manifestFrom(published.version, published.peerDependencies);
+          : manifestFrom(
+              published.version,
+              published.peerDependencies,
+              published.peerDependenciesMeta,
+            );
       } catch (error) {
         if (ctx.signal.aborted) throw error;
         return undefined;
@@ -126,6 +143,7 @@ export function requiredPeersForSetup(ctx: {
       resolved = await resolveRequiredPeers({
         packageName,
         ownsTarget: false,
+        installedElsewhere: ctx.installedElsewhere,
         declared: () => new Map(),
         installedVersion: () => undefined,
         install: undefined,
@@ -141,8 +159,9 @@ export function requiredPeersForSetup(ctx: {
 }
 
 /**
- * Collects the Prisma ORM peer packages of the target package: every `@prisma/orm-*` package its
- * manifest names as a peer, then the peers those name, until no new name appears. With `install`,
+ * Collects the required peers of the target package: every `@prisma/orm-*` package its manifest
+ * names as a peer, then the peers those name, until no new name appears, and every other required
+ * peer those manifests name, whose own peers are not followed. With `install`,
  * it installs what the project does not list yet and reads the manifests that only that install
  * put on disk. A package the project lists at another version is left as it is and reported.
  */
@@ -150,6 +169,8 @@ export async function resolveRequiredPeers(ctx: {
   readonly packageName: string;
   /** Whether init wrote the target package's line, so it may pin it to the installed version. */
   readonly ownsTarget: boolean;
+  /** Packages init installs another way, such as the CLI's engine, which the list leaves out. */
+  readonly installedElsewhere: ReadonlySet<string>;
   readonly declared: () => ReadonlyMap<string, string>;
   readonly installedVersion: (name: string) => string | undefined;
   readonly install:
@@ -158,7 +179,11 @@ export async function resolveRequiredPeers(ctx: {
   readonly read: ReadPackage;
 }): Promise<RequiredPeers | CliStructuredError> {
   const target = await ctx.read(ctx.packageName, undefined);
-  if (target === undefined || target.version === undefined || target.peers.size === 0) {
+  if (
+    target === undefined ||
+    target.version === undefined ||
+    ![...target.peers.keys()].some(isPrismaOrmPackage)
+  ) {
     return {
       target: ctx.packageName,
       packages: [],
@@ -185,9 +210,11 @@ export async function resolveRequiredPeers(ctx: {
           continue;
         }
         for (const [peer, range] of manifest.peers) {
-          if (peer === ctx.packageName || wanted.has(peer)) continue;
+          if (peer === ctx.packageName || wanted.has(peer) || ctx.installedElsewhere.has(peer)) {
+            continue;
+          }
           wanted.set(peer, { range, by: name });
-          next.push(peer);
+          if (isPrismaOrmPackage(peer)) next.push(peer);
         }
       }
       level = await Promise.all(
@@ -217,7 +244,7 @@ export async function resolveRequiredPeers(ctx: {
         continue;
       }
       const installed = ctx.installedVersion(name);
-      if (lineStandsFor(listed, range, installed)) {
+      if (!isPrismaOrmPackage(name) || lineStandsFor(listed, range, installed)) {
         outcomes.set(name, 'already-listed');
         continue;
       }
@@ -266,6 +293,16 @@ function lineStandsFor(line: string, version: string, installed: string | undefi
   const exact = EXACT_VERSION_LINE.exec(line.trim());
   if (exact !== null) return exact[1] === version;
   return installed === undefined || installed === version;
+}
+
+function isPrismaOrmPackage(name: string): boolean {
+  return name.startsWith(PRISMA_ORM_PACKAGE_PREFIX);
+}
+
+function isOptional(peerDependenciesMeta: unknown, peer: string): boolean {
+  if (!isRecord(peerDependenciesMeta)) return false;
+  const meta = peerDependenciesMeta[peer];
+  return isRecord(meta) && meta['optional'] === true;
 }
 
 function byName<T>(entries: ReadonlyMap<string, T>): [string, T][] {

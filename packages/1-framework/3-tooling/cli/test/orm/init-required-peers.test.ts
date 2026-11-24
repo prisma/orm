@@ -320,6 +320,7 @@ describe('init lists the packages the target package names as peers', () => {
             { name: '@prisma/orm-framework', version: VERSION, outcome: 'left-at-another-version' },
             { name: '@prisma/orm-target-postgres', version: VERSION, outcome: 'installed' },
             { name: '@prisma/orm-toolchain', version: VERSION, outcome: 'installed' },
+            { name: 'pg', version: '^8.22.0', outcome: 'already-listed' },
           ],
         },
       });

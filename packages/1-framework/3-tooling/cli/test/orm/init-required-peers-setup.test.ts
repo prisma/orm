@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { requiredPeersForSetup, resolveRequiredPeers } from '../../src/orm/init-required-peers';
-import { REGISTRY_LOOKUP_TIMEOUT_MILLIS } from '../../src/orm/registry-keywords';
+import {
+  type PublishedPackage,
+  REGISTRY_LOOKUP_TIMEOUT_MILLIS,
+} from '../../src/orm/registry-keywords';
 
 const VERSION = '8.1.0';
 const never = new AbortController().signal;
@@ -30,7 +33,11 @@ async function readPublished(name: string, spec: string) {
   const peers = published.get(`${name}@${spec}`);
   return peers === undefined
     ? undefined
-    : { version: spec === 'latest' ? VERSION : spec, peerDependencies: peers };
+    : {
+        version: spec === 'latest' ? VERSION : spec,
+        peerDependencies: peers,
+        peerDependenciesMeta: undefined,
+      };
 }
 
 // Outside the CLI's fixture app, whose own installed target packages would be found first.
@@ -53,8 +60,15 @@ function installed(name: string, peers: Record<string, string>): void {
   writeFileSync(path, JSON.stringify({ name, version: VERSION, peerDependencies: peers }));
 }
 
-function forSetup(read = readPublished) {
-  return requiredPeersForSetup({ cwd: projectDir, signal: never, readPublished: read });
+function forSetup(
+  read: (name: string, spec: string) => Promise<PublishedPackage | undefined> = readPublished,
+) {
+  return requiredPeersForSetup({
+    cwd: projectDir,
+    installedElsewhere: new Set(),
+    signal: never,
+    readPublished: read,
+  });
 }
 
 describe('the list the printed Prisma 6 setup names', () => {
@@ -67,6 +81,7 @@ describe('the list the printed Prisma 6 setup names', () => {
         packages: [
           { name: '@prisma/orm-family-mongo', version: VERSION, outcome: 'to-install' },
           { name: '@prisma/orm-framework', version: VERSION, outcome: 'to-install' },
+          { name: 'mongodb', version: '^7', outcome: 'to-install' },
         ],
         unread: [],
         warnings: [],
@@ -78,6 +93,27 @@ describe('the list the printed Prisma 6 setup names', () => {
       ],
       mostInFlight: 2,
     });
+  });
+
+  it('names a required peer that is not a Prisma ORM package, and leaves an optional one', async () => {
+    const list = await forSetup(async (name, spec) =>
+      name === '@prisma/orm-mongo'
+        ? {
+            version: VERSION,
+            peerDependencies: {
+              '@prisma/orm-framework': VERSION,
+              'temporal-polyfill': '^1.0.8',
+              typescript: '>=5.9',
+            },
+            peerDependenciesMeta: { typescript: { optional: true } },
+          }
+        : readPublished(name, spec),
+    )('@prisma/orm-mongo');
+
+    expect(list.packages).toEqual([
+      { name: '@prisma/orm-framework', version: VERSION, outcome: 'to-install' },
+      { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'to-install' },
+    ]);
   });
 
   it('reads the installed manifests first', async () => {
@@ -132,7 +168,11 @@ describe('the shared time limit and cancelling of the registry reads', () => {
           resolve(
             peers === undefined
               ? undefined
-              : { version: spec === 'latest' ? VERSION : spec, peerDependencies: peers },
+              : {
+                  version: spec === 'latest' ? VERSION : spec,
+                  peerDependencies: peers,
+                  peerDependenciesMeta: undefined,
+                },
           );
         }, delay);
       });
@@ -143,6 +183,7 @@ describe('the shared time limit and cancelling of the registry reads', () => {
     const firstRead = REGISTRY_LOOKUP_TIMEOUT_MILLIS * 0.6;
     const list = requiredPeersForSetup({
       cwd: projectDir,
+      installedElsewhere: new Set(),
       signal: never,
       readPublished: slowRead({
         '@prisma/orm-mongo': firstRead,
@@ -162,6 +203,7 @@ describe('the shared time limit and cancelling of the registry reads', () => {
     const command = new AbortController();
     const list = requiredPeersForSetup({
       cwd: projectDir,
+      installedElsewhere: new Set(),
       signal: command.signal,
       readPublished: slowRead({}),
     })('@prisma/orm-mongo');
@@ -182,6 +224,7 @@ describe('whether a package the project lists is at the version asked for', () =
     return resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
       ownsTarget: false,
+      installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', line]]),
       installedVersion: () => installed,
       install: undefined,
@@ -227,6 +270,7 @@ describe('whether a package the project lists is at the version asked for', () =
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
       ownsTarget: false,
+      installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', '^8.0.0-rc.26']]),
       installedVersion: () => '8.0.0-rc.27',
       install: undefined,

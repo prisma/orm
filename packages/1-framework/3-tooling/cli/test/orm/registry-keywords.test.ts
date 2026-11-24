@@ -270,6 +270,7 @@ describe('lookUpRegistryPeers', () => {
       result: {
         version: '8.1.0',
         peerDependencies: { '@prisma/orm-framework': '8.1.0', typescript: '>=5.9' },
+        peerDependenciesMeta: undefined,
       },
       urls: ['https://registry.npmjs.org/@prisma%2Form-family-sql/8.1.0'],
     });

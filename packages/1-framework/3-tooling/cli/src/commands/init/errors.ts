@@ -635,6 +635,10 @@ export function errorInitContributionUnavailable(options: {
   readonly detail: string | undefined;
   /** The package is in no list, so the value was taken as a package name. */
   readonly unlisted: boolean;
+  /** Required peers of the package that are not installed, a likely cause of an `unloadable` module. */
+  readonly missingPeers: readonly string[];
+  /** The command that adds `missingPeers`; `undefined` when there are none. */
+  readonly missingPeersCommand: string | undefined;
 }): CliStructuredError {
   const module = `${options.packageName}/init`;
   const detail = options.detail ?? 'its shape is wrong';
@@ -653,9 +657,11 @@ export function errorInitContributionUnavailable(options: {
       ...explainUnlisted(options.unlisted, options.packageName, {
         why: `${why} ${options.packageName} is installed; no scaffold file was written.`,
         fix:
-          options.reason === 'unloadable'
-            ? `Reinstall ${options.packageName} with your package manager and run \`prisma orm init\` again, or ${byHand.charAt(0).toLowerCase()}${byHand.slice(1)}`
-            : byHand,
+          options.reason === 'unloadable' && options.missingPeersCommand !== undefined
+            ? `${listed(options.missingPeers)}, which ${options.packageName} needs as ${options.missingPeers.length === 1 ? 'a peer, is' : 'peers, are'} not installed: a package manager that installs no peer dependencies leaves them out. Add them with \`${options.missingPeersCommand}\`, then run \`prisma orm init\` again.`
+            : options.reason === 'unloadable'
+              ? `Reinstall ${options.packageName} with your package manager and run \`prisma orm init\` again, or ${byHand.charAt(0).toLowerCase()}${byHand.slice(1)}`
+              : byHand,
       }),
       docsUrl: docsUrlFor('CLI.INIT_CONTRIBUTION_UNAVAILABLE'),
       meta: {
@@ -664,6 +670,30 @@ export function errorInitContributionUnavailable(options: {
         reason: options.reason,
         ...takenAsPackageNameMeta(options.unlisted),
       },
+    },
+  );
+}
+
+/**
+ * Under `--skip-install`, the target package is installed but some of its required peers are not,
+ * as a package manager that installs no peer dependencies leaves them. Init stops before loading
+ * the package's `init` entrypoint, which would fail to resolve them. Nothing was changed. Maps to
+ * exit code `2 = PRECONDITION`.
+ */
+export function errorInitRequiredPeersNotInstalled(options: {
+  readonly packageName: string;
+  readonly missing: readonly string[];
+  readonly installCommand: string;
+}): CliStructuredError {
+  const { packageName, missing } = options;
+  return new CliStructuredError(
+    'CLI.INIT_REQUIRED_PEERS_NOT_INSTALLED',
+    `${packageName} needs peer dependencies that are not installed`,
+    {
+      why: `${packageName} names ${listed(missing)} as required peer dependencies, and ${missing.length === 1 ? 'it is' : 'they are'} not installed, so its init entrypoint cannot load. \`--skip-install\` forbids installing them. Nothing was changed.`,
+      fix: `Add them with \`${options.installCommand}\`, then run \`prisma orm init\` again.`,
+      docsUrl: docsUrlFor('CLI.INIT_REQUIRED_PEERS_NOT_INSTALLED'),
+      meta: { packageName, missing, installCommand: options.installCommand },
     },
   );
 }
