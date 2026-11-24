@@ -246,7 +246,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // workspace or catalog, is left alone: only a declared major below 7 moves.
       const moveClient = movePackages !== null && clientMajor !== undefined && clientMajor < 7;
       const deps = [
-        inputs.target.packageName,
+        ...inputs.targetDependencies,
         'dotenv',
         ...inputs.contribution.peerPackages,
         ...(moveClient ? ['@prisma/client@7'] : []),

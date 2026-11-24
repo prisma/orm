@@ -27,6 +27,7 @@ import {
 } from '../commands/init/target-packages';
 import { chooseAction } from '../utils/next-actions';
 import { installProjectDependencies } from './init-packages';
+import { resolvePlatformPackages } from './init-platform-packages';
 import { normalizeError } from './normalize-error';
 import { keywordsOf } from './package-manifest';
 import { type ImportFromProject, installedManifest } from './project-modules';
@@ -98,6 +99,12 @@ export function installCommand(
 /** The target package and the contribution it exports, with what installing it changed. */
 export interface PreparedTargetPackage {
   readonly contribution: InitContribution;
+  /**
+   * The target package and every `@prisma/orm-*` package it names as a peer, followed through
+   * their peers, as the specifiers the application lists: the target package alone when it names
+   * none.
+   */
+  readonly targetDependencies: readonly string[];
   /** Every package the step installed or found in place, so the install phase skips them. */
   readonly installed: readonly string[];
   /** The installed packages the project did not declare before; `undefined` when there are none. */
@@ -187,12 +194,41 @@ export function createTargetPackagePreparation(ctx: {
       // alone too and the project keeps the version it has.
       installed = installsTarget ? deps : [packageName, ...deps];
       ranCommand = deps.length === 0 ? undefined : installCommand(ctx.packageManager, deps);
+    }
+
+    const platform = await resolvePlatformPackages({
+      cwd: ctx.cwd,
+      packageName,
+      ownsTarget: installsTarget,
+      declared: () => declaredPackages(ctx.cwd),
+      install: ctx.install
+        ? (specifiers) =>
+            installProjectDependencies({
+              packages: ctx.packages,
+              cwd: ctx.cwd,
+              deps: specifiers,
+              devDeps: [],
+            })
+        : undefined,
+    });
+    if (platform instanceof CliStructuredError) {
+      throw new TargetPackageInstallFailed(platform);
+    }
+    warnings.push(...platform.warnings);
+    if (ctx.install) {
+      installed = [...new Set([...installed, ...platform.dependencies])];
       added = manifestChanges(ctx.packageManager, declaredBefore, declaredPackages(ctx.cwd));
     }
 
     try {
       const contribution = await loadContribution(ctx, target, ranCommand);
-      return { contribution, installed, added, warnings };
+      return {
+        contribution,
+        targetDependencies: platform.dependencies,
+        installed,
+        added,
+        warnings,
+      };
     } catch (error) {
       throw added === undefined ? error : new TargetPackageRefusedAfterInstall(error, added);
     }

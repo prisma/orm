@@ -126,6 +126,7 @@ export function preparedTarget(
 ): PreparedTargetPackage {
   return {
     contribution: STUB_CONTRIBUTION,
+    targetDependencies: ['@prisma/orm-postgres'],
     installed: [],
     added: undefined,
     warnings: [],

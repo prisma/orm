@@ -118,6 +118,8 @@ export interface ResolvedInitInputs {
   /** What detection and the Prisma 7 check could not do; reported, never fatal. */
   readonly warnings: readonly string[];
   readonly install: boolean;
+  /** The target package and the Prisma ORM packages it names as peers, as the application lists them. */
+  readonly targetDependencies: readonly string[];
   /** Packages installed with the target package, so the install phase skips them. */
   readonly preinstalled: readonly string[];
   readonly writeEnv: boolean;
@@ -687,6 +689,7 @@ async function confirmPrisma7Inputs(ctx: {
     sideBySide,
     warnings: [...detection.warnings, ...prepared.warnings],
     install: !flags.skipInstall,
+    targetDependencies: prepared.targetDependencies,
     preinstalled: prepared.installed,
     writeEnv,
     probeDb: flags.probeDb,
@@ -835,6 +838,7 @@ async function confirmStarterInputs(ctx: {
     sideBySide: null,
     warnings: [...ctx.warnings, ...prepared.warnings],
     install: !flags.skipInstall,
+    targetDependencies: prepared.targetDependencies,
     preinstalled: prepared.installed,
     writeEnv,
     probeDb: flags.probeDb,
