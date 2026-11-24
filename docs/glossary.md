@@ -75,7 +75,7 @@ The library that handles the actual network connection to your database. A drive
 
 ### Target
 
-Which specific database you're using — Postgres, MySQL, MongoDB, etc. Each target belongs to a family (e.g., Postgres is a SQL target; MongoDB is a Mongo target) and supports a specific set of capabilities.
+The component of the Prisma ORM stack that provides support for one database — Postgres, MySQL, MongoDB, etc. Its npm package is the [target package](#target-package). Each target belongs to a family (e.g., Postgres is a SQL target; MongoDB is a Mongo target) and supports a specific set of capabilities.
 
 ### Target package
 

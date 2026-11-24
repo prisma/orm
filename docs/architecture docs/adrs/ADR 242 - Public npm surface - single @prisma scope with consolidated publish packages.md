@@ -4,50 +4,52 @@
 
 > **Partially superseded by [ADR 324](ADR%20324%20-%20Generated%20files%20import%20from%20the%20module%20the%20target%20package%20names.md) (2026-11).** The emitter no longer picks an import root by reading the application's manifest, and a decomposed install is no longer read from it. The config names the modules generated files import from, and the target package (the facade) puts them there. The statement under "Who each package is for" that "nothing configures this", and the sentence under "Decomposing a facade" that "the emitter reads that from the manifest", describe the earlier mechanism. The rule that generated code imports only from packages the application depends on directly stands.
 
-> **Partially superseded by [ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) (2026-11).** An application lists the platform packages beside its facade, and every published package names the others as peer dependencies. The statements below that an application installs one package and names nothing else, that the facade brings the rest as ordinary exact-pinned dependencies, and that an extension holds the framework and family as ordinary dependencies, describe the earlier arrangement. The package split, one published home for each module, and the facade re-exporting everything application code imports all stand.
-
 > **Amended (2026-11): library integrations.** Prisma also publishes packages that connect an outside library to an application's Prisma 8 client. Such a package is named `@prisma/orm-<library>`, after the library and with no word for the kind of package: `@prisma/orm-better-auth`. An application installs one beside its facade, as it does an extension pack. A package of this kind that someone else publishes follows [ADR 308](ADR%20308%20-%20Community%20packages%20are%20named%20prisma-orm-name.md).
 
 ## Decision
 
-An application that uses Prisma Next against Postgres installs **one** package:
+An application that uses Prisma ORM against Postgres imports from **one** package, the facade `@prisma/orm-postgres`, and declares it together with the platform packages the facade is built on:
 
 ```jsonc
 // package.json
 {
   "dependencies": {
-    "@prisma/orm-postgres": "0.16.0"
+    "@prisma/orm-postgres": "^8.4.0",
+    "@prisma/orm-framework": "^8.4.0",
+    "@prisma/orm-family-sql": "^8.4.0",
+    "@prisma/orm-target-postgres": "^8.4.0",
+    "@prisma/orm-toolchain": "^8.4.0"
   }
 }
 ```
 
-That facade pulls in everything else — the framework, the SQL family, the Postgres target, and the CLI tooling — as ordinary, exact-pinned npm dependencies:
+The facade wires the platform packages together and re-exports what application code needs. It names them as peer dependencies rather than bringing its own copies, so the application holds exactly one copy of each ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)):
 
 ```text
-@prisma/orm-postgres            facade: wiring + re-exports, installs the stack
-├── @prisma/orm-framework       contracts, components, runtime core
-├── @prisma/orm-family-sql      SQL-family contract, lanes, runtime
-├── @prisma/orm-target-postgres target descriptor + adapter + driver
-└── @prisma/orm-toolchain       CLI (bin), emitter, config-loader, LSP
+@prisma/orm-postgres            facade: wiring + re-exports
+@prisma/orm-framework           contracts, components, runtime core
+@prisma/orm-family-sql          SQL-family contract, lanes, runtime
+@prisma/orm-target-postgres     target package: target descriptor + adapter + driver
+@prisma/orm-toolchain           CLI commands, emitter, config-loader, LSP
 ```
 
 Every published package lives under the single `@prisma` scope. Every other workspace package is `"private": true`: it exists for code organization and layering guardrails, and reaches npm only as a subpath entrypoint of a published package (for example, the SQL runtime is importable as `@prisma/orm-family-sql/runtime`).
 
 | Published package | Role |
 |---|---|
-| `@prisma/orm-postgres`, `orm-sqlite`, `orm-mysql`, `orm-mariadb`, `orm-mongo` | database facades — an app installs exactly one |
+| `@prisma/orm-postgres`, `orm-sqlite`, `orm-mysql`, `orm-mariadb`, `orm-mongo` | database facades — an application imports from one |
 | `@prisma/orm-extension-postgis`, `-pgvector`, `-paradedb`, `-supabase`, `-arktype-json`, `-middleware-cache`, `@prisma/orm-postgres-contrib` | optional capability packs, additive installs |
 | `@prisma/orm-better-auth` | library integration, an additive install, named `@prisma/orm-<library>` |
 | `@prisma/orm-framework` | target-agnostic runtime: contract, components, authoring surface |
 | `@prisma/orm-toolchain` | dev/build tooling: CLI (carries the bin), emitter, config-loader, language server, telemetry, vite plugin |
 | `@prisma/orm-family-sql`, `@prisma/orm-family-mongo` | family domains |
-| `@prisma/orm-target-postgres`, `orm-target-sqlite`, `orm-target-mysql`, `orm-target-mariadb`, `orm-target-mongo` | concrete targets, each exposing `/target`, `/adapter`, `/driver` entrypoints; `orm-target-mariadb` publishes only MariaDB's own packages and depends on `orm-target-mysql` for the MySQL packages it extends |
+| `@prisma/orm-target-postgres`, `orm-target-sqlite`, `orm-target-mysql`, `orm-target-mariadb`, `orm-target-mongo` | target packages, each exposing `/target`, `/adapter`, `/driver` entrypoints; `orm-target-mariadb` publishes only MariaDB's own packages and depends on `orm-target-mysql` for the MySQL packages it extends |
 
 ## What an application depends on
 
-One facade, plus whatever extension packs and library integrations it installs. Nothing else — not `@prisma/orm-family-sql`, not `@prisma/orm-toolchain`, even though the facade brings both in. Those arrive as the facade's own dependencies, and an application that names one directly is claiming a version contract it does not have.
+One facade, the platform packages that facade names as peer dependencies, and whatever extension packs and library integrations it installs. `prisma orm init` writes those lines. The application declares the platform packages so that it holds one copy of each; its code imports only from the facade and the extensions.
 
-That holds only if the facade has a name for everything an application reaches, so it republishes each of them as one of its own entrypoints:
+That works only if the facade has a name for everything an application reaches, so it republishes each of them as one of its own entrypoints:
 
 | What the application reaches for | Facade entrypoint |
 |---|---|
@@ -69,16 +71,16 @@ The `prisma-next` command arrives the same way. A package manager puts only a pa
 
 The package boundary states the audience, so "is this public API?" needs no documentation lookup:
 
-- **App developers** touch the facades, the extensions, and the `prisma-next` bin. Nothing else appears in a tutorial, and nothing else appears in an application's `package.json`.
+- **App developers** import from the facades and the extensions, and run the `prisma-next` bin. Nothing else appears in application code or in a tutorial's code. An application's `package.json` also declares the platform packages its facade names, which `init` writes.
 - **Generated code** imports only from packages the application directly depends on — never from transitive dependencies, which strict package managers refuse to resolve and which the application has no version contract with. The facade re-exports the contract surfaces as its own entrypoints (`@prisma/orm-postgres/contract`, `@prisma/orm-postgres/components`), and the emitter picks the import root by reading the application's own manifest: a project that depends on a facade is emitted against that facade, one that depends on the platform packages is emitted against those, and one that depends on neither keeps the names it already had. Nothing configures this, because the manifest already states it and a separate setting could only disagree with what is installed.
-- **Extension authors** build against the platform packages (`orm-framework`, the families, the targets). So do decomposed installs. Applications reach the same modules through their facade's entrypoints, so the two never end up with separate copies. An extension pack splits those declarations two ways: the framework and its family are ordinary dependencies, and the *target* is a peer, because the target is what carries the codec and operation registries the pack registers into and there must be exactly one copy of those (see Consequences).
+- **Extension authors** build against the platform packages (`orm-framework`, the families, the target packages), and name each of them as a peer dependency. So do decomposed installs. Applications reach the same modules through their facade's entrypoints, and the application's own declarations are the only copy, so the extension and the application share one copy of each ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)).
 - **Nobody** installs a private workspace package; they are not on npm.
 
 Platform package names are strict and symmetric: `orm-family-sql`, not `orm-sql`. These names are typed by tooling and generated code, not by humans running `npm install`, so regularity beats brevity.
 
 ## Decomposing a facade
 
-A facade is thin: real wiring code plus exact-pinned dependencies. It bundles nothing. An application that outgrows the default wiring — say it needs a custom Postgres adapter — installs the facade's own dependencies directly and recomposes them:
+A facade is thin: real wiring code, with the platform packages as peer dependencies. It bundles nothing. An application that outgrows the default wiring — say it needs a custom Postgres adapter — already declares the platform packages, and recomposes them itself:
 
 ```ts
 import { createSqlExecutionStack } from '@prisma/orm-family-sql/runtime'
@@ -95,13 +97,13 @@ const stack = createSqlExecutionStack({
 
 An application imports the runtime entries, as here, and not the `/target`, `/adapter` or `/driver` aggregates, because each aggregate re-exports every entry of its namespace, the control-plane entries included.
 
-Because the facade's dependencies are ordinary published packages pinned to one lockstep version, the decomposed install reproduces exactly the combination the facade would have provided, minus the part being replaced. (Versioning is lockstep repo-wide — one root version, `workspace:` pins, `scripts/set-version-utils` — and this ADR leaves that model untouched.)
+Because the application already declares the platform packages the facade was built on, the decomposed install keeps exactly that combination, minus the part being replaced. (Versioning is lockstep repo-wide — one root version, `workspace:` pins, `scripts/set-version-utils` — and this ADR leaves that model untouched.)
 
-Decomposing means dropping the facade, not adding packages beside it: the platform packages become the application's direct dependencies and the emitter reads that from the manifest. Scaffolding a decomposed project is a different template rather than the same one under a different import root — `prisma-next init` writes an application around a facade's `runtime` entrypoint, which is that facade's own wiring code and has no counterpart in a layout that does the wiring itself.
+Decomposing means dropping the facade from the application's declarations; the platform packages are already there. Scaffolding a decomposed project is a different template rather than the same one under a different import root — `prisma-next init` writes an application around a facade's `runtime` entrypoint, which is that facade's own wiring code and has no counterpart in a layout that does the wiring itself.
 
 ## Why entrypoints, not bundles: module identity
 
-The runtime relies on shared registries and `instanceof` checks that only work when a given module exists **once** in an application's module graph. Extensions also peer-depend on target packages for the same reason. This yields the core packaging rule:
+The runtime relies on shared registries and `instanceof` checks that only work when a given module exists **once** in an application's module graph. For the same reason, every published package names the platform packages it uses as peer dependencies ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)). This yields the core packaging rule:
 
 > Every internal module is published from exactly one package. Consolidation happens by re-exporting internal packages as subpath entrypoints of a single published shell — never by bundling the same code into multiple packages.
 
@@ -171,7 +173,7 @@ packages/9-public/
 
 - Every Prisma Next package on the npm registry has a stated audience; internals are structurally absent rather than "present but discouraged".
 - Generated code and documentation reference only published names; the private workspace names cannot leak because they do not resolve outside the repo. Those names are `@internal/*`, with `@repo/*` for the repository's own tooling — two scopes that cannot be mistaken for a published `@prisma/*` name, which the single old scope could not offer once it stopped matching what shipped.
-- Extension packs peer-depend on target packages (e.g. `@prisma/orm-target-postgres`), which are always installed — directly or via a facade — so peer resolution is satisfied in both the facade and decomposed configurations.
+- Extension packs name the platform packages they use as peer dependencies (e.g. `@prisma/orm-target-postgres`), and the application declares those packages in both the facade and decomposed configurations, so an extension and the application's client share one copy of each.
 - Publishing remains a lockstep, whole-train operation; the release process is unchanged apart from the package list.
 - Adding a new database means adding one target package, one facade, and (if it starts a new family) one family package — the public surface grows by two or three packages, not by a per-module count.
 
