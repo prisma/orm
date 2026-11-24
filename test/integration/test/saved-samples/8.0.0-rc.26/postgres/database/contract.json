@@ -1,0 +1,1257 @@
+[
+  {
+    "core_hash": "55cd844d8863b4f8651a03add82462a844a9f35a4d9740cb55c910e9e7ad2408",
+    "created_at": "2026-11-24T13:08:12.924+00:00",
+    "contract_json": {
+      "meta": {},
+      "roots": {
+        "post": {
+          "model": "Post",
+          "namespace": "public"
+        },
+        "user": {
+          "model": "User",
+          "namespace": "public"
+        },
+        "document": {
+          "model": "Document",
+          "namespace": "public"
+        }
+      },
+      "domain": {
+        "namespaces": {
+          "public": {
+            "enum": {
+              "Role": {
+                "codecId": "pg/text@1",
+                "members": [
+                  {
+                    "name": "USER",
+                    "value": "USER"
+                  },
+                  {
+                    "name": "ADMIN",
+                    "value": "ADMIN"
+                  }
+                ]
+              }
+            },
+            "models": {
+              "Post": {
+                "fields": {
+                  "id": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/int4@1"
+                    },
+                    "nullable": false
+                  },
+                  "title": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/text@1"
+                    },
+                    "nullable": false
+                  },
+                  "authorId": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/int4@1"
+                    },
+                    "nullable": false
+                  }
+                },
+                "storage": {
+                  "table": "post",
+                  "fields": {
+                    "id": {
+                      "column": "id"
+                    },
+                    "title": {
+                      "column": "title"
+                    },
+                    "authorId": {
+                      "column": "authorId"
+                    }
+                  },
+                  "namespaceId": "public"
+                },
+                "relations": {
+                  "author": {
+                    "on": {
+                      "localFields": [
+                        "authorId"
+                      ],
+                      "targetFields": [
+                        "id"
+                      ]
+                    },
+                    "to": {
+                      "model": "User",
+                      "namespace": "public"
+                    },
+                    "nullable": false,
+                    "cardinality": "N:1"
+                  }
+                }
+              },
+              "User": {
+                "fields": {
+                  "id": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/int4@1"
+                    },
+                    "nullable": false
+                  },
+                  "role": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/text@1"
+                    },
+                    "nullable": false,
+                    "valueSet": {
+                      "plane": "domain",
+                      "entityKind": "enum",
+                      "entityName": "Role",
+                      "namespaceId": "public"
+                    }
+                  },
+                  "email": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/text@1"
+                    },
+                    "nullable": false
+                  }
+                },
+                "storage": {
+                  "table": "user",
+                  "fields": {
+                    "id": {
+                      "column": "id"
+                    },
+                    "role": {
+                      "column": "role"
+                    },
+                    "email": {
+                      "column": "email"
+                    }
+                  },
+                  "namespaceId": "public"
+                },
+                "relations": {
+                  "posts": {
+                    "on": {
+                      "localFields": [
+                        "id"
+                      ],
+                      "targetFields": [
+                        "authorId"
+                      ]
+                    },
+                    "to": {
+                      "model": "Post",
+                      "namespace": "public"
+                    },
+                    "cardinality": "1:N"
+                  }
+                }
+              },
+              "Document": {
+                "fields": {
+                  "id": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/int4@1"
+                    },
+                    "nullable": false
+                  },
+                  "title": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/text@1"
+                    },
+                    "nullable": false
+                  },
+                  "embedding": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/vector@1",
+                      "typeParams": {
+                        "length": 3
+                      }
+                    },
+                    "nullable": true
+                  }
+                },
+                "storage": {
+                  "table": "document",
+                  "fields": {
+                    "id": {
+                      "column": "id"
+                    },
+                    "title": {
+                      "column": "title"
+                    },
+                    "embedding": {
+                      "column": "embedding"
+                    }
+                  },
+                  "namespaceId": "public"
+                },
+                "relations": {}
+              }
+            }
+          }
+        }
+      },
+      "target": "postgres",
+      "storage": {
+        "namespaces": {
+          "public": {
+            "id": "public",
+            "kind": "postgres-schema",
+            "entries": {
+              "table": {
+                "post": {
+                  "columns": {
+                    "id": {
+                      "codecId": "pg/int4@1",
+                      "default": {
+                        "kind": "function",
+                        "expression": "autoincrement()"
+                      },
+                      "dataType": "pg/int4",
+                      "nullable": false
+                    },
+                    "title": {
+                      "codecId": "pg/text@1",
+                      "dataType": "pg/text",
+                      "nullable": false
+                    },
+                    "authorId": {
+                      "codecId": "pg/int4@1",
+                      "dataType": "pg/int4",
+                      "nullable": false
+                    }
+                  },
+                  "indexes": [
+                    {
+                      "name": "post_authorId_idx_e47547ed",
+                      "prefix": "post_authorId_idx",
+                      "unique": false,
+                      "columns": [
+                        "authorId"
+                      ]
+                    }
+                  ],
+                  "uniques": [],
+                  "primaryKey": {
+                    "columns": [
+                      "id"
+                    ]
+                  },
+                  "foreignKeys": [
+                    {
+                      "index": {
+                        "name": "post_authorId_idx_e47547ed"
+                      },
+                      "source": {
+                        "columns": [
+                          "authorId"
+                        ],
+                        "tableName": "post",
+                        "namespaceId": "public"
+                      },
+                      "target": {
+                        "columns": [
+                          "id"
+                        ],
+                        "tableName": "user",
+                        "namespaceId": "public"
+                      }
+                    }
+                  ]
+                },
+                "user": {
+                  "checks": [
+                    {
+                      "name": "user_role_check_1954e8c0",
+                      "prefix": "user_role_check",
+                      "expression": "\"role\" IN ('USER', 'ADMIN')"
+                    }
+                  ],
+                  "columns": {
+                    "id": {
+                      "codecId": "pg/int4@1",
+                      "default": {
+                        "kind": "function",
+                        "expression": "autoincrement()"
+                      },
+                      "dataType": "pg/int4",
+                      "nullable": false
+                    },
+                    "role": {
+                      "codecId": "pg/text@1",
+                      "dataType": "pg/text",
+                      "nullable": false,
+                      "valueSet": {
+                        "plane": "storage",
+                        "entityKind": "valueSet",
+                        "entityName": "Role",
+                        "namespaceId": "public"
+                      }
+                    },
+                    "email": {
+                      "codecId": "pg/text@1",
+                      "dataType": "pg/text",
+                      "nullable": false
+                    }
+                  },
+                  "indexes": [],
+                  "uniques": [
+                    {
+                      "columns": [
+                        "email"
+                      ]
+                    }
+                  ],
+                  "primaryKey": {
+                    "columns": [
+                      "id"
+                    ]
+                  },
+                  "foreignKeys": []
+                },
+                "document": {
+                  "columns": {
+                    "id": {
+                      "codecId": "pg/int4@1",
+                      "default": {
+                        "kind": "function",
+                        "expression": "autoincrement()"
+                      },
+                      "dataType": "pg/int4",
+                      "nullable": false
+                    },
+                    "title": {
+                      "codecId": "pg/text@1",
+                      "dataType": "pg/text",
+                      "nullable": false
+                    },
+                    "embedding": {
+                      "codecId": "pg/vector@1",
+                      "dataType": "pgvector/vector",
+                      "nullable": true,
+                      "typeParams": {
+                        "length": 3
+                      }
+                    }
+                  },
+                  "indexes": [],
+                  "uniques": [],
+                  "primaryKey": {
+                    "columns": [
+                      "id"
+                    ]
+                  },
+                  "foreignKeys": []
+                }
+              },
+              "valueSet": {
+                "Role": {
+                  "kind": "valueSet",
+                  "values": [
+                    "USER",
+                    "ADMIN"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "storageHash": "55cd844d8863b4f8651a03add82462a844a9f35a4d9740cb55c910e9e7ad2408"
+      },
+      "_generated": {
+        "message": "This file is automatically generated by \"prisma contract emit\".",
+        "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+        "regenerate": "To regenerate, run: prisma contract emit"
+      },
+      "extensions": {
+        "pgvector": {
+          "id": "pgvector",
+          "kind": "extension",
+          "version": "0.0.1",
+          "familyId": "sql",
+          "targetId": "postgres",
+          "capabilities": {
+            "postgres": {
+              "pgvector.cosine": true
+            }
+          }
+        }
+      },
+      "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
+      "capabilities": {
+        "sql": {
+          "enums": true,
+          "lockOf": true,
+          "jsonAgg": true,
+          "lateral": true,
+          "forShare": true,
+          "forUpdate": true,
+          "returning": true,
+          "lockNowait": true,
+          "scalarList": true,
+          "lockSkipLocked": true,
+          "checkConstraint": true,
+          "defaultInInsert": true,
+          "insertOnConflictSkip": true,
+          "insertOnConflictTarget": true,
+          "jsonAggWithoutTruncation": true,
+          "insertOnConflictWithoutTarget": true,
+          "outerReferencesInDerivedTables": true
+        },
+        "postgres": {
+          "limit": true,
+          "jsonAgg": true,
+          "lateral": true,
+          "orderBy": true,
+          "returning": true,
+          "distinctOn": true,
+          "forKeyShare": true,
+          "forNoKeyUpdate": true,
+          "pgvector.cosine": true
+        }
+      },
+      "targetFamily": "sql",
+      "formatVersion": 1
+    }
+  },
+  {
+    "core_hash": "6bb8e6bebc413fbd0a6f203079c61a9979c89d9df48f97e9f6718da05fbe4549",
+    "created_at": "2026-11-24T13:08:12.7+00:00",
+    "contract_json": {
+      "meta": {},
+      "roots": {
+        "user": {
+          "model": "User",
+          "namespace": "public"
+        },
+        "document": {
+          "model": "Document",
+          "namespace": "public"
+        }
+      },
+      "domain": {
+        "namespaces": {
+          "public": {
+            "enum": {
+              "Role": {
+                "codecId": "pg/text@1",
+                "members": [
+                  {
+                    "name": "USER",
+                    "value": "USER"
+                  },
+                  {
+                    "name": "ADMIN",
+                    "value": "ADMIN"
+                  }
+                ]
+              }
+            },
+            "models": {
+              "User": {
+                "fields": {
+                  "id": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/int4@1"
+                    },
+                    "nullable": false
+                  },
+                  "role": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/text@1"
+                    },
+                    "nullable": false,
+                    "valueSet": {
+                      "plane": "domain",
+                      "entityKind": "enum",
+                      "entityName": "Role",
+                      "namespaceId": "public"
+                    }
+                  },
+                  "email": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/text@1"
+                    },
+                    "nullable": false
+                  }
+                },
+                "storage": {
+                  "table": "user",
+                  "fields": {
+                    "id": {
+                      "column": "id"
+                    },
+                    "role": {
+                      "column": "role"
+                    },
+                    "email": {
+                      "column": "email"
+                    }
+                  },
+                  "namespaceId": "public"
+                },
+                "relations": {}
+              },
+              "Document": {
+                "fields": {
+                  "id": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/int4@1"
+                    },
+                    "nullable": false
+                  },
+                  "title": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/text@1"
+                    },
+                    "nullable": false
+                  },
+                  "embedding": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/vector@1",
+                      "typeParams": {
+                        "length": 3
+                      }
+                    },
+                    "nullable": true
+                  }
+                },
+                "storage": {
+                  "table": "document",
+                  "fields": {
+                    "id": {
+                      "column": "id"
+                    },
+                    "title": {
+                      "column": "title"
+                    },
+                    "embedding": {
+                      "column": "embedding"
+                    }
+                  },
+                  "namespaceId": "public"
+                },
+                "relations": {}
+              }
+            }
+          }
+        }
+      },
+      "target": "postgres",
+      "storage": {
+        "namespaces": {
+          "public": {
+            "id": "public",
+            "kind": "postgres-schema",
+            "entries": {
+              "table": {
+                "user": {
+                  "checks": [
+                    {
+                      "name": "user_role_check_1954e8c0",
+                      "prefix": "user_role_check",
+                      "expression": "\"role\" IN ('USER', 'ADMIN')"
+                    }
+                  ],
+                  "columns": {
+                    "id": {
+                      "codecId": "pg/int4@1",
+                      "default": {
+                        "kind": "function",
+                        "expression": "autoincrement()"
+                      },
+                      "dataType": "pg/int4",
+                      "nullable": false
+                    },
+                    "role": {
+                      "codecId": "pg/text@1",
+                      "dataType": "pg/text",
+                      "nullable": false,
+                      "valueSet": {
+                        "plane": "storage",
+                        "entityKind": "valueSet",
+                        "entityName": "Role",
+                        "namespaceId": "public"
+                      }
+                    },
+                    "email": {
+                      "codecId": "pg/text@1",
+                      "dataType": "pg/text",
+                      "nullable": false
+                    }
+                  },
+                  "indexes": [],
+                  "uniques": [
+                    {
+                      "columns": [
+                        "email"
+                      ]
+                    }
+                  ],
+                  "primaryKey": {
+                    "columns": [
+                      "id"
+                    ]
+                  },
+                  "foreignKeys": []
+                },
+                "document": {
+                  "columns": {
+                    "id": {
+                      "codecId": "pg/int4@1",
+                      "default": {
+                        "kind": "function",
+                        "expression": "autoincrement()"
+                      },
+                      "dataType": "pg/int4",
+                      "nullable": false
+                    },
+                    "title": {
+                      "codecId": "pg/text@1",
+                      "dataType": "pg/text",
+                      "nullable": false
+                    },
+                    "embedding": {
+                      "codecId": "pg/vector@1",
+                      "dataType": "pgvector/vector",
+                      "nullable": true,
+                      "typeParams": {
+                        "length": 3
+                      }
+                    }
+                  },
+                  "indexes": [],
+                  "uniques": [],
+                  "primaryKey": {
+                    "columns": [
+                      "id"
+                    ]
+                  },
+                  "foreignKeys": []
+                }
+              },
+              "valueSet": {
+                "Role": {
+                  "kind": "valueSet",
+                  "values": [
+                    "USER",
+                    "ADMIN"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "storageHash": "6bb8e6bebc413fbd0a6f203079c61a9979c89d9df48f97e9f6718da05fbe4549"
+      },
+      "_generated": {
+        "message": "This file is automatically generated by \"prisma contract emit\".",
+        "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+        "regenerate": "To regenerate, run: prisma contract emit"
+      },
+      "extensions": {
+        "pgvector": {
+          "id": "pgvector",
+          "kind": "extension",
+          "version": "0.0.1",
+          "familyId": "sql",
+          "targetId": "postgres",
+          "capabilities": {
+            "postgres": {
+              "pgvector.cosine": true
+            }
+          }
+        }
+      },
+      "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
+      "capabilities": {
+        "sql": {
+          "enums": true,
+          "lockOf": true,
+          "jsonAgg": true,
+          "lateral": true,
+          "forShare": true,
+          "forUpdate": true,
+          "returning": true,
+          "lockNowait": true,
+          "scalarList": true,
+          "lockSkipLocked": true,
+          "checkConstraint": true,
+          "defaultInInsert": true,
+          "insertOnConflictSkip": true,
+          "insertOnConflictTarget": true,
+          "jsonAggWithoutTruncation": true,
+          "insertOnConflictWithoutTarget": true,
+          "outerReferencesInDerivedTables": true
+        },
+        "postgres": {
+          "limit": true,
+          "jsonAgg": true,
+          "lateral": true,
+          "orderBy": true,
+          "returning": true,
+          "distinctOn": true,
+          "forKeyShare": true,
+          "forNoKeyUpdate": true,
+          "pgvector.cosine": true
+        }
+      },
+      "targetFamily": "sql",
+      "formatVersion": 1
+    }
+  },
+  {
+    "core_hash": "ca21ea32b59b3a7f9e4f7ec0305ffb05d788236e80b3f278add2574036b5159d",
+    "created_at": "2026-11-24T13:08:13.39+00:00",
+    "contract_json": {
+      "meta": {},
+      "roots": {
+        "post": {
+          "model": "Post",
+          "namespace": "public"
+        },
+        "user": {
+          "model": "User",
+          "namespace": "public"
+        },
+        "document": {
+          "model": "Document",
+          "namespace": "public"
+        }
+      },
+      "domain": {
+        "namespaces": {
+          "public": {
+            "enum": {
+              "Role": {
+                "codecId": "pg/text@1",
+                "members": [
+                  {
+                    "name": "USER",
+                    "value": "USER"
+                  },
+                  {
+                    "name": "ADMIN",
+                    "value": "ADMIN"
+                  }
+                ]
+              }
+            },
+            "models": {
+              "Post": {
+                "fields": {
+                  "id": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/int4@1"
+                    },
+                    "nullable": false
+                  },
+                  "title": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/text@1"
+                    },
+                    "nullable": false
+                  },
+                  "authorId": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/int4@1"
+                    },
+                    "nullable": false
+                  }
+                },
+                "storage": {
+                  "table": "post",
+                  "fields": {
+                    "id": {
+                      "column": "id"
+                    },
+                    "title": {
+                      "column": "title"
+                    },
+                    "authorId": {
+                      "column": "authorId"
+                    }
+                  },
+                  "namespaceId": "public"
+                },
+                "relations": {
+                  "author": {
+                    "on": {
+                      "localFields": [
+                        "authorId"
+                      ],
+                      "targetFields": [
+                        "id"
+                      ]
+                    },
+                    "to": {
+                      "model": "User",
+                      "namespace": "public"
+                    },
+                    "nullable": false,
+                    "cardinality": "N:1"
+                  }
+                }
+              },
+              "User": {
+                "fields": {
+                  "id": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/int4@1"
+                    },
+                    "nullable": false
+                  },
+                  "role": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/text@1"
+                    },
+                    "nullable": false,
+                    "valueSet": {
+                      "plane": "domain",
+                      "entityKind": "enum",
+                      "entityName": "Role",
+                      "namespaceId": "public"
+                    }
+                  },
+                  "email": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/text@1"
+                    },
+                    "nullable": false
+                  },
+                  "displayName": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/text@1"
+                    },
+                    "nullable": false
+                  }
+                },
+                "storage": {
+                  "table": "user",
+                  "fields": {
+                    "id": {
+                      "column": "id"
+                    },
+                    "role": {
+                      "column": "role"
+                    },
+                    "email": {
+                      "column": "email"
+                    },
+                    "displayName": {
+                      "column": "displayName"
+                    }
+                  },
+                  "namespaceId": "public"
+                },
+                "relations": {
+                  "posts": {
+                    "on": {
+                      "localFields": [
+                        "id"
+                      ],
+                      "targetFields": [
+                        "authorId"
+                      ]
+                    },
+                    "to": {
+                      "model": "Post",
+                      "namespace": "public"
+                    },
+                    "cardinality": "1:N"
+                  }
+                }
+              },
+              "Document": {
+                "fields": {
+                  "id": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/int4@1"
+                    },
+                    "nullable": false
+                  },
+                  "title": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/text@1"
+                    },
+                    "nullable": false
+                  },
+                  "embedding": {
+                    "type": {
+                      "kind": "scalar",
+                      "codecId": "pg/vector@1",
+                      "typeParams": {
+                        "length": 3
+                      }
+                    },
+                    "nullable": true
+                  }
+                },
+                "storage": {
+                  "table": "document",
+                  "fields": {
+                    "id": {
+                      "column": "id"
+                    },
+                    "title": {
+                      "column": "title"
+                    },
+                    "embedding": {
+                      "column": "embedding"
+                    }
+                  },
+                  "namespaceId": "public"
+                },
+                "relations": {}
+              }
+            }
+          }
+        }
+      },
+      "target": "postgres",
+      "storage": {
+        "namespaces": {
+          "public": {
+            "id": "public",
+            "kind": "postgres-schema",
+            "entries": {
+              "table": {
+                "post": {
+                  "columns": {
+                    "id": {
+                      "codecId": "pg/int4@1",
+                      "default": {
+                        "kind": "function",
+                        "expression": "autoincrement()"
+                      },
+                      "dataType": "pg/int4",
+                      "nullable": false
+                    },
+                    "title": {
+                      "codecId": "pg/text@1",
+                      "dataType": "pg/text",
+                      "nullable": false
+                    },
+                    "authorId": {
+                      "codecId": "pg/int4@1",
+                      "dataType": "pg/int4",
+                      "nullable": false
+                    }
+                  },
+                  "indexes": [
+                    {
+                      "name": "post_authorId_idx_e47547ed",
+                      "prefix": "post_authorId_idx",
+                      "unique": false,
+                      "columns": [
+                        "authorId"
+                      ]
+                    }
+                  ],
+                  "uniques": [],
+                  "primaryKey": {
+                    "columns": [
+                      "id"
+                    ]
+                  },
+                  "foreignKeys": [
+                    {
+                      "index": {
+                        "name": "post_authorId_idx_e47547ed"
+                      },
+                      "source": {
+                        "columns": [
+                          "authorId"
+                        ],
+                        "tableName": "post",
+                        "namespaceId": "public"
+                      },
+                      "target": {
+                        "columns": [
+                          "id"
+                        ],
+                        "tableName": "user",
+                        "namespaceId": "public"
+                      }
+                    }
+                  ]
+                },
+                "user": {
+                  "checks": [
+                    {
+                      "name": "user_role_check_1954e8c0",
+                      "prefix": "user_role_check",
+                      "expression": "\"role\" IN ('USER', 'ADMIN')"
+                    }
+                  ],
+                  "columns": {
+                    "id": {
+                      "codecId": "pg/int4@1",
+                      "default": {
+                        "kind": "function",
+                        "expression": "autoincrement()"
+                      },
+                      "dataType": "pg/int4",
+                      "nullable": false
+                    },
+                    "role": {
+                      "codecId": "pg/text@1",
+                      "dataType": "pg/text",
+                      "nullable": false,
+                      "valueSet": {
+                        "plane": "storage",
+                        "entityKind": "valueSet",
+                        "entityName": "Role",
+                        "namespaceId": "public"
+                      }
+                    },
+                    "email": {
+                      "codecId": "pg/text@1",
+                      "dataType": "pg/text",
+                      "nullable": false
+                    },
+                    "displayName": {
+                      "codecId": "pg/text@1",
+                      "dataType": "pg/text",
+                      "nullable": false
+                    }
+                  },
+                  "indexes": [],
+                  "uniques": [
+                    {
+                      "columns": [
+                        "email"
+                      ]
+                    }
+                  ],
+                  "primaryKey": {
+                    "columns": [
+                      "id"
+                    ]
+                  },
+                  "foreignKeys": []
+                },
+                "document": {
+                  "columns": {
+                    "id": {
+                      "codecId": "pg/int4@1",
+                      "default": {
+                        "kind": "function",
+                        "expression": "autoincrement()"
+                      },
+                      "dataType": "pg/int4",
+                      "nullable": false
+                    },
+                    "title": {
+                      "codecId": "pg/text@1",
+                      "dataType": "pg/text",
+                      "nullable": false
+                    },
+                    "embedding": {
+                      "codecId": "pg/vector@1",
+                      "dataType": "pgvector/vector",
+                      "nullable": true,
+                      "typeParams": {
+                        "length": 3
+                      }
+                    }
+                  },
+                  "indexes": [],
+                  "uniques": [],
+                  "primaryKey": {
+                    "columns": [
+                      "id"
+                    ]
+                  },
+                  "foreignKeys": []
+                }
+              },
+              "valueSet": {
+                "Role": {
+                  "kind": "valueSet",
+                  "values": [
+                    "USER",
+                    "ADMIN"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "storageHash": "ca21ea32b59b3a7f9e4f7ec0305ffb05d788236e80b3f278add2574036b5159d"
+      },
+      "_generated": {
+        "message": "This file is automatically generated by \"prisma contract emit\".",
+        "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+        "regenerate": "To regenerate, run: prisma contract emit"
+      },
+      "extensions": {
+        "pgvector": {
+          "id": "pgvector",
+          "kind": "extension",
+          "version": "0.0.1",
+          "familyId": "sql",
+          "targetId": "postgres",
+          "capabilities": {
+            "postgres": {
+              "pgvector.cosine": true
+            }
+          }
+        }
+      },
+      "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
+      "capabilities": {
+        "sql": {
+          "enums": true,
+          "lockOf": true,
+          "jsonAgg": true,
+          "lateral": true,
+          "forShare": true,
+          "forUpdate": true,
+          "returning": true,
+          "lockNowait": true,
+          "scalarList": true,
+          "lockSkipLocked": true,
+          "checkConstraint": true,
+          "defaultInInsert": true,
+          "insertOnConflictSkip": true,
+          "insertOnConflictTarget": true,
+          "jsonAggWithoutTruncation": true,
+          "insertOnConflictWithoutTarget": true,
+          "outerReferencesInDerivedTables": true
+        },
+        "postgres": {
+          "limit": true,
+          "jsonAgg": true,
+          "lateral": true,
+          "orderBy": true,
+          "returning": true,
+          "distinctOn": true,
+          "forKeyShare": true,
+          "forNoKeyUpdate": true,
+          "pgvector.cosine": true
+        }
+      },
+      "targetFamily": "sql",
+      "formatVersion": 1
+    }
+  },
+  {
+    "core_hash": "d2c19e6a88b5b89e23e8ce4863844d40813bcf7712509e631d7cd29d405af27b",
+    "created_at": "2026-11-24T13:08:12.7+00:00",
+    "contract_json": {
+      "meta": {},
+      "roots": {},
+      "domain": {
+        "namespaces": {
+          "public": {
+            "models": {}
+          }
+        }
+      },
+      "target": "postgres",
+      "storage": {
+        "types": {
+          "vector": {
+            "kind": "codec-instance",
+            "codecId": "pg/vector@1",
+            "dataType": "pgvector/vector"
+          }
+        },
+        "namespaces": {
+          "public": {
+            "id": "public",
+            "kind": "postgres-schema",
+            "entries": {
+              "table": {}
+            }
+          },
+          "__unbound__": {
+            "id": "__unbound__",
+            "kind": "postgres-unbound-schema",
+            "entries": {
+              "table": {},
+              "extension": {
+                "vector": {
+                  "kind": "extension",
+                  "name": "vector"
+                }
+              }
+            }
+          }
+        },
+        "storageHash": "d2c19e6a88b5b89e23e8ce4863844d40813bcf7712509e631d7cd29d405af27b"
+      },
+      "_generated": {
+        "message": "This file is automatically generated by \"prisma contract emit\".",
+        "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+        "regenerate": "To regenerate, run: prisma contract emit"
+      },
+      "extensions": {},
+      "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
+      "capabilities": {
+        "sql": {
+          "enums": true,
+          "lockOf": true,
+          "jsonAgg": true,
+          "lateral": true,
+          "forShare": true,
+          "forUpdate": true,
+          "returning": true,
+          "lockNowait": true,
+          "scalarList": true,
+          "lockSkipLocked": true,
+          "checkConstraint": true,
+          "defaultInInsert": true,
+          "insertOnConflictSkip": true,
+          "insertOnConflictTarget": true,
+          "jsonAggWithoutTruncation": true,
+          "insertOnConflictWithoutTarget": true,
+          "outerReferencesInDerivedTables": true
+        },
+        "postgres": {
+          "limit": true,
+          "jsonAgg": true,
+          "lateral": true,
+          "orderBy": true,
+          "returning": true,
+          "distinctOn": true,
+          "forKeyShare": true,
+          "forNoKeyUpdate": true
+        }
+      },
+      "targetFamily": "sql",
+      "formatVersion": 1
+    }
+  }
+]

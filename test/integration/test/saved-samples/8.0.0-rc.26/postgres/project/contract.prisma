@@ -1,0 +1,39 @@
+// use prisma-8
+
+types {
+  Embedding3 = pgvector.Vector(3)
+}
+
+enum Role {
+  @@type("pg/text@1")
+  USER
+  ADMIN
+}
+
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  role  Role
+  displayName String
+  posts Post[]
+
+  @@map("user")
+}
+
+model Post {
+  id       Int    @id @default(autoincrement())
+  title    String
+  authorId Int
+  author   User   @relation(fields: [authorId], references: [id])
+
+  @@index([authorId])
+  @@map("post")
+}
+
+model Document {
+  id        Int         @id @default(autoincrement())
+  title     String
+  embedding Embedding3?
+
+  @@map("document")
+}

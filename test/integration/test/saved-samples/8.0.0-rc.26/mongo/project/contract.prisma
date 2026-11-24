@@ -1,0 +1,26 @@
+// use prisma-8
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id    ObjectId @id @map("_id")
+  email String   @unique
+  role  Role
+  name  String?
+  posts Post[]
+
+  @@map("users")
+}
+
+model Post {
+  id       ObjectId @id @map("_id")
+  title    String
+  authorId ObjectId
+  author   User     @relation(fields: [authorId], references: [id])
+
+  @@index([authorId])
+  @@map("posts")
+}
