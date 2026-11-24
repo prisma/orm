@@ -15,6 +15,7 @@ import {
 } from '../../src/orm/registry-keywords';
 import { declareAddedPackages } from '../utils/fake-package-manager';
 import { fixtureContribution } from '../utils/fixture-contribution';
+import { noRegistryPeersLookup } from '../utils/registry-keywords';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const UNLISTED = 'prisma-orm-somedb';
@@ -83,6 +84,7 @@ function harness(
       emitScaffoldedContract: vi.fn().mockResolvedValue(undefined),
       importFromProject: loadModule,
       lookUpRegistryKeywords,
+      lookUpRegistryPeers: noRegistryPeersLookup,
     }),
   };
   return createTestCli({

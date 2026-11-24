@@ -23,7 +23,7 @@ import {
 } from '../../src/orm/project-modules';
 import { declareAddedPackages } from '../utils/fake-package-manager';
 import { fixtureContribution } from '../utils/fixture-contribution';
-import { noRegistryLookup } from '../utils/registry-keywords';
+import { noRegistryLookup, noRegistryPeersLookup } from '../utils/registry-keywords';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 let projectDir: string;
@@ -58,6 +58,7 @@ function harness(loadInit: ImportFromProject = importFromProject) {
       importFromProject: (cwd, specifier) =>
         specifier.endsWith('/init') ? loadInit(cwd, specifier) : importFromProject(cwd, specifier),
       lookUpRegistryKeywords: noRegistryLookup,
+      lookUpRegistryPeers: noRegistryPeersLookup,
     }),
   };
   return createTestCli({

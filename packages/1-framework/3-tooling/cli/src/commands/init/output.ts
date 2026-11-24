@@ -40,11 +40,21 @@ export const InitOutputSchema = type({
    * `devDeps` list what was installed: under `skipped`, and under a `failed`
    * first install, both are empty; when a later install fails, `deps` holds
    * what the first install, before the questions, put in place.
+   * `ormPeerPackages` says, for each `@prisma/orm-*` package the target
+   * package names as a peer, directly or through another, what init did:
+   * installed it at `version`, found it already listed at that version, left
+   * it at another version (and warned), or, under `--skip-install`, left it
+   * for the application to install.
    */
   packagesInstalled: {
     status: "'installed'|'skipped'|'failed'",
     deps: 'string[]',
     devDeps: 'string[]',
+    ormPeerPackages: type({
+      name: 'string',
+      version: 'string',
+      outcome: "'installed'|'already-listed'|'left-at-another-version'|'to-install'",
+    }).array(),
   },
   contractEmitted: 'boolean',
   /**

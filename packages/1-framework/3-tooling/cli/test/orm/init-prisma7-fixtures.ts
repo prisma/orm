@@ -126,7 +126,7 @@ export function preparedTarget(
 ): PreparedTargetPackage {
   return {
     contribution: STUB_CONTRIBUTION,
-    targetDependencies: ['@prisma/orm-postgres'],
+    ormPeerPackages: { target: '@prisma/orm-postgres', packages: [], unread: [], warnings: [] },
     installed: [],
     added: undefined,
     warnings: [],
@@ -169,13 +169,9 @@ type ResolveContext = Parameters<typeof resolveInitInputs>[0];
 export function resolveInputs(
   ctx: Omit<
     ResolveContext,
-    | 'prepareTargetPackage'
-    | 'checkPrisma7Source'
-    | 'warn'
-    | 'packageManager'
-    | 'platformPackagesFor'
+    'prepareTargetPackage' | 'checkPrisma7Source' | 'warn' | 'packageManager' | 'ormPeerPackagesFor'
   > & {
-    readonly platformPackagesFor?: ResolveContext['platformPackagesFor'];
+    readonly ormPeerPackagesFor?: ResolveContext['ormPeerPackagesFor'];
     readonly prepareTargetPackage?: PrepareTargetPackage;
     readonly checkPrisma7Source?: CheckPrisma7Source;
     readonly warn?: ResolveContext['warn'];
@@ -187,7 +183,12 @@ export function resolveInputs(
     checkPrisma7Source: stubCheck(),
     warn: () => {},
     packageManager: 'pnpm',
-    platformPackagesFor: async (packageName) => [packageName],
+    ormPeerPackagesFor: async (packageName) => ({
+      target: packageName,
+      packages: [],
+      unread: [],
+      warnings: [],
+    }),
     ...ctx,
   });
 }

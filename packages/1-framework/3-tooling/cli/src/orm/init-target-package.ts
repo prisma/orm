@@ -26,8 +26,13 @@ import {
   type TargetPackage,
 } from '../commands/init/target-packages';
 import { chooseAction } from '../utils/next-actions';
+import {
+  installedManifests,
+  type OrmPeerPackages,
+  ormPeerSpecifier,
+  resolveOrmPeerPackages,
+} from './init-orm-peer-packages';
 import { installProjectDependencies } from './init-packages';
-import { installedPackages, resolvePlatformPackages } from './init-platform-packages';
 import { normalizeError } from './normalize-error';
 import { keywordsOf } from './package-manifest';
 import { type ImportFromProject, installedManifest } from './project-modules';
@@ -99,12 +104,7 @@ export function installCommand(
 /** The target package and the contribution it exports, with what installing it changed. */
 export interface PreparedTargetPackage {
   readonly contribution: InitContribution;
-  /**
-   * The target package and every `@prisma/orm-*` package it names as a peer, followed through
-   * their peers, as the specifiers the application lists: the target package alone when it names
-   * none.
-   */
-  readonly targetDependencies: readonly string[];
+  readonly ormPeerPackages: OrmPeerPackages;
   /** Every package the step installed or found in place, so the install phase skips them. */
   readonly installed: readonly string[];
   /** The installed packages the project did not declare before; `undefined` when there are none. */
@@ -196,9 +196,11 @@ export function createTargetPackagePreparation(ctx: {
       ranCommand = deps.length === 0 ? undefined : installCommand(ctx.packageManager, deps);
     }
 
-    const platform = await resolvePlatformPackages({
+    const manifests = installedManifests(ctx.cwd);
+    const ormPeerPackages = await resolveOrmPeerPackages({
       packageName,
-      read: installedPackages(ctx.cwd),
+      read: manifests.read,
+      installedVersion: manifests.installedVersion,
       ownsTarget: installsTarget,
       declared: () => declaredPackages(ctx.cwd),
       install: ctx.install
@@ -211,19 +213,25 @@ export function createTargetPackagePreparation(ctx: {
             })
         : undefined,
     });
-    if (platform instanceof CliStructuredError) {
+    if (ormPeerPackages instanceof CliStructuredError) {
       const addedBeforeFailure = manifestChanges(
         ctx.packageManager,
         declaredBefore,
         declaredPackages(ctx.cwd),
       );
       throw addedBeforeFailure === undefined
-        ? new TargetPackageInstallFailed(platform)
-        : new TargetPackageRefusedAfterInstall(platform, addedBeforeFailure);
+        ? new TargetPackageInstallFailed(ormPeerPackages)
+        : new TargetPackageRefusedAfterInstall(ormPeerPackages, addedBeforeFailure);
     }
-    warnings.push(...platform.warnings);
+    warnings.push(...ormPeerPackages.warnings);
     if (ctx.install) {
-      installed = [...new Set([...installed, ...platform.dependencies])];
+      installed = [
+        ...new Set([
+          ...installed,
+          ormPeerPackages.target,
+          ...ormPeerPackages.packages.map(ormPeerSpecifier),
+        ]),
+      ];
       added = manifestChanges(ctx.packageManager, declaredBefore, declaredPackages(ctx.cwd));
     }
 
@@ -231,7 +239,7 @@ export function createTargetPackagePreparation(ctx: {
       const contribution = await loadContribution(ctx, target, ranCommand);
       return {
         contribution,
-        targetDependencies: platform.dependencies,
+        ormPeerPackages,
         installed,
         added,
         warnings,

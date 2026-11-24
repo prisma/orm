@@ -1,17 +1,15 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { MountedTree, PackageManagerRunner } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
-import { dirname, join } from 'pathe';
+import { basename, dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
-import { platformPackagesForSetup } from '../../src/orm/init-platform-packages';
 import { type ImportFromProject, importFromProject } from '../../src/orm/project-modules';
 import { declareAddedPackages } from '../utils/fake-package-manager';
 import { fixtureContribution } from '../utils/fixture-contribution';
-import { noRegistryLookup } from '../utils/registry-keywords';
+import { noRegistryLookup, noRegistryPeersLookup } from '../utils/registry-keywords';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const VERSION = '8.1.0';
@@ -21,19 +19,40 @@ let installs: (readonly string[])[];
 let onInstall: (args: readonly string[]) => void;
 let fails: (args: readonly string[]) => boolean;
 
+let declares: (request: Parameters<PackageManagerRunner>[0]) => void;
+
 const runner: PackageManagerRunner = async (request) => {
   installs.push([...request.args]);
   if (fails(request.args)) return { exitCode: 1, stderr: 'ETARGET no matching version' };
-  declareAddedPackages(request);
+  declares(request);
   onInstall(request.args);
   return { exitCode: 0, stderr: '' };
 };
 
+/**
+ * What a package manager writes for `<name>@<version>` without an exact-save setting: the version
+ * with a caret. A bare name gets the fixed range of the shared fake.
+ */
+function declareWithCaret(request: Parameters<PackageManagerRunner>[0]): void {
+  declareAddedPackages(request);
+  const versioned = request.args.filter((arg) => /^@?[^@]+@\d/.test(arg));
+  if (versioned.length === 0) return;
+  const manifestPath = join(request.cwd, 'package.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+  const field = request.args.includes('-D') ? 'devDependencies' : 'dependencies';
+  for (const spec of versioned) {
+    const at = spec.lastIndexOf('@');
+    manifest[field][spec.slice(0, at)] = `^${spec.slice(at + 1)}`;
+  }
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf-8');
+}
+
 beforeEach(() => {
-  projectDir = createTestProjectDir('orm-init-platform-packages');
+  projectDir = createTestProjectDir('orm-init-orm-peer-packages');
   installs = [];
   onInstall = () => {};
   fails = () => false;
+  declares = declareAddedPackages;
 });
 
 afterEach(() => {
@@ -53,6 +72,7 @@ async function harness(targetPackage: string) {
       importFromProject: (cwd, specifier) =>
         specifier.endsWith('/init') ? loadInit(cwd, specifier) : importFromProject(cwd, specifier),
       lookUpRegistryKeywords: noRegistryLookup,
+      lookUpRegistryPeers: noRegistryPeersLookup,
     }),
   };
   return createTestCli({
@@ -69,13 +89,17 @@ function writeProjectFile(relative: string, content: string): void {
 }
 
 /** An installed package whose manifest names `peers`, each at `VERSION` unless given a range. */
-function installed(name: string, peers: Record<string, string | undefined> = {}): void {
+function installed(
+  name: string,
+  peers: Record<string, string | undefined> = {},
+  version = VERSION,
+): void {
   const peerDependencies = Object.fromEntries(
     Object.entries(peers).map(([peer, range]) => [peer, range ?? VERSION]),
   );
   writeProjectFile(
     `node_modules/${name}/package.json`,
-    JSON.stringify({ name, version: VERSION, peerDependencies }),
+    JSON.stringify({ name, version, peerDependencies }),
   );
 }
 
@@ -269,6 +293,7 @@ describe('init lists the packages the target package names as peers', () => {
     'leaves a platform package the project lists at another version, and reports it',
     async () => {
       installedPostgresStack();
+      installed('@prisma/orm-framework', {}, '8.0.0');
       writeManifest({ '@prisma/orm-framework': '8.0.0' });
 
       const run = await (await harness('@prisma/orm-postgres')).run(POSTGRES, {
@@ -282,8 +307,21 @@ describe('init lists the packages the target package names as peers', () => {
       expect(declared()['@prisma/orm-framework']).toBe('8.0.0');
       expect(run.presented?.data).toMatchObject({
         warnings: expect.arrayContaining([
-          `package.json lists @prisma/orm-framework at 8.0.0, but @prisma/orm-postgres needs ${VERSION}; init left it as it is. Install @prisma/orm-framework@${VERSION} so every Prisma ORM package is at one version.`,
+          `package.json lists @prisma/orm-framework at 8.0.0, installed at 8.0.0, but @prisma/orm-postgres needs ${VERSION}; init left it as it is. Install @prisma/orm-framework@${VERSION} so every Prisma ORM package is at one version.`,
         ]),
+        packagesInstalled: {
+          deps: [
+            ...POSTGRES_STACK.filter((spec) => !spec.startsWith('@prisma/orm-framework@')),
+            'dotenv',
+            'pg',
+          ],
+          ormPeerPackages: [
+            { name: '@prisma/orm-family-sql', version: VERSION, outcome: 'installed' },
+            { name: '@prisma/orm-framework', version: VERSION, outcome: 'left-at-another-version' },
+            { name: '@prisma/orm-target-postgres', version: VERSION, outcome: 'installed' },
+            { name: '@prisma/orm-toolchain', version: VERSION, outcome: 'installed' },
+          ],
+        },
       });
     },
     timeouts.coldTransformImport,
@@ -359,77 +397,56 @@ describe('init lists the packages the target package names as peers', () => {
     },
     timeouts.coldTransformImport,
   );
-});
 
-describe('the list the printed Prisma 6 setup names', () => {
-  const published = new Map<string, Record<string, string>>([
-    [
-      '@prisma/orm-mongo@latest',
-      { '@prisma/orm-framework': VERSION, '@prisma/orm-family-mongo': VERSION, mongodb: '^7' },
-    ],
-    [`@prisma/orm-family-mongo@${VERSION}`, { '@prisma/orm-framework': VERSION }],
-    [`@prisma/orm-framework@${VERSION}`, {}],
-  ]);
-  const asked: string[] = [];
-  const readPublished = async (name: string, spec: string) => {
-    asked.push(`${name}@${spec}`);
-    const peers = published.get(`${name}@${spec}`);
-    return peers === undefined
-      ? undefined
-      : { version: spec === 'latest' ? VERSION : spec, peerDependencies: peers };
-  };
+  it(
+    'warns about nothing on a second run after the package manager wrote carets',
+    async () => {
+      installedPostgresStack();
+      declares = declareWithCaret;
+      await (await harness('@prisma/orm-postgres')).run(POSTGRES, { cwd: projectDir });
+      expect(declared()['@prisma/orm-framework']).toBe(`^${VERSION}`);
+      installs = [];
 
-  // Outside the fixture app, whose own installed target packages would be found first.
-  let outsideDir: string;
+      const second = await (await harness('@prisma/orm-postgres')).run(
+        [...POSTGRES, '--confirm', basename(projectDir)],
+        { cwd: projectDir },
+      );
 
-  beforeEach(() => {
-    asked.length = 0;
-    outsideDir = mkdtempSync(join(tmpdir(), 'orm-init-prisma6-list-'));
-  });
+      expect(second.exitCode).toBe(0);
+      expect(
+        runtimeInstalls()
+          .flat()
+          .filter((arg) => arg.startsWith('@prisma/orm-')),
+      ).toEqual([]);
+      expect(second.presented?.data).toMatchObject({
+        warnings: expect.not.arrayContaining([expect.stringContaining('package.json lists')]),
+      });
+    },
+    timeouts.coldTransformImport,
+  );
 
-  afterEach(() => {
-    rmSync(outsideDir, { recursive: true, force: true });
-  });
+  it.each([
+    ['a catalog line', 'catalog:'],
+    ['a workspace line', 'workspace:*'],
+    ['a caret on the version', `^${VERSION}`],
+  ])(
+    'counts %s whose installed copy is at the version as listed',
+    async (_case, line) => {
+      installedPostgresStack();
+      writeManifest({ '@prisma/orm-framework': line });
 
-  it('reads the published manifests of a database package that is not installed', async () => {
-    const list = await platformPackagesForSetup({ cwd: outsideDir, readPublished })(
-      '@prisma/orm-mongo',
-    );
+      const run = await (await harness('@prisma/orm-postgres')).run(POSTGRES, { cwd: projectDir });
 
-    expect({ list, asked }).toEqual({
-      list: [
-        `@prisma/orm-mongo@${VERSION}`,
-        `@prisma/orm-family-mongo@${VERSION}`,
-        `@prisma/orm-framework@${VERSION}`,
-      ],
-      asked: [
-        '@prisma/orm-mongo@latest',
-        `@prisma/orm-framework@${VERSION}`,
-        `@prisma/orm-family-mongo@${VERSION}`,
-      ],
-    });
-  });
-
-  it('reads the installed manifests first', async () => {
-    installed('@prisma/orm-mongo', { '@prisma/orm-framework': undefined });
-    installed('@prisma/orm-framework');
-
-    const list = await platformPackagesForSetup({ cwd: projectDir, readPublished })(
-      '@prisma/orm-mongo',
-    );
-
-    expect({ list, asked }).toEqual({
-      list: [`@prisma/orm-mongo@${VERSION}`, `@prisma/orm-framework@${VERSION}`],
-      asked: [],
-    });
-  });
-
-  it('names only the database package when the registry cannot be read', async () => {
-    const list = await platformPackagesForSetup({
-      cwd: outsideDir,
-      readPublished: async () => undefined,
-    })('@prisma/orm-mongo');
-
-    expect(list).toEqual(['@prisma/orm-mongo']);
-  });
+      expect(run.presented?.data).toMatchObject({
+        warnings: expect.not.arrayContaining([expect.stringContaining('package.json lists')]),
+        packagesInstalled: {
+          ormPeerPackages: expect.arrayContaining([
+            { name: '@prisma/orm-framework', version: VERSION, outcome: 'already-listed' },
+          ]),
+        },
+      });
+      expect(declared()['@prisma/orm-framework']).toBe(line);
+    },
+    timeouts.coldTransformImport,
+  );
 });

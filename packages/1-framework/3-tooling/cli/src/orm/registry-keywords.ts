@@ -206,14 +206,16 @@ export const lookUpRegistryKeywords: LookUpRegistryKeywords = async (packageName
  * The version and `peerDependencies` the registry `env` names publishes for `spec` (a version or a
  * dist-tag) of a package; `undefined` when it cannot be read.
  */
-export async function lookUpRegistryPeers(
+export type LookUpRegistryPeers = (
   packageName: string,
   spec: string,
   options: {
     readonly env: Readonly<Record<string, string | undefined>>;
     readonly signal: AbortSignal;
   },
-): Promise<PublishedPackage | undefined> {
+) => Promise<PublishedPackage | undefined>;
+
+export const lookUpRegistryPeers: LookUpRegistryPeers = async (packageName, spec, options) => {
   const lookup = await lookUpManifest(packageName, spec, options);
   if (lookup.kind !== 'read') {
     return undefined;
@@ -231,7 +233,7 @@ export async function lookUpRegistryPeers(
           )
         : {},
   };
-}
+};
 
 /** What a published version names as its version and peers. */
 export interface PublishedPackage {

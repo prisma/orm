@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { importFromProject } from '../../src/orm/project-modules';
-import { noRegistryLookup } from '../utils/registry-keywords';
+import { noRegistryLookup, noRegistryPeersLookup } from '../utils/registry-keywords';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const emit = vi.fn();
@@ -19,6 +19,7 @@ const commands: MountedTree = {
     emitScaffoldedContract: emit,
     importFromProject,
     lookUpRegistryKeywords: noRegistryLookup,
+    lookUpRegistryPeers: noRegistryPeersLookup,
   }),
 };
 const groups = BIN_GROUPS;

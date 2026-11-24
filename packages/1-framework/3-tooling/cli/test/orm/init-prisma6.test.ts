@@ -162,7 +162,7 @@ describe(
       expect(check.requests).toEqual([]);
     });
 
-    it('names the platform packages of the database package in the install command', async () => {
+    it('names the Prisma ORM peer packages of the target package in the install command', async () => {
       writePrisma6Project();
       const { prompt } = scriptedPrompt();
       const asked: string[] = [];
@@ -173,9 +173,16 @@ describe(
           flags: flags(),
           prompt,
           packageManager: 'pnpm',
-          platformPackagesFor: async (packageName) => {
+          ormPeerPackagesFor: async (packageName) => {
             asked.push(packageName);
-            return [`${packageName}@8.1.0`, '@prisma/orm-framework@8.1.0'];
+            return {
+              target: `${packageName}@8.1.0`,
+              packages: [
+                { name: '@prisma/orm-framework', version: '8.1.0', outcome: 'to-install' },
+              ],
+              unread: [],
+              warnings: [],
+            };
           },
         }),
       );
@@ -189,6 +196,39 @@ describe(
             command: 'pnpm add @prisma/orm-mongo@8.1.0 @prisma/orm-framework@8.1.0 dotenv mongodb',
           },
         ]),
+      });
+    });
+
+    it('warns that the packages it could not read must be added too', async () => {
+      writePrisma6Project();
+      const { prompt } = scriptedPrompt();
+      const warnings: string[] = [];
+
+      const error = await rejectionOf(
+        resolveInputs({
+          cwd: projectDir,
+          flags: flags(),
+          prompt,
+          packageManager: 'pnpm',
+          warn: (text) => warnings.push(text),
+          ormPeerPackagesFor: async (packageName) => ({
+            target: packageName,
+            packages: [],
+            unread: [packageName],
+            warnings: [],
+          }),
+        }),
+      );
+
+      expect({ error, warnings }).toMatchObject({
+        error: {
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({ command: 'pnpm add @prisma/orm-mongo dotenv mongodb' }),
+          ]),
+        },
+        warnings: [
+          'init could not read the peer dependencies of @prisma/orm-mongo from the registry, so the install command below leaves out the @prisma/orm-* packages it names as peers. Add each of them too, at the version of @prisma/orm-mongo: after installing it, its package.json lists them under peerDependencies.',
+        ],
       });
     });
 
