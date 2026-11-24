@@ -14,11 +14,16 @@ export function printUpdateMessage(checkResult: Check.Result | 0 | void): void {
   const latestVersionAvailable = checkResult.data.current_version
   const updateLine = `${blue('Update available')} ${currentVersionInstalled} -> ${latestVersionAvailable}`
 
-  const isMajorUpdate = Number(currentVersionInstalled.split('.')[0]) < Number(latestVersionAvailable.split('.')[0])
+  const majorInstalled = Number(currentVersionInstalled.split('.')[0])
+  const majorAvailable = Number(latestVersionAvailable.split('.')[0])
+  const isMajorUpdate = majorInstalled < majorAvailable
 
   let boxText: string
   if (isMajorUpdate) {
-    boxText = `\n${updateLine}\n\nThis is a major update - please follow the guide at\nhttps://pris.ly/d/major-version-upgrade`
+    // Every major version has its own upgrade guide, so the link names the major being upgraded to.
+    // A single link for all majors can only point at one guide, and goes stale with the next major.
+    const upgradeGuideUrl = `https://www.prisma.io/docs/guides/upgrade-prisma-orm/v${majorAvailable}`
+    boxText = `\n${updateLine}\n\nThis is a major update - please follow the guide at\n${upgradeGuideUrl}`
   } else {
     const prismaCLICommand = makeInstallCommand(checkResult.data.package, checkResult.data.release_tag)
     const prismaClientCommand = makeInstallCommand('@prisma/client', checkResult.data.release_tag, {

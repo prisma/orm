@@ -1,12 +1,12 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`update available message update available dev tag - major 1`] = `
-"┌─────────────────────────────────────────────────────────┐
-│  Update available 2.6.1-dev.18 -> 3.0.1-dev.8           │
-│                                                         │
-│  This is a major update - please follow the guide at    │
-│  https://pris.ly/d/major-version-upgrade                │
-└─────────────────────────────────────────────────────────┘"
+"┌───────────────────────────────────────────────────────────┐
+│  Update available 2.6.1-dev.18 -> 3.0.1-dev.8             │
+│                                                           │
+│  This is a major update - please follow the guide at      │
+│  https://www.prisma.io/docs/guides/upgrade-prisma-orm/v3  │
+└───────────────────────────────────────────────────────────┘"
 `;
 
 exports[`update available message update available dev tag - minor 1`] = `
@@ -19,21 +19,21 @@ exports[`update available message update available dev tag - minor 1`] = `
 `;
 
 exports[`update available message update available latest tag - major 1`] = `
-"┌─────────────────────────────────────────────────────────┐
-│  Update available 2.6.1 -> 3.0.0                        │
-│                                                         │
-│  This is a major update - please follow the guide at    │
-│  https://pris.ly/d/major-version-upgrade                │
-└─────────────────────────────────────────────────────────┘"
+"┌───────────────────────────────────────────────────────────┐
+│  Update available 2.6.1 -> 3.0.0                          │
+│                                                           │
+│  This is a major update - please follow the guide at      │
+│  https://www.prisma.io/docs/guides/upgrade-prisma-orm/v3  │
+└───────────────────────────────────────────────────────────┘"
 `;
 
 exports[`update available message update available latest tag - major pre-release 1`] = `
-"┌─────────────────────────────────────────────────────────┐
-│  Update available 7.10.1 -> 8.0.0-rc.34                 │
-│                                                         │
-│  This is a major update - please follow the guide at    │
-│  https://pris.ly/d/major-version-upgrade                │
-└─────────────────────────────────────────────────────────┘"
+"┌───────────────────────────────────────────────────────────┐
+│  Update available 7.10.1 -> 8.0.0-rc.34                   │
+│                                                           │
+│  This is a major update - please follow the guide at      │
+│  https://www.prisma.io/docs/guides/upgrade-prisma-orm/v8  │
+└───────────────────────────────────────────────────────────┘"
 `;
 
 exports[`update available message update available latest tag - minor 1`] = `
