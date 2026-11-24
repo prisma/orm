@@ -31,8 +31,8 @@ import {
 import { chooseAction } from '../utils/next-actions';
 import { ENGINE_PACKAGE, installProjectDependencies } from './init-packages';
 import {
+  exactVersionOf,
   installedManifests,
-  isExactVersion,
   type RequiredPeer,
   type RequiredPeers,
   requiredPeerSpecifier,
@@ -298,18 +298,19 @@ function refuseRequiredPeersAtAnotherVersion(
   const declared = declaredPackages(ctx.cwd);
   const wrong = peers.flatMap((peer) => {
     const found = installedVersion(peer.name);
-    return found === undefined || !isExactVersion(peer.version) || found === peer.version
+    const required = exactVersionOf(peer.version);
+    return found === undefined || required === undefined || exactVersionOf(found) === required
       ? []
-      : [{ peer, found }];
+      : [{ peer, found, required }];
   });
   if (wrong.length === 0) return;
   const toAdd = wrong.filter(({ peer }) => peer.outcome === 'to-install').map(({ peer }) => peer);
   throw errorInitRequiredPeersAtAnotherVersion({
     packageName,
-    packages: wrong.map(({ peer, found }) => ({
+    packages: wrong.map(({ peer, found, required }) => ({
       name: peer.name,
       found,
-      required: peer.version,
+      required,
       listed: peer.outcome === 'left-at-another-version' ? declared.get(peer.name) : undefined,
     })),
     installCommand:

@@ -236,12 +236,12 @@ export async function resolveRequiredPeers(ctx: {
   const readWanted = async (name: string) => {
     const wantedAt = wanted.get(name);
     const manifest = await ctx.read(name, wantedAt?.range);
-    const exact = wantedAt === undefined ? null : EXACT_VERSION_LINE.exec(wantedAt.range.trim());
+    const exact = wantedAt === undefined ? undefined : exactVersionOf(wantedAt.range);
     if (
       wantedAt !== undefined &&
       manifest?.version !== undefined &&
-      exact !== null &&
-      manifest.version !== exact[1]
+      exact !== undefined &&
+      exactVersionOf(manifest.version) !== exact
     ) {
       atAnotherVersion.set(name, { installed: manifest.version, ...wantedAt });
       return { name, manifest: undefined };
@@ -308,7 +308,8 @@ export async function resolveRequiredPeers(ctx: {
     level = await Promise.all(reread.map(readWanted));
   }
 
-  for (const [name, { installed: installedAt, range, by }] of atAnotherVersion) {
+  for (const [name, { installed: installedAt, range: asked, by }] of atAnotherVersion) {
+    const range = exactVersionOf(asked) ?? asked;
     unread = unread.filter((unreadName) => unreadName !== name);
     warnings.push(
       `${name} is installed at ${installedAt}, but ${by} needs ${range}, so init could not work out the packages ${name} needs as required peers. Once ${name}@${range} is installed, add each package its package.json lists under peerDependencies, at the range listed there.`,
@@ -327,9 +328,13 @@ export async function resolveRequiredPeers(ctx: {
   };
 }
 
-/** Whether a required peer's version is one exact version, not a range. */
-export function isExactVersion(spec: string): boolean {
-  return EXACT_VERSION_LINE.test(spec.trim());
+/**
+ * The version a spec names when it is one exact version, in one form (`v8.0.0` and `=8.0.0` read
+ * as `8.0.0`), so a required version, a `package.json` line and an installed version compare as
+ * equal when they name the same version; `undefined` for a range or any other spec.
+ */
+export function exactVersionOf(spec: string): string | undefined {
+  return EXACT_VERSION_LINE.exec(spec.trim())?.[1];
 }
 
 const EXACT_VERSION_LINE = /^[v=]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/;
@@ -343,9 +348,10 @@ const EXACT_VERSION_LINE = /^[v=]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Z
  * next one after an update, so it must not be judged by its text.
  */
 function lineStandsFor(line: string, version: string, installed: string | undefined): boolean {
-  const exact = EXACT_VERSION_LINE.exec(line.trim());
-  if (exact !== null) return exact[1] === version;
-  return installed === undefined || installed === version;
+  const exact = exactVersionOf(line);
+  const required = exactVersionOf(version) ?? version;
+  if (exact !== undefined) return exact === required;
+  return installed === undefined || (exactVersionOf(installed) ?? installed) === required;
 }
 
 function isPrismaOrmPackage(name: string): boolean {
