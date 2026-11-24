@@ -30,6 +30,7 @@ import {
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableKeyReason } from './migration-factories';
+import { collectionControlPolicy } from './mongo-control-policy';
 import { modelCoordinates, sameModel } from './mongo-model-coordinates';
 import { fieldRenamesConflict } from './mongo-rename-conflicts';
 import {
@@ -38,7 +39,7 @@ import {
   rewriteRefusals,
 } from './mongo-rewrite-refusals';
 import { collectionControlOf, modelAt } from './mongo-statement-planning';
-import { collectionControlPolicy, renameRefused } from './mongo-storage-renames';
+import { renameRefused } from './mongo-storage-renames';
 import {
   type StoredPlace,
   type StoredType,
@@ -442,7 +443,7 @@ export function planStoredKeyRewrites(
                 statement: change.statement?.entity === 'field' ? change.statement : undefined,
               },
               collection,
-              place: { kind: 'embedded', model: subject.model },
+              nameKind: { kind: 'embedded', model: subject.model },
               from: change.from,
               to,
             },

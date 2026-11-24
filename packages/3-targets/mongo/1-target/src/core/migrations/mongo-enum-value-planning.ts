@@ -32,11 +32,12 @@ import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { type StoredValue, unrewritableKeyReason } from './migration-factories';
+import { collectionControlPolicy } from './mongo-control-policy';
 import { modelCoordinates } from './mongo-model-coordinates';
 import { joinedList } from './mongo-plan-text';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
-import { collectionControlPolicy, renameRefused } from './mongo-storage-renames';
+import { renameRefused } from './mongo-storage-renames';
 import { rewriteCollectionOf } from './mongo-stored-key-planning';
 import {
   type StoredPlace,

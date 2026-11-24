@@ -22,6 +22,7 @@ import {
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { collectionControlPolicy } from './mongo-control-policy';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
 import { modelCoordinates, sameModel } from './mongo-model-coordinates';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
@@ -31,12 +32,7 @@ import {
   TIME_SERIES_UPDATES,
 } from './mongo-rewrite-refusals';
 import { destinationModelOf, modelAt } from './mongo-statement-planning';
-import {
-  collectionControlPolicy,
-  type FieldRename,
-  type ModelRename,
-  renameRefused,
-} from './mongo-storage-renames';
+import { type FieldRename, type ModelRename, renameRefused } from './mongo-storage-renames';
 import { DeleteDocumentsCall, ReplaceStoredValueCall } from './op-factory-call';
 
 type VariantStatement = ResolvedModelRenameStatement | ResolvedVariantConvertStatement;

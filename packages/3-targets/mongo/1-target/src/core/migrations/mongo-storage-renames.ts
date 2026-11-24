@@ -1,4 +1,4 @@
-import type { ContractWithDomain, ControlPolicy } from '@internal/contract/types';
+import type { ContractWithDomain } from '@internal/contract/types';
 import {
   type FieldCoordinate,
   type MigrationPlannerConflict,
@@ -9,13 +9,8 @@ import {
   type ResolvedModelRenameStatement,
   type ResolvedRenameStatement,
 } from '@internal/framework-components/control';
-import {
-  collectionControlPoliciesOf,
-  collectionControlPolicyOf,
-  collectionOfModel,
-  embeddingModelOf,
-  mongoModelsOf,
-} from '@internal/mongo-contract';
+import { collectionOfModel, embeddingModelOf, mongoModelsOf } from '@internal/mongo-contract';
+import { managedOnBothSides } from './mongo-control-policy';
 import { modelCoordinates, sameModel } from './mongo-model-coordinates';
 import { handWrittenMigrationSteps, modelsText } from './mongo-plan-text';
 
@@ -103,26 +98,6 @@ export function modelRenamesOf(
       : [],
   );
   return [...stated, ...kept];
-}
-
-/** The control policy of `collection` as `contract` declares it. */
-export function collectionControlPolicy(
-  contract: ContractWithDomain,
-  collection: string,
-): ControlPolicy {
-  return collectionControlPolicyOf(collection, collectionControlPoliciesOf(contract));
-}
-
-/** Whether the control policy is `managed` for collection `from` in the origin contract and collection `to` in the destination contract, as a rename between them needs. */
-export function managedOnBothSides(
-  fromContract: ContractWithDomain,
-  contract: ContractWithDomain,
-  change: { readonly from: string; readonly to: string },
-): boolean {
-  return (
-    collectionControlPolicy(fromContract, change.from) === 'managed' &&
-    collectionControlPolicy(contract, change.to) === 'managed'
-  );
 }
 
 /** The collections the model renames move, each with the renames that move it, in the order of the renames. */

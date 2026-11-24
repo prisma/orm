@@ -26,7 +26,7 @@ import {
 } from './mongo-storage-renames';
 
 /** Where a renamed name is stored: a field of a collection's documents, or a key of an embedded model's objects. */
-export type StoredPlace =
+export type RenamedNameKind =
   | { readonly kind: 'document' }
   | { readonly kind: 'embedded'; readonly model: string };
 
@@ -34,26 +34,26 @@ export type StoredPlace =
 export interface FieldChange {
   readonly rename: FieldRename;
   readonly collection: string;
-  readonly place: StoredPlace;
+  readonly nameKind: RenamedNameKind;
   readonly from: string;
   readonly to: string;
 }
 
 /** The noun a route gives the names it moves through at `place`. */
-function routeNoun(place: StoredPlace): 'field name' | 'key' {
+function routeNoun(place: RenamedNameKind): 'field name' | 'key' {
   return place.kind === 'document' ? 'field name' : 'key';
 }
 
 /** The noun for a name stored at `place`, as labels and routes use it. */
-function nounOf(place: StoredPlace): 'field' | 'key' {
+function nounOf(place: RenamedNameKind): 'field' | 'key' {
   return place.kind === 'document' ? 'field' : 'key';
 }
 
 /** Where the name is stored, in words, after the names: in a collection's documents, or of an embedded model. */
 function whereText(change: FieldChange): string {
-  return change.place.kind === 'document'
+  return change.nameKind.kind === 'document'
     ? `in collection "${change.collection}"`
-    : `of embedded model "${change.place.model}"`;
+    : `of embedded model "${change.nameKind.model}"`;
 }
 
 const ORDER =
@@ -72,7 +72,7 @@ function fieldsText(fields: readonly FieldCoordinate[]): string {
 export function fieldChangeText(change: FieldChange): string {
   return change.rename.statement === undefined
     ? `the stored name of field "${fieldDisplayName(change.rename.from)}" changes from "${change.from}" to "${change.to}"`
-    : `field "${fieldDisplayName(change.rename.from)}" is renamed to "${fieldDisplayName(change.rename.to)}", which renames ${nounOf(change.place)} "${change.from}" to "${change.to}" ${whereText(change)}`;
+    : `field "${fieldDisplayName(change.rename.from)}" is renamed to "${fieldDisplayName(change.rename.to)}", which renames ${nounOf(change.nameKind)} "${change.from}" to "${change.to}" ${whereText(change)}`;
 }
 
 /** A name for `name` to move through that is not in `used`. */
@@ -505,7 +505,7 @@ function fieldRoute(
     return { objects: fieldsText([moving.rename.to]), through, to: moving.to };
   });
   return temporaryNamesRoute(
-    routeNoun(pair[0].place),
+    routeNoun(pair[0].nameKind),
     moves,
     linked.some((change) => change.rename.statement !== undefined),
   );
@@ -521,12 +521,12 @@ function fieldRenameConflict(
   changes: readonly FieldChange[],
   contracts: Contracts,
 ): MigrationPlannerConflict | undefined {
-  const noun = nounOf(change.place);
+  const noun = nounOf(change.nameKind);
   const label = `Cannot rename ${noun} "${change.from}" to "${change.to}" ${whereText(change)}`;
   const holding =
-    change.place.kind === 'document'
+    change.nameKind.kind === 'document'
       ? 'the documents'
-      : `the objects of embedded model "${change.place.model}"`;
+      : `the objects of embedded model "${change.nameKind.model}"`;
   const text = capitalized(fieldChangeText(change));
   const moving = fieldsText([change.rename.from]);
   const misread = (stored: string) => `values of ${noun} "${stored}" as values of ${moving}`;
@@ -556,7 +556,7 @@ function fieldRenameConflict(
     return renameRefused(
       undefined,
       `${label}: ${holding} already hold ${noun} "${change.to}"`,
-      `${text}, and ${holding} already hold ${noun} "${change.to}", the stored name of ${holdersText(holders)}. Without the rename the plan would read the ${misread(change.to)}. Make the change in two plans: first ${freeHeldName(holders, routeNoun(change.place), change.to, unused(used, change.to))}, and plan and apply that; then make this change and plan again.${holders.every((holder) => holder.kind === 'relation') ? ` Or keep the stored name "${change.from}" of ${moving} in the contract.` : ''}`,
+      `${text}, and ${holding} already hold ${noun} "${change.to}", the stored name of ${holdersText(holders)}. Without the rename the plan would read the ${misread(change.to)}. Make the change in two plans: first ${freeHeldName(holders, routeNoun(change.nameKind), change.to, unused(used, change.to))}, and plan and apply that; then make this change and plan again.${holders.every((holder) => holder.kind === 'relation') ? ` Or keep the stored name "${change.from}" of ${moving} in the contract.` : ''}`,
     );
   }
   const takes = others.find(

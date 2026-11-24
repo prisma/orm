@@ -22,6 +22,7 @@ import {
   documentsNotOfType,
   unrewritableFieldNameReason,
 } from './migration-factories';
+import { collectionControlPolicy } from './mongo-control-policy';
 import type { PlannedRewrite } from './mongo-rewrite-refusals';
 import {
   embeddedModelReason,
@@ -31,7 +32,6 @@ import {
   originFieldOf,
   originModelOf,
 } from './mongo-statement-planning';
-import { collectionControlPolicy } from './mongo-storage-renames';
 
 import type { TypeChange } from './mongo-type-changes';
 import { DataTransformCall } from './op-factory-call';

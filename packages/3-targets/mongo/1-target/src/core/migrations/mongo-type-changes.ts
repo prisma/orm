@@ -21,6 +21,7 @@ import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { castsFrom, isConvertTarget } from './bson-convert';
 import { type CastFieldOptions, unrewritableFieldNameReason } from './migration-factories';
+import { collectionControlPolicy } from './mongo-control-policy';
 import { modelCoordinates } from './mongo-model-coordinates';
 import {
   destinationFieldOf,
@@ -29,7 +30,6 @@ import {
   type FieldRemovalInput,
   modelAt,
 } from './mongo-statement-planning';
-import { collectionControlPolicy } from './mongo-storage-renames';
 
 import { CastFieldCall } from './op-factory-call';
 

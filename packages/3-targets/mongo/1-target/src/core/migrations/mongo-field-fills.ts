@@ -25,6 +25,7 @@ import {
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
+import { collectionControlPolicy } from './mongo-control-policy';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
 import { modelCoordinates } from './mongo-model-coordinates';
 import {
@@ -35,7 +36,6 @@ import {
   originModelOf,
   storedFieldsKeptOf,
 } from './mongo-statement-planning';
-import { collectionControlPolicy } from './mongo-storage-renames';
 
 import { FillFieldCall } from './op-factory-call';
 

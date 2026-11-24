@@ -43,6 +43,7 @@ import { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir'
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
+import { collectionControlPolicy, managedOnBothSides } from './mongo-control-policy';
 import { modelCoordinates, sameModel } from './mongo-model-coordinates';
 import { capitalized, handWrittenMigrationSteps, modelsText } from './mongo-plan-text';
 import {
@@ -66,10 +67,8 @@ import {
   type CollectionChange,
   CollectionRenames,
   collectionChangeText,
-  collectionControlPolicy,
   type FieldRename,
   type ModelRename,
-  managedOnBothSides,
   modelRenamesOf,
   renameRefused,
 } from './mongo-storage-renames';
@@ -420,7 +419,7 @@ function fieldChangeOf(rename: FieldRename, { call }: FieldRenameCall): FieldCha
     collection: call.collection,
     from: call.from,
     to: call.to,
-    place: { kind: 'document' },
+    nameKind: { kind: 'document' },
   };
 }
 
@@ -828,7 +827,7 @@ function planFieldRename(
           fieldChangeText({
             rename,
             collection,
-            place: { kind: 'document' },
+            nameKind: { kind: 'document' },
             from: fromStored,
             to: toStored,
           }),
