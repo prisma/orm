@@ -14,7 +14,7 @@ Each project is sized for one to four pull requests. Its design is written when 
 
 New work joins a project only when it serves that project's purpose. Work that serves the goal and fits no project becomes a new project.
 
-Projects 1 to 6 are Must for GA, 7, 9 and 12 are Aim, and 8, 10 and 11 are Later. This is proposed and not yet confirmed. Project 1 comes first, and project 4 before project 3.
+Projects 1 to 6 are Must for GA, 7, 9 and 12 are Aim, and 8, 10 and 11 are Later. Will confirmed this on 2026-11-24; it is updated as we go. Project 1 comes first, and project 4 before project 3.
 
 "Task N" is the number a piece of work had before 2026-11-24. The reports under [research/](research/) use those numbers. The facts about the code were read on 2026-11-23 and are rechecked when a project starts.
 
