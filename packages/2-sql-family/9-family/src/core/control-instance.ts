@@ -1,3 +1,4 @@
+import { carriesFormatVersion } from '@internal/contract/format-version';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import {
   type AuthoringEntityTypeNamespace,
@@ -401,14 +402,6 @@ function buildTransitiveDependsOnMap(
  * Throws with a diagnostic naming the violating extension (source), the
  * target space, and the direction violation.
  */
-function isStoredContractDocument(value: unknown): boolean {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    ('formatVersion' in value || 'schemaVersion' in value)
-  );
-}
-
 function isObjectRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
@@ -651,7 +644,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
   /** A contract the caller already deserialized is validated again from what it prints; a stored document is read as one. */
   const loadContractOrDocument = (contractOrJson: unknown): Contract<SqlStorage> =>
     loadContract(
-      isStoredContractDocument(contractOrJson)
+      carriesFormatVersion(contractOrJson)
         ? contractOrJson
         : contractSerializer.serializeContract(
             blindCast<

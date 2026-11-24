@@ -1,5 +1,9 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
-import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
+import {
+  CONTRACT_FORMAT_VERSIONS,
+  carriesFormatVersion,
+  readFormatVersion,
+} from '@internal/contract/format-version';
 import {
   type Contract,
   ContractExecutionSectionSchema,
@@ -1146,7 +1150,7 @@ export function validateSqlContractFully<T extends Contract<SqlStorage>>(
   const stripped =
     typeof value === 'object' && value !== null
       ? (() => {
-          if ('formatVersion' in value || 'schemaVersion' in value) {
+          if (carriesFormatVersion(value)) {
             readFormatVersion(value, { kind: 'contract', knownVersions: CONTRACT_FORMAT_VERSIONS });
           }
           const {

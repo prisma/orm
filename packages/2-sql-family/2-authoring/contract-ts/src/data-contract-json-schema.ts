@@ -95,8 +95,6 @@ export function generateDataContractJsonSchema(): JsonSchemaObject {
     enum: [1],
     description: "The version of the contract file's format",
   };
-  const required = contract['required'];
-  contract['required'] = [...(Array.isArray(required) ? required : []), 'formatVersion'].sort();
   properties['_generated'] = {
     type: 'object',
     description: 'Non-semantic generation metadata (ignored by validation)',

@@ -55,7 +55,7 @@ describe('contractFromJson', () => {
   });
 
   it('throws the structured validation error for invalid JSON', () => {
-    expect(() => contractFromJson({ target: 'mongo' })).toThrow(
+    expect(() => contractFromJson({ formatVersion: 1, target: 'mongo' })).toThrow(
       expect.objectContaining({ code: 'CONTRACT.VALIDATION_FAILED' }),
     );
   });

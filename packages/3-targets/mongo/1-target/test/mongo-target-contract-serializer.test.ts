@@ -15,6 +15,11 @@ import { describe, expect, it } from 'vitest';
 import { MongoTargetContractSerializer } from '../src/core/mongo-target-contract-serializer';
 import { MongoTargetUnboundDatabase } from '../src/core/mongo-target-database';
 
+/** A contract as a stored `contract.json` holds it: with its format version. */
+function storedContract(contract: unknown): unknown {
+  return { formatVersion: 1, ...(contract as Record<string, unknown>) };
+}
+
 function makeSingletonUnboundContractJson() {
   return {
     targetFamily: 'mongo' as const,
@@ -77,7 +82,7 @@ function makeValidContractJson() {
 describe('MongoTargetContractSerializer', () => {
   it('deserializes a valid contract into the MongoTarget class hierarchy', () => {
     const serializer = new MongoTargetContractSerializer();
-    const contract = serializer.deserializeContract(makeValidContractJson());
+    const contract = serializer.deserializeContract(storedContract(makeValidContractJson()));
 
     expect(contract.targetFamily).toBe('mongo');
     expect(contract.storage).toBeInstanceOf(MongoStorage);
@@ -85,14 +90,16 @@ describe('MongoTargetContractSerializer', () => {
 
   it('default storage carries the __unbound__ singleton namespace', () => {
     const serializer = new MongoTargetContractSerializer();
-    const contract = serializer.deserializeContract(makeSingletonUnboundContractJson());
+    const contract = serializer.deserializeContract(
+      storedContract(makeSingletonUnboundContractJson()),
+    );
 
     expect(contract.storage.namespaces['__unbound__']).toBe(MongoTargetUnboundDatabase.instance);
   });
 
   it('hydrates collections into MongoCollection IR-class instances', () => {
     const serializer = new MongoTargetContractSerializer();
-    const contract = serializer.deserializeContract(makeValidContractJson());
+    const contract = serializer.deserializeContract(storedContract(makeValidContractJson()));
 
     const ns = contract.storage.namespaces[UNBOUND_NAMESPACE_ID];
     expect(ns).toBeDefined();
@@ -104,7 +111,7 @@ describe('MongoTargetContractSerializer', () => {
   it('rejects an invalid contract (family-shared structural validation runs)', () => {
     const serializer = new MongoTargetContractSerializer();
     const bad = { ...makeValidContractJson(), targetFamily: 'sql' };
-    expect(() => serializer.deserializeContract(bad)).toThrow();
+    expect(() => serializer.deserializeContract(storedContract(bad))).toThrow();
   });
 
   it('fails closed at hydration: an unregistered entries kind throws naming the kind', () => {
@@ -114,12 +121,12 @@ describe('MongoTargetContractSerializer', () => {
       entries: Record<string, unknown>;
     };
     ns.entries['bogus'] = { Foo: {} };
-    expect(() => serializer.deserializeContract(json)).toThrow(/bogus/);
+    expect(() => serializer.deserializeContract(storedContract(json))).toThrow(/bogus/);
   });
 
   it('serializeContract emits canonical nested namespaces on disk', () => {
     const serializer = new MongoTargetContractSerializer();
-    const contract = serializer.deserializeContract(makeValidContractJson());
+    const contract = serializer.deserializeContract(storedContract(makeValidContractJson()));
     const json = serializer.serializeContract(contract) as {
       storage: Record<string, unknown>;
     };
@@ -198,7 +205,7 @@ describe('MongoTargetContractSerializer', () => {
 
     it('deserialised collection carries instanceof for each IR class kind', () => {
       const serializer = new MongoTargetContractSerializer();
-      const contract = serializer.deserializeContract(makeFullyPopulatedJson());
+      const contract = serializer.deserializeContract(storedContract(makeFullyPopulatedJson()));
 
       const ns = contract.storage.namespaces[UNBOUND_NAMESPACE_ID];
       expect(ns).toBeDefined();
@@ -267,7 +274,7 @@ describe('MongoTargetContractSerializer', () => {
 
     it('preserves effective control per collection across serialize → deserialize', () => {
       const serializer = new MongoTargetContractSerializer();
-      const contract = serializer.deserializeContract(makeMixedControlJson());
+      const contract = serializer.deserializeContract(storedContract(makeMixedControlJson()));
       const reparsed = JSON.parse(JSON.stringify(serializer.serializeContract(contract)));
 
       expect(reparsed.defaultControlPolicy).toBe('tolerated');
@@ -282,7 +289,7 @@ describe('MongoTargetContractSerializer', () => {
     it('serialise(deserialise(json)) produces canonically equivalent JSON', () => {
       const json = makeFullyPopulatedJson();
       const serializer = new MongoTargetContractSerializer();
-      const contract = serializer.deserializeContract(json);
+      const contract = serializer.deserializeContract(storedContract(json));
       const out = serializer.serializeContract(contract);
 
       const reparsed = JSON.parse(JSON.stringify(out));
@@ -293,7 +300,7 @@ describe('MongoTargetContractSerializer', () => {
       expect(items.options.kind).toBe('mongo-collection-options');
       expect(items.options.collation.kind).toBe('mongo-collation-options');
 
-      const roundtripped = serializer.deserializeContract(reparsed);
+      const roundtripped = serializer.deserializeContract(storedContract(reparsed));
       const roundtrippedNs = roundtripped.storage.namespaces[UNBOUND_NAMESPACE_ID];
       expect(roundtrippedNs).toBeDefined();
       expect(roundtrippedNs!.entries.collection?.['items']).toBeInstanceOf(MongoCollection);
@@ -314,7 +321,7 @@ describe('MongoTargetContractSerializer', () => {
 
     it('hydrates entries.valueSet into MongoValueSet IR instances (deserialize)', () => {
       const serializer = new MongoTargetContractSerializer();
-      const contract = serializer.deserializeContract(makeValueSetContractJson());
+      const contract = serializer.deserializeContract(storedContract(makeValueSetContractJson()));
       const ns = contract.storage.namespaces[UNBOUND_NAMESPACE_ID];
       const roleVs = ns!.entries.valueSet?.['Role'];
       expect(roleVs).toBeInstanceOf(MongoValueSet);
@@ -323,7 +330,7 @@ describe('MongoTargetContractSerializer', () => {
 
     it('serializes entries.valueSet back to JSON with values intact (serialize)', () => {
       const serializer = new MongoTargetContractSerializer();
-      const contract = serializer.deserializeContract(makeValueSetContractJson());
+      const contract = serializer.deserializeContract(storedContract(makeValueSetContractJson()));
       const out = JSON.parse(JSON.stringify(serializer.serializeContract(contract)));
       const entries = out.storage.namespaces[UNBOUND_NAMESPACE_ID].entries;
       expect(entries.valueSet).toEqual({
@@ -333,9 +340,9 @@ describe('MongoTargetContractSerializer', () => {
 
     it('survives a full serialize → deserialize cycle with the value set intact (both directions)', () => {
       const serializer = new MongoTargetContractSerializer();
-      const contract = serializer.deserializeContract(makeValueSetContractJson());
+      const contract = serializer.deserializeContract(storedContract(makeValueSetContractJson()));
       const reparsed = JSON.parse(JSON.stringify(serializer.serializeContract(contract)));
-      const roundtripped = serializer.deserializeContract(reparsed);
+      const roundtripped = serializer.deserializeContract(storedContract(reparsed));
       const ns = roundtripped.storage.namespaces[UNBOUND_NAMESPACE_ID];
       const roleVs = ns!.entries.valueSet?.['Role'];
       expect(roleVs).toBeInstanceOf(MongoValueSet);
@@ -361,7 +368,9 @@ describe('MongoTargetContractSerializer', () => {
 
     it('hydrates entries.valueObject and serializes it back unchanged', () => {
       const serializer = new MongoTargetContractSerializer();
-      const contract = serializer.deserializeContract(makeValueObjectContractJson());
+      const contract = serializer.deserializeContract(
+        storedContract(makeValueObjectContractJson()),
+      );
       const out = JSON.parse(JSON.stringify(serializer.serializeContract(contract)));
       expect({
         hydrated:
