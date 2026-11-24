@@ -3,6 +3,7 @@ import type {
   FamilyPackRef,
   TargetPackRef,
 } from '@internal/framework-components/components';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type {
   EntityHandleLoweringInput,
   LoweredPackEntity,
@@ -193,5 +194,29 @@ describe('generic entities handle channel', () => {
         entities: collidingHandles,
       }),
     ).toThrow(/two different "gadget" entities named "g" in namespace "public"/);
+  });
+
+  it('leaves the namespace out of a name collision on a target without namespaces', () => {
+    const { pack } = makeGadgetPack();
+    const collidingHandles = [
+      { entityKind: 'gadget', key: 'g', entity: { id: 1 } },
+      { entityKind: 'gadget', key: 'g', entity: { id: 2 } },
+    ];
+    expect(() =>
+      defineContract({
+        ...testTypeLookups,
+        family: sqlFamilyPack,
+        target: { ...targetPack, defaultNamespaceId: UNBOUND_NAMESPACE_ID },
+        createNamespace: createTestSqlNamespace,
+        extensions: { gadgetDemo: pack },
+        entities: collidingHandles,
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          'defineContract: two different "gadget" entities named "g" — pack-entity names must be unique per namespace.',
+        meta: { kind: 'gadget', name: 'g', namespaceId: UNBOUND_NAMESPACE_ID },
+      }),
+    );
   });
 });

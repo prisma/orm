@@ -1,5 +1,5 @@
-import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { contractError } from './contract-errors';
+import { inNamespace } from './namespace-id';
 
 /** What a name names, and where: the kind of entry it keys, with what the place it was declared tells. */
 export type NameSite =
@@ -27,12 +27,6 @@ export type NameSite =
 export type NamedEntriesSite =
   | { readonly kind: 'field' | 'relation'; readonly modelName: string | undefined }
   | { readonly kind: 'model' | 'enum' | 'databaseType' | 'extensionPack' };
-
-function inNamespace(namespaceId: string | undefined): string {
-  return namespaceId === undefined || namespaceId === UNBOUND_NAMESPACE_ID
-    ? ''
-    : ` in namespace "${namespaceId}"`;
-}
 
 /** How an error message names what the name names, such as `A table in namespace "public"`. */
 function nameSiteSubject(site: NameSite): string {

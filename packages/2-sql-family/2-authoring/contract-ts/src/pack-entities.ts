@@ -16,6 +16,7 @@ import {
   readNamedEntry,
   writeNamedEntry,
 } from './named-entries';
+import { inNamespace } from './namespace-id';
 
 export type CollectedColumnEntities = Record<string, Record<string, Record<string, unknown>>>;
 
@@ -50,7 +51,7 @@ export function collectEntityFromColumn(
   if (existing !== undefined && existing !== entityRef.entity) {
     throw contractError(
       'CONTRACT.NAME_DUPLICATE',
-      `buildSqlContractFromDefinition: two different "${entityRef.entityKind}" entities named "${entityRef.entityName}" in namespace "${namespaceId}" — pack-entity names must be unique per namespace.`,
+      `buildSqlContractFromDefinition: two different "${entityRef.entityKind}" entities named "${entityRef.entityName}"${inNamespace(namespaceId)} — pack-entity names must be unique per namespace.`,
       { meta: { kind: entityRef.entityKind, name: entityRef.entityName, namespaceId } },
     );
   }
@@ -93,7 +94,7 @@ export function mergeColumnAndAttachedEntities(
       if (existing !== undefined && existing !== entity) {
         throw contractError(
           'CONTRACT.NAME_DUPLICATE',
-          `buildSqlContractFromDefinition: two different "${kind}" entities named "${name}" in namespace "${namespaceId}" — a column-referenced entity conflicts with an attached one; pack-entity names must be unique per namespace.`,
+          `buildSqlContractFromDefinition: two different "${kind}" entities named "${name}"${inNamespace(namespaceId)} — a column-referenced entity conflicts with an attached one; pack-entity names must be unique per namespace.`,
           { meta: { kind, name, namespaceId } },
         );
       }
@@ -121,7 +122,7 @@ export function assertNoManagedEntityKinds(
     if (MANAGED_ENTRY_KINDS.has(kind)) {
       throw contractError(
         'CONTRACT.ENTITY_KIND_INVALID',
-        `buildSqlContractFromDefinition: attached entity in namespace "${namespaceId}" declares entry kind "${kind}", which is managed by the framework (table/valueSet) and cannot be attached.`,
+        `buildSqlContractFromDefinition: attached entity${inNamespace(namespaceId)} declares entry kind "${kind}", which is managed by the framework (table/valueSet) and cannot be attached.`,
         { meta: { entityKind: kind, namespaceId } },
       );
     }
@@ -208,7 +209,7 @@ export function mergeNamespaceValueSets(
       if (Object.hasOwn(enumValueSets, name)) {
         throw contractError(
           'CONTRACT.NAME_DUPLICATE',
-          `buildSqlContractFromDefinition: value-set "${name}" in namespace "${namespaceId}" is derived from both an enum and a pack entity — names must be unique per namespace.`,
+          `buildSqlContractFromDefinition: value-set "${name}"${inNamespace(namespaceId)} is derived from both an enum and a pack entity — names must be unique per namespace.`,
           { meta: { kind: 'valueSet', name, namespaceId } },
         );
       }
