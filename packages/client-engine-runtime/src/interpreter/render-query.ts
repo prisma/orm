@@ -225,7 +225,11 @@ function* pairFragmentsWithParams<Types>(
         }
 
         const value = params[index]
-        yield { ...fragment, value: Array.isArray(value) ? value : [value], argType: argTypes?.[index] }
+        // The query compiler only emits `parameterTuple` fragments as the right-hand
+        // side of IN/NOT IN membership tests, where duplicates never change the result,
+        // so the values are deduplicated to shrink the placeholder list (#29478).
+        const uniqueValues = Array.isArray(value) ? [...new Set(value)] : [value]
+        yield { ...fragment, value: uniqueValues, argType: argTypes?.[index] }
         index++
         break
       }
