@@ -1,9 +1,4 @@
-import {
-  asNamespaceId,
-  type Contract,
-  type ContractWithDomain,
-  type ControlPolicy,
-} from '@internal/contract/types';
+import type { Contract, ContractWithDomain, ControlPolicy } from '@internal/contract/types';
 import {
   canonicalizeSchemasForVerification,
   contractToMongoSchemaIR,
@@ -50,6 +45,7 @@ import {
 import { documentsNotRewrittenWarnings } from './mongo-documents-not-rewritten';
 import { planEnumValueRewrites } from './mongo-enum-value-planning';
 import { planFieldFills } from './mongo-field-fills';
+import { documentCollectionOf, isRootModel, modelCoordinates } from './mongo-model-coordinates';
 import {
   type DiscriminatorFilter,
   type OrderedRewrite,
@@ -272,24 +268,17 @@ export type PlanCallsResult =
  * root models, which variants stored there belong to, else the variants that store their documents
  * there themselves.
  */
-function modelsStoredIn(
+function modelsADropLoses(
   fromContract: ContractWithDomain,
   collection: string,
 ): readonly ModelCoordinate[] {
-  const storing = Object.entries(fromContract.domain.namespaces).flatMap(
-    ([namespaceId, namespace]) =>
-      Object.entries(namespace.models).flatMap(([model, definition]) => {
-        const coordinate = { namespaceId: asNamespaceId(namespaceId), model };
-        return embeddingModelOf(fromContract.domain, coordinate) === undefined &&
-          collectionOfModel(fromContract.domain, coordinate) === collection
-          ? [{ coordinate, isRoot: definition.base === undefined }]
-          : [];
-      }),
+  const storing = modelCoordinates(fromContract).filter(
+    (model) => documentCollectionOf(fromContract, model) === collection,
   );
-  const roots = storing.filter(({ isRoot }) => isRoot);
-  return (roots.length > 0 ? roots : storing)
-    .map(({ coordinate }) => coordinate)
-    .sort((a, b) => modelDisplayName(a).localeCompare(modelDisplayName(b)));
+  const roots = storing.filter((model) => isRootModel(fromContract, model));
+  return [...(roots.length > 0 ? roots : storing)].sort((a, b) =>
+    modelDisplayName(a).localeCompare(modelDisplayName(b)),
+  );
 }
 
 /**
@@ -322,7 +311,7 @@ function collectionDrops(
   return calls.flatMap((call, operationIndex): readonly MigrationDataLoss[] => {
     if (!(call instanceof DropCollectionCall)) return [];
     const lost = { operationIndex, loss: 'drop', label: call.label } as const;
-    const models = fromContract === null ? [] : modelsStoredIn(fromContract, call.collection);
+    const models = fromContract === null ? [] : modelsADropLoses(fromContract, call.collection);
     if (models.length === 0) {
       return [{ ...lost, subject: { kind: 'storage', name: call.collection } }];
     }

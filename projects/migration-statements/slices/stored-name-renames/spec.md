@@ -52,7 +52,7 @@ Pairing order, per kind:
 
 | Object | Paired by, in this order | Compared | SQL family | MongoDB |
 | --- | --- | --- | --- | --- |
-| Model | a model rename statement; else a namespace rename statement and the same name; else the same coordinate; else, MongoDB variants only, the same storage (the rule of prisma/orm#31061, unchanged) | table, collection | rename table | rename collection |
+| Model | a model rename statement; else a namespace rename statement and the same name; else the same coordinate; else, on MongoDB, the same storage (the rule of prisma/orm#31061, unchanged), for root models and variants, with renames no statement asks for derived only for variants | table, collection | rename table | rename collection |
 | Field of a paired model | a field rename statement; else the same field name | column, document key | rename column | rename field (`$rename`) |
 | Field of an embedded model (MongoDB) | the same field name in the same embedded model | key inside the subdocument | not applicable | rename stored key, in every place the type is stored |
 | Enum member | an enum value rename statement; else the same member name | stored value | replace stored value | replace stored value |

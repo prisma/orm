@@ -263,7 +263,7 @@ function collectionRefusal(
     );
   }
   if (input.schema.collection(change.collection)?.options?.timeseries === undefined) {
-    return sharedCollectionRefusal(change, label, fromContract);
+    return sharedCollectionRefusal(change, label, fromContract, input);
   }
   return refusedChange(
     change,
@@ -282,6 +282,7 @@ function sharedCollectionRefusal(
   change: VariantChange,
   label: string,
   fromContract: ContractWithDomain,
+  input: VariantInput,
 ): MigrationPlannerConflict | undefined {
   const originCollection = collectionOfModel(fromContract.domain, change.model);
   if (originCollection === undefined) return undefined;
@@ -291,6 +292,10 @@ function sharedCollectionRefusal(
     originCollection,
     { field: change.originField, value: change.from },
     undefined,
+  ).filter(
+    (name) =>
+      destinationOf({ namespaceId: change.model.namespaceId, model: name }, fromContract, input) !==
+      undefined,
   );
   if (others.length === 0) return undefined;
   const named = others.map(quoted).join(', ');
