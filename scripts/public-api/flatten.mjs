@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { ApiItemKind, ApiPackage } from '@microsoft/api-extractor-model';
 import ts from 'typescript';
+import { normalizeTypes, TypeTextError } from './normalize-type.mjs';
 
 export class ApiListError extends Error {}
 
@@ -75,13 +76,25 @@ function excerptText(item, nameOf, ownName) {
 
 function signature(item, nameOf, ownName) {
   const text = excerptText(item, nameOf, ownName);
-  if (item.kind === ApiItemKind.Variable) return `${item.isReadonly ? 'const' : 'let'} ${text}`;
-  if (item.kind === ApiItemKind.Function && !text.startsWith('function ')) return `const ${text}`;
-  return text;
+  if (item.kind === ApiItemKind.Variable) {
+    return normalizeTypes(`${item.isReadonly ? 'const' : 'let'} ${text}`, 'declaration');
+  }
+  if (item.kind === ApiItemKind.Function && !text.startsWith('function ')) {
+    return normalizeTypes(`const ${text}`, 'declaration');
+  }
+  return normalizeTypes(text, 'declaration');
+}
+
+function memberContext(item) {
+  if (item.kind === ApiItemKind.EnumMember) return 'enum member';
+  return item.parent?.kind === ApiItemKind.Class ? 'class member' : 'interface member';
 }
 
 function memberLine(item, nameOf) {
-  const text = excerptText(item, nameOf, item.displayName).replace(MEMBER_MODIFIERS, '');
+  const text = normalizeTypes(
+    excerptText(item, nameOf, item.displayName),
+    memberContext(item),
+  ).replace(MEMBER_MODIFIERS, '');
   const words = [];
   if (item.isStatic) words.push('static');
   if (item.isAbstract) words.push('abstract');
@@ -112,11 +125,17 @@ class LineSet {
 
 // Emits the lines of one item and its members. `ownName` is null for a member.
 function emitItem(item, { prefix, context, ownName, nameOf, origin, lines }) {
-  const own =
-    ownName === null
-      ? `${context}${memberLine(item, nameOf)}`
-      : `${context}${signature(item, nameOf, ownName)}`;
   const itemOrigin = `${origin} ${item.canonicalReference.toString()}`;
+  let own;
+  try {
+    own =
+      ownName === null
+        ? `${context}${memberLine(item, nameOf)}`
+        : `${context}${signature(item, nameOf, ownName)}`;
+  } catch (error) {
+    if (!(error instanceof TypeTextError)) throw error;
+    throw new ApiListError(`${prefix}${item.canonicalReference.toString()}: ${error.message}`);
+  }
   lines.add(`${prefix}${own}`, itemOrigin);
   if (item.tsdocComment?.deprecatedBlock) lines.add(`${prefix}deprecated: ${own}`, itemOrigin);
   const containerWord = CONTAINER_WORDS[item.kind];
@@ -246,10 +265,16 @@ function augmentationsOf(files) {
         const head = `augments ${statement.name.text} interface ${declaration.name.text}`;
         found.push({ line: head, deprecated: false });
         for (const member of declaration.members) {
-          found.push({
-            line: `${head}, ${augmentationMemberWords(member)} ${augmentationMemberText(member)}`,
-            deprecated: ts.getJSDocDeprecatedTag(member) !== undefined,
-          });
+          try {
+            const text = normalizeTypes(augmentationMemberText(member), 'interface member');
+            found.push({
+              line: `${head}, ${augmentationMemberWords(member)} ${text}`,
+              deprecated: ts.getJSDocDeprecatedTag(member) !== undefined,
+            });
+          } catch (error) {
+            if (!(error instanceof TypeTextError)) throw error;
+            problems.push(`${head}: ${error.message}`);
+          }
         }
       }
     }
@@ -433,7 +458,23 @@ export function flattenPackage(packageDir, entryPoints) {
     throw new ApiListError(`${relative(process.cwd(), packageDir)}:\n  ${problems.join('\n  ')}`);
   }
 
-  const models = loadModels(entryPoints);
+  let sorted;
+  try {
+    sorted = collectLines(loadModels(entryPoints), analysis);
+  } catch (error) {
+    if (!(error instanceof ApiListError)) throw error;
+    throw new ApiListError(`${relative(process.cwd(), packageDir)}: ${error.message}`);
+  }
+  const portability = portabilityProblems(sorted, repositoryRoot(packageDir));
+  if (portability.length > 0) {
+    throw new ApiListError(
+      `${relative(process.cwd(), packageDir)}:\n  ${portability.join('\n  ')}`,
+    );
+  }
+  return sorted;
+}
+
+function collectLines(models, analysis) {
   const { locals, localNames, nameOf } = nameDeclarations(models, analysis);
   const lines = new LineSet();
 
@@ -486,12 +527,5 @@ export function flattenPackage(packageDir, entryPoints) {
     }
   }
 
-  const sorted = lines.sorted();
-  const portability = portabilityProblems(sorted, repositoryRoot(packageDir));
-  if (portability.length > 0) {
-    throw new ApiListError(
-      `${relative(process.cwd(), packageDir)}:\n  ${portability.join('\n  ')}`,
-    );
-  }
-  return sorted;
+  return lines.sorted();
 }

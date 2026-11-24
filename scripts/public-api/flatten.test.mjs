@@ -119,11 +119,37 @@ describe('flattenPackage', () => {
         '.: augments fixture-augment/registry interface Registry, optional property name?: string',
         '.: deprecated: augments fixture-augment/registry interface Registry, optional property name?: string',
         '.: augments fixture-augment/registry interface Registry, readonly required property "fixture/size": number',
+        '.: augments fixture-augment/registry interface Registry, readonly required property mode: "read" | "write"',
         '.: augments fixture-augment/registry interface Registry, required method describe(): string',
         '.: function plain(): void',
         './registry: interface Registry',
         './registry: interface Registry, readonly required property base: string',
       ]),
+    );
+  });
+
+  it('sorts union members and prints import("…") references by name alone', () => {
+    deepStrictEqual(
+      linesOf('normalize'),
+      sorted([
+        '.: const fromImport: ParsedPath',
+        '.: const nested: { readonly kind: "y" | "z"; readonly pair: readonly ["c" | "d", 1 | 2]; readonly map: Map<"m" | "n", boolean | string>; readonly fn: (value: "p" | "q") => "r" | "s"; }',
+        '.: const parsed: PlatformPath["parse"]',
+        '.: function generic(value: ParsedPath | null): typeof sep',
+        '.: interface Holder',
+        '.: interface Holder, readonly required property value: "one" | "two"',
+        '.: interface Holder, required method method(arg: "a" | "b"): void',
+        '.: type Both = { a: 1 } & ("x" | "y")',
+        '.: type Conditional<T> = T extends "j" | "k" ? "u" | "v" : never',
+        '.: type Literal = "a" | "b" | "c"',
+      ]),
+    );
+  });
+
+  it('fails when dropping an import("…") module makes two items give the same line', () => {
+    throws(
+      () => linesOf('import-duplicate'),
+      /two different items give the line "\.: function describe\(value: ParsedPath\): void"/,
     );
   });
 
