@@ -442,10 +442,11 @@ interface ProjectFiles {
   readonly migrations: StoredText[];
   readonly refs: StoredText[];
   readonly migrationTs: string[];
+  readonly unversioned: string[];
 }
 
 function emptyFiles(): ProjectFiles {
-  return { contracts: [], migrations: [], refs: [], migrationTs: [] };
+  return { contracts: [], migrations: [], refs: [], migrationTs: [], unversioned: [] };
 }
 
 function readStored(path: string): StoredText | string {
@@ -489,6 +490,13 @@ function classify(
   } else if (atRefLocation || (isInRefsDirectory(root, path) && hasRefContent(value))) {
     files.refs.push(stored);
   } else if (isContract(value)) {
+    if (value['formatVersion'] === undefined && value['schemaVersion'] === undefined) {
+      if (name === 'contract.json')
+        files.unversioned.push(
+          `${shown}: has neither "formatVersion" nor "schemaVersion", so no release of Prisma wrote it; the script leaves it alone. Emit it again with \`prisma contract emit\`, or restore it from version control`,
+        );
+      return;
+    }
     files.contracts.push(stored);
   } else {
     return;
@@ -801,7 +809,7 @@ function main(args: readonly string[]): number {
     removals: [],
     notes,
     merged: [],
-    problems: [],
+    problems: [...files.unversioned],
   };
   planMigrations(files, hashes, plan, stops, shown);
   planRefs(files, hashes, plan, shown);
@@ -858,9 +866,11 @@ function planMigrations(
   for (const file of files.migrations) {
     const { value, text } = file;
     const opsPath = join(dirname(file.path), 'ops.json');
+    let opsText: string;
     let ops: Json;
     try {
-      ops = JSON.parse(readFileSync(opsPath, 'utf8'));
+      opsText = readFileSync(opsPath, 'utf8');
+      ops = JSON.parse(opsText);
     } catch (error) {
       stops.push(`${shown(opsPath)}: cannot be read as JSON (${errorText(error)})`);
       continue;
@@ -887,8 +897,11 @@ function planMigrations(
       );
       continue;
     }
-    if (next['from'] === value['from'] && next['to'] === value['to']) continue;
-    const migrationHash = computeMigrationHash(next, ops);
+    const nextOpsText = replaceQuoted(opsText, hashes.byKind.storage);
+    if (next['from'] === value['from'] && next['to'] === value['to'] && nextOpsText === opsText)
+      continue;
+    const nextOps: Json = JSON.parse(nextOpsText);
+    const migrationHash = computeMigrationHash(next, nextOps);
     next['migrationHash'] = migrationHash;
     const replacements = new Map<string, string>();
     for (const field of ['from', 'to', 'migrationHash'] as const) {
@@ -905,6 +918,7 @@ function planMigrations(
       continue;
     }
     plan.writes.set(file.path, rewritten);
+    if (nextOpsText !== opsText) plan.writes.set(opsPath, nextOpsText);
   }
 }
 

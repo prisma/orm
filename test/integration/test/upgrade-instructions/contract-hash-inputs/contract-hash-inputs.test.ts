@@ -1,4 +1,4 @@
-import { readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
@@ -21,6 +21,8 @@ const POSTGRES_HEAD_SNAPSHOT =
   'postgres-app/migrations/snapshots/6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1';
 const REMOVED_HASH = '6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1';
 const REMOVED_HASH_NEW_VALUE = '345059ad82748235deff6cf12d40690f582d2420e63dccaf41c1c3fe654777b4';
+const BACKFILL_HASH = '5b423686089e2ada5ece2b224849ac73ce6b998fb062e88217d2f30a1a567748';
+const BACKFILL_HASH_NEW_VALUE = 'f6146e922053633f815e208705396f57f232a93ac6a95e78b39ee7fb695d0d70';
 const MONGO_CONTRACT = 'mongo-app/src/contract.json';
 const MONGO_STORAGE_HASH = '1c73a5a88943362a9b01f6476e85fddc574031accb9ada12be61e9da24fe0fd8';
 
@@ -64,6 +66,14 @@ describe('an application and an extension with hashes under the old rules', () =
     expect(run.stdout).toContain(
       `  ${POSTGRES_HEAD_SNAPSHOT}/contract.json (profile hash and execution hash)\n`,
     );
+  });
+
+  it('rewrites the storage hash a data transform writes into ops.json', () => {
+    const ops = 'mongo-app/migrations/app/20260513T0508_backfill_product_status/ops.json';
+    expect({
+      before: fixtureTree('before')[ops]?.includes(BACKFILL_HASH),
+      after: readTree(root)[ops]?.includes(BACKFILL_HASH_NEW_VALUE),
+    }).toEqual({ before: true, after: true });
   });
 
   it('changes nothing on a second run', () => {
@@ -182,5 +192,29 @@ describe('a migration naming a contract the project has no snapshot of', () => {
     expect(Object.fromEntries(rest.map((path) => [path, tree[path]]))).toEqual(
       Object.fromEntries(rest.map((path) => [path, after[path]])),
     );
+  });
+});
+
+describe('a contract.json with no format version of either kind', () => {
+  it('is left alone and reported, and the rest of the project is upgraded', () => {
+    const root = copyFixture('before', 'extension');
+    mkdirSync(join(root, 'test'));
+    writeFileSync(
+      join(root, 'test/contract.json'),
+      '{ "targetFamily": "sql", "target": "postgres", "storage": {} }\n',
+    );
+    const run = runScript(root, 'extension');
+    expect({
+      status: run.status,
+      stderr: run.stderr,
+      upgraded:
+        readTree(root)['src/contract.json'] ===
+        fixtureTree('after', 'extension')['src/contract.json'],
+    }).toEqual({
+      status: 1,
+      stderr:
+        'Left unchanged:\n  test/contract.json: has neither "formatVersion" nor "schemaVersion", so no release of Prisma wrote it; the script leaves it alone. Emit it again with `prisma contract emit`, or restore it from version control\n',
+      upgraded: true,
+    });
   });
 });
