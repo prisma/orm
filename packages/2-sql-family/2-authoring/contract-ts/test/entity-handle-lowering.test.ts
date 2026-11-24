@@ -214,7 +214,7 @@ describe('generic entities handle channel', () => {
     ).toThrow(
       expect.objectContaining({
         message:
-          'defineContract: two different "gadget" entities named "g" — pack-entity names must be unique per namespace.',
+          'defineContract: two different "gadget" entities named "g" — pack-entity names must be unique.',
         meta: { kind: 'gadget', name: 'g', namespaceId: UNBOUND_NAMESPACE_ID },
       }),
     );

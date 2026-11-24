@@ -11,9 +11,9 @@ import {
 const valueSet = { kind: 'valueSet', values: ['a'] } as const;
 
 describe.each([
-  ['public', ' in namespace "public"'],
-  [UNBOUND_NAMESPACE_ID, ''],
-])('pack entity refusals in namespace %s', (namespaceId, where) => {
+  ['public', ' in namespace "public"', ' per namespace'],
+  [UNBOUND_NAMESPACE_ID, '', ''],
+])('pack entity refusals in namespace %s', (namespaceId, where, scope) => {
   it('names two different entities of one kind and name collected from columns', () => {
     const collected: CollectedColumnEntities = {};
     collectEntityFromColumn(collected, namespaceId, {
@@ -29,7 +29,7 @@ describe.each([
       }),
     ).toThrow(
       expect.objectContaining({
-        message: `buildSqlContractFromDefinition: two different "gadget" entities named "g"${where} — pack-entity names must be unique per namespace.`,
+        message: `buildSqlContractFromDefinition: two different "gadget" entities named "g"${where} — pack-entity names must be unique${scope}.`,
         meta: { kind: 'gadget', name: 'g', namespaceId },
       }),
     );
@@ -44,7 +44,7 @@ describe.each([
       ),
     ).toThrow(
       expect.objectContaining({
-        message: `buildSqlContractFromDefinition: two different "gadget" entities named "g"${where} — a column-referenced entity conflicts with an attached one; pack-entity names must be unique per namespace.`,
+        message: `buildSqlContractFromDefinition: two different "gadget" entities named "g"${where} — a column-referenced entity conflicts with an attached one; pack-entity names must be unique${scope}.`,
         meta: { kind: 'gadget', name: 'g', namespaceId },
       }),
     );
@@ -64,7 +64,7 @@ describe.each([
       mergeNamespaceValueSets(namespaceId, { Level: valueSet }, { Level: valueSet }),
     ).toThrow(
       expect.objectContaining({
-        message: `buildSqlContractFromDefinition: value-set "Level"${where} is derived from both an enum and a pack entity — names must be unique per namespace.`,
+        message: `buildSqlContractFromDefinition: value-set "Level"${where} is derived from both an enum and a pack entity — names must be unique${scope}.`,
         meta: { kind: 'valueSet', name: 'Level', namespaceId },
       }),
     );

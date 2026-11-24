@@ -76,7 +76,7 @@ import {
   readNamedEntry,
   writeNamedEntry,
 } from './named-entries';
-import { inNamespace } from './namespace-id';
+import { inNamespace, perNamespace } from './namespace-id';
 import { refuseTypesKey } from './refuse-types-key';
 import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
 
@@ -1345,7 +1345,7 @@ function lowerPackEntityHandles(
       if (existing !== undefined && existing !== row.entity) {
         throw contractError(
           'CONTRACT.NAME_DUPLICATE',
-          `defineContract: two different "${row.entityKind}" entities named "${row.key}"${inNamespace(row.namespaceId)} — pack-entity names must be unique per namespace.`,
+          `defineContract: two different "${row.entityKind}" entities named "${row.key}"${inNamespace(row.namespaceId)} — pack-entity names must be unique${perNamespace(row.namespaceId)}.`,
           { meta: { kind: row.entityKind, name: row.key, namespaceId: row.namespaceId } },
         );
       }

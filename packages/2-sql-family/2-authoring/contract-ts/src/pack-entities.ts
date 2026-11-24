@@ -16,7 +16,7 @@ import {
   readNamedEntry,
   writeNamedEntry,
 } from './named-entries';
-import { inNamespace } from './namespace-id';
+import { inNamespace, perNamespace } from './namespace-id';
 
 export type CollectedColumnEntities = Record<string, Record<string, Record<string, unknown>>>;
 
@@ -51,7 +51,7 @@ export function collectEntityFromColumn(
   if (existing !== undefined && existing !== entityRef.entity) {
     throw contractError(
       'CONTRACT.NAME_DUPLICATE',
-      `buildSqlContractFromDefinition: two different "${entityRef.entityKind}" entities named "${entityRef.entityName}"${inNamespace(namespaceId)} — pack-entity names must be unique per namespace.`,
+      `buildSqlContractFromDefinition: two different "${entityRef.entityKind}" entities named "${entityRef.entityName}"${inNamespace(namespaceId)} — pack-entity names must be unique${perNamespace(namespaceId)}.`,
       { meta: { kind: entityRef.entityKind, name: entityRef.entityName, namespaceId } },
     );
   }
@@ -94,7 +94,7 @@ export function mergeColumnAndAttachedEntities(
       if (existing !== undefined && existing !== entity) {
         throw contractError(
           'CONTRACT.NAME_DUPLICATE',
-          `buildSqlContractFromDefinition: two different "${kind}" entities named "${name}"${inNamespace(namespaceId)} — a column-referenced entity conflicts with an attached one; pack-entity names must be unique per namespace.`,
+          `buildSqlContractFromDefinition: two different "${kind}" entities named "${name}"${inNamespace(namespaceId)} — a column-referenced entity conflicts with an attached one; pack-entity names must be unique${perNamespace(namespaceId)}.`,
           { meta: { kind, name, namespaceId } },
         );
       }
@@ -209,7 +209,7 @@ export function mergeNamespaceValueSets(
       if (Object.hasOwn(enumValueSets, name)) {
         throw contractError(
           'CONTRACT.NAME_DUPLICATE',
-          `buildSqlContractFromDefinition: value-set "${name}"${inNamespace(namespaceId)} is derived from both an enum and a pack entity — names must be unique per namespace.`,
+          `buildSqlContractFromDefinition: value-set "${name}"${inNamespace(namespaceId)} is derived from both an enum and a pack entity — names must be unique${perNamespace(namespaceId)}.`,
           { meta: { kind: 'valueSet', name, namespaceId } },
         );
       }
