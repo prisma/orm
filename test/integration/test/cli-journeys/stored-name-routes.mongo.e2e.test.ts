@@ -5,10 +5,19 @@
  * - T2: a new required field is stored under the old name of a renamed field: the rename comes first (both commands).
  * - T3: two collections that move along a chain with no statement, through names nothing uses (both commands).
  * - T4: a new model takes the collection name a rename frees: the rename comes first (both commands).
+ * - T5: `--rename` of a model that shares its collection with another root model: the route that plans without the statement and moves the documents in that plan's `migration.ts`, followed to the end (`migration plan`).
  */
 
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import {
+  latestMigrationDirName,
+  runMigrate,
+  runMigrationPlan,
+  selfEmitMigration,
+} from '../utils/journey-test-helpers';
 import {
   apply,
   begin,
@@ -174,4 +183,64 @@ describe('Journeys (MongoDB): stored-name refusal routes', {
       await expectSettled(journey, 'T4.08');
     },
   );
+
+  it('T5: --rename of a model that shares its collection is refused, and the documents move in the migration of the plan without the statement', async () => {
+    const journey = project('t5_plan');
+    const shared = (user: string, collection: string) => `// use prisma-8
+
+model Admin {
+  id    ObjectId @id @map("_id")
+  admin String
+
+  @@map("users")
+}
+
+model ${user} {
+  id   ObjectId @id @map("_id")
+  user String
+
+  @@map("${collection}")
+}
+`;
+    await begin(journey, 'migration plan', shared('User', 'users'), 'T5.01');
+    await journey.db.collection('users').insertMany([{ admin: 'Root' }, { user: 'Ada' }]);
+    await useSchema(journey, shared('Member', 'members'), 'T5.02');
+    const error = await refused(journey, 'migration plan', ['--rename', 'User:Member'], 'T5.03');
+    expect({ code: error.code, why: error.why }).toEqual({
+      code: 'MIGRATION.PLANNING_FAILED',
+      why: 'Cannot rename model "User" to "Member": collection "users" also stores model "Admin"',
+    });
+
+    const planned = await runMigrationPlan(journey.ctx, [
+      '--name',
+      'move',
+      ...(journey.origin === undefined ? [] : ['--from', journey.origin]),
+      '--json',
+    ]);
+    expect(planned.exitCode, `T5.04: ${planned.stderr}`).toBe(0);
+    const dir = join(journey.ctx.testDir, 'migrations/app', latestMigrationDirName(journey.ctx));
+    const path = join(dir, 'migration.ts');
+    const filter = '{ user: { $exists: true } }';
+    const written = readFileSync(path, 'utf-8')
+      .replace(
+        /import \{([^}]*)\} from '([^']*migration)';/,
+        (_, names: string, from: string) =>
+          `import {${names}, dataTransform, deleteDocuments, rawAggregate } from '${from}';`,
+      )
+      .replace(
+        /(\n\s*)collMod\(/,
+        (_, indent: string) =>
+          `${indent}dataTransform('move User documents to members', { run: () => rawAggregate('users', [{ $match: ${filter} }, { $merge: { into: 'members' } }]) }),${indent}deleteDocuments({ collection: 'users', filter: ${filter} }),${indent}collMod(`,
+      );
+    writeFileSync(path, written);
+    const emitted = await selfEmitMigration(journey.ctx, ['--dir', dir]);
+    expect(emitted.exitCode, `T5.05: ${emitted.stdout}${emitted.stderr}`).toBe(0);
+    const applied = await runMigrate(journey.ctx);
+    expect(applied.exitCode, `T5.06: ${applied.stdout}${applied.stderr}`).toBe(0);
+    expect({
+      users: await documents(journey.db, 'users'),
+      members: await documents(journey.db, 'members'),
+    }).toEqual({ users: [{ admin: 'Root' }], members: [{ user: 'Ada' }] });
+    await expectSettled(journey, 'T5.07');
+  });
 });
