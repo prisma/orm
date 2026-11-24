@@ -16,12 +16,13 @@ import {
   tryInstallShells,
 } from '@repo/tsdown/shell-testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { versionOutsideTheRelease } from './skewed-version';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const workspaceVersion = (
   JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as { version: string }
 ).version;
-const skewedVersion = workspaceVersion.replace(/\d+$/, (patch) => String(Number(patch) + 1));
+const skewedVersion = versionOutsideTheRelease(workspaceVersion);
 const extension = '@prisma/orm-extension-pgvector';
 const facade = '@prisma/orm-postgres';
 const targetShell = '@prisma/orm-target-postgres';
@@ -187,7 +188,7 @@ describe('an extension pack next to a target shell of a different version', () =
     const targetDir = publicShells.get(targetShell)?.dir;
     if (targetDir === undefined) throw new Error(`unknown shell ${targetShell}`);
     // Everything the extension needs is packed except the target, which is
-    // present one patch ahead — so the only thing that can fail is the peer.
+    // present at a version outside the release — so the only thing that can fail is the peer.
     const matching: ShellName[] = [
       '@prisma/orm-framework',
       '@prisma/orm-family-sql',

@@ -21,12 +21,13 @@ import {
   tryInstallShells,
 } from '@repo/tsdown/shell-testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { versionOutsideTheRelease } from './skewed-version';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const workspaceVersion = (
   JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as { version: string }
 ).version;
-const skewedVersion = workspaceVersion.replace(/\d+$/, (patch) => String(Number(patch) + 1));
+const skewedVersion = versionOutsideTheRelease(workspaceVersion);
 const adapter = '@prisma/orm-better-auth';
 const adapterDir = join(repoRoot, 'packages/9-public/@prisma/orm-better-auth');
 const betterAuthFloor = (() => {
