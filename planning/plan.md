@@ -154,9 +154,9 @@ Each project brings its code changes, its checks and its documentation together,
 | # | Progress | Project | GA | Owner | Status | Next |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | — | Document the compatibility policy in the repository | Moved into the other projects | Will | Dropped 2026-11-24. Each project documents its own part of the policy when it implements it. prisma/orm#31194 holds the drafts and is not merged | |
-| 2 | 🔄 | Make later releases read the files and database records of earlier releases | Must | Will | Design agreed and work started 2026-11-24 | |
+| 2 | 🔄 0/4 | Make later releases read the files and database records of earlier releases | Must | Will | Two of four pull requests are open and wait on review: prisma/orm#31198 (the marker check only warns) and prisma/orm#31200 (format versions). Hashes and saved samples are not started | |
 | 3 | ⏳ | Minimize the exported TS APIs of GA packages and guarantee them until the next major version | Must | Will | Not started. Needs two decisions from Will | |
-| 4 | ⏳ | Catch breaking changes and accidental new exports in CI, by comparing each package's API with the last release | Must | Will | Started 2026-11-24 with its design | |
+| 4 | 🔄 | Catch breaking changes and accidental new exports in CI, by comparing each package's API with the last release | Must | Will | Design agreed 2026-11-24. First pull request, a committed list of each package's exports, is a draft: prisma/orm#31201 | |
 | 5 | ⏳ | Prevent new error codes, built-in names and builder methods from breaking user code | Must | Will | Not started | |
 | 6 | ⏳ | Show whether something is GA in a package's version and an API's name, and release each package at its own level | Must | Will | Not started. Needs one decision from Will | |
 | 7 | ⏳ | Bring Prisma's own database tables up to date in each release, so no upgrade fails on them | Must | Will | Not started. Design agreed 2026-11-24 | |
