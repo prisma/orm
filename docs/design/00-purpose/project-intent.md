@@ -22,7 +22,7 @@ When other docs or code conflict with this page, treat this page as the project'
 Optimise for:
 
 - **Deterministic behaviour.** Declarative artifacts define every execution path, and checks run before data is touched.
-- **Upgrades that need no changes.** From `8.0.0`, an application or extension built on Prisma 8 upgrades to any later `8.x` release with no changes to its code, its generated files or its database ([ADR 329](../../architecture%20docs/adrs/ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md)). Until `8.0.0` a release candidate may still contain breaking changes.
+- **Upgrades that need no changes.** From `8.0.0`, an application or extension built on Prisma 8 upgrades to any later `8.x` release with no changes to its code, its generated files or its database, as long as it uses only what is Generally Available, apart from the exceptions ADR 329 lists: a fix to wrong behaviour, a change to unspecified detail such as SQL text, and a security fix ([ADR 329](../../architecture%20docs/adrs/ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md)). Until `8.0.0` a release candidate may still contain breaking changes.
 - **Explicit behaviour.** No hidden extra round-trips, fallbacks or guesses. One query builder call compiles to one SQL statement ([ADR 003](../../architecture%20docs/adrs/ADR%20003%20-%20One%20Query%20One%20Statement.md)).
 - **Feedback before execution.** Lints, budgets and offline checks say what is wrong and how to fix it before anything runs.
 

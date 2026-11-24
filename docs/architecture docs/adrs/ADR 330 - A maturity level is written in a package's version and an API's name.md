@@ -53,7 +53,7 @@ A name can only lower a level. A GA API cannot exist inside a package below GA, 
 
 Nothing else has a level. In particular an entrypoint (a path inside a package that code imports from, such as `@prisma/orm-toolchain/config-loader`) has none: everything it exports has the level of the package, or the lower level in its own name.
 
-Functionality that is not ready for GA therefore ships in one of two ways: in its own package below GA, or inside a GA package under a name that carries its level. AWS CDK does both; it marks the single API with a suffix, such as `Beta1`, where we use a prefix.
+Functionality that is not ready for GA therefore ships in one of two ways: in its own package below GA, or inside a GA package under a name that carries its level. AWS CDK also marks a single API below its stable level in the API's name, with a suffix such as `Beta1`, where we use a prefix.
 
 ### How a level is written
 

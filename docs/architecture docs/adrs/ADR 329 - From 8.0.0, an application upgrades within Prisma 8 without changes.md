@@ -16,11 +16,11 @@ An application is on `8.0.0`. Its developer changes one line and installs:
  }
 ```
 
-Nothing else changes. The application's code compiles and behaves as it did. Its `contract.json`, generated types and migration files are read as they are, with no re-emit. Its database is used as it is: the developer signs nothing again and repairs nothing.
+Nothing else changes. The application's code compiles, and everything the reference documentation specifies behaves as it did. Its `contract.json`, generated types and migration files are read as they are, with no re-emit. Its database is used as it is: the developer does not write a new contract hash into it with `db sign`, and repairs nothing.
 
 ## Decision
 
-From `8.0.0`, an application built on Prisma 8 upgrades to any later `8.x` release with no changes: none to its code, its generated files or its database. An extension gets the same promise.
+From `8.0.0`, an application built on Prisma 8 upgrades to any later `8.x` release with no changes: none to its code, its generated files or its database. An extension gets the same promise. The promise covers what is Generally Available, and its only exceptions are listed under [Changes to existing behaviour](#changes-to-existing-behaviour).
 
 The purpose is to make upgrading routine. A user who can upgrade without risk stays on the latest release and receives fixes, and we maintain one release line for each major. Each rule in this record is judged by one question: would it make a user hesitate before upgrading?
 

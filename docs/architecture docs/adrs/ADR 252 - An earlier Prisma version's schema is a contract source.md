@@ -1,6 +1,6 @@
 # ADR 252 — An earlier Prisma version's schema is a contract source
 
-> **Partially superseded by [ADR 329](ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md) from `8.0.0`.** The consequence that a change to Prisma 8's naming rule "needs an upgrade instruction telling those users to re-sign or plan a migration" holds until `8.0.0`. From `8.0.0` the naming rule does not change in a way that changes the name of an existing object, because an upgrade requires no change to the user's database. The rest of the decision stands.
+> **Partially superseded by [ADR 329](ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md) from `8.0.0`.** The consequence that a change to Prisma 8's naming rule "needs an upgrade instruction telling those users to re-sign or plan a migration" holds until `8.0.0`. From `8.0.0` the naming rule does not change in a way that changes the name of an existing object, because an upgrade requires no change to the user's database. Its section "How long the reader lives" says a reader is retired when support for the version it reads ends. From `8.0.0` a reader that is Generally Available is not removed within the major, even after that support ends; it may be removed in the next major. The rest of the decision stands.
 
 Status: **Accepted**
 

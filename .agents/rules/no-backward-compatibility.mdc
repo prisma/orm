@@ -8,17 +8,17 @@ alwaysApply: false
 
 ## Until `8.0.0`
 
-Every release is a release candidate and may break. Change the implementation directly. Do NOT add:
-- Backward compatibility code, aliases or deprecation warnings, unless a decision record requires one (ADR 257 keeps a renamed PSL name as a deprecated alias)
+Every release is a release candidate and may break. Change the implementation directly. Unless a decision record requires it (ADR 257 keeps a renamed PSL name as a deprecated alias, with tests), do NOT add:
+- Backward compatibility code, aliases or deprecation warnings
 - Comments explaining "legacy" or "old" vs "new" approaches
 - Tests, fixtures or examples that keep an old pattern beside the new one
 
-Remove the old code, update every reference, tests and design docs to the current state, and record upgrade instructions for users (`record-upgrade-instructions` skill).
+Remove the old code, update every reference, test and design doc, and record upgrade instructions (`record-upgrade-instructions` skill).
 
 ## From `8.0.0`
 
-[ADR 329](../../docs/architecture%20docs/adrs/ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md) applies. An application or extension built on one `8.x` release works on every later one, so:
+[ADR 329](../../docs/architecture%20docs/adrs/ADR%20329%20-%20From%208.0.0%2C%20an%20application%20upgrades%20within%20Prisma%208%20without%20changes.md) applies to everything Generally Available:
 - Nothing Generally Available is removed or changed incompatibly within a major. A replaced API stays, deprecated, until the next major.
-- Specified behaviour (what the reference documentation states) changes only in a new major, as a new API the user adopts, or through a security fix. A fix to wrong behaviour and a change to unspecified detail, such as SQL text, may ship in any release. State the class of your change.
+- Specified behaviour (what the reference documentation states) changes only in a new major, as a new API the user adopts, or through a security fix with a published notice. A fix to wrong behaviour and a change to unspecified detail, such as SQL text, may ship in any release. State the class of your change.
 - A later release reads every stored file and database record an earlier release wrote, and the same stored content keeps the same hash.
-- Code that no published package exports, whatever package it lives in, and anything below GA ([ADR 330](../../docs/architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)) still changes directly, as above.
+- Code no published package exports, and anything below GA ([ADR 330](../../docs/architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)) still changes directly, as above.
