@@ -1,5 +1,7 @@
 # ADR 316 — PostgreSQL scalars get convenience types
 
+> **Partially superseded by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) from `8.0.0`.** Its deprecated aliases follow ADR 257's "one release line" rule, which holds until `8.0.0`. A deprecated name that `8.0.0` still accepts keeps working until the next major.
+
 **Status:** Accepted, amended 2026-11-17: `Json` is a convenience type too, and `sql.String(n)` is renamed `sql.Varchar(n)`. [ADR 322](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md) gives the other targets the same convenience types, starting with MongoDB, and its rule 4 replaces this ADR's suffix rule: an explicit type carries a suffix where its database type is read by more than one codec of its data type.
 **Amends:** [ADR 257 — Scalar types are named after the target on every surface](ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md), [ADR 279 — Convenience types choose an explicit type from their arguments](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)
 

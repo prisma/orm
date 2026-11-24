@@ -50,7 +50,7 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 - Use arktype, not zod.
 - Never add file extensions to imports in TypeScript.
 - Don't add comments if avoidable, prefer code that expresses its intent; prefer links to canonical docs over long comments.
-- Don't add backwards-compat exports unless asked.
+- No backwards-compat code until `8.0.0`; then ADR 329.
 - Always write tests before creating or modifying implementation.
 - Don't reexport from one file in another, except in `exports/` folders.
 - Don't branch on target; use adapters: `.agents/rules/no-target-branches.mdc`.
@@ -133,4 +133,4 @@ See [`docs/architecture docs/subsystems/`](docs/architecture%20docs/subsystems/)
 
 ---
 
-**Remember**: This is a prototype. Focus on clear docs that reflect implemented behavior.
+**Remember**: Focus on clear docs that reflect implemented behavior.

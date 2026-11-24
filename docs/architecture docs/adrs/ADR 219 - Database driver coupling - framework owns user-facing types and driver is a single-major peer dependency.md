@@ -1,5 +1,7 @@
 # ADR 219 — Database driver coupling: framework owns user-facing types; driver is a single-major peer dependency
 
+> **Partially superseded by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) from `8.0.0`.** Its rule that Prisma supports exactly one major of a database driver at a time, and moves to the next one in a breaking release, holds until `8.0.0`. From `8.0.0` support for a driver version follows the lifetime its maker gives it: a minor release adds support for a new driver version, and an older one is dropped only in a new major or when its maker ends support for it. The rule that the framework owns the user-facing types stands.
+
 ## At a glance
 
 Prisma Next's database extensions (`@internal/mongo`, `@internal/postgres`, `@internal/sqlite`, …) couple to their underlying database drivers (`mongodb`, `pg`, `better-sqlite3`, …) under two framework-wide rules:

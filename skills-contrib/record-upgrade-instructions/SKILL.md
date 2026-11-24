@@ -15,6 +15,8 @@ description: >-
 
 # Record upgrade instructions
 
+This skill serves the release candidates, which may break. From `8.0.0`, ADR 329 (in `docs/architecture docs/adrs/`) applies: a change that breaks an application or extension is not made within the major.
+
 Contribute an independent fragment on the PR that changes Prisma 8. Release preparation combines fragments into the published app and extension guides; **feature PRs do not edit shared transition guides or choose a release number**. Read the canonical [upgrade instruction lifecycle](../../upgrade-instructions/README.md) for storage, release assembly, and checker modes.
 
 ## Detection signals and routing

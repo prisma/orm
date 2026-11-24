@@ -1,5 +1,7 @@
 # ADR 252 — An earlier Prisma version's schema is a contract source
 
+> **Partially superseded by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) from `8.0.0`.** The consequence that a change to Prisma 8's naming rule "needs an upgrade instruction telling those users to re-sign or plan a migration" holds until `8.0.0`. From `8.0.0` the naming rule does not change within a major, because an upgrade requires no change to the user's database. The rest of the decision stands.
+
 Status: **Accepted**
 
 ## Decision

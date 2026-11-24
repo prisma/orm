@@ -155,9 +155,8 @@ The following namespaces are reserved and cannot be used by extension packs:
 - Complex capabilities use descriptive names: `explainFormat`, `transactional_ddl`
 
 ### Stability Contract
-- **Stable**: Core capabilities that cannot change meaning or be removed
-- **Deprecated**: Capabilities marked for removal with migration path
-- **Experimental**: New capabilities under evaluation
+- A capability key published by a Generally Available package cannot change meaning or be removed within a major ([ADR 329](../architecture%20docs/adrs/ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md)).
+- A capability has no maturity level of its own: it has the level of the package that publishes it ([ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
 
 ### Versioning
 - Capability keys are immutable once published

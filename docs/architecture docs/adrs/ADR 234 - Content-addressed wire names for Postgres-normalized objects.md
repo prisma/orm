@@ -1,5 +1,7 @@
 # ADR 234 — Content-addressed wire names for Postgres-normalized objects
 
+> **Partially superseded by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) from `8.0.0`.** Its "Normalizer stability" section handles a normalizer change by users emitting again and applying migrations again. That holds until `8.0.0`. From `8.0.0` a release does not change the normalizer in a way that moves the wire name or the storage hash of an unchanged contract. The decision on content-addressed wire names stands.
+
 Status: **Accepted**.
 
 Related: [ADR 004 — Storage Hash vs Profile Hash](ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md), [ADR 009 — Deterministic Naming Scheme for Constraints](ADR%20009%20-%20Deterministic%20Naming%20Scheme.md), [ADR 224 — Control Policy](ADR%20224%20-%20Control%20Policy%20—%20framework-locked%20vocabulary%20and%20family-owned%20dispatch.md), [ADR 235 — The schema differ walks two derived schema IRs](ADR%20235%20-%20The%20schema%20differ%20walks%20two%20derived%20schema%20IRs.md).

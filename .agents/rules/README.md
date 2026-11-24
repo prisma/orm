@@ -120,7 +120,7 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 - `modular-refactoring-patterns.mdc` — Split monoliths into modules
 - `moving-packages.mdc` — Guidelines for moving packages and updating relative paths
 - `no-barrel-files.mdc` — Avoid barrels
-- `no-backward-compatibility.mdc` — No backward-compat shims; update call sites instead
+- `no-backward-compatibility.mdc` — No backward-compat code until `8.0.0`; from `8.0.0`, ADR 329
 
 ## Architecture
 - `adr-writing.mdc` — ADR writing guidelines (clarity, flow, examples)

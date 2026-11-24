@@ -1,43 +1,23 @@
 ---
-description: Do not add backward-compatibility shims or migration scaffolding
+description: Until 8.0.0, no backward-compatibility code; from 8.0.0, ADR 329 decides what must keep working
 globs: ["packages/**"]
 alwaysApply: false
 ---
 
-# No Backward Compatibility or Migration Paths
+# Backward compatibility: none until `8.0.0`, then ADR 329
 
-## Rule
+## Until `8.0.0`
 
-**This project has no external consumers. Do NOT add:**
-- Backward compatibility code or APIs
-- Migration paths or deprecation warnings
+Every release is a release candidate and may break. Change the implementation directly. Do NOT add:
+- Backward compatibility code, aliases or deprecation warnings
 - Comments explaining "legacy" or "old" vs "new" approaches
-- Test fixtures or examples showing old patterns alongside new ones
-- Code comments documenting what changed or why it changed
+- Tests, fixtures or examples that keep an old pattern beside the new one
 
-## What to Do Instead
+Remove the old code, update every reference, tests and design docs to the current state, and record upgrade instructions for users (`record-upgrade-instructions` skill).
 
-**Directly change the implementation:**
-- Remove old code entirely
-- Update all references to use the new approach
-- Update design docs to reflect the current state (not the transition)
-- Update tests to only test the current approach
-- Delete obsolete examples or fixtures
+## From `8.0.0`
 
-## Rationale
-
-Since this project has no external consumers, maintaining backward compatibility creates unnecessary complexity and technical debt. The codebase should reflect the current design, not preserve history of how it evolved.
-
-## Examples
-
-**Bad:**
-- Adding "legacy" codecs alongside new ones
-- Keeping old test fixtures "for reference"
-- Comments like "Legacy support - will be removed in future"
-- Deprecation warnings or migration helpers
-
-**Good:**
-- Delete old code completely
-- Update all references immediately
-- Update design docs to show current state only
-- Tests only exercise current patterns
+[ADR 329](../../docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) applies. An application or extension built on one `8.x` release works on every later one, so:
+- Nothing Generally Available is removed or changed incompatibly within a major. A replaced API stays, deprecated, until the next major.
+- A later release reads every stored file and database record an earlier release wrote.
+- Internal code (not exported by a published package) and anything below GA ([ADR 330](../../docs/architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)) still changes directly, as above.

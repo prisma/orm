@@ -1,5 +1,7 @@
 # ADR 017 — Extension and Alternate Runtime Compatibility Policy
 
+> **Partially superseded by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) from `8.0.0`.** Its "Versioning and compatibility matrix" section, with a separate version for the contract format, the plan model, the hook interface and each adapter, was not built. ADR 329 is the compatibility policy: the platform packages share one major version, and an extension built on one release works on every later release of that major.
+
 **Amended by [ADR 274](ADR%20274%20-%20A%20client%20takes%20a%20typed%20contract%20value%2C%20so%20every%20other%20option%20is%20inferred.md):** the clients no longer accept `contractJson`. They take a contract value, and emitted JSON becomes that value through `contractFromJson<Contract>(json)`.
 
 ## Context

@@ -22,12 +22,13 @@ When other docs or code conflict with this page, treat this page as the project'
 Optimise for:
 
 - **Deterministic behaviour.** Declarative artifacts define every execution path, and checks run before data is touched.
+- **Upgrades that need no changes.** From `8.0.0`, an application or extension built on Prisma 8 upgrades to any later `8.x` release with no changes to its code, its generated files or its database ([ADR 329](../../architecture%20docs/adrs/ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md)). Until `8.0.0` a release candidate may still contain breaking changes.
 - **Explicit behaviour.** No hidden extra round-trips, fallbacks or guesses. One query builder call compiles to one SQL statement ([ADR 003](../../architecture%20docs/adrs/ADR%20003%20-%20One%20Query%20One%20Statement.md)).
 - **Feedback before execution.** Lints, budgets and offline checks say what is wrong and how to fix it before anything runs.
 
 It does not need to optimise for:
 
-- **CommonJS or older runtimes.** Packages are ES modules only. The supported version of each runtime and database starts at the latest release the project tests against, and is lowered only when a concrete user need justifies it ([ADR 222](../../architecture%20docs/adrs/ADR%20222%20-%20Version%20support%20policy.md)).
+- **CommonJS, or runtimes and databases older than the minimums in `8.0.0`.** Packages are ES modules only, and a minimum supported version never claims more than the project tests ([ADR 222](../../architecture%20docs/adrs/ADR%20222%20-%20Version%20support%20policy.md)). From `8.0.0` a minimum rises only in a new major, or when its maker ends support for a version ([ADR 329](../../architecture%20docs/adrs/ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md#supported-versions-of-what-prisma-runs-on)).
 - **Reproducing Prisma 7 query behaviour.** A Prisma 7 schema used as a contract source describes a database. It does not commit Prisma 8 to behaving like Prisma 7 ([GA plan, principle 4](https://github.com/prisma/orm/blob/196fa9e57c53befd65b8f75724aaa660ec480de3/planning/decisions.md#principles)).
 
 ## What not to assume

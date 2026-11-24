@@ -2,9 +2,9 @@
 // Workspace-level lint gate that enforces the minimum TypeScript peer
 // dependency on every publishable package.
 //
-// The supported TypeScript floor is the latest GA release we test against.
-// We raise floors freely and only lower them if a concrete user need appears.
 // A declared floor must never claim more than our own test infra exercises.
+// Until `8.0.0` the floor may still be raised. From `8.0.0` it rises only in a
+// new major, or when TypeScript's maker ends support for a version (ADR 329).
 //
 // Every publishable package must declare:
 //   "peerDependencies": { "typescript": ">=<MIN_TYPESCRIPT_PEER>" }

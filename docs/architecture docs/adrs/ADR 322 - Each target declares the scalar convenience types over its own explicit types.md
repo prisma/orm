@@ -1,5 +1,7 @@
 # ADR 322 — Each target declares the scalar convenience types over its own explicit types
 
+> **Partially superseded by [ADR 329](ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) from `8.0.0`.** Its rule 5, that an explicit name that disappears stays in PSL "for one release line" and that a renamed TypeScript helper goes at once, holds until `8.0.0`. From `8.0.0` neither a PSL name nor an exported helper that is Generally Available is removed within a major.
+
 **Status:** Accepted. The MongoDB, SQLite and MySQL sections are decided. MariaDB shares MySQL's.
 **Builds on:** [ADR 279 — Convenience types choose an explicit type from their arguments](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md), [ADR 316 — PostgreSQL scalars get convenience types](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md), [ADR 315 — Each target declares the convenience date and time types over its own explicit types](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)
 **Uses:** [ADR 314 — Code shared by several targets' type implementations lives in one package](ADR%20314%20-%20Code%20shared%20by%20several%20targets'%20type%20implementations%20lives%20in%20one%20package.md)

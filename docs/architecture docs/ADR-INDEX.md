@@ -1,6 +1,6 @@
 # ADR Index
 
-This document provides a comprehensive index of all Architectural Decision Records (ADRs) for the Prisma 8 prototype, organized by category and ADR number.
+This document provides a comprehensive index of all Architectural Decision Records (ADRs) for Prisma 8, organized by category and ADR number.
 
 ## When to add a record
 
@@ -36,6 +36,8 @@ Open this list before you propose a new feature or surface, or judge a feature r
 - [ADR 319](adrs/ADR%20319%20-%20Prisma%208%20never%20derives%20a%20back-reference.md): no derived back-references; declare the back-reference on the other model (`posts Post[]`, or `rel.hasMany(...)` in a TypeScript contract).
 - [ADR 320](adrs/ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md): a database records in its marker whether `db update` may move it and whether a change may lose data or widen access; a ref declares them, and a deploy changes them only with `--permit-policy-change`.
 - [ADR 323](adrs/ADR%20323%20-%20Prisma%208%20is%20not%20a%20package%20manager%20and%20does%20not%20second-guess%20one.md): Prisma 8 does not second-guess or work around a package manager; a failed install is reported as failed, and the user runs the package manager's own command.
+- [ADR 329](adrs/ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md): from `8.0.0`, no change that makes an application or extension change its code, its generated files or its database to upgrade within the major, and no feature flags; add a new API beside the old one, deprecate the old one until the next major, or wait for the next major. Until `8.0.0` a release candidate may still break.
+- [ADR 330](adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md): no second word, such as "experimental" or "unstable", for what is not ready, and no maturity level on an import path; ship it in a package with a `-preview.N` or `-ea.N` version, or under a name that starts with `preview_` or `ea_`.
 
 ## Core Architecture
 
@@ -280,6 +282,8 @@ Requests answered with a no, with what to use instead. Every Accepted row is on 
 | 310 | Each generated identifier has a type alias for its column | `Ulid`, `UuidString`, `Nanoid`, `Cuid2` and `Ksuid` name each identifier's column; the id field writes `@id` and its generator, and a foreign key uses the alias alone | [ADR 310 - Each generated identifier has a type alias for its column.md](adrs/ADR%20310%20-%20Each%20generated%20identifier%20has%20a%20type%20alias%20for%20its%20column.md) |
 | 312 | A Postgres extension is a contract entity, and db sign refuses a space with unmet invariants | **Accepted. Amended by ADR 321** (a pack's extension is in the unbound namespace and found through the search path). `extension <name> {}` declares an extension in its schema's namespace; the planner creates it and the verifier checks it; each pack declares its own; `db sign` refuses a space whose marker lacks a required invariant | [ADR 312 - A Postgres extension is a contract entity, and db sign refuses a space with unmet invariants.md](adrs/ADR%20312%20-%20A%20Postgres%20extension%20is%20a%20contract%20entity%2C%20and%20db%20sign%20refuses%20a%20space%20with%20unmet%20invariants.md) |
 | 321 | An extension pack's extension is found through the connection's search_path | **Proposed.** A pack declares its extension in the unbound namespace; Postgres verifies it against `current_schemas(true)`, creates it with no `WITH SCHEMA` and never moves it; one contract space declares each extension, so a pack is refused for a named namespace or a second declaration, and an application for declaring a pack's extension. Amends ADR 312 | [ADR 321 - An extension pack's extension is found through the connection's search_path.md](adrs/ADR%20321%20-%20An%20extension%20pack's%20extension%20is%20found%20through%20the%20connection's%20search_path.md) |
+| 329 | An application built on Prisma 8 upgrades within the major without changes | **Accepted.** From `8.0.0`, an application or extension upgrades to any later `8.x` release with no changes to its code, generated files or database; the record states what is covered, the four classes of change to behaviour, the rules for stored data and hashes, supported versions, and how a change is checked. Until `8.0.0` a release candidate may break. Supersedes parts of ADRs 010, 016, 017, 140, 219, 222, 234, 252, 257, 316 and 322 | [ADR 329 - An application built on Prisma 8 upgrades within the major without changes.md](adrs/ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md) |
+| 330 | A maturity level is written in a package's version and an API's name | **Accepted.** One scale, Early Access, Preview and Generally Available, for packages and single APIs; a package below GA has a pre-release version and an API below GA in a GA package has a name starting with `preview_` or `ea_`; no feature flags | [ADR 330 - A maturity level is written in a package's version and an API's name.md](adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md) |
 
 ## Notes
 
@@ -289,6 +293,7 @@ Requests answered with a no, with what to use instead. Every Accepted row is on 
 - **ADR 170** is partially superseded by ADR 275: its field-preset half; type constructors and namespacing stand
 - **ADR 246** is superseded by ADR 275, except its two omission rules for `executionDefaults` and `typeParams`, which the Data Contract subsystem doc now states
 - **ADR 178** is partially superseded by ADR 309: value objects are storage entities, not a domain section
+- **ADRs 010, 016, 017, 140, 219, 222, 234, 252, 257, 316 and 322** are partially superseded by ADR 329 from `8.0.0`; each carries a note naming the part, and ADR 329 lists them under "Earlier records"
 - Field presets were removed on 2026-10-22 (ADR 275); ADRs that show them carry a dated amendment note
 - **ADRs 104-118** form the core extension system architecture (decorators, attributes, capabilities, packs)
 - **ADRs 126-127** introduce PSL top-level blocks and views as composable extensions

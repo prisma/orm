@@ -115,7 +115,7 @@ A few conventions that will save review round-trips:
 - **One logical change per PR.** If you find an unrelated bug while working, file a separate issue or open a separate PR. The same bug in another place is not unrelated: see [Fix the cause, everywhere it occurs](#fix-the-cause-everywhere-it-occurs).
 - **Conventional commit titles.** PR titles drive the auto-generated GitHub Release notes, so `feat(sql-orm-client): support computed includes` is more useful than `update sql-orm-client`. Common prefixes: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`.
 - **Update tests in the same PR.** A behavioural change without a test usually triggers a review comment asking for one.
-- **No backward-compat shims.** Prisma 8 is still on the release-candidate line; if you change an API, update the call sites instead of leaving an alias behind.
+- **No backward-compat shims until `8.0.0`.** Prisma 8 is still on the release-candidate line; if you change an API, update the call sites instead of leaving an alias behind. From `8.0.0` the opposite holds for everything Generally Available: an application or extension upgrades within the major without changes ([ADR 329](./docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md)).
 
 ### Fix the cause, everywhere it occurs
 

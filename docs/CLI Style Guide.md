@@ -203,6 +203,8 @@ Structured error codes (`CLI.INIT_MISSING_FLAGS`, `MIGRATION.UNFILLED_PLACEHOLDE
 
 ## Removed-verb redirects
 
+A verb or flag is removed only before `8.0.0` or in a new major. Within a major, a Generally Available command or flag that is replaced keeps working, deprecated ([ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20built%20on%20Prisma%208%20upgrades%20within%20the%20major%20without%20changes.md#replaced-apis)).
+
 When a verb or flag is removed from the CLI surface (e.g. during a surface refactor that promotes a subcommand to top-level, or splits a flag-overloaded verb into separate verbs), the CLI MUST emit a **targeted redirect** rather than a generic "unknown command" error. The redirect:
 
 - exits `2` (`PRECONDITION`),
