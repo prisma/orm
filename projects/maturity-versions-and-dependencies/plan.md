@@ -17,8 +17,17 @@ Four slices, in the order of what cannot be changed after `8.0.0`.
 | 2, [TML-3936](https://linear.app/prisma-company/issue/TML-3936) | Each package declares its level, and its version, ranges and tag follow from it | prisma/orm | 1 | the last release candidate |
 | 3, [TML-3937](https://linear.app/prisma-company/issue/TML-3937) | Releasing `8.0.0`, one package alone, and an older major | prisma/orm | 2 | `8.0.0` |
 | 4, [TML-3938](https://linear.app/prisma-company/issue/TML-3938) | The levels and each package's level in the Prisma 8 docs site | prisma/web | 2 for the text | published with `8.0.0` |
+| 5 | Every release's notes have a "How to upgrade" section | prisma/orm | nothing | the next release candidate after slice 1 |
 
-Slices 1 and 2 are a stack. Slice 4's draft can be written while slice 3 is built.
+Slices 1 and 2 are a stack. Slice 4's draft can be written while slice 3 is built. Slice 5 is independent of the others and starts after slice 1's pull request.
+
+### 5. Every release's notes have a "How to upgrade" section
+
+Agreed with the operator on 2026-11-25, through the stream. From the next release candidate, each GitHub Release body (`docs/releases/v<version>.md`, which the publish workflow uses) carries numbered steps a person can follow. Today a release links to recipes written for an agent and lists the breaking changes, with nothing that says what to do. Starting before `8.0.0` is deliberate: it puts pressure on each release candidate to carry few changes a user must make by hand.
+
+- The steps for people, the agent's recipe and the list of changes come from one source, never written separately. The likely source is the fragments each pull request adds under `upgrade-instructions/pending/`, which the release-preparation skill already assembles.
+- Whether the fragment system is retired later is another project's decision; this slice does not remove or redesign it.
+- To work out, checked against the release-preparation skill and the publish workflow: how the section is generated at release preparation, how the check on release notes requires it, and what it says when a release needs no action.
 
 ### 1. The application lists the platform packages, and our packages name each other as peers
 
