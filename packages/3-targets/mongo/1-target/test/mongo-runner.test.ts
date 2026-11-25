@@ -49,6 +49,7 @@ import { MongoServerError } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import {
   castField,
+  collMod,
   createCollection,
   createIndex,
   dataTransform,
@@ -1114,6 +1115,66 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
 
     expect(failureFields(result.assertNotOk()).why).toBe(
       "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. A later operation of this migration updates the validator of collection members: add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents. Run the file with node, then run the command again. The operations that ran before the failure stay applied.",
+    );
+  });
+
+  it('says what a later validator removal does, which checks nothing', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(rejected());
+
+    const result = await execute(harness, [
+      dataTransform('move User to members', {
+        run: () =>
+          rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
+      }),
+      collMod('members', { validator: {}, validationLevel: 'strict', validationAction: 'error' }),
+    ]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      "A later operation of this migration removes the validator of collection members: add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so the copy does not have to fit the validator that is then removed.",
+    );
+  });
+
+  it('finds a later validator update on the target under the name a later rename gives it', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(rejected());
+
+    const result = await execute(harness, [
+      dataTransform('move User to members', {
+        run: () =>
+          rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
+      }),
+      renameCollection('members', 'people'),
+      setValidation('people', { bsonType: 'object' }),
+    ]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      'A later operation of this migration updates the validator of collection members, as collection people:',
+    );
+  });
+
+  it('names the document the validator rejected, and where to find it, when MongoDB names it', async () => {
+    const harness = makeHarness();
+    const id = new ObjectId('6650a1b2c3d4e5f6a7b8c9d0');
+    harness.driver.failAggregateWith(
+      new MongoServerError({
+        ok: 0,
+        code: 121,
+        codeName: 'DocumentValidationFailure',
+        errmsg: 'PlanExecutor error during aggregation :: caused by :: Document failed validation',
+        errInfo: { failingDocumentId: id, details: {} },
+      }),
+    );
+
+    const result = await execute(harness, [
+      dataTransform('move User to members', {
+        run: () =>
+          rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
+      }),
+    ]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      'Document failed validation. The rejected document has _id ObjectId("6650a1b2c3d4e5f6a7b8c9d0"): find it with db.getCollection("users").find({ _id: ObjectId("6650a1b2c3d4e5f6a7b8c9d0") }) in mongosh. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. No later operation of this migration updates the validator of collection members, so fix that document in its source, or change the pipeline',
     );
   });
 

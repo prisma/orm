@@ -325,4 +325,148 @@ describe('a plan that moves documents into a collection whose validator it then 
       members: [{ user: 'Linus' }, { guest: 'Grace' }],
     });
   });
+
+  it('stops at the validator check and says that the copy, which has no check, runs again', async () => {
+    const from = contract(
+      'from',
+      {
+        Admin: { collection: 'users', fields: { admin: 'admin' } },
+        User: { collection: 'users', fields: { user: 'user' } },
+        Guest: { collection: 'members', fields: { guest: 'guest' } },
+      },
+      {},
+      'mongo/string@1',
+      { members: GUEST_ONLY },
+    );
+    const to = contract(
+      'to',
+      {
+        Admin: { collection: 'users', fields: { admin: 'role' } },
+        Member: { collection: 'members', fields: { user: 'user' } },
+        Guest: { collection: 'members', fields: { guest: 'guest' } },
+      },
+      {},
+      'mongo/string@1',
+      { members: GUEST_OR_MEMBER },
+    );
+    await db()
+      .collection('users')
+      .insertMany([{ admin: 'Ada' }, { user: 7 }]);
+    await db().createCollection('members', {
+      validator: { $jsonSchema: GUEST_ONLY },
+      validationLevel: 'strict',
+      validationAction: 'error',
+    });
+    await db().collection('members').insertOne({ guest: 'Grace' });
+    await initMarker(from);
+    const operations = [...move, ...(await plannedOperations(from, to))];
+    const result = await runOperations(operations, from, to, { policy });
+    if (result.ok) throw new Error('Expected the validator check to stop the apply');
+    expect({
+      code: result.failure.code,
+      why: result.failure.why,
+    }).toEqual({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      why: expect.stringContaining(
+        'This operation did not change the validator. Once the documents are fixed, run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again.',
+      ),
+    });
+  });
+
+  it('names the document a copy into a new collection writes and the validator rejects', async () => {
+    const from = contract(
+      'from',
+      {
+        Admin: { collection: 'users', fields: { admin: 'admin' } },
+        User: { collection: 'users', fields: { user: 'user' } },
+      },
+      {},
+    );
+    const to = contract(
+      'to',
+      {
+        Admin: { collection: 'users', fields: { admin: 'admin' } },
+        Member: { collection: 'members', fields: { user: 'user' } },
+      },
+      {},
+      'mongo/string@1',
+      { members: closedSchema(['user']) },
+    );
+    const inserted = await db()
+      .collection('users')
+      .insertMany([{ admin: 'Ada' }, { user: 7 }]);
+    await initMarker(from);
+    const [create, ...rest] = await plannedOperations(from, to);
+    if (create === undefined) throw new Error('Expected a plan');
+    const copy = dataTransform('move User to members', {
+      run: () => rawAggregate('users', [USERS, { $merge: { into: 'members' } }]),
+    });
+    const result = await runOperations([create, copy, ...rest], from, to, { policy });
+    if (result.ok) throw new Error('Expected the copy to be rejected');
+    expect(result.failure.why).toContain(
+      `The rejected document has _id ObjectId("${String(inserted.insertedIds[1])}"): find it with db.getCollection("users").find({ _id: ObjectId("${String(inserted.insertedIds[1])}") }) in mongosh.`,
+    );
+  });
+
+  it('keeps the documents when every model leaves the source, with the drop the plan without the statements writes', async () => {
+    const from = contract(
+      'from',
+      {
+        A: { collection: 'users', fields: { a: 'a' } },
+        B: { collection: 'users', fields: { b: 'b' } },
+        Guest: { collection: 'members', fields: { guest: 'guest' } },
+        Visitor: { collection: 'guests', fields: { visitor: 'visitor' } },
+      },
+      {},
+    );
+    const to = contract(
+      'to',
+      {
+        A2: { collection: 'members', fields: { a: 'a' } },
+        B2: { collection: 'guests', fields: { b: 'b' } },
+        Guest: { collection: 'members', fields: { guest: 'guest' } },
+        Visitor: { collection: 'guests', fields: { visitor: 'visitor' } },
+      },
+      {},
+    );
+    await db()
+      .collection('users')
+      .insertMany([{ a: 'Ada' }, { b: 'Bob' }]);
+    await db().collection('members').insertOne({ guest: 'Grace' });
+    await db().collection('guests').insertOne({ visitor: 'Vic' });
+    await initMarker(from);
+    const moves = [
+      dataTransform('move A to members', {
+        run: () =>
+          rawAggregate('users', [
+            { $match: { a: { $exists: true } } },
+            { $merge: { into: 'members' } },
+          ]),
+      }),
+      deleteDocuments({ collection: 'users', filter: { a: { $exists: true } } }),
+      dataTransform('move B to guests', {
+        run: () =>
+          rawAggregate('users', [
+            { $match: { b: { $exists: true } } },
+            { $merge: { into: 'guests' } },
+          ]),
+      }),
+      deleteDocuments({ collection: 'users', filter: { b: { $exists: true } } }),
+    ];
+    const planned = await plannedOperations(from, to);
+    const result = await runOperations([...moves, ...planned], from, to, { policy });
+    expect({
+      planned: planned.map(({ label }) => label),
+      ok: result.ok,
+      usersDropped: !(await db().listCollections().toArray()).some(({ name }) => name === 'users'),
+      members: await documents('members'),
+      guests: await documents('guests'),
+    }).toEqual({
+      planned: ['Drop collection users'],
+      ok: true,
+      usersDropped: true,
+      members: [{ a: 'Ada' }, { guest: 'Grace' }],
+      guests: [{ b: 'Bob' }, { visitor: 'Vic' }],
+    });
+  });
 });

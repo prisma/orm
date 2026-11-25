@@ -357,6 +357,19 @@ function createTargetExistsRefusal(
   );
 }
 
+/**
+ * The sentence that says to run the command again, and what a re-run does with the operations
+ * `before` the one that stopped: those whose check shows they ran are skipped, and one with no
+ * check, such as a copy in a dataTransform, runs again.
+ */
+function rerunText(runAgain: string, before: readonly AnyMongoMigrationOperation[]): string {
+  return before.some(
+    (operation) => isMongoDmlOperation(operation) && operation.postcheck.length === 0,
+  )
+    ? `${runAgain}. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again.`
+    : `${runAgain}; operations that already ran are skipped.`;
+}
+
 function validatorSetBy(op: MongoMigrationPlanOperation): CollModCommand | undefined {
   const step = op.execute.find(({ command }) => command instanceof CollModCommand)?.command;
   return step instanceof CollModCommand && step.validator !== undefined ? step : undefined;
@@ -1145,29 +1158,59 @@ function copyTargetOf(plan: MongoQueryPlan): CopyTarget | undefined {
   return undefined;
 }
 
+/** What a later operation of the migration does to the validator of the collection a copy writes into, and the name the collection has by then. */
+type LaterValidator =
+  | { readonly kind: 'replaced' | 'removed'; readonly collection: string }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'unknown' };
+
 /**
- * Whether a later operation of the migration updates the validator of the collection a copy writes
- * into: `undefined` for a collection in another database, whose validator the migration's operations
- * do not touch, so the runner cannot tell.
+ * What a later operation of the migration does to the validator of the collection a copy writes
+ * into, following the renames of that collection: unknown for a collection in another database,
+ * whose validator the migration's operations do not touch, so the runner cannot tell.
  */
-function laterValidatorUpdate(
+function laterValidator(
   target: CopyTarget,
   later: readonly AnyMongoMigrationOperation[],
-): boolean | undefined {
-  if (target.database !== undefined) return undefined;
-  return later.some(
-    (operation) =>
-      !isMongoDmlOperation(operation) &&
-      validatorSetBy(operation)?.collection === target.collection,
-  );
+): LaterValidator {
+  if (target.database !== undefined) return { kind: 'unknown' };
+  let collection = target.collection;
+  for (const operation of later) {
+    if (isMongoDmlOperation(operation)) continue;
+    for (const { command } of operation.execute) {
+      if (command instanceof RenameCollectionCommand && command.collection === collection) {
+        collection = command.to;
+      }
+      if (
+        command instanceof CollModCommand &&
+        command.collection === collection &&
+        command.validator !== undefined
+      ) {
+        return {
+          kind: Object.keys(command.validator).length === 0 ? 'removed' : 'replaced',
+          collection,
+        };
+      }
+    }
+  }
+  return { kind: 'none' };
+}
+
+/** The document the validator rejected, as MongoDB's error names it, and where it is in the copy's source. */
+function rejectedDocumentText(error: object, source: string): string {
+  const info: unknown = Reflect.get(error, 'errInfo');
+  const id: unknown =
+    typeof info === 'object' && info !== null ? Reflect.get(info, 'failingDocumentId') : undefined;
+  if (id === undefined) return '';
+  const value = mongoshValue(id);
+  return ` The rejected document has _id ${value}: find it with db.getCollection(${JSON.stringify(source)}).find({ _id: ${value} }) in mongosh.`;
 }
 
 /** Why a copy failed when the validator of its target rejected a document it wrote, and the one change that fits the migration. */
 function copyRejectedWhy(
   target: CopyTarget,
-  mongoError: string,
-  reason: string,
-  later: boolean | undefined,
+  failure: { readonly mongoError: string; readonly reason: string; readonly document: string },
+  later: LaterValidator,
 ): string {
   const name =
     target.database === undefined ? target.collection : `${target.database}.${target.collection}`;
@@ -1175,15 +1218,25 @@ function copyRejectedWhy(
     target.stage === '$merge'
       ? `Documents the copy wrote before the error stay in collection ${name}, and the copy runs again on a re-run.`
       : `Collection ${name} is as it was: an $out stage replaces it only when the whole pipeline succeeds.`;
-  const bypass = `add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents`;
+  const bypass = `add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call`;
   const pipeline = `change the pipeline in the migration's migration.ts so the documents it writes fit the validator`;
-  const advice =
-    later === true
-      ? `A later operation of this migration updates the validator of collection ${name}: ${bypass}.`
-      : later === false
-        ? `No later operation of this migration updates the validator of collection ${name}, so ${pipeline}.`
-        : `If a later validator update replaces the validator of collection ${name}, ${bypass}. Otherwise ${pipeline}.`;
-  return `MongoDB error ${mongoError}: ${reason}. ${written} ${advice} Run the file with node, then run the command again.`;
+  const renamed = (collection: string) =>
+    collection === target.collection ? '' : `, as collection ${collection}`;
+  const orPipeline =
+    failure.document === '' ? pipeline : `fix that document in its source, or ${pipeline}`;
+  const advice = (() => {
+    switch (later.kind) {
+      case 'replaced':
+        return `A later operation of this migration updates the validator of collection ${name}${renamed(later.collection)}: ${bypass}, so that update checks the moved documents.`;
+      case 'removed':
+        return `A later operation of this migration removes the validator of collection ${name}${renamed(later.collection)}: ${bypass}, so the copy does not have to fit the validator that is then removed.`;
+      case 'none':
+        return `No later operation of this migration updates the validator of collection ${name}, so ${orPipeline}.`;
+      case 'unknown':
+        return `If a later validator update replaces the validator of collection ${name}, ${bypass}, so that update checks the moved documents. Otherwise ${orPipeline}.`;
+    }
+  })();
+  return `MongoDB error ${failure.mongoError}: ${failure.reason}.${failure.document} ${written} ${advice} Run the file with node, then run the command again.`;
 }
 
 /**
@@ -1217,9 +1270,15 @@ function rewriteFailure(
         {
           why: copyRejectedWhy(
             target,
-            mongoError,
-            reason,
-            laterValidatorUpdate(target, position.plan.slice(position.operationIndex + 1)),
+            {
+              mongoError,
+              reason,
+              document:
+                plan.command instanceof RawAggregateCommand
+                  ? rejectedDocumentText(error, plan.command.collection)
+                  : '',
+            },
+            laterValidator(target, position.plan.slice(position.operationIndex + 1)),
           ),
           meta: {
             operationId: op.id,
@@ -1863,7 +1922,12 @@ export class MongoMigrationRunner {
       ...advice,
       `Under db migrate you can instead apply the validator over them: set checkDocuments to false on this operation in that migration.ts, run the file with node, and run db migrate again. db update writes no migration.ts, so there ${uncheckable ? 'store the field under another name' : 'fix the documents'} first.`,
       'This operation did not change the validator.',
-      `${uncheckable ? 'Then run the command again' : 'Once the documents are fixed, run the command again'}; operations that already ran are skipped.`,
+      rerunText(
+        uncheckable
+          ? 'Then run the command again'
+          : 'Once the documents are fixed, run the command again',
+        plan.slice(0, operationIndex),
+      ),
     ].join(' ');
     return runnerFailure(
       'MIGRATION.PRECHECK_FAILED',
