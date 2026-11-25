@@ -33,7 +33,23 @@ import { callMethod, hasMethod, type OrmCollection, type Row } from './orm';
 export interface PrismaClientLike {
   readonly contract: SqlContract;
   readonly orm: object;
+}
+
+/** A client that runs interactive transactions, which the `transaction` option needs. */
+export interface TransactionalPrismaClientLike extends PrismaClientLike {
   transaction<R>(fn: (tx: { readonly orm: object }) => PromiseLike<R>): Promise<R>;
+}
+
+/** The client `prismaAdapter` takes: one with `transaction()` when `transaction` may be on. */
+export type PrismaClientLikeFor<Options extends PrismaAdapterOptions> =
+  'transaction' extends keyof Options
+    ? true extends Options['transaction' & keyof Options]
+      ? TransactionalPrismaClientLike
+      : PrismaClientLike
+    : PrismaClientLike;
+
+function hasTransaction(db: PrismaClientLike): db is TransactionalPrismaClientLike {
+  return 'transaction' in db && typeof db.transaction === 'function';
 }
 
 const supportedTargets = ['postgres', 'sqlite'];
@@ -51,6 +67,11 @@ function assertClient(db: PrismaClientLike, adapterOptions: PrismaAdapterOptions
   const namespace = adapterOptions.namespace;
   if (namespace !== undefined && !Object.hasOwn(contract.domain.namespaces, namespace)) {
     throw new BetterAuthError(`Namespace "${namespace}" is not in your Prisma contract.`);
+  }
+  if (adapterOptions.transaction === true && !hasTransaction(db)) {
+    throw new BetterAuthError(
+      'The transaction option runs Better Auth transactions through the client’s transaction(), which this client does not have. Its contract does not list interactive transactions, so turn the option off.',
+    );
   }
 }
 
@@ -309,6 +330,10 @@ function factoryConfig(
  * export const auth = betterAuth({ database: prismaAdapter(db) });
  * ```
  */
+export function prismaAdapter<const Options extends PrismaAdapterOptions = Record<never, never>>(
+  db: PrismaClientLikeFor<Options>,
+  adapterOptions?: Options,
+): (betterAuthOptions: BetterAuthOptions) => DBAdapter<BetterAuthOptions>;
 export function prismaAdapter(
   db: PrismaClientLike,
   adapterOptions: PrismaAdapterOptions = {},
@@ -326,7 +351,7 @@ export function prismaAdapter(
       adapterOptions,
     };
     const transaction: AdapterFactoryConfig['transaction'] =
-      adapterOptions.transaction === true
+      adapterOptions.transaction === true && hasTransaction(db)
         ? (callback) =>
             db.transaction((tx) =>
               callback(

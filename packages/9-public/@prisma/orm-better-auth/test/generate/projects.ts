@@ -17,11 +17,7 @@ const options: BetterAuthOptions = { plugins: [twoFactor()] };
 const testDir = fileURLToPath(new URL('.', import.meta.url));
 
 function clientOver(contract: SqlContract): PrismaClientLike {
-  return {
-    contract,
-    orm: {},
-    transaction: () => Promise.reject(new Error('createSchema opens no transaction')),
-  };
+  return { contract, orm: {} };
 }
 
 export async function inDirectory<T>(dir: string, run: () => Promise<T>): Promise<T> {
