@@ -57,7 +57,7 @@ Agreed 2026-11-25.
 10. **Topology decides a capability.** MongoDB transactions need a replica set. Atlas offers `$vectorSearch`, which a self-hosted server does not.
 11. **We add or drop a version.** PostgreSQL 19 is released, or a version reaches end of life and we stop supporting it.
 12. **The application connects to a database it has not signed.**
-13. **The application queries over a narrower connection than the one it migrates over.** The application uses interactive transactions, so its contract requires them. Migrations run over a direct connection, and that database provides interactive transactions, so signing succeeds. The application then runs on Cloudflare Workers over an HTTP driver, which has no interactive transactions. The client refuses to start, because its connection does not provide what the contract requires.
+13. **The application queries over a narrower connection than the one it migrates over.** The application uses interactive transactions, so its contract requires them. Migrations run over a direct connection, and that database provides interactive transactions, so signing succeeds. The application then runs on Cloudflare Workers over an HTTP driver, which has no interactive transactions. The application fails to type-check, and at runtime the client reports the mismatch as it reports a signature that does not match.
 
 ## The design
 
@@ -77,26 +77,26 @@ A profile is the target as one database version provides it: the same target, wi
 
 A behaviour that a later version drops is a capability the later profile does not have. Capabilities that describe behaviour already exist, for example `sql.jsonAggWithoutTruncation`, which MariaDB's adapter turns off.
 
-### The user names the profile in the import
+### The user selects the profile once, in the config
 
-There is no default profile. The name the user imports carries the version, for example:
+Agreed 2026-11-25. The profile matters only where the contract is emitted: emitting turns the profile into the contract's list of required capabilities. Signing and the client both work from the contract, so the client takes no version and no profile. The user selects the profile in the config, as a required option:
 
 ```ts
-import { postgres18 } from '@prisma/orm-postgres';
+export default defineConfig({
+  contract: './prisma/contract.prisma',
+  db: { version: 17, url: env('DATABASE_URL') },
+});
 ```
 
-The exact names are not decided. The version has to appear at both places where the user selects the target today, because the facade builds the stack inside each of them:
+Whether the option is a version number, as shown, or a named profile object is not decided.
 
-- the config, `defineConfig` from `@prisma/orm-postgres/config`, used by `contract emit` and the other commands;
-- the client factory in the application, `postgres<Contract>({ contractJson, url })`.
-
-Why no default:
+There is no default profile:
 
 - A default of the oldest version would give users fewer features than their database has.
 - A default of the recommended version would change every user's contract when the recommendation moves.
-- With the version in the name, "recommended" is only what the docs and `orm init` write. Moving the recommendation changes no existing project.
+- With no default, "recommended" is only what the docs and `orm init` write. Moving the recommendation changes no existing project.
 
-The capability types travel with the import. The contract's capability type is already computed from the types of the target, the adapter and the extensions (`DerivedCapabilities` in `packages/2-sql-family/2-authoring/contract-ts/src/contract-types.ts`). A profile with a narrower capability type therefore makes a feature that needs a newer version fail to type-check, with no new mechanism.
+An earlier draft put the version in the name the user imports (`postgres18`), in the config and again in the client. The client no longer needs it. Hibernate 6 deprecated its versioned dialect classes in favour of a setting; see the [prior art](2026-11-25-capability-prior-art.md).
 
 ### `orm init` writes the profile that matches the database
 
@@ -124,11 +124,20 @@ The comparison is in capabilities, but a message such as "your database lacks `s
 
 The advice always has two parts: change the profile, which changes the features available, or upgrade the database. When the cause is not the version, the target names the real cause, for example the `sql_mode` setting.
 
-### The runtime obeys the contract
+### The signature is the one check of the database
 
-The runtime stops merging the stack's capabilities over the contract's. The contract's list is the list. The runtime refuses a stack whose capabilities do not cover the contract's, in the same place it already refuses a stack with the wrong target or a missing extension pack (`assertExecutionStackContractRequirements`).
+Agreed 2026-11-25. This is what the subsystem docs already describe ([Data Contract](../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md), "ProfileHash Computation"): verification checks that the database satisfies the contract's capability requirements and writes the hashes, and the runtime only compares the hashes in the contract with those in the database. The client does not read the database's capabilities again at connect time. A database changed after signing is found by `db verify`.
 
-This closes the case where the config names one profile and the application names another.
+### The assembled stack is checked against the contract
+
+Agreed 2026-11-25. The family, target, adapter and driver each state what they provide, and their types carry it. The contract's requirements are compared with the assembled stack twice:
+
+- **At compile time.** A stack that does not provide what the contract requires fails to type-check where the client is created.
+- **At runtime.** The client compares the requirements in `contract.json` with what the stack's components declare, and reports a mismatch as it reports a signature that does not match.
+
+The runtime stops merging the stack's capabilities over the contract's. The contract's list is the list.
+
+The subsystem docs already describe the runtime check ([Adapters & Targets](../../docs/architecture%20docs/subsystems/5.%20Adapters%20%26%20Targets.md), "Capability discovery flow"; [Runtime & Middleware Framework](../../docs/architecture%20docs/subsystems/4.%20Runtime%20%26%20Middleware%20Framework.md), "Capabilities, Packs, and Codecs"). The code does not do it.
 
 ## Why this lands before GA
 
@@ -140,9 +149,9 @@ It is not purely additive.
 
 ## Open
 
-- The names of the versioned exports, at both entry points.
+- Whether the config option is a version number or a named profile object.
+- How the application states in its contract that it requires a capability the connection provides, such as interactive transactions. A database version cannot imply it.
 - Which versions get a profile for each target at GA, and which is recommended.
 - What the minimum server version constants become once profiles exist. A database older than the oldest profile fails the capability check, so the constants may no longer be needed.
-- How an extension pack's capabilities depend on the extension's own version.
 - MongoDB: the same design should apply, and has not been checked against the MongoDB family's code.
 - Whether [ADR 004](../../docs/architecture%20docs/adrs/ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md), [ADR 031](../../docs/architecture%20docs/adrs/ADR%20031%20-%20Adapter%20capability%20discovery%20&%20negotiation.md) and [ADR 065](../../docs/architecture%20docs/adrs/ADR%20065%20-%20Adapter%20capability%20schema%20&%20negotiation%20v1.md) need amending, or one new ADR replaces their capability sections.
