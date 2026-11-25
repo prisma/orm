@@ -1,3 +1,4 @@
+import { MongoFieldFilter } from '@internal/mongo-query-ast/execution';
 import { ObjectId } from 'bson';
 import { MongoServerError } from 'mongodb';
 import { describe, expect, it } from 'vitest';
@@ -119,6 +120,10 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
         withPipeline([{ $match: { email: { $exists: true } } }, { $limit: 1 }]),
       ],
       ['expects a document to exist', { ...documentsFit, expect: 'exists' as const }],
+      [
+        'keeps only the documents a narrower filter selects',
+        { ...documentsFit, filter: MongoFieldFilter.eq('_id', 'sentinel') },
+      ],
       [
         'has a stage other than $limit after the $match',
         withPipeline([rejectedByValidator, { $project: { _id: 1 } }]),

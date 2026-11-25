@@ -384,25 +384,37 @@ function runFilterIsCheckFilter(op: MongoDmlOperation, plan: MongoQueryPlan): bo
   const run = plan.command;
   if (!(run instanceof RawUpdateManyCommand) || op.postcheck.length !== 1) return false;
   const [check] = op.postcheck;
-  const source = check?.source.command;
+  const match = check === undefined ? undefined : noDocumentMatchOf(check, run.collection);
+  return match !== undefined && canonicalize(match) === canonicalize(run.filter);
+}
+
+/**
+ * The `$match` of a check that no document of `collection` matches it: a `notExists` check whose
+ * filter keeps every row, over an aggregate of that `$match` and only `$limit` stages after it.
+ */
+function noDocumentMatchOf(
+  check: MongoMigrationCheck | MongoDmlCheck,
+  collection: string,
+): unknown {
+  const { source } = check;
   if (
-    check?.expect !== 'notExists' ||
+    check.expect !== 'notExists' ||
     !(
       check.filter instanceof MongoExistsExpr &&
       check.filter.field === '_id' &&
       check.filter.exists
     ) ||
-    !(source instanceof RawAggregateCommand) ||
-    source.collection !== run.collection
+    !('command' in source) ||
+    !(source.command instanceof RawAggregateCommand) ||
+    source.command.collection !== collection
   ) {
-    return false;
+    return undefined;
   }
-  const [first, ...rest] = source.pipeline;
-  return (
-    first !== undefined &&
-    canonicalize(Reflect.get(first, '$match')) === canonicalize(run.filter) &&
+  const [first, ...rest] = source.command.pipeline;
+  return first !== undefined &&
     rest.every((stage) => Object.keys(stage).length === 1 && Object.hasOwn(stage, '$limit'))
-  );
+    ? Reflect.get(first, '$match')
+    : undefined;
 }
 
 /**
@@ -1281,21 +1293,8 @@ function checksDocumentsOf(
 ): boolean {
   const rejected = canonicalize({ $nor: [validator] });
   return operation.precheck.some((check) => {
-    const { source } = check;
-    if (
-      check.expect !== 'notExists' ||
-      !('command' in source) ||
-      !(source.command instanceof RawAggregateCommand) ||
-      source.command.collection !== collection
-    ) {
-      return false;
-    }
-    const [first, ...rest] = source.command.pipeline;
-    return (
-      first !== undefined &&
-      canonicalize(Reflect.get(first, '$match')) === rejected &&
-      rest.every((stage) => Object.keys(stage).length === 1 && Object.hasOwn(stage, '$limit'))
-    );
+    const match = noDocumentMatchOf(check, collection);
+    return match !== undefined && canonicalize(match) === rejected;
   });
 }
 
