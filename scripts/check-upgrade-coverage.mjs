@@ -5,7 +5,10 @@ import { basename, posix } from 'node:path';
 import { argv, cwd, exit, stderr, stdout } from 'node:process';
 import { fileURLToPath } from 'node:url';
 import matter from 'gray-matter';
-import { parseVersion as parseReleaseVersion } from '../packages/0-shared/publish-surface/src/release-plan.ts';
+import {
+  parseVersion as parseReleaseVersion,
+  rootVersionOfRelease,
+} from '../packages/0-shared/publish-surface/src/release-plan.ts';
 
 export function parseChangesFrontmatter(src) {
   if (!/^---\s*\n[\s\S]*?\n---/.test(src))
@@ -66,11 +69,18 @@ export function publishedTransitionOf(path) {
   return PUBLISHED_TRANSITION.exec(path)?.[1];
 }
 
-/** The inverse of `transitionLabel`: a stable segment `major.minor` reads as `major.minor.0`. */
+/** The inverse of `transitionLabel`: a stable segment `major.minor` reads as that release's root version, `8.0.1` for `8.0`. */
 export function parseTransitionLabel(label) {
   const match = /^(.+)-to-(.+)$/.exec(label);
   if (!match) throw new Error(`unparseable transition label "${label}"`);
-  const segment = (text) => parseVersion(/^\d+\.\d+$/.test(text) ? `${text}.0` : text);
+  const segment = (text) => {
+    const release = /^(\d+)\.(\d+)$/.exec(text);
+    return parseVersion(
+      release
+        ? rootVersionOfRelease({ major: Number(release[1]), minor: Number(release[2]) })
+        : text,
+    );
+  };
   return { from: segment(match[1]), to: segment(match[2]) };
 }
 function publishedGuide(audience, transition) {

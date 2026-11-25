@@ -7,6 +7,7 @@ import {
   formatVersion,
   type ParsedVersion,
   parseVersion,
+  releaseOfRootVersion,
 } from '../packages/0-shared/publish-surface/src/release-plan.ts';
 
 /**
@@ -26,7 +27,7 @@ export function computeNextMinor(current: string): string {
  * - `8.0.0-rc.N` -> `8.0.0-rc.N+1` — the RC line advances its counter.
  * - pre-8 stable (`0.17.0`) -> `8.0.0-rc.1` — the one-time transition
  *   onto the v8 RC line; there are no further `0.x` minors.
- * - stable `>= 8` -> next minor.
+ * - stable `>= 8` -> next minor: `8.0.1` -> `8.1.0`.
  */
 export function computeNextReleaseVersion(current: string): string {
   assertCanonicalBase(current);
@@ -138,9 +139,10 @@ function releaseOf(version: ParsedVersion): string {
 }
 
 /**
- * Asserts that a base version is canonical: either a clean release
- * (`major.minor.patch`) or a version on the supported RC line
- * (`8.0.0-rc.N`, N ≥ 1). Used to fail-fast in the publish workflow if
+ * Asserts that a base version is canonical: a clean pre-8 release
+ * (`major.minor.patch`), a Prisma 8 release number (`8.0.1`, then
+ * `X.Y.0`; see `releaseOfRootVersion`), or a version on the supported RC
+ * line (`8.0.0-rc.N`, N ≥ 1). Used to fail-fast in the publish workflow if
  * root `package.json` was edited to something other than a release
  * shape — without this guard, a malformed root would compose nonsense
  * publish versions like `0.7.0-foo-dev.1`.
@@ -167,5 +169,15 @@ export function assertCanonicalBase(base: string): void {
         'The root package.json `version` must be a clean release shape ("0.7.0") ' +
         'or on the supported RC line ("8.0.0-rc.N", N >= 1); nothing else is permitted on `main`.',
     );
+  }
+  if (parsed !== undefined && parsed.major >= 8 && parsed.level === undefined) {
+    try {
+      releaseOfRootVersion(base);
+    } catch (cause) {
+      throw new Error(
+        `Base version "${base}" is not canonical: ${cause instanceof Error ? cause.message : String(cause)}`,
+        { cause },
+      );
+    }
   }
 }

@@ -39,8 +39,12 @@ describe('computeNextReleaseVersion', () => {
   });
 
   it('advances a stable 8.x base to the next minor', () => {
-    assert.equal(computeNextReleaseVersion('8.0.0'), '8.1.0');
+    assert.equal(computeNextReleaseVersion('8.0.1'), '8.1.0');
     assert.equal(computeNextReleaseVersion('8.1.0'), '8.2.0');
+  });
+
+  it('refuses 8.0.0, since release 8.0 is cut as 8.0.1', () => {
+    assert.throws(() => computeNextReleaseVersion('8.0.0'), /8\.0\.1/);
   });
 
   it('rejects a non-canonical base', () => {
@@ -166,8 +170,15 @@ describe('planPushPublish', () => {
 
   it('plans a stable release with its dev follow-up', () => {
     assert.deepEqual(
-      planPushPublish('8.1.0', { available: true, version: '8.0.0' }, '8.0.0-dev.5'),
+      planPushPublish('8.1.0', { available: true, version: '8.0.1' }, '8.0.1-dev.5'),
       { version: '8.1.0', tag: 'latest', devVersion: '8.1.0-dev.1' },
+    );
+  });
+
+  it('plans release 8.0 as 8.0.1 after the release candidates, its dev counter starting again', () => {
+    assert.deepEqual(
+      planPushPublish('8.0.1', { available: true, version: '8.0.0-rc.35' }, '8.0.0-rc.35-dev.4'),
+      { version: '8.0.1', tag: 'latest', devVersion: '8.0.1-dev.1' },
     );
   });
 });
@@ -208,6 +219,14 @@ describe('assertCanonicalBase', () => {
   it('accepts a clean release', () => {
     assert.doesNotThrow(() => assertCanonicalBase('0.7.0'));
     assert.doesNotThrow(() => assertCanonicalBase('1.2.3'));
+    assert.doesNotThrow(() => assertCanonicalBase('8.0.1'));
+    assert.doesNotThrow(() => assertCanonicalBase('8.1.0'));
+  });
+
+  it('refuses a Prisma 8 release that is not a release number, saying why', () => {
+    assert.throws(() => assertCanonicalBase('8.0.0'), /release 8\.0 is cut as 8\.0\.1/);
+    assert.throws(() => assertCanonicalBase('8.0.2'), /8\.0\.1/);
+    assert.throws(() => assertCanonicalBase('8.1.1'), /8\.1\.0/);
   });
 
   it('accepts an rc base', () => {
