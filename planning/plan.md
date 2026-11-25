@@ -22,10 +22,10 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Upgrade path from Prisma 7 | 7 of 7 (100%) | `██████████` | 0 | 0 |
 | Editor and tools | 3 of 6 (50%) | `█████░░░░░` | 1 | 2 |
 | Query features | 10 of 11 (91%) | `█████████░` | 1 | 0 |
-| Docs and the new user's first hour | 2 of 5 (40%) | `████░░░░░░` | 2 | 1 |
+| Docs and the new user's first hour | 3 of 5 (60%) | `██████░░░░` | 2 | 0 |
 | Work found along the way | 4 of 9 (44%) | `████░░░░░░` | 1 | 4 |
 | Compatibility policy | 0 of 7 (0%) | `░░░░░░░░░░` | 3 | 4 |
-| **All streams** | **34 of 53 (64%)** | `██████░░░░` | **8** | **11** |
+| **All streams** | **35 of 53 (66%)** | `██████░░░░` | **8** | **10** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -102,7 +102,7 @@ Everything here is additive, so nothing here can block a breaking change.
 
 ## Stream 5: Docs and the new user's first hour
 
-**GA readiness:** 2 of 5 Must projects done (40%). 2 in progress, 1 not started.
+**GA readiness:** 3 of 5 Must projects done (60%). 2 in progress, 0 not started.
 
 Test: the getting-started eval passes, in few steps and with no workarounds.
 
@@ -110,11 +110,11 @@ Test: the getting-started eval passes, in few steps and with no workarounds.
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | ✅ 2/2 | Docs and the shipped skill stop naming `prisma-composer` | Must, urgent | Will | Done 2026-10-08 |  |
 | 2 | ✅ 3/3 | Correct the query reference in the shipped skill, which promises features that do not exist | Must, urgent | Will | Done 2026-11-18. Back-references merged 2026-11-13. The skill fix merged 2026-11-18: data transforms match the code, the skill names only published packages, and the self-join example is fixed. TML-3346, TML-3440 and TML-3365 are Done |  |
-| 3 | 🔄 1/11 | Docs gaps found by the eval: 11 items, 5 high | Must | Will | 1 of 11 merged. The rest not re-checked | Re-check the 11 items against prisma/web |
-| 4 | ❓ | ORM scenario for the eval: decide the project, then build it | Must | Will | Not decided | Decide the project |
-| 5 | 🔄 | Docs restructure | Must | Will | The docs audit draft is active again, updated 2026-10-22. Three new pages merged 2026-10-23: a database on your machine, Advanced PostgreSQL, and supported versions. More merged 2026-10-29: Types for your code, Money and decimals, a Vercel deployment guide, and extension pages. The docs update for rc.21 and rc.22 merged 2026-10-30. Seven small audit items merged 2026-11-17. One `/getting-started` page, and fixes to wrong facts on the migration and CLI pages, merged 2026-11-18. Nine PRs that bring the docs and guides in line with ORM rc.24 and CLI rc.34 merged 2026-11-20 and 2026-11-21 | |
+| 3 | 🔄 7/11 | Docs gaps found by the eval: 11 items, 5 high | Must | Will | Re-checked 2026-11-25 against prisma/web: 6 fixed and 1 no longer applies (the `prisma` CLI has no `destroy` command). Left, all on the Composer pages: no example of an HTTP service with GET and POST routes (high); no page says how to migrate the local `dev` database or a `rawPostgres()` database (high, in part: the deploy applies migrations to a `postgres()` database); no full signatures for `compute()`, `postgres()` and `rawPostgres()`; the Composer landing page links 7 of its 14 subpages | Write the 4 missing pieces of the Composer docs |
+| 4 | ✅ 2/2 | ORM scenario for the eval: decide the project, then build it | Must | Will | Done 2026-11-10. The scenario is the docs' own ORM quickstart pages, run every night with no deploy: MongoDB since 2026-09-28 and PostgreSQL since 2026-11-10. Both passed in the nightly of 2026-11-25, as did the Composer script and 3 of 3 agent attempts. SQLite, MySQL and MariaDB have no Prisma 8 quickstart page, so they have no script; they are Early Access at 8.0 | |
+| 5 | 🔄 | Docs restructure | Must | Will | The docs audit draft is active again, updated 2026-10-22. Three new pages merged 2026-10-23: a database on your machine, Advanced PostgreSQL, and supported versions. More merged 2026-10-29: Types for your code, Money and decimals, a Vercel deployment guide, and extension pages. The docs update for rc.21 and rc.22 merged 2026-10-30. Seven small audit items merged 2026-11-17. One `/getting-started` page, and fixes to wrong facts on the migration and CLI pages, merged 2026-11-18. Nine PRs that bring the docs and guides in line with ORM rc.24 and CLI rc.34 merged 2026-11-20 and 2026-11-21. The update for ORM rc.25 merged 2026-11-23. The audit draft was last updated 2026-11-23 and is still open | |
 | 6 | ✅ | Document that cursor pagination starts after the cursor row | Aim | Will | Done 2026-11-18, in the route-by-route upgrade guide | |
-| 7 | ⏳ | Update the records that contradict the code | Aim | Will | Not started |  |
+| 7 | 🔄 5/7 | Update the records that contradict the code | Aim | Will | One PR, merged 2026-11-18, corrected four of the documents in `query-feature-gaps.md` and 33 port records that claimed missing features. Left: the SQL builder's `STATUS.md`, unchanged since 2026-09-28; the gap list says it is wrong but not which lines, and the operators it lists as missing, such as `NOT`, `IS NULL` and `LIKE`, were not found in the builder, and the failing-test records, which do not match the `test.fails` markers (about 50 records to 45 markers) | Check `STATUS.md` against the builder, then match the failing-test records to the markers |
 
 ## Stream 6: Work found along the way
 
