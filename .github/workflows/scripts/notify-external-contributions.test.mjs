@@ -56,8 +56,12 @@ describe('resolveWindow', () => {
     });
   });
 
-  it('looks back fifteen minutes when no scheduled run has succeeded yet', () => {
-    assert.deepEqual(resolveWindow(undefined, until).since, new Date('2026-11-25T11:45:00Z'));
+  it('looks back a day, without a warning, until a scheduled run has succeeded', () => {
+    assert.deepEqual(resolveWindow(undefined, until), {
+      since: new Date('2026-11-24T12:00:00Z'),
+      until,
+      skipped: undefined,
+    });
   });
 
   it('looks back at most a day after a long outage and reports the skipped time', () => {
@@ -194,6 +198,29 @@ describe('createGitHubClient', () => {
     assert.deepEqual(items[0].number, 2);
     assert.deepEqual(items.at(-1).number, 300);
     assert.equal(items.length, 101);
+  });
+
+  it('keeps an item once when a new item pushes it onto the next page as well', async () => {
+    const since = new Date('2026-11-25T10:00:00Z');
+    const until = new Date('2026-11-25T12:00:00Z');
+    const fullPage = Array.from({ length: 100 }, (_, i) =>
+      issue({
+        number: 300 - i,
+        created_at: new Date(until.getTime() - 1000 * (i + 1)).toISOString(),
+      }),
+    );
+    const secondPage = [fullPage.at(-1), issue({ number: 1, created_at: '2026-11-25T09:00:00Z' })];
+    const { github } = clientFor([
+      [
+        '/repos/o/r/issues',
+        (path) => jsonResponse(path.endsWith('&page=1') ? fullPage : secondPage),
+      ],
+    ]);
+
+    const numbers = (await github.itemsCreatedBetween(since, until)).map((item) => item.number);
+
+    assert.equal(numbers.length, 100);
+    assert.equal(new Set(numbers).size, 100);
   });
 
   it('stops after one full page once that page reaches the start of the window', async () => {

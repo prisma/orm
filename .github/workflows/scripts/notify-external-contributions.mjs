@@ -4,7 +4,6 @@ import { parseArgs } from 'node:util';
 
 const GITHUB_API = 'https://api.github.com';
 const REQUEST_TIMEOUT_MS = 30_000;
-const FIRST_RUN_LOOKBACK_MS = 15 * 60 * 1000;
 const MAX_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 const SLACK_ATTEMPTS = 3;
 const SLACK_SPACING_MS = 1000;
@@ -26,9 +25,7 @@ export function lastScheduledRunStart(successfulRuns) {
 
 export function resolveWindow(lastRunStart, until) {
   const earliest = new Date(until.getTime() - MAX_LOOKBACK_MS);
-  if (!lastRunStart) {
-    return { since: new Date(until.getTime() - FIRST_RUN_LOOKBACK_MS), until, skipped: undefined };
-  }
+  if (!lastRunStart) return { since: earliest, until, skipped: undefined };
   if (lastRunStart < earliest) {
     return { since: earliest, until, skipped: { from: lastRunStart, to: earliest } };
   }
@@ -87,14 +84,18 @@ export function createGitHubClient({ token, repository, fetch = globalThis.fetch
     },
 
     async itemsCreatedBetween(since, until) {
-      const collected = [];
+      const byNumber = new Map();
       for (let page = 1; ; page++) {
         const newestFirst = await getJson(
           `/repos/${repository}/issues?state=all&sort=created&direction=desc&per_page=100&page=${page}`,
         );
         const { items, reachedStart } = itemsCreatedInWindow(newestFirst, since, until);
-        collected.unshift(...items);
-        if (reachedStart || newestFirst.length < 100) return collected;
+        for (const item of items) byNumber.set(item.number, item);
+        if (reachedStart || newestFirst.length < 100) {
+          return [...byNumber.values()].sort(
+            (a, b) => new Date(a.created_at) - new Date(b.created_at),
+          );
+        }
       }
     },
 
