@@ -409,9 +409,7 @@ function runFilterIsCheckFilter(op: MongoDmlOperation, plan: MongoQueryPlan): bo
  * check, such as a copy in a dataTransform, runs again.
  */
 function rerunText(runAgain: string, before: readonly AnyMongoMigrationOperation[]): string {
-  return before.some(
-    (operation) => isMongoDmlOperation(operation) && operation.postcheck.length === 0,
-  )
+  return before.some((operation) => operation.postcheck.length === 0)
     ? `${runAgain}. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again.`
     : `${runAgain}; operations that already ran are skipped.`;
 }

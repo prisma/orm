@@ -1306,6 +1306,21 @@ describe('MongoMigrationRunner, a stop after a copy, which has no check', () => 
     );
   });
 
+  it('says that an operation with no check runs again when it is a create from an ops.json written before creates had one', async () => {
+    const harness = makeHarness();
+    harness.inspectionExecutor.collections = [{ name: 'events' }, { name: 'occasions' }];
+    const uncheckedCreate = { ...createCollection('members'), postcheck: [] };
+
+    const result = await execute(harness, [
+      uncheckedCreate,
+      renameCollection('events', 'occasions'),
+    ]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      'If occasions holds nothing you need, drop it, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again.',
+    );
+  });
+
   const mongoError = (code: number, codeName: string, extra: Record<string, unknown> = {}) =>
     new MongoServerError({ ok: 0, code, codeName, errmsg: `${codeName} error`, ...extra });
   const runsAgain =
