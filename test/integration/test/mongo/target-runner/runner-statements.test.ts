@@ -1,10 +1,8 @@
 import { introspectSchema } from '@internal/adapter-mongo/control';
 import type { MigrationOperationPolicy } from '@internal/framework-components/control';
 import { MongoCollection } from '@internal/mongo-contract';
-import {
-  type AnyMongoMigrationOperation,
-  MongoMigrationPlanner,
-} from '@internal/target-mongo/control';
+import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
+import { MongoMigrationPlanner } from '@internal/target-mongo/control';
 import { dataTransform, deleteDocuments, rawAggregate } from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
