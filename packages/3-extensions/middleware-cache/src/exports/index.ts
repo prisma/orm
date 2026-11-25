@@ -15,7 +15,3 @@ export type {
   InMemoryCacheStoreOptions,
 } from '../cache-store';
 export { createInMemoryCacheStore } from '../cache-store';
-
-export function cacheProbeForQa(): string {
-  return 'qa';
-}
