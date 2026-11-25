@@ -57,7 +57,7 @@ An extension package bundles a contract and migrations with its hashes, and this
 
 ### 4. Emit the contract and commit
 
-Run `prisma contract emit` and commit the result with the script's changes. It writes the emitted contract with the hashes the script wrote, and the files Prisma keeps for each extension under `migrations/<extension>/`. The profile hash covers the contract's `capabilities`, which `contract emit` takes from the target, the adapter and the extensions. If this release lists capabilities your release did not, the emitted contract lists them too and has the profile hash of that longer list, not the one the script wrote. That is expected: step 5 signs each database with the emitted contract's hashes.
+Run `prisma contract emit` and commit the result with the script's changes. It writes the emitted contract, with the storage and execution hashes the script wrote, and the files Prisma keeps for each extension under `migrations/<extension>/`. The profile hash covers the contract's `capabilities`, which `contract emit` takes from the target, the adapter and the extensions. When this release lists the same capabilities as your release, the emitted contract keeps the profile hash the script wrote. When it lists different ones (more or fewer, for example after an extension upgrade in step 3), the emitted contract has this release's list and the profile hash of that list. That is expected: step 5 signs each database with the emitted contract.
 
 ### 5. Sign every database in that release's deploy
 
