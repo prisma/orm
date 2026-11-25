@@ -1,6 +1,6 @@
 # Public API compatibility checks
 
-From `8.0.0`, Prisma 8 promises that an application upgrades to any later `8.x` release with no code changes. CI checks every pull request against that promise. This guide says what each check does and what to do when one fails. The decision and its reasons are in [ADR 330](architecture%20docs/adrs/ADR%20330%20-%20CI%20finds%20breaking%20API%20changes%20by%20compiling%20against%20the%20last%20release.md).
+From `8.0.0`, Prisma 8 promises that an application upgrades to any later `8.x` release with no code changes. CI checks every pull request against that promise. This guide says what each check does and what to do when one fails. The decision and its reasons are in [ADR 330](architecture%20docs/adrs/ADR%20330%20-%20CI%20finds%20breaking%20and%20accidental%20API%20changes%20against%20the%20last%20release.md).
 
 ## The four checks
 
