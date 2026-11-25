@@ -1,3 +1,4 @@
+import { InternalError } from '@internal/utils/internal-error';
 import { MongoServerError } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import {
@@ -43,7 +44,10 @@ const badValue = new MongoServerError({
 const copyAndDelete = [[], [{ _id: 1 }], [], []];
 const stopsAtCheckedTransform = [...copyAndDelete, [{ _id: 1 }], []];
 
-const unfinished = `Operation data_transform.move Measurement to measurements copied documents into collection measurements with an $out stage, and operation ${deletion.id}, which deletes them from collection events, has not finished. Before you run the command again, finish that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts: the copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If the command was already run again before the delete finished, the moved documents are in collection measurements more than once: the copy's filter, run on collection measurements, selects each of them two or more times, under the same _id.`;
+const DUPLICATES =
+  "To find them, group collection measurements by _id and keep each _id that appears more than once, for example with db.measurements.aggregate([{ $group: { _id: '$_id', n: { $sum: 1 } } }, { $match: { n: { $gt: 1 } } }]) in mongosh.";
+
+const unfinished = `Operation data_transform.move Measurement to measurements copied documents into collection measurements with an $out stage, and operation ${deletion.id}, which deletes them from collection events, has not finished. Before you run the command again, finish that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts: the copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If the command was already run again before the delete finished, collection measurements holds some of the moved documents two or more times, under the same _id. ${DUPLICATES}`;
 
 describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
   it('says to finish the delete on the source when the apply stops between the copy and the delete', async () => {
@@ -160,6 +164,81 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     );
   });
 
+  it('names each unfinished delete of a copy with one $unionWith stage for each group of models', async () => {
+    const sample = { kind: 'sample' };
+    const groupsCopy = dataTransform('move Measurement and Sample to measurements', {
+      run: () =>
+        rawAggregate('measurements', [
+          { $unionWith: { coll: 'events', pipeline: [{ $match: FILTER }, { $unset: ['x'] }] } },
+          { $unionWith: { coll: 'events', pipeline: [{ $match: sample }] } },
+          { $out: 'measurements' },
+        ]),
+    });
+    const sampleDeletion = deleteDocuments({ collection: 'events', filter: sample });
+    const harness = makeHarness();
+    harness.driver.failUpdateManyWith(badValue);
+
+    const result = await execute(harness, [groupsCopy, failingUpdate, deletion, sampleDeletion]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      `Operation data_transform.move Measurement and Sample to measurements copied documents into collection measurements with an $out stage, and operations ${deletion.id} and ${sampleDeletion.id}, which delete them from collection events, have not finished. Before you run the command again, finish those deletes yourself, on collection events, each with the filter of its deleteDocuments call in the migration's migration.ts: the copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If the command was already run again before the deletes finished, collection measurements holds some of the moved documents two or more times, under the same _id. ${DUPLICATES}`,
+    );
+  });
+
+  it('names only the delete that has not finished once the delete of the other group has', async () => {
+    const sample = { kind: 'sample' };
+    const groupsCopy = dataTransform('move Measurement and Sample to measurements', {
+      run: () =>
+        rawAggregate('measurements', [
+          { $unionWith: { coll: 'events', pipeline: [{ $match: FILTER }] } },
+          { $unionWith: { coll: 'events', pipeline: [{ $match: sample }] } },
+          { $out: 'measurements' },
+        ]),
+    });
+    const sampleDeletion = deleteDocuments({ collection: 'events', filter: sample });
+    const harness = makeHarness();
+    for (const rows of stopsAtCheckedTransform) harness.driver.queueResponse(rows);
+
+    const result = await execute(harness, [groupsCopy, deletion, checkedTransform, sampleDeletion]);
+
+    expect(failureFields(result.assertNotOk())).toMatchObject({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      why: expect.stringContaining(
+        `with an $out stage, and operation ${sampleDeletion.id}, which deletes them from collection events, has not finished.`,
+      ),
+    });
+  });
+
+  it('pairs a copy whose stages rename the field its filter reads', async () => {
+    const renamingCopy = dataTransform('move Measurement to measurements', {
+      run: () =>
+        rawAggregate('measurements', [
+          {
+            $unionWith: {
+              coll: 'events',
+              pipeline: [{ $match: FILTER }, { $set: { when: '$at' } }, { $unset: ['at'] }],
+            },
+          },
+          { $out: 'measurements' },
+        ]),
+    });
+    const harness = makeHarness();
+    harness.driver.failUpdateManyWith(badValue);
+
+    const result = await execute(harness, [renamingCopy, failingUpdate, deletion]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(unfinished);
+  });
+
+  it('throws an InternalError again as it is, with no advice', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([]);
+    const bug = new InternalError('an invariant broke');
+    harness.driver.failUpdateManyWith(bug);
+
+    await expect(execute(harness, [unionCopy, failingUpdate, deletion])).rejects.toBe(bug);
+  });
+
   it.each([
     {
       shape: 'a copy that only a delete before it follows',
@@ -196,6 +275,54 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     {
       shape: 'a copy that reads only its source',
       operations: [loneCopy, failingUpdate, deletion],
+    },
+    {
+      shape: 'a copy of the whole source followed by the drop of another collection',
+      operations: [renameCopy, failingUpdate, dropCollection('archive')],
+    },
+    {
+      shape:
+        'a copy whose $unionWith pipeline does not start with $match, followed by the drop of its source',
+      operations: [
+        dataTransform('reshape readings into measurements', {
+          run: () =>
+            rawAggregate('measurements', [
+              { $unionWith: { coll: 'readings', pipeline: [{ $set: { unit: 'C' } }] } },
+              { $out: 'measurements' },
+            ]),
+        }),
+        failingUpdate,
+        dropCollection('readings'),
+      ],
+    },
+    {
+      shape: 'a copy whose $out writes into another database',
+      operations: [
+        dataTransform('move Measurement to archive', {
+          run: () =>
+            rawAggregate('measurements', [
+              { $unionWith: { coll: 'events', pipeline: [{ $match: FILTER }] } },
+              { $out: { db: 'archive', coll: 'measurements' } },
+            ]),
+        }),
+        failingUpdate,
+        deletion,
+      ],
+    },
+    {
+      shape: 'a copy of two groups whose second group has no delete',
+      operations: [
+        dataTransform('move Measurement and Sample to measurements', {
+          run: () =>
+            rawAggregate('measurements', [
+              { $unionWith: { coll: 'events', pipeline: [{ $match: FILTER }] } },
+              { $unionWith: { coll: 'events', pipeline: [{ $match: { kind: 'sample' } }] } },
+              { $out: 'measurements' },
+            ]),
+        }),
+        failingUpdate,
+        deletion,
+      ],
     },
   ])('says nothing about a copy the planner does not print: $shape', async ({ operations }) => {
     const harness = makeHarness();

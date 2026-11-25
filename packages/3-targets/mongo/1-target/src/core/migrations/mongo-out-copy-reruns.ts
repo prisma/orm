@@ -5,18 +5,19 @@ import {
   isMongoDmlOperation,
 } from '@internal/mongo-query-ast/control';
 import { RawAggregateCommand, RawDeleteManyCommand } from '@internal/mongo-query-ast/execution';
+import { joinedList } from './mongo-plan-text';
 
 /**
  * A copy the planner prints for a move into a time-series collection: a data transform whose run
- * reads its target, adds documents of one source with `$unionWith`, and writes them all back with
- * `$out`. `filter` is the `$match` of its one `$unionWith` pipeline; a copy of every document of the
- * source, as the rename route prints, has none.
+ * reads its target, adds documents of one source with `$unionWith` stages, and writes them all back
+ * with `$out`. `filters` holds the `$match` of each `$unionWith` pipeline, one for each group of
+ * models; it is empty for a copy of every document of the source, as the rename route prints.
  */
 interface UnionCopy {
   readonly id: string;
   readonly into: string;
   readonly source: string;
-  readonly filter: string | undefined;
+  readonly filters: readonly string[];
 }
 
 interface Union {
@@ -56,25 +57,38 @@ function unionCopyOf(operation: AnyMongoMigrationOperation): UnionCopy | undefin
   const [plan, ...more] = operation.run;
   const command = plan?.command;
   if (more.length > 0 || !(command instanceof RawAggregateCommand)) return undefined;
-  const [stage, out, ...rest] = command.pipeline;
-  const union = unionOf(stage);
-  const into = outOf(out);
-  if (union === undefined || into !== command.collection || rest.length > 0) return undefined;
-  if (union.coll === into || (!union.whole && union.filter === undefined)) return undefined;
-  return { id: operation.id, into, source: union.coll, filter: union.filter };
+  const stages = command.pipeline;
+  const into = outOf(stages.at(-1));
+  const unions = stages.slice(0, -1).map(unionOf);
+  const [first] = unions;
+  if (first === undefined || into !== command.collection) return undefined;
+  const source = first.coll;
+  if (source === into) return undefined;
+  if (first.whole) {
+    return unions.length === 1 ? { id: operation.id, into, source, filters: [] } : undefined;
+  }
+  const filters = unions.map((union) =>
+    union?.coll === source && !union.whole ? union.filter : undefined,
+  );
+  if (!filters.every((filter) => filter !== undefined)) return undefined;
+  return { id: operation.id, into, source, filters };
 }
 
-/** Whether `operation` is the step that removes the copied documents from the copy's source: a delete with the copy's filter, or, for a copy of the whole source, its drop. */
-function removesCopied(operation: AnyMongoMigrationOperation, copy: UnionCopy): boolean {
-  if (copy.filter === undefined) {
-    return (
-      !isMongoDmlOperation(operation) &&
-      operation.execute.some(
-        ({ command }) =>
-          command instanceof DropCollectionCommand && command.collection === copy.source,
-      )
-    );
-  }
+function dropsSource(operation: AnyMongoMigrationOperation, copy: UnionCopy): boolean {
+  return (
+    !isMongoDmlOperation(operation) &&
+    operation.execute.some(
+      ({ command }) =>
+        command instanceof DropCollectionCommand && command.collection === copy.source,
+    )
+  );
+}
+
+function deletesFromSource(
+  operation: AnyMongoMigrationOperation,
+  copy: UnionCopy,
+  filter: string,
+): boolean {
   if (!isMongoDmlOperation(operation)) return false;
   const [plan, ...more] = operation.run;
   const command = plan?.command;
@@ -82,13 +96,47 @@ function removesCopied(operation: AnyMongoMigrationOperation, copy: UnionCopy): 
     more.length === 0 &&
     command instanceof RawDeleteManyCommand &&
     command.collection === copy.source &&
-    canonicalize(command.filter) === copy.filter
+    canonicalize(command.filter) === filter
   );
 }
 
-function unfinishedDeleteText(copy: UnionCopy, deleteId: string): string {
+/**
+ * The index of each step after the copy at `index` that removes what the copy took from its
+ * source: the delete with the filter of each `$unionWith` stage, or, for a copy of the whole
+ * source, its drop. `undefined` when one of them is missing.
+ */
+function removalsOf(
+  operations: readonly AnyMongoMigrationOperation[],
+  index: number,
+  copy: UnionCopy,
+): readonly number[] | undefined {
+  const removes =
+    copy.filters.length === 0
+      ? [(operation: AnyMongoMigrationOperation) => dropsSource(operation, copy)]
+      : copy.filters.map(
+          (filter) => (operation: AnyMongoMigrationOperation) =>
+            deletesFromSource(operation, copy, filter),
+        );
+  const found = removes.map((removes) =>
+    operations.findIndex((later, laterIndex) => laterIndex > index && removes(later)),
+  );
+  return found.every((removal) => removal !== -1) ? found : undefined;
+}
+
+function duplicatesText(into: string): string {
+  return `To find them, group collection ${into} by _id and keep each _id that appears more than once, for example with db.${into}.aggregate([{ $group: { _id: '$_id', n: { $sum: 1 } } }, { $match: { n: { $gt: 1 } } }]) in mongosh.`;
+}
+
+function unfinishedDeleteText(copy: UnionCopy, deleteIds: readonly string[]): string {
   const { id, into, source } = copy;
-  return `Operation ${id} copied documents into collection ${into} with an $out stage, and operation ${deleteId}, which deletes them from collection ${source}, has not finished. Before you run the command again, finish that delete yourself, on collection ${source} with the filter of its deleteDocuments call in the migration's migration.ts: the copy has no check, so it runs again, and it would add the documents still in collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the command was already run again before the delete finished, the moved documents are in collection ${into} more than once: the copy's filter, run on collection ${into}, selects each of them two or more times, under the same _id.`;
+  const one = deleteIds.length === 1;
+  const deletes = one
+    ? `operation ${deleteIds[0]}, which deletes them from collection ${source}, has not finished`
+    : `operations ${joinedList(deleteIds)}, which delete them from collection ${source}, have not finished`;
+  const finish = one
+    ? `finish that delete yourself, on collection ${source} with the filter of its deleteDocuments call in the migration's migration.ts`
+    : `finish those deletes yourself, on collection ${source}, each with the filter of its deleteDocuments call in the migration's migration.ts`;
+  return `Operation ${id} copied documents into collection ${into} with an $out stage, and ${deletes}. Before you run the command again, ${finish}: the copy has no check, so it runs again, and it would add the documents still in collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the command was already run again before the ${one ? 'delete' : 'deletes'} finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
 function undroppedText(copy: UnionCopy, dropId: string): string {
@@ -109,15 +157,13 @@ export function outCopyRerunText(
   const texts = operations.slice(0, stoppedAt).flatMap((operation, index) => {
     const copy = unionCopyOf(operation);
     if (copy === undefined) return [];
-    const removalIndex = operations.findIndex(
-      (later, laterIndex) => laterIndex > index && removesCopied(later, copy),
-    );
-    const removal = operations[removalIndex];
-    if (removal === undefined || removalIndex < stoppedAt) return [];
+    const pending = (removalsOf(operations, index, copy) ?? [])
+      .filter((removalIndex) => removalIndex >= stoppedAt)
+      .flatMap((removalIndex) => operations[removalIndex]?.id ?? []);
+    const [first] = pending;
+    if (first === undefined) return [];
     return [
-      copy.filter === undefined
-        ? undroppedText(copy, removal.id)
-        : unfinishedDeleteText(copy, removal.id),
+      copy.filters.length === 0 ? undroppedText(copy, first) : unfinishedDeleteText(copy, pending),
     ];
   });
   return texts.length === 0 ? undefined : texts.join(' ');

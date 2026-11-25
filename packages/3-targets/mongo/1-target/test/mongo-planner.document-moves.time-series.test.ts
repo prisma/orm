@@ -137,7 +137,7 @@ describe('MongoMigrationPlanner, a document move into a time-series collection',
     });
   });
 
-  it('writes one $out for all the copies of one collection when there are several', () => {
+  it('writes one $out for all the copies of one collection when there are several, and a delete for each', () => {
     const why = routeOf(
       plan({
         from: contract(
@@ -167,10 +167,15 @@ describe('MongoMigrationPlanner, a document move into a time-series collection',
         '  rawAggregate("measurements", [\n    { $unionWith: { coll: "events", pipeline: [{ $match: <a filter that selects only the documents of model "Measurement"> }, { $unset: ["x"] }] } },\n    { $unionWith: { coll: "events", pipeline: [{ $match: <a filter that selects only the documents of model "Sample"> }] } },\n    { $out: "measurements" },\n  ])',
       ],
       unions: [expect.stringContaining(unionText('models "Measurement" and "Sample"'))],
-      reruns: [rerun('events')],
+      reruns: [
+        'The copy has no check, so it runs again on every run of the migration, and a run after the deletes have finished writes back what collection "measurements" already holds. If the apply stops after the copy and before the deletes have finished, finish them yourself, on collection "events", each with its stage\'s filter, before you run db migrate again: otherwise the copy adds the documents still in collection "events" to collection "measurements" a second time. Do not delete documents from collection "measurements" instead: a time-series collection does not enforce a unique _id, so a delete by _id there can also remove a document it already held.',
+      ],
       limits: `${MOVE_LIMITS} ${OUT_LIMITS}`,
       apply: ONE_RUN,
     });
+    expect(why).toContain(
+      'After it, add the operations that delete the documents of models "Measurement" and "Sample" from collection "events", one for each $unionWith stage, with that stage\'s filter:\n\n  deleteDocuments({ collection: "events", filter: <the filter of the $unionWith stage of model "Measurement"> })\n  deleteDocuments({ collection: "events", filter: <the filter of the $unionWith stage of model "Sample"> })\n\n',
+    );
   });
 
   it('gives each source collection its own $out copy when documents of two collections move into one', () => {

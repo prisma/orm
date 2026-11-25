@@ -178,6 +178,33 @@ function unionCall(move: DocumentMove): string {
 }
 
 /**
+ * The deletes after the `$unionWith` copy of a move: one for each of its stages, with that stage's
+ * filter, so that the runner can tell which of them has not finished when the apply stops.
+ */
+function unionDeletesText(
+  move: DocumentMove,
+  deletes: string,
+  deleteCall: (filter: string) => string,
+): string {
+  const { from, to, copies } = move;
+  const one = copies.length === 1;
+  const calls = one
+    ? deleteCall('<the same filter>')
+    : copies
+        .map((copy) =>
+          deleteCall(`<the filter of the $unionWith stage of ${modelNamesText(copy.models)}>`),
+        )
+        .join('\n');
+  const after = one
+    ? `After it, add ${deletes}:`
+    : `After it, add the operations that delete the documents of ${movingText(move)} from collection "${from}", one for each $unionWith stage, with that stage's filter:`;
+  const stop = one
+    ? `If the apply stops after the copy and before the delete has finished, finish that delete yourself, on collection "${from}" with the same filter,`
+    : `If the apply stops after the copy and before the deletes have finished, finish them yourself, on collection "${from}", each with its stage's filter,`;
+  return `${after}\n\n${calls}\n\nThe copy has no check, so it runs again on every run of the migration, and a run after the ${one ? 'delete has' : 'deletes have'} finished writes back what collection "${to}" already holds. ${stop} before you run db migrate again: otherwise the copy adds the documents still in collection "${from}" to collection "${to}" a second time. Do not delete documents from collection "${to}" instead: a time-series collection does not enforce a unique _id, so a delete by _id there can also remove a document it already held.`;
+}
+
+/**
  * The dataTransforms of a move, one for each copy, since a dataTransform's run is one query plan,
  * and after them the delete, which is an operation of its own.
  */
@@ -192,7 +219,7 @@ function copiesText(move: DocumentMove, write: CopyWrite): string {
       ? '<the same filter>'
       : '<a filter that selects the documents of all of them>';
   if (write === 'unionOut') {
-    return `add a dataTransform. ${timeSeriesCopyLimits(to)} So its run reads the documents collection "${to}" holds, adds those of ${movingText(move)} with a $unionWith stage, and writes them all back with an $out stage, which rewrites the whole collection:\n\n${unionCall(move)}\n\nAfter it, add ${deletes}:\n\n${deleteCall(sameFilter)}\n\nThe copy has no check, so it runs again on every run of the migration, and a run after the delete has finished writes back what collection "${to}" already holds. If the apply stops after the copy and before the delete has finished, finish that delete yourself, on collection "${from}" with the same filter, before you run db migrate again: otherwise the copy adds the documents still in collection "${from}" to collection "${to}" a second time. Do not delete documents from collection "${to}" instead: a time-series collection does not enforce a unique _id, so a delete by _id there can also remove a document it already held.`;
+    return `add a dataTransform. ${timeSeriesCopyLimits(to)} So its run reads the documents collection "${to}" holds, adds those of ${movingText(move)} with a $unionWith stage, and writes them all back with an $out stage, which rewrites the whole collection:\n\n${unionCall(move)}\n\n${unionDeletesText(move, deletes, deleteCall)}`;
   }
   return copies.length === 1 && only !== undefined
     ? `add a dataTransform. Its run copies the documents of ${movingText(move)} into collection "${to}":\n\n${copyCall(move, only, 'those documents')}\n\nAfter it, add ${deletes}:\n\n${deleteCall(sameFilter)}`

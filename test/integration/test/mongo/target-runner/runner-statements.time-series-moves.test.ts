@@ -165,6 +165,105 @@ describe('MongoMigrationPlanner and runner - a move into a new time-series colle
   );
 });
 
+describe('MongoMigrationPlanner and runner - a move of two groups of models into one time-series collection', () => {
+  const groupsFrom = contract(
+    'from',
+    {
+      Event: event,
+      Measurement: { collection: 'events', fields: ['_id', 'at'] },
+      Sample: { collection: 'events', fields: ['_id', 'at'] },
+    },
+    { events: new MongoCollection({}) },
+  );
+  const groupsTo = contract(
+    'to',
+    {
+      Event: event,
+      Reading: { collection: 'measurements', fields: ['_id', 'at'] },
+      Probe: { collection: 'measurements', fields: ['_id', 'at'] },
+    },
+    {
+      events: new MongoCollection({}),
+      measurements: new MongoCollection({ options: { timeseries: { timeField: 'at' } } }),
+    },
+  );
+  const measurementFilter = { value: { $exists: true } };
+  const sampleFilter = { probe: { $exists: true } };
+  const groupsCopy = dataTransform('move Measurement and Sample documents to measurements', {
+    run: () =>
+      rawAggregate('measurements', [
+        { $unionWith: { coll: 'events', pipeline: [{ $match: measurementFilter }] } },
+        { $unionWith: { coll: 'events', pipeline: [{ $match: sampleFilter }] } },
+        { $out: 'measurements' },
+      ]),
+  });
+  const measurementDeletion = deleteDocuments({ collection: 'events', filter: measurementFilter });
+  const sampleDeletion = deleteDocuments({ collection: 'events', filter: sampleFilter });
+
+  it(
+    'keeps every moved document once when the apply stops between the copy and the deletes, and the deletes are finished as the failure says',
+    async () => {
+      await live
+        .db()
+        .collection('events')
+        .insertMany([{ name: 'launch' }, { at, value: 1 }, { at, probe: 'p1' }]);
+      await live.initMarker(groupsFrom);
+      const planned = await new MongoMigrationPlanner().plan({
+        contract: groupsTo,
+        schema: await introspectSchema(live.db()),
+        policy,
+        fromContract: groupsFrom,
+        origin: { storageHash: 'from' },
+        statements: [],
+        frameworkComponents: [],
+        snapshotsImportPath: '../../snapshots',
+      });
+      if (planned.kind !== 'success') throw new Error(JSON.stringify(planned.conflicts));
+      const operations = planned.plan.operations as readonly AnyMongoMigrationOperation[];
+      const create = operations.findIndex((operation) => operation.label.includes('measurements'));
+      const before = operations.slice(0, create + 1);
+      const after = operations.slice(create + 1);
+      const deletes = [measurementDeletion, sampleDeletion];
+
+      const first = await live.runOperations(
+        [...before, groupsCopy, failing, ...deletes, ...after],
+        groupsFrom,
+        groupsTo,
+        { policy },
+      );
+      const advice = first.ok ? undefined : first.failure.why;
+      await live.db().collection('events').deleteMany(measurementFilter);
+      await live.db().collection('events').deleteMany(sampleFilter);
+      const second = await live.runOperations(
+        [...before, groupsCopy, ...deletes, ...after],
+        groupsFrom,
+        groupsTo,
+        { policy },
+      );
+
+      expect({
+        advice,
+        second: second.ok ? 'applied' : second.failure,
+        measurements: await live.documents('measurements'),
+        events: await live.documents('events'),
+        further: await live.furtherPlanLabels(groupsTo),
+      }).toEqual({
+        advice: expect.stringContaining(
+          `Operation ${groupsCopy.id} copied documents into collection measurements with an $out stage, and operations ${measurementDeletion.id} and ${sampleDeletion.id}, which delete them from collection events, have not finished. Before you run the command again, finish those deletes yourself`,
+        ),
+        second: 'applied',
+        measurements: [
+          { at, value: 1 },
+          { at, probe: 'p1' },
+        ],
+        events: [{ name: 'launch' }],
+        further: [],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
 describe('MongoMigrationPlanner and runner - the copy of the time-series rename route', () => {
   const fromReadings = contract(
     'from',

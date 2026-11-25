@@ -82,7 +82,7 @@ import {
 } from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { InternalError } from '@internal/utils/internal-error';
+import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { notOk, ok, okVoid, type Result } from '@internal/utils/result';
 import {
   isStructuredError,
@@ -1654,6 +1654,7 @@ export class MongoMigrationRunner {
         progress,
       );
     } catch (error) {
+      if (isInternalError(error)) throw error;
       const text = advice();
       const stopped = progress.operations[progress.stoppedAt];
       if (text === undefined || stopped === undefined) throw error;
