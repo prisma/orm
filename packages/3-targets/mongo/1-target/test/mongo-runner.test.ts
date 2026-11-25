@@ -936,7 +936,7 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
       code: 'MIGRATION.EXECUTION_FAILED',
       message:
         'Operation field.users.nickname.unset failed: the database user may not skip document validation',
-      why: 'Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
+      why: 'Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again. The failed apply changed nothing.',
       meta: {
         operationId: 'field.users.nickname.unset',
         mongoCode: 13,
@@ -1041,7 +1041,7 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
     expect(failureFields(result.assertNotOk())).toMatchObject({
       message:
         'Operation data_transform.move User to members failed: the database user may not skip document validation',
-      why: 'Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
+      why: 'Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again. The failed apply changed nothing.',
     });
   });
 

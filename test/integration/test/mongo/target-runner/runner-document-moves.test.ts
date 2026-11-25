@@ -205,4 +205,72 @@ describe('a plan that moves documents into a collection whose validator it then 
       members: [{ user: 'Linus' }, { guest: 'Grace' }],
     });
   });
+
+  it("writes the moving model's new stored names in the copy into a target with a closed validator", async () => {
+    const from = contract(
+      'from',
+      {
+        Admin: { collection: 'users', fields: { admin: 'admin' } },
+        User: { collection: 'users', fields: { user: 'user', name: 'name' } },
+        Guest: { collection: 'members', fields: { guest: 'guest' } },
+      },
+      {},
+      'mongo/string@1',
+      { members: GUEST_ONLY },
+    );
+    const to = contract(
+      'to',
+      {
+        Admin: { collection: 'users', fields: { admin: 'admin' } },
+        Member: { collection: 'members', fields: { user: 'user', name: 'fullName' } },
+        Guest: { collection: 'members', fields: { guest: 'guest' } },
+      },
+      {},
+      'mongo/string@1',
+      { members: { bsonType: 'object', anyOf: [GUEST_ONLY, closedSchema(['user', 'fullName'])] } },
+    );
+    await db()
+      .collection('users')
+      .insertMany([{ admin: 'Ada' }, { user: 'linus', name: 'Linus' }]);
+    await db().createCollection('members', {
+      validator: { $jsonSchema: GUEST_ONLY },
+      validationLevel: 'strict',
+      validationAction: 'error',
+    });
+    await db().collection('members').insertOne({ guest: 'Grace' });
+    await initMarker(from);
+    const copy = dataTransform('move User to members', {
+      run: () =>
+        rawAggregate(
+          'users',
+          [
+            USERS,
+            { $set: { fullName: '$name' } },
+            { $unset: ['name'] },
+            { $merge: { into: 'members' } },
+          ],
+          { bypassDocumentValidation: true },
+        ),
+    });
+    const operations = [
+      copy,
+      deleteDocuments({ collection: 'users', filter: { user: { $exists: true } } }),
+      ...(await plannedOperations(from, to)),
+    ];
+    const result = await runOperations(operations, from, to, { policy });
+    expect({
+      labels: operations.map(({ label }) => label),
+      ok: result.ok,
+      ...(await bothCollections()),
+    }).toEqual({
+      labels: [
+        'Data transform: move User to members',
+        'Delete the documents of collection users matching {"user":{"$exists":true}}',
+        'Update validator on members (added: user, fullName)',
+      ],
+      ok: true,
+      users: [{ admin: 'Ada' }],
+      members: [{ user: 'linus', fullName: 'Linus' }, { guest: 'Grace' }],
+    });
+  });
 });

@@ -967,7 +967,7 @@ function bypassValidationRefusal(
     'MIGRATION.EXECUTION_FAILED',
     `Operation ${op.id} failed: the database user may not skip document validation`,
     {
-      why: `Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error ${MONGO_UNAUTHORIZED} (${String(codeName)}). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped.`,
+      why: `Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error ${MONGO_UNAUTHORIZED} (${String(codeName)}). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again.`,
       meta: {
         operationId: op.id,
         mongoCode: MONGO_UNAUTHORIZED,
