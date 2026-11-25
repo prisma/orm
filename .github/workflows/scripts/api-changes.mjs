@@ -1,5 +1,5 @@
 // Lists the lines a pull request adds to and removes from the packages' api.txt files, and the
-// records it adds to and removes from api-breaks.json and examples/last-release-errors.json. Keeps
+// records it adds to and removes from the three record files (scripts/public-api/records.mjs). Keeps
 // one comment with that list current, and fails until the description names each changed export,
 // and the package or app of each changed record.
 
@@ -7,6 +7,13 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { compareCodeUnits, exportOfLine } from '../../../scripts/public-api/api-lines.mjs';
+import {
+  BREAKS_FILE,
+  EXAMPLES_FILE,
+  exportLabel as labelOfExport,
+  REMOVED_FILE,
+  recordLine,
+} from '../../../scripts/public-api/records.mjs';
 
 export class ApiChangesError extends Error {
   constructor(message, status) {
@@ -17,8 +24,6 @@ export class ApiChangesError extends Error {
 
 export const MARKER = '<!-- api-changes -->';
 export const SECTION = '## API changes';
-const BREAKS_FILE = 'api-breaks.json';
-const EXAMPLES_FILE = 'examples/last-release-errors.json';
 const PACKAGE_FILE = /^packages\/9-public\/(@prisma\/[^/]+)\/(api\.txt|api-breaks\.json)$/;
 const COMMENT_LIMIT = 60_000;
 export const SUMMARY_BYTES = 1_000_000;
@@ -28,10 +33,8 @@ const HEAD = 'HEAD';
 const GITHUB_API = 'https://api.github.com';
 const REQUEST_TIMEOUT_MS = 30_000;
 
-export function exportLabel(packageName, { subpath, name }) {
-  if (subpath === undefined) return `${packageName} (not exported): ${name}`;
-  return `${packageName}${subpath.slice(1)}: ${name}`;
-}
+export const exportLabel = (packageName, { subpath, name }) =>
+  labelOfExport(packageName, subpath, name);
 
 function linesOf(text) {
   if (text === undefined) return new Set();
@@ -43,6 +46,7 @@ export function apiChanges(files) {
   for (const file of files) {
     if (file.kind === 'breaks') changes.push(...breakChanges(file));
     else if (file.kind === 'examples') changes.push(...exampleChanges(file));
+    else if (file.kind === 'removed') changes.push(...removedChanges(file));
     else changes.push(...listChanges(file));
   }
   return changes;
@@ -63,9 +67,6 @@ function listChanges({ packageName, before, after }) {
   return [{ packageName, added, removed, exports: [...exports].sort(compareCodeUnits) }];
 }
 
-const BREAK_KEYS = ['path', 'export', 'test', 'release', 'reason'];
-const EXAMPLE_KEYS = ['app', 'file', 'line', 'code', 'message', 'release', 'reason'];
-
 function recordsOf(text, file) {
   if (text === undefined) return [];
   let records;
@@ -78,22 +79,10 @@ function recordsOf(text, file) {
   return records;
 }
 
-// One line per record, with its keys in the documented order, so that reordering changes nothing.
-function recordLine(record, keys) {
-  if (record === null || typeof record !== 'object') return JSON.stringify(record);
-  const ordered = [
-    ...keys.filter((key) => Object.hasOwn(record, key)),
-    ...Object.keys(record)
-      .filter((key) => !keys.includes(key))
-      .sort(compareCodeUnits),
-  ];
-  return JSON.stringify(Object.fromEntries(ordered.map((key) => [key, record[key]])));
-}
-
 function breakChanges({ packageName, before, after }) {
   const heading = `packages/9-public/${packageName}/${BREAKS_FILE}`;
   const lines = (text) =>
-    new Set(recordsOf(text, heading).map((record) => recordLine(record, BREAK_KEYS)));
+    new Set(recordsOf(text, heading).map((record) => recordLine(record, 'breaks')));
   const { added, removed } = difference(lines(before), lines(after));
   if (added.length === 0 && removed.length === 0) return [];
   return [{ packageName, heading, added, removed, exports: [packageName] }];
@@ -105,7 +94,7 @@ function exampleChanges({ before, after }) {
     for (const record of recordsOf(text, EXAMPLES_FILE)) {
       const app = typeof record?.app === 'string' ? record.app : undefined;
       if (!apps.has(app)) apps.set(app, new Set());
-      apps.get(app).add(recordLine(record, EXAMPLE_KEYS));
+      apps.get(app).add(recordLine(record, 'examples'));
     }
     return apps;
   };
@@ -123,6 +112,31 @@ function exampleChanges({ before, after }) {
   });
 }
 
+// A removed package's record is named by the package it is for.
+function removedChanges({ before, after }) {
+  const byPackage = (text) => {
+    const packages = new Map();
+    for (const record of recordsOf(text, REMOVED_FILE)) {
+      const name = typeof record?.package === 'string' ? record.package : REMOVED_FILE;
+      if (!packages.has(name)) packages.set(name, new Set());
+      packages.get(name).add(recordLine(record, 'removed'));
+    }
+    return packages;
+  };
+  const old = byPackage(before);
+  const current = byPackage(after);
+  return [...new Set([...old.keys(), ...current.keys()])].sort(compareCodeUnits).flatMap((name) => {
+    const { added, removed } = difference(
+      old.get(name) ?? new Set(),
+      current.get(name) ?? new Set(),
+    );
+    if (added.length === 0 && removed.length === 0) return [];
+    return [
+      { packageName: name, heading: `${REMOVED_FILE}: ${name}`, added, removed, exports: [name] },
+    ];
+  });
+}
+
 export function readChangedFiles({ git }) {
   const status = git([
     'diff',
@@ -134,6 +148,7 @@ export function readChangedFiles({ git }) {
     'packages/9-public/@prisma/*/api.txt',
     `packages/9-public/@prisma/*/${BREAKS_FILE}`,
     EXAMPLES_FILE,
+    REMOVED_FILE,
   ]);
   const files = [];
   for (const entry of status.split('\n')) {
@@ -155,6 +170,7 @@ export function readChangedFiles({ git }) {
 
 function kindOf(path) {
   if (path === EXAMPLES_FILE) return { kind: 'examples', packageName: undefined };
+  if (path === REMOVED_FILE) return { kind: 'removed', packageName: undefined };
   const match = PACKAGE_FILE.exec(path);
   if (match === null) return undefined;
   return { kind: match[2] === 'api.txt' ? 'api' : 'breaks', packageName: match[1] };
