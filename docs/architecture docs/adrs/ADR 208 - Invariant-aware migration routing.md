@@ -140,19 +140,23 @@ Framework decisions about applicability and routing must never depend on the aud
 
 ## Performance
 
-`findPathWithInvariants`'s worst case is `O((V + E) · 2^k)` where `k` is the number of required invariants — each node can be reached once per distinct covered subset. The covered subset is a `Set<string>` of invariant ids; the BFS dedup key is `${node}\0${[...covered].sort().join('\0')}`.
+`findPathWithInvariants` searches breadth-first over `(node, covered invariants)` states. The covered set is a `Set<string>` of invariant ids, and the dedup key is `JSON.stringify([node, [...covered].sort()])`.
 
-In practice, `effectiveRequired` collapses `k` toward zero in steady state. The dominant case is a stick-shaped or mostly-stick migration graph with `k = 0` (ref unchanged → short-circuits to `findPath`) or `k = 1` (one new invariant per change). Measured wall times on a developer laptop:
+Before the search it computes, for each required invariant, the nodes from which an edge providing it can still be taken on the way to the target: the edge's `from` is reachable from the node and its `to` reaches the target. That is one reverse breadth-first search per invariant, `O(k · (V + E))` for `k` required invariants. The search never enqueues a state whose node does not reach the target, or that still lacks an invariant its node can no longer pick up. Such a state has no satisfying continuation, and every state that does have one is still discovered by the same parent in the same order, so the returned path, tie-breaks included, is the one the unpruned search returns.
 
-| Case | k | Wall time |
-|---|---:|---:|
-| `stick(n=1000)` | 1 | 0.50 ms |
-| `mostly-stick(spine=1000, 5% branch rate)` | 1 | 0.55 ms |
-| `mostly-stick(spine=1000, 5% branch rate)` | 2 | 1.20 ms |
+This matters most for a fresh database catching up to a ref that lists many invariants, which is the normal case for CI and every new environment, not an edge case. Each same-hash migration that provides a required invariant offers two continuations, taken and skipped. Without pruning both stay alive and the state count doubles per invariant; with it, skipping one makes its invariant unobtainable and the skipped state is dropped at once. On a history of `k` schema migrations each followed by a same-hash migration providing one invariant, measured on a developer laptop:
 
-Pathological inputs (high feature-branch density with many required invariants) follow the `2^k` curve — `branchy(spine=1000, density=0.05)` reaches ~80 ms at `k = 8` and ~8.7 s at `k = 16`. Materialising those inputs requires either a fresh database catching up to a long-applied ref or a ref edited extensively without ever being applied; neither is typical.
+| k | Before pruning | After pruning |
+|---:|---:|---:|
+| 16 | 0.37 s, 310 MB | 6 ms, 112 MB |
+| 18 | 1.8 s, 594 MB | — |
+| 32 | over 12 GB (reported), did not finish | 7 ms, 110 MB |
+| 64 | — | 9 ms, 112 MB |
+| 128 | — | 15 ms, 113 MB |
 
-The algorithm has no refusal threshold and the encoding has no length cap. If real usage pushes routine `k > 20`, a different approach — heuristic A*, dominance pruning, or precomputed reach sets per invariant — would replace the current BFS.
+Peak memory after pruning is the Node process baseline. In steady state `effectiveRequired` is usually empty or holds one new invariant, and routing costs about one breadth-first search of the graph.
+
+The worst case is still exponential in `k`: when several alternative routes each provide a different subset of the required invariants, distinct covered sets at the same node can all still reach the goal, and finding the shortest path that covers a set of labels is NP-hard in general. The algorithm has no refusal threshold. If real histories reach that shape with large `k`, a different search (heuristic A* or dominance pruning) would replace this one.
 
 ## Alternatives considered
 
