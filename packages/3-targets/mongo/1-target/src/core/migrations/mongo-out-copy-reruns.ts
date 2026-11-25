@@ -124,7 +124,7 @@ function removalsOf(
 }
 
 function duplicatesText(into: string): string {
-  return `To find them, group collection ${into} by _id and keep each _id that appears more than once, for example with db.${into}.aggregate([{ $group: { _id: '$_id', n: { $sum: 1 } } }, { $match: { n: { $gt: 1 } } }]) in mongosh.`;
+  return `To find them, group collection ${into} by _id and keep each _id that appears more than once, for example with db.getCollection(${JSON.stringify(into)}).aggregate([{ $group: { _id: '$_id', n: { $sum: 1 } } }, { $match: { n: { $gt: 1 } } }]) in mongosh.`;
 }
 
 function unfinishedDeleteText(copy: UnionCopy, deleteIds: readonly string[]): string {
@@ -141,7 +141,7 @@ function unfinishedDeleteText(copy: UnionCopy, deleteIds: readonly string[]): st
 
 function undroppedText(copy: UnionCopy, dropId: string): string {
   const { id, into, source } = copy;
-  return `Operation ${id} copied the documents of collection ${source} into collection ${into} with an $out stage, and operation ${dropId}, which drops collection ${source}, has not run. Before you run the command again, delete the documents of collection ${source} or drop it yourself: the copy has no check, so it runs again, and it would add the documents of collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the command was already run again before collection ${source} was dropped, its documents are in collection ${into} more than once: each of them is there two or more times, under the same _id.`;
+  return `Operation ${id} copied the documents of collection ${source} into collection ${into} with an $out stage, and operation ${dropId}, which drops collection ${source}, has not run. Before you run the command again, delete the documents of collection ${source} or drop it yourself: the copy has no check, so it runs again, and it would add the documents of collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the command was already run again before collection ${source} was dropped, its documents are in collection ${into} more than once: each of them is there two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
 /**
