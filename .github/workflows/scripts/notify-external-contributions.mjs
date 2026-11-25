@@ -12,10 +12,6 @@ const SLACK_SPACING_MS = 1000;
 // docs/oss/pr-triage.md#who-counts-as-external: an agent account that belongs to a team member is team.
 const TEAM_AGENT_ACCOUNTS = new Map([['StevenMcClankerton', 'SevInf']]);
 const TEAM_PERMISSIONS = new Set(['admin', 'write']);
-const ASSOCIATION_NOTES = {
-  FIRST_TIME_CONTRIBUTOR: 'first contribution to this repository',
-  FIRST_TIMER: 'first contribution on GitHub',
-};
 
 const sleepFor = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -56,10 +52,9 @@ const escapeSlack = (text) =>
 export function formatSlackMessage(item, baseBranch) {
   const kind = item.pull_request ? 'pull request' : 'issue';
   const into = baseBranch ? ` into \`${baseBranch}\`` : '';
-  const note = ASSOCIATION_NOTES[item.author_association];
   const author = `<${item.user.html_url}|${item.user.login}>`;
   const link = `<${item.html_url}|#${item.number} ${escapeSlack(item.title)}>`;
-  return `New ${kind}${into} from ${author}${note ? ` (${note})` : ''}\n${link}`;
+  return `New ${kind}${into} from ${author}\n${link}`;
 }
 
 export function createGitHubClient({ token, repository, fetch = globalThis.fetch }) {

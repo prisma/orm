@@ -119,24 +119,16 @@ describe('formatSlackMessage', () => {
     );
   });
 
-  it('names the base branch of a pull request and a first-time contributor', () => {
+  it('names the base branch of a pull request', () => {
     const pull = issue({
       number: 202,
       title: 'fix: money',
       html_url: 'https://github.com/prisma/orm/pull/202',
-      author_association: 'FIRST_TIME_CONTRIBUTOR',
       pull_request: {},
     });
     assert.equal(
       formatSlackMessage(pull, 'v7'),
-      'New pull request into `v7` from <https://github.com/someone|someone> (first contribution to this repository)\n<https://github.com/prisma/orm/pull/202|#202 fix: money>',
-    );
-  });
-
-  it('notes an author whose first contribution on GitHub this is', () => {
-    assert.match(
-      formatSlackMessage(issue({ author_association: 'FIRST_TIMER' }), undefined),
-      /\(first contribution on GitHub\)\n/,
+      'New pull request into `v7` from <https://github.com/someone|someone>\n<https://github.com/prisma/orm/pull/202|#202 fix: money>',
     );
   });
 
