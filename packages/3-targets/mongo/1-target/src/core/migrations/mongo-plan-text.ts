@@ -6,6 +6,11 @@ import {
 import { jsonToTsSource } from '@internal/ts-render';
 import type { DocumentCopy, DocumentMove } from './mongo-document-moves';
 
+/** Where a hand-written collection rename goes in a migration.ts: after the drops of indexes on `from`, which act on `from`, and before every other operation. */
+export function byHandRenamePlacement(from: string, to: string): string {
+  return `put renameCollection(${JSON.stringify(from)}, ${JSON.stringify(to)}) right after the drops of indexes on "${from}", if there are any, and before every other operation`;
+}
+
 /** Joins items into text: "a", "a and b", "a, b and c". */
 export function joinedList(items: readonly string[]): string {
   return items.length === 1

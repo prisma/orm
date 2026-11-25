@@ -1611,7 +1611,7 @@ describe('MongoMigrationRunner, a collection rename stopped because the new coll
       code: 'MIGRATION.PRECHECK_FAILED',
       message:
         'Operation collection.events.rename(occasions) stopped: collection occasions already exists, so collection events cannot be renamed to it',
-      why: 'If occasions holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If an earlier operation of the same migration created occasions, as a createIndex on occasions does, make renameCollection("events", "occasions") the first operation of its migration.ts, run node on that migration.ts, and then drop occasions and run the command again. The failed apply changed nothing.',
+      why: 'If occasions holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If an earlier operation of the same migration created occasions, as a createIndex on occasions does, in its migration.ts put renameCollection("events", "occasions") right after the drops of indexes on "events", if there are any, and before every other operation, run node on that migration.ts, and then drop occasions and run the command again. If occasions is a temporary name that a refused rename suggested, you can instead delete this migration, give the model another temporary name that the database does not have, and plan again. The failed apply changed nothing.',
       meta: { operationId: 'collection.events.rename(occasions)', databaseUnchanged: true },
     });
   });

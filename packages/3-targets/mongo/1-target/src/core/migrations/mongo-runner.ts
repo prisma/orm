@@ -91,6 +91,7 @@ import {
   unrewritableKeyReason,
 } from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
+import { byHandRenamePlacement } from './mongo-plan-text';
 import { type RewriteCollection, rewriteRefusals } from './mongo-rewrite-refusals';
 import { storedKeyFieldAt } from './mongo-stored-key-fills';
 import { callInSentence, RemoveStoredValueCall, ReplaceStoredValueCall } from './op-factory-call';
@@ -334,7 +335,7 @@ function renameTargetExistsRefusal(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: collection ${to} already exists, so collection ${from} cannot be renamed to it`,
     {
-      why: `${rerunText(`If ${to} holds nothing you need, drop it, then run the command again`, before)} If an earlier operation of the same migration created ${to}, as a createIndex on ${to} does, make renameCollection(${JSON.stringify(from)}, ${JSON.stringify(to)}) the first operation of its migration.ts, run node on that migration.ts, and then drop ${to} and run the command again.`,
+      why: `${rerunText(`If ${to} holds nothing you need, drop it, then run the command again`, before)} If an earlier operation of the same migration created ${to}, as a createIndex on ${to} does, in its migration.ts ${byHandRenamePlacement(from, to)}, run node on that migration.ts, and then drop ${to} and run the command again. If ${to} is a temporary name that a refused rename suggested, you can instead delete this migration, give the model another temporary name that the database does not have, and plan again.`,
       meta: { operationId: op.id },
     },
   );

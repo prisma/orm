@@ -146,7 +146,7 @@ describe('MongoMigrationPlanner, a field of an embedded model whose name both co
           kind: 'unsupportedOperation',
           summary:
             'Cannot rename key "sku" to "code" of embedded model "Line": the objects of embedded model "Line" already hold key "code"',
-          why: 'The stored name of field "Line.sku" changes from "sku" to "code", and the objects of embedded model "Line" already hold key "code", the stored name of field "Line.note". Without the rename the plan would read the values of key "code" as values of field "Line.sku". Make the change in two plans: first remove field "Line.note", or keep it and change its key (@map) to a name nothing uses, such as "prisma_swap_code", and plan and apply that; then make this change and plan again.',
+          why: 'The stored name of field "Line.sku" changes from "sku" to "code", and the objects of embedded model "Line" already hold key "code", the stored name of field "Line.note". Without the rename the plan would read the values of key "code" as values of field "Line.sku". Make the change in two plans: first remove field "Line.note", or keep it and change its key (@map) to a name neither contract uses, such as "prisma_swap_code", or another if the objects already hold a key of that name, and plan and apply that; then make this change and plan again.',
         },
       ],
     });
@@ -165,7 +165,7 @@ describe('MongoMigrationPlanner, a field of an embedded model whose name both co
           kind: 'unsupportedOperation',
           summary:
             'Cannot rename key "x" to "y" of embedded model "Line": key "y" is renamed in the same plan',
-          why: 'The stored name of field "Line.a" changes from "x" to "y", and the stored name of field "Line.b" changes from "y" to "x". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of key "y" as values of field "Line.a". Make the change in two plans: first give field "Line.a" the key (@map) "prisma_swap_y" and field "Line.b" the key (@map) "prisma_swap_x", keys nothing uses, and plan and apply that; then give field "Line.a" the key (@map) "y" and field "Line.b" the key (@map) "x", and plan again.',
+          why: 'The stored name of field "Line.a" changes from "x" to "y", and the stored name of field "Line.b" changes from "y" to "x". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of key "y" as values of field "Line.a". Make the change in two plans: first give field "Line.a" the key (@map) "prisma_swap_y" and field "Line.b" the key (@map) "prisma_swap_x", keys neither contract uses, and plan and apply that; then give field "Line.a" the key (@map) "y" and field "Line.b" the key (@map) "x", and plan again. If the objects already hold a key of one of those names, pick another.',
         },
       ],
       kind: 'failure',
@@ -187,7 +187,7 @@ describe('MongoMigrationPlanner, a field of an embedded model whose name both co
           kind: 'unsupportedOperation',
           summary:
             'Cannot rename key "x" to "y" of embedded model "Line": key "y" is renamed in the same plan',
-          why: 'The stored name of field "Line.a" changes from "x" to "y", and field "Line.b" is renamed to "Line.c", which renames key "y" to "z" of embedded model "Line". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of key "y" as values of field "Line.a". Make the change in two plans: first give field "Line.a" the key (@map) "prisma_swap_y" and field "Line.c" the key (@map) "prisma_swap_z", keys nothing uses, and plan and apply that with the same statements; then give field "Line.a" the key (@map) "y" and field "Line.c" the key (@map) "z", and plan again without them.',
+          why: 'The stored name of field "Line.a" changes from "x" to "y", and field "Line.b" is renamed to "Line.c", which renames key "y" to "z" of embedded model "Line". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of key "y" as values of field "Line.a". Make the change in two plans: first give field "Line.a" the key (@map) "prisma_swap_y" and field "Line.c" the key (@map) "prisma_swap_z", keys neither contract uses, and plan and apply that with the same statements; then give field "Line.a" the key (@map) "y" and field "Line.c" the key (@map) "z", and plan again without them. If the objects already hold a key of one of those names, pick another.',
         },
       ],
       kind: 'failure',

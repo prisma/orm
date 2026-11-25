@@ -145,7 +145,7 @@ describe('MongoMigrationPlanner, field renames onto a stored name another model 
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename field "x" to "y" in collection "users": the documents already hold field "y"',
-        why: 'The stored name of field "User.a" changes from "x" to "y", and the documents already hold field "y", the stored name of field "Admin.b". Without the rename the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first remove field "Admin.b", or keep it and change its stored name (@map) to a name nothing uses, such as "prisma_swap_y", and plan and apply that; then make this change and plan again.',
+        why: 'The stored name of field "User.a" changes from "x" to "y", and the documents already hold field "y", the stored name of field "Admin.b". Without the rename the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first remove field "Admin.b", or keep it and change its stored name (@map) to a name neither contract uses, such as "prisma_swap_y", or another if the documents already hold a field of that name, and plan and apply that; then make this change and plan again.',
       },
     ]);
   });
@@ -164,7 +164,7 @@ describe('MongoMigrationPlanner, field renames onto a stored name another model 
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename field "x" to "y" in collection "tasks": the documents already hold field "y"',
-        why: 'The stored name of field "Task.a" changes from "x" to "y", and the documents already hold field "y", the stored name of field "Bug.b". Without the rename the plan would read the values of field "y" as values of field "Task.a". Make the change in two plans: first remove field "Bug.b", or keep it and change its stored name (@map) to a name nothing uses, such as "prisma_swap_y", and plan and apply that; then make this change and plan again.',
+        why: 'The stored name of field "Task.a" changes from "x" to "y", and the documents already hold field "y", the stored name of field "Bug.b". Without the rename the plan would read the values of field "y" as values of field "Task.a". Make the change in two plans: first remove field "Bug.b", or keep it and change its stored name (@map) to a name neither contract uses, such as "prisma_swap_y", or another if the documents already hold a field of that name, and plan and apply that; then make this change and plan again.',
       },
     ]);
   });

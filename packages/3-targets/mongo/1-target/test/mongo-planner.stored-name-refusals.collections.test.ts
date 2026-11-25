@@ -49,7 +49,7 @@ describe('MongoMigrationPlanner, collection renames that swap, chain or take a n
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename collection "accounts" to "users": collection "users" is renamed in the same plan',
-        why: 'The collection of model "Account" changes from "accounts" to "users", and the collection of model "User" changes from "users" to "accounts". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the documents of collection "users" as documents of model "Account". Make the change in two plans: first give model "Account" the collection "prisma_swap_users" and model "User" the collection "prisma_swap_accounts", collections nothing uses, and plan and apply that; then give model "Account" the collection "users" and model "User" the collection "accounts", and plan again.',
+        why: 'The collection of model "Account" changes from "accounts" to "users", and the collection of model "User" changes from "users" to "accounts". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the documents of collection "users" as documents of model "Account". Make the change in two plans: first give model "Account" the collection "prisma_swap_users" and model "User" the collection "prisma_swap_accounts", collections neither contract uses, and plan and apply that; then give model "Account" the collection "users" and model "User" the collection "accounts", and plan again. If the database already has a collection of one of those names, pick another.',
       },
     ]);
   });
@@ -63,7 +63,7 @@ describe('MongoMigrationPlanner, collection renames that swap, chain or take a n
       }),
     );
     expect(conflict?.why).toContain(
-      'first give model "Account" the collection "prisma_swap_users" and model "User" the collection "prisma_swap_accounts_", collections nothing uses',
+      'first give model "Account" the collection "prisma_swap_users" and model "User" the collection "prisma_swap_accounts_", collections neither contract uses',
     );
   });
 
@@ -94,7 +94,7 @@ describe('MongoMigrationPlanner, collection renames that swap, chain or take a n
           kind: 'unsupportedOperation',
           summary:
             'Cannot rename collection "users" to "accounts": collection "accounts" is renamed in the same plan',
-          why: 'The collection of model "User" changes from "users" to "accounts", and the collection of model "Account" changes from "accounts" to "members". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the documents of collection "accounts" as documents of model "User". Make the change in two plans: first give model "User" the collection "prisma_swap_accounts" and model "Account" the collection "prisma_swap_members", collections nothing uses, and plan and apply that; then give model "User" the collection "accounts" and model "Account" the collection "members", and plan again.',
+          why: 'The collection of model "User" changes from "users" to "accounts", and the collection of model "Account" changes from "accounts" to "members". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the documents of collection "accounts" as documents of model "User". Make the change in two plans: first give model "User" the collection "prisma_swap_accounts" and model "Account" the collection "prisma_swap_members", collections neither contract uses, and plan and apply that; then give model "User" the collection "accounts" and model "Account" the collection "members", and plan again. If the database already has a collection of one of those names, pick another.',
         },
       ]);
     },
@@ -114,7 +114,7 @@ describe('MongoMigrationPlanner, collection renames that swap, chain or take a n
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename collection "users" to "accounts": the schema being planned from already has a collection "accounts"',
-        why: 'The collection of model "User" changes from "users" to "accounts", and the schema being planned from already has collection "accounts", the collection of model "Account". Without the rename the plan would read the documents of collection "accounts" as documents of model "User". Make the change in two plans: first remove model "Account", or keep it and change its collection to a name nothing uses, such as "prisma_swap_accounts", and plan and apply that; then make this change and plan again.',
+        why: 'The collection of model "User" changes from "users" to "accounts", and the schema being planned from already has collection "accounts", the collection of model "Account". Without the rename the plan would read the documents of collection "accounts" as documents of model "User". Make the change in two plans: first remove model "Account", or keep it and change its collection to a name neither contract uses, such as "prisma_swap_accounts", or another if the database already has a collection of that name, and plan and apply that; then make this change and plan again.',
       },
     ]);
   });
@@ -157,7 +157,7 @@ describe('MongoMigrationPlanner, collection renames that swap, chain or take a n
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename collection "users" to "accounts": collection "accounts" is renamed in the same plan',
-        why: 'The collection of model "User" changes from "users" to "accounts", and model "Account" is renamed to "Member", which renames collection "accounts" to "members". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the documents of collection "accounts" as documents of model "User". Make the change in two plans: first give model "User" the collection "prisma_swap_accounts" and model "Member" the collection "prisma_swap_members", collections nothing uses, and plan and apply that with the same statements; then give model "User" the collection "accounts" and model "Member" the collection "members", and plan again without them.',
+        why: 'The collection of model "User" changes from "users" to "accounts", and model "Account" is renamed to "Member", which renames collection "accounts" to "members". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the documents of collection "accounts" as documents of model "User". Make the change in two plans: first give model "User" the collection "prisma_swap_accounts" and model "Member" the collection "prisma_swap_members", collections neither contract uses, and plan and apply that with the same statements; then give model "User" the collection "accounts" and model "Member" the collection "members", and plan again without them. If the database already has a collection of one of those names, pick another.',
       },
     ]);
   });
@@ -177,7 +177,7 @@ describe('MongoMigrationPlanner, collection renames that swap, chain or take a n
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename collection "users" to "people": another rename in the same plan takes collection name "users"',
-        why: 'The collection of model "User" changes from "users" to "people", and model "Account" is renamed to "Member", which renames collection "accounts" to "users". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out. Make the change in two plans: first give model "User" the collection "prisma_swap_people" and model "Member" the collection "prisma_swap_users", collections nothing uses, and plan and apply that with the same statements; then give model "User" the collection "people" and model "Member" the collection "users", and plan again without them.',
+        why: 'The collection of model "User" changes from "users" to "people", and model "Account" is renamed to "Member", which renames collection "accounts" to "users". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out. Make the change in two plans: first give model "User" the collection "prisma_swap_people" and model "Member" the collection "prisma_swap_users", collections neither contract uses, and plan and apply that with the same statements; then give model "User" the collection "people" and model "Member" the collection "users", and plan again without them. If the database already has a collection of one of those names, pick another.',
       },
     ]);
   });
@@ -198,7 +198,7 @@ describe('MongoMigrationPlanner, a chain whose next link is a merge', () => {
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename collection "users" to "accounts": the schema being planned from already has a collection "accounts"',
-        why: 'The collection of model "User" changes from "users" to "accounts", and the schema being planned from already has collection "accounts", the collection of model "A". Model "A" moves to collection "people" with model "B", whose documents are in another collection, so their storage is being merged, which the plan does not do, and collection "accounts" keeps its name. Without the rename the plan would read the documents of collection "accounts" as documents of model "User". Make the change in two plans: first remove model "A", or keep it and change its collection to a name nothing uses, such as "prisma_swap_accounts", and plan and apply that; then make this change and plan again.',
+        why: 'The collection of model "User" changes from "users" to "accounts", and the schema being planned from already has collection "accounts", the collection of model "A". Model "A" moves to collection "people" with model "B", whose documents are in another collection, so their storage is being merged, which the plan does not do, and collection "accounts" keeps its name. Without the rename the plan would read the documents of collection "accounts" as documents of model "User". Make the change in two plans: first remove model "A", or keep it and change its collection to a name neither contract uses, such as "prisma_swap_accounts", or another if the database already has a collection of that name, and plan and apply that; then make this change and plan again.',
       },
     ]);
   });

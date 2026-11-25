@@ -145,7 +145,7 @@ describe('Journeys (MongoDB): stored-name refusal routes', {
         planningFailure({
           summary:
             'Cannot rename field "x" to "y" in collection "users": the documents already hold field "y"',
-          why: 'The stored name of field "User.a" changes from "x" to "y", and the documents already hold field "y", the stored name of field "User.b". Without the rename the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first remove field "User.b", or keep it and change its stored name (@map) to a name nothing uses, such as "prisma_swap_y", and plan and apply that; then make this change and plan again.',
+          why: 'The stored name of field "User.a" changes from "x" to "y", and the documents already hold field "y", the stored name of field "User.b". Without the rename the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first remove field "User.b", or keep it and change its stored name (@map) to a name neither contract uses, such as "prisma_swap_y", or another if the documents already hold a field of that name, and plan and apply that; then make this change and plan again.',
         }),
       );
       await useSchema(journey, usersPsl('  a  String? @map("x")'), 'T1.04');
@@ -200,7 +200,7 @@ describe('Journeys (MongoDB): stored-name refusal routes', {
         planningFailure({
           summary:
             'Cannot rename collection "users" to "accounts": collection "accounts" is renamed in the same plan',
-          why: 'The collection of model "User" changes from "users" to "accounts", and the collection of model "Account" changes from "accounts" to "members". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the documents of collection "accounts" as documents of model "User". Make the change in two plans: first give model "User" the collection "prisma_swap_accounts" and model "Account" the collection "prisma_swap_members", collections nothing uses, and plan and apply that; then give model "User" the collection "accounts" and model "Account" the collection "members", and plan again.',
+          why: 'The collection of model "User" changes from "users" to "accounts", and the collection of model "Account" changes from "accounts" to "members". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the documents of collection "accounts" as documents of model "User". Make the change in two plans: first give model "User" the collection "prisma_swap_accounts" and model "Account" the collection "prisma_swap_members", collections neither contract uses, and plan and apply that; then give model "User" the collection "accounts" and model "Account" the collection "members", and plan again. If the database already has a collection of one of those names, pick another.',
         }),
       );
       await useSchema(

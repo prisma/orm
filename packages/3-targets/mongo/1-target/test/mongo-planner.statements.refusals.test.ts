@@ -133,6 +133,21 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
     ]);
   });
 
+  it('gives both routes for a time-series collection, each saying to stop writes until the source is dropped', () => {
+    expect(
+      refusal(
+        plan({
+          from: profiles,
+          to: users,
+          schema: [schemaCollection('profiles', { timeseries: true })],
+          statements: [renameModel('Profile', 'User')],
+        }),
+      ).map(({ why }) => why),
+    ).toEqual([
+      'MongoDB cannot rename a time-series collection. Leave out this statement. With db update, first create collection "users" yourself with the time-series options of collection "profiles", which db.getCollectionInfos({ name: "profiles" }) shows in mongosh, stop writes to collection "profiles", copy the documents into it, and run db update again with --delete naming the model, which drops "profiles"; allow writes again once it has run, since a document written to "profiles" after the copy is dropped with it. With migration plan, plan with --delete naming the model; the migration.ts it writes creates collection "users", and there add a dataTransform that copies the documents right after that creation and before the drop of collection "profiles". Then run that migration.ts to emit its ops.json, stop writes to collection "profiles", and apply it with db migrate; allow writes again once it has run, since a document written to "profiles" after the copy is dropped with it.',
+    ]);
+  });
+
   it('refuses a collection name MongoDB rejects', () => {
     const to = (collection: string) =>
       contract('to', { User: { collection, fields: ['_id', 'name'] } }, { [collection]: {} });

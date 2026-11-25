@@ -108,7 +108,19 @@ function collectionsOf(contract: ContractWithDomain): readonly string[] {
   );
 }
 
-/** One object's move in the route through names nothing uses: what moves, through which name, to which. */
+/**
+ * What the database may already hold under a temporary name. Neither contract uses it, but under
+ * migration plan the planner cannot see the database.
+ */
+function databaseHolds(noun: 'collection' | 'stored name' | 'key'): string {
+  return {
+    collection: 'the database already has a collection of',
+    'stored name': 'the documents already hold a field of',
+    key: 'the objects already hold a key of',
+  }[noun];
+}
+
+/** One object's move in the route through temporary names: what moves, through which name, to which. */
 interface RouteMove {
   readonly objects: string;
   readonly through: string;
@@ -117,7 +129,7 @@ interface RouteMove {
 
 /**
  * The route that works on both commands for a chain or swap of names: a plan that moves each
- * object to a name nothing uses, then a plan that moves it to its final name.
+ * object to a temporary name, then a plan that moves it to its final name.
  */
 function temporaryNamesRoute(
   noun: 'collection' | 'stored name' | 'key',
@@ -126,7 +138,7 @@ function temporaryNamesRoute(
 ): string {
   const give = (name: (move: RouteMove) => string) =>
     joinedList(moves.map((move) => `${move.objects} the ${nounWithMap(noun)} "${name(move)}"`));
-  return `Make the change in two plans: first give ${give(({ through }) => through)}, ${noun}s nothing uses, and plan and apply that${withStatements ? ' with the same statements' : ''}; then give ${give(({ to }) => to)}, and plan again${withStatements ? ' without them' : ''}.`;
+  return `Make the change in two plans: first give ${give(({ through }) => through)}, ${noun}s neither contract uses, and plan and apply that${withStatements ? ' with the same statements' : ''}; then give ${give(({ to }) => to)}, and plan again${withStatements ? ' without them' : ''}. If ${databaseHolds(noun)} one of those names, pick another.`;
 }
 
 /**
@@ -157,7 +169,7 @@ function linkedChanges<TChange>(
   return [...ordered, ...linked.filter((change) => !ordered.includes(change))];
 }
 
-/** How the first of two plans frees a name: it removes what the origin stores there, or gives it a name nothing uses. */
+/** How the first of two plans frees a name: it removes what the origin stores there, or gives it a temporary name. */
 function freeName(
   noun: 'collection' | 'stored name' | 'key',
   held: string,
@@ -165,10 +177,10 @@ function freeName(
   unusedName: string,
 ): string {
   if (holders.count === 0) {
-    return `remove ${noun} "${held}" or give it a name nothing uses, such as "${unusedName}"`;
+    return `remove ${noun} "${held}" or give it a name neither contract uses, such as "${unusedName}", or another if ${databaseHolds(noun)} that name`;
   }
   const [them, their] = holders.count === 1 ? ['it', 'its'] : ['them', 'their'];
-  return `remove ${holders.text}, or keep ${them} and change ${their} ${nounWithMap(noun)} to a name nothing uses, such as "${unusedName}"`;
+  return `remove ${holders.text}, or keep ${them} and change ${their} ${nounWithMap(noun)} to a name neither contract uses, such as "${unusedName}", or another if ${databaseHolds(noun)} that name`;
 }
 
 interface Contracts {
