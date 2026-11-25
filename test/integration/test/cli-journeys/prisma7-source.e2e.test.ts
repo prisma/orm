@@ -6,7 +6,7 @@
  * SQL Prisma 7.10.0 generated, with exit 0 and zero findings. Prisma 7 creates no check on a list column, so a `String[]` column reads as a list whose elements may be null, and verifies with no migration. The contract keeps the columns of `@ignore` fields and the tables of `@@ignore` models, so `db verify --strict` reports no findings either. A schema with a `view` fails `contract emit` with one diagnostic and writes nothing.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { computeProfileHash } from '@internal/contract/hashing';
+import { computeProfileHash } from '@prisma/orm-postgres/contract/hashing';
 import { withClient } from '@repo/test-utils';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
