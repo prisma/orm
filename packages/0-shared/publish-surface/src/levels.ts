@@ -7,9 +7,6 @@ import type { DeclaredLevel, PackageKind } from './release-plan';
  * `planRelease`. `{ firstVersion }` marks a package numbered outside the release number, with no
  * level: this is the one home of its version at the first release with levels; after that its
  * version is in its manifest.
- *
- * `@prisma/orm-extension-middleware-cache` and `@prisma/orm-better-auth` are Preview until the
- * operator decides otherwise.
  */
 export const packageLevels: ReadonlyMap<string, DeclaredLevel> = new Map<string, DeclaredLevel>([
   ['@prisma/orm-postgres', 'ga'],
@@ -21,12 +18,12 @@ export const packageLevels: ReadonlyMap<string, DeclaredLevel> = new Map<string,
   ['@prisma/orm-extension-postgis', 'ga'],
   ['@prisma/orm-postgres-contrib', 'ga'],
   ['@prisma/orm-extension-arktype-json', 'ga'],
+  ['@prisma/orm-extension-middleware-cache', 'ga'],
+  ['@prisma/orm-better-auth', 'ga'],
   ['@prisma/orm-mongo', 'preview'],
   ['@prisma/orm-family-mongo', 'preview'],
   ['@prisma/orm-target-mongo', 'preview'],
   ['@prisma/orm-extension-supabase', 'preview'],
-  ['@prisma/orm-extension-middleware-cache', 'preview'],
-  ['@prisma/orm-better-auth', 'preview'],
   ['@prisma/orm-mysql', 'ea'],
   ['@prisma/orm-target-mysql', 'ea'],
   ['@prisma/orm-mariadb', 'ea'],

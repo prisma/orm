@@ -7,9 +7,9 @@ import { planTable, realGraph } from './release-plan-fixtures';
  * `@prisma/orm-`, its version, its tag, and the range it writes on each package of ours it names.
  */
 const AT_8_0_0 = `
-    better-auth                 8.0.0-preview.0  latest  family-sql ^8.0.0, framework ^8.0.0
+    better-auth                 8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, toolchain ^8.0.0
     extension-arktype-json      8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, target-postgres ^8.0.0
-    extension-middleware-cache  8.0.0-preview.0  latest  framework ^8.0.0
+    extension-middleware-cache  8.0.0            latest  framework ^8.0.0
     extension-paradedb          0.1.0            latest  family-sql ^8.0.0, framework ^8.0.0, toolchain ^8.0.0
     extension-pgvector          8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
     extension-postgis           8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
@@ -32,9 +32,9 @@ const AT_8_0_0 = `
 `;
 
 const AT_8_1_0 = `
-    better-auth                 8.1.0-preview.0  latest  family-sql ^8.1.0, framework ^8.1.0
+    better-auth                 8.1.0            latest  family-sql ^8.1.0, framework ^8.1.0, toolchain ^8.1.0
     extension-arktype-json      8.1.0            latest  family-sql ^8.1.0, framework ^8.1.0, target-postgres ^8.1.0
-    extension-middleware-cache  8.1.0-preview.0  latest  framework ^8.1.0
+    extension-middleware-cache  8.1.0            latest  framework ^8.1.0
     extension-paradedb          0.1.0            latest  family-sql ^8.1.0, framework ^8.1.0, toolchain ^8.1.0
     extension-pgvector          8.1.0            latest  family-sql ^8.1.0, framework ^8.1.0, target-postgres ^8.1.0, toolchain ^8.1.0
     extension-postgis           8.1.0            latest  family-sql ^8.1.0, framework ^8.1.0, target-postgres ^8.1.0, toolchain ^8.1.0

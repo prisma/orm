@@ -41,9 +41,9 @@ describe('the declared level of each published package', () => {
 
   it('holds the levels decided for 8.0.0', () => {
     expect(Object.fromEntries([...packageLevels].sort(([a], [b]) => a.localeCompare(b)))).toEqual({
-      '@prisma/orm-better-auth': 'preview',
+      '@prisma/orm-better-auth': 'ga',
       '@prisma/orm-extension-arktype-json': 'ga',
-      '@prisma/orm-extension-middleware-cache': 'preview',
+      '@prisma/orm-extension-middleware-cache': 'ga',
       '@prisma/orm-extension-paradedb': { firstVersion: '0.1.0' },
       '@prisma/orm-extension-pgvector': 'ga',
       '@prisma/orm-extension-postgis': 'ga',
