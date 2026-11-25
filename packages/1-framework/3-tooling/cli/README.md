@@ -555,7 +555,7 @@ A PSL file cannot carry the contract's default control policy. When the contract
 // prisma.config.ts
 import { definePrismaConfig } from 'prisma/config';
 import { prismaContract } from '@prisma/orm-family-sql/contract-psl/provider';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgresContractCapabilities } from '@prisma/orm-postgres/config';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@prisma/orm-postgres/target/codec-ids';
 import postgresPack from '@prisma/orm-postgres/target/pack';
 import { postgresCreateNamespace } from '@prisma/orm-postgres/target/types';
@@ -566,6 +566,7 @@ export default definePrismaConfig({
       target: postgresPack,
       createNamespace: postgresCreateNamespace,
       enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
+      capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
       defaultControlPolicy: 'external',
     }),
     db: { connection: process.env['DATABASE_URL']! },
@@ -1429,7 +1430,7 @@ See `.cursor/rules/config-validation-and-normalization.mdc` for detailed pattern
 - Families expose component descriptors (target, adapter, driver, extensions) as plain TypeScript objects. Each descriptor includes **declarative fields**: metadata that describes what the component *provides* (independent of its runtime implementation), and that the CLI can safely copy into emitted artifacts.
   - Common declarative keys:
     - **`version`**: Component version included in emitted metadata (useful for debugging and reproducibility).
-    - **`capabilities`**: Feature flags the component contributes (e.g., adapter/runtime lowering requirements). Typically namespaced by target (e.g., `{ postgres: { returning: true } }`) so contracts can be validated against the active target.
+    - **`capabilities`**: Feature flags the component declares, namespaced (e.g., `{ sql: { interactiveTransactions: true } }` on the PostgreSQL driver). On PostgreSQL, the control descriptors in the config declare none: a contract's capabilities come from the database version its author states and the facade's `capabilities` list. See `docs/reference/capabilities.md`.
     - **`types`**: Type import specs and type IDs contributed by the component. Common examples:
       - `types.codecTypes.import`: Where to import codec type mappings for `contract.d.ts`.
       - `types.queryOperationTypes.import`: Where to import flat query-builder operation type signatures for `contract.d.ts` (adapters/extensions).
