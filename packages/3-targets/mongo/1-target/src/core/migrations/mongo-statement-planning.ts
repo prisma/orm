@@ -639,6 +639,8 @@ interface RefusedGroup {
 interface SharedRoute {
   /** The first model rename statement the rule refuses, whose refusal prints the route. */
   readonly printer: ResolvedModelRenameStatement;
+  /** Whether the printer's refusal is about a split or a merge, so a refusal of the other kind keeps its own reason. */
+  readonly printerKind: SharedCollection['kind'];
   /** The statements to leave out, as the CLI takes them. */
   readonly statementsText: string;
   readonly text: () => string;
@@ -793,7 +795,10 @@ function sharedRouteOf(input: {
       each.entity === 'model' && renames.some((renamed) => renamed.statement === each),
   );
   const [printer] = modelStatements;
-  if (printer === undefined) return undefined;
+  const printerGroup = groups.find((group) =>
+    group.changes.some((change) => change.renames.some((renamed) => renamed.statement === printer)),
+  );
+  if (printer === undefined || printerGroup === undefined) return undefined;
   const fieldStatements = statements.filter(
     (each): each is ResolvedFieldRenameStatement =>
       each.entity === 'field' && movingModels.some((model) => sameModel(model, each.from)),
@@ -944,6 +949,7 @@ function sharedRouteOf(input: {
   let built: string | undefined;
   return {
     printer,
+    printerKind: printerGroup.shared.kind,
     statementsText,
     text: () => {
       built ??= groups.every(leavesBehind) ? leaveBehind() : handWritten();
@@ -975,10 +981,14 @@ function sharedCollectionRefusal(
   if (change === undefined || shared === undefined || sharedRoute === undefined) return undefined;
   const { from, to } = change;
   const others = modelsText(shared.objects);
-  const whyOf = (reason: string) =>
-    sharedRoute.printer === statement
-      ? `${reason}\n\n${sharedRoute.text()}`
-      : `Leave out ${sharedRoute.statementsText} to plan the change without moving them: the refusal of ${renameFlag(sharedRoute.printer, fromContract, contract)} says why, what that plan does, and how to keep the documents.`;
+  const printerFlag = renameFlag(sharedRoute.printer, fromContract, contract);
+  const pointer = (says: string) =>
+    `Leave out ${sharedRoute.statementsText} to plan the change without moving them: the refusal of ${printerFlag} says ${says}, and how to keep the documents.`;
+  const whyOf = (reason: string) => {
+    if (sharedRoute.printer === statement) return `${reason}\n\n${sharedRoute.text()}`;
+    if (sharedRoute.printerKind === shared.kind) return pointer('why, what that plan does');
+    return `${reason}\n\n${pointer('what that plan does')}`;
+  };
   switch (shared.kind) {
     case 'split':
       return refusedOutcome(

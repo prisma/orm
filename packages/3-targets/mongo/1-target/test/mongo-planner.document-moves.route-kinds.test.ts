@@ -70,6 +70,68 @@ describe('MongoMigrationPlanner, a route over refused groups of different kinds'
     });
   });
 
+  describe('a split and a merge refused together', () => {
+    const from = contract(
+      'from',
+      {
+        Admin: ADMIN,
+        User: { collection: 'users', fields: ['_id', 'user'] },
+        Guest: { collection: 'members', fields: ['_id', 'guest'] },
+        Clerk: { collection: 'staff', fields: ['_id', 'clerk'] },
+        Visitor: { collection: 'guests', fields: ['_id', 'visitor'] },
+      },
+      { users: {}, members: {}, staff: {}, guests: {} },
+    );
+    const to = contract(
+      'to',
+      {
+        Admin: ADMIN,
+        Member: { collection: 'members', fields: ['_id', 'user'] },
+        Guest: { collection: 'members', fields: ['_id', 'guest'] },
+        Teller: { collection: 'guests', fields: ['_id', 'clerk'] },
+        Visitor: { collection: 'guests', fields: ['_id', 'visitor'] },
+      },
+      { users: {}, members: {}, guests: {} },
+    );
+    const schema = ['users', 'members', 'staff', 'guests'].map((name) => schemaCollection(name));
+    const SPLIT_SUMMARY =
+      'Cannot rename model "User" to "Member": collection "users" also stores model "Admin"';
+    const SPLIT_REASON =
+      'A collection rename moves every document of the collection, and the documents of model "Admin" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write.';
+    const MERGE_SUMMARY =
+      'Cannot rename model "Clerk" to "Teller": collection "guests" also stores model "Visitor", whose documents are not in collection "staff"';
+    const MERGE_REASON =
+      'A collection rename moves the documents of one collection, and collection "guests" would also store the documents of model "Visitor". Moving the documents of two collections into one is a data migration, which a plan does not write.';
+
+    function textsOf(statements: Parameters<typeof plan>[0]['statements']) {
+      const [printer, pointer] = refusal(plan({ from, to, schema, statements }));
+      return {
+        printer: { summary: printer?.summary, why: printer?.why?.split('\n\n')[0] },
+        pointer: { summary: pointer?.summary, why: pointer?.why },
+      };
+    }
+
+    it('keeps the merge its own reason when the split prints the route', () => {
+      expect(textsOf([renameModel('User', 'Member'), renameModel('Clerk', 'Teller')])).toEqual({
+        printer: { summary: SPLIT_SUMMARY, why: SPLIT_REASON },
+        pointer: {
+          summary: MERGE_SUMMARY,
+          why: `${MERGE_REASON}\n\nLeave out --rename User:Member and --rename Clerk:Teller to plan the change without moving them: the refusal of --rename User:Member says what that plan does, and how to keep the documents.`,
+        },
+      });
+    });
+
+    it('keeps the split its own reason when the merge prints the route', () => {
+      expect(textsOf([renameModel('Clerk', 'Teller'), renameModel('User', 'Member')])).toEqual({
+        printer: { summary: MERGE_SUMMARY, why: MERGE_REASON },
+        pointer: {
+          summary: SPLIT_SUMMARY,
+          why: `${SPLIT_REASON}\n\nLeave out --rename Clerk:Teller and --rename User:Member to plan the change without moving them: the refusal of --rename Clerk:Teller says what that plan does, and how to keep the documents.`,
+        },
+      });
+    });
+  });
+
   it('says a variant that leaves its base collection is asked about, beside a model removed with no question', () => {
     const task = { collection: 'tasks', fields: ['_id', 'type'], discriminator: 'type' };
     const from = contract(
