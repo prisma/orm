@@ -12,13 +12,18 @@
 // before tsc; it must end in a tsc run, which is given `--pretty false`.
 //
 // The apps' type tests assert exact types, so a change the compatibility policy allows can fail
-// them. Such an error is recorded in examples/last-release-errors.json as
+// them. Such an error, or one a deliberate break causes, is recorded in
+// examples/last-release-errors.json as
 // [{ "app": "prisma-8-demo", "file": "test/rows.test-d.ts", "line": 12, "code": "TS2344",
-//    "message": "Type '…' does not satisfy the constraint '…'.", "release": "8.0.0",
-//    "reason": "…" }]. The tag's files never change, so the record stays valid for as long as that
-// release is the last one, until the current build changes the type again. Each record must match
-// exactly one error (line 0 for an error with no location). A record for an earlier release is
-// skipped and listed as removable; one for a later release, or one that matches no error, fails.
+//    "message": "Type '…' does not satisfy the constraint '…'.", "kind": "allowed",
+//    "lastRelease": "8.0.0", "reason": "…" }]. The kind is `allowed` for an addition the policy
+// allows that an exact type assertion rejects, and `break` for a deliberate break, which the
+// release notes must name; the report lists the two apart. The last release is the version the
+// error is measured against. The tag's files never change, so the record stays valid for as long
+// as that release is the last one, until the current build changes the type again. Each record
+// must match exactly one error (line 0 for an error with no location). A record for an earlier
+// last release is skipped and listed as removable; one for a later one, or one that matches no
+// error, fails.
 //
 // An error that is not recorded fails the run when the last release has no pre-release part
 // (`--ga` treats it as if it had none); otherwise it is reported. Needs network access to the
@@ -64,7 +69,8 @@ const Records = type({
   line: 'number.integer >= 0',
   code: /^TS\d+$/,
   message: 'string > 0',
-  release: VERSION,
+  kind: "'allowed' | 'break'",
+  lastRelease: VERSION,
   reason: /^[^\r\n]+$/,
 }).array();
 
@@ -82,7 +88,7 @@ export function readRecords(root) {
   const records = Records(parsed);
   if (records instanceof type.errors) {
     throw new ExamplesError(
-      `${RECORDS_FILE}: ${records.summary}. Each record is { "app", "file", "line", "code", "message", "release", "reason" }, with the release a version and the reason on one line.`,
+      `${RECORDS_FILE}: ${records.summary}. Each record is { "app", "file", "line", "code", "message", "kind", "lastRelease", "reason" }, where the kind is allowed or break, the last release is the version the error is measured against, and the reason is on one line.`,
     );
   }
   return records;
@@ -304,12 +310,13 @@ export function applyRecords({ results, records, version, strict }) {
   );
   const removable = [];
   const problems = [];
+  const recorded = [];
   for (const record of records) {
-    const order = compareVersions(record.release, version);
+    const order = compareVersions(record.lastRelease, version);
     if (order < 0) removable.push(record);
     else if (order > 0) {
       problems.push(
-        `${recordLabel(record)} is for release ${record.release}, which is later than the last release ${version}.`,
+        `${recordLabel(record)} is for the last release ${record.lastRelease}, which is later than the last release, ${version}.`,
       );
     } else if (checked.has(record.app)) {
       const matches = checked
@@ -321,13 +328,16 @@ export function applyRecords({ results, records, version, strict }) {
         problems.push(
           `${recordLabel(record)} matches ${matches.length} errors; it must match exactly one.`,
         );
-      } else matches[0].recorded = record.reason;
+      } else {
+        matches[0].recorded = { kind: record.kind, reason: record.reason };
+        recorded.push(record);
+      }
     }
   }
   for (const result of checked.values()) {
     for (const error of result.errors) error.failsRun = strict && error.recorded === undefined;
   }
-  return { removable, problems };
+  return { removable, problems, recorded };
 }
 
 export const failsRun = (report) =>
@@ -351,8 +361,18 @@ const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
 const describeError = ({ file, line, column, code, message }) =>
   `${file}(${line},${column}): ${code} ${message}`;
 
-const describeRecord = ({ app, file, line, code, release, reason }) =>
-  `${app} ${file}:${line} ${code} (release ${release}): ${reason}`;
+const describeRecord = ({ app, file, line, code, lastRelease: last, reason }) =>
+  `${app} ${file}:${line} ${code} (last release ${last}): ${reason}`;
+
+const recordedLabel = ({ recorded }) =>
+  recorded === undefined
+    ? ''
+    : ` (recorded ${recorded.kind === 'break' ? 'break' : 'allowed change'}: ${recorded.reason})`;
+
+const RECORD_KINDS = [
+  { kind: 'break', heading: 'Recorded deliberate breaks:' },
+  { kind: 'allowed', heading: 'Recorded allowed changes:' },
+];
 
 const headline = ({ version, tag, strict }) =>
   `last release ${version} (tag ${tag}); ${strict ? 'an error fails unless it is recorded' : 'a pre-release, so errors are reported and do not fail'}`;
@@ -360,11 +380,11 @@ const headline = ({ version, tag, strict }) =>
 const appFails = (result) =>
   (result.problems?.length ?? 0) > 0 || (result.errors ?? []).some((error) => error.failsRun);
 
-const recordedCount = (result) =>
-  result.errors.filter((error) => error.recorded !== undefined).length;
+const recordedCount = (result, kind) =>
+  result.errors.filter((error) => error.recorded?.kind === kind).length;
 
 const appSummary = (result) =>
-  `${count(result.errors.length, 'error')} in ${count(byFile(result.errors).length, 'file')} (${recordedCount(result)} recorded)`;
+  `${count(result.errors.length, 'error')} in ${count(byFile(result.errors).length, 'file')} (recorded: ${recordedCount(result, 'allowed')} allowed, ${count(recordedCount(result, 'break'), 'break')})`;
 
 export function reportText(report) {
   const lines = [`api:compat:examples: ${headline(report)}`];
@@ -376,11 +396,16 @@ export function reportText(report) {
     for (const [file, errors] of byFile(result.errors)) {
       lines.push(`  ${file}: ${errors.length}`);
       for (const error of errors) {
-        const label = error.recorded === undefined ? '' : ` (recorded: ${error.recorded})`;
-        lines.push(`    ${describeError(error)}${label}`);
+        lines.push(`    ${describeError(error)}${recordedLabel(error)}`);
       }
     }
     for (const problem of result.problems) lines.push(`  problem  ${problem}`);
+  }
+  for (const { kind, heading } of RECORD_KINDS) {
+    const records = report.recorded.filter((record) => record.kind === kind);
+    if (records.length > 0) {
+      lines.push(`\n${heading}`, ...records.map((record) => `  ${describeRecord(record)}`));
+    }
   }
   const skipped = report.results.filter((result) => result.skipped);
   if (skipped.length > 0) {
@@ -388,7 +413,7 @@ export function reportText(report) {
   }
   if (report.removable.length > 0) {
     lines.push(
-      `\nRecords for a release before ${report.version}, skipped; remove them:`,
+      `\nRecords for a last release before ${report.version}, skipped; remove them:`,
       ...report.removable.map((record) => `  ${describeRecord(record)}`),
     );
   }
@@ -406,11 +431,11 @@ export function reportMarkdown(report) {
     '',
     `${headline(report).replace(/^./, (first) => first.toUpperCase())}. Records are in \`${RECORDS_FILE}\`.`,
     '',
-    '| App | Errors | Recorded | Files | Problems |',
-    '| --- | --- | --- | --- | --- |',
+    '| App | Errors | Allowed | Breaks | Files | Problems |',
+    '| --- | --- | --- | --- | --- | --- |',
     ...checked.map(
       (result) =>
-        `| ${result.app} | ${result.errors.length} | ${recordedCount(result)} | ${byFile(result.errors).length} | ${result.problems.length} |`,
+        `| ${result.app} | ${result.errors.length} | ${recordedCount(result, 'allowed')} | ${recordedCount(result, 'break')} | ${byFile(result.errors).length} | ${result.problems.length} |`,
     ),
     '',
   ];
@@ -421,7 +446,7 @@ export function reportMarkdown(report) {
         .slice(0, SAMPLES_PER_FILE)
         .map(
           (error) =>
-            `  - ${error.line}:${error.column} ${error.code} ${cell(error.message)}${error.recorded === undefined ? '' : ` (recorded: ${cell(error.recorded)})`}`,
+            `  - ${error.line}:${error.column} ${error.code} ${cell(error.message)}${cell(recordedLabel(error))}`,
         ),
       ...(errors.length > SAMPLES_PER_FILE
         ? [`  - and ${errors.length - SAMPLES_PER_FILE} more in the job log`]
@@ -430,6 +455,12 @@ export function reportMarkdown(report) {
     items.push(...result.problems.map((problem) => `- problem: ${cell(problem)}`));
     if (items.length > 0) lines.push(`### ${result.app}`, '', ...items, '');
   }
+  for (const { kind, heading } of RECORD_KINDS) {
+    const records = report.recorded.filter((record) => record.kind === kind);
+    if (records.length > 0) {
+      lines.push(heading, '', ...records.map((record) => `- ${cell(describeRecord(record))}`), '');
+    }
+  }
   const skipped = report.results.filter((result) => result.skipped);
   if (skipped.length > 0) {
     const apps = skipped.map(({ app, skipped: why }) => `${app} (${why})`);
@@ -437,7 +468,7 @@ export function reportMarkdown(report) {
   }
   if (report.removable.length > 0) {
     lines.push(
-      `Records for a release before ${report.version}, skipped; remove them:`,
+      `Records for a last release before ${report.version}, skipped; remove them:`,
       '',
       ...report.removable.map((record) => `- ${cell(describeRecord(record))}`),
       '',
@@ -488,6 +519,7 @@ export async function checkExamples({
     strict,
     results,
     removable: applied.removable,
+    recorded: applied.recorded,
     problems: [...problems, ...applied.problems],
   };
 }
