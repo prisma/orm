@@ -19,3 +19,15 @@ reviews:
         bigint comparison, addition, subtraction and multiplication are already exact (division drops the fraction). Decimal has no exact operators, since JavaScript has no operator
         overloading, so ask for its own methods instead, such as a.lt(b) or a.cmp(b). Also flag a subclass
         or patch that changes a third-party library's documented behaviour; that belongs upstream.
+    - path: "packages/9-public/@prisma/*/api.txt"
+      instructions: >-
+        This generated file lists everything users can import from a published package, one line per import
+        path, export and member. From 8.0.0 an exported API must be kept, without breaking changes, until the
+        next major release, so review each added and removed line as a promise to users. Follow the review
+        criteria in packages/9-public/AGENTS.md: is each addition meant to be supported until the next major,
+        at the right maturity (a name starting with preview_ or ea_ is below GA); does a GA package now depend
+        on something below GA; is a new member on an interface that users implement optional; is each removal
+        or change either below GA or recorded as a deliberate break with a reason. Lines that changed only
+        because a non-exported type was renumbered (such as Options_2) or an outside type gained its package
+        prefix are not API changes; say so. Check that the pull request description's "API changes" section
+        names each changed export with a reason that matches the change.
