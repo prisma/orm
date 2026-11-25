@@ -148,6 +148,15 @@
 (not exported) interface FillStoredKeyCallOptions, readonly required property value: JsonValue | UnfilledValue
 (not exported) interface FillStoredKeyOptions extends StoredKeyOptions
 (not exported) interface FillStoredKeyOptions, readonly required property value: JsonValue
+(not exported) interface MongoPlanOptions
+(not exported) interface MongoPlanOptions, readonly required property contract: unknown
+(not exported) interface MongoPlanOptions, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'mongo', 'mongo'>>
+(not exported) interface MongoPlanOptions, readonly required property fromContract: Contract | null
+(not exported) interface MongoPlanOptions, readonly required property origin: PlanOrigin | null
+(not exported) interface MongoPlanOptions, readonly required property policy: MigrationOperationPolicy
+(not exported) interface MongoPlanOptions, readonly required property schema: unknown
+(not exported) interface MongoPlanOptions, readonly required property snapshotsImportPath: string
+(not exported) interface MongoPlanOptions, readonly required property statements: readonly ResolvedMigrationStatement[]
 (not exported) interface MongoSpaceSuccessValue extends MigrationRunnerPerSpaceSuccessValue
 (not exported) interface MongoSpaceSuccessValue, readonly required property changedDatabase: boolean
 (not exported) interface MongoTargetDatabaseInput
@@ -318,7 +327,7 @@
 ./target/control: class FilterEvaluator, required method or(expr: MongoOrExpr): boolean
 ./target/control: class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
 ./target/control: class MongoMigrationPlanner, required method emptyMigration(context: MigrationScaffoldContext): MigrationPlanWithAuthoringSurface
-./target/control: class MongoMigrationPlanner, required method plan(options: { readonly contract: unknown; readonly schema: unknown; readonly policy: MigrationOperationPolicy; readonly fromContract: Contract | null; readonly origin: PlanOrigin | null; readonly statements: readonly ResolvedMigrationStatement[]; readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'mongo', 'mongo'>>; readonly snapshotsImportPath: string; }): MigrationPlannerResult
+./target/control: class MongoMigrationPlanner, required method plan(options: MongoPlanOptions): MigrationPlannerResult
 ./target/control: class MongoMigrationPlanner, required method planCalls(options: { readonly contract: unknown; readonly schema: unknown; readonly policy: MigrationOperationPolicy; readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'mongo', 'mongo'>>; readonly fromContract: Contract | null; readonly statementCalls?: StatementCalls; }): PlanCallsResult
 ./target/control: class MongoMigrationRunner
 ./target/control: class MongoMigrationRunner, constructor(deps: MongoRunnerDependencies)
@@ -451,7 +460,7 @@
 ./target/migration: function dropIndex(collectionName: string, keys: ReadonlyArray<MongoIndexKey>, options?: CreateIndexOptions): MongoMigrationPlanOperation
 ./target/migration: function fillField(options: FillFieldOptions): MongoDmlOperation
 ./target/migration: function fillStoredKey(options: FillStoredKeyOptions): MongoDmlOperation
-./target/migration: function rawAggregate(collectionName: string, pipeline: readonly Document[]): MongoQueryPlan
+./target/migration: function rawAggregate(collectionName: string, pipeline: readonly Document[], options?: { readonly bypassDocumentValidation?: boolean; }): MongoQueryPlan
 ./target/migration: function rawUpdateMany(collectionName: string, filter: Document, update: Document | readonly Document[], options?: { readonly bypassDocumentValidation?: boolean; }): MongoQueryPlan
 ./target/migration: function removeStoredKey(options: StoredKeyOptions): MongoDmlOperation
 ./target/migration: function removeStoredValue(options: RemoveStoredValueOptions): MongoDmlOperation
@@ -529,7 +538,7 @@
 ./target: class FilterEvaluator, required method or(expr: MongoOrExpr): boolean
 ./target: class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
 ./target: class MongoMigrationPlanner, required method emptyMigration(context: MigrationScaffoldContext): MigrationPlanWithAuthoringSurface
-./target: class MongoMigrationPlanner, required method plan(options: { readonly contract: unknown; readonly schema: unknown; readonly policy: MigrationOperationPolicy; readonly fromContract: Contract | null; readonly origin: PlanOrigin | null; readonly statements: readonly ResolvedMigrationStatement[]; readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'mongo', 'mongo'>>; readonly snapshotsImportPath: string; }): MigrationPlannerResult
+./target: class MongoMigrationPlanner, required method plan(options: MongoPlanOptions): MigrationPlannerResult
 ./target: class MongoMigrationPlanner, required method planCalls(options: { readonly contract: unknown; readonly schema: unknown; readonly policy: MigrationOperationPolicy; readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'mongo', 'mongo'>>; readonly fromContract: Contract | null; readonly statementCalls?: StatementCalls; }): PlanCallsResult
 ./target: class MongoMigrationRunner
 ./target: class MongoMigrationRunner, constructor(deps: MongoRunnerDependencies)
@@ -654,7 +663,7 @@
 ./target: function mongoDurationText(text: string): string
 ./target: function mongoInstantText(text: string): string
 ./target: function mongoTimeText(text: string): string
-./target: function rawAggregate(collectionName: string, pipeline: readonly Document[]): MongoQueryPlan
+./target: function rawAggregate(collectionName: string, pipeline: readonly Document[], options?: { readonly bypassDocumentValidation?: boolean; }): MongoQueryPlan
 ./target: function rawUpdateMany(collectionName: string, filter: Document, update: Document | readonly Document[], options?: { readonly bypassDocumentValidation?: boolean; }): MongoQueryPlan
 ./target: function removeStoredKey(options: StoredKeyOptions): MongoDmlOperation
 ./target: function removeStoredValue(options: RemoveStoredValueOptions): MongoDmlOperation
