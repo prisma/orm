@@ -267,7 +267,10 @@ function precheckFind(op: MongoDmlOperation, collection: string): string {
  * The failure when a field rename's before-check finds documents that already hold the new name,
  * which `$rename` would overwrite: what to look for and fix, and that the plan resumes.
  */
-function renameOverwriteRefusal(op: MongoDmlOperation): MongoMigrationRunnerResult | undefined {
+function renameOverwriteRefusal(
+  op: MongoDmlOperation,
+  before: readonly AnyMongoMigrationOperation[],
+): MongoMigrationRunnerResult | undefined {
   const rewrite = fieldRewriteOf(op);
   if (rewrite === undefined) return undefined;
   const renames: unknown = Reflect.get(rewrite.command.update, '$rename');
@@ -281,7 +284,7 @@ function renameOverwriteRefusal(op: MongoDmlOperation): MongoMigrationRunnerResu
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: some documents in collection ${rewrite.collection} already hold ${to} as well as ${rewrite.field}`,
     {
-      why: `Renaming ${rewrite.field} to ${to} would overwrite their ${to}. Find them with ${find} in mongosh, and move or remove one of the two values in each. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
+      why: `Renaming ${rewrite.field} to ${to} would overwrite their ${to}. Find them with ${find} in mongosh, and move or remove one of the two values in each. ${rerunText('Once the documents are fixed, run the command again', before)}`,
       meta: { operationId: op.id, name: op.name },
     },
   );
@@ -291,7 +294,10 @@ function renameOverwriteRefusal(op: MongoDmlOperation): MongoMigrationRunnerResu
  * The failure when a key rename's before-check finds objects that already hold the new key, which
  * the rename would overwrite: how to find them, and that the plan resumes.
  */
-function storedKeyRenameRefusal(op: MongoDmlOperation): MongoMigrationRunnerResult | undefined {
+function storedKeyRenameRefusal(
+  op: MongoDmlOperation,
+  before: readonly AnyMongoMigrationOperation[],
+): MongoMigrationRunnerResult | undefined {
   const rewrite = op.meta?.rewrite;
   if (rewrite?.kind !== 'renameStoredKey') return undefined;
   const keyPath = storedKeyPath(rewrite.field, rewrite.path);
@@ -302,7 +308,7 @@ function storedKeyRenameRefusal(op: MongoDmlOperation): MongoMigrationRunnerResu
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: some objects at path ${JSON.stringify(keyPath.value.objectsText)} in field ${rewrite.field} of collection ${rewrite.collection} already hold key ${to} as well as key ${from}`,
     {
-      why: `Renaming key ${from} to ${to} would overwrite their ${to}. Find them with ${precheckFind(op, rewrite.collection)} in mongosh, and remove one of the two keys from each of those objects. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
+      why: `Renaming key ${from} to ${to} would overwrite their ${to}. Find them with ${precheckFind(op, rewrite.collection)} in mongosh, and remove one of the two keys from each of those objects. ${rerunText('Once the documents are fixed, run the command again', before)}`,
       meta: { operationId: op.id, name: op.name },
     },
   );
@@ -314,6 +320,7 @@ function storedKeyRenameRefusal(op: MongoDmlOperation): MongoMigrationRunnerResu
 function renameTargetExistsRefusal(
   op: MongoMigrationPlanOperation,
   failed: MongoMigrationCheck,
+  before: readonly AnyMongoMigrationOperation[],
 ): MongoMigrationRunnerResult | undefined {
   const rename = op.execute.find(
     (step) => step.command instanceof RenameCollectionCommand,
@@ -326,7 +333,7 @@ function renameTargetExistsRefusal(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: collection ${to} already exists, so collection ${from} cannot be renamed to it`,
     {
-      why: `If ${to} holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If an earlier operation of the same migration created ${to}, as a createIndex on ${to} does, make renameCollection(${JSON.stringify(from)}, ${JSON.stringify(to)}) the first operation of its migration.ts, run node on that migration.ts, and then drop ${to} and run the command again.`,
+      why: `${rerunText(`If ${to} holds nothing you need, drop it, then run the command again`, before)} If an earlier operation of the same migration created ${to}, as a createIndex on ${to} does, make renameCollection(${JSON.stringify(from)}, ${JSON.stringify(to)}) the first operation of its migration.ts, run node on that migration.ts, and then drop ${to} and run the command again.`,
       meta: { operationId: op.id },
     },
   );
@@ -1047,11 +1054,15 @@ function fieldStoredAt(
 const MONGO_DUPLICATE_KEY = 11000;
 
 /** What a user can do about a MongoDB error that stopped a rewrite, when the error says. */
-function rewriteErrorFix(mongoCode: number, reason: string): string | undefined {
+function rewriteErrorFix(
+  mongoCode: number,
+  reason: string,
+  before: readonly AnyMongoMigrationOperation[],
+): string | undefined {
   if (mongoCode !== MONGO_DUPLICATE_KEY) return undefined;
   const index = /index: (\S+)/.exec(reason)?.[1];
   const named = index === undefined ? 'a unique index' : `unique index ${JSON.stringify(index)}`;
-  return `The rewrite would give two documents the same value under ${named}. Change or remove the documents that would collide, then run the command again; operations that already ran are skipped.`;
+  return `The rewrite would give two documents the same value under ${named}. ${rerunText('Change or remove the documents that would collide, then run the command again', before)}`;
 }
 
 /**
@@ -1081,6 +1092,7 @@ function indexBuildFailure(
   command: CreateIndexCommand,
   error: object,
   backfill: (fields: readonly string[]) => readonly string[],
+  before: readonly AnyMongoMigrationOperation[],
 ): MongoMigrationRunnerResult {
   const reason = mongoErrorText(error);
   const duplicate = /dup key: (\{.*\})/.exec(reason)?.[1];
@@ -1091,7 +1103,10 @@ function indexBuildFailure(
     lacking.length === 0
       ? 'A document without the field counts as holding null.'
       : `The documents that collide lack ${quotedList(lacking)} or hold null in ${lacking.length === 1 ? 'it' : 'them'}, and a document without the field counts as holding null.`,
-    'Give each document its own value of the indexed fields, or remove the duplicates, then run the command again; operations that already ran are skipped.',
+    rerunText(
+      'Give each document its own value of the indexed fields, or remove the duplicates, then run the command again',
+      before,
+    ),
     ...(statements.length === 0
       ? []
       : [
@@ -1219,24 +1234,27 @@ function copyRejectedWhy(
       ? `Documents the copy wrote before the error stay in collection ${name}, and the copy runs again on a re-run.`
       : `Collection ${name} is as it was: an $out stage replaces it only when the whole pipeline succeeds.`;
   const bypass = `add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call`;
-  const pipeline = `change the pipeline in the migration's migration.ts so the documents it writes fit the validator`;
+  const node = 'run the file with node, then run the command again';
+  const pipeline = `change the pipeline in the migration's migration.ts so the documents it writes fit the validator, ${node}`;
   const renamed = (collection: string) =>
     collection === target.collection ? '' : `, as collection ${collection}`;
   const orPipeline =
-    failure.document === '' ? pipeline : `fix that document in its source, or ${pipeline}`;
+    failure.document === ''
+      ? pipeline
+      : `fix that document in its source and run the command again, or ${pipeline}`;
   const advice = (() => {
     switch (later.kind) {
       case 'replaced':
-        return `A later operation of this migration updates the validator of collection ${name}${renamed(later.collection)}: ${bypass}, so that update checks the moved documents.`;
+        return `A later operation of this migration updates the validator of collection ${name}${renamed(later.collection)}: ${bypass}, so that update checks the moved documents. Run the file with node, then run the command again.`;
       case 'removed':
-        return `A later operation of this migration removes the validator of collection ${name}${renamed(later.collection)}: ${bypass}, so the copy does not have to fit the validator that is then removed.`;
+        return `A later operation of this migration removes the validator of collection ${name}${renamed(later.collection)}: ${bypass}, so the copy does not have to fit the validator that is then removed. Run the file with node, then run the command again.`;
       case 'none':
         return `No later operation of this migration updates the validator of collection ${name}, so ${orPipeline}.`;
       case 'unknown':
-        return `If a later validator update replaces the validator of collection ${name}, ${bypass}, so that update checks the moved documents. Otherwise ${orPipeline}.`;
+        return `If a later validator update replaces the validator of collection ${name}, ${bypass}, so that update checks the moved documents, and ${node}. Otherwise ${orPipeline}.`;
     }
   })();
-  return `MongoDB error ${failure.mongoError}: ${failure.reason}.${failure.document} ${written} ${advice} Run the file with node, then run the command again.`;
+  return `MongoDB error ${failure.mongoError}: ${failure.reason}.${failure.document} ${written} ${advice}`;
 }
 
 /**
@@ -1315,7 +1333,7 @@ function rewriteFailure(
   if (rewrite === undefined) return undefined;
   const cast = op.meta?.rewrite?.kind === 'cast' ? op.meta.rewrite : undefined;
   if (mongoCode !== MONGO_CONVERSION_FAILURE || cast === undefined) {
-    const fix = rewriteErrorFix(mongoCode, reason);
+    const fix = rewriteErrorFix(mongoCode, reason, position.plan.slice(0, position.operationIndex));
     return runnerFailure(
       'MIGRATION.EXECUTION_FAILED',
       `Operation ${op.id} failed: MongoDB error ${mongoError}: ${reason}`,
@@ -1455,7 +1473,7 @@ export class MongoMigrationRunner {
           if (failing !== undefined) {
             const failedCheck = failedCheckOf(operation.id, 'precheck', failing);
             return (
-              renameTargetExistsRefusal(operation, failing) ??
+              renameTargetExistsRefusal(operation, failing, operations.slice(0, operationIndex)) ??
               createTargetExistsRefusal(operation, failing) ??
               (await this.documentsFailingValidatorRefusal(
                 operation,
@@ -1481,14 +1499,19 @@ export class MongoMigrationRunner {
               throw error;
             }
             const inPlace = await this.collectionInPlace(command.collection);
-            return indexBuildFailure(operation, command, error, (fields) =>
-              backfillStatements(
-                options.destinationContract,
-                command.collection,
-                fields,
-                new Map(),
-                inPlace.rewrite,
-              ).map(({ statement }) => `--backfill ${statement}`),
+            return indexBuildFailure(
+              operation,
+              command,
+              error,
+              (fields) =>
+                backfillStatements(
+                  options.destinationContract,
+                  command.collection,
+                  fields,
+                  new Map(),
+                  inPlace.rewrite,
+                ).map(({ statement }) => `--backfill ${statement}`),
+              operations.slice(0, operationIndex),
             );
           }
           wrote();
@@ -1672,14 +1695,15 @@ export class MongoMigrationRunner {
       if (allSatisfied) return { executed: false };
     }
 
+    const before = position.plan.slice(0, position.operationIndex);
     if (runPrechecks && op.precheck.length > 0) {
       const passed = await this.evaluateDmlChecks(op.precheck, filterEvaluator);
       if (!passed) {
         return {
           executed: false,
           failure:
-            renameOverwriteRefusal(op) ??
-            storedKeyRenameRefusal(op) ??
+            renameOverwriteRefusal(op, before) ??
+            storedKeyRenameRefusal(op, before) ??
             (await this.documentsHoldingRemovedValueRefusal(op, position)) ??
             runnerFailure(
               'MIGRATION.PRECHECK_FAILED',
@@ -1718,7 +1742,7 @@ export class MongoMigrationRunner {
         return {
           executed: false,
           failure:
-            (await this.documentsStillMatchingFailure(op)) ??
+            (await this.documentsStillMatchingFailure(op, before)) ??
             runnerFailure(
               'MIGRATION.POSTCHECK_FAILED',
               `Operation ${op.id} failed during postcheck`,
@@ -1739,7 +1763,7 @@ export class MongoMigrationRunner {
    */
   private async documentsHoldingRemovedValueRefusal(
     op: MongoDmlOperation,
-    position: { readonly operationIndex: number; readonly contract: MongoContract },
+    position: DmlPosition,
   ): Promise<MongoMigrationRunnerResult | undefined> {
     const rewrite = op.meta?.rewrite;
     const [check] = op.precheck;
@@ -1788,7 +1812,10 @@ export class MongoMigrationRunner {
         why: [
           `${one ? 'It has' : 'One of them has'} _id ${mongoshValue(counted?.['documentId'])}. Find them all with ${query} in mongosh.`,
           `To keep them, add a new member to the enum and rename ${named} to it instead of removing it, or change those documents to another value first.`,
-          'Once the documents are fixed, run the command again; operations that already ran are skipped.',
+          rerunText(
+            'Once the documents are fixed, run the command again',
+            position.plan.slice(0, position.operationIndex),
+          ),
         ].join(' '),
         meta: {
           operationId: op.id,
@@ -1958,6 +1985,7 @@ export class MongoMigrationRunner {
    */
   private async documentsStillMatchingFailure(
     op: MongoDmlOperation,
+    before: readonly AnyMongoMigrationOperation[],
   ): Promise<MongoMigrationRunnerResult | undefined> {
     const [check] = op.postcheck;
     const command = check?.source.command;
@@ -1984,8 +2012,11 @@ export class MongoMigrationRunner {
         why: [
           `${one ? 'It has' : 'One of them has'} _id ${documentId}. Find them all with ${query} in mongosh.`,
           op.operationClass === 'data'
-            ? "Change the update in the migration's migration.ts so it changes them too, run the file with node, then run the command again; operations that already ran are skipped."
-            : 'The update this operation runs did not change them: another client may have written them during the apply, or the value it writes does not pass its own check. Run the command again; operations that already ran are skipped. If they are still found, change them by hand.',
+            ? rerunText(
+                "Change the update in the migration's migration.ts so it changes them too, run the file with node, then run the command again",
+                before,
+              )
+            : `The update this operation runs did not change them: another client may have written them during the apply, or the value it writes does not pass its own check. ${rerunText('Run the command again', before)} If they are still found, change them by hand.`,
         ].join(' '),
         meta: {
           operationId: op.id,

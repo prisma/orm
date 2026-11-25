@@ -1091,7 +1091,7 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
       code: 'MIGRATION.EXECUTION_FAILED',
       message:
         'Operation data_transform.move User to members failed: the validator of collection members rejected a document the copy wrote',
-      why: "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. No later operation of this migration updates the validator of collection members, so change the pipeline in the migration's migration.ts so the documents it writes fit the validator. Run the file with node, then run the command again. The operations that ran before the failure stay applied.",
+      why: "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. No later operation of this migration updates the validator of collection members, so change the pipeline in the migration's migration.ts so the documents it writes fit the validator, run the file with node, then run the command again. The operations that ran before the failure stay applied.",
       meta: {
         operationId: 'data_transform.move User to members',
         mongoCode: 121,
@@ -1174,7 +1174,7 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
     ]);
 
     expect(failureFields(result.assertNotOk()).why).toContain(
-      'Document failed validation. The rejected document has _id ObjectId("6650a1b2c3d4e5f6a7b8c9d0"): find it with db.getCollection("users").find({ _id: ObjectId("6650a1b2c3d4e5f6a7b8c9d0") }) in mongosh. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. No later operation of this migration updates the validator of collection members, so fix that document in its source, or change the pipeline',
+      'Document failed validation. The rejected document has _id ObjectId("6650a1b2c3d4e5f6a7b8c9d0"): find it with db.getCollection("users").find({ _id: ObjectId("6650a1b2c3d4e5f6a7b8c9d0") }) in mongosh. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. No later operation of this migration updates the validator of collection members, so fix that document in its source and run the command again, or change the pipeline in the migration\'s migration.ts so the documents it writes fit the validator, run the file with node, then run the command again.',
     );
   });
 
@@ -1196,7 +1196,7 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
       message:
         'Operation data_transform.move User to members failed: the validator of collection archive.members rejected a document the copy wrote',
       why: expect.stringContaining(
-        "If a later validator update replaces the validator of collection archive.members, add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents. Otherwise change the pipeline",
+        "If a later validator update replaces the validator of collection archive.members, add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents, and run the file with node, then run the command again. Otherwise change the pipeline",
       ),
     });
   });
@@ -1267,6 +1267,39 @@ describe('MongoMigrationRunner, a field rename stopped because documents already
         name: 'field.posts.title.rename(headline).where({"type":"bug"})',
       },
     });
+  });
+});
+
+describe('MongoMigrationRunner, a stop after a copy, which has no check', () => {
+  const copy = dataTransform('move User to posts', {
+    run: () => rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'posts' } }]),
+  });
+
+  it('says at a field rename collision that the copy runs again', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([]);
+    harness.driver.queueResponse([{ _id: 1 }]);
+    harness.driver.queueResponse([{ _id: 2 }]);
+
+    const result = await execute(harness, [
+      copy,
+      renameField('posts', 'title', 'headline', { filter: { type: 'bug' } }),
+    ]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      'Once the documents are fixed, run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again.',
+    );
+  });
+
+  it('says at a collection rename whose new collection exists that the copy runs again', async () => {
+    const harness = makeHarness();
+    harness.inspectionExecutor.collections = [{ name: 'events' }, { name: 'occasions' }];
+
+    const result = await execute(harness, [copy, renameCollection('events', 'occasions')]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      'If occasions holds nothing you need, drop it, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again. If an earlier operation',
+    );
   });
 });
 
