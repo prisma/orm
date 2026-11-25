@@ -65,12 +65,13 @@ afterEach(() => {
 });
 
 describe('CONSUMER_SCOPES', () => {
-  it('covers the consumer-shaped trees and no substrate suite', () => {
+  it('covers the consumer-shaped trees, the Better Auth adapter and no substrate suite', () => {
     assert.deepEqual(CONSUMER_SCOPES, [
       'examples',
       'apps',
       'test/e2e/framework',
       'test/integration/test/cli-journeys',
+      'packages/9-public/@prisma/orm-better-auth',
     ]);
   });
 });
@@ -172,6 +173,19 @@ describe('scanManifests', () => {
     assert.deepEqual(
       scanManifests(repo, 'examples').map((r) => `${r.field}:${r.package}`),
       ['dependencies:@internal/postgres', 'devDependencies:@internal/cli'],
+    );
+  });
+
+  it('reads internal packages from peerDependencies and optionalDependencies', () => {
+    manifest('examples/app/package.json', {
+      peerDependencies: { '@internal/sql-contract': '*', '@prisma/orm-framework': '8' },
+      optionalDependencies: { '@internal/postgres': 'workspace:*' },
+    });
+    commitAll('internal peer and optional packages');
+
+    assert.deepEqual(
+      scanManifests(repo, 'examples').map((r) => `${r.field}:${r.package}`),
+      ['peerDependencies:@internal/sql-contract', 'optionalDependencies:@internal/postgres'],
     );
   });
 

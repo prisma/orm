@@ -2,13 +2,17 @@
   "name": "e2e-tests-postgres-fixtures",
   "private": true,
   "type": "module",
-  "version": "8.0.0-rc.24",
+  "version": "8.0.0-rc.25",
   "description": "The Postgres fixture of the e2e suite. Its own manifest because emission reads the nearest one to decide which package names generated files import, and this suite exercises two databases whose halves must not name each other's facade.",
   "dependencies": {
-    "@prisma/cli-engine": "0.10.0",
-    "@prisma/orm-extension-arktype-json": "workspace:8.0.0-rc.24",
-    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.24",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.24",
+    "@prisma/cli-engine": "0.10.4",
+    "@prisma/orm-extension-arktype-json": "workspace:8.0.0-rc.25",
+    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "arktype": "catalog:"
   }
 }

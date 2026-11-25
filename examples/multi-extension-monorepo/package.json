@@ -1,6 +1,6 @@
 {
   "name": "multi-extension-monorepo",
-  "version": "8.0.0-rc.24",
+  "version": "8.0.0-rc.25",
   "private": true,
   "type": "module",
   "engines": {
@@ -15,13 +15,17 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.24"
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.10.0",
-    "@repo/prisma-bin": "workspace:8.0.0-rc.24",
-    "@repo/test-utils": "workspace:8.0.0-rc.24",
-    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@prisma/cli-engine": "0.10.4",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.25",
+    "@repo/test-utils": "workspace:8.0.0-rc.25",
+    "@repo/tsconfig": "workspace:8.0.0-rc.25",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

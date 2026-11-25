@@ -19,7 +19,11 @@
     "lint:fix": "biome check --write ."
   },
   "dependencies": {
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.24",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "@react-router/node": "^8.5.1",
     "@react-router/serve": "^8.5.1",
     "dotenv": "^17.4.2",
@@ -30,12 +34,12 @@
     "react-router": "^8.3.1"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.10.0",
+    "@prisma/cli-engine": "0.10.4",
     "@prisma/dev": "catalog:",
     "@react-router/dev": "^8.3.1",
-    "@repo/prisma-bin": "workspace:8.0.0-rc.24",
-    "@repo/test-utils": "workspace:8.0.0-rc.24",
-    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.25",
+    "@repo/test-utils": "workspace:8.0.0-rc.25",
+    "@repo/tsconfig": "workspace:8.0.0-rc.25",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "@types/react": "^19.3.0",
@@ -47,5 +51,5 @@
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.24"
+  "version": "8.0.0-rc.25"
 }

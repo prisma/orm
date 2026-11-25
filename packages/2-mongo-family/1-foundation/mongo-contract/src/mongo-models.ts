@@ -22,7 +22,7 @@ export function modelAndBasesOf<Model extends Pick<ContractModel<MongoModelStora
   const seen = new Set<string>();
   for (let name: string | undefined = modelName; name !== undefined && !seen.has(name); ) {
     seen.add(name);
-    const model: Model | undefined = models[name];
+    const model: Model | undefined = Object.hasOwn(models, name) ? models[name] : undefined;
     if (model === undefined) break;
     chain.push(model);
     name = model.base?.model;

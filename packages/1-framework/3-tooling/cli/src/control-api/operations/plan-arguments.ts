@@ -1,0 +1,410 @@
+/**
+ * The arguments `migration plan` takes, derived from where a plan should start and end: the inverse
+ * of `resolveFromForPlan` and `resolveToForPlan` in `plan-resolution.ts`. Advice that prints a
+ * `migration plan` from where a database is asks here, so it names only what those resolvers
+ * accept. A few messages print a fixed command that always resolves: `--from @empty`, `--from` a
+ * ref whose contract a migration records, or no `--from` when there are no migrations.
+ */
+
+import type { ContractMarkerRecordLike } from '@internal/migration-tools/aggregate';
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
+import type { MigrationGraph } from '@internal/migration-tools/graph';
+import {
+  historyEndsFrom,
+  isGraphNode,
+  reconstructGraph,
+} from '@internal/migration-tools/migration-graph';
+import type { OnDiskMigrationPackage } from '@internal/migration-tools/package';
+import type { Refs } from '@internal/migration-tools/refs';
+import { ifDefined } from '@internal/utils/defined';
+import { type MigrationsToTarget, migrationsToTarget } from './graph-queries';
+import type { FromResolution } from './plan-resolution';
+
+/**
+ * What `migration plan` takes for `--from` or `--to`:
+ * - `reference`: a contract reference it resolves (a hash, a ref name, or `@empty`);
+ * - `default`: leave the flag out;
+ * - `ambiguous`: the user has to choose, for `reason`, from `candidates` when they are known;
+ * - `none`: no value makes `migration plan` start or end there, for `reason`.
+ */
+export type MigrationPlanArgument =
+  | { readonly kind: 'reference'; readonly reference: string }
+  | { readonly kind: 'default' }
+  | {
+      readonly kind: 'ambiguous';
+      readonly reason: string;
+      readonly candidates: readonly string[];
+    }
+  | { readonly kind: 'none'; readonly reason: string };
+
+/** What `--to` can be: the target is never left for the user to choose. */
+export type MigrationPlanTargetArgument = Exclude<
+  MigrationPlanArgument,
+  { readonly kind: 'ambiguous' }
+>;
+
+/** A value `migration plan` resolves as printed. */
+export type RunnablePlanArgument = Extract<
+  MigrationPlanArgument,
+  { readonly kind: 'reference' | 'default' }
+>;
+
+/** What a `migration plan` takes for `--from` and `--to`. */
+export interface MigrationPlanArguments {
+  readonly from: MigrationPlanArgument;
+  readonly to: MigrationPlanTargetArgument;
+  /**
+   * Where the database is, when its marker was read.
+   *
+   * @internal
+   */
+  readonly position?: DatabasePosition;
+  /**
+   * Present when `from` lies past migrations on disk the database has not applied, by its marker:
+   * the plan extends the history that continues from where the database is.
+   *
+   * @internal
+   */
+  readonly startsAfterUnapplied?: true;
+  /**
+   * How the database reaches `to` through migrations, when its marker was read, which decides what
+   * the CLI's advice prints. It is in the published types, but it exists for that advice only, and
+   * its shape may change in any release without notice.
+   *
+   * @internal
+   */
+  readonly migrationsToTarget?: MigrationsToTarget;
+}
+
+/**
+ * What deriving a plan's arguments needs from the application space: its migration graph, its
+ * refs, and the hash of the contract the caller takes as emitted.
+ */
+export interface PlanSpace {
+  readonly graph: MigrationGraph;
+  readonly refs: Refs;
+  /**
+   * The hash of the contract the caller takes as emitted, absent when it does not know it. `db
+   * update` and `migration status` pass the emitted contract: the one at the config's contract
+   * path, which `migration plan` targets by default and `migration new` writes to. `db init`, `db
+   * migrate` and `db sign` pass the contract the run was given (see {@link appSpaceOf}), which is
+   * another one under `db migrate --to` and `db sign <contract>`. Their advice does not depend on
+   * it there, since the plan's end is then a migration's end or a ref.
+   */
+  readonly emittedHash?: string;
+}
+
+/**
+ * Where a database is, which decides where a plan for it starts: unmarked (no marker, so empty or
+ * not yet adopted), at a contract by its hash, or unknown, for `reason`, when it cannot be read.
+ */
+export type DatabasePosition =
+  | { readonly kind: 'unmarked' }
+  | { readonly kind: 'contract'; readonly hash: string }
+  | { readonly kind: 'unknown'; readonly reason: string };
+
+/** Where a plan ends: the emitted contract, a ref, or a recorded contract by its hash. */
+export type PlanEnd =
+  | { readonly kind: 'emitted' }
+  | { readonly kind: 'ref'; readonly name: string }
+  | { readonly kind: 'contract'; readonly hash: string };
+
+/** A `--from` or `--to` the user chooses from candidates. */
+export type PlanChoice = Extract<MigrationPlanArgument, { readonly kind: 'ambiguous' }>;
+
+function reference(value: string): RunnablePlanArgument {
+  return { kind: 'reference', reference: value };
+}
+
+/** The ref `refs` defines under `name`; not one `Object.prototype` holds, such as `constructor`. */
+function refNamed(refs: Refs, name: string): Refs[string] | undefined {
+  return Object.hasOwn(refs, name) ? refs[name] : undefined;
+}
+
+/** The names of `refs`, the `db` ref first. */
+function refNames(refs: Refs): readonly string[] {
+  return Object.keys(refs).sort((a, b) => (a === 'db' ? -1 : b === 'db' ? 1 : a.localeCompare(b)));
+}
+
+/** Where the history that continues from `hash` ends, as `--from` names each end. */
+function historyEnds(graph: MigrationGraph, hash: string = EMPTY_CONTRACT_HASH): readonly string[] {
+  return historyEndsFrom(graph, hash).map((end) => (end === EMPTY_CONTRACT_HASH ? '@empty' : end));
+}
+
+/**
+ * The `--from` the user chooses, for `reason`, when where the database is cannot be told: with no
+ * migrations, `@empty` or a ref, which `migration plan` baselines; otherwise where the history ends;
+ * with the space unread, none named.
+ */
+export function migrationPlanChoice(space: PlanSpace | undefined, reason: string): PlanChoice {
+  const candidates =
+    space === undefined
+      ? []
+      : space.graph.nodes.size === 0
+        ? ['@empty', ...refNames(space.refs)]
+        : historyEnds(space.graph);
+  return { kind: 'ambiguous', reason, candidates };
+}
+
+const NO_MARKER = 'The database has no marker';
+const ADOPT_FIRST = 'A database that is not empty needs adopting first';
+
+/** Why a database with no marker in a space with no migrations gets a plan from `@empty` only as a choice. */
+const NO_MARKER_REASON = `${NO_MARKER}, so a plan from \`@empty\` fits only an empty database. ${ADOPT_FIRST}: emit the contract that describes it as it is, before your change, and record it with \`{bin} db sign\`, then plan from there`;
+
+/**
+ * Why `db migrate` on a database with no marker, in a space with migrations, fits only an empty
+ * database, and how to adopt one that is not: `sign` is the `db sign <contract>` and `list` the
+ * `migration list` advice prints.
+ */
+export function noMarkerReplayText(sign: string, list: string): string {
+  return `${NO_MARKER}, so \`db migrate\` applies every migration on disk from the first, which fits only an empty database. ${ADOPT_FIRST}: record the contract it is at with \`${sign}\`, naming the migration whose result it matches (\`${list}\` shows them), and \`db migrate\` then applies only the migrations after it`;
+}
+
+/** A `--from`, and whether it lies past migrations the database has not applied. */
+interface Start {
+  readonly from: MigrationPlanArgument;
+  readonly afterUnapplied: boolean;
+}
+
+function at(from: MigrationPlanArgument): Start {
+  return { from, afterUnapplied: false };
+}
+
+/**
+ * The `--from` that makes `migration plan` start where a database at `position` is. A contract a
+ * migration records is named by its hash. An empty database starts where its history ends, because
+ * a plan from the empty contract would recreate what the existing migrations create; with no
+ * migration from the empty contract it starts at `@empty`. With no migrations, a database with no
+ * marker may be empty or may need adopting, so the plan from `@empty` is a choice; a database at a
+ * contract a ref names starts from the ref, which `migration plan` baselines.
+ */
+function startAtPosition(space: PlanSpace, position: DatabasePosition): Start {
+  const { graph, refs } = space;
+  if (position.kind === 'unknown') return at(migrationPlanChoice(space, position.reason));
+  if (position.kind === 'unmarked' || position.hash === EMPTY_CONTRACT_HASH) {
+    if (graph.nodes.size === 0) {
+      return at(
+        position.kind === 'unmarked'
+          ? { kind: 'ambiguous', reason: NO_MARKER_REASON, candidates: ['@empty'] }
+          : reference('@empty'),
+      );
+    }
+    return startAtEndOf(
+      graph,
+      EMPTY_CONTRACT_HASH,
+      'The migration history an empty database replays',
+    );
+  }
+  if (isGraphNode(position.hash, graph)) return at(reference(position.hash));
+  if (graph.nodes.size === 0) {
+    const [name] = refNames(refs).filter((each) => refs[each]?.hash === position.hash);
+    if (name !== undefined) return at(reference(name));
+    return at({
+      kind: 'none',
+      reason: `No ref names contract ${position.hash}, and with no migrations \`migration plan\` starts only from \`@empty\` or a ref`,
+    });
+  }
+  return at({
+    kind: 'none',
+    reason: `No migration records contract ${position.hash}, and \`migration plan\` starts only from a contract a migration records`,
+  });
+}
+
+/**
+ * Where the history that continues from `hash` ends: the one end, or a choice of them, past
+ * migrations not applied when an end is not `hash` itself.
+ */
+function startAtEndOf(graph: MigrationGraph, hash: string, history: string): Start {
+  const ends = historyEnds(graph, hash);
+  const start = hash === EMPTY_CONTRACT_HASH ? '@empty' : hash;
+  const afterUnapplied = ends.some((end) => end !== start);
+  const [onlyEnd] = ends;
+  if (ends.length === 1 && onlyEnd !== undefined) {
+    return { from: reference(onlyEnd), afterUnapplied };
+  }
+  return {
+    from: { kind: 'ambiguous', reason: `${history} has more than one end`, candidates: ends },
+    afterUnapplied,
+  };
+}
+
+/**
+ * The `--to` that makes `migration plan` end at `end`: none for the emitted contract, which it
+ * targets by default, nor for a contract hash that is the one the run was given; a ref by its name;
+ * a contract a migration records by its hash. It does not plan to the empty contract, by its hash or
+ * a ref, or to any other contract no migration records.
+ */
+export function migrationPlanTo(space: PlanSpace, end: PlanEnd): MigrationPlanTargetArgument {
+  if (end.kind === 'emitted') return { kind: 'default' };
+  const hash = end.kind === 'ref' ? refNamed(space.refs, end.name)?.hash : end.hash;
+  if (hash === EMPTY_CONTRACT_HASH) {
+    return {
+      kind: 'none',
+      reason: '`migration plan` does not plan a migration to the empty contract',
+    };
+  }
+  if (end.kind === 'ref') return reference(end.name);
+  if (isGraphNode(end.hash, space.graph)) return reference(end.hash);
+  if (end.hash === space.emittedHash) return { kind: 'default' };
+  return {
+    kind: 'none',
+    reason: `No migration records contract ${end.hash}, and \`migration plan --to\` ends only at a contract a migration records, a ref, or the emitted contract`,
+  };
+}
+
+/**
+ * The `--from` and `--to` of the `migration plan` that takes a database at `position` to `end`. To
+ * a contract the history records, the plan leaves from where the database is. To the emitted
+ * contract, a new one, it extends the history: it starts where the history that continues from the
+ * database's contract ends, so `db migrate` applies the migrations after it and then the new one,
+ * and the plan forks nothing.
+ */
+export function migrationPlanArguments(
+  space: PlanSpace,
+  position: DatabasePosition,
+  end: PlanEnd,
+): MigrationPlanArguments {
+  const to = migrationPlanTo(space, end);
+  const extendsHistory =
+    to.kind === 'default' &&
+    position.kind === 'contract' &&
+    position.hash !== EMPTY_CONTRACT_HASH &&
+    isGraphNode(position.hash, space.graph);
+  const start = extendsHistory
+    ? startAtEndOf(
+        space.graph,
+        position.hash,
+        'The migration history that continues from where the database is',
+      )
+    : startAtPosition(space, position);
+  return {
+    from: start.from,
+    to,
+    ...ifDefined('startsAfterUnapplied', start.afterUnapplied ? true : undefined),
+  };
+}
+
+const EMPTY_ORIGIN_STATEMENTS =
+  'A plan from `@empty` creates every model, so its statements name nothing it can resolve';
+
+/**
+ * `from` for a plan that carries `--rename`, `--delete`, `--convert` or `--backfill`: such a plan
+ * cannot start at `@empty`, so that start is dropped, and with no start left there is no plan.
+ */
+export function migrationPlanFromForStatements(from: MigrationPlanArgument): MigrationPlanArgument {
+  if (from.kind === 'reference' && from.reference === '@empty') {
+    return { kind: 'none', reason: EMPTY_ORIGIN_STATEMENTS };
+  }
+  if (from.kind !== 'ambiguous' || !from.candidates.includes('@empty')) return from;
+  const candidates = from.candidates.filter((candidate) => candidate !== '@empty');
+  return candidates.length === 0
+    ? { kind: 'none', reason: `${from.reason}. ${EMPTY_ORIGIN_STATEMENTS}` }
+    : { ...from, candidates };
+}
+
+/**
+ * The `--from` that plans a failed migration again after its directory is deleted: the contract it
+ * started from, as `--from` names it in the graph without that migration.
+ */
+export function migrationPlanReplacing(
+  space: PlanSpace & { readonly packages: readonly OnDiskMigrationPackage[] },
+  failed: { readonly from: string; readonly dirName: string },
+): MigrationPlanArgument {
+  if (failed.from === EMPTY_CONTRACT_HASH) return reference('@empty');
+  const graph = reconstructGraph(
+    space.packages.filter(({ dirName }) => dirName !== failed.dirName),
+  );
+  return startAtPosition({ graph, refs: space.refs }, { kind: 'contract', hash: failed.from }).from;
+}
+
+/**
+ * The `migration plan` that takes the database at `marker` to `end`, with how it reaches `end`
+ * through migrations when the contract `end` names is known.
+ */
+export function migrationPlanForDatabase(
+  space: PlanSpace,
+  marker: ContractMarkerRecordLike | null | undefined,
+  end: PlanEnd,
+): MigrationPlanArguments {
+  const position = databasePositionOf(marker?.storageHash);
+  const plan = migrationPlanArguments(space, position, end);
+  const target = planEndContract(space, end);
+  return {
+    ...plan,
+    position,
+    ...ifDefined(
+      'migrationsToTarget',
+      target === undefined ? undefined : migrationsToTarget(space, marker, target),
+    ),
+  };
+}
+
+/** The contract `end` names, with the invariants a ref requires; undefined when it is not known. */
+function planEndContract(
+  space: PlanSpace,
+  end: PlanEnd,
+): { readonly hash: string; readonly invariants: readonly string[] } | undefined {
+  switch (end.kind) {
+    case 'emitted':
+      return space.emittedHash === undefined
+        ? undefined
+        : { hash: space.emittedHash, invariants: [] };
+    case 'ref':
+      return refNamed(space.refs, end.name);
+    case 'contract':
+      return { hash: end.hash, invariants: [] };
+  }
+}
+
+/** Where a database whose marker names `markerHash`, or that has none, is. */
+export function databasePositionOf(markerHash: string | undefined): DatabasePosition {
+  if (markerHash === undefined) return { kind: 'unmarked' };
+  return { kind: 'contract', hash: markerHash };
+}
+
+/**
+ * The application space of `aggregate`, as a {@link PlanSpace}, with `emitted.hash` as its
+ * `emittedHash`: by default the hash of the contract the run was given, the aggregate's.
+ */
+export function appSpaceOf(
+  aggregate: {
+    readonly app: {
+      readonly spaceId: string;
+      readonly refs: Refs;
+      graph(): MigrationGraph;
+      contract(): { readonly storage: { readonly storageHash: string } };
+    };
+  },
+  emitted: { readonly hash: string | undefined } = {
+    hash: aggregate.app.contract().storage.storageHash,
+  },
+): PlanSpace & { readonly spaceId: string } {
+  return {
+    spaceId: aggregate.app.spaceId,
+    graph: aggregate.app.graph(),
+    refs: aggregate.app.refs,
+    ...ifDefined('emittedHash', emitted.hash),
+  };
+}
+
+/**
+ * The `--from` that makes `migration plan` start where a run of it started: the `--from` it was
+ * given, or the origin it resolved by default, which is `@empty`, the `db` ref it baselined from, or
+ * the hash the `db` ref names.
+ */
+export function migrationPlanFromRun(
+  optionsFrom: string | undefined,
+  resolution: FromResolution,
+): RunnablePlanArgument {
+  if (optionsFrom !== undefined) return reference(optionsFrom);
+  switch (resolution.kind) {
+    case 'greenfield':
+      return reference('@empty');
+    case 'auto-baseline':
+      return reference('db');
+    case 'graph-node':
+    case 'ref':
+      return reference(resolution.fromHash);
+  }
+}

@@ -181,26 +181,28 @@ export function treeFromFlat(schemaIR: SqlSchemaIR): PostgresDatabaseSchemaNode 
         members: entry.values,
       }),
   );
-  const tables: Record<string, PostgresTableSchemaNode> = {};
-  for (const [name, table] of Object.entries(schemaIR.tables)) {
-    tables[name] = new PostgresTableSchemaNode({
-      name: table.name,
-      columns: withReportedTypes(
-        table.columns,
-        fixtureEnums(
-          'public',
-          readNativeEnums(schemaIR.annotations).map(({ typeName }) => typeName),
+  const tables = Object.fromEntries(
+    Object.entries(schemaIR.tables).map(([name, table]) => [
+      name,
+      new PostgresTableSchemaNode({
+        name: table.name,
+        columns: withReportedTypes(
+          table.columns,
+          fixtureEnums(
+            'public',
+            readNativeEnums(schemaIR.annotations).map(({ typeName }) => typeName),
+          ),
         ),
-      ),
-      foreignKeys: table.foreignKeys,
-      uniques: table.uniques,
-      indexes: table.indexes,
-      ...(table.primaryKey !== undefined ? { primaryKey: table.primaryKey } : {}),
-      ...(table.annotations !== undefined ? { annotations: table.annotations } : {}),
-      ...(table.checks !== undefined ? { checks: table.checks } : {}),
-      rlsEnabled: false,
-    });
-  }
+        foreignKeys: table.foreignKeys,
+        uniques: table.uniques,
+        indexes: table.indexes,
+        ...(table.primaryKey !== undefined ? { primaryKey: table.primaryKey } : {}),
+        ...(table.annotations !== undefined ? { annotations: table.annotations } : {}),
+        ...(table.checks !== undefined ? { checks: table.checks } : {}),
+        rlsEnabled: false,
+      }),
+    ]),
+  );
   return new PostgresDatabaseSchemaNode({
     extensions: undefined,
     namespaces: {

@@ -10,7 +10,7 @@
 
 The minimum supported PostgreSQL server version is **15** (previously 17).
 
-The policy in ADR 222 is unchanged: the floor is a hard floor, declared as `POSTGRES_MIN_SERVER_VERSION` in `@internal/target-postgres`. (When this record was written, the CLI kept a copy guarded by a drift test; [ADR 325](ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md) removed the copy, and `init` reads the constant through the target package.) This ADR changes the value and corrects the record of how the floor is enforced.
+The policy in ADR 222 is unchanged: the floor is a hard floor, declared as `POSTGRES_MIN_SERVER_VERSION` in `@internal/target-postgres`. (When this record was written, the CLI kept a copy guarded by a drift test; [ADR 325](ADR%20325%20-%20init%20gets%20everything%20about%20a%20database%20from%20its%20facade.md) removed the copy, and `init` reads the constant through the target package.) This ADR changes the value and corrects the record of how the floor is enforced.
 
 ## Context
 
@@ -57,7 +57,7 @@ If any of these becomes worth emitting, the path is per-server capability gating
 ## Enforcement
 
 - Source of truth: `POSTGRES_MIN_SERVER_VERSION = '15'` in `packages/3-targets/postgres/1-target/src/core/server-version.ts`, exported from `@internal/target-postgres/server-version`.
-- `prisma orm init`: the Postgres target package's init contribution reads the constant for its `serverRequirement` (`packages/3-targets/postgres/9-facade/src/init/`).
+- `prisma orm init`: the Postgres facade's init contribution reads the constant for its `serverRequirement` (`packages/3-targets/postgres/9-facade/src/init/`).
 - CI proves the floor: the `postgres:15` service containers in `.github/workflows/ci.yml`. **When bumping the floor, update these image tags** — this replaces ADR 222's step 3, which pointed only at `docker-compose.yaml`.
 - Local dev (`docker-compose.yaml`) also runs the floor version (`postgres:15-alpine`).
 - Newer majors get incidental coverage: PGlite embeds Postgres 17.5 (via `@prisma/dev`) and 18.3 (driver devDependency); the Supabase contract fixture pins `supabase/postgres:17.6`.

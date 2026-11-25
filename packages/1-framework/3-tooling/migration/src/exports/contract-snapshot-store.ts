@@ -3,6 +3,7 @@ export {
   contractSnapshotDir,
   contractSnapshotFiles,
   createSnapshotContentVerifier,
+  hasContractSnapshot,
   readContractSnapshotJson,
   readContractSnapshotJsonTolerant,
   type SnapshotCanonicalizationHooks,

@@ -57,6 +57,7 @@ export function readsTableAsFound(
   );
 }
 
+/** A builder marks a write's condition as its `Find`'s by giving both the same object; equal but separate conditions are not merged. */
 export function foldsIntoCondition(
   graph: Graph,
   { id, find }: FindAt,

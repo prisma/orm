@@ -22,6 +22,7 @@ import {
   lockIncompatible,
   OrderByItem,
   ProjectionItem,
+  refuseReservedResultColumn,
   SelectAst,
   type TableSource,
 } from '@internal/sql-relational-core/ast';
@@ -30,8 +31,9 @@ import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import { createFunctions } from '@internal/sql-relational-core/functions';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { SqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/query-lane-context';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { structuredError } from '@internal/utils/structured-error';
+import { type StructuredError, structuredError } from '@internal/utils/structured-error';
 import type {
   AggregateFunctions,
   Expression,
@@ -288,18 +290,85 @@ export function tableToScope(
   return { topLevel: { ...fields }, namespaces: { [alias]: fields } };
 }
 
+/** The field `table` owns under `name`; an inherited property such as `constructor` is no field. */
+export function ownScopeField(table: ScopeTable, name: string): ScopeField | undefined {
+  return Object.hasOwn(table, name) ? table[name] : undefined;
+}
+
 export function mergeScopes<A extends Scope, B extends Scope>(a: A, b: B): MergeScopes<A, B> {
   const topLevel: ScopeTable = {};
+  const aNames = scopeColumnNames(a);
+  const bNames = scopeColumnNames(b);
   for (const [k, v] of Object.entries(a.topLevel)) {
-    if (!(k in b.topLevel)) topLevel[k] = v;
+    if (!bNames.has(k)) topLevel[k] = v;
   }
   for (const [k, v] of Object.entries(b.topLevel)) {
-    if (!(k in a.topLevel)) topLevel[k] = v;
+    if (!aNames.has(k)) topLevel[k] = v;
   }
-  return {
-    topLevel,
-    namespaces: { ...a.namespaces, ...b.namespaces },
-  } as MergeScopes<A, B>;
+  return blindCast<MergeScopes<A, B>, 'the loops above compute the topLevel MergeScopes describes'>(
+    {
+      topLevel,
+      namespaces: { ...a.namespaces, ...b.namespaces },
+    },
+  );
+}
+
+function columnScopeError(
+  scope: Scope,
+  column: string,
+  method: string | undefined,
+): StructuredError {
+  const tables = Object.entries(scope.namespaces)
+    .filter(([, fields]) => Object.hasOwn(fields, column))
+    .map(([table]) => table);
+  if (tables.length < 2) {
+    const where = method === undefined ? '' : ` for ${method}`;
+    return structuredError('ORM.COLUMN_UNKNOWN', `Column "${column}" not found in scope${where}`, {
+      meta: { column },
+    });
+  }
+  const where = method === undefined ? '' : ` in ${method}`;
+  const tablePlaceholder = tables.every(isIdentifier) ? '.<table>' : "['<table>']";
+  const tableRead = `(f) => f${tablePlaceholder}${propertyAccess(column)}`;
+  const suggestion =
+    method === undefined
+      ? `select(${stringLiteral(column)}, ${tableRead})`
+      : `${method}(${tableRead})`;
+  const restOfCall =
+    method === 'orderBy'
+      ? 'keep its options'
+      : `name any other columns in a separate ${method ?? 'select'} call`;
+  return structuredError(
+    'ORM.COLUMN_AMBIGUOUS',
+    `Column "${column}"${where} is in more than one joined table (${tables.join(', ')})`,
+    {
+      fix: `Name the table the column comes from (${listOfAlternatives(tables)}); ${restOfCall}: ${suggestion}`,
+      meta: { column, candidates: tables },
+    },
+  );
+}
+
+function isIdentifier(name: string): boolean {
+  return /^[A-Za-z_$][\w$]*$/.test(name);
+}
+
+function stringLiteral(value: string): string {
+  return `'${value.replace(/['\\]/g, '\\$&')}'`;
+}
+
+function propertyAccess(name: string): string {
+  return isIdentifier(name) ? `.${name}` : `[${stringLiteral(name)}]`;
+}
+
+function listOfAlternatives(names: readonly string[]): string {
+  return `${names.slice(0, -1).join(', ')} or ${names.at(-1)}`;
+}
+
+function scopeColumnNames(scope: Scope): ReadonlySet<string> {
+  return new Set([
+    ...Object.keys(scope.topLevel),
+    ...Object.values(scope.namespaces).flatMap((fields) => Object.keys(fields)),
+  ]);
 }
 
 export function nullableScope<S extends Scope>(scope: S): NullableScope<S> {
@@ -378,11 +447,8 @@ export function resolveSelectArgs(
 
   if (typeof args[0] === 'string' && (args.length === 1 || typeof args[1] !== 'function')) {
     for (const colName of args as string[]) {
-      const field = scope.topLevel[colName];
-      if (!field)
-        throw structuredError('ORM.COLUMN_UNKNOWN', `Column "${colName}" not found in scope`, {
-          meta: { column: colName },
-        });
+      const field = ownScopeField(scope.topLevel, colName);
+      if (!field) throw columnScopeError(scope, colName, undefined);
       projections.push(
         ProjectionItem.of(colName, IdentifierRef.of(colName), codecRefOf(field, ctx)),
       );
@@ -402,6 +468,7 @@ export function resolveSelectArgs(
       ctx.rawCodecInferer,
       ctx.aggregates,
     );
+    refuseReservedResultColumn(alias, 'select');
     const result = exprFn(createFieldProxy(scope), fns);
     const field = result.returnType;
     projections.push(ProjectionItem.of(alias, projectionAstOf(result), codecRefOf(field, ctx)));
@@ -421,6 +488,7 @@ export function resolveSelectArgs(
     );
     const record = callbackFn(createFieldProxy(scope), fns);
     for (const [key, expr] of Object.entries(record)) {
+      refuseReservedResultColumn(key, 'select');
       const field = expr.returnType;
       projections.push(ProjectionItem.of(key, projectionAstOf(expr), codecRefOf(field, ctx)));
       newRowFields[key] = field;
@@ -456,14 +524,7 @@ export function resolveOrderBy(
 
   if (typeof arg === 'string') {
     const combined = orderByScopeOf(scope, rowFields);
-    if (!(arg in combined.topLevel))
-      throw structuredError(
-        'ORM.COLUMN_UNKNOWN',
-        `Column "${arg}" not found in scope for orderBy`,
-        {
-          meta: { column: arg },
-        },
-      );
+    if (!Object.hasOwn(combined.topLevel, arg)) throw columnScopeError(scope, arg, 'orderBy');
     return toOrderByItem(IdentifierRef.of(arg));
   }
 
@@ -488,12 +549,8 @@ export function resolveGroupBy(
   if (typeof args[0] === 'string') {
     const combined = orderByScopeOf(scope, rowFields);
     return (args as string[]).map((colName) => {
-      if (!(colName in combined.topLevel))
-        throw structuredError(
-          'ORM.COLUMN_UNKNOWN',
-          `Column "${colName}" not found in scope for groupBy`,
-          { meta: { column: colName } },
-        );
+      if (!Object.hasOwn(combined.topLevel, colName))
+        throw columnScopeError(scope, colName, 'groupBy');
       return IdentifierRef.of(colName);
     });
   }
@@ -522,12 +579,8 @@ export function resolveDistinctOn(
   }
   const combined = orderByScopeOf(scope, rowFields);
   return (args as string[]).map((colName) => {
-    if (!(colName in combined.topLevel))
-      throw structuredError(
-        'ORM.COLUMN_UNKNOWN',
-        `Column "${colName}" not found in scope for distinctOn`,
-        { meta: { column: colName } },
-      );
+    if (!Object.hasOwn(combined.topLevel, colName))
+      throw columnScopeError(scope, colName, 'distinctOn');
     return IdentifierRef.of(colName);
   });
 }

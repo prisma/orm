@@ -115,6 +115,17 @@ jobs:
         run: pnpm lint:workflows
       - name: Test scripts/
         run: pnpm test:scripts
+      - name: Check the committed API lists match the build
+        id: api-check
+        run: pnpm api:check
+      - name: Upload the API lists CI generated
+        if: failure() && steps.api-check.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: api-lists
+          path: packages/9-public/@prisma/*/dist-api/api.txt
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Lint ratchets (casts, throws, framework vocabulary)
         run: pnpm lint:ratchets
       - name: Lint consumer internal imports
@@ -446,7 +457,7 @@ jobs:
     env:
       TEST_TIMEOUT_MULTIPLIER: 2
       MYSQL_URL: mysql://root:root@127.0.0.1:3306/mysql?allowPublicKeyRetrieval=true
-    # For the MySQL tests in test/integration, which fail in CI when MYSQL_URL is not set.
+    # For the MySQL tests in test/integration, which fail when MYSQL_URL is not set.
     services:
       mysql:
         image: mysql:8.4

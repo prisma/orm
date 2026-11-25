@@ -248,7 +248,7 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
 
 ## Init Flow
 - `prisma orm init` is the greenfield-app entry point (distinct from `prisma db init`, which adopts an existing database).
-- The target: `--target` takes a short name from the list of target packages Prisma vouches for (`postgres`, `mongodb`, with their aliases) or the name of a package that lists the `prisma-orm-extension` keyword. Without `--target`, the picker lists the known packages and an entry for typing another package name. Everything about the target comes from the package's init contribution ([ADR 325](architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md)).
+- The target: `--target` takes a short name from the list of target packages Prisma vouches for (`postgres`, `mongodb`, with their aliases) or the name of a package that lists the `prisma-orm-extension` keyword. Without `--target`, the picker lists the known packages and an entry for typing another package name. Everything about the target comes from the package's init contribution ([ADR 325](architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20database%20from%20its%20facade.md)).
 - Order: init installs the target package first, then asks the remaining questions: the authoring mode (only the modes the package offers; none when it offers one), the schema location (default `src/prisma/contract.prisma`), and, on a re-init, the consent token. Nothing is asked between naming the target and installing it.
 - Detects the package manager from lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`/`bun.lockb`) and `package.json#packageManager`, falling back to npm. It installs the target package with `dotenv` (and, for a listed package, its drivers), later the drivers the contribution names, and `prisma` plus `@prisma/cli-engine` and `@types/node` as development dependencies. Then it runs `prisma contract emit` programmatically to produce `contract.json` and `contract.d.ts`.
 - Scaffolds:
@@ -272,6 +272,7 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
   - `contract emit`: `--contract <path>`, `--out <dir>`, `--show-sql`, `--show-diff`.
   - `migration plan`: `--out <dir>`, `--show-sql`, `--show-diff`, `--max-sql-lines <n>`, `--yes`.
   - `db sign`: `[contract]` / `--contract <ref>`, `--db <url>`, `--advance-ref <name>`, `--no-advance-ref`.
+  - `db migrate`: `--db <url>`, `--to <contract>`, `--advance-ref <name>`, `--no-advance-ref`.
 
 ## Rationale
 - Predictable, human‑oriented text with clear errors; mirror determinism and actionable messages while avoiding heavy codegen.

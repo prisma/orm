@@ -92,6 +92,7 @@ import {
   runContractSpaceSeedPhase,
 } from './contract-space-seed-phase';
 import { forbiddingSettingsOfRef, refuseForbiddenChanges } from './database-policies';
+import { migrationPlanFromRun, migrationPlanTo } from './plan-arguments';
 import { resolveFromForPlan, resolveToForPlan } from './plan-resolution';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
 
@@ -638,11 +639,13 @@ async function executeMigrationPlanCommandInner(
   const resolutionResult = await resolveFromForPlan({
     optionsFrom: options.from,
     space: resolutionSpace,
+    invocation: invocationOf(options),
   });
 
   if (!resolutionResult.ok) {
     return notOk(resolutionResult.failure);
   }
+  const fromResolution = resolutionResult.value;
 
   const warnings: string[] = [];
   const plannerWarnings: MigrationPlannerConflict[] = [];
@@ -727,8 +730,13 @@ async function executeMigrationPlanCommandInner(
     (conflicts: readonly MigrationPlannerConflict[]) =>
       planningRefusedError(conflicts, {
         invocation: invocationOf(options),
-        from: fromHash ?? undefined,
-        to: options.to,
+        migrationPlan: {
+          from: migrationPlanFromRun(options.from, fromResolution),
+          to:
+            options.to === undefined
+              ? { kind: 'default' }
+              : { kind: 'reference', reference: options.to },
+        },
         statements: texts,
         resolved,
       });
@@ -859,6 +867,13 @@ async function executeMigrationPlanCommandInner(
             appSpaceId: aggregate.app.spaceId,
             command: 'migration plan',
             invocation: invocationOf(options),
+            migrationPlan: {
+              from: migrationPlanFromRun(options.from, fromResolution),
+              to: migrationPlanTo(
+                { graph: resolutionSpace.graph(), refs: resolutionSpace.refs },
+                { kind: 'ref', name: toRef.name },
+              ),
+            },
             forbidden: forbiddingSettingsOfRef(toRef),
             dataLoss: plannedOperations(leg, leg.dataLoss, planned),
             accessChanges: plannedOperations(leg, leg.accessChanges, planned),

@@ -7,9 +7,10 @@ import type { MongoValueSetInput } from './ir/mongo-value-set';
 export function mongoValueSetsOf(
   enums: Readonly<Record<string, ContractEnum>>,
 ): Record<string, MongoValueSetInput> {
-  const valueSets: Record<string, MongoValueSetInput> = {};
-  for (const [enumName, { members }] of Object.entries(enums)) {
-    valueSets[enumName] = { kind: 'valueSet', values: members.map((member) => member.value) };
-  }
-  return valueSets;
+  return Object.fromEntries(
+    Object.entries(enums).map(([enumName, { members }]): [string, MongoValueSetInput] => [
+      enumName,
+      { kind: 'valueSet', values: members.map((member) => member.value) },
+    ]),
+  );
 }

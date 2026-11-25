@@ -1,0 +1,49 @@
+{
+  "name": "better-auth-example",
+  "private": true,
+  "type": "module",
+  "version": "8.0.0-rc.25",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "emit": "prisma contract emit",
+    "emit:check": "pnpm emit && git diff --exit-code prisma/contract.json prisma/contract.d.ts",
+    "db:init": "prisma db init",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "lint": "biome check . --error-on-warnings"
+  },
+  "dependencies": {
+    "@prisma/orm-better-auth": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
+    "better-auth": "1.7.27",
+    "dotenv": "^17.4.2",
+    "next": "^16.4.5",
+    "pg": "catalog:",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@prisma/cli-engine": "0.10.4",
+    "@prisma/dev": "catalog:",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.25",
+    "@repo/test-utils": "workspace:8.0.0-rc.25",
+    "@repo/tsconfig": "workspace:8.0.0-rc.25",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "auth": "1.7.27",
+    "pathe": "^2.0.3",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

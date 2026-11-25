@@ -163,7 +163,7 @@ export async function startStartupParameterRecorder(): Promise<StartupParameterR
     socket.on('close', () => sockets.delete(socket));
     socket.on('error', () => {});
     let buffered = Buffer.alloc(0);
-    socket.on('data', (chunk) => {
+    socket.on('data', (chunk: Buffer) => {
       buffered = Buffer.concat([buffered, chunk]);
       while (buffered.length >= 8 && buffered.length >= buffered.readInt32BE(0)) {
         const length = buffered.readInt32BE(0);

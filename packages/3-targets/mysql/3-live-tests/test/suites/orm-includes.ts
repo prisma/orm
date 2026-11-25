@@ -23,8 +23,8 @@ export function describeOrmIncludes(server: LiveServer): void {
   describe(`${server.displayName} includes through the ORM`, {
     timeout: timeouts.databaseOperation,
   }, () => {
-    it('includes the row a to-one relation points at', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('includes the row a to-one relation points at', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const posts = await db.orm.Post.select('id', 'title')
           .include('author', (author) => author.select('id', 'email'))
@@ -39,9 +39,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       });
     });
 
-    it('carries an enum column through an include as its member', async (test) => {
+    it('carries an enum column through an include as its member', async () => {
       await withSeededDatabase(
-        test,
         server,
         [
           ...exampleDatabase,
@@ -62,8 +61,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       );
     });
 
-    it('keeps a to-many include in the order it asks for, both ways', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('keeps a to-many include in the order it asks for, both ways', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const withPosts = (dir: 'asc' | 'desc') =>
           db.orm.User.select('id')
@@ -80,8 +79,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       });
     });
 
-    it('limits and skips the rows of a to-many include', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('limits and skips the rows of a to-many include', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const user = await db.orm.User.select('id')
           .include('posts', (posts) =>
@@ -96,8 +95,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       });
     });
 
-    it('includes two levels deep, and an empty to-many include as an empty array', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('includes two levels deep, and an empty to-many include as an empty array', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const users = await db.orm.User.select('id')
           .include('posts', (posts) =>
@@ -124,14 +123,13 @@ export function describeOrmIncludes(server: LiveServer): void {
       });
     });
 
-    it('returns an ordered include longer than the session group_concat_max_len in full', async (test) => {
+    it('returns an ordered include longer than the session group_concat_max_len in full', async () => {
       const titles = Array.from(
         { length: 40 },
         (_, i) => `post ${String(i).padStart(2, '0')} ${'x'.repeat(60)}`,
       );
       const rows = titles.map((title, i) => `(${i + 1}, '${title}', 1)`).join(', ');
       await withSeededDatabase(
-        test,
         server,
         [
           ...exampleDatabase.slice(0, 3),
@@ -147,9 +145,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       );
     });
 
-    it('fails, rather than returning an empty array, or returns every row, as the server is expected to, when an ordered include is larger than a packet', async (test) => {
+    it('fails, rather than returning an empty array, or returns every row, as the server is expected to, when an ordered include is larger than a packet', async () => {
       await withSeededDatabase(
-        test,
         server,
         [
           "CREATE TABLE `User` (`id` int NOT NULL, `email` varchar(191) NOT NULL, `role` enum('USER','ADMIN') NOT NULL, PRIMARY KEY (`id`))",
@@ -178,8 +175,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       );
     });
 
-    it('returns whole rows for a user with its posts in order and for posts with their author', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('returns whole rows for a user with its posts in order and for posts with their author', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const withPosts = await db.orm.User.include('posts', (posts) =>
           posts.orderBy((p) => p.title.desc()),
@@ -208,8 +205,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       });
     });
 
-    it('carries text with quotes, backslashes and non-ASCII characters, and a NULL, through an include unchanged', async (test) => {
-      await withSeededDatabase(test, server, notesDatabase, async (url) => {
+    it('carries text with quotes, backslashes and non-ASCII characters, and a NULL, through an include unchanged', async () => {
+      await withSeededDatabase(server, notesDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const author = await db.orm.Author.select('id')
           .include('notes', (notes) => notes.select('body', 'summary').orderBy((n) => n.id.asc()))
@@ -224,8 +221,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       });
     });
 
-    it('includes three levels deep', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('includes three levels deep', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const user = await db.orm.User.select('id')
           .include('posts', (posts) =>
@@ -246,8 +243,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       });
     });
 
-    it('reduces a to-many include to count, sum, avg, min and max', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('reduces a to-many include to count, sum, avg, min and max', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const reduced = async (user: number) => ({
           count: await db.orm.User.include('posts', (p) => p.count()).first({ id: user }),
@@ -267,9 +264,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       });
     });
 
-    it('reads the mean of integers exactly, whether or not the join column has an index', async (test) => {
+    it('reads the mean of integers exactly, whether or not the join column has an index', async () => {
       await withSeededDatabase(
-        test,
         server,
         [
           ...exampleDatabase,
@@ -300,8 +296,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       );
     });
 
-    it('reads a sum past 2^53 exactly through sumBigInt, and refuses it as a number rather than round it', async (test) => {
-      await withSeededDatabase(test, server, eventsDatabase, async (url) => {
+    it('reads a sum past 2^53 exactly through sumBigInt, and refuses it as a number rather than round it', async () => {
+      await withSeededDatabase(server, eventsDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const exact = await db.orm.Account.select('id')
           .include('events', (events) => events.sumBigInt('id'))
@@ -315,8 +311,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       });
     });
 
-    it('combines the rows of a to-many include with a count of them', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('combines the rows of a to-many include with a count of them', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const users = await db.orm.User.select('id')
           .include('posts', (posts) =>
@@ -339,8 +335,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       });
     });
 
-    it('counts the posts of the author of each post, two levels deep', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('counts the posts of the author of each post, two levels deep', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const posts = await db.orm.Post.select('id')
           .include('author', (author) =>
@@ -356,8 +352,8 @@ export function describeOrmIncludes(server: LiveServer): void {
       });
     });
 
-    it('keeps a bigint past 2^53 and a datetime(3) exact inside an include', async (test) => {
-      await withSeededDatabase(test, server, eventsDatabase, async (url) => {
+    it('keeps a bigint past 2^53 and a datetime(3) exact inside an include', async () => {
+      await withSeededDatabase(server, eventsDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const account = await db.orm.Account.select('id')
           .include('events', (events) => events.select('id', 'at').orderBy((e) => e.id.desc()))

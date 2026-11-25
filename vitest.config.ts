@@ -7,7 +7,7 @@ const coverageShard = process.env['VITEST_COVERAGE_SHARD'];
 
 export default defineConfig({
   test: {
-    projects: ['packages/**/vitest.config.ts'],
+    projects: ['packages/**/vitest.config.ts', 'test/utils/vitest.config.ts'],
     // Cap fork concurrency on CI so the PGlite-WASM-heavy package suites
     // (cli, sql runtime, postgres/supabase extensions, postgres adapter +
     // driver) don't all peak at once. Uncapped, vitest runs ~one fork per

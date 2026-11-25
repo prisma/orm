@@ -13,8 +13,7 @@
         "vitest.config.ts",
         "tsconfig.json"
       ],
-      "env": ["TEST_TIMEOUT_MULTIPLIER", "MARIADB_URL"],
-      "passThroughEnv": ["CI"]
+      "env": ["TEST_TIMEOUT_MULTIPLIER", "MARIADB_URL"]
     }
   }
 }

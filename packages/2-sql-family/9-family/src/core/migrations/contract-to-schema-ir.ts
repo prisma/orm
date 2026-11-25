@@ -331,12 +331,12 @@ function convertTable(
   hooks: DefaultHooks,
   storage: SqlStorage,
 ): SqlTableIR {
-  const columns: Record<string, SqlColumnIRInput> = {};
-  for (const [colName, colDef] of Object.entries(table.columns)) {
-    columns[colName] = withColumnInErrors(name, colName, () =>
-      convertColumn(colName, colDef, types, hooks),
-    );
-  }
+  const columns: Record<string, SqlColumnIRInput> = Object.fromEntries(
+    Object.entries(table.columns).map(([colName, colDef]) => [
+      colName,
+      withColumnInErrors(name, colName, () => convertColumn(colName, colDef, types, hooks)),
+    ]),
+  );
 
   const checks: SqlCheckConstraintIRInput[] | undefined =
     table.checks && table.checks.length > 0
@@ -469,7 +469,12 @@ export function contractNamespaceToSchemaIR(
   const tables: Record<string, SqlTableIR> = {};
   for (const [tableName, tableDefRaw] of Object.entries(namespace.entries.table ?? {})) {
     StorageTable.assert(tableDefRaw, `namespaces.${namespaceId}.entries.table.${tableName}`);
-    tables[tableName] = convertTable(tableName, tableDefRaw, options, options, storage);
+    Object.defineProperty(tables, tableName, {
+      value: convertTable(tableName, tableDefRaw, options, options, storage),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
   return new SqlSchemaIR({ tables });
 }
@@ -512,7 +517,7 @@ export function contractToSchemaIR(
     for (const [tableName, tableDefRaw] of Object.entries(ns.entries.table ?? {})) {
       StorageTable.assert(tableDefRaw, `namespaces.${ns.id}.entries.table.${tableName}`);
       const tableDef = tableDefRaw;
-      if (tables[tableName] !== undefined) {
+      if (Object.hasOwn(tables, tableName)) {
         throw sqlFamilyError(
           'CONTRACT.TABLE_AMBIGUOUS',
           `contractToSchemaIR: duplicate SQL table name "${tableName}" across namespaces (ambiguous for flat SqlSchemaIR.tables).`,
@@ -523,7 +528,12 @@ export function contractToSchemaIR(
           },
         );
       }
-      tables[tableName] = convertTable(tableName, tableDef, options, options, storage);
+      Object.defineProperty(tables, tableName, {
+        value: convertTable(tableName, tableDef, options, options, storage),
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     }
   }
 

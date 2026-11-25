@@ -120,13 +120,9 @@ const redirects: readonly RedirectSpec[] = [
     reason: 'One flag names the target contract, whether it is a ref, a hash or a migration.',
   },
   v7Command('migrate dev', {
-    replacement: [
-      '{bin} contract emit',
-      '{bin} migration plan --name <name>',
-      '{bin} db migrate --advance-ref db',
-    ],
+    replacement: ['{bin} contract emit', '{bin} migration status', '{bin} db migrate'],
     reason:
-      'Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration plan --name <name>` (for `--create-only`, stop here), then `db migrate --advance-ref db`.',
+      'Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration status`, which prints the `migration plan` that plans it from where the database is, and run that plan, fill in any placeholders it leaves and run the `node` command it prints (for `--create-only`, stop here), then `db migrate`. When migrations on disk already lead to the new contract, `migration status` prints no plan, and `db migrate` applies them.',
     whileMigrationsStayOnPrisma7: true,
     help: 'contract emit',
   }),

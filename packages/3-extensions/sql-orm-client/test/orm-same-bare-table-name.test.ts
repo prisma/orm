@@ -286,13 +286,16 @@ describe('orm same bare table name across namespaces', () => {
   it('resolves identity columns within the namespace for singular delete, discriminating by namespace', async () => {
     const { db, runtime } = setup();
 
-    runtime.setNextResults([[{ id: 1, email_addr: 'a@example.com' }], []]);
+    runtime.setNextResults([
+      [{ id: 1, email_addr: 'a@example.com' }],
+      [{ id: 1, email_addr: 'a@example.com' }],
+    ]);
     const publicDeleted = await db.public.User.where({ email: 'a@example.com' }).delete();
     expect(publicDeleted).toEqual({ id: 1, email: 'a@example.com' });
     expect(codecByAlias(findAst(runtime, 2))).toEqual({ id: 'pg/int4@1', email_addr: 'pg/text@1' });
     expect(lastWriteAst(runtime).table.namespaceId).toBe('public');
 
-    runtime.setNextResults([[{ id: 2, token_col: 'tok' }], []]);
+    runtime.setNextResults([[{ id: 2, token_col: 'tok' }], [{ id: 2, token_col: 'tok' }]]);
     const authDeleted = await db.auth.User.where({ token: 'tok' }).delete();
     expect(authDeleted).toEqual({ id: 2, token: 'tok' });
     expect(codecByAlias(findAst(runtime, 2))).toEqual({

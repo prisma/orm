@@ -1,6 +1,6 @@
 # Prisma 8 Demo (MySQL)
 
-A minimal demo showing how to use `@prisma/orm-mysql`, the one package a MySQL application installs. It has a PSL contract with four models, a relation, an enum, the convenience date and time types and the scalar convenience types, and three committed migrations written by `prisma migration plan`.
+A minimal demo showing how to use `@prisma/orm-mysql`, the package a MySQL application installs for its database, beside the platform packages it names as peer dependencies. It has a PSL contract with four models, a relation, an enum, the convenience date and time types and the scalar convenience types, and three committed migrations written by `prisma migration plan`.
 
 MySQL support is early, and this example grows with it. Today it shows the control plane, reads and writes: the contract emits, the committed migration applies to an empty MySQL database, `db verify` and `db sign` pass, planning again from the unchanged contract writes nothing, the ORM writes the seed rows, and the ORM and the SQL builder read them, includes among them. MariaDB has an example of its own, [`prisma-8-demo-mariadb`](../prisma-8-demo-mariadb/README.md), because the target id is part of the contract and every migration.
 
@@ -106,7 +106,7 @@ Against a server reached over a network, use TLS (`sslmode=verify-full`, or
 password.
 
 ```bash
-docker compose up -d mysql
+docker compose up -d --wait mysql
 docker compose exec mysql mysql -uroot -proot -e 'CREATE DATABASE prisma_demo'
 pnpm install
 pnpm emit                                   # generates src/prisma/contract.json + contract.d.ts
@@ -131,7 +131,7 @@ which contract the database is at.
 | `db:sign` | `prisma db sign` | Signs a database whose schema satisfies the contract |
 | `test` | `vitest run` | The whole flow against fresh databases at `MYSQL_URL` |
 
-`pnpm test` uses only the server part of `MYSQL_URL`. For each test file it creates a uniquely named database on that server and drops it afterwards. `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and `migration plan` through the `prisma` CLI. `test/reads.test.ts` migrates with `db migrate`, seeds the rows and checks the whole result of each read. `test/events.test.ts` writes events and reads back their dates and times, and `test/products.test.ts` does the same for products. Without `MYSQL_URL` the tests are skipped.
+`pnpm test` uses only the server part of `MYSQL_URL`. For each test file it creates a uniquely named database on that server and drops it afterwards. `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and `migration plan` through the `prisma` CLI. `test/reads.test.ts` migrates with `db migrate`, seeds the rows and checks the whole result of each read. `test/events.test.ts` writes events and reads back their dates and times, and `test/products.test.ts` does the same for products. The tests need the MySQL server and fail when `MYSQL_URL` is not set; `docker compose up -d --wait mysql` starts it.
 
 ## What the migrations create
 

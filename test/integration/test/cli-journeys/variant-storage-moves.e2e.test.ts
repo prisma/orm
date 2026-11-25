@@ -117,7 +117,7 @@ withTempDir(({ createTempDir }) => {
           expect(asked, 'J1.03: the question names Bug.severity').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: '"Bug.severity" needs a statement, and the session is not interactive.',
+            summary: 'This command requires explicit consent, but it was not provided.',
             why: 'Drop column "severity" from "task" would lose the values of field "Bug.severity".',
             nextActions: [
               {
@@ -168,7 +168,7 @@ withTempDir(({ createTempDir }) => {
           expect(askedBack, 'J1.07: the question names Bug').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: '"Bug" needs a statement, and the session is not interactive.',
+            summary: 'This command requires explicit consent, but it was not provided.',
             why: 'Drop table "bug" would lose the data of model "Bug".',
             nextActions: [
               {
@@ -235,7 +235,7 @@ withTempDir(({ createTempDir }) => {
           ).toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: '"Bug" needs a statement, and the session is not interactive.',
+            summary: 'This command requires explicit consent, but it was not provided.',
             why: 'These operations would lose the data of model "Bug":\n- Drop column "severity" from "task"\n- Delete the rows of "task" that hold value "bug" in column "type"',
             nextActions: [
               {

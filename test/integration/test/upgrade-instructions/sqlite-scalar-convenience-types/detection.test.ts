@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { detectionPatterns } from '../guide-detections';
+import { detectionPatterns, guideChange } from '../guide-detections';
 
 const GUIDES = [
-  'upgrade-instructions/pending/sqlite-scalar-convenience-types/app/instructions.md',
-  'upgrade-instructions/pending/sqlite-scalar-convenience-types/extension/instructions.md',
+  'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md',
+  'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md',
 ];
 
 describe.each(GUIDES)('the renamed SQLite column helpers detection in %s', (guidePath) => {
@@ -128,51 +128,32 @@ describe.each(GUIDES)(
       });
     });
 
-    it('match a schema or TypeScript contract with a field on sqlite/integer@1, and not one without', () => {
+    it('match a project that depends on or configures the SQLite package, and not a PostgreSQL one', () => {
       const matches = matcher('sqlite-integer-safe-range');
-      const sqlite = "import { defineContract } from '@prisma/orm-sqlite/contract-builder';\n";
       expect({
-        field: matches('model Post {\n  id    Int @id\n}'),
-        optional: matches('model Post {\n  views Int?\n}'),
-        convenienceCall: matches('model Post {\n  views Int(storage: integer)\n}'),
-        explicit: matches('model Post {\n  views IntegerNumber\n}'),
-        bigIntAsNumber: matches('model Post {\n  views BigInt(as: number)\n}'),
-        alias: matches('types {\n  Count = Int\n}'),
-        typescript: matches(`${sqlite}field.column(type.Int());`),
-        typescriptAsNumber: matches(`${sqlite}field.column(type.BigInt({ as: 'number' }));`),
-        columnHelper: matches(
-          "import { integerNumberColumn } from '@prisma/orm-sqlite/adapter/column-types';",
+        glob: guideChange(guidePath, 'sqlite-integer-safe-range').detection?.glob,
+        dependency: matches(
+          '{\n  "dependencies": {\n    "@prisma/orm-sqlite": "8.0.0-rc.25"\n  }\n}',
         ),
-        oldColumnHelper: matches(
-          "import { integerColumn } from '@prisma/orm-sqlite/adapter/column-types';",
+        targetDependency: matches(
+          '{\n  "peerDependencies": {\n    "@prisma/orm-target-sqlite": "8.0.0-rc.25"\n  }\n}',
         ),
-        oldColumnHelperNamespace: matches(
-          "import * as columns from '@internal/adapter-sqlite/column-types';\n\nfield.column(columns.integerColumn);",
+        config: matches("import { defineConfig } from '@prisma/orm-sqlite/config';"),
+        postgresDependency: matches(
+          '{\n  "dependencies": {\n    "@prisma/orm-postgres": "8.0.0-rc.25"\n  }\n}',
         ),
-        bigInt: matches('model Post {\n  views BigInt\n}'),
-        longerName: matches('model Post {\n  views Integer\n}'),
-        postgresTypescript: matches(
-          "import { defineContract } from '@prisma/orm-postgres/contract-builder';\nfield.column(type.Int());\nfield.column(type.BigInt({ as: 'number' }));",
-        ),
-        postgresColumnHelper: matches(
-          "import { integerColumn } from '@prisma/orm-postgres/adapter/column-types';\n\nfield.column(integerColumn);",
+        postgresConfig: matches("import { defineConfig } from '@prisma/orm-postgres/config';"),
+        otherPackage: matches(
+          '{\n  "dependencies": {\n    "@prisma/orm-sqlite-tools": "1.0.0"\n  }\n}',
         ),
       }).toEqual({
-        field: true,
-        optional: true,
-        convenienceCall: true,
-        explicit: true,
-        bigIntAsNumber: true,
-        alias: true,
-        typescript: true,
-        typescriptAsNumber: true,
-        columnHelper: true,
-        oldColumnHelper: true,
-        oldColumnHelperNamespace: true,
-        bigInt: false,
-        longerName: false,
-        postgresTypescript: false,
-        postgresColumnHelper: false,
+        glob: '**/{package.json,prisma.config.{ts,mts,cts,js,mjs}}',
+        dependency: true,
+        targetDependency: true,
+        config: true,
+        postgresDependency: false,
+        postgresConfig: false,
+        otherPackage: false,
       });
     });
   },

@@ -189,7 +189,7 @@ function paramRefForTable(
     coordinate.tableName,
     coordinate.namespaceId,
   );
-  if (resolved === undefined || !resolved.table.columns[column]) {
+  if (resolved === undefined || !Object.hasOwn(resolved.table.columns, column)) {
     throw unknownColumn(alias, column);
   }
   const codec = codecRefForStorageColumn(

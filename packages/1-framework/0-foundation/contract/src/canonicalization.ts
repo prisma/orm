@@ -173,10 +173,20 @@ function omitDefaults(
       }
     }
 
-    result[key] = omitDefaults(value, currentPath, shouldPreserveEmpty);
+    defineOwn(result, key, omitDefaults(value, currentPath, shouldPreserveEmpty));
   }
 
   return result;
+}
+
+/** Stores `value` as an own key of `target`, so a key named `__proto__` is a key rather than the prototype. */
+function defineOwn(target: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
 }
 
 function sortObjectKeys(obj: unknown): unknown {
@@ -191,8 +201,12 @@ function sortObjectKeys(obj: unknown): unknown {
   const sorted: Record<string, unknown> = {};
   const keys = Object.keys(obj).sort();
   for (const key of keys) {
-    sorted[key] = sortObjectKeys(
-      blindCast<Record<string, unknown>, 'non-array object narrowed above'>(obj)[key],
+    defineOwn(
+      sorted,
+      key,
+      sortObjectKeys(
+        blindCast<Record<string, unknown>, 'non-array object narrowed above'>(obj)[key],
+      ),
     );
   }
 

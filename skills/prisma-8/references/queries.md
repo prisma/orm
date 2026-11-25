@@ -43,7 +43,7 @@ On Postgres, models and tables are **always** addressed by namespace coordinate 
 - **ORM**: `db.orm.<namespace>.<Model>` — e.g. `db.orm.public.User`, `db.orm.auth.User`
 - **SQL builder**: `db.sql.<namespace>.<table>` — e.g. `db.sql.public.user`, `db.sql.auth.users`
 
-There is no flat `db.orm.User` / `db.sql.user` on the Postgres façade: `db.sql` is one facet per storage namespace and nothing else, and `db.orm` is keyed the same way (`examples/prisma-8-demo` uses `db.orm.public.User` and `db.sql.public.user` throughout). SQLite has no schemas, so its façade exposes the single unbound namespace directly — `db.orm.User` and `db.sql.user` are the SQLite spellings (`examples/prisma-8-demo-sqlite`). Mongo is keyed by collection storage name (`db.orm.users`).
+There is no flat `db.orm.User` / `db.sql.user` on the Postgres package: `db.sql` is one facet per storage namespace and nothing else, and `db.orm` is keyed the same way (`examples/prisma-8-demo` uses `db.orm.public.User` and `db.sql.public.user` throughout). SQLite has no schemas, so its database package exposes the single unbound namespace directly — `db.orm.User` and `db.sql.user` are the SQLite spellings (`examples/prisma-8-demo-sqlite`). Mongo is keyed by collection storage name (`db.orm.users`).
 
 See [`queries-postgres.md` § Namespace-aware accessors](./queries-postgres.md#namespace-aware-accessors) for a worked example.
 
@@ -105,7 +105,7 @@ If you've seen `collect(...)` / `toArray(...)` helpers in a codebase wrapping `.
 
 ## Running queries from a short script
 
-When the user is running a one-off `tsx my-script.ts` (not a long-lived server), call `await db.close()` at the end so the process exits cleanly — on Postgres the façade-owned pool keeps Node's event loop alive; on Mongo the façade-owned `MongoClient` does the same. See `references/runtime.md` § *Running as a script (teardown)* for the full pattern including `await using`.
+When the user is running a one-off `tsx my-script.ts` (not a long-lived server), call `await db.close()` at the end so the process exits cleanly — on Postgres the pool the database package owns keeps Node's event loop alive; on Mongo the `MongoClient` it owns does the same. See `references/runtime.md` § *Running as a script (teardown)* for the full pattern including `await using`.
 
 ```typescript
 // src/scripts/seed.ts
@@ -233,9 +233,9 @@ Target-specific pitfalls live in the per-target guides.
 - **TypedSQL (`.sql` files compiled into typed callables).** Not implemented. For a repeated query, use `db.prepare(...)` (see *Prepared statements* above) or a function that returns the built plan and `db.query(plan)` at the call site. If you want a `.sql`-file compile path, file a feature request via `references/feedback.md`.
 - **`EXPLAIN` / query-plan inspection.** Prisma 8 does not expose an `.explain()` method. Workaround: connect a `pg.Pool` you control via the runtime's `pg:` binding (see `references/runtime.md`) and issue `EXPLAIN ANALYZE` through it. If you want a first-class plan-inspection surface, file a feature request via `references/feedback.md`.
 - **Multi-statement batching (Prisma-7-style `db.$transaction([call1, call2])`).** Prisma 8 runs each call sequentially. Workaround: wrap atomically-related work in `db.transaction(async (tx) => { ... })` on Postgres. If you want batch-as-array semantics, file a feature request via `references/feedback.md`.
-- **Mongo façade transactions.** `@prisma/orm-mongo/runtime` does not expose `db.transaction(...)`. Multi-document atomicity is not yet wrapped in the Prisma 8 Mongo façade. Workaround: use the MongoDB driver's session API directly if you control the client binding (`mongoClient:` option). File a feature request via `references/feedback.md` if you need a first-class façade surface.
+- **Mongo package transactions.** `@prisma/orm-mongo/runtime` does not expose `db.transaction(...)`. Multi-document atomicity is not yet wrapped in the Prisma 8 Mongo package. Workaround: use the MongoDB driver's session API directly if you control the client binding (`mongoClient:` option). File a feature request via `references/feedback.md` if you need a first-class surface in the database package.
 - **Mongo ORM aggregates.** No `.aggregate(...)` / `.groupBy(...)` on `db.orm.<root>`. Workaround: express aggregations through `db.query.from(...).group(...).build()` and `runtime.query(plan)`.
-- **Mongo filter helpers on the façade.** Rich filters (`.in`, ranges, boolean composition) are filter expressions built with `MongoFieldFilter` and its siblings from `@prisma/orm-mongo/query-ast/execution`, not from `@prisma/orm-mongo/runtime`, and the ORM's `.where(...)` takes no callback. Use object equality `.where({ field: value })` where it is enough.
+- **Mongo filter helpers on the database package.** Rich filters (`.in`, ranges, boolean composition) are filter expressions built with `MongoFieldFilter` and its siblings from `@prisma/orm-mongo/query-ast/execution`, not from `@prisma/orm-mongo/runtime`, and the ORM's `.where(...)` takes no callback. Use object equality `.where({ field: value })` where it is enough.
 - **Automatic N+1 detection.** Prisma 8 does not warn when an `.include(...)` is missing. Workaround: be deliberate about `.include(...)` in code review; the `lints` middleware (see `references/runtime.md`) catches the more common authoring slips (missing `WHERE` on a `DELETE` / `UPDATE`, missing `LIMIT` on a `SELECT`).
 
 ## Reference Files
@@ -251,6 +251,6 @@ This skill is split for selective loading. Target-specific reference paths live 
 - [ ] On Postgres, used `db.orm.<ns>.<Model>` / `db.sql.<ns>.<table>` coordinates (usually `public`) — not a flat `db.orm.User`, which exists only on SQLite.
 - [ ] Chose the right lane (ORM by default; lower-level builder for shapes the ORM doesn't express).
 - [ ] Used `.first()` / `.first({ pk })` (Postgres) or `.where({ ... }).first()` (Mongo) for single-row reads — not `.all()`.
-- [ ] Consumed `.all()` with plain `await` (not a `collect()` / `toArray()` helper). Used `for await` only when per-row handling is actually wanted — and did not promise it bounds memory on the long-lived façade — and never iterated the same result twice.
+- [ ] Consumed `.all()` with plain `await` (not a `collect()` / `toArray()` helper). Used `for await` only when per-row handling is actually wanted — and did not promise it bounds memory on the long-lived client — and never iterated the same result twice.
 - [ ] Did NOT use `db.sql` on a Mongo project or `db.query` where the Postgres SQL builder is meant.
 - [ ] Completed the target-specific checklist in the loaded guide.

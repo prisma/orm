@@ -19,10 +19,11 @@ import {
   checkValueObjectExecutionDefaults,
 } from './build-execution-defaults';
 import { checkFields } from './build-fields';
-import { buildModels, buildRoots, buildValueObjects } from './build-models';
+import { buildModels, buildRoots, buildValueObjects, refuseUnsupportedNames } from './build-models';
 import { decidePolymorphism, inheritVariantCollections } from './build-polymorphism';
 import { type BuildRefusal, type BuildWarning, validatorRefusalKey } from './build-refusals';
 import type { ContractDefinition } from './contract-definition';
+import { ownEntry } from './own-keys';
 
 /** Whether a refusal is about listing an enum in a collection validator, which matters only when collections get validators. */
 function isAboutEnumListing(refusal: MongoContractRefusal): boolean {
@@ -63,6 +64,7 @@ export function buildMongoContractFromDefinition(
   const components = [definition.target, ...Object.values(definition.extensions ?? {})];
   const generatorFunctions = assembleGeneratorFunctions(components);
 
+  refuseUnsupportedNames(definition, refusals);
   const models = inheritVariantCollections(definition.models, refusals);
   const builtEnums = buildEnums(definition, codecLookup, refusals);
   const variantValues = decidePolymorphism({
@@ -135,7 +137,7 @@ export function buildMongoContractFromDefinition(
     collections: Object.fromEntries(
       Object.entries(collections).map(([name, collection]) => [
         name,
-        { ...collection, ...ifDefined('validator', validators[name]) },
+        { ...collection, ...ifDefined('validator', ownEntry(validators, name)) },
       ]),
     ),
     valueSets: storageValueSets,
