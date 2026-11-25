@@ -184,6 +184,7 @@ export function interpretSchemaTextResult(
     dataTypes: context.dataTypes,
     composedExtensions: [...context.composedExtensions, ...composedPacks.keys()],
     composedExtensionContracts: new Map([...context.composedExtensionContracts, ...composedPacks]),
+    capabilities: context.capabilities,
   });
 }
 

@@ -18,6 +18,7 @@ import {
 } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import {
+  type CapabilityMatrix,
   EMPTY_GENERATOR_FUNCTIONS,
   type GeneratorFunctionRegistry,
 } from '@internal/framework-components/components';
@@ -155,6 +156,7 @@ export interface InterpretPrisma7DocumentsInput {
   /** Each composed pack's contract, by the pack's id. */
   readonly composedExtensionContracts: ReadonlyMap<string, Contract>;
   readonly defaultNamespaceId: string;
+  readonly capabilities: CapabilityMatrix;
 }
 
 const SUMMARY = 'Prisma 7 schema interpretation failed';
@@ -643,6 +645,7 @@ export function interpretPrisma7Documents(
     buildSqlContractFromDefinition(
       {
         target: binding.target,
+        capabilities: input.capabilities,
         warnings: undefined,
         createNamespace,
         ...ifDefined(

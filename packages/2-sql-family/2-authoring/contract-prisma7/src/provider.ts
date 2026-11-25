@@ -182,6 +182,7 @@ export function prisma7Contract(
             composedExtensions: context.composedExtensions,
             composedExtensionContracts: context.composedExtensionContracts,
             defaultNamespaceId: context.defaultNamespaceId,
+            capabilities: context.capabilities,
           });
           if (!interpreted.ok) return interpreted;
           contract = applySqlSpecifierControlPolicy(

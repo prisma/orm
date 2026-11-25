@@ -1,6 +1,7 @@
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { expandContractInputs } from '@internal/config-loader';
+import { computeProfileHash } from '@internal/contract/hashing';
 import type {
   CodecInstanceContext,
   CodecLookupWithDescriptors,
@@ -98,6 +99,29 @@ describe('prisma7Contract', () => {
     expect(
       prisma7Contract('prisma/schema.prisma', { ...postgres, output: 'out/c.json' }).output,
     ).toBe('out/c.json');
+  });
+
+  it('lists the capabilities of the stack it is loaded with, and the profile hash of that list', async () => {
+    const schemaPath = join(scratchDir('capabilities'), 'schema.prisma');
+    writeFileSync(
+      schemaPath,
+      'datasource db {\n  provider = "postgresql"\n}\nmodel Post {\n  id Int @id\n}\n',
+    );
+    const context = postgresSourceContext([schemaPath]);
+    const result = await prisma7Contract(schemaPath, postgres).source.load(context);
+
+    expect(
+      result.ok
+        ? { capabilities: result.value.capabilities, profileHash: result.value.profileHash }
+        : result.failure,
+    ).toEqual({
+      capabilities: context.capabilities,
+      profileHash: computeProfileHash({
+        target: 'postgres',
+        targetFamily: 'sql',
+        capabilities: context.capabilities,
+      }),
+    });
   });
 
   it('rejects a top-level model named like the default namespace', async () => {
