@@ -127,6 +127,7 @@ The glossary's existing **control policy** (managed, tolerated, external, observ
 - Writing the marker's policies only through a privileged database role.
 - Permitted change operations and the compatibility policy.
 - `prisma postgres connection delete` rejects `--project`, which `create` and `list` accept.
+- Every ref writer (`writeRef` in `packages/1-framework/3-tooling/migration/src/refs.ts`) drops top-level keys the ref format does not define and reformats the file, so a person's own keys in a ref file are lost on the next `ref set`, `db migrate` advance or `ref policy set`. Its temporary file name uses only the time, so two processes writing the same ref in one millisecond collide.
 
 ## Alternatives considered
 
