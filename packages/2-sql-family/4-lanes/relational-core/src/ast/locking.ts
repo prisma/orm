@@ -55,13 +55,10 @@ export function missingCapability(
 }
 
 /**
- * The sentences a refusal ends with when the contract does not list `capabilities`, each named by its key. They name no database: how a contract states its capabilities is up to the database package.
+ * The sentence a refusal ends with when the contract does not list a capability the refusal has named. It names no database: how a contract states its capabilities is up to the database package.
  */
-export function missingCapabilityRemedy(capabilities: readonly string[]): string {
-  const quoted = capabilities.map((capability) => `"${capability}"`);
-  const named =
-    quoted.length === 1 ? `capability ${quoted[0]}` : `capabilities ${quoted.join(', ')}`;
-  return `The contract does not list ${named}. A contract lists the capabilities its database and connection provide; the database package's documentation says how to state them.`;
+export function missingCapabilityRemedy(): string {
+  return "A contract lists the capabilities its database and connection provide; the database package's documentation says how to state them.";
 }
 
 /** The wait-policy options of a locking method; each key exists only when its capability is reported. */

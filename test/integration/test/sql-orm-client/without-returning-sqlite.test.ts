@@ -211,7 +211,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
         expect.objectContaining({
           code: 'ORM.CAPABILITY_MISSING',
           message:
-            'createAll() on model "User" cannot return the rows it inserts: their key column "id" is generated, and without capability "returning" the database reports a generated value only for a one-row insert. Use createAndCount(), or create() for each row. The contract does not list capability "returning". A contract lists the capabilities its database and connection provide; the database package\'s documentation says how to state them.',
+            'createAll() on model "User" cannot return the rows it inserts: their key column "id" is generated, and without capability "returning" the database reports a generated value only for a one-row insert. Use createAndCount(), or create() for each row. A contract lists the capabilities its database and connection provide; the database package\'s documentation says how to state them.',
         }),
       );
       expect(statements).toEqual([]);
@@ -228,7 +228,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
       await expect(db.Token.create({ label: 'x' })).rejects.toMatchObject({
         code: 'ORM.CAPABILITY_MISSING',
         message:
-          'create() on model "Token" cannot find the row it inserts: key column "id" gets no value from the client and is not an auto-increment column, and the contract does not report capability "returning" to read the value the database chose. Supply the key, or give the column a client-side default. The contract does not list capability "returning". A contract lists the capabilities its database and connection provide; the database package\'s documentation says how to state them.',
+          'create() on model "Token" cannot find the row it inserts: key column "id" gets no value from the client and is not an auto-increment column, and the contract does not report capability "returning" to read the value the database chose. Supply the key, or give the column a client-side default. A contract lists the capabilities its database and connection provide; the database package\'s documentation says how to state them.',
       });
       expect({ statements, tokens: rowsOf(database, 'tokens') }).toEqual({
         statements: [],
@@ -433,7 +433,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
       ).rejects.toMatchObject({
         code: 'ORM.CAPABILITY_MISSING',
         message:
-          'upsert() on model "Account" requires contract capability "insertOnConflictTarget": without it the conflict clause applies to every unique key, and the create values can also collide on (handle), which would update a row other than the one conflictOn names. The contract does not list capability "insertOnConflictTarget". A contract lists the capabilities its database and connection provide; the database package\'s documentation says how to state them.',
+          'upsert() on model "Account" requires contract capability "insertOnConflictTarget": without it the conflict clause applies to every unique key, and the create values can also collide on (handle), which would update a row other than the one conflictOn names. A contract lists the capabilities its database and connection provide; the database package\'s documentation says how to state them.',
       });
       expect(statements).toEqual([]);
     });
@@ -450,7 +450,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
       ).rejects.toMatchObject({
         code: 'ORM.CAPABILITY_MISSING',
         message:
-          'upsert() on model "User" updates conflict column "email"; without capability "returning" the row is read back by the create\'s values for the conflict columns. The contract does not list capability "returning". A contract lists the capabilities its database and connection provide; the database package\'s documentation says how to state them.',
+          'upsert() on model "User" updates conflict column "email"; without capability "returning" the row is read back by the create\'s values for the conflict columns. A contract lists the capabilities its database and connection provide; the database package\'s documentation says how to state them.',
       });
       await expect(
         db.User.upsert({ create: ada, update: { name: 'x' }, conflictOn: { id: 1 } }),
@@ -465,7 +465,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
         expect.objectContaining({
           code: 'ORM.CAPABILITY_MISSING',
           message:
-            'createAll() requires contract capability "insertOnConflictTarget". The contract does not list capability "insertOnConflictTarget". A contract lists the capabilities its database and connection provide; the database package\'s documentation says how to state them.',
+            'createAll() requires contract capability "insertOnConflictTarget". A contract lists the capabilities its database and connection provide; the database package\'s documentation says how to state them.',
         }),
       );
       await expect(db.User.createAll([ada], { onConflict: 'skip' })).rejects.toThrow(

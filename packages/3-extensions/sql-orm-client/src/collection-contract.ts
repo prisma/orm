@@ -948,7 +948,7 @@ export function assertReturningCapability(contract: Contract<SqlStorage>, action
 
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${action} requires contract capability "returning". ${missingCapabilityRemedy(['returning'])}`,
+    `${action} requires contract capability "returning". ${missingCapabilityRemedy()}`,
     {
       meta: { capability: 'returning', action },
     },
@@ -977,7 +977,7 @@ function requireCapability(
 
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${action} requires contract capability "${capability}". ${missingCapabilityRemedy([capability])}`,
+    `${action} requires contract capability "${capability}". ${missingCapabilityRemedy()}`,
     { meta: { capability, action } },
   );
 }
@@ -1006,7 +1006,7 @@ export function assertDistinctOnCapability(
 
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${methodName}() requires capability postgres.distinctOn. ${missingCapabilityRemedy(['postgres.distinctOn'])}`,
+    `${methodName}() requires capability postgres.distinctOn. ${missingCapabilityRemedy()}`,
     { meta: { capability: 'postgres.distinctOn', method: methodName } },
   );
 }
@@ -1023,7 +1023,7 @@ export function assertLockCapability(
 
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${methodName}() requires capability ${capability}. ${missingCapabilityRemedy([capability])}`,
+    `${methodName}() requires capability ${capability}. ${missingCapabilityRemedy()}`,
     {
       meta: { capability, method: methodName },
     },
