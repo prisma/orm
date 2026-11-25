@@ -70,11 +70,36 @@ function moveScenario(
   return { from, to };
 }
 
+const EARLIER =
+  'Or make the change in an earlier migration, before model "Member" is added to collection "members".';
+
+/**
+ * The summaries of the refusals of the plan without `--rename User:Member`. Each names the earlier
+ * migration that works, and the statement's own refusal gives no move, since its route reads that
+ * plan.
+ */
 function leftOutSummaries(
   scenario: ReturnType<typeof moveScenario>,
   statements: readonly ResolvedMigrationStatement[] = [],
 ): readonly string[] {
-  return refusal(plan({ ...scenario, schema: SCHEMA, statements })).map(({ summary }) => summary);
+  const leftOut = refusal(plan({ ...scenario, schema: SCHEMA, statements }));
+  const [stated] = refusal(
+    plan({
+      ...scenario,
+      schema: SCHEMA,
+      statements: [renameModel('User', 'Member'), ...statements],
+    }),
+  );
+  expect({
+    earlier: leftOut.map(({ why }) => why?.endsWith(EARLIER)),
+    route: {
+      fallback: stated?.why?.endsWith(
+        'Planned without it, the change is refused for another reason as well, which that refusal names.',
+      ),
+      moves: stated?.why?.includes('rawAggregate('),
+    },
+  }).toEqual({ earlier: leftOut.map(() => true), route: { fallback: true, moves: false } });
+  return leftOut.map(({ summary }) => summary);
 }
 
 describe('MongoMigrationPlanner, rewrites in the target of a document move', () => {
@@ -90,23 +115,6 @@ describe('MongoMigrationPlanner, rewrites in the target of a document move', () 
       expect(leftOutSummaries(scenario)).toEqual([
         'Cannot rename field "name" to "fullName" in collection "members": model "Member" stores field "name" in the same collection, "members"',
       ]);
-    });
-
-    it('a field rename, whose refusal names the order that works: the rename first, then the move', () => {
-      const scenario = moveScenario(
-        { fields: ['_id', 'name'] },
-        {
-          from: { fields: ['_id', 'guest', 'name'] },
-          to: { fields: ['_id', 'guest', 'name'], storedAs: { name: 'fullName' } },
-        },
-      );
-      expect(
-        refusal(plan({ ...scenario, schema: SCHEMA })).map(({ why }) =>
-          why?.endsWith(
-            'Or rename the field in an earlier migration, before model "Member" is added to collection "members".',
-          ),
-        ),
-      ).toEqual([true]);
     });
 
     it('a cast', () => {

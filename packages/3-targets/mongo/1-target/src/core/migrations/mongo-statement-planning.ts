@@ -71,6 +71,8 @@ import {
   variantDiscriminatorFilter,
 } from './mongo-rewrite-overlaps';
 import {
+  type ArrivalOf,
+  earlierMigrationText,
   SEPARATE_THE_MODELS,
   sharedCollectionWhy,
   TIME_SERIES_UPDATES,
@@ -1062,9 +1064,22 @@ function planFieldRename(
   });
   const others = [...staying, ...arriving];
   if (others.length > 0) {
+    const arrival = arrivalOf(pairing);
     const earlier =
       staying.length === 0
-        ? ` Or rename the field in an earlier migration, before ${modelNamesText(arriving)} ${arriving.length === 1 ? 'is' : 'are'} added to collection ${JSON.stringify(collection)}.`
+        ? earlierMigrationText(
+            arriving.map((name) => ({
+              name,
+              arrival: arrival(
+                { namespaceId: rename.to.namespaceId, model: name },
+                collection,
+                fromStored,
+              ),
+            })),
+            collection,
+            fromStored,
+            'holding',
+          )
         : '';
     const sharedWhy = `${sharedCollectionWhy(collection, others, 'renaming the field would rename it in the documents')} To change it, ${changed === undefined ? SEPARATE_THE_MODELS : `move the models to separate collections, or keep the stored name ${JSON.stringify(fromStored)} in the contract`}.${earlier}`;
     return refuse(
@@ -1239,6 +1254,27 @@ export interface ModelMatchInput {
   readonly fromContract: ContractWithDomain;
   readonly contract: MongoContract;
   readonly collectionAfterRenames: (collection: string) => string;
+}
+
+/**
+ * How each destination model that blocks a rewrite came into its collection: with no origin model
+ * stored there after the plan's renames, it is new to the collection; with one that does not store
+ * the field, it starts storing it.
+ */
+export function arrivalOf(match: ModelMatchInput): ArrivalOf {
+  return (model, collection, storedName) => {
+    const origin = originModelOf(model, match);
+    const originCollection =
+      origin === undefined ? undefined : documentCollectionOf(match.fromContract, origin);
+    if (
+      origin === undefined ||
+      originCollection === undefined ||
+      match.collectionAfterRenames(originCollection) !== collection
+    ) {
+      return 'collection';
+    }
+    return storedFieldsOf(match.fromContract, origin).has(storedName) ? undefined : 'field';
+  };
 }
 
 /** The origin model a destination model was, by the rules of `destinationModelOf`, read the other way. */

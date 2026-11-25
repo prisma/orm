@@ -10,7 +10,7 @@ import {
   validatorRootShapesOf,
 } from '@internal/mongo-contract';
 import type { MongoFieldRewriteMeta } from '@internal/mongo-query-ast/control';
-import { modelNamesText, quotedList } from './mongo-plan-text';
+import { joinedList, modelNamesText, quotedList } from './mongo-plan-text';
 import { renameRefused } from './mongo-storage-renames';
 
 export const SEPARATE_THE_MODELS =
@@ -22,6 +22,47 @@ export function sharedCollectionWhy(
   change: string,
 ): string {
   return `Collection ${JSON.stringify(collection)} stores several models and no discriminator tells their documents apart, so ${change} of ${quotedList(others)} too.`;
+}
+
+/**
+ * How a model that blocks a rewrite came to share its documents in the destination: it is new to
+ * the collection, or it was there and starts storing the field.
+ */
+export type Arrival = 'collection' | 'field';
+
+/** The arrival of destination model `model` in `collection` with a field stored as `storedName`; `undefined` when the origin already stores it there with that field. */
+export type ArrivalOf = (
+  model: ModelCoordinate,
+  collection: string,
+  storedName: string,
+) => Arrival | undefined;
+
+/**
+ * The order that works when every model blocking a rewrite arrives in the destination: the change
+ * in an earlier migration, before they do, when their documents do not hold the field yet. Empty
+ * when one of them does not arrive, and for a rewrite that reaches a model's documents whether or
+ * not they hold the field, since an earlier migration reaches a model already there just the same.
+ */
+export function earlierMigrationText(
+  arrivals: readonly { readonly name: string; readonly arrival: Arrival | undefined }[],
+  collection: string,
+  field: string,
+  reaches: 'holding' | 'selected',
+): string {
+  if (
+    arrivals.length === 0 ||
+    arrivals.some(
+      ({ arrival }) => arrival === undefined || (reaches === 'selected' && arrival === 'field'),
+    )
+  ) {
+    return '';
+  }
+  const before = arrivals.map(({ name, arrival }) =>
+    arrival === 'collection'
+      ? `model ${JSON.stringify(name)} is added to collection ${JSON.stringify(collection)}`
+      : `model ${JSON.stringify(name)} stores field ${JSON.stringify(field)}`,
+  );
+  return ` Or make the change in an earlier migration, before ${joinedList(before)}.`;
 }
 
 export const TIME_SERIES_UPDATES =
@@ -223,6 +264,7 @@ function sharedCollectionRefusal(
   rewrite: PlannedRewrite,
   contract: ContractWithDomain,
   validator: unknown,
+  arrivalOf: ArrivalOf | undefined,
 ): MigrationPlannerConflict | undefined {
   const words = WORDS[rewrite.kind];
   const { collection, field, model } = rewrite;
@@ -250,10 +292,22 @@ function sharedCollectionRefusal(
   if (others.length === 0) return undefined;
   const named = quotedList(others);
   const modelName = JSON.stringify(model.model);
+  const earlier =
+    arrivalOf === undefined
+      ? ''
+      : earlierMigrationText(
+          others.map((name) => ({
+            name,
+            arrival: arrivalOf({ namespaceId: model.namespaceId, model: name }, collection, field),
+          })),
+          collection,
+          field,
+          words.reaches,
+        );
   return refusalOf(
     rewrite,
     `Cannot ${action(rewrite)} field ${JSON.stringify(field)} of model ${modelName} ${words.preposition} collection ${JSON.stringify(collection)}: ${modelNamesText(others)} ${words.reaches === 'holding' ? (others.length === 1 ? 'stores it' : 'store it') : others.length === 1 ? 'is stored' : 'are stored'} in the same collection`,
-    `${sharedCollectionWhy(collection, others, words.sharedChange)} ${words.sharedGoal(modelName, named)}, ${rewrite.keepAdvice === undefined ? SEPARATE_THE_MODELS : `move the models to separate collections, or ${rewrite.keepAdvice}`}.`,
+    `${sharedCollectionWhy(collection, others, words.sharedChange)} ${words.sharedGoal(modelName, named)}, ${rewrite.keepAdvice === undefined ? SEPARATE_THE_MODELS : `move the models to separate collections, or ${rewrite.keepAdvice}`}.${earlier}`,
   );
 }
 
@@ -261,14 +315,16 @@ function sharedCollectionRefusal(
  * Why the plan refuses a rewrite of its collection's documents: MongoDB does not let an update change
  * a time-series collection's documents except through the metaField, and a rewrite must not change
  * the documents of another model stored in the same collection. The planner refuses every rewrite it
- * plans with these; the runner asks them before it names a statement that would plan one.
+ * plans with these, and with `arrivalOf` names the earlier migration that works; the runner asks them
+ * before it names a statement that would plan one.
  */
 export function rewriteRefusals(
   rewrite: PlannedRewrite,
   contract: ContractWithDomain,
   collection: RewriteCollection,
+  arrivalOf: ArrivalOf | undefined,
 ): readonly MigrationPlannerConflict[] {
-  const shared = sharedCollectionRefusal(rewrite, contract, collection.validator);
+  const shared = sharedCollectionRefusal(rewrite, contract, collection.validator, arrivalOf);
   return [
     ...(collection.timeSeries ? [timeSeriesRefusal(rewrite)] : []),
     ...(shared === undefined ? [] : [shared]),

@@ -45,6 +45,7 @@ import {
 } from './mongo-rewrite-overlaps';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import {
+  arrivalOf,
   type FieldRemoval,
   keepCollectionByHandAdvice,
   type ModelMatchInput,
@@ -327,24 +328,6 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       renamedCollections,
     } = statementPlan;
     const destinationIR = contractToMongoSchemaIR(contract);
-    const storedKeys = planStoredKeyRewrites({
-      statements: renames,
-      fromContract,
-      contract,
-      schema,
-      destination: destinationIR,
-    });
-    if (!storedKeys.ok) return { kind: 'failure', conflicts: [...storedKeys.failure] };
-    const storedKeyRewrites = [...storedKeys.value.renames, ...storedKeys.value.removals];
-    const enumValues = planEnumValueRewrites({
-      statements: renames,
-      fromContract,
-      contract,
-      schema,
-      lookups: mongoTypeLookupsOf(options.frameworkComponents),
-    });
-    if (!enumValues.ok) return { kind: 'failure', conflicts: [...enumValues.failure] };
-    const { replacements: valueReplacements, removals: valueRemovals } = enumValues.value;
     const renamedTo = renamedCollections;
     const match: ModelMatchInput | undefined =
       fromContract === null
@@ -357,6 +340,27 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
             contract,
             collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
           };
+    const arrivals = match === undefined ? undefined : arrivalOf(match);
+    const storedKeys = planStoredKeyRewrites({
+      statements: renames,
+      fromContract,
+      contract,
+      schema,
+      destination: destinationIR,
+      arrivalOf: arrivals,
+    });
+    if (!storedKeys.ok) return { kind: 'failure', conflicts: [...storedKeys.failure] };
+    const storedKeyRewrites = [...storedKeys.value.renames, ...storedKeys.value.removals];
+    const enumValues = planEnumValueRewrites({
+      statements: renames,
+      fromContract,
+      contract,
+      schema,
+      lookups: mongoTypeLookupsOf(options.frameworkComponents),
+      arrivalOf: arrivals,
+    });
+    if (!enumValues.ok) return { kind: 'failure', conflicts: [...enumValues.failure] };
+    const { replacements: valueReplacements, removals: valueRemovals } = enumValues.value;
     const lookups = mongoTypeLookupsOf(options.frameworkComponents);
     const plannedFills = planFieldFills({
       match,
@@ -458,6 +462,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       lookups,
       schema,
       destination: destinationIR,
+      arrivalOf: arrivals,
     });
     if (!storedKeyFills.ok) return { kind: 'failure', conflicts: [...storedKeyFills.failure] };
     const rewrites: readonly PlannedRewrite[] = [
@@ -508,10 +513,15 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       ...unrewritableTypeChangeRefusals(unconverted, contract),
       ...noCastRefusals(rewritable, contract),
       ...rewrites.flatMap((rewrite) =>
-        rewriteRefusals(rewrite, contract, {
-          timeSeries: schema.collection(rewrite.collection)?.options?.timeseries !== undefined,
-          validator: schema.collection(rewrite.collection)?.validator?.jsonSchema,
-        }),
+        rewriteRefusals(
+          rewrite,
+          contract,
+          {
+            timeSeries: schema.collection(rewrite.collection)?.options?.timeseries !== undefined,
+            validator: schema.collection(rewrite.collection)?.validator?.jsonSchema,
+          },
+          arrivals,
+        ),
       ),
     ];
     if (refusals.length > 0) return { kind: 'failure', conflicts: refusals };

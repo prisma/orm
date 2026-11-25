@@ -18,6 +18,7 @@ function timeSeriesRefusal(kind: 'renameStoredKey' | 'removeStoredKey' | 'fillSt
     },
     noModels,
     { timeSeries: true, validator: undefined },
+    undefined,
   );
 }
 

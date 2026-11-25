@@ -34,6 +34,7 @@ import { collectionControlOf, collectionControlPolicy } from './mongo-control-po
 import { modelCoordinates, sameModel } from './mongo-model-coordinates';
 import { fieldRenamesConflict } from './mongo-rename-conflicts';
 import {
+  type ArrivalOf,
   type PlannedRewrite,
   type RewriteCollection,
   rewriteRefusals,
@@ -92,6 +93,8 @@ interface StoredKeyInput {
   readonly schema: MongoSchemaIR;
   /** The schema the destination contract describes. */
   readonly destination: MongoSchemaIR;
+  /** How a model that blocks a rewrite arrives in its collection, for the refusal's earlier-migration route; `undefined` without an origin contract. */
+  readonly arrivalOf: ArrivalOf | undefined;
 }
 
 function valueObjectChanges(
@@ -397,6 +400,7 @@ export function planStoredKeyRewrites(
         },
         contract,
         rewriteCollectionOf(input.schema, call.options.collection),
+        undefined,
       ),
     );
     return refusals.length > 0
@@ -513,6 +517,7 @@ export function planStoredKeyRewrites(
         plannedRewriteOf(each, contracts),
         contract,
         rewriteCollectionOf(input.schema, each.place.collection),
+        input.arrivalOf,
       ),
     );
   }

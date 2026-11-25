@@ -531,7 +531,7 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
               kind: 'unsupportedOperation',
               summary:
                 'Cannot rename field "name" to "fullName" in collection "members": model "Member" stores field "name" in the same collection, "members"',
-              why: 'The stored name of field "Guest.name" changes from "name" to "fullName". Collection "members" stores several models and no discriminator tells their documents apart, so renaming the field would rename it in the documents of "Member" too. To change it, move the models to separate collections, or keep the stored name "name" in the contract. Or rename the field in an earlier migration, before model "Member" is added to collection "members".',
+              why: 'The stored name of field "Guest.name" changes from "name" to "fullName". Collection "members" stores several models and no discriminator tells their documents apart, so renaming the field would rename it in the documents of "Member" too. To change it, move the models to separate collections, or keep the stored name "name" in the contract. Or make the change in an earlier migration, before model "Member" is added to collection "members".',
             },
           ],
         },

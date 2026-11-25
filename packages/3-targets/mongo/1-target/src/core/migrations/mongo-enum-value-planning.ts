@@ -36,7 +36,7 @@ import { collectionControlPolicy } from './mongo-control-policy';
 import { modelCoordinates } from './mongo-model-coordinates';
 import { joinedList, ONE_AT_A_TIME } from './mongo-plan-text';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
-import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
+import { type ArrivalOf, type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import { renameRefused } from './mongo-storage-renames';
 import { rewriteCollectionOf } from './mongo-stored-key-planning';
 import {
@@ -601,6 +601,8 @@ export interface EnumValueInput {
   /** The schema the plan starts from, with each renamed collection under its new name. */
   readonly schema: MongoSchemaIR;
   readonly lookups: TypeLookups;
+  /** How a model that blocks a rewrite arrives in its collection, for the refusal's earlier-migration route; `undefined` without an origin contract. */
+  readonly arrivalOf: ArrivalOf | undefined;
 }
 
 /**
@@ -843,6 +845,7 @@ function placeRefusals(
         },
         input.contract,
         rewriteCollectionOf(input.schema, place.collection),
+        input.arrivalOf,
       )) {
         push(conflict);
       }

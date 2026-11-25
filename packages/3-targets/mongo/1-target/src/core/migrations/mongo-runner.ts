@@ -629,6 +629,7 @@ function nestedBackfillStatement(
     },
     contract,
     rewriteCollection,
+    undefined,
   );
   return refusals.length === 0 ? { statement: found.text, subject: found.subject } : undefined;
 }
@@ -668,6 +669,7 @@ function backfillStatements(
       },
       contract,
       rewriteCollection,
+      undefined,
     );
     return refusals.length === 0
       ? [{ stored, statement: fieldStatementText(contract, field), subject: field }]

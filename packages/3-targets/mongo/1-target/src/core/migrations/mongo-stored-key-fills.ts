@@ -36,7 +36,7 @@ import { unrewritableKeyReason } from './migration-factories';
 import { collectionControlPolicy } from './mongo-control-policy';
 import { temporaryValueOf } from './mongo-field-fills';
 import { modelCoordinates } from './mongo-model-coordinates';
-import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
+import { type ArrivalOf, type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import { modelAt } from './mongo-statement-planning';
 
 import { rewriteCollectionOf } from './mongo-stored-key-planning';
@@ -87,6 +87,8 @@ interface StoredKeyFillInput {
   readonly schema: MongoSchemaIR;
   /** The schema the destination contract describes. */
   readonly destination: MongoSchemaIR;
+  /** How a model that blocks a rewrite arrives in its collection, for the refusal's earlier-migration route; `undefined` without an origin contract. */
+  readonly arrivalOf: ArrivalOf | undefined;
 }
 
 function byName<T>([a]: readonly [string, T], [b]: readonly [string, T]): number {
@@ -457,6 +459,7 @@ export function planStoredKeyFills(
           plannedRewriteOf(fill, contract),
           contract,
           rewriteCollectionOf(input.schema, fill.place.collection),
+          input.arrivalOf,
         ),
       );
       fills.push({
