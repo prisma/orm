@@ -94,6 +94,18 @@ describe('whether a requirement admits an installed version', () => {
     ['^8.1.0', '8.0.4', false],
     ['^8.1.0', '9.0.0', false],
     ['~8.1.0-ea.0', '8.1.0-ea.3', true],
+    ['~8.1.0-ea.1', '8.1.0-ea.0', false],
+    ['~8.1.0-ea.0', '8.1.0', true],
+    ['~8.1.0-ea.0', '8.1.2', true],
+    ['~8.1.0-ea.0', '8.1.1-ea.0', false],
+    ['~8.1.0', '8.1.1-ea.0', false],
+    ['^8.0.0', '8.0.0-rc.26', false],
+    ['~8.0.1-ea.0', '8.0.0-rc.26', false],
+    ['~8.0.1-ea.0', '8.0.1-ea.2', true],
+    ['~8.0.1-ea.0', '8.0.1-preview.0', true],
+    ['~8.0.1-rc.0', '8.0.1-preview.0', false],
+    ['~8.0.0-rc.27', '8.0.0-rc.26', false],
+    ['~8.0.0-rc.27', '8.0.0-rc.30', true],
   ])('%s admits %s: %s', (requirement, version, admits) => {
     expect(requirementAdmits(requirement, version)).toBe(admits);
   });

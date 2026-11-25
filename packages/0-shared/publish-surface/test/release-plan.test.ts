@@ -48,7 +48,10 @@ const AT_8_1 = {
 };
 
 const AT_8_0: Record<string, string> = Object.fromEntries(
-  Object.entries(AT_8_1).map(([name, version]) => [name, version.replace(/^8\.1\./, '8.0.')]),
+  Object.entries(AT_8_1).map(([name, version]) => [
+    name,
+    version.replace(/^8\.1\.0(?=-(?:ea|preview)\.)/, '8.0.1').replace(/^8\.1\./, '8.0.'),
+  ]),
 );
 
 const GA = new Set(['framework', 'family', 'target', 'postgres', 'pgvector']);
@@ -334,8 +337,8 @@ describe('planRelease', () => {
     }).toEqual({
       framework: '8.0.0 latest',
       mongo: '8.0.0-rc.27 latest framework ~8.0.0',
-      mysql: '8.0.0-ea.0 latest framework ~8.0.0 target-mysql ~8.0.0-ea.0',
-      supabase: '8.0.0-preview.0 latest postgres ^8.0.0',
+      mysql: '8.0.1-ea.0 latest framework ~8.0.0 target-mysql ~8.0.1-ea.0',
+      supabase: '8.0.1-preview.0 latest postgres ^8.0.0',
       paradedb: '0.1.0 latest framework ^8.0.0',
     });
   });
@@ -358,35 +361,62 @@ describe('planRelease', () => {
     );
   });
 
-  it('moves a package up to rc within 8.0 above the last release candidate', () => {
+  it('moves a package that started 8.0 at 8.0.1 up to rc at 8.0.1-rc.0, and ranges on it follow', () => {
     const plan = planRelease(
       input({
         release: { major: 8, minor: 0 },
-        current: { ...AT_8_0, mongo: '8.0.0-preview.2' },
-        levelChanges: { mongo: 'rc' },
-        lastReleaseCandidate: 26,
+        current: { ...AT_8_0, mysql: '8.0.1-ea.2' },
+        levelChanges: { mysql: 'rc', 'target-mysql': 'rc' },
+      }),
+    );
+
+    expect({
+      mysql: line(plan, 'mysql'),
+      mariadbOnMysql: plan['mariadb']?.ranges['mysql'],
+    }).toEqual({
+      mysql: '8.0.1-rc.0 latest framework ~8.0.0 target-mysql ~8.0.1-rc.0',
+      mariadbOnMysql: '~8.0.1-rc.0',
+    });
+  });
+
+  it('moves a package that started 8.0 at 8.0.1 up to GA at 8.0.1, and ranges on it are ~8.0.0', () => {
+    const plan = planRelease(
+      input({
+        release: { major: 8, minor: 0 },
+        current: { ...AT_8_0, mongo: '8.0.1-preview.2' },
+        levelChanges: { mongo: 'ga' },
+        uses: { ...input({}).uses, mysql: ['framework', 'target-mysql', 'mongo'] },
       }),
     );
 
     expect({
       mongo: line(plan, 'mongo'),
-      mariadbOnMysql: plan['mariadb']?.ranges['mysql'],
+      mysqlOnMongo: plan['mysql']?.ranges['mongo'],
     }).toEqual({
-      mongo: '8.0.0-rc.27 latest framework ~8.0.0',
-      mariadbOnMysql: '~8.0.0-ea.0',
+      mongo: '8.0.1 latest framework ~8.0.0',
+      mysqlOnMongo: '~8.0.0',
     });
   });
 
-  it('refuses to move a package up to rc within 8.0 when the last release candidate is not known', () => {
-    expect(() =>
-      planRelease(
-        input({
-          release: { major: 8, minor: 0 },
-          current: { ...AT_8_0, mongo: '8.0.0-preview.2' },
-          levelChanges: { mongo: 'rc' },
-        }),
-      ),
-    ).toThrow(/last 8\.0\.0 release candidate/);
+  it('keeps an rc package of 8.0 on the release candidates’ counter at a fix', () => {
+    const plan = planRelease(
+      input({
+        release: { major: 8, minor: 0 },
+        current: { ...AT_8_0, mongo: '8.0.0-rc.27' },
+        levelChanges: { mongo: 'rc' },
+        lastReleaseCandidate: 26,
+        bump: ['mongo'],
+        uses: { ...input({}).uses, mysql: ['framework', 'target-mysql', 'mongo'] },
+      }),
+    );
+
+    expect({
+      mongo: line(plan, 'mongo'),
+      mysqlOnMongo: plan['mysql']?.ranges['mongo'],
+    }).toEqual({
+      mongo: '8.0.0-rc.28 latest framework ~8.0.0',
+      mysqlOnMongo: '~8.0.0-rc.27',
+    });
   });
 
   it.each([
@@ -433,14 +463,29 @@ describe('planRelease', () => {
 
 describe('firstVersionOfMinor', () => {
   it.each([
-    ['ga', { major: 8, minor: 0 }, '8.0.0'],
-    ['preview', { major: 8, minor: 0 }, '8.0.0-preview.0'],
-    ['ea', { major: 8, minor: 0 }, '8.0.0-ea.0'],
-    ['rc', { major: 8, minor: 0 }, '8.0.0-rc.27'],
-    ['rc', { major: 8, minor: 3 }, '8.3.0-rc.0'],
-    ['preview', { major: 8, minor: 3 }, '8.3.0-preview.0'],
-  ] as const)('gives a %s package at %o its first version %s', (level, release, expected) => {
-    expect(firstVersionOfMinor(release, level, 26)).toBe(expected);
+    ['ga', { major: 8, minor: 0 }, undefined, '8.0.0'],
+    ['preview', { major: 8, minor: 0 }, undefined, '8.0.1-preview.0'],
+    ['ea', { major: 8, minor: 0 }, '8.0.0-rc.26', '8.0.1-ea.0'],
+    ['rc', { major: 8, minor: 0 }, '8.0.0-rc.26', '8.0.0-rc.27'],
+    ['ga', { major: 8, minor: 0 }, '8.0.0-rc.29', '8.0.0'],
+    ['rc', { major: 8, minor: 0 }, '8.0.1-ea.3', '8.0.1-rc.0'],
+    ['ga', { major: 8, minor: 0 }, '8.0.1-rc.1', '8.0.1'],
+    ['ga', { major: 8, minor: 0 }, '8.0.1', '8.0.0'],
+    ['rc', { major: 8, minor: 3 }, undefined, '8.3.0-rc.0'],
+    ['preview', { major: 8, minor: 3 }, '8.0.1-ea.3', '8.3.0-preview.0'],
+    ['ea', { major: 8, minor: 3 }, undefined, '8.3.0-ea.0'],
+  ] as const)(
+    'gives a %s package at %o, from %s, its first version %s',
+    (level, release, from, expected) => {
+      const version = from === undefined ? undefined : parseVersion(from);
+      expect(firstVersionOfMinor(release, level, 26, version)).toBe(expected);
+    },
+  );
+
+  it('refuses an rc package of 8.0 when the last release candidate is not known', () => {
+    expect(() =>
+      firstVersionOfMinor({ major: 8, minor: 0 }, 'rc', undefined, parseVersion('8.0.0-rc.26')),
+    ).toThrow(/last 8\.0\.0 release candidate/);
   });
 });
 
@@ -493,11 +538,25 @@ const LATER_PLANS: Record<string, ReleasePlanInput> = {
   'levels going up within 8.1': input({
     levelChanges: { mongo: 'rc', mysql: 'preview', 'target-mysql': 'preview' },
   }),
+  'a fix within 8.0': input({
+    release: { major: 8, minor: 0 },
+    current: { ...AT_8_0, mongo: '8.0.1-preview.2' },
+    bump: ['framework', 'mongo', 'mysql', 'paradedb'],
+  }),
   'a move up to rc within 8.0': input({
     release: { major: 8, minor: 0 },
-    current: { ...AT_8_0, mongo: '8.0.0-preview.2' },
+    current: { ...AT_8_0, mongo: '8.0.1-preview.2' },
     levelChanges: { mongo: 'rc' },
-    lastReleaseCandidate: 26,
+  }),
+  'a move up to GA within 8.0': input({
+    release: { major: 8, minor: 0 },
+    current: { ...AT_8_0, mongo: '8.0.1-preview.2' },
+    levelChanges: { mongo: 'ga' },
+  }),
+  'an rc package of 8.0 moving up to GA': input({
+    release: { major: 8, minor: 0 },
+    current: { ...AT_8_0, mongo: '8.0.0-rc.28' },
+    levelChanges: { mongo: 'ga' },
   }),
   '8.2 with a level going down': input({
     release: { major: 8, minor: 2 },
@@ -532,19 +591,27 @@ describe('a planned version never sorts below the version a package has', () => 
     expect(movedBack(given)).toEqual([]);
   });
 
-  // The open numbering question: at the first release with levels, a package that leaves the
-  // release candidates below GA (and ParadeDB, which leaves the release number) gets a version that
-  // sorts below the published 8.0.0-rc.26. This is today's design, kept until the operator decides;
-  // see projects/maturity-versions-and-dependencies/spikes/2026-11-25-ranges-on-versions-below-old-release-candidates.md.
-  it('at the first release with levels, moves back exactly the packages that leave the release candidates below GA, as designed for now', () => {
-    expect(movedBack(FIRST_RELEASE_WITH_LEVELS)).toEqual([
-      'target-mysql: 8.0.0-rc.26 to 8.0.0-ea.0',
-      'mysql: 8.0.0-rc.26 to 8.0.0-ea.0',
-      'mariadb: 8.0.0-rc.26 to 8.0.0-ea.0',
-      'supabase: 8.0.0-rc.26 to 8.0.0-preview.0',
-      'better-auth: 8.0.0-rc.26 to 8.0.0-preview.0',
-      'paradedb: 8.0.0-rc.26 to 0.1.0',
-    ]);
+  it('at the first release with levels, moves back only ParadeDB, which leaves the release number', () => {
+    expect(movedBack(FIRST_RELEASE_WITH_LEVELS)).toEqual(['paradedb: 8.0.0-rc.26 to 0.1.0']);
+  });
+});
+
+describe('no range release 8.0 writes admits a published release candidate', () => {
+  const plans = {
+    'the first release with levels': FIRST_RELEASE_WITH_LEVELS,
+    ...Object.fromEntries(
+      Object.entries(LATER_PLANS).filter(([, given]) => given.release.minor === 0),
+    ),
+  };
+
+  it.each(Object.entries(plans))('%s', (_case, given) => {
+    const plan = planRelease(given);
+    const admitted = Object.entries(plan).flatMap(([user, planned]) =>
+      Object.entries(planned.ranges)
+        .filter(([, range]) => ['8.0.0-rc.1', '8.0.0-rc.26'].some((rc) => admits(range, rc)))
+        .map(([named, range]) => `${user} writes ${range} on ${named}`),
+    );
+    expect(admitted).toEqual([]);
   });
 });
 

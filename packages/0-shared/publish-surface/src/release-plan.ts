@@ -155,7 +155,7 @@ export function planRelease(given: ReleasePlanInput): ReleasePlan {
       ranges[named] =
         input.line === 'release-candidates' || input.dev !== undefined
           ? withDev(versions[named] ?? '', input.dev)
-          : levelRange(input, name, named);
+          : levelRange(input, name, named, versions[named] ?? '');
     }
     plan[name] = { version, tag: tagOf(input, name), ranges };
   }
@@ -284,7 +284,7 @@ function levelVersions(input: ReleasePlanInput, names: readonly string[]): Recor
     }
     if (level === undefined) throw new ReleasePlanError(`${name} has no declared level`);
     versions[name] = first
-      ? firstVersionOfMinor({ major, minor }, level, input.lastReleaseCandidate)
+      ? firstVersionOfMinor({ major, minor }, level, input.lastReleaseCandidate, current)
       : nextVersion(name, text, current, level, input);
   }
   return versions;
@@ -311,7 +311,7 @@ function nextVersion(
     );
   }
   const first = (): string =>
-    firstVersionOfMinor({ major, minor }, level, input.lastReleaseCandidate);
+    firstVersionOfMinor({ major, minor }, level, input.lastReleaseCandidate, current);
   if (order > 0) return first();
   if (LEVEL_ORDER[level] < LEVEL_ORDER[currentLevel]) {
     throw new ReleasePlanError(
@@ -337,27 +337,51 @@ function nextVersion(
 
 /**
  * The first version of a minor for a package at `level`: `X.Y.0` for GA and `X.Y.0-<level>.0` below
- * it. Every version a minor starts at and every range on one comes from here. Release `8.0` follows
- * the release candidates, so a package at `rc` continues their counter above the last `8.0.0-rc.N`,
- * so its version sorts above everything already published; that is the one special case, and the
- * one place to change how release `8.0` is numbered.
+ * it. Every version a minor starts at and every range on one comes from here, and so does the one
+ * place to change how release `8.0` is numbered.
+ *
+ * Release `8.0` follows the release candidates `8.0.0-rc.N`, and no range on a package below GA may
+ * admit one of those. A package at `rc` continues their counter above the last one. A package at
+ * `preview` or `ea` starts at `8.0.1-<level>.0`, since `8.0.0-ea.0` sorts below `8.0.0-rc.1`, and
+ * keeps that patch when it moves up within `8.0`: to `8.0.1-rc.0`, then `8.0.1`. `version` is the
+ * package's version within the release, which tells whether it started there.
  */
 export function firstVersionOfMinor(
   release: { readonly major: number; readonly minor: number },
   level: Level,
   lastReleaseCandidate: number | undefined,
+  version: ParsedVersion | undefined,
 ): string {
   const { major, minor } = release;
-  if (level === 'ga') return `${major}.${minor}.0`;
-  if (major === 8 && minor === 0 && level === 'rc') {
-    if (lastReleaseCandidate === undefined) {
-      throw new ReleasePlanError(
-        'a package at rc in release 8.0 continues above the last 8.0.0 release candidate, whose number is not known here',
-      );
+  if (major === 8 && minor === 0) {
+    if (level === 'preview' || level === 'ea' || startedAt801(version)) {
+      return level === 'ga' ? '8.0.1' : `8.0.1-${level}.0`;
     }
-    return `8.0.0-rc.${lastReleaseCandidate + 1}`;
+    if (level === 'rc') {
+      if (lastReleaseCandidate === undefined) {
+        throw new ReleasePlanError(
+          'a package at rc in release 8.0 continues above the last 8.0.0 release candidate, whose number is not known here',
+        );
+      }
+      return `8.0.0-rc.${lastReleaseCandidate + 1}`;
+    }
   }
+  if (level === 'ga') return `${major}.${minor}.0`;
   return `${major}.${minor}.0-${level}.0`;
+}
+
+/**
+ * A pre-release `8.0.1-<level>.N` is a package that started release `8.0` below Release Candidate.
+ * A GA `8.0.1` may as well be a fix to `8.0.0`, so it does not count; a range `~8.0.0` admits it.
+ */
+function startedAt801(version: ParsedVersion | undefined): boolean {
+  return (
+    version !== undefined &&
+    version.major === 8 &&
+    version.minor === 0 &&
+    version.patch === 1 &&
+    version.level !== undefined
+  );
 }
 
 function compareVersions(a: ParsedVersion, b: ParsedVersion): number {
@@ -369,7 +393,12 @@ function compareVersions(a: ParsedVersion, b: ParsedVersion): number {
   return LEVEL_ORDER[a.level.name] - LEVEL_ORDER[b.level.name] || a.level.counter - b.level.counter;
 }
 
-function levelRange(input: ReleasePlanInput, user: string, named: string): string {
+function levelRange(
+  input: ReleasePlanInput,
+  user: string,
+  named: string,
+  namedVersion: string,
+): string {
   const level = input.levels.get(named);
   if (level === undefined || isNumberedOnItsOwn(level)) {
     throw new ReleasePlanError(`${user} names ${named}, which is numbered on its own`);
@@ -380,7 +409,13 @@ function levelRange(input: ReleasePlanInput, user: string, named: string): strin
     kind === 'extension' ||
     kind === 'library-integration';
   const operator = widens && level === 'ga' ? '^' : '~';
-  return `${operator}${firstVersionOfMinor(input.release, level, input.lastReleaseCandidate)}`;
+  const first = firstVersionOfMinor(
+    input.release,
+    level,
+    input.lastReleaseCandidate,
+    parseVersion(namedVersion),
+  );
+  return `${operator}${first}`;
 }
 
 function tagOf(input: ReleasePlanInput, name: string): string {

@@ -13,21 +13,21 @@ const AT_8_0_0 = `
     extension-paradedb          0.1.0            latest  family-sql ^8.0.0, framework ^8.0.0, toolchain ^8.0.0
     extension-pgvector          8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
     extension-postgis           8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
-    extension-supabase          8.0.0-ea.0       latest  family-sql ^8.0.0, framework ^8.0.0, postgres ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
-    family-mongo                8.0.0-ea.0       latest  framework ~8.0.0, toolchain ~8.0.0
+    extension-supabase          8.0.1-ea.0       latest  family-sql ^8.0.0, framework ^8.0.0, postgres ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
+    family-mongo                8.0.1-ea.0       latest  framework ~8.0.0, toolchain ~8.0.0
     family-sql                  8.0.0            latest  framework ~8.0.0, toolchain ~8.0.0
     framework                   8.0.0            latest  -
-    mariadb                     8.0.0-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, mysql ~8.0.0-ea.0, target-mariadb ~8.0.0-ea.0, target-mysql ~8.0.0-ea.0, toolchain ~8.0.0
-    mongo                       8.0.0-ea.0       latest  family-mongo ~8.0.0-ea.0, framework ~8.0.0, target-mongo ~8.0.0-ea.0, toolchain ~8.0.0
-    mysql                       8.0.0-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, target-mysql ~8.0.0-ea.0, toolchain ~8.0.0
+    mariadb                     8.0.1-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, mysql ~8.0.1-ea.0, target-mariadb ~8.0.1-ea.0, target-mysql ~8.0.1-ea.0, toolchain ~8.0.0
+    mongo                       8.0.1-ea.0       latest  family-mongo ~8.0.1-ea.0, framework ~8.0.0, target-mongo ~8.0.1-ea.0, toolchain ~8.0.0
+    mysql                       8.0.1-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, target-mysql ~8.0.1-ea.0, toolchain ~8.0.0
     postgres                    8.0.0            latest  family-sql ~8.0.0, framework ~8.0.0, target-postgres ~8.0.0, toolchain ~8.0.0
     postgres-contrib            8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
-    sqlite                      8.0.0-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, target-sqlite ~8.0.0-ea.0, toolchain ~8.0.0
-    target-mariadb              8.0.0-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, target-mysql ~8.0.0-ea.0
-    target-mongo                8.0.0-ea.0       latest  family-mongo ~8.0.0-ea.0, framework ~8.0.0, toolchain ~8.0.0
-    target-mysql                8.0.0-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, toolchain ~8.0.0
+    sqlite                      8.0.1-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, target-sqlite ~8.0.1-ea.0, toolchain ~8.0.0
+    target-mariadb              8.0.1-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, target-mysql ~8.0.1-ea.0
+    target-mongo                8.0.1-ea.0       latest  family-mongo ~8.0.1-ea.0, framework ~8.0.0, toolchain ~8.0.0
+    target-mysql                8.0.1-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, toolchain ~8.0.0
     target-postgres             8.0.0            latest  family-sql ~8.0.0, framework ~8.0.0, toolchain ~8.0.0
-    target-sqlite               8.0.0-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, toolchain ~8.0.0
+    target-sqlite               8.0.1-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, toolchain ~8.0.0
     toolchain                   8.0.0            latest  framework ~8.0.0
 `;
 

@@ -11,8 +11,8 @@ export interface VersionLines {
 }
 
 const EXACT_VERSION = /^[v=]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/;
-const RANGE = /^([~^])(\d+)\.(\d+)\./;
-const RELEASE = /^[v=]?(\d+)\.(\d+)\./;
+const RANGE = /^([~^])(\S+)$/;
+const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
 
 /**
  * The version a spec names when it is one exact version, in one form (`v8.0.0` and `=8.0.0` read
@@ -57,24 +57,69 @@ export function versionLines(
 }
 
 /**
- * Whether a required peer's version or range admits an installed version, judged by its operator:
- * an exact version only itself, a tilde any version of the release it starts at (its major and
- * minor), and a caret any version of its major from that minor on. `undefined` for any other range,
- * which this cannot judge; the installed copy then decides.
+ * Whether a required peer's version or range admits an installed version, as Semantic Versioning
+ * reads it: an exact version only itself; a tilde or a caret any version from the one it names, of
+ * the same release (major and minor) for a tilde and of the same major for a caret. A pre-release
+ * is admitted only by a range that names a pre-release of the same `X.Y.Z`, so `~8.0.1-ea.0` does
+ * not admit `8.0.0-rc.26`. `undefined` for any other range, which this cannot judge; the installed
+ * copy then decides.
  */
 export function requirementAdmits(requirement: string, version: string): boolean | undefined {
   const exact = exactVersionOf(requirement);
   if (exact !== undefined) return exact === (exactVersionOf(version) ?? version);
   const range = RANGE.exec(requirement.trim());
-  const installed = RELEASE.exec(version.trim());
   if (range === null) return undefined;
-  if (installed === null) return false;
-  const [, operator, major, minor] = range;
-  const [, installedMajor, installedMinor] = installed;
-  if (Number(installedMajor) !== Number(major)) return false;
-  return operator === '~'
-    ? Number(installedMinor) === Number(minor)
-    : Number(installedMinor) >= Number(minor);
+  const [, operator, rangeVersion = ''] = range;
+  const from = semverOf(rangeVersion);
+  const installed = semverOf(exactVersionOf(version) ?? '');
+  if (from === undefined) return undefined;
+  if (installed === undefined || installed.major !== from.major) return false;
+  if (operator === '~' && installed.minor !== from.minor) return false;
+  if (
+    installed.pre.length > 0 &&
+    (from.pre.length === 0 || installed.minor !== from.minor || installed.patch !== from.patch)
+  ) {
+    return false;
+  }
+  return compareSemver(installed, from) >= 0;
+}
+
+interface Semver {
+  readonly major: number;
+  readonly minor: number;
+  readonly patch: number;
+  readonly pre: readonly string[];
+}
+
+function semverOf(version: string): Semver | undefined {
+  const match = SEMVER.exec(version);
+  if (match === null) return undefined;
+  const [, major, minor, patch, pre] = match;
+  return {
+    major: Number(major),
+    minor: Number(minor),
+    patch: Number(patch),
+    pre: pre === undefined ? [] : pre.split('.'),
+  };
+}
+
+function compareSemver(a: Semver, b: Semver): number {
+  const byNumber = a.major - b.major || a.minor - b.minor || a.patch - b.patch;
+  if (byNumber !== 0) return byNumber;
+  if (a.pre.length === 0 || b.pre.length === 0) return b.pre.length - a.pre.length;
+  for (let i = 0; i < Math.min(a.pre.length, b.pre.length); i++) {
+    const order = compareIdentifier(a.pre[i] ?? '', b.pre[i] ?? '');
+    if (order !== 0) return order;
+  }
+  return a.pre.length - b.pre.length;
+}
+
+function compareIdentifier(a: string, b: string): number {
+  const aNumeric = /^\d+$/.test(a);
+  const bNumeric = /^\d+$/.test(b);
+  if (aNumeric && bNumeric) return Number(a) - Number(b);
+  if (aNumeric !== bNumeric) return aNumeric ? -1 : 1;
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /**
