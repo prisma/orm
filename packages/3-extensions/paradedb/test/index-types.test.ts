@@ -5,10 +5,8 @@ import { paradedbIndexTypes } from '../src/types/index-types';
 
 describe('ParadeDB extension', () => {
   describe('paradedbPackMeta', () => {
-    it('declares bm25 capability', () => {
-      expect(paradedbPackMeta.capabilities).toEqual({
-        postgres: { 'paradedb/bm25': true },
-      });
+    it('declares no capabilities, because nothing reads one', () => {
+      expect(paradedbPackMeta).not.toHaveProperty('capabilities');
     });
   });
 
