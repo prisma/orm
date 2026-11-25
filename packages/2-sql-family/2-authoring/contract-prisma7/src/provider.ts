@@ -188,6 +188,12 @@ export function prisma7Contract(
             composedExtensions: context.composedExtensions,
             composedExtensionContracts: context.composedExtensionContracts,
             defaultNamespaceId: context.defaultNamespaceId,
+            capabilities:
+              options.capabilities === undefined
+                ? context.capabilities
+                : mergeCapabilityMatrices(context.capabilities, [
+                    { capabilities: options.capabilities },
+                  ]),
           });
           if (!interpreted.ok) return interpreted;
           contract = applySqlSpecifierControlPolicy(
@@ -196,14 +202,6 @@ export function prisma7Contract(
             options.binding.createNamespace,
           );
           validateInterpretedContract(contract);
-          if (options.capabilities !== undefined) {
-            contract = {
-              ...contract,
-              capabilities: mergeCapabilityMatrices(contract.capabilities, [
-                { capabilities: options.capabilities },
-              ]),
-            };
-          }
         } catch (error) {
           if (!isStructuredError(error)) throw error;
           return notOk({

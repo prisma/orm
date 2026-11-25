@@ -1,14 +1,23 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { join } from 'pathe';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { prisma7Contract } from '../src/provider';
 import { postgresSourceContext } from './support';
 
+const scratchRoot = join(import.meta.dirname, '..', '.tmp-output');
+const scratchDirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of scratchDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 function schemaFile(): string {
-  const dir = join(tmpdir(), `prisma7-provider-capabilities-${process.pid}-${Date.now()}`);
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(scratchRoot, { recursive: true });
+  const dir = mkdtempSync(join(scratchRoot, 'provider-capabilities-'));
+  scratchDirs.push(dir);
   const schemaPath = join(dir, 'schema.prisma');
   writeFileSync(
     schemaPath,
@@ -28,10 +37,13 @@ async function capabilitiesWith(capabilities?: Record<string, Record<string, boo
 }
 
 describe('prisma7Contract capabilities', () => {
-  it('adds the capabilities it is given to the contract', async () => {
+  it('builds the contract with the capabilities it is given, keeping only the flags that are on', async () => {
     const without = await capabilitiesWith();
     expect(
-      await capabilitiesWith({ sql: { interactiveTransactions: true }, http: { batch: true } }),
+      await capabilitiesWith({
+        sql: { interactiveTransactions: true, pipelining: false },
+        http: { batch: true },
+      }),
     ).toEqual({
       ...without,
       sql: { ...without['sql'], interactiveTransactions: true },
