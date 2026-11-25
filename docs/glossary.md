@@ -225,7 +225,7 @@ Each plane has its own stack type:
 
 ### Capability
 
-A specific feature that a database may or may not support (e.g., `RETURNING` clauses, vector indexes). Your contract declares which capabilities it needs; they follow from the database version you state for it. Signing a database checks that it provides them, and creating a client checks that its adapter and driver provide the rest, so you find out about missing features before any query runs.
+A specific feature that a database may or may not support (e.g., `RETURNING` clauses, vector indexes). Your contract declares which capabilities it needs; on PostgreSQL they follow from the database version you state for it, and signing a database checks that it provides them; other databases' contracts take a fixed list from their adapter. Creating a client checks that its adapter and driver provide what the contract requires of the connection, so you find out about missing features before any query runs.
 
 ### Codec
 

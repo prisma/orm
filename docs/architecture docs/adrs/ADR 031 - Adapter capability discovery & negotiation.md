@@ -7,16 +7,16 @@ Prisma Next supports multiple SQL dialects via adapters. Lanes (DSL, ORM, TypedS
 ## Problem
 
 - Lanes must not emit SQL that the target cannot execute
-- Capability presence can be static (dialect design) or runtime-dependent (server version, extensions, config)
+- Capability presence can follow from the dialect's design or from the server's version, extensions and configuration
 - We need deterministic lowering and stable failure modes across environments
 - Plans and caches must vary when capabilities change to avoid stale or unsafe SQL
 
 ## Goals
 
-- Define a capability model covering static and runtime-discovered features
+- Define a capability model covering what the dialect has by design and what depends on the server's version
 - Provide a verification flow that checks database capabilities satisfy the contract-declared requirements
 - Let lanes declare required vs optional capabilities and degrade or fail deterministically (based on contract-declared caps)
-- Allow feature flags to pin or disable capabilities for safety or perf reasons
+- Let a contract's author turn capabilities on or off for safety or perf reasons
 - Keep the lowering responsibility in adapters, preserving lane portability
 
 ## Non-goals
@@ -51,34 +51,34 @@ Each capability is declared by the component that knows the fact ([ADR 335](ADR%
   - Example: interactive transactions
 - **The adapter** declares what it can write as a query
 
-The contract's author states the database version, and the contract lists that version's capabilities plus the connection's.
+On PostgreSQL the contract's author states the database version, and the contract lists that version's capabilities plus the connection's. The other targets' contracts take a fixed list from their adapter until each gets its own table.
 
 ### Verification (pinned profile)
 
-During verification (`prisma db verify`, `prisma db sign`, and before the runner applies):
+On PostgreSQL, during verification (`prisma db verify`, `prisma db sign`, and before the runner applies):
 1. The adapter reads the server's version during introspection
 2. The target compares the capabilities the contract requires of the database with what that version provides
-3. On success, the contract's `storageHash` and `profileHash` are written to the marker; on failure nothing is signed or applied, and the error states the versions involved
+3. On success, `db sign` and the runner write the contract's `storageHash` and `profileHash` to the marker, and `db verify` writes nothing; on failure nothing is signed or applied, and the error states the versions involved
 
 When a client is created, the capabilities the contract requires of the connection are compared with what the adapter and driver declare. The runtime does not probe the database.
 
-### Feature flags
+### Turning capabilities on and off
+
+On PostgreSQL the contract's author can state a `capabilities` list beside the database version. It is an array of capability sets, merged in order over the version's capabilities; a later set overrides an earlier one, and `false` turns a flag off:
 
 ```typescript
-type CapabilityPolicy = {
-  forceEnable?: CapabilityId[]   // pin on, useful in tests
-  forceDisable?: CapabilityId[]  // pin off for safety or perf
-  prefer?: CapabilityId[]        // tie-break hints for adapters
-}
+defineContract({
+  databaseVersion: 17,
+  capabilities: [...defaultConnectionCapabilities, { sql: { jsonAgg: false } }],
+  // models…
+})
 ```
 
-The effective capability set is:
+The contract's set is:
 
 ```
-effective = (static ∪ runtime ∪ forceEnable) \ forceDisable
+contract capabilities = flags that are on in (version's row, then each set of the list in order)
 ```
-
-The adapter may use `prefer` to choose among multiple legal lowerings.
 
 ### Profile hash
 
@@ -102,8 +102,7 @@ Lanes do not implement dialect fallbacks themselves. They call adapter lowerers 
 
 Stable error codes per ADR 027:
 - `ERR_CAPABILITY_MISSING` when a required cap is absent
-- `ERR_CAPABILITY_UNCERTAIN` when discovery is inconclusive
-- `ERR_CAPABILITY_DISABLED_BY_POLICY` when `forceDisable` blocks it
+- `ERR_CAPABILITY_UNCERTAIN` when the server's version cannot be read
 - Errors carry `{ capability, lane, reason, suggestions }`
 
 ### Discovery cadence and caching
@@ -112,11 +111,10 @@ Stable error codes per ADR 027:
 - The check is repeated when verification is re-run; the runtime does not check the database in pinned mode
 - Lanes receive a read-only view of declared capabilities from the contract
 
-### Feature flags use cases
+### Uses of the list
 
-- Pin off `jsonAgg` in environments where it regresses perf to force flattened lowerings
-- Disable `transactionalDdl` when running against engines without full support
-- Prefer `cte` over subqueries for readability in training or testing contexts
+- Turn off `jsonAgg` where it regresses performance, so the ORM client loads relations with one query per relation
+- State the capabilities of a driver other than the default one
 
 ## Deterministic lowering requirement
 
@@ -131,7 +129,7 @@ Adapters must produce the same SQL for the same Plan + effective capabilities se
 - Deterministic, testable behavior across dialects and versions
 - Clear separation of concerns: lanes are portable, adapters own dialect logic
 - Stable caches keyed by profileHash and predictable invalidation (when the contract changes)
-- Safer rollouts by feature-flagging risky capabilities
+- Safer rollouts by turning a risky capability off in the contract
 
 ### Negative
 
@@ -141,7 +139,7 @@ Adapters must produce the same SQL for the same Plan + effective capabilities se
 ## Alternatives considered
 
 - **Centralize all capability handling in lanes**: Rejected to keep lanes portable and avoid dialect leakage
-- **Omit discovery entirely**: Rejected because extensions and server versions materially affect available features; we still probe to verify satisfaction, but we do not compute a new profile hash at runtime in pinned mode
+- **Omit discovery entirely**: Rejected because extensions and server versions materially affect available features; verification still reads the server's version to check the contract is satisfied, but we do not compute a new profile hash at runtime in pinned mode
 - **Auto multi-statement fallback when caps are missing**: Rejected for the lanes due to ADR 015 one-call → one-statement rule and policy guardrails. The ORM client, above the lanes, does choose a multi-statement strategy from capabilities ([ADR 164](ADR%20164%20-%20Repository%20Layer.md))
 
 ## Implementation notes

@@ -10,7 +10,7 @@ A PostgreSQL contract states the version of the database it must run on:
 
 ```ts
 export const contract = defineContract({
-  version: 17,
+  databaseVersion: 17,
   // models…
 });
 ```
@@ -18,9 +18,14 @@ export const contract = defineContract({
 A contract written in the Prisma schema language states it where the config loads the file:
 
 ```ts
-export default defineConfig({
-  contract: { path: './prisma/contract.prisma', version: 17 },
-  db: { connection: env('DATABASE_URL') },
+import { definePrismaConfig } from '@prisma/cli-engine';
+import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+
+export default definePrismaConfig({
+  orm: ormConfig({
+    contract: { path: './prisma/contract.prisma', databaseVersion: 17 },
+    db: { connection: process.env['DATABASE_URL']! },
+  }),
 });
 ```
 
@@ -46,7 +51,7 @@ A contract is the application's statement of the capabilities it requires. Three
 | What the connection provides | Driver | `sql.interactiveTransactions` |
 | What the adapter can write as a query | Adapter | None yet for PostgreSQL |
 
-The target holds a table of which version provides which capability (`postgresCapabilitiesByVersion`). The earlier position, that capabilities are reported by the adapter and never defined by the target, is replaced: whether PostgreSQL 17 has a feature is a fact about PostgreSQL, the same for every adapter, and the table is also where the refusal's "requires PostgreSQL 17 or later" comes from.
+The target holds a table of which version provides which capability (`postgresCapabilitiesByVersion`). Whether PostgreSQL 17 has a feature is a fact about PostgreSQL, the same for every adapter, so the target declares it and the adapter does not. The table is also where the refusal's "requires PostgreSQL 17 or later" comes from.
 
 A capability is a yes-or-no fact that a query client reads to decide what it offers or how it writes a query. New operations and data types are not capabilities; they go through the operation registry and the codecs. Extension descriptors declare no capability flags.
 
@@ -58,11 +63,11 @@ The `capabilities` list is an array of capability sets, each the nested object a
 
 The control descriptors of the target, adapter and driver declare no capabilities. The framework still merges the capabilities of the config's components into a contract at emit, and with nothing declared that merge adds nothing. The config's adapter and driver are the stack that migrates, not the stack the application runs on, so they have no say in what the application requires.
 
-A config built without the facade's `defineConfig` passes the same resolved list to its contract source itself, with `postgresContractCapabilities({ version, capabilities? })`.
+A config built without the facade's `defineConfig` passes the same resolved list to its contract source itself, with `postgresContractCapabilities({ databaseVersion, capabilities? })`.
 
 ### The version is a value
 
-The version is a value the target resolves against its table, such as `17`. It is not an exported name per version. MySQL and SQLite add features in patch releases, so a name per version would mean dozens of exports, and a new database version is a new row, not a new export.
+The option is named `databaseVersion`, because a bare `version` in a contract or in the config's contract entry reads as the contract's own version. Its value is one the target resolves against its table, such as `17`. It is not an exported name per version. MySQL and SQLite add features in patch releases, so a name per version would mean dozens of exports, and a new database version is a new row, not a new export.
 
 It has no default. A default of the oldest version would give users fewer features than their database has, and a default of the newest would change every contract when the newest moves.
 
@@ -76,7 +81,7 @@ Only the flags in the target's table are checked against the database. A server 
 
 ### The client checks its stack, and only that
 
-The runtime keeps the contract's capabilities as the contract lists them. It no longer merges the capabilities of its target, adapter, driver and extensions over them.
+The runtime keeps the contract's capabilities as the contract lists them. It does not merge the capabilities of its target, adapter, driver or extensions over them.
 
 The contract's capabilities that are not the database's must be provided by the adapter's and the driver's sets. The target tells the check which flags are the database's (`databaseCapabilities` on the SQL runtime target descriptor); signing answers for those.
 
@@ -89,8 +94,8 @@ The client does not read the database's capabilities at connect time. A database
 
 ## Consequences
 
-- **A supported version's row does not change within a major version.** The profile hash covers the contract's capability list ([ADR 004](ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md)). Adding a flag to the row of PostgreSQL 17 would change the hash of every contract for 17, and every signed database would have to be signed again. A feature that needs a newer database can arrive in a minor release only with a new version row. A test pins each row.
-- **The same holds for the default connection list.** Switching to a driver with a different set changes the profile hash, and each database is signed again. A hash over only the database's flags would avoid that, at the cost of a hash function that knows which flags are the database's wherever a contract's hashes are computed or verified.
+- **A supported version's row does not change within a major version.** Adding a flag to the row of PostgreSQL 17 would change what every contract for 17 requires without its author changing anything, so a database signed before was not checked against it. Where the profile hash covers the capability list ([ADR 004](ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md) says what it covers), every such database would also have to be signed again. A feature that needs a newer database can arrive in a minor release only with a new version row. A test pins each row.
+- **The same holds for the default connection list.** Switching to a driver with a different set changes the contract's capabilities and, where the profile hash covers them, its profile hash, so each database is signed again. A hash over only the database's flags would avoid that, at the cost of a hash function that knows which flags are the database's wherever a contract's hashes are computed or verified.
 - **All four PostgreSQL rows are equal today.** No feature Prisma supports needs a version above 15. The version is required now because a required option cannot be added after `8.0`.
 - **A contract that is given no capabilities gets none.** A config built without the facade that forgets `postgresContractCapabilities` emits a contract with no database flags, and so with fewer features. Nothing refuses it, because the SQL family cannot know that one target's contract should have some.
 - **The minimum server version is the table's first row.** `POSTGRES_MIN_SERVER_VERSION` is derived from it ([ADR 222](ADR%20222%20-%20Version%20support%20policy.md)).
@@ -98,9 +103,10 @@ The client does not read the database's capabilities at connect time. A database
 
 ## Alternatives considered
 
-- **An exported name per version (`postgres18`), imported in the config and again in the client.** The client no longer needs the version, and Hibernate 6 deprecated its versioned dialect classes in favour of a setting.
+- **An exported name per version (`postgres18`), imported in the config and again in the client.** The client needs no version, since it goes by the contract, and Hibernate 6 deprecated its versioned dialect classes in favour of a setting.
+- **The option named `version`.** In `contract: { version: 17 }` it reads as the contract's own version.
 - **The version in the command settings (`db: { version }`).** The version chooses the contract's requirements, so it belongs where the contract is written.
 - **Naming the runtime driver in the config.** It puts a runtime choice in a file that is about emitting and migrating. A list of capabilities says what it does: it adds requirements to the contract.
-- **A version-resolved target descriptor whose `capabilities` are the version's row, merged in by the framework at emit.** It was built first. It was a second mechanism beside the one a TypeScript contract needs, and the two disagreed: a flag turned off in the list came back on, and a client built without the facade's config emitted a contract with no flags and no error.
+- **A version-resolved target descriptor whose `capabilities` are the version's row, merged in by the framework at emit.** A TypeScript contract cannot use it, so it is a second mechanism beside the one that contract needs, and the two disagree: a flag turned off in the list comes back on at emit, and a client built without the facade's config emits a contract with no flags and no error.
 - **Reading the database's capabilities when the client connects.** The signature is the one check of the database. A second check costs a query at every start, which matters on serverless platforms.
 - **Removing `transaction()` from the type of a client whose contract lacks the capability.** Helpers that wrap a client with a contract type they do not know yet stopped compiling.

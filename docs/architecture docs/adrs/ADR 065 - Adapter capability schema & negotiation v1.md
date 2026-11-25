@@ -3,7 +3,7 @@
 ## Decision
 
 Define a versioned capability schema and a discovery flow where:
-- The target, the driver and the adapter each declare the capabilities they know, in one schema; a contract lists the capabilities its author's stated database version and connection provide ([ADR 335](ADR%20335%20-%20A%20contract's%20capabilities%20follow%20from%20the%20database%20version%20its%20author%20states.md))
+- The target, the driver and the adapter each declare the capabilities they know, in one schema; on PostgreSQL a contract lists the capabilities its author's stated database version and connection provide, and the other targets' contracts take a fixed list from their adapter ([ADR 335](ADR%20335%20-%20A%20contract's%20capabilities%20follow%20from%20the%20database%20version%20its%20author%20states.md))
 - Compile profiles (target-specific lowerers, e.g. `sql/pg`) consume capabilities to choose deterministic lowering strategies
 - Lanes and plugins branch on capabilities, never on target strings
 - The runtime goes by the contract's capabilities; they change only when the contract is emitted again
@@ -15,7 +15,7 @@ Define a versioned capability schema and a discovery flow where:
 - Keep dialect logic deterministic and testable with golden SQL in compile profiles
 - Allow one runtime to execute across heterogeneous deployments by branching on declared capabilities rather than hardcoding "postgres" or "mysql"
 - Make fallbacks explicit when a feature is unavailable and avoid silent differences across environments
-- Enable reproducible builds by hashing the capability set the contract declares per ADR 004
+- Enable reproducible builds by fixing the capability set in the emitted contract; ADR 004 says which hash covers it
 
 ## Capability schema
 
@@ -79,10 +79,10 @@ Capabilities are a JSON-serializable object with stable key ordering:
 
 ## How capabilities are checked
 
-1. **Authoring**
+1. **Authoring** (PostgreSQL)
    - The contract's author states the database version; the facade writes that version's capabilities, plus the connection's, into the contract
 
-2. **Signing**
+2. **Signing** (PostgreSQL)
    - Verification reads the server's version and refuses a database that does not provide what the contract requires of it
 
 3. **Client creation**
