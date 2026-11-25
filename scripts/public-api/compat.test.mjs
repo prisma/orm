@@ -197,6 +197,18 @@ describe('checkPackage on names a path forwards from another package', () => {
     ]);
   });
 
+  it('checks that a value the release forwards type-only is still forwarded', () => {
+    const result = check('forward-removed', {
+      release: 'forward-type-only',
+      dependencies: forwardDependency,
+    });
+    deepStrictEqual(brokenExports(result), [
+      { path: '.', name: 'fwdFn', test: 'exists', failsRun: true },
+      { path: '.', name: 'Fwd', test: 'exists', failsRun: true },
+    ]);
+    deepStrictEqual(result.notCompared, []);
+  });
+
   it('fails when one is no longer forwarded', () => {
     const result = check('forward-removed', {
       release: 'forward-release',

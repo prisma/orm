@@ -335,6 +335,12 @@ export function generateTests({
             test: 'exists',
             texts: { native: `${current}.${name}${typeArguments(kinds.target)}` },
           });
+        } else if (kinds?.typeOnlyValue) {
+          segments.push({
+            id: id++,
+            test: 'exists',
+            texts: { native: `typeof ${current}.${name}` },
+          });
         }
       } else {
         const symbol = own.get(name);

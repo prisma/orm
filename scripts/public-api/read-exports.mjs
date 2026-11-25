@@ -50,13 +50,15 @@ const VALUE_FLAGS =
   ts.SymbolFlags.ValueModule;
 
 // Whether a forwarded name is a type, and whether users can use it as a value: a value that is not
-// exported type-only on the way.
+// exported type-only on the way. A value exported type-only can still be named in `typeof`.
 function kindsOf(checker, exported) {
   const target =
     exported.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exported) : exported;
+  const isValue = (target.flags & VALUE_FLAGS) !== 0;
   return {
     type: (target.flags & TYPE_FLAGS) !== 0,
-    value: (target.flags & VALUE_FLAGS) !== 0 && !isTypeOnlyExport(checker, exported),
+    value: isValue && !isTypeOnlyExport(checker, exported),
+    typeOnlyValue: isValue && isTypeOnlyExport(checker, exported),
     target,
   };
 }
