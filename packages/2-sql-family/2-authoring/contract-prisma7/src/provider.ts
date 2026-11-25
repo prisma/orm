@@ -2,6 +2,10 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import type { ContractConfig, ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { validateContractDomain } from '@internal/contract/validate-domain';
+import {
+  type CapabilityMatrix,
+  mergeCapabilityMatrices,
+} from '@internal/framework-components/components';
 import type { ParseDiagnostic, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -23,6 +27,8 @@ export interface Prisma7ContractOptions {
   readonly binding: Prisma7TargetBinding;
   readonly output?: string;
   readonly defaultControlPolicy?: ControlPolicy;
+  /** Capabilities the contract requires beyond those of the configured components, such as the connection's. */
+  readonly capabilities?: CapabilityMatrix;
 }
 
 function defaultOutputFromSchemaPath(schemaPath: string): string {
@@ -190,6 +196,14 @@ export function prisma7Contract(
             options.binding.createNamespace,
           );
           validateInterpretedContract(contract);
+          if (options.capabilities !== undefined) {
+            contract = {
+              ...contract,
+              capabilities: mergeCapabilityMatrices(contract.capabilities, [
+                { capabilities: options.capabilities },
+              ]),
+            };
+          }
         } catch (error) {
           if (!isStructuredError(error)) throw error;
           return notOk({
