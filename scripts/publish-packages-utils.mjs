@@ -120,11 +120,12 @@ export function releaseTagsFor({ rootDir, rootVersion, names, publishedVersions 
  * The packages with their own version whose version is already on the
  * registry. Such a package keeps its version until it gets a fix, so at most
  * releases there is nothing new of it to publish; it is skipped and reported,
- * not published and refused. On the release candidates every version is new,
- * and nothing is read from the registry.
+ * not published and refused. A dry run skips nothing, so every package goes
+ * through `pnpm publish --dry-run` and its checks. On the release candidates
+ * every version is new, and nothing is read from the registry.
  */
-export function ownVersionsAlreadyPublished({ rootVersion, packages, publishedVersions }) {
-  if (releaseOfRootVersion(rootVersion).line === 'release-candidates') return [];
+export function ownVersionsAlreadyPublished({ dryRun, rootVersion, packages, publishedVersions }) {
+  if (dryRun || releaseOfRootVersion(rootVersion).line === 'release-candidates') return [];
   return packages
     .filter(({ name }) => hasOwnVersion(numberingOf(name)))
     .filter(({ name, version }) => publishedVersions(name).includes(version))

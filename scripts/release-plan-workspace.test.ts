@@ -182,6 +182,7 @@ describe('a dry run of set-version and the publish planning on a copy of the man
           version,
         );
         const skipped = ownVersionsAlreadyPublished({
+          dryRun: false,
           rootVersion: version,
           packages: Object.entries(written).map(([name, { version: v }]) => ({ name, version: v })),
           publishedVersions: (name: string) => [published[name]?.version ?? ''],

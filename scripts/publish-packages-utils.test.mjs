@@ -153,6 +153,7 @@ describe('ownVersionsAlreadyPublished', () => {
   it('skips a package with its own version when that version is on the registry', () => {
     assert.deepEqual(
       ownVersionsAlreadyPublished({
+        dryRun: false,
         rootVersion: '8.1.0',
         packages,
         publishedVersions: () => ['0.18.0', '8.1.0'],
@@ -164,6 +165,7 @@ describe('ownVersionsAlreadyPublished', () => {
   it('publishes it when its version is new', () => {
     assert.deepEqual(
       ownVersionsAlreadyPublished({
+        dryRun: false,
         rootVersion: '8.1.0',
         packages: [{ name: '@prisma/orm-extension-paradedb', version: '0.18.1' }],
         publishedVersions: () => ['0.18.0'],
@@ -172,9 +174,22 @@ describe('ownVersionsAlreadyPublished', () => {
     );
   });
 
+  it('skips nothing in a dry run, so every package goes through the publish checks', () => {
+    assert.deepEqual(
+      ownVersionsAlreadyPublished({
+        dryRun: true,
+        rootVersion: '8.1.0',
+        packages,
+        publishedVersions: () => ['0.18.0', '8.1.0'],
+      }),
+      [],
+    );
+  });
+
   it('reads nothing on the release candidates', () => {
     assert.deepEqual(
       ownVersionsAlreadyPublished({
+        dryRun: false,
         rootVersion: '8.0.0-rc.26',
         packages,
         publishedVersions: () => {
