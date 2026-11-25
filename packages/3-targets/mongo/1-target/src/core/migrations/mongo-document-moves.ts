@@ -11,6 +11,8 @@ export interface DocumentMove {
   readonly to: string;
   readonly order: DocumentMoveOrder;
   readonly copies: readonly DocumentCopy[];
+  /** Whether the destination is a time-series collection, which a `$merge` stage cannot write into. */
+  readonly timeSeries: boolean;
 }
 
 /** One copy of a document move: the models whose documents it writes alike, and how. */
@@ -157,5 +159,8 @@ export function documentMoveOf(
     to: input.to,
     order: documentMoveOrder(input),
     copies: documentCopiesOf(models),
+    timeSeries:
+      collectionPlanSchemasOf(input.schema, input.contract).writtenDestination.collection(input.to)
+        ?.options?.timeseries !== undefined,
   };
 }

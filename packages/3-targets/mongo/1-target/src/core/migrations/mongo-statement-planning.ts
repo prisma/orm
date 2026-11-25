@@ -65,6 +65,7 @@ import {
   joinedList,
   modelNamesText,
   modelsText,
+  timeSeriesCopyLimits,
 } from './mongo-plan-text';
 import {
   type FieldChange,
@@ -1018,8 +1019,7 @@ function sharedRouteOf(input: {
       }),
     );
     const timeSeries = timeSeriesDestinations.map(
-      (collection) =>
-        ` Collection "${collection}" is a time-series collection, which a $merge stage cannot write into, so no rawAggregate copy can move the documents there: insert them yourself, as insertMany in mongosh does.`,
+      (collection) => ` ${timeSeriesCopyLimits(collection)}`,
     );
     return `${consequences(plan, false)}${refusedText(leftOut)}\n\n${handWrittenRoute(what)}${timeSeries.join('')}`;
   };
@@ -1083,10 +1083,7 @@ function sharedRouteOf(input: {
       if (built !== undefined) return built;
       const leftOut = leftOutPlan();
       const plan = leftOut.ok ? leftOut.value : undefined;
-      built =
-        timeSeriesDestinations.length === 0 && groups.every((group) => leavesBehind(group, plan))
-          ? leaveBehind()
-          : handWritten();
+      built = groups.every((group) => leavesBehind(group, plan)) ? leaveBehind() : handWritten();
       return built;
     },
     leftOutRefusals: () => {

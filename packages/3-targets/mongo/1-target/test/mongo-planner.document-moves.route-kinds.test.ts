@@ -435,40 +435,4 @@ describe('MongoMigrationPlanner, a route when the plan without the statements ke
       handWritten: true,
     });
   });
-
-  it('gives the hand-written route when a model moves into a time-series collection, which $merge cannot write into', () => {
-    const from = contract(
-      'from',
-      {
-        Event: { collection: 'events', fields: ['_id', 'name'] },
-        Measurement: { collection: 'events', fields: ['_id', 'at'] },
-      },
-      { events: {} },
-    );
-    const to = contract(
-      'to',
-      {
-        Event: { collection: 'events', fields: ['_id', 'name'] },
-        Reading: { collection: 'measurements', fields: ['_id', 'at'] },
-      },
-      { events: {}, measurements: { timeField: 'at' } },
-    );
-    const why = routeOf(
-      plan({
-        from,
-        to,
-        schema: [schemaCollection('events')],
-        statements: [renameModel('Measurement', 'Reading')],
-      }),
-    );
-    expect({
-      copies: why.split('rawAggregate(').length - 1,
-      handWritten: why.includes(
-        'write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "Measurement" into collection "measurements" yourself',
-      ),
-      timeSeries: why.includes(
-        'Collection "measurements" is a time-series collection, which a $merge stage cannot write into, so no rawAggregate copy can move the documents there: insert them yourself, as insertMany in mongosh does.',
-      ),
-    }).toEqual({ copies: 0, handWritten: true, timeSeries: true });
-  });
 });

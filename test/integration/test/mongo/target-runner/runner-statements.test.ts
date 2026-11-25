@@ -1,7 +1,11 @@
 import { introspectSchema } from '@internal/adapter-mongo/control';
 import type { MigrationOperationPolicy } from '@internal/framework-components/control';
 import { MongoCollection } from '@internal/mongo-contract';
-import { MongoMigrationPlanner } from '@internal/target-mongo/control';
+import {
+  type AnyMongoMigrationOperation,
+  MongoMigrationPlanner,
+} from '@internal/target-mongo/control';
+import { dataTransform, deleteDocuments, rawAggregate } from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
@@ -302,6 +306,90 @@ describe('MongoMigrationPlanner and runner - a field removed from an embedded mo
         executed: 0,
         dataLoss: [],
         users: [{ street: 'Main', addresses: [{ street: 'Elm', city: 'Oslo' }] }],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'moves the documents of a model into a new time-series collection with the $out copy its refusal prints',
+    async () => {
+      const at = new Date('2026-01-01T00:00:00Z');
+      const event = { collection: 'events', fields: ['_id', 'name'] };
+      const from = contract(
+        'from',
+        { Event: event, Measurement: { collection: 'events', fields: ['_id', 'at'] } },
+        { events: new MongoCollection({}) },
+      );
+      const to = contract(
+        'to',
+        { Event: event, Reading: { collection: 'measurements', fields: ['_id', 'at'] } },
+        {
+          events: new MongoCollection({}),
+          measurements: new MongoCollection({ options: { timeseries: { timeField: 'at' } } }),
+        },
+      );
+      await live
+        .db()
+        .collection('events')
+        .insertMany([{ name: 'launch' }, { at }]);
+      await live.initMarker(from);
+      const planFor = async (
+        statements: Parameters<MongoMigrationPlanner['plan']>[0]['statements'],
+      ) =>
+        new MongoMigrationPlanner().plan({
+          contract: to,
+          schema: await introspectSchema(live.db()),
+          policy,
+          fromContract: from,
+          origin: { storageHash: 'from' },
+          statements,
+          frameworkComponents: [],
+          snapshotsImportPath: '../../snapshots',
+        });
+      const refused = await planFor([
+        {
+          kind: 'rename',
+          entity: 'model',
+          from: { namespaceId: NS, model: 'Measurement' },
+          to: { namespaceId: NS, model: 'Reading' },
+        },
+      ]);
+      expect(refused.kind === 'failure' ? refused.conflicts[0]?.why : refused.kind).toContain(
+        '  rawAggregate("events", [\n    { $match: <a filter that selects only those documents> },\n    { $out: "measurements" },\n  ])',
+      );
+
+      const planned = await planFor([]);
+      if (planned.kind !== 'success') throw new Error(JSON.stringify(planned.conflicts));
+      const operations = planned.plan.operations as readonly AnyMongoMigrationOperation[];
+      const create = operations.findIndex((operation) => operation.label.includes('measurements'));
+      const filter = { at: { $exists: true } };
+      const result = await live.runOperations(
+        [
+          ...operations.slice(0, create + 1),
+          dataTransform('move Measurement documents to measurements', {
+            run: () => rawAggregate('events', [{ $match: filter }, { $out: 'measurements' }]),
+          }),
+          deleteDocuments({ collection: 'events', filter }),
+          ...operations.slice(create + 1),
+        ],
+        from,
+        to,
+        { policy: { allowedOperationClasses: [...policy.allowedOperationClasses, 'data'] } },
+      );
+
+      expect({
+        ok: result.ok ? true : result.failure,
+        measurements: await live.documents('measurements'),
+        kind: (await live.db().listCollections({ name: 'measurements' }).toArray())[0]?.['type'],
+        events: await live.documents('events'),
+        further: await live.furtherPlanLabels(to),
+      }).toEqual({
+        ok: true,
+        measurements: [{ at }],
+        kind: 'timeseries',
+        events: [{ name: 'launch' }],
+        further: [],
       });
     },
     timeouts.spinUpMongoMemoryServer,
