@@ -41,7 +41,7 @@ import { defineConfig } from '@internal/postgres/config';
 import pgvector from '@internal/extension-pgvector/control';
 
 export default defineConfig({
-  contract: './prisma/schema.prisma',
+  contract: { path: './prisma/schema.prisma', databaseVersion: 18 },
   extensions: [pgvector],
 });
 ```
@@ -187,9 +187,7 @@ const similarity = tables.post.columns.embedding.cosineSimilarity(param('queryVe
 
 ## Capabilities
 
-The extension declares the following capabilities:
-
-- `pgvector.cosine`: Indicates support for cosine distance and similarity operations
+The extension declares no capabilities. Its operations are available wherever the contract lists the extension. See [`docs/reference/capabilities.md`](../../../docs/reference/capabilities.md).
 
 ## Authoring (maintainers)
 

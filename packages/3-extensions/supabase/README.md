@@ -36,7 +36,7 @@ import { defineConfig } from '@internal/postgres/config';
 import supabasePack from '@internal/extension-supabase/pack';
 
 export default defineConfig({
-  contract: './src/contract.prisma',
+  contract: { path: './src/contract.prisma', databaseVersion: 17 },
   extensions: [supabasePack],
 });
 ```

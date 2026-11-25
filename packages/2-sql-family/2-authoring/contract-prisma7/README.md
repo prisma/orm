@@ -18,13 +18,13 @@ import { defineConfig as ormConfig, prisma7Schema } from '@prisma/orm-postgres/c
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: prisma7Schema('prisma/schema.prisma'),
+    contract: prisma7Schema('prisma/schema.prisma', { databaseVersion: 18 }),
     db: { connection: process.env['DATABASE_URL']! },
   }),
 });
 ```
 
-The package itself is target-neutral: everything specific to a database comes from the target binding, which the Postgres facade passes in.
+The package itself is target-neutral: everything specific to a database comes from the target binding, which the Postgres facade passes in. The provider, `prisma7Contract`, also takes the contract's `capabilities`; `prisma7Schema` resolves them from the PostgreSQL version stated in `databaseVersion`.
 
 ## Rule table, in short
 
