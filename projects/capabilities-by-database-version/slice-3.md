@@ -6,7 +6,7 @@ Delivers the third slice of [plan.md](plan.md). Read [spec.md](spec.md) sections
 
 `db verify`, `db sign` and the commands that sign after changing a database (`db migrate`, `db update`, `db init`) refuse a PostgreSQL database that does not provide a capability the contract requires of the database, and say why in versions:
 
-> Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 15.4. Either upgrade the database, or state version 15 for your contract, which turns off the features that need 17.
+> Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 15.4. Either upgrade the database, or state version 15 for your contract, which turns off the features that need 17. If its capabilities list turns one of them on (sql.mergeReturning), remove it there.
 
 ## What changes
 

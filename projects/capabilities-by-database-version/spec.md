@@ -53,9 +53,9 @@ This replaces the recorded position that capabilities are reported by the adapte
 
 - The verification shared by `db verify`, `db sign` and the signing in `db migrate` checks that the connected database provides every capability the contract requires that depends on the database or its configuration. It signs only if it does.
 - The adapter reads what it needs from the database: the server version, and settings that change behaviour, such as MySQL's `sql_mode`.
-- A failure states the cause in the user's terms, with both remedies:
+- A failure states the cause in the user's terms, with both remedies. The last sentence is always printed, because the check cannot tell whether the version or the `capabilities` list turned a capability on:
 
-  > Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 15.4. Either upgrade the database, or state version 15 for your contract, which turns off the features that need 17.
+  > Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 15.4. Either upgrade the database, or state version 15 for your contract, which turns off the features that need 17. If its capabilities list turns one of them on (sql.mergeReturning), remove it there.
 
 - A database older than the first row of the target's table fails the same check. The separate minimum server version constants go away or become that first row.
 
