@@ -7,7 +7,7 @@ From `8.0.0`, Prisma 8 promises that an application upgrades to any later `8.x` 
 | Check | Where | What it does | Before `8.0.0` | From `8.0.0` |
 | --- | --- | --- | --- | --- |
 | The API lists are current | `Lint` job, `pnpm api:check` | Each published package's `api.txt` matches the build | Fails | Fails |
-| The description names each change | `API changes` workflow | A pull request that changes an `api.txt` gets a comment listing the changed lines, and its description must name each changed export | Fails | Fails |
+| The description names each change | `API changes` workflow | A pull request that changes an `api.txt` or a record of a break gets a comment listing the changes, and its description must name each changed export, package or app | Fails | Fails |
 | Type tests against the last release | `api-compat` job, `pnpm api:compat` | Each export of the last release still fits the current build | Reports | Fails |
 | The last release's example apps | `api-compat` job, `pnpm api:compat:examples` | The example apps as they were at the last release compile against the current build | Reports | Fails |
 
@@ -53,7 +53,7 @@ Reviewers, people and agents, read the section to decide whether each addition i
 
 ## A break against the last release
 
-The `api-compat` job installs the last release of each package and compiles a generated test per export that asks whether the current type can stand where the last release's stood. A failure is listed as a break, with the import path, the export, whether it is the type or the value, and TypeScript's message.
+The `api-compat` job installs the last release of each package and compiles a generated test per export that asks whether the current type can stand where the last release's stood. A failure is listed as a break, with the import path, the export, the kind of test (the export's type, its value, its constructor, and so on) and TypeScript's message, followed by a record that would cover it.
 
 To run it locally: `pnpm build`, then `pnpm api:compat`. `--only <package>` checks one package, and `--ga` treats the last release as generally available, to see what will fail from `8.0.0`.
 
@@ -74,10 +74,10 @@ If the break is not intended, change the code. If it is, record it.
 A break in a generally available export is an exception to the compatibility policy, and the release notes must name it. Record it in the package's `api-breaks.json`, beside its `api.txt`:
 
 ```json
-[{ "path": "./builder", "export": "Db", "test": "type", "kind": "break", "lastRelease": "8.1.0", "api": "41dd4b16945a80ce", "reason": "Join scopes merge by name; see the release notes" }]
+[{ "path": "./builder", "export": "Db", "test": "type", "kind": "break", "lastRelease": "8.1.0", "fingerprint": "34261bf6461da021", "reason": "Join scopes merge by name; see the release notes" }]
 ```
 
-Do not write the record by hand: the job prints one, ready to paste, under each break it reports, and the job summary has one block per package. `test` is the kind of test that broke: `type`, `value`, `constructor`, `abstract`, `exists`, `path` or `augments`. `kind` is `break` for a deliberate break, which the release notes must name, or `allowed` for a change the policy allows that the check reports anyway, such as widening the return type of a method on an interface users only implement. `lastRelease` is the release the break is measured against. `api` is a fingerprint of the export's lines in the package's `api.txt`: when the export changes again, the fingerprint no longer matches and the break is reported again, to be judged afresh. A deleted package is recorded in `packages/9-public/removed-packages.json` as `{ "package", "lastRelease", "reason" }`.
+Do not write the record by hand: the job prints one, ready to paste, under each break it reports, and the job summary has one block per package. `test` is the kind of test that broke: `type`, `value`, `constructor`, `abstract`, `exists`, `path` or `augments`. `kind` is `break` for a deliberate break, which the release notes must name, or `allowed` for a change the policy allows that the check reports anyway, such as widening the return type of a method on an interface users only implement. `lastRelease` is the release the break is measured against. `fingerprint` covers the export's lines in the package's `api.txt` and the lines of every declaration there that they name, followed until nothing new is named. When the export, or a type it uses, changes again, the fingerprint no longer matches, the record stops applying, and the break is reported again with a note, to be judged afresh. Run `pnpm build` and `pnpm api:update` before copying a printed record, so its fingerprint is taken from the lists you commit. Some changes that are not API changes also change a fingerprint: a non-exported type renumbered (`Options_2`), an outside type that gains its package prefix, or an upgrade of TypeScript or API Extractor. After one of those, paste the printed records again. A deleted package is recorded in `packages/9-public/removed-packages.json` as `{ "package", "lastRelease", "reason" }`.
 
 ## The last release's example apps fail
 
