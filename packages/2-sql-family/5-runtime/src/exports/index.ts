@@ -108,4 +108,5 @@ export {
   withTransaction,
   withTransactionMembers,
 } from '../sql-runtime';
+export { capabilitiesTheStackDoesNotProvide } from '../stack-capabilities';
 export { createToSql, type RenderedSql, type ToSqlMember } from '../to-sql';

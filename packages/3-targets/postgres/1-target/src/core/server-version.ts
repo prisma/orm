@@ -50,6 +50,22 @@ export const postgresCapabilitiesByVersion = {
   18: postgres15Capabilities,
 } as const satisfies Record<PostgresVersion, CapabilitiesByVersion[number]>;
 
+/** Every flag any row of `table` provides: the capabilities that are facts about the database, whichever version it runs. */
+export function databaseCapabilitiesOf(
+  table: CapabilitiesByVersion,
+): Readonly<Record<string, Readonly<Record<string, boolean>>>> {
+  const merged: Record<string, Record<string, boolean>> = {};
+  for (const row of Object.values(table)) {
+    for (const [namespace, flags] of Object.entries(row)) {
+      merged[namespace] = { ...merged[namespace], ...flags };
+    }
+  }
+  return merged;
+}
+
+/** The capabilities that are facts about a PostgreSQL database, in any supported version. Signing checks the database for them. */
+export const postgresDatabaseCapabilities = databaseCapabilitiesOf(postgresCapabilitiesByVersion);
+
 /** The oldest PostgreSQL version Prisma 8 supports: the first row of the table. */
 export const POSTGRES_MIN_SERVER_VERSION = `${postgresVersions[0]}` as const;
 
