@@ -14,8 +14,6 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "@standard-schema/spec": "^1.1.0",
     "arktype": "catalog:",
     "pathe": "^2.0.3",
@@ -37,12 +35,16 @@
     "@internal/sql-relational-core": "workspace:8.0.0-rc.25",
     "@internal/sql-runtime": "workspace:8.0.0-rc.25",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "@repo/tsconfig": "workspace:8.0.0-rc.25",
     "@repo/tsdown": "workspace:8.0.0-rc.25",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

@@ -1,6 +1,6 @@
 # @internal/sqlite
 
-One-package SQLite setup for Prisma 8. Install this single package to get config, runtime, contract authoring, control-plane access, and migration helpers — no reach-ins to internal packages required.
+SQLite setup for Prisma 8, published as `@prisma/orm-sqlite`. An application installs it beside the platform packages it names as peer dependencies (`@prisma/orm-framework`, `@prisma/orm-family-sql`, `@prisma/orm-target-sqlite` and `@prisma/orm-toolchain`, at the same version), and gets config, runtime, contract authoring, control-plane access, and migration helpers from it — no reach-ins to internal packages required.
 
 ## Package Classification
 

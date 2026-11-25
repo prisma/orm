@@ -9,11 +9,11 @@ describe('the errors for a config that names no generated-file module', () => {
     ['contract.typesModule', errorContractTypesModuleMissing()],
     ['migrations.module', errorMigrationModuleMissing()],
   ])(
-    'say what to do with a hand-assembled config and with a target package too old to set %s',
+    'say what to do with a hand-assembled config and with a database package too old to set %s',
     (member, error) => {
       expect(error.fix).toContain(`A config assembled by hand sets \`${member}\``);
       expect(error.fix).toContain(
-        "If the config comes from a target package's `defineConfig`, that package is older than",
+        'If the config comes from the `defineConfig` of the package for your database, that package is older than',
       );
     },
   );

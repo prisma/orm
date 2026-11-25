@@ -1,6 +1,6 @@
 # @internal/postgres
 
-One-package Postgres setup for Prisma 8. Install this package and the `pg` driver to get config, runtime, and all transitive type dependencies. `pg` and `@types/pg` are peer dependencies, so the application declares them itself.
+Postgres setup for Prisma 8, published as `@prisma/orm-postgres`. An application installs it beside the platform packages it names as peer dependencies (`@prisma/orm-framework`, `@prisma/orm-family-sql`, `@prisma/orm-target-postgres` and `@prisma/orm-toolchain`, at the same version) and the `pg` driver, and gets config, runtime and every type it needs from it. `pg` and `@types/pg` are peer dependencies too, so the application declares them itself.
 
 Callback isolation is configured with factory `transactionOptions` and `transaction(fn, options?)`, using `PostgresTransactionOptions`. Import `{ IsolationLevel }` from `@prisma/orm-postgres/runtime` or `@prisma/orm-postgres/serverless` and use `IsolationLevel.Serializable` in either option position. Both entries share the same const object; string literals remain accepted. Pooled and serverless clients share all four isolation literals; PostgreSQL treats ReadUncommitted as ReadCommitted. See [transaction isolation](../../../../docs/reference/transaction-options.md) for precedence, validation and explicit-only defaults.
 
@@ -83,7 +83,7 @@ Simplified `defineConfig` that pre-wires all Postgres internals (family, target,
 
 #### A PSL source with a default control policy
 
-`defineConfig` has no option for the contract's `defaultControlPolicy`, and a PSL file cannot carry it. To set one on a PSL contract, such as the file `prisma contract print --output` writes for a contract that has one, build the source with `prismaContract` from `@prisma/orm-family-sql` (add that package to the project's dependencies) and pass it the Postgres settings `defineConfig` passes for a `.prisma` path:
+`defineConfig` has no option for the contract's `defaultControlPolicy`, and a PSL file cannot carry it. To set one on a PSL contract, such as the file `prisma contract print --output` writes for a contract that has one, build the source with `prismaContract` from `@prisma/orm-family-sql` (the project already lists that package, a peer dependency of `@prisma/orm-postgres`) and pass it the Postgres settings `defineConfig` passes for a `.prisma` path:
 
 ```typescript
 // prisma.config.ts
@@ -132,7 +132,7 @@ export default definePrismaConfig({
 
 What the project needs around that file:
 
-- A `package.json` that depends on `@prisma/orm-postgres`, `pg` and `prisma` (the Prisma 8 CLI, which also provides `prisma/config`). `@prisma/cli-engine` is not a direct dependency of the project: `prisma/config` re-exports `definePrismaConfig` from it, and the generated `contract.d.ts` imports only `@prisma/orm-postgres/...`. `contract emit` reads the nearest manifest to decide which package names `contract.d.ts` imports; without one it imports workspace-internal names that are not published.
+- A `package.json` that depends on `@prisma/orm-postgres`, the platform packages it names as peer dependencies, `pg` and `prisma` (the Prisma 8 CLI, which also provides `prisma/config`). `@prisma/cli-engine` is not a direct dependency of the project: `prisma/config` re-exports `definePrismaConfig` from it, and the generated `contract.d.ts` imports only `@prisma/orm-postgres/...`. `contract emit` reads the nearest manifest to decide which package names `contract.d.ts` imports; without one it imports workspace-internal names that are not published.
 - `db.connection` is the same database URL Prisma 7 has in its own `prisma.config.ts` (`datasource.url`). Prisma 8 does not read Prisma 7's config, so pass it here too, usually from the same `DATABASE_URL` variable.
 - The Prisma 7 schema stays as Prisma 7 wants it: the `datasource` block carries `provider` only. Prisma 7 rejects `url` in the schema (it moved to `prisma.config.ts`), and this source ignores it.
 - The commands print prose to the terminal. When stdout is a pipe or a file, it receives only the command's plain data lines, such as one line per migration. Pass `--json` to get JSON.

@@ -28,10 +28,17 @@
     "@prisma/orm-extension-paradedb": "workspace:8.0.0-rc.25",
     "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.25",
     "@prisma/orm-extension-postgis": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
     "@prisma/orm-mongo": "workspace:8.0.0-rc.25",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.25",
     "@prisma/orm-postgres-contrib": "workspace:8.0.0-rc.25",
     "@prisma/orm-sqlite": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "@repo/test-utils": "workspace:8.0.0-rc.25",
     "arktype": "catalog:"
   }
