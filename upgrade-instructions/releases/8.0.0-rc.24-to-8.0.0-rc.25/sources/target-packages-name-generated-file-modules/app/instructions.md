@@ -33,7 +33,7 @@ changes:
         - '@prisma/orm-toolchain/publish-surface'
 ---
 
-# Generated files import from the module the target package names
+# Generated files import from the module the facade names
 
 The target package an application's `prisma.config.ts` imports, such as `@prisma/orm-postgres`, now tells Prisma which modules generated files import from. The CLI no longer reads the application's `package.json` to work that out.
 

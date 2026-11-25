@@ -19,7 +19,7 @@ When a test needs an explicit timeout, always use a shared named helper from `@r
 
 ## Exception: facade-only examples
 
-An example that models a real application depends on one `@prisma/orm-*` facade and nothing else (ADR 242), so it cannot have `@repo/test-utils` — a workspace package with no published counterpart. Naming both roots in one consumer also loads two copies of every module they share, which `scripts/lint-single-import-root.mjs` rejects.
+An example that models a real application depends only on published `@prisma/orm-*` packages, so it cannot have `@repo/test-utils` — a workspace package with no published counterpart. Naming both roots in one consumer also loads two copies of every module they share, which `scripts/lint-single-import-root.mjs` rejects.
 
 Those examples keep the same shape locally: a `test/timeouts.ts` exporting one named constant per scenario, applying `TEST_TIMEOUT_MULTIPLIER` the way the shared helper does. Pattern reference: `examples/mongo-blog-leaderboard/test/timeouts.ts`.
 

@@ -34,6 +34,7 @@ const TYPES_MODULE = `${STANDIN}/contract-types`;
 const MIGRATION_MODULE = `${STANDIN}/migration`;
 const EXTENSION = '@prisma/orm-extension-pgvector';
 const TOOLCHAIN = '@prisma/orm-toolchain';
+const FRAMEWORK = '@prisma/orm-framework';
 const TARGET = '@prisma/orm-target-postgres';
 const RUNTIME = '@prisma/orm-postgres';
 const shells: ShellName[] = [
@@ -135,7 +136,7 @@ interface Application {
  */
 function createInitApplication(dir: string, packed: readonly PackedShell[]): Application {
   installShells(dir, packed, {
-    direct: [STANDIN, TOOLCHAIN],
+    direct: [STANDIN, TOOLCHAIN, FRAMEWORK],
     registryDependencies: {
       '@prisma/cli-engine': cliEngineVersion ?? '',
       typescript: typescriptVersion,
@@ -163,7 +164,12 @@ function createApplication(
   packed: readonly PackedShell[],
   options: { readonly withExtension: boolean },
 ): Application {
-  const fromTarballs = [STANDIN, TOOLCHAIN, ...(options.withExtension ? [EXTENSION, TARGET] : [])];
+  const fromTarballs = [
+    STANDIN,
+    TOOLCHAIN,
+    FRAMEWORK,
+    ...(options.withExtension ? [EXTENSION, TARGET, '@prisma/orm-family-sql'] : []),
+  ];
   const fromRegistry = {
     '@prisma/cli-engine': cliEngineVersion ?? '',
     typescript: typescriptVersion,
@@ -310,7 +316,7 @@ function importProblems(app: Application): string[] {
   );
 }
 
-describe('a target package under a name the CLI has never heard of', () => {
+describe('a facade under a name the CLI has never heard of', () => {
   let scratch: string;
   let app: Application;
   let appWithExtension: Application;
@@ -337,11 +343,12 @@ describe('a target package under a name the CLI has never heard of', () => {
     rmSync(scratch, { recursive: true, force: true });
   });
 
-  it('is installed from its own tarball and is the only target package the application declares', () => {
+  it('is installed from its own tarball and is the only facade the application declares', () => {
     expect([...app.directDependencies].sort()).toEqual(
       [
         STANDIN,
         TOOLCHAIN,
+        FRAMEWORK,
         '@prisma/cli-engine',
         'typescript',
         ...Object.keys(INIT_INSTALLS),

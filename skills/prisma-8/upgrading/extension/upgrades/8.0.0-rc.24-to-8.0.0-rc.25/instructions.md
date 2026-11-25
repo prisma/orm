@@ -118,7 +118,7 @@ changes:
         - '(?<![\s\S])(?=[\s\S]*@(?:prisma/orm-family-sql|internal/sql-contract-ts)/(?:contract-ts/)?config-types)[\s\S]*\btypescriptContractFromPath\b'
   - id: target-package-exports-an-init-contribution
     summary: |
-      `prisma orm init` takes everything about a target from the target package: a package that wants `init` to set up a project on it exports an init contribution, typed `InitContribution` from `@prisma/orm-toolchain/cli/init-contribution`, as the default export of its `init` entrypoint. `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite` and `@prisma/orm-mysql` export one. A package without it is not affected; `init` cannot set up a project on it, and the application writes `prisma.config.ts` by hand.
+      `prisma orm init` takes everything about a database from its facade: a package that wants `init` to set up a project on it exports an init contribution, typed `InitContribution` from `@prisma/orm-toolchain/cli/init-contribution`, as the default export of its `init` entrypoint. `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite` and `@prisma/orm-mysql` export one. A package without it is not affected; `init` cannot set up a project on it, and the application writes `prisma.config.ts` by hand.
   - id: init-reaches-a-target-package-by-name
     summary: |
       `prisma orm init --target <package name>` sets up a project on any target package that exports an init contribution from its `init` entrypoint. The package needs no entry in any list of Prisma's, and must list the `prisma-orm-extension` keyword. A package without an `init` entrypoint is not affected.

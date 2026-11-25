@@ -15,9 +15,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "@standard-schema/spec": "^1.1.0",
     "@types/node": "catalog:",
     "arktype": "^2.2.9",
@@ -31,6 +28,9 @@
     "@internal/adapter-postgres": "workspace:8.0.0-rc.25",
     "@internal/driver-postgres": "workspace:8.0.0-rc.25",
     "@internal/target-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "@repo/test-utils": "workspace:8.0.0-rc.25",
     "@repo/tsconfig": "workspace:8.0.0-rc.25",
     "@repo/tsdown": "workspace:8.0.0-rc.25",
@@ -39,6 +39,9 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "@types/pg": "^8.20.0",
     "pg": "^8.22.0",
     "temporal-polyfill": "^1.0.8",

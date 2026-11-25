@@ -30,9 +30,9 @@ This skill does **not** cover migrating from another ORM (Drizzle, Prisma 6/7, S
 ## Key Concepts
 
 - **Contract**: the data model. Authored as `contract.prisma` (PSL, the canonical surface) or `contract.ts` (TypeScript builder). The framework reads it and emits two artefacts: `contract.json` (runtime IR) and `contract.d.ts` (types).
-- **Target**: the backing store. Today: `postgres` or `mongodb`. Picked at `init` time; baked into the `@prisma/orm-<target>` façade the scaffold imports from.
+- **Target**: the backing store. Today: `postgres` or `mongodb`. Picked at `init` time; baked into the `@prisma/orm-<target>` package the scaffold imports from.
 - **Authoring mode**: how you write the contract. `psl` (Prisma Schema Language, default) or `typescript` (programmatic builder, optionally paired with the Vite plugin for auto-emit during `vite dev` — see `references/build.md`).
-- **Façade packages.** The scaffold installs exactly one façade per target — `@prisma/orm-postgres` (or `@prisma/orm-mongo`). User code imports from façade subpaths (`@prisma/orm-postgres/config`, `@prisma/orm-postgres/runtime`, `@prisma/orm-postgres/static`, `@prisma/orm-postgres/contract-builder`). The façade bakes in the family / target / adapter / driver wiring; never reach past it. See `references/contract.md` for the full list.
+- **Database packages.** The scaffold installs one database package per target — `@prisma/orm-postgres` (or `@prisma/orm-mongo`) — and, beside it at the same version, the platform packages the database package names as peer dependencies (`@prisma/orm-framework`, the family, the target, `@prisma/orm-toolchain`). The application lists them so it holds exactly one copy of each: the platform packages recognise a data-type value by which copy made it, and a package manager takes a peer dependency only from the application's own list. A monorepo whose applications are on different Prisma versions can still get two copies under npm workspaces and Bun's hoisted linker; keep such applications on one version, or use pnpm, Yarn or Bun's isolated linker. Installing by hand, name every one of them; `init` writes the list for you, with the other packages the database package needs as required peers, such as `temporal-polyfill`. `prisma orm init` does not support Yarn Plug'n'Play; with Yarn, set `nodeLinker: node-modules` in `.yarnrc.yml` first. User code imports from database package subpaths (`@prisma/orm-postgres/config`, `@prisma/orm-postgres/runtime`, `@prisma/orm-postgres/static`, `@prisma/orm-postgres/contract-builder`). The database package bakes in the family / target / adapter / driver wiring; never reach past it. See `references/contract.md` for the full list.
 - **`db.ts`**: the runtime entry point. Lives next to the contract source at `src/prisma/db.ts`. Imports the contract artefacts and exports a `db` value the rest of the app uses.
 - **Marker**: a row in the `prisma_contract.marker` table (Postgres) or a document in the `_prisma_migrations` collection (Mongo) that records the contract hash per contract space. Lets Prisma 8 detect drift between contract and live DB. Created by `db init` (greenfield / first-touch orientation) or `db sign` (brownfield).
 
@@ -96,7 +96,7 @@ If that prints `[{ id: 1, email: 'alice@example.com' }]`, the project is wired e
 
 `db.orm.<ns>.<Model>` is the default ORM lane — model-shaped, fully typed against the contract, lazily connects to the database on first use (it picks up `DATABASE_URL` from `.env` via the runtime's `dotenv/config`-loaded environment). The deeper `references/queries.md` reference covers the rest of the supported surface (filters, joins, transactions, the SQL builder, raw SQL via `db.raw.sql`, prepared statements) when the user is ready — and names the gaps (TypedSQL is not available).
 
-> **SQLite target:** `prisma orm init` scaffolds only `postgres` and `mongodb`; a SQLite project is wired by hand with the `@prisma/orm-sqlite` façade (`references/runtime.md` § *Switch between Postgres, SQLite, and Mongo*; `examples/prisma-8-demo-sqlite`). SQLite has no schemas, so that façade exposes the unbound namespace directly — write `db.orm.User` rather than `db.orm.public.User`.
+> **SQLite target:** `prisma orm init` scaffolds only `postgres` and `mongodb`; a SQLite project is wired by hand with the `@prisma/orm-sqlite` package (`references/runtime.md` § *Switch between Postgres, SQLite, and Mongo*; `examples/prisma-8-demo-sqlite`). SQLite has no schemas, so that database package exposes the unbound namespace directly — write `db.orm.User` rather than `db.orm.public.User`.
 >
 > **Mongo target:** the snippet above is SQL-target shape. On `@prisma/orm-mongo`, `db.orm` is keyed by the collection's storage name (`@@map(...)`, or the lowercased model name if no `@@map`), so the same arc reads `await db.orm.users.create(...)` / `await db.orm.users.select('id', 'email').all()` — not `db.orm.public.User`. Full rule and rewrite recipe in `references/queries.md` § *MongoDB ORM addressing*.
 
@@ -186,7 +186,7 @@ pnpm dlx prisma@latest orm init --yes --target postgres --authoring psl
 
 The flags `init` accepts (run `prisma orm init --help` for the source of truth):
 
-- `--target <package>` — `postgres`, `mongodb`, or the name of another target package, such as `@prisma/orm-sqlite`.
+- `--target <package>` — `postgres`, `mongodb`, or the name of another database package, such as `@prisma/orm-sqlite`.
 - `--authoring <style>` — `psl` or `typescript`.
 - `--schema-path <path>` — where to write the starter schema. Defaults to `src/prisma/contract.prisma` (or `src/prisma/contract.ts` with `--authoring typescript`), the canonical layout above. The extension must agree with `--authoring` (`CLI.INIT_AUTHORING_SCHEMA_PATH_MISMATCH` otherwise).
 - `--confirm <directory name>` — grant the reinit consent non-interactively. Re-running init in a scaffolded directory asks you to type the directory name back before it overwrites; non-interactive runs pass the name with this flag instead (`--yes` does not grant it).
@@ -194,7 +194,7 @@ The flags `init` accepts (run `prisma orm init --help` for the source of truth):
 - `--probe-db` — connect to `DATABASE_URL` once and check the server version against the target's minimum.
 - `--strict-probe` — fail init if the probe fails (errors without `--probe-db`).
 - `--skip-install` — skip dependency install + initial contract emit.
-- `--keep-previous-facade` — when re-running init to switch targets, keep the previous target package in `package.json`.
+- `--keep-previous-facade` — when re-running init to switch targets, keep the previous database package in `package.json`.
 
 `init` does not install agent skills and has no `--skip-skills` flag: the `prisma-8` skill ships inside the `@prisma/orm-*` package the project installs, and the family-level `prisma init` / `prisma skills sync` commands copy it into the agent harness directories.
 

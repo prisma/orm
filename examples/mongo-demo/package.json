@@ -18,7 +18,11 @@
   },
   "dependencies": {
     "@prisma/orm-extension-middleware-cache": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
     "@prisma/orm-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "mongodb": "catalog:",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

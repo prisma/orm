@@ -422,8 +422,8 @@ describe('all publish shells packed and installed together', () => {
 
   // The identity rule of ADR 242: an internal module is published from
   // exactly one package. A shell that bundled a module mapped to another
-  // shell would ship a second copy of it, breaking shared registries and
-  // `instanceof` for anyone who installs both.
+  // shell would ship a second copy of it, and anyone who installs both would
+  // have values one copy made that the other does not recognise.
   it('bundles only the internal packages mapped to it', () => {
     const strays: string[] = [];
     for (const name of allShells) {

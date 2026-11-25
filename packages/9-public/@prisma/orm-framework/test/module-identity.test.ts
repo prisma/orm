@@ -6,7 +6,7 @@
  * its `@internal/*` workspace name are two objects, not one. Nothing about
  * that is visible to a type-checker or a passing unit test: the two copies
  * have identical shapes and identical behaviour, and they differ only where
- * identity is the point — a shared registry, an `instanceof`, a function
+ * identity is the point — a private field only the constructing copy can read, an `instanceof`, a function
  * compared by reference.
  *
  * These tests make the difference observable, so the rule that an in-repo
