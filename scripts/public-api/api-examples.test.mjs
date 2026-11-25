@@ -117,6 +117,8 @@ const CURRENT_APPS = [
   'pretty',
   'precheck',
   'misconfigured',
+  'unused',
+  'partial',
 ];
 
 function linkNodeModules(appDir) {
@@ -153,6 +155,11 @@ before(() => {
       script: `node -e "console.log('src/x.ts(1,1): error TS2322: Type from a step before tsc.'); process.exit(1)" && ${TSC}`,
     }),
     ...app('misconfigured', { script: 'tsc --project tsconfig.missing.json --noEmit' }),
+    ...app('unused', {
+      compilerOptions: { noUnusedLocals: true },
+      files: { 'src/unused.ts': 'const unused = 1;\nexport {};\n' },
+    }),
+    ...app('partial', { script: `node -e "process.stderr.write('no newline')" && ${TSC}` }),
     ...app('slow', {
       script: `node slow.mjs && ${TSC}`,
       files: {
@@ -467,6 +474,19 @@ describe('checkExamples', () => {
     );
     deepStrictEqual(resultFor(report, 'misconfigured').errors, []);
     strictEqual(failsRun(report), true);
+  });
+
+  it('reports an unused declaration as an error of the app, not as a setup problem', async () => {
+    const result = resultFor(await check({ only: ['unused'] }), 'unused');
+    deepStrictEqual(result.problems, []);
+    deepStrictEqual(
+      result.errors.map((error) => error.code),
+      ['TS6133'],
+    );
+  });
+
+  it('finds the tsc marker after a partial line left by an earlier step', async () => {
+    deepStrictEqual(resultFor(await check({ only: ['partial'] }), 'partial').problems, []);
   });
 
   it('names the signal that stopped the typecheck', async () => {

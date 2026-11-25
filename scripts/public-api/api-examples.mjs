@@ -164,8 +164,9 @@ const withTscMarker = (script) =>
     /(^|&&)(\s*tsc(?:\s[^&|;]*)?)$/,
     (_, before, tsc) => `${before} echo '${TSC_MARKER}' &&${tsc}`,
   );
-// Errors in the compiler's options, or files it cannot read: the check could not run.
-const SETUP_ERROR = /^TS(?:5\d{3}|6\d{3}|18003)$/;
+// Errors in the compiler's options, or in the files it is given to read: the check could not run.
+// Other TS6xxx codes, such as unused declarations, are ordinary errors.
+const SETUP_ERROR = /^TS(?:5\d{3}|6053|6054|6059|6231|630[5-9]|6310|18003)$/;
 
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
 const PLAIN_ERROR = /^(?:(.+)\((\d+),(\d+)\): )?error (TS\d+): (.*)$/;
@@ -270,11 +271,8 @@ async function checkApp({ root, tag, app, env, runDir, timeoutMs }) {
   } finally {
     rmSync(appDir, { recursive: true, force: true });
   }
-  const tscRan = run.output.split(/\r?\n/).includes(TSC_MARKER);
-  const output = run.output
-    .split(/\r?\n/)
-    .filter((line) => line !== TSC_MARKER)
-    .join('\n');
+  const tscRan = run.output.includes(TSC_MARKER);
+  const output = run.output.replace(`${TSC_MARKER}\n`, '\n');
   const parsed = tscRan ? parseErrors(output) : [];
   const setup = parsed.filter((error) => SETUP_ERROR.test(error.code));
   const errors = parsed.filter((error) => !SETUP_ERROR.test(error.code));

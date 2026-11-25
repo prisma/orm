@@ -57,8 +57,8 @@ const scalar = (text) => {
 
 // The repository's supply-chain settings, from its pnpm-workspace.yaml, for the install of the
 // last release. They are top-level scalars and lists of scalars, in either form, which is all this
-// reads. Our own
-// packages are excluded from the release-age cooldown, since the last release may be minutes old.
+// reads. Our own packages are excluded from the release-age cooldown, since the last release may
+// be minutes old.
 export function supplyChainSettings(workspaceYaml) {
   const settings = {};
   let list;
