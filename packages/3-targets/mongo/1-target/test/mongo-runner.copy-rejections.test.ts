@@ -224,6 +224,7 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
       ['sets _id', { $set: { _id: '$legacyId' } }],
       ['groups the documents', { $group: { _id: '$kind' } }],
       ['drops _id', { $project: { _id: 0, email: 1 } }],
+      ['unsets _id', { $unset: '_id' }],
     ])('a pipeline that %s', async (_name, stage) => {
       const harness = makeHarness();
       failWithId(harness);
