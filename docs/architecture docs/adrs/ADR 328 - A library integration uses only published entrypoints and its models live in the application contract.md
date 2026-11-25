@@ -71,50 +71,15 @@ flowchart LR
 
 The integration package sits between the library and the client. It owns nothing in the database and nothing in the contract. It reads the contract to find the library's models and to check that everything the library needs is there.
 
-When something is missing, the integration adds it to the contract on the developer's request. After the application turns on Better Auth's two-factor plugin, the developer runs Better Auth's `auth generate` command. It asks before it writes, and then the contract has these lines more, and no line less:
+When the library needs a model or field the contract lacks, the integration says what to add, and adds it to the contract's source when the developer asks. The developer then emits the contract and changes the database the way they change it for their own models. The integration never touches the database's tables.
 
-```diff
- model User {
-   id            String    @id
-   name          String
-   email         String    @unique
-   emailVerified Boolean
-   image         String?
-   createdAt     DateTime
-   updatedAt     DateTime
-   sessions      Session[]
-   accounts      Account[]
-   posts         Post[]
-+  twoFactorEnabled Boolean?
-+  twoFactors       TwoFactor[]
-
-   @@map("user")
- }
-@@ at the end of the file @@
-+
-+model TwoFactor {
-+  id                      String    @id
-+  secret                  String
-+  backupCodes             String
-+  userId                  String
-+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-+  verified                Boolean?
-+  failedVerificationCount Int?
-+  lockedUntil             DateTime?
-+
-+  @@index([secret])
-+  @@index([userId])
-+  @@map("twoFactor")
-+}
-```
-
-The developer then emits the contract and changes the database the way they change it for their own models. The integration never touches the database's tables.
+This record uses Better Auth only as its example. How `@prisma/orm-better-auth` itself works is described in that package's README and developer notes, which move with the package.
 
 ## Decision
 
 A **library integration** is a package that connects a library from outside Prisma, such as Better Auth, to an application's Prisma 8 client. Every library integration follows two rules.
 
-1. **It imports only what Prisma publishes.** Its code builds on the published packages `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`, and on the client the application passes in. It imports none of this repository's private packages.
+1. **It imports only what Prisma publishes.** Its code builds on the published packages `@prisma/orm-framework` and `@prisma/orm-family-sql`, on `@prisma/orm-toolchain` when it adds models to the contract, and on the client the application passes in. It imports none of this repository's private packages.
 2. **The tables the library needs are models in the application's contract.** The integration ships no models and no migrations of its own. It checks the application's contract against what the library needs and reports what is missing. On the developer's request it adds the missing models and fields to the contract's source. It never changes the database's tables.
 
 The next two sections take the rules one at a time: what each means, why it holds, and what it costs.
@@ -135,11 +100,11 @@ A library integration is written against that published set only, the same set a
 
 ### How the integration depends on Prisma's packages
 
-The integration declares `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain` as peer dependencies, at the exact version of the application's database package. The database package always installs all three, so the application ends up with one copy of each, shared by its client and the integration. The application still names only its database package and the integration: the peers are met by what the database package brings in, at that package's version.
+The integration declares the Prisma packages it uses as peer dependencies, at the exact version of the application's database package. The database package always installs all three, so the application ends up with one copy of each, shared by its client and the integration. The application still names only its database package and the integration: the peers are met by what the database package brings in, at that package's version.
 
 One copy matters, because the integration builds query filters with functions from `@prisma/orm-family-sql` and hands them to the client. Because they are peers, the package manager reports a version mismatch at install time. If they were regular dependencies, it would silently install a second copy of those functions beside the client's.
 
-The third package, `@prisma/orm-toolchain`, is Prisma's tooling. The integration uses it for one thing, to find the contract's source files through the project's `prisma.config.ts`, and loads it only when the developer runs the library's generate command. An application that serves requests through the integration never loads Prisma's tooling. It is an exact peer like the other two, because the config loader must read the project's config as the same version of Prisma's own commands reads it.
+`@prisma/orm-toolchain` is Prisma's tooling. An integration needs it only to find the contract's source files through the project's `prisma.config.ts`, and loads it only when the developer asks it to add models. An application that serves requests through the integration never loads Prisma's tooling. It is an exact peer like the others, because the config loader must read the project's config as the same version of Prisma's own commands reads it.
 
 ### How the rule is kept
 
@@ -148,8 +113,8 @@ Two checks fail when the rule is broken. The lint `pnpm lint:consumer-internal-i
 ### What it costs
 
 - **Looser types inside the package.** No published type says "a client whose contract contains these models". The integration treats the client loosely on the inside, and its correctness rests on the contract check described under rule 2 and on its tests.
-- **Gaps are worked around, and written down.** Where the published packages lack something, the integration carries its own small substitute. Each one marks a gap to close in the published packages. For example, `@prisma/orm-better-auth` keeps its own table of the kind of JavaScript value each codec reads, because nothing published gives that at run time.
-- **The rule covers Prisma's packages, not the library's.** An integration may need a hook that the library itself labels internal; `@prisma/orm-better-auth` uses one to register its contract check with Better Auth. The integration then accepts only the library's minor version it has been tested against, because a new minor version may change the hook.
+- **Gaps are worked around, and written down.** Where the published packages lack something, the integration carries its own small substitute and records it in its developer notes. Each one marks a gap to close in the published packages.
+- **The rule covers Prisma's packages, not the library's.** An integration may need a hook that the library itself labels internal. The integration then accepts only the library's minor version it has been tested against, because a new minor version may change the hook.
 
 ## Rule 2: the library's tables are models in the application's contract
 
@@ -173,16 +138,13 @@ Prisma 8 also lets a package own tables. Such a package ships a **contract space
 
 **It compares.** The integration takes the list of models and fields the library needs under the application's configuration and checks each against the contract. It finds a missing model or field, a field of the wrong type, and a field whose optionality the library cannot work with.
 
-**It reports.** Wherever the library gives the integration a place to run that check, a problem stops the library with a message that says what to add or change, with the PSL to add. Better Auth runs the check before it serves requests and from its `auth check` command.
+**It reports.** Wherever the library gives the integration a place to run that check, a problem stops the library with a message that says what to add or change, with the PSL to add.
 
-**It adds what is missing, when the developer asks.** A library usually has a command that generates the tables it needs; Better Auth's is `auth generate`. Under that command the integration adds the missing models and fields to the contract's source, as in the example at the top. The edit reuses what Prisma already publishes:
+**It adds what is missing, when the developer asks.** A library usually has a command that generates the tables it needs. Under that command the integration adds the missing models and fields to the contract's source, like this:
 
-- The project's `prisma.config.ts`, read with Prisma's own config loader, names the contract's source files.
-- Prisma's PSL parser returns a syntax tree that keeps every comment and space and gives the position of each model and field.
-- The integration inserts the new lines as text at those positions: new fields after a model's last field, new models at the end of the file. It does not reformat or reprint the file, so every line the developer wrote stays as it was.
-- The library's command asks the developer and writes the file. The integration hands it the edited text and writes nothing itself.
-
-The edit is all or nothing. When the contract needs anything other than additions, or the additions cannot all be placed in one PSL file, the command writes nothing and prints the message the check gives, with a line that says why nothing was written. That covers a contract written in TypeScript, a file that does not parse, and a field that must change type.
+- It finds the contract's source files and the place for each new line with what Prisma publishes: the config loader and the PSL syntax tree.
+- It only adds lines. It does not reformat or reprint the file, so every line the developer wrote stays as it was.
+- The edit is all or nothing. When the contract needs anything other than additions, or the integration cannot place them all, it writes nothing and reports what to change.
 
 **It never changes the database.** The integration reads and writes rows, as the library asks. Creating and altering tables stays with Prisma, driven by the application's contract.
 
@@ -204,7 +166,7 @@ The integration compares against the emitted contract but edits the contract's s
 ## Consequences
 
 - A library integration published by Prisma is hand-written source, where the other published packages are thin shells over private packages. While it is developed in this repository it sits in `packages/9-public/@prisma/`. It is named `@prisma/orm-<library>` ([ADR 242](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md)). One published by someone else is named as any community package is ([ADR 308](ADR%20308%20-%20Community%20packages%20are%20named%20prisma-orm-name.md)).
-- An integration accepts the databases it has been proven correct on and refuses a client for any other, with an error that names the database. `@prisma/orm-better-auth` accepts Postgres and SQLite.
+- An integration accepts the databases it has been proven correct on and refuses a client for any other, with an error that names the database.
 - Revisit this decision for a library whose tables are the same in every application, and which the application never changes and never queries through its own client. A contract space owned by a package may fit that case better, as it does for Supabase's auth tables.
 
 ## Alternatives considered
