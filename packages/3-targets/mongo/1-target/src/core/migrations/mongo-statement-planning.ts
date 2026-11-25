@@ -4,6 +4,7 @@ import type {
   ContractRelation,
   ContractWithDomain,
 } from '@internal/contract/types';
+import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
 import {
   describeMigrationStatement,
   type FieldCoordinate,
@@ -925,6 +926,12 @@ function sharedRouteOf(input: {
         !renames.some((renamed) => sameModel(renamed.to, model)),
     );
   const opening = `Leave out ${statementsText} to plan the change without moving them.`;
+  const destinationSchema = contractToMongoSchemaIR(contract);
+  const timeSeriesDestinations = [
+    ...new Set(groups.flatMap((group) => group.changes.map((change) => change.to))),
+  ].filter(
+    (collection) => destinationSchema.collection(collection)?.options?.timeseries !== undefined,
+  );
   const leftBehindGroup = (group: RefusedGroup, plan: StatementPlan | undefined) =>
     leavesBehind(group, plan) && !dropsSource(group, plan);
   const readersOf = (collection: string) =>
@@ -1010,7 +1017,11 @@ function sharedRouteOf(input: {
         );
       }),
     );
-    return `${consequences(plan, false)}${refusedText(leftOut)}\n\n${handWrittenRoute(what)}`;
+    const timeSeries = timeSeriesDestinations.map(
+      (collection) =>
+        ` Collection "${collection}" is a time-series collection, which a $merge stage cannot write into, so no rawAggregate copy can move the documents there: insert them yourself, as insertMany in mongosh does.`,
+    );
+    return `${consequences(plan, false)}${refusedText(leftOut)}\n\n${handWrittenRoute(what)}${timeSeries.join('')}`;
   };
 
   const leaveBehind = (): string => {
@@ -1072,7 +1083,10 @@ function sharedRouteOf(input: {
       if (built !== undefined) return built;
       const leftOut = leftOutPlan();
       const plan = leftOut.ok ? leftOut.value : undefined;
-      built = groups.every((group) => leavesBehind(group, plan)) ? leaveBehind() : handWritten();
+      built =
+        timeSeriesDestinations.length === 0 && groups.every((group) => leavesBehind(group, plan))
+          ? leaveBehind()
+          : handWritten();
       return built;
     },
     leftOutRefusals: () => {
