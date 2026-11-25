@@ -731,6 +731,13 @@ describe('moduleUsersImport', () => {
 });
 
 describe('oneLine', () => {
+  it('writes a line comment as a block comment, so the text after it stays on the line as code', () => {
+    strictEqual(
+      oneLine('type T = {\n  // the key */ here\n  a: Opts;\n}'),
+      'type T = { /* the key * / here */ a: Opts; }',
+    );
+  });
+
   it('keeps a literal inside an interpolation whose expression holds braces', () => {
     const text = 'type Spaced = `\u0024{{ x:  string } extends { x: string } ? `a  b` : never}`';
     strictEqual(
