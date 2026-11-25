@@ -67,12 +67,13 @@ The method adapts Microsoft's Fluid Framework, which generates one compile-time 
 
 ```ts
 import type * as r0 from 'release-orm-extension-middleware-cache';
-import type * as c0 from 'current-orm-extension-middleware-cache';
+import type * as c0 from 'current-orm-extension-middleware-cache'; import * as cv0 from 'current-orm-extension-middleware-cache';
 
 type t4 = [requireAssignableTo<typeof c0.createCacheMiddleware, typeof r0.createCacheMiddleware>];
+cv0.createCacheMiddleware;
 ```
 
-`release-…` is the last release, installed under that alias; `current-…` links to the current build. `requireAssignableTo<A, B>` compiles only when `A` is assignable to `B`. Each test is a type named after its line in the generated file, so an error maps back to its export. A type export gets the same test without `typeof`, and a class also gets one for its constructor's parameters, which TypeScript otherwise compares loosely.
+`release-…` is the last release, installed under that alias; `current-…` links to the current build. `requireAssignableTo<A, B>` compiles only when `A` is assignable to `B`. Each test is a type named after its line in the generated file, so an error maps back to its export. A type export gets the same test without `typeof`, and a class also gets one for its constructor's parameters, which TypeScript otherwise compares loosely. The last line uses the export as a value through an ordinary import, because `typeof` also accepts a name exported with `export type`, and a value turned type-only would otherwise pass. A published package that is deleted is a break as well, recorded in `packages/9-public/removed-packages.json` when it is deliberate.
 
 **Only one direction.** Fluid asks in both directions and needs every interface tagged as one users implement or one they only receive, because a new member breaks the first kind and not the second. We ask only whether the current export is assignable to the last release's, and the tags become unnecessary. A new required member on `CacheStore`, which users implement, fails through the exported function that accepts a `CacheStore`: the current `createCacheMiddleware` no longer accepts an old store, so it is not assignable to the old `createCacheMiddleware`. A new member on `CacheMiddleware`, which users only receive, passes, because a type with more members is still assignable to the old one. This relies on an exported function or type accepting the interface; one that nothing accepts cannot be implemented in any useful way.
 

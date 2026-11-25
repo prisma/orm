@@ -9,7 +9,7 @@ From `8.0.0`, Prisma 8 promises that an application upgrades to any later `8.x` 
 | The API lists are current | `Lint` job, `pnpm api:check` | Each published package's `api.txt` matches the build | Fails | Fails |
 | The description names each change | `API changes` workflow | A pull request that changes an `api.txt` gets a comment listing the changed lines, and its description must name each changed export | Fails | Fails |
 | Type tests against the last release | `api-compat` job, `pnpm api:compat` | Each export of the last release still fits the current build | Reports | Fails |
-| The last release's example apps | `api-compat` job, `pnpm api:examples` | The example apps as they were at the last release compile against the current build | Reports | Fails |
+| The last release's example apps | `api-compat` job, `pnpm api:compat:examples` | The example apps as they were at the last release compile against the current build | Reports | Fails |
 
 "Reports" means the job lists what it found in its summary and passes. The type tests and the example apps start to fail by themselves at the first release whose version has no pre-release part; nothing is switched on.
 
@@ -74,14 +74,14 @@ If the break is not intended, change the code. If it is, record it.
 A break in a generally available export is an exception to the compatibility policy, and the release notes must name it. Record it in the package's `api-breaks.json`, beside its `api.txt`:
 
 ```json
-[{ "path": "./builder", "export": "Db", "test": "type", "release": "8.1.0", "reason": "Join scopes merge by name; see the release notes" }]
+[{ "path": "./builder", "export": "Db", "test": "type", "lastRelease": "8.1.0", "message": "<the message, as the job reports it>", "reason": "Join scopes merge by name; see the release notes" }]
 ```
 
-`test` is the kind of test that broke, as the job reports it: `type`, `value`, `constructor`, `abstract`, `exists` or `path`. `release` is the last release the break is measured against. The reason is one line. Once the break is undone, the record fails, so it cannot go stale silently. When the next release is published, records for the earlier one are skipped and listed as removable; delete them.
+`test` is the kind of test that broke, as the job reports it: `type`, `value`, `constructor`, `abstract`, `exists`, `path` or `augments`. `lastRelease` is the release the break is measured against. `message` is the failure's message, copied from the job's report: a record matches exactly one failure, so a second, different break of the same export is still reported. A deleted package is recorded in `packages/9-public/removed-packages.json` as `{ "package", "lastRelease", "reason" }`. The reason is one line. Once the break is undone, the record fails, so it cannot go stale silently. When the next release is published, records for the earlier one are skipped and listed as removable; delete them.
 
 ## The last release's example apps fail
 
-`pnpm api:examples` extracts each app under `examples/` as it was at the last release into a folder of its own (`.api-examples/`), links the app's installed `node_modules` into it, and runs the app's `typecheck` script there. Your own app folders are not touched. The apps' committed contracts are compiled as they were, because a contract must keep working without being emitted again.
+`pnpm api:compat:examples` extracts each app under `examples/` as it was at the last release into a folder of its own (`.api-examples/`), links the app's installed `node_modules` into it, and runs the app's `typecheck` script there. Your own app folders are not touched. The apps' committed contracts are compiled as they were, because a contract must keep working without being emitted again.
 
 An error there is a change a user's code would see. The apps' type tests assert exact types, so an addition the policy allows, such as a new optional property on a result row, also fails them. Record such an error, or a deliberate break, in `examples/last-release-errors.json`:
 
