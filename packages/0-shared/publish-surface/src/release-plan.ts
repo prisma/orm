@@ -442,11 +442,11 @@ export function releaseOfRootVersion(version: string): RootRelease {
       );
     }
     throw new ReleasePlanError(
-      `root version "${version}" is not the release number of ${release.major}.${release.minor}, which is ${root}`,
+      `root version "${version}" is not the root version of release ${release.major}.${release.minor}, which is ${root}`,
     );
   }
   throw new ReleasePlanError(
-    `root version "${version}" is neither a release candidate 8.0.0-rc.N nor a release number such as 8.1.0`,
+    `root version "${version}" is neither a release candidate 8.0.0-rc.N nor the root version of a release, such as 8.1.0`,
   );
 }
 

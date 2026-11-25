@@ -230,7 +230,7 @@ describe('assertCanonicalBase', () => {
     assert.doesNotThrow(() => assertCanonicalBase('8.1.0'));
   });
 
-  it('refuses a Prisma 8 release that is not a release number, saying why', () => {
+  it('refuses a Prisma 8 version that is not a root version, saying why', () => {
     assert.throws(() => assertCanonicalBase('8.0.0'), /release 8\.0 is cut as 8\.0\.1/);
     assert.throws(() => assertCanonicalBase('8.0.2'), /8\.0\.1/);
     assert.throws(() => assertCanonicalBase('8.1.1'), /8\.1\.0/);
