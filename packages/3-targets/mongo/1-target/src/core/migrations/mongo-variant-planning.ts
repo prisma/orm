@@ -310,7 +310,7 @@ function variantRoute(
     moves.map((move) => `${modelNamesText(namesOf(move))} to collection ${quoted(move.to)}`),
   );
   const sameTarget = `Write that first contract as this one with ${variantText(change.model)} kept, so its plan changes ${moves.length === 1 ? `collection ${quoted(moves[0]?.to ?? '')}` : 'those collections'} as this plan does, which the steps below expect.`;
-  const firstMove = `First move ${destinations}, keep ${variantText(change.model)} as it is, and plan that with migration plan. ${sameTarget}\n\n${documentMovesText(moves)}\n\nUnder db update, first move the documents of ${modelNamesText(moving)} out of collection ${quoted(change.collection)} by hand, then apply that change. Applied before the move, the change can stop at the new validator of collection ${quoted(change.collection)}, which need not accept those documents.`;
+  const firstMove = `First move ${destinations}, keep ${variantText(change.model)} as it is, and plan that with migration plan. ${sameTarget}\n\n${documentMovesText(moves)}\n\nUnder db update, first stop writes to collection ${quoted(change.collection)}, then move the documents of ${modelNamesText(moving)} out of it by hand, then apply that change, and allow writes again only once it is applied: a document of ${modelNamesText(moving)} written there after the copy would not be moved. Applied before the move, the change can stop at the new validator of collection ${quoted(change.collection)}, which need not accept those documents.`;
   if (staying.length === 0) {
     return `A model that moves out of collection ${quoted(change.collection)} leaves its documents in it, so make the change in two plans. ${firstMove}\n\nThen make the change to ${variantText(change.model)} and plan again. Or ${keep}.`;
   }
