@@ -120,7 +120,7 @@ The group description defines a ref, the change policy and the data protection p
 
 A mismatch with differences of both kinds gives both sentences, each starting with the settings it covers ("For dataProtection.dataLoss: …").
 
-`MIGRATION.DATA_PROTECTION_FORBIDS` keeps its text. For a refusal by a ref it says the database's owner must first change what the ref declares, which addresses the person who may decide that, not the agent that was refused.
+`MIGRATION.DATA_PROTECTION_FORBIDS` used to end a refusal by a ref with "To do it anyway, whoever owns that database must first change the data protection policy <ref> declares." That describes loosening the ref to get past the refusal, so a refusal by a ref now ends with the recoveries for the refused operations. A refusal by the database's own recorded policy keeps its closing sentence, because that policy changes only in a deploy its owner gives consent to.
 
 ## Where the code goes
 
