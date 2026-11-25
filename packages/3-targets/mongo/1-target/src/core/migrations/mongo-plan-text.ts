@@ -102,18 +102,14 @@ const CODE_INDENT = '  ';
 
 /**
  * How a move's copy writes into its target. `$merge` cannot write into a time-series collection,
- * and `$out` replaces everything the collection holds, so a copy into one ends in `$out` alone
- * only when the plan creates the collection and this is the one copy into it. Any other copy into
- * one also reads what the collection holds, and adds the moved documents with `$unionWith`.
+ * and `$out` replaces everything the collection holds, so a copy into one reads what the
+ * collection holds, adds the moved documents with `$unionWith`, and writes them all back with
+ * `$out`. A run after the delete then writes back what the collection already holds.
  */
-type CopyWrite = 'merge' | 'out' | 'union';
+type CopyWrite = 'merge' | 'unionOut';
 
-function copyWriteOf(move: DocumentMove, moves: readonly DocumentMove[]): CopyWrite {
-  if (!move.timeSeries) return 'merge';
-  const copiesInto = moves
-    .filter((each) => each.to === move.to)
-    .reduce((count, each) => count + each.copies.length, 0);
-  return move.order.after?.kind === 'createCollection' && copiesInto === 1 ? 'out' : 'union';
+function copyWriteOf(move: DocumentMove): CopyWrite {
+  return move.timeSeries ? 'unionOut' : 'merge';
 }
 
 /** What a time-series collection allows a copy: the reason a move into it cannot end in `$merge`. */
@@ -141,20 +137,16 @@ function matchStage(selects: string): string {
 }
 
 /** A `rawAggregate` call of the move as it goes in `migration.ts`, one stage to a line. */
-function copyCall(
-  move: DocumentMove,
-  copy: DocumentCopy,
-  selects: string,
-  write: 'merge' | 'out',
-): string {
-  const end = write === 'merge' ? { $merge: { into: move.to } } : { $out: move.to };
+function copyCall(move: DocumentMove, copy: DocumentCopy, selects: string): string {
   return rawAggregateCall(move, move.from, [
     matchStage(selects),
-    ...[...copy.fieldStages, end].map((stage) => oneLine(jsonToTsSource(stage))),
+    ...[...copy.fieldStages, { $merge: { into: move.to } }].map((stage) =>
+      oneLine(jsonToTsSource(stage)),
+    ),
   ]);
 }
 
-/** The one `rawAggregate` call of a move into a time-series collection that holds documents, or that other copies write into: it reads that collection and adds each copy's documents with `$unionWith`. */
+/** The one `rawAggregate` call of a move into a time-series collection: it reads that collection and adds each copy's documents with `$unionWith`. */
 function unionCall(move: DocumentMove): string {
   const unions = move.copies.map(
     (copy) =>
@@ -184,20 +176,12 @@ function copiesText(move: DocumentMove, write: CopyWrite): string {
     copies.length === 1
       ? '<the same filter>'
       : '<a filter that selects the documents of all of them>';
-  if (write === 'union') {
-    const why =
-      move.order.after?.kind === 'createCollection'
-        ? `More than one copy writes into collection "${to}", and an $out stage in each would remove what the one before it wrote.`
-        : `Collection "${to}" holds documents when the move runs, which an $out stage alone would remove.`;
-    return `add a dataTransform. ${timeSeriesCopyLimits(to)} ${why} So its run reads the documents collection "${to}" holds, adds those of ${movingText(move)} with a $unionWith stage, and writes them all back with an $out stage:\n\n${unionCall(move)}\n\nAfter it, add ${deletes}:\n\n${deleteCall(sameFilter)}\n\nIf the apply stops after the copy and before the delete, delete the moved documents from collection "${to}" before you run db migrate again: the copy runs again, and the collection would then hold them twice.`;
+  if (write === 'unionOut') {
+    return `add a dataTransform. ${timeSeriesCopyLimits(to)} So its run reads the documents collection "${to}" holds, adds those of ${movingText(move)} with a $unionWith stage, and writes them all back with an $out stage, which rewrites the whole collection:\n\n${unionCall(move)}\n\nAfter it, add ${deletes}:\n\n${deleteCall(sameFilter)}\n\nThe copy has no check, so it runs again on every run of the migration, and a run after the delete has finished writes back what collection "${to}" already holds. If the apply stops after the copy and before the delete has finished, finish that delete yourself, on collection "${from}" with the same filter, before you run db migrate again: otherwise the copy adds the documents still in collection "${from}" to collection "${to}" a second time. Do not delete documents from collection "${to}" instead: a time-series collection does not enforce a unique _id, so a delete by _id there can also remove a document it already held.`;
   }
-  const out =
-    write === 'out'
-      ? `\n\n${timeSeriesCopyLimits(to)} So the copy ends in an $out stage: the plan creates collection "${to}" right before it with the time-series options of the contract, and no other copy writes into it, so the $out replaces nothing and keeps those options.`
-      : '';
   return copies.length === 1 && only !== undefined
-    ? `add a dataTransform. Its run copies the documents of ${movingText(move)} into collection "${to}":\n\n${copyCall(move, only, 'those documents', write)}${out}\n\nAfter it, add ${deletes}:\n\n${deleteCall(sameFilter)}`
-    : `add one dataTransform for each group of models whose documents change alike on the way into collection "${to}". The run of each is one of these copies:\n\n${copies.map((copy) => copyCall(move, copy, `the documents of ${modelNamesText(copy.models)}`, 'merge')).join('\n\n')}\n\nAfter them, add ${deletes}:\n\n${deleteCall(sameFilter)}`;
+    ? `add a dataTransform. Its run copies the documents of ${movingText(move)} into collection "${to}":\n\n${copyCall(move, only, 'those documents')}\n\nAfter it, add ${deletes}:\n\n${deleteCall(sameFilter)}`
+    : `add one dataTransform for each group of models whose documents change alike on the way into collection "${to}". The run of each is one of these copies:\n\n${copies.map((copy) => copyCall(move, copy, `the documents of ${modelNamesText(copy.models)}`)).join('\n\n')}\n\nAfter them, add ${deletes}:\n\n${deleteCall(sameFilter)}`;
 }
 
 function droppedText({ copies }: DocumentMove): string {
@@ -245,7 +229,7 @@ const MERGE_LIMITS =
 function outLimits(collections: readonly string[]): string {
   return collections.length === 0
     ? ''
-    : ` Stop writes to ${namedList('collection', collections)} too, from before the apply until it ends, retries included: an $out stage replaces a document written there before it runs.`;
+    : ` Stop writes to ${namedList('collection', collections)} too, for the whole apply, retries included: an $out stage replaces the collection with what it read, so a document written there while the copy runs is lost. An $out stage cannot write into a sharded collection.`;
 }
 
 /** For each collection the documents of several collections move into, that their `_id` values must be checked against each other as well as against it. */
@@ -286,7 +270,7 @@ function stopText(moves: readonly DocumentMove[]): string {
  * model reach them, as they should.
  */
 export function documentMovesText(moves: readonly DocumentMove[]): string {
-  const writes = moves.map((move) => ({ move, write: copyWriteOf(move, moves) }));
+  const writes = moves.map((move) => ({ move, write: copyWriteOf(move) }));
   const merges = writes.filter(({ write }) => write === 'merge').map(({ move }) => move);
   const outs = [
     ...new Set(writes.filter(({ write }) => write !== 'merge').map(({ move }) => move.to)),
@@ -295,7 +279,7 @@ export function documentMovesText(moves: readonly DocumentMove[]): string {
     ...writes.map(({ move, write }) => moveText(move, moves.length > 1, write)),
     applyText(
       writes.reduce(
-        (count, { move, write }) => count + (write === 'union' ? 1 : move.copies.length),
+        (count, { move, write }) => count + (write === 'unionOut' ? 1 : move.copies.length),
         0,
       ),
     ),

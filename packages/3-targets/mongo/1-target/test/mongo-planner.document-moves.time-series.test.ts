@@ -4,27 +4,38 @@ import { contract, plan, refusal, renameModel, schemaCollection } from './mongo-
 const EVENT = { collection: 'events', fields: ['_id', 'name'] };
 const LIMITS =
   'Collection "measurements" is a time-series collection, which a $merge stage cannot write into, and an $out stage replaces everything it holds.';
+const MOVE_LIMITS =
+  'Stop writes to each collection the documents move out of until the apply ends: the delete also removes a document of those models written there after the copy, and that document was not copied.';
 const OUT_LIMITS =
-  'Stop writes to collection "measurements" too, from before the apply until it ends, retries included: an $out stage replaces a document written there before it runs.';
-const UNION_RERUN =
-  'If the apply stops after the copy and before the delete, delete the moved documents from collection "measurements" before you run db migrate again: the copy runs again, and the collection would then hold them twice.';
+  'Stop writes to collection "measurements" too, for the whole apply, retries included: an $out stage replaces the collection with what it read, so a document written there while the copy runs is lost. An $out stage cannot write into a sharded collection.';
+
+function rerun(from: string): string {
+  return `The copy has no check, so it runs again on every run of the migration, and a run after the delete has finished writes back what collection "measurements" already holds. If the apply stops after the copy and before the delete has finished, finish that delete yourself, on collection "${from}" with the same filter, before you run db migrate again: otherwise the copy adds the documents still in collection "${from}" to collection "measurements" a second time. Do not delete documents from collection "measurements" instead: a time-series collection does not enforce a unique _id, so a delete by _id there can also remove a document it already held.`;
+}
+
+function unionText(moving: string): string {
+  return `${LIMITS} So its run reads the documents collection "measurements" holds, adds those of ${moving} with a $unionWith stage, and writes them all back with an $out stage, which rewrites the whole collection:`;
+}
 
 function routeOf(result: ReturnType<typeof plan>): string {
   return refusal(result)[0]?.why ?? '';
 }
 
 function shape(why: string) {
+  const paragraphs = why.split('\n\n');
   return {
     copies: why.match(/ {2}rawAggregate\([\s\S]*?\n {2}\]\)/g) ?? [],
-    merges: why.includes('$merge: {'),
-    limits: why.includes(LIMITS),
-    outLimits: why.includes(OUT_LIMITS),
-    rerun: why.includes(UNION_RERUN),
+    unions: paragraphs.filter((paragraph) => paragraph.includes(`${LIMITS} So its run reads`)),
+    reruns: paragraphs.filter((paragraph) => paragraph.startsWith('The copy has no check')),
+    limits: paragraphs.find((paragraph) => paragraph.startsWith(MOVE_LIMITS)),
+    apply: paragraphs.find((paragraph) => paragraph.includes('emit its ops.json')),
   };
 }
 
+const ONE_RUN = 'Run that migration.ts to emit its ops.json, and apply it with db migrate.';
+
 describe('MongoMigrationPlanner, a document move into a time-series collection', () => {
-  it('copies with $out when the plan creates the collection and the copy is the only one into it', () => {
+  it('reads the collection into the $out copy even when the plan creates it', () => {
     const why = routeOf(
       plan({
         from: contract(
@@ -41,24 +52,18 @@ describe('MongoMigrationPlanner, a document move into a time-series collection',
         statements: [renameModel('Measurement', 'Reading')],
       }),
     );
-    expect({
-      ...shape(why),
-      why: why.includes(
-        `${LIMITS} So the copy ends in an $out stage: the plan creates collection "measurements" right before it with the time-series options of the contract, and no other copy writes into it, so the $out replaces nothing and keeps those options.`,
-      ),
-    }).toEqual({
+    expect(shape(why)).toEqual({
       copies: [
-        '  rawAggregate("events", [\n    { $match: <a filter that selects only those documents> },\n    { $out: "measurements" },\n  ])',
+        '  rawAggregate("measurements", [\n    { $unionWith: { coll: "events", pipeline: [{ $match: <a filter that selects only those documents> }] } },\n    { $out: "measurements" },\n  ])',
       ],
-      merges: false,
-      limits: true,
-      outLimits: true,
-      rerun: false,
-      why: true,
+      unions: [expect.stringContaining(unionText('model "Measurement"'))],
+      reruns: [rerun('events')],
+      limits: `${MOVE_LIMITS} ${OUT_LIMITS}`,
+      apply: ONE_RUN,
     });
   });
 
-  it('copies with $out on the variant route too', () => {
+  it('reads the collection into the $out copy on the variant route too', () => {
     const task = (variants: Readonly<Record<string, string>>) => ({
       collection: 'tasks',
       fields: ['_id', 'type'],
@@ -92,16 +97,16 @@ describe('MongoMigrationPlanner, a document move into a time-series collection',
     );
     expect(shape(why)).toEqual({
       copies: [
-        '  rawAggregate("tasks", [\n    { $match: <a filter that selects only those documents> },\n    { $out: "measurements" },\n  ])',
+        '  rawAggregate("measurements", [\n    { $unionWith: { coll: "tasks", pipeline: [{ $match: <a filter that selects only those documents> }] } },\n    { $out: "measurements" },\n  ])',
       ],
-      merges: false,
-      limits: true,
-      outLimits: true,
-      rerun: false,
+      unions: [expect.stringContaining(unionText('model "Reading"'))],
+      reruns: [rerun('tasks')],
+      limits: `${MOVE_LIMITS} ${OUT_LIMITS}`,
+      apply: ONE_RUN,
     });
   });
 
-  it('reads the documents the collection holds into the $out when it exists before the move', () => {
+  it('reads the collection into the $out copy when it exists before the move', () => {
     const why = routeOf(
       plan({
         from: contract(
@@ -121,24 +126,18 @@ describe('MongoMigrationPlanner, a document move into a time-series collection',
         statements: [renameModel('Measurement', 'Reading')],
       }),
     );
-    expect({
-      ...shape(why),
-      why: why.includes(
-        `${LIMITS} Collection "measurements" holds documents when the move runs, which an $out stage alone would remove. So its run reads the documents collection "measurements" holds, adds those of model "Measurement" with a $unionWith stage, and writes them all back with an $out stage:`,
-      ),
-    }).toEqual({
+    expect(shape(why)).toEqual({
       copies: [
         '  rawAggregate("measurements", [\n    { $unionWith: { coll: "events", pipeline: [{ $match: <a filter that selects only those documents> }] } },\n    { $out: "measurements" },\n  ])',
       ],
-      merges: false,
-      limits: true,
-      outLimits: true,
-      rerun: true,
-      why: true,
+      unions: [expect.stringContaining(unionText('model "Measurement"'))],
+      reruns: [rerun('events')],
+      limits: `${MOVE_LIMITS} ${OUT_LIMITS}`,
+      apply: ONE_RUN,
     });
   });
 
-  it('writes one $out for all the copies into a new collection when there are several', () => {
+  it('writes one $out for all the copies of one collection when there are several', () => {
     const why = routeOf(
       plan({
         from: contract(
@@ -163,24 +162,89 @@ describe('MongoMigrationPlanner, a document move into a time-series collection',
         statements: [renameModel('Measurement', 'Reading'), renameModel('Sample', 'Probe')],
       }),
     );
-    expect({
-      ...shape(why),
-      why: why.includes(
-        `${LIMITS} More than one copy writes into collection "measurements", and an $out stage in each would remove what the one before it wrote.`,
-      ),
-      apply: why.includes(
-        'Run that migration.ts to emit its ops.json, and apply it with db migrate.',
-      ),
-    }).toEqual({
+    expect(shape(why)).toEqual({
       copies: [
         '  rawAggregate("measurements", [\n    { $unionWith: { coll: "events", pipeline: [{ $match: <a filter that selects only the documents of model "Measurement"> }, { $unset: ["x"] }] } },\n    { $unionWith: { coll: "events", pipeline: [{ $match: <a filter that selects only the documents of model "Sample"> }] } },\n    { $out: "measurements" },\n  ])',
       ],
-      merges: false,
-      limits: true,
-      outLimits: true,
-      rerun: true,
-      why: true,
-      apply: true,
+      unions: [expect.stringContaining(unionText('models "Measurement" and "Sample"'))],
+      reruns: [rerun('events')],
+      limits: `${MOVE_LIMITS} ${OUT_LIMITS}`,
+      apply: ONE_RUN,
+    });
+  });
+
+  it('gives each source collection its own $out copy when documents of two collections move into one', () => {
+    const why = routeOf(
+      plan({
+        from: contract(
+          'from',
+          {
+            Event: EVENT,
+            Measurement: { collection: 'events', fields: ['_id', 'at'] },
+            Log: { collection: 'logs', fields: ['_id', 'line'] },
+            Sample: { collection: 'logs', fields: ['_id', 'at'] },
+          },
+          { events: {}, logs: {} },
+        ),
+        to: contract(
+          'to',
+          {
+            Event: EVENT,
+            Log: { collection: 'logs', fields: ['_id', 'line'] },
+            Reading: { collection: 'measurements', fields: ['_id', 'at'] },
+            Probe: { collection: 'measurements', fields: ['_id', 'at'] },
+          },
+          { events: {}, logs: {}, measurements: { timeField: 'at' } },
+        ),
+        schema: [schemaCollection('events'), schemaCollection('logs')],
+        statements: [renameModel('Measurement', 'Reading'), renameModel('Sample', 'Probe')],
+      }),
+    );
+    expect(shape(why)).toEqual({
+      copies: [
+        '  rawAggregate("measurements", [\n    { $unionWith: { coll: "events", pipeline: [{ $match: <a filter that selects only those documents> }] } },\n    { $out: "measurements" },\n  ])',
+        '  rawAggregate("measurements", [\n    { $unionWith: { coll: "logs", pipeline: [{ $match: <a filter that selects only those documents> }] } },\n    { $out: "measurements" },\n  ])',
+      ],
+      unions: [
+        expect.stringContaining(unionText('model "Measurement"')),
+        expect.stringContaining(unionText('model "Sample"')),
+      ],
+      reruns: [rerun('events'), rerun('logs')],
+      limits: `${MOVE_LIMITS} ${OUT_LIMITS}`,
+      apply:
+        'Both dataTransforms go in that one migration.ts. Run it to emit its ops.json, and apply it once with db migrate.',
+    });
+  });
+
+  it('says on the hand-written route that the collection is time-series', () => {
+    const why = routeOf(
+      plan({
+        from: contract(
+          'from',
+          {
+            User: { collection: 'users', fields: ['_id', 'at'] },
+            Account: { collection: 'accounts', fields: ['_id', 'at'] },
+          },
+          { users: {}, accounts: {} },
+        ),
+        to: contract(
+          'to',
+          {
+            User: { collection: 'measurements', fields: ['_id', 'at'] },
+            Member: { collection: 'measurements', fields: ['_id', 'at'] },
+          },
+          { measurements: { timeField: 'at' } },
+        ),
+        schema: [schemaCollection('users'), schemaCollection('accounts')],
+        statements: [renameModel('Account', 'Member')],
+      }),
+    );
+    expect({
+      copies: why.split('rawAggregate(').length - 1,
+      route: why.split('\n\n').at(-1),
+    }).toEqual({
+      copies: 0,
+      route: `With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "Account", and those of model "User" that collection "measurements" does not already hold, into collection "measurements" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json. ${LIMITS}`,
     });
   });
 });
