@@ -15,7 +15,7 @@ Slices 1 to 4 are in the order of what cannot be changed after release `8.0`; sl
 | --- | --- | --- | --- | --- |
 | 1, [TML-3935](https://linear.app/prisma-company/issue/TML-3935) | The application lists the platform packages, and our packages name each other as peers | prisma/orm, with small changes in prisma/prisma-cli, prisma/composer and prisma/web | nothing | the last release candidate |
 | 2, [TML-3936](https://linear.app/prisma-company/issue/TML-3936) | Each package declares its level, and its version, ranges and tag follow from it | prisma/orm | 1 | the last release candidate |
-| 3, [TML-3937](https://linear.app/prisma-company/issue/TML-3937) | Releasing release `8.0` as `8.0.1`, one package alone, and an older major | prisma/orm | 2 | `8.0.1` |
+| 3, [TML-3937](https://linear.app/prisma-company/issue/TML-3937) | Cutting release `8.0` as `8.0.1`, one package alone, and an older major | prisma/orm | 2 | `8.0.1` |
 | 4, [TML-3938](https://linear.app/prisma-company/issue/TML-3938) | The public docs: what an application installs, the levels, and each package's level | prisma/web | 1 for the install instructions, 2 for the levels | the install instructions with the release that ships slice 1; the levels with release `8.0` |
 | 5 | Every release's notes have a "How to upgrade" section | prisma/orm | nothing | the next release candidate after slice 1 |
 | 6, [TML-3956](https://linear.app/prisma-company/issue/TML-3956) | Apps that create-prisma generates list the platform packages | prisma/create-prisma | the first release of prisma/orm that contains slice 1 | create-prisma's move to that release |
@@ -94,7 +94,7 @@ Agreed with the operator on 2026-11-25, through the stream. From the next releas
   - The capability docs say a capability has the level of the package that publishes it.
 - **Five corrections that are true today** ride along: the capability stability scheme that was never built comes out of the Ecosystem subsystem doc and `docs/reference/capabilities.md`; the note on ADR 017; "early-access install" in `docs/oss/versioning.md`; the pin bullet that names an unpublished package; "prototype" in the decision record index and `AGENTS.md`.
 
-### 3. Releasing release `8.0` as `8.0.1`, one package alone, and an older major
+### 3. Cutting release `8.0` as `8.0.1`, one package alone, and an older major
 
 **After this slice:** a maintainer can cut release `8.0`, published as `8.0.1`, release a fix to one package, and release a fix to an older major, each with one command and a dry run that shows what will be published.
 
