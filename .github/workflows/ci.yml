@@ -167,8 +167,8 @@ jobs:
         run: pnpm build
       - name: Find breaks since the last release
         if: needs.changes.outputs.inert != 'true'
-        # Each package's comparison takes up to about 4.5 GB; three at once fit the runner's 16 GB.
-        run: pnpm api:compat --jobs 3
+        # The largest packages take up to about 6 GB each; two at once fit the runner's 16 GB.
+        run: pnpm api:compat --jobs 2
       - name: Type check the last release's example apps against this build
         # Runs when the step above found breaks too, so both reports are in the summary.
         if: ${{ !cancelled() && needs.changes.outputs.inert != 'true' }}
