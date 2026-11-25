@@ -18,7 +18,7 @@ const recordFor = (fixture, fields) => ({
   lastRelease: '1.0.0',
   reason: 'on purpose',
   ...fields,
-  api: fingerprint(fixture, fields.path ?? '.', fields.export),
+  fingerprint: fingerprint(fixture, fields.path ?? '.', fields.export),
 });
 
 describe('checkPackage with recorded breaks', () => {
@@ -59,7 +59,7 @@ describe('checkPackage with recorded breaks', () => {
       test: 'value',
       kind: 'break',
       lastRelease: '1.0.0',
-      api: fingerprint('narrowed-parameter', '.', 'format'),
+      fingerprint: fingerprint('narrowed-parameter', '.', 'format'),
       reason: '…',
     });
     const pasted = check('narrowed-parameter', {
@@ -76,13 +76,33 @@ describe('checkPackage with recorded breaks', () => {
     ]);
   });
 
-  it('judges a recorded export again once its lines in api.txt change', () => {
-    const result = check('narrowed-parameter-again', { records: [record] });
-    deepStrictEqual(names(result.breaks), ['. format value']);
-    deepStrictEqual(result.problems, [
-      '. format (value): the export has changed in api.txt since the record was written, so its break is judged again. If it is still intended, replace the record with the one printed for the break.',
+  it('judges a recorded export again once its lines in api.txt change, reporting the break with why', () => {
+    const result = check('narrowed-parameter-again', { records: [record], strict: false });
+    deepStrictEqual(brokenExports(result), [
+      { path: '.', name: 'format', test: 'value', failsRun: false },
     ]);
+    match(result.breaks[0].note, /^a record for an earlier state of this export exists/);
+    deepStrictEqual(result.problems, []);
   });
+
+  for (const [what, fixture] of [
+    ['exported', 'configure'],
+    ['not exported', 'hidden'],
+  ]) {
+    it(`judges a recorded export again once a type it names, ${what}, changes`, () => {
+      const options = { release: `${fixture}-release` };
+      const [recorded] = check(`${fixture}-narrowed`, options).breaks;
+      const accepted = { ...recorded.record, reason: 'mode takes only "x" now' };
+      deepStrictEqual(
+        brokenExports(check(`${fixture}-narrowed`, { ...options, records: [accepted] })),
+        [],
+      );
+      deepStrictEqual(
+        names(check(`${fixture}-grown`, { ...options, records: [accepted] }).breaks),
+        ['. configure value'],
+      );
+    });
+  }
 
   it('skips a record for an earlier release and lists it as removable', () => {
     const stale = { ...record, lastRelease: '1.0.0-rc.3' };
@@ -147,7 +167,7 @@ describe('checkPackage on import paths', () => {
     test: 'path',
     kind: 'break',
     lastRelease: '1.0.0',
-    api: fingerprint('paths-removed', './sub', '*'),
+    fingerprint: fingerprint('paths-removed', './sub', '*'),
     reason: 'the sub path is gone',
   };
 

@@ -26,6 +26,8 @@ const OUT_OF_TIME =
 const UNCONFIRMED =
   ' (not confirmed against the copy of the last release: the time ran out; raise the budget)';
 const OUT_OF_STACK = 'not decided: TypeScript ran out of stack comparing it';
+const OUTDATED =
+  'a record for an earlier state of this export exists; the export, or a declaration it names in api.txt, has changed since, so it is judged again. If the break is still intended, replace the record with this one';
 const UNRELATABLE =
   "TypeScript's own comparison fails between the last release and a copy of it too, so it cannot compare the two copies here";
 const STRUCTURAL_ONLY = `not decided: ${UNRELATABLE}, and only the structural comparison, which instantiates generic signatures with their constraints, passes`;
@@ -969,8 +971,9 @@ export function checkPackage({
     else decidedByMembers.push(testOf(each.entry, each.segment));
   }
 
-  // A record covers the breaks of one test of one export while the export's lines in api.txt are
-  // the ones it was recorded with. A record whose test no longer breaks, where that test is
+  // A record covers the breaks of one test of one export while the fingerprint of the export in
+  // api.txt is the one it was recorded with. Otherwise the export is judged again: its breaks are
+  // reported as unrecorded, with a note. A record whose test no longer breaks, where that test is
   // decided, must be removed.
   const apiText = existsSync(join(currentDir, 'api.txt'))
     ? readFileSync(join(currentDir, 'api.txt'), 'utf8')
@@ -985,6 +988,7 @@ export function checkPackage({
     each.path === record.path && each.name === record.export && each.test === record.test;
   const applied = generated.entries.flatMap((entry) => entry.records);
   const recordedBreaks = new Set();
+  const outdated = new Set();
   const recorded = [];
   for (const record of applied) {
     const found = breaks.filter(sameTest(record));
@@ -993,10 +997,8 @@ export function checkPackage({
       if (!undecided.some(sameTest(record))) {
         problems.add(`${label}: the recorded break is no longer a break. Remove the record.`);
       }
-    } else if (record.api !== fingerprintOf(record.path, record.export)) {
-      problems.add(
-        `${label}: the export has changed in api.txt since the record was written, so its break is judged again. If it is still intended, replace the record with the one printed for the break.`,
-      );
+    } else if (record.fingerprint !== fingerprintOf(record.path, record.export)) {
+      for (const each of found) outdated.add(each);
     } else {
       for (const each of found) recordedBreaks.add(each);
       recorded.push({
@@ -1012,13 +1014,14 @@ export function checkPackage({
     .filter((each) => !recordedBreaks.has(each))
     .map((each) => ({
       ...each,
+      ...(outdated.has(each) ? { note: OUTDATED } : {}),
       record: {
         path: each.path,
         export: each.name,
         test: each.test,
         kind: 'break',
         lastRelease: version,
-        api: fingerprintOf(each.path, each.name),
+        fingerprint: fingerprintOf(each.path, each.name),
         reason: '…',
       },
     }));

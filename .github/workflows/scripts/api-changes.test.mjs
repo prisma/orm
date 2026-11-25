@@ -358,7 +358,7 @@ describe('record files', () => {
     test: 'type',
     kind: 'break',
     lastRelease: '8.1.0',
-    api: '0123456789abcdef',
+    fingerprint: '0123456789abcdef',
     reason,
   });
   const err = (app, line) => ({
@@ -376,7 +376,7 @@ describe('record files', () => {
   it('lists added and removed deliberate breaks under the package, which must be named', () => {
     const changes = apiChanges([
       {
-        kind: 'breaks',
+        source: 'breaks',
         packageName: '@prisma/p',
         before: json([brk('Old'), brk('Kept')]),
         after: json([brk('Kept'), brk('New')]),
@@ -387,10 +387,10 @@ describe('record files', () => {
         packageName: '@prisma/p',
         heading: 'packages/9-public/@prisma/p/api-breaks.json',
         added: [
-          '{"path":".","export":"New","test":"type","kind":"break","lastRelease":"8.1.0","api":"0123456789abcdef","reason":"Join scopes merge by name"}',
+          '{"path":".","export":"New","test":"type","kind":"break","lastRelease":"8.1.0","fingerprint":"0123456789abcdef","reason":"Join scopes merge by name"}',
         ],
         removed: [
-          '{"path":".","export":"Old","test":"type","kind":"break","lastRelease":"8.1.0","api":"0123456789abcdef","reason":"Join scopes merge by name"}',
+          '{"path":".","export":"Old","test":"type","kind":"break","lastRelease":"8.1.0","fingerprint":"0123456789abcdef","reason":"Join scopes merge by name"}',
         ],
         exports: ['@prisma/p'],
       },
@@ -400,7 +400,7 @@ describe('record files', () => {
   it('groups expected example-app errors by app, each named as examples/<app>', () => {
     const changes = apiChanges([
       {
-        kind: 'examples',
+        source: 'examples',
         before: json([err('demo', 1)]),
         after: json([err('demo', 2), err('shop', 3)]),
       },
@@ -434,7 +434,7 @@ describe('record files', () => {
 
   it('lists a changed record of a removed package under the package, which must be named', () => {
     const gone = { package: '@prisma/orm-gone', lastRelease: '8.1.0', reason: 'merged into orm-x' };
-    assert.deepEqual(apiChanges([{ kind: 'removed', before: undefined, after: json([gone]) }]), [
+    assert.deepEqual(apiChanges([{ source: 'removed', before: undefined, after: json([gone]) }]), [
       {
         packageName: '@prisma/orm-gone',
         heading: 'packages/9-public/removed-packages.json: @prisma/orm-gone',
@@ -450,7 +450,7 @@ describe('record files', () => {
   it('counts no change when only the order of keys or records changes', () => {
     const reordered = {
       reason: 'Join scopes merge by name',
-      api: '0123456789abcdef',
+      fingerprint: '0123456789abcdef',
       lastRelease: '8.1.0',
       kind: 'break',
       test: 'type',
@@ -460,7 +460,7 @@ describe('record files', () => {
     assert.deepEqual(
       apiChanges([
         {
-          kind: 'breaks',
+          source: 'breaks',
           packageName: '@prisma/p',
           before: json([brk('B'), brk('A')]),
           after: json([reordered, brk('B')]),
@@ -474,14 +474,14 @@ describe('record files', () => {
     assert.throws(
       () =>
         apiChanges([
-          { kind: 'breaks', packageName: '@prisma/p', before: undefined, after: '{ nope' },
+          { source: 'breaks', packageName: '@prisma/p', before: undefined, after: '{ nope' },
         ]),
       (error) =>
         error instanceof ApiChangesError &&
         error.message.includes('packages/9-public/@prisma/p/api-breaks.json'),
     );
     assert.throws(
-      () => apiChanges([{ kind: 'examples', before: undefined, after: '{}' }]),
+      () => apiChanges([{ source: 'examples', before: undefined, after: '{}' }]),
       (error) =>
         error instanceof ApiChangesError &&
         error.message.includes('examples/last-release-errors.json'),
@@ -490,8 +490,8 @@ describe('record files', () => {
 
   it('requires the package or app named with a reason', () => {
     const changes = apiChanges([
-      { kind: 'breaks', packageName: '@prisma/p', before: undefined, after: json([brk('A')]) },
-      { kind: 'examples', before: undefined, after: json([err('demo', 1)]) },
+      { source: 'breaks', packageName: '@prisma/p', before: undefined, after: json([brk('A')]) },
+      { source: 'examples', before: undefined, after: json([err('demo', 1)]) },
     ]);
     assert.deepEqual(checkDescription('## API changes\n\n- `@prisma/p`:', changes), {
       section: true,
@@ -511,12 +511,12 @@ describe('record files', () => {
   it('lists the records in the comment under their file', () => {
     const body = commentBody(
       apiChanges([
-        { kind: 'breaks', packageName: '@prisma/p', before: undefined, after: json([brk('A')]) },
+        { source: 'breaks', packageName: '@prisma/p', before: undefined, after: json([brk('A')]) },
       ]),
     );
     assert.ok(
       body.includes(
-        '### `packages/9-public/@prisma/p/api-breaks.json`\n\n```diff\n+ {"path":".","export":"A","test":"type","kind":"break","lastRelease":"8.1.0","api":"0123456789abcdef","reason":"Join scopes merge by name"}\n```',
+        '### `packages/9-public/@prisma/p/api-breaks.json`\n\n```diff\n+ {"path":".","export":"A","test":"type","kind":"break","lastRelease":"8.1.0","fingerprint":"0123456789abcdef","reason":"Join scopes merge by name"}\n```',
       ),
       body,
     );
@@ -527,7 +527,7 @@ describe('record files', () => {
     const quiet = {
       repository: 'o/r',
       readFiles: () => [
-        { kind: 'breaks', packageName: '@prisma/p', before: undefined, after: json([brk('A')]) },
+        { source: 'breaks', packageName: '@prisma/p', before: undefined, after: json([brk('A')]) },
       ],
       appendSummary: () => {},
       log: () => {},
@@ -582,12 +582,12 @@ describe('readChangedFiles', () => {
       throw new ApiChangesError(`unexpected git ${args.join(' ')}`);
     };
     assert.deepEqual(readChangedFiles({ git }), [
-      { kind: 'examples', packageName: undefined, before: '[1]', after: '[2]' },
-      { kind: 'api', packageName: '@prisma/orm-new', before: undefined, after: 'new' },
-      { kind: 'api', packageName: '@prisma/orm-old', before: 'old', after: undefined },
-      { kind: 'breaks', packageName: '@prisma/orm-postgres', before: undefined, after: '[]' },
-      { kind: 'api', packageName: '@prisma/orm-postgres', before: 'before', after: 'after' },
-      { kind: 'removed', packageName: undefined, before: undefined, after: '[]' },
+      { source: 'examples', packageName: undefined, before: '[1]', after: '[2]' },
+      { source: 'api', packageName: '@prisma/orm-new', before: undefined, after: 'new' },
+      { source: 'api', packageName: '@prisma/orm-old', before: 'old', after: undefined },
+      { source: 'breaks', packageName: '@prisma/orm-postgres', before: undefined, after: '[]' },
+      { source: 'api', packageName: '@prisma/orm-postgres', before: 'before', after: 'after' },
+      { source: 'removed', packageName: undefined, before: undefined, after: '[]' },
     ]);
     assert.equal(
       calls[0],

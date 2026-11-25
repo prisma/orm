@@ -17,12 +17,12 @@ const breakRecord = {
   test: 'type',
   kind: 'break',
   lastRelease: '8.0.0',
-  api: '0123456789abcdef',
+  fingerprint: '0123456789abcdef',
   reason: 'Db takes a scope now',
 };
 
 describe('validateRecords', () => {
-  it('accepts the three kinds of record with their fields', () => {
+  it('accepts the records of each record file', () => {
     deepStrictEqual(validateRecords('breaks', [breakRecord], 'f'), [breakRecord]);
     const removed = { package: '@prisma/orm-x', lastRelease: '8.0.0', reason: 'merged' };
     deepStrictEqual(validateRecords('removed', [removed], 'f'), [removed]);
@@ -49,7 +49,8 @@ describe('validateRecords', () => {
       { ...breakRecord, kind: 'maybe' },
       { ...breakRecord, test: 'member' },
       { ...breakRecord, lastRelease: 'eight' },
-      { ...breakRecord, api: 'abc' },
+      { ...breakRecord, fingerprint: 'abc' },
+      { ...breakRecord, reason: '…' },
       { ...breakRecord, reason: 'one\ntwo' },
     ]) {
       throws(() => validateRecords('breaks', [record], 'f'), RecordsError);
@@ -64,9 +65,18 @@ describe('validateRecords', () => {
       'test',
       'kind',
       'lastRelease',
-      'api',
+      'fingerprint',
       'reason',
     ]);
+  });
+});
+
+describe('the reason of a record', () => {
+  it('must be written: the placeholder of a printed record is rejected, with what to do', () => {
+    throws(
+      () => validateRecords('breaks', [{ ...breakRecord, reason: '…' }], 'f'),
+      /reason must be one line of text that says why, in place of the … of a printed record/,
+    );
   });
 });
 
@@ -109,6 +119,28 @@ describe('apiFingerprint', () => {
     );
   });
 
+  it('takes in the lines of every declaration the export names, exported or not, followed further', () => {
+    const lines = [
+      '.: function configure(options: Options, mode: string): void',
+      '.: type Options = Settings',
+      '(not exported) interface Settings',
+      '(not exported) interface Settings, readonly required property level: Level',
+      './other: type Level = 1 | 2',
+      '.: interface Unrelated',
+    ];
+    const base = apiFingerprint(lines.join('\n'), '.', 'configure');
+    const changed = (from, to) =>
+      apiFingerprint(lines.join('\n').replace(from, to), '.', 'configure') === base;
+    deepStrictEqual(
+      [
+        changed('level: Level', 'level?: Level'),
+        changed('Level = 1 | 2', 'Level = 1 | 2 | 3'),
+        changed('interface Unrelated', 'interface Unrelated2'),
+      ],
+      [false, false, true],
+    );
+  });
+
   it('covers every line of a path for *', () => {
     strictEqual(apiFingerprint(api, './sub', '*') === apiFingerprint('', './sub', '*'), false);
   });
@@ -131,6 +163,15 @@ describe('recordLine', () => {
 });
 
 describe('normaliseMessage', () => {
+  it('leaves out the qualifiers TypeScript prints under nodenext', () => {
+    strictEqual(
+      normaliseMessage(
+        `Property 'b' is missing in type 'import("a/release/lib/index", { with: { "resolution-mode": "import" } }).Options' but required in type 'import("a/current/lib/index", { with: { "resolution-mode": "import" } }).Options'.`,
+      ),
+      "Property 'b' is missing in type 'Options' but required in type 'Options'.",
+    );
+  });
+
   it('leaves out import("…") qualifiers, which name files with build hashes', () => {
     strictEqual(
       normaliseMessage(

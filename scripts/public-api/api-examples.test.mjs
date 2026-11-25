@@ -18,10 +18,10 @@ import {
   failsRun,
   main,
   parseErrors,
-  RECORDS_FILE,
   RUN_FOLDER,
   reportMarkdown,
 } from './api-examples.mjs';
+import { EXAMPLES_FILE } from './records.mjs';
 import { LastReleaseError, lastRelease } from './release.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -178,7 +178,7 @@ async function withLib(text, run) {
 }
 
 async function withRecords(records, run) {
-  const file = join(checkout, RECORDS_FILE);
+  const file = join(checkout, EXAMPLES_FILE);
   writeFileSync(file, JSON.stringify(records));
   try {
     return await run();

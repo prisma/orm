@@ -10,7 +10,7 @@ import { compareCodeUnits, exportOfLine } from '../../../scripts/public-api/api-
 import {
   BREAKS_FILE,
   EXAMPLES_FILE,
-  exportLabel as labelOfExport,
+  exportLabel,
   REMOVED_FILE,
   recordLine,
 } from '../../../scripts/public-api/records.mjs';
@@ -33,9 +33,6 @@ const HEAD = 'HEAD';
 const GITHUB_API = 'https://api.github.com';
 const REQUEST_TIMEOUT_MS = 30_000;
 
-export const exportLabel = (packageName, { subpath, name }) =>
-  labelOfExport(packageName, subpath, name);
-
 function linesOf(text) {
   if (text === undefined) return new Set();
   return new Set(text.split(/\r?\n/).filter((line) => line !== '' && !line.startsWith('#')));
@@ -44,9 +41,9 @@ function linesOf(text) {
 export function apiChanges(files) {
   const changes = [];
   for (const file of files) {
-    if (file.kind === 'breaks') changes.push(...breakChanges(file));
-    else if (file.kind === 'examples') changes.push(...exampleChanges(file));
-    else if (file.kind === 'removed') changes.push(...removedChanges(file));
+    if (file.source === 'breaks') changes.push(...breakChanges(file));
+    else if (file.source === 'examples') changes.push(...exampleChanges(file));
+    else if (file.source === 'removed') changes.push(...removedChanges(file));
     else changes.push(...listChanges(file));
   }
   return changes;
@@ -62,7 +59,10 @@ function listChanges({ packageName, before, after }) {
   const { added, removed } = difference(linesOf(before), linesOf(after));
   if (added.length === 0 && removed.length === 0) return [];
   const exports = new Set(
-    [...added, ...removed].map((line) => exportLabel(packageName, exportOfLine(line))),
+    [...added, ...removed].map((line) => {
+      const { subpath, name } = exportOfLine(line);
+      return exportLabel(packageName, subpath, name);
+    }),
   );
   return [{ packageName, added, removed, exports: [...exports].sort(compareCodeUnits) }];
 }
@@ -153,12 +153,12 @@ export function readChangedFiles({ git }) {
   const files = [];
   for (const entry of status.split('\n')) {
     const [change, path] = entry.split('\t');
-    const kind = kindOf(path ?? '');
-    if (kind === undefined) continue;
+    const found = sourceOf(path ?? '');
+    if (found === undefined) continue;
     files.push({
       path,
-      kind: kind.kind,
-      packageName: kind.packageName,
+      source: found.source,
+      packageName: found.packageName,
       before: change === 'A' ? undefined : git(['show', `${BASE}:${path}`]),
       after: change === 'D' ? undefined : git(['show', `${HEAD}:${path}`]),
     });
@@ -168,12 +168,12 @@ export function readChangedFiles({ git }) {
     .map(({ path: _path, ...file }) => file);
 }
 
-function kindOf(path) {
-  if (path === EXAMPLES_FILE) return { kind: 'examples', packageName: undefined };
-  if (path === REMOVED_FILE) return { kind: 'removed', packageName: undefined };
+function sourceOf(path) {
+  if (path === EXAMPLES_FILE) return { source: 'examples', packageName: undefined };
+  if (path === REMOVED_FILE) return { source: 'removed', packageName: undefined };
   const match = PACKAGE_FILE.exec(path);
   if (match === null) return undefined;
-  return { kind: match[2] === 'api.txt' ? 'api' : 'breaks', packageName: match[1] };
+  return { source: match[2] === 'api.txt' ? 'api' : 'breaks', packageName: match[1] };
 }
 
 function outsideFences(lines) {

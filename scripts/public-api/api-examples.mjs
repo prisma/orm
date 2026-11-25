@@ -49,7 +49,6 @@ import { fetchReleaseTag, isPrerelease, LastReleaseError, lastRelease } from './
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-export const RECORDS_FILE = EXAMPLES_FILE;
 export const RUN_FOLDER = '.api-examples';
 const TYPECHECK_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -395,7 +394,7 @@ export function reportMarkdown(report) {
   const lines = [
     `## The example apps of ${report.version} against this build`,
     '',
-    `${headline(report).replace(/^./, (first) => first.toUpperCase())}. Records are in \`${RECORDS_FILE}\`.`,
+    `${headline(report).replace(/^./, (first) => first.toUpperCase())}. Records are in \`${EXAMPLES_FILE}\`.`,
     '',
     '| App | Errors | Allowed | Breaks | Files | Problems |',
     '| --- | --- | --- | --- | --- | --- |',

@@ -8,14 +8,13 @@ import {
   main,
   PackageSelectionError,
   planPackages,
-  RecordsError,
   readRecords,
   removedPackageResults,
   reportMarkdown,
   reportText,
   selectPackages,
 } from './api-compat.mjs';
-import { REMOVED_FILE } from './records.mjs';
+import { REMOVED_FILE, RecordsError } from './records.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const work = join(here, '..', '..', 'wip', `api-compat-main-tests-${process.pid}`);
@@ -34,7 +33,7 @@ const record = {
   test: 'type',
   kind: 'break',
   lastRelease: '8.0.0',
-  api: '0123456789abcdef',
+  fingerprint: '0123456789abcdef',
   reason: 'Db takes a scope now',
 };
 
@@ -149,6 +148,21 @@ describe('the report', () => {
         '',
       ].join('\n'),
     );
+  });
+
+  it('prints one record for each test of an export, and the note of a break judged again', () => {
+    const record = { path: '.', export: 'Shape', test: 'type' };
+    const breaks = ['a', 'b'].map((member) => ({
+      ...strictBreak,
+      name: 'Shape',
+      message: `${member}: changed`,
+      record,
+      note: 'a record for an earlier state of this export exists',
+    }));
+    const report = { version: '8.0.0', results: [result({ breaks })], notReleased: [] };
+    strictEqual(reportText(report).split('to record it').length - 1, 1);
+    match(reportText(report), /\n {4}note: a record for an earlier state of this export exists\n/);
+    strictEqual(reportMarkdown(report).split('"export":"Shape"').length - 1, 1);
   });
 
   it('names what is not compared across the package, such as a unique symbol', () => {

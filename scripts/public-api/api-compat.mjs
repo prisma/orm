@@ -74,8 +74,6 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const INSTALL_FOLDER = '.api-compat';
-export { RecordsError };
-
 export const readRecords = (packageDir, root) =>
   readRecordFile(
     join(packageDir, BREAKS_FILE),
@@ -250,11 +248,17 @@ export function reportText({ version, results, notReleased }) {
           ? `${result.name}: records of removed packages`
           : `${result.name}: not checked`;
     lines.push(`\n${head}${failsRun(result) ? ' — FAILS' : ''}`);
+    const printed = new Set();
     for (const each of result.breaks ?? []) {
       lines.push(
         `  break${each.failsRun ? '' : ' (reported only)'}  ${describeFailure(result.name, each)}`,
       );
-      if (each.record) lines.push(`    to record it: ${JSON.stringify(each.record)}`);
+      if (each.note) lines.push(`    note: ${each.note}`);
+      const record = each.record && JSON.stringify(each.record);
+      if (record && !printed.has(record)) {
+        printed.add(record);
+        lines.push(`    to record it: ${record}`);
+      }
     }
     for (const each of result.undecided ?? []) {
       lines.push(`  undecided (${each.stage})  ${describeFailure(result.name, each)}`);
@@ -313,7 +317,7 @@ export function reportMarkdown({ version, results, notReleased }) {
     const items = [
       ...(result.breaks ?? []).map(
         (each) =>
-          `- break${each.failsRun ? '' : ' (reported only)'}: ${cell(describeFailure(result.name, each))}`,
+          `- break${each.failsRun ? '' : ' (reported only)'}: ${cell(describeFailure(result.name, each))}${each.note ? ` (${cell(each.note)})` : ''}`,
       ),
       ...(result.undecided ?? []).map(
         (each) => `- undecided (${each.stage}): ${cell(describeFailure(result.name, each))}`,
@@ -335,14 +339,20 @@ export function reportMarkdown({ version, results, notReleased }) {
       ),
       ...result.problems.map((problem) => `- problem: ${cell(problem)}`),
     ];
-    const toRecord = (result.breaks ?? []).filter((each) => each.record);
+    const toRecord = [
+      ...new Set(
+        (result.breaks ?? [])
+          .filter((each) => each.record)
+          .map((each) => JSON.stringify(each.record)),
+      ),
+    ];
     if (toRecord.length > 0) {
       items.push(
         '',
         `To record these breaks, add to \`${result.name.replace('@prisma/', 'packages/9-public/@prisma/')}/api-breaks.json\`, with the kind and the reason:`,
         '',
         '```json',
-        ...toRecord.map((each) => JSON.stringify(each.record)),
+        ...toRecord,
         '```',
       );
     }

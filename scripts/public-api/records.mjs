@@ -1,9 +1,10 @@
 // The committed records of failures accepted against the last release, in three files:
 //
 // - api-breaks.json beside a package's api.txt: a break the type tests find, as { "path", "export",
-//   "test", "kind", "lastRelease", "api", "reason" }. `api` is the fingerprint of the export's lines
-//   in that api.txt (apiFingerprint), so the record covers the break only while the export stays as
-//   it was recorded; any further change to it is judged again.
+//   "test", "kind", "lastRelease", "fingerprint", "reason" }. The fingerprint is of the export's
+//   lines in that api.txt and of the declarations they name (apiFingerprint), so the record covers
+//   the break only while the export, and what it depends on in its package, stay as recorded; any
+//   further change is judged again.
 // - packages/9-public/removed-packages.json: a released package the repository no longer has, as
 //   { "package", "lastRelease", "reason" }. A removed package is always a break.
 // - examples/last-release-errors.json: an error in a last release's example app, as { "app",
@@ -34,6 +35,11 @@ const oneLine = {
   test: (value) => typeof value === 'string' && value !== '' && !/[\r\n]/.test(value),
   says: 'one line of text',
 };
+const PLACEHOLDER = '…';
+const reason = {
+  test: (value) => oneLine.test(value) && value.trim() !== PLACEHOLDER,
+  says: `one line of text that says why, in place of the ${PLACEHOLDER} of a printed record`,
+};
 const oneOf = (values) => ({
   test: (value) => values.includes(value),
   says: `one of ${values.join(', ')}`,
@@ -62,10 +68,10 @@ const FIELDS = {
     test: oneOf(TESTS),
     kind: oneOf(KINDS),
     lastRelease: version,
-    api: fingerprint,
-    reason: oneLine,
+    fingerprint,
+    reason,
   },
-  removed: { package: nonEmpty, lastRelease: version, reason: oneLine },
+  removed: { package: nonEmpty, lastRelease: version, reason },
   examples: {
     app: nonEmpty,
     file: nonEmpty,
@@ -74,18 +80,19 @@ const FIELDS = {
     message: nonEmpty,
     kind: oneOf(KINDS),
     lastRelease: version,
-    reason: oneLine,
+    reason,
   },
 };
 
-// The fields of each kind of record, in the order the records are written.
+// The fields of the records of each record file (`breaks`, `removed` or `examples`), in the order
+// they are written.
 export const RECORD_KEYS = Object.fromEntries(
-  Object.entries(FIELDS).map(([kind, fields]) => [kind, Object.keys(fields)]),
+  Object.entries(FIELDS).map(([recordFile, fields]) => [recordFile, Object.keys(fields)]),
 );
 
-export function validateRecords(kind, value, label) {
-  const fields = FIELDS[kind];
-  const shape = `Each record is { ${RECORD_KEYS[kind].map((key) => `"${key}"`).join(', ')} }.`;
+export function validateRecords(recordFile, value, label) {
+  const fields = FIELDS[recordFile];
+  const shape = `Each record is { ${RECORD_KEYS[recordFile].map((key) => `"${key}"`).join(', ')} }.`;
   if (!Array.isArray(value))
     throw new RecordsError(`${label}: is not a JSON array of records. ${shape}`);
   value.forEach((record, index) => {
@@ -105,7 +112,7 @@ export function validateRecords(kind, value, label) {
   return value;
 }
 
-export function readRecords(file, kind, label = file) {
+export function readRecords(file, recordFile, label = file) {
   if (!existsSync(file)) return [];
   let parsed;
   try {
@@ -113,7 +120,7 @@ export function readRecords(file, kind, label = file) {
   } catch (error) {
     throw new RecordsError(`${label}: ${error.message}`);
   }
-  return validateRecords(kind, parsed, label);
+  return validateRecords(recordFile, parsed, label);
 }
 
 // Sorts records by the release they are for: the last one, an earlier one (removable), or a later
@@ -140,24 +147,53 @@ export const exportLabel = (packageName, path, name) =>
     ? `${packageName} (not exported): ${name}`
     : `${packageName}${path === '.' ? '' : path.slice(1)}: ${name}`;
 
-// A fingerprint of an export's lines in an api.txt, its member lines included; for `*`, of every
-// line of the import path.
-export function apiFingerprint(apiText, path, name) {
-  const lines = (apiText ?? '')
-    .split(/\r?\n/)
-    .filter((line) => line !== '' && !line.startsWith('#'))
-    .filter((line) => {
+const IDENTIFIER = /[A-Za-z_$][\w$]*/g;
+const linesByOwner = new Map();
+
+// The lines of an api.txt, by the name of the declaration each belongs to, on any path or not
+// exported.
+function ownersOf(apiText) {
+  if (!linesByOwner.has(apiText)) {
+    const owners = new Map();
+    for (const line of apiText.split(/\r?\n/)) {
+      if (line === '' || line.startsWith('#')) continue;
       const owner = exportOfLine(line);
-      return owner.subpath === path && (name === '*' || owner.name === name);
-    })
-    .sort(compareCodeUnits);
+      owners.set(owner.name, [...(owners.get(owner.name) ?? []), { line, ...owner }]);
+    }
+    linesByOwner.set(apiText, owners);
+  }
+  return linesByOwner.get(apiText);
+}
+
+// A fingerprint of an export's lines in an api.txt, its member lines included (for `*`, of every
+// line of the import path), and of the lines of every declaration in the same api.txt those lines
+// name, followed until nothing new is named. A type of another package is not in the api.txt, so
+// a change to it does not change the fingerprint.
+export function apiFingerprint(apiText, path, name) {
+  const owners = ownersOf(apiText ?? '');
+  const taken = new Set();
+  const queue = [...owners.values()]
+    .flat()
+    .filter((owner) => owner.subpath === path && (name === '*' || owner.name === name));
+  const named = new Set();
+  while (queue.length > 0) {
+    const { line } = queue.pop();
+    if (taken.has(line)) continue;
+    taken.add(line);
+    for (const [identifier] of line.slice(line.indexOf(' ')).matchAll(IDENTIFIER)) {
+      if (named.has(identifier)) continue;
+      named.add(identifier);
+      queue.push(...(owners.get(identifier) ?? []));
+    }
+  }
+  const lines = [...taken].sort(compareCodeUnits);
   return createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 16);
 }
 
 // One line of JSON per record, its fields in the documented order.
-export function recordLine(record, kind) {
+export function recordLine(record, recordFile) {
   if (record === null || typeof record !== 'object') return JSON.stringify(record);
-  const keys = RECORD_KEYS[kind];
+  const keys = RECORD_KEYS[recordFile];
   const ordered = [
     ...keys.filter((key) => Object.hasOwn(record, key)),
     ...Object.keys(record)
@@ -169,5 +205,7 @@ export function recordLine(record, kind) {
 
 // A TypeScript message as reports print it and records hold it: `import("…")` qualifiers, which
 // name files with build hashes and install folders, are left out.
+const QUALIFIER = /import\("[^"]*"(?:, \{[^)]*\})?\)/g;
+
 export const normaliseMessage = (message) =>
-  message.replace(/import\("[^"]*"\)\./g, '').replace(/import\("[^"]*"\)/g, 'import(…)');
+  message.replace(new RegExp(`${QUALIFIER.source}\\.`, 'g'), '').replace(QUALIFIER, 'import(…)');
