@@ -5,6 +5,7 @@ import { postgresServerVersions } from '@internal/target-postgres/server-version
 import { join, resolve } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
+import { createPostgresControlClient } from '../../src/exports/control';
 
 const removedFlags = {
   postgres: ['orderBy', 'limit', 'lateral', 'jsonAgg', 'returning'],
@@ -111,5 +112,33 @@ describe('contract emit', () => {
       sql: { ...postgresServerVersions[16].sql, interactiveTransactions: true },
     });
     expectNoRemovedFlags(capabilities);
+  });
+});
+
+describe('the control client', () => {
+  it('emits the version row of a Prisma schema contract when given the version', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'postgres-contract-version-'));
+    tempDirs.push(dir);
+    const schemaPath = join(dir, 'contract.prisma');
+    await writeFile(schemaPath, '// use prisma-8\nmodel User {\n  id Int @id\n}\n', 'utf-8');
+    const { contract } = defineConfig({ contract: { path: schemaPath, version: 17 } });
+    if (contract?.typesModule === undefined) throw new Error('defineConfig set no contract');
+
+    const client = createPostgresControlClient({ version: 17 });
+    try {
+      const emitted = await client.emit({
+        contractConfig: {
+          source: contract.source,
+          output: join(dir, 'contract.json'),
+          typesModule: contract.typesModule,
+        },
+      });
+      if (!emitted.ok) throw new Error(emitted.failure.summary);
+      expect(JSON.parse(emitted.value.contractJson).capabilities).toEqual(
+        postgresServerVersions[17],
+      );
+    } finally {
+      await client.close();
+    }
   });
 });

@@ -30,11 +30,13 @@ import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './prisma/contract.prisma',
+    contract: { path: './prisma/contract.prisma', version: 18 },
     db: { connection: process.env['DATABASE_URL']! },
   }),
 });
 ```
+
+`version` is the PostgreSQL version the database runs (15, 16, 17 or 18), and is required for a Prisma schema contract: the emitted contract requires the capabilities that version provides. `capabilities` beside it is the list of capability sets the connection provides, merged in order; it defaults to those of the adapter and driver the client runs with, and a list given there replaces the default. A TypeScript contract (`contract: './prisma/contract.ts'`) states both in `defineContract` instead, and the config refuses them in its entry.
 
 The default export must be the value `definePrismaConfig` returns, with the ORM settings nested under `orm`; the CLI rejects a bare `defineConfig` result with `CONFIG.VERSION_MARKER_MISSING`. (Inside this repository the same two imports are `@prisma/cli-engine` and `@internal/postgres/config`; see the contributor note under `prisma7Schema` below.)
 
@@ -273,13 +275,13 @@ Pass a compatible runtime, connection or transaction explicitly to `query(target
 
 ### `@internal/postgres/contract-builder`
 
-Re-exports the TypeScript contract authoring DSL (`defineContract`, `field`, `model`, `rel`, ...) so a generated `prisma/contract.ts` can author its contract using only this facade package. The `defineContract` export is a Postgres-specific wrapper that pre-binds `family` and `target` — callers do not pass those fields:
+Re-exports the TypeScript contract authoring DSL (`defineContract`, `field`, `model`, `rel`, ...) so a generated `prisma/contract.ts` can author its contract using only this facade package. The `defineContract` export is a Postgres-specific wrapper that pre-binds `family` and `target` — callers do not pass those fields. It requires the PostgreSQL `version` the database runs, and takes the optional `capabilities` list, as the config's contract entry does for a Prisma schema:
 
 ```typescript
 import { defineContract, field, model } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract(
-  { extensions: {} },
+  { version: 18, extensions: {} },
   ({ field: f, model: m, gen, type }) => ({
     models: {
       User: m('User', { fields: { id: f.column(type.Uuid()).id().onCreate(gen.uuid()) } }),

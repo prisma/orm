@@ -248,14 +248,15 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         { meta: { surface: 'control-adapter' } },
       );
     }
+    const contract = blindCast<PostgresContract, 'caller must supply a matching PostgresContract'>(
+      context.contract,
+    );
     return renderLoweredSql(
       ast,
-      blindCast<PostgresContract, 'caller must supply a matching PostgresContract'>(
-        context.contract,
-      ),
+      contract,
       this.codecRegistry,
       this.dataTypeLookup,
-      context.contract === undefined ? {} : context.contract.capabilities,
+      contract.capabilities,
     );
   }
 

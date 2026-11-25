@@ -12,8 +12,13 @@ import {
   type ControlClientOptions,
   createControlClient,
 } from '@internal/cli/control-api';
+import {
+  type PostgresServerVersion,
+  postgresServerVersions,
+} from '@internal/target-postgres/server-version';
 import { ifDefined } from '@internal/utils/defined';
 import { controlComponents } from '../config/components';
+import { capabilitiesForVersion } from '../contract/database-version';
 
 export interface PostgresControlClientOptions {
   /**
@@ -27,6 +32,10 @@ export interface PostgresControlClientOptions {
    * the contract was authored against.
    */
   readonly extensions?: ControlClientOptions['extensions'];
+  /**
+   * The PostgreSQL version a Prisma schema contract the client emits is written for, as the config's contract entry states it. A TypeScript contract states its own.
+   */
+  readonly version?: PostgresServerVersion;
 }
 
 export function createPostgresControlClient(
@@ -34,6 +43,15 @@ export function createPostgresControlClient(
 ): ControlClient {
   const clientOptions: ControlClientOptions = {
     ...controlComponents,
+    ...ifDefined(
+      'target',
+      options.version === undefined
+        ? undefined
+        : {
+            ...controlComponents.target,
+            capabilities: capabilitiesForVersion(postgresServerVersions, options.version),
+          },
+    ),
     ...ifDefined('connection', options.connection),
     ...ifDefined('extensions', options.extensions),
   };
