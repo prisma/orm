@@ -6,7 +6,7 @@
 
 ## Decision
 
-An application must hold exactly one copy of each platform package. The platform packages hold the registries of data types and operations that the client and the extensions share, and two copies of one do not see each other: a data type an extension registers in one copy is missing from the other, and nothing reports it.
+An application must hold exactly one copy of each platform package. The application builds its client from the facade and hands it the extensions' contributions: their data types, codecs and operations. Those contributions are made with the extension's copy of the platform packages and used by the client's copy, and the platform packages recognise some of their values by which copy made them. A data-type value carries a private field that only the copy that constructed it can read, and query expressions are told apart with `instanceof`. A value from the other copy is refused with an error that does not name the cause, or quietly takes another path: an expression that fails the `instanceof` check in `projectionAstOf` is projected without the extension's own projection, such as pgvector's cast of a vector to text. Where the two copies' types meet, TypeScript reports errors that do not name the cause either.
 
 One configuration makes the package manager alone give an application one copy, under every package manager, while an extension still works with any facade built on its target package:
 
@@ -35,7 +35,7 @@ The packages involved:
 | Kind | Example | What it is |
 | --- | --- | --- |
 | **Facade** | `@prisma/orm-postgres` | What an application installs for its database. One function in it wires the framework, family, target, adapter and driver together, and it re-exports everything application code imports. |
-| **Platform packages** | `@prisma/orm-framework` | The core, shared by every database. It holds the registries. |
+| **Platform packages** | `@prisma/orm-framework` | The core, shared by every database: data types, codecs and the runtime the client runs on. |
 | | `@prisma/orm-family-sql` | What all SQL databases share. MongoDB has its own family. |
 | | `@prisma/orm-target-postgres` | The PostgreSQL **target package**: what is specific to PostgreSQL. |
 | | `@prisma/orm-toolchain` | The `prisma orm` commands: emitting the contract, migrations. |
@@ -59,10 +59,10 @@ The ranges themselves, on both sides, are set by the versioning rules in [Versio
 ```text
 node_modules/
 ├── @prisma/orm-postgres                8.4.0
-├── @prisma/orm-framework               8.4.0   ← the client registers data types here
+├── @prisma/orm-framework               8.4.0   ← the client's copy
 └── @prisma/orm-extension-pgvector      8.3.0
     └── node_modules/
-        └── @prisma/orm-framework       8.3.0   ← pgvector registers `vector` here
+        └── @prisma/orm-framework       8.3.0   ← pgvector's copy: its `vector` values are made here
 ```
 
 **A peer dependency cannot.** When A lists B as a peer, the package manager never gives A its own copy: A uses the application's. So every package of ours names the others only as peers.
@@ -88,10 +88,10 @@ Two further benefits follow. **The package manager checks the versions:** when t
   ├── @prisma/orm-framework              8.3.0   ← app-a's
   └── @prisma/orm-extension-pgvector     8.3.0   ← shared by both apps, so it sees 8.3.0
   apps/app-b/node_modules/
-  └── @prisma/orm-framework              8.4.0   ← app-b's client registers here
+  └── @prisma/orm-framework              8.4.0   ← app-b's client's copy
   ```
 
-  In app-b, the extension registers into one copy and the client looks in the other, and nothing reports it. pnpm, Yarn and Bun's isolated mode keep each workspace's packages apart and do not have this problem. A monorepo keeps its applications on one version of Prisma, or uses one of those package managers. No arrangement of dependencies changes where a package manager puts a package.
+  In app-b, the extension's values are made by one copy and used by the other, as in the first tree, and the install reports nothing. pnpm, Yarn and Bun's isolated mode keep each workspace's packages apart and do not have this problem. A monorepo keeps its applications on one version of Prisma, or uses one of those package managers. No arrangement of dependencies changes where a package manager puts a package.
 
 ## Alternatives considered
 
