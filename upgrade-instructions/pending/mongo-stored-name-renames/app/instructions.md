@@ -81,6 +81,8 @@ Cannot rename model "User" to "Member": collection "users" also stores model "Ad
 
 A plan cannot tell the two models' documents apart, since nothing in a document names its root model. Without the statement the plan does not move them either: `User` is removed and nothing is asked, since nothing is deleted; its documents stay in `users`, where `Admin` still reads them, and `Member` starts with none. If the new validator of `users` does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there. To keep them, move them in a hand-written migration with `migration plan`, as the message describes.
 
+The message says where the move goes in the operations, and when its copy must skip document validation: `rawAggregate` now takes `{ bypassDocumentValidation: true }` as its last argument, as `rawUpdateMany` does. The option is new; nothing you wrote before changes.
+
 ## `mongo-create-collection-postcheck`
 
 Before, `createCollection` had no check after it ran. When a later operation of the same migration stopped, running `db migrate` again tried the create again, and it stopped because the collection already existed. Now the create checks that the collection exists with the options it sets, and a re-run skips it, so a migration that stopped part way is finished by fixing what stopped it and running `db migrate` again.

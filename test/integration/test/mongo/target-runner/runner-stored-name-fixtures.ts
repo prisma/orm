@@ -31,12 +31,13 @@ export const STATUS_REF = {
   entityName: 'Status',
 };
 
-/** A contract of the models given, with nullable string fields, and the `Status` enum when members are given. */
+/** A contract of the models given, with nullable string fields, the `Status` enum when members are given, and the `$jsonSchema` validator of each collection in `validators`. */
 export function contract(
   storageHash: string,
   models: Readonly<Record<string, Spec>>,
   members: Readonly<Record<string, string | boolean>> = {},
   codecId = 'mongo/string@1',
+  validators: Readonly<Record<string, Record<string, unknown>>> = {},
 ): MongoContract {
   const collections = [
     ...new Set(
@@ -119,7 +120,23 @@ export function contract(
           kind: 'mongo-namespace',
           entries: {
             collection: Object.fromEntries(
-              collections.map((name) => [name, new MongoCollection({})]),
+              collections.map((name) => {
+                const jsonSchema = validators[name];
+                return [
+                  name,
+                  new MongoCollection(
+                    jsonSchema === undefined
+                      ? {}
+                      : {
+                          validator: {
+                            jsonSchema,
+                            validationLevel: 'strict',
+                            validationAction: 'error',
+                          },
+                        },
+                  ),
+                ];
+              }),
             ),
           },
         },

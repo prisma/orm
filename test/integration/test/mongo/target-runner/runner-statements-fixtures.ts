@@ -4,6 +4,7 @@ import { MongoControlDriver } from '@internal/driver-mongo/control';
 import type {
   MigrationOperationPolicy,
   MigrationPlan,
+  MigrationPlanOperation,
   ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
@@ -35,6 +36,10 @@ export function closedSchema(fields: readonly string[]) {
     ]),
     additionalProperties: false,
   };
+}
+
+interface MigrationRunnerCallbacks {
+  onOperationStart?(operation: MigrationPlanOperation): void;
 }
 
 export interface ModelSpec {
@@ -230,6 +235,10 @@ export function useStatementsDatabase(dbName: string) {
     operations: readonly AnyMongoMigrationOperation[],
     from: MongoContract,
     to: MongoContract,
+    options: {
+      readonly policy?: MigrationOperationPolicy;
+      readonly callbacks?: MigrationRunnerCallbacks;
+    } = {},
   ) {
     const plan: MigrationPlan = {
       targetId: 'mongo',
@@ -249,7 +258,8 @@ export function useStatementsDatabase(dbName: string) {
         }),
       ],
       destinationContract: to,
-      policy,
+      policy: options.policy ?? policy,
+      ...(options.callbacks === undefined ? {} : { callbacks: options.callbacks }),
       frameworkComponents: [],
     });
   }

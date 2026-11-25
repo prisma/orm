@@ -1,4 +1,9 @@
-import type { ContractModel, ContractRelation, ContractWithDomain } from '@internal/contract/types';
+import type {
+  Contract,
+  ContractModel,
+  ContractRelation,
+  ContractWithDomain,
+} from '@internal/contract/types';
 import {
   describeMigrationStatement,
   type FieldCoordinate,
@@ -29,12 +34,13 @@ import {
   validatorRootShapesOf,
   variantFilter,
 } from '@internal/mongo-contract';
-import { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
+import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
-import { planCreatesCollection } from './mongo-collection-creates';
+import { renameInSchema } from './mongo-collection-plan';
 import { collectionControlPolicy, managedOnBothSides } from './mongo-control-policy';
+import { type DocumentMove, documentMoveOrder } from './mongo-document-moves';
 import {
   documentCollectionOf,
   isRootModel,
@@ -43,7 +49,6 @@ import {
 } from './mongo-model-coordinates';
 import {
   capitalized,
-  type DocumentMove,
   documentMoveSteps,
   handWrittenRoute,
   modelNamesText,
@@ -202,8 +207,12 @@ const LEAVE_OUT = 'Leave out this statement.';
 interface PlanningInput {
   readonly statements: readonly ResolvedRenameStatement[];
   /** The origin contract; the destination stands in for it when the plan has none. */
-  readonly fromContract: ContractWithDomain;
+  readonly fromContract: Contract;
   readonly contract: MongoContract;
+  /** The schema the plan starts from. */
+  readonly schema: MongoSchemaIR;
+  /** The renames of the plan made without `statement`, if it can be made. */
+  readonly planWithout: (statement: ResolvedRenameStatement) => StatementPlan | undefined;
 }
 
 /**
@@ -217,7 +226,7 @@ interface PlanningInput {
  */
 export function planStatements(input: {
   readonly statements: readonly ResolvedRenameStatement[];
-  readonly fromContract: ContractWithDomain | null;
+  readonly fromContract: Contract | null;
   readonly contract: MongoContract;
   readonly schema: MongoSchemaIR;
 }): Result<StatementPlan, readonly MigrationPlannerConflict[]> {
@@ -225,6 +234,14 @@ export function planStatements(input: {
     statements: input.statements,
     fromContract: input.fromContract ?? input.contract,
     contract: input.contract,
+    schema: input.schema,
+    planWithout: (statement) => {
+      const without = planStatements({
+        ...input,
+        statements: input.statements.filter((each) => each !== statement),
+      });
+      return without.ok ? without.value : undefined;
+    },
   };
   const models = modelRenamesOf(input.statements, input.fromContract, input.contract);
   const collections = new CollectionRenames(models, planning.fromContract, input.contract);
@@ -498,22 +515,6 @@ function refusedOutcome(
   return { kind: 'refused', conflict: renameRefused(statement, summary, why) };
 }
 
-function renameInSchema(schema: MongoSchemaIR, from: string, to: string): MongoSchemaIR {
-  return new MongoSchemaIR(
-    schema.collections.map((collection) =>
-      collection.name === from
-        ? new MongoSchemaCollection({
-            name: to,
-            indexes: collection.indexes,
-            ...(collection.validator === undefined ? {} : { validator: collection.validator }),
-            ...(collection.options === undefined ? {} : { options: collection.options }),
-          })
-        : collection,
-    ),
-    { fromDatabase: schema.fromDatabase },
-  );
-}
-
 function controlPolicyRefusal(
   statement: ResolvedMigrationStatement,
   label: string,
@@ -583,7 +584,9 @@ function leaveOutShared(moving: string): string {
  * plan` only: add their move to the migration.ts that plan writes, as `documentMoveSteps` says.
  */
 function moveInLeftOutPlan(move: DocumentMove): string {
-  return `With migration plan, keep the documents by moving them in the migration that plan writes: plan the change without this statement, and ${documentMoveSteps(move)}`;
+  return move.order.twoPlans
+    ? `With migration plan, keep the documents: ${documentMoveSteps(move, 'plan it without this statement')}`
+    : `With migration plan, keep the documents by moving them in the migration that plan writes: ${documentMoveSteps(move, 'plan the change without this statement')}`;
 }
 
 /** The leave-out route for root models whose documents no discriminator tells apart from those of the models that stay: without the statement they are removed, and nothing is asked. */
@@ -607,8 +610,9 @@ function sharedCollectionRefusal(
   label: string,
   collections: CollectionRenames,
   models: readonly ModelRename[],
-  { fromContract, contract }: PlanningInput,
+  input: PlanningInput,
 ): StatementOutcome | undefined {
+  const { fromContract, contract } = input;
   const rename = models.find((model) => model.statement === statement);
   const change = rename === undefined ? undefined : collections.changeOf(rename);
   const shared = change === undefined ? undefined : collections.sharedCollection(change);
@@ -625,12 +629,42 @@ function sharedCollectionRefusal(
         !change.renames.some((renamed) => sameModel(renamed.to, model)),
     );
   const moveSteps = handWrittenRoute(`the documents of ${moving} into collection "${to}"`);
+  const leftOutMove = (): DocumentMove => {
+    const leftOut = input.planWithout(statement);
+    return {
+      moving,
+      from,
+      to,
+      order: documentMoveOrder({
+        schema: leftOut?.schema ?? input.schema,
+        fromContract,
+        contract,
+        from,
+        to,
+        collectionRenames: leftOut?.collectionRenames ?? [],
+        rewrittenCollections: new Set(
+          (leftOut?.fieldRenameCalls ?? []).map(({ call }) => call.collection),
+        ),
+        storedNameMoves: movedStoredNames(
+          {
+            statements: input.statements,
+            models,
+            fieldRenames: [],
+            fromContract,
+            contract,
+            collectionAfterRenames: (name) => name,
+          },
+          change.renames.map((renamed) => renamed.from),
+        ),
+      }),
+    };
+  };
   switch (shared.kind) {
     case 'split':
       return refusedOutcome(
         statement,
         `${label}: collection "${from}" also stores ${others}`,
-        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${leavesBehind ? `${leaveOutRemoved(moving, shared.objects, modelsText(change.renames.map((renamed) => renamed.to)), readersIn(to), from)} ${moveInLeftOutPlan({ moving, from, to, created: planCreatesCollection(fromContract, contract, to) })}` : `${leaveOutShared(moving)} ${moveSteps}`}`,
+        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${leavesBehind ? `${leaveOutRemoved(moving, shared.objects, modelsText(change.renames.map((renamed) => renamed.to)), readersIn(to), from)} ${moveInLeftOutPlan(leftOutMove())}` : `${leaveOutShared(moving)} ${moveSteps}`}`,
       );
     case 'merged':
       return refusedOutcome(
@@ -1193,6 +1227,23 @@ function storedNameMoves(
     const keptByDestination = destinationModel !== undefined && ownStores(destinationModel, from);
     return ofABase && !keptByDestination ? [{ from, to }] : [];
   });
+}
+
+/**
+ * The stored names the documents of `origins` change, from the origin's to the destination's, as a
+ * document move must write them: of the plan's field renames, and of the fields their destination
+ * models name alike, which the plan does not rename when a model moves to another collection.
+ */
+export function movedStoredNames(
+  input: ModelMatchInput,
+  origins: readonly ModelCoordinate[],
+): readonly { readonly from: string; readonly to: string }[] {
+  const fieldRenames = [...input.fieldRenames, ...unstatedFieldRenamesOf(input)];
+  const moves = origins.flatMap((origin) => storedNameMoves({ ...input, fieldRenames }, origin));
+  return moves.filter(
+    (move, index) =>
+      moves.findIndex((other) => other.from === move.from && other.to === move.to) === index,
+  );
 }
 
 /** The stored names of the documents of the origin model at `origin`, without those a rename of one of its own fields moves to another stored name. */

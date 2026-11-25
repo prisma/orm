@@ -3,6 +3,7 @@ import {
   type ModelCoordinate,
   modelDisplayName,
 } from '@internal/framework-components/control';
+import type { DocumentMove } from './mongo-document-moves';
 
 /** Joins items into text: "a", "a and b", "a, b and c". */
 export function joinedList(items: readonly string[]): string {
@@ -51,25 +52,53 @@ export function handWrittenRoute(what: string): string {
   return `With migration plan, write this change as a hand-written migration instead: ${handWrittenMigrationSteps(what)}`;
 }
 
-/** A move of one or more models' documents to another collection, which a plan cannot write because no filter of its own selects them. */
-export interface DocumentMove {
-  /** The models whose documents move, in words. */
-  readonly moving: string;
-  readonly from: string;
-  readonly to: string;
-  /** Whether the plan creates collection `to`; when it already exists the plan has no creation to place the move after. */
-  readonly created: boolean;
+function placementOf({ from, to, order }: DocumentMove): string {
+  const before = `before any other operation on collection "${from}"`;
+  switch (order.after?.kind) {
+    case 'createCollection':
+      return `in the operations of the migration.ts it writes, right after the creation of collection "${to}" and ${before}`;
+    case 'renameCollection':
+      return `in the operations of the migration.ts it writes, right after the rename of collection "${order.after.from}" to "${to}" and ${before}`;
+    case undefined:
+      return `at the start of the operations of the migration.ts it writes, ${before}`;
+  }
+}
+
+function bypassText({ to, order }: DocumentMove): string {
+  switch (order.validatorChange) {
+    case 'replaced':
+      return ` The copy skips document validation because collection "${to}" still has its old validator; the later validator update on "${to}" checks the moved documents. If that check stops the apply, the moved documents are in collection "${to}": fix them there and run db migrate again.`;
+    case 'removed':
+      return ` The copy skips document validation because collection "${to}" still has its old validator, which the plan then removes.`;
+    case undefined:
+      return '';
+  }
+}
+
+function operationsText({ moving, from, to, order }: DocumentMove, bypass: string): string {
+  const pipeline = [
+    '{ $match: <a filter that selects only those documents> }',
+    ...order.fieldStages.map((stage) => JSON.stringify(stage)),
+    `{ $merge: { into: ${JSON.stringify(to)} } }`,
+  ].join(', ');
+  return `add a dataTransform whose run copies the documents of ${moving} into collection "${to}", such as rawAggregate(${JSON.stringify(from)}, [${pipeline}]${bypass}), and a deleteDocuments({ collection: ${JSON.stringify(from)}, filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate.`;
+}
+
+function filterText({ moving, from }: DocumentMove): string {
+  return `This works only when a filter can tell those documents apart from the other documents of collection "${from}", which can hold the same values in the fields they share, such as a discriminator value: filter by a field only ${moving} stores. If the apply stops, fix what stopped it and run db migrate again.`;
 }
 
 /**
- * The steps that add a document move to the migration.ts a plan writes: the operations, where they
- * go (right after the creation of the new collection, or first when the collection already exists,
- * so no later rewrite of the old collection reaches the documents first), the filter they need, and
- * what to do if the apply stops.
+ * The steps that add a document move to the migration.ts a plan writes, after `plan`, the step that
+ * plans it, when one is given: the operations, where they go (see `documentMoveOrder`), the filter
+ * they need, and what to do if the apply stops. When the plan also rewrites documents in the target,
+ * the move goes in a plan of its own first.
  */
-export function documentMoveSteps({ moving, from, to, created }: DocumentMove): string {
-  const placement = created
-    ? `in the operations of the migration.ts it writes, right after the creation of collection "${to}" and before any other operation on collection "${from}"`
-    : `at the start of the operations of the migration.ts it writes, before any other operation on collection "${from}"`;
-  return `${placement}, add a dataTransform whose run copies the documents of ${moving} into collection "${to}", such as rawAggregate(${JSON.stringify(from)}, [{ $match: <a filter that selects only those documents> }, { $merge: { into: ${JSON.stringify(to)} } }]), and a deleteDocuments({ collection: ${JSON.stringify(from)}, filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. This works only when a filter can tell those documents apart from the other documents of collection "${from}", which can hold the same values in the fields they share, such as a discriminator value: filter by a field only ${moving} stores. If the apply stops, fix what stopped it and run db migrate again.`;
+export function documentMoveSteps(move: DocumentMove, plan?: string): string {
+  const { moving, from, to, order } = move;
+  if (order.twoPlans) {
+    return `move them in a plan of their own first, because that plan also rewrites documents in collection "${to}", which would reach the moved documents: make only the change that moves ${moving} to collection "${to}", ${plan ?? 'plan it'}, and in the operations of the migration.ts it writes, after any operation that creates collection "${to}" and before any other operation on collection "${from}", ${operationsText(move, '')} If that plan also changes the validator of collection "${to}", give the rawAggregate { bypassDocumentValidation: true } as its last argument, so the copy skips the old validator and the validator update checks the moved documents. Once it is applied, make the rest of the change and plan again. ${filterText(move)}`;
+  }
+  const steps = `${placementOf(move)}, ${operationsText(move, order.bypassDocumentValidation ? ', { bypassDocumentValidation: true }' : '')}${bypassText(move)} ${filterText(move)}`;
+  return plan === undefined ? steps : `${plan}, and ${steps}`;
 }

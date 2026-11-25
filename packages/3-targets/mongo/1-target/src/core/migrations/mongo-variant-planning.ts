@@ -1,4 +1,4 @@
-import { asNamespaceId, type ContractWithDomain } from '@internal/contract/types';
+import { asNamespaceId, type Contract, type ContractWithDomain } from '@internal/contract/types';
 import {
   describeMigrationStatement,
   fieldStatementText,
@@ -22,9 +22,9 @@ import {
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import { planCreatesCollection } from './mongo-collection-creates';
 import { collectionControlPolicy } from './mongo-control-policy';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
+import { type DocumentMoveOrder, documentMoveOrder } from './mongo-document-moves';
 import { documentCollectionOf, modelCoordinates, sameModel } from './mongo-model-coordinates';
 import { capitalized, documentMoveSteps, joinedList, modelNamesText } from './mongo-plan-text';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
@@ -38,6 +38,7 @@ import {
   destinationModelOf,
   type ModelMatchInput,
   modelAt,
+  movedStoredNames,
   sharesCollectionInDestination,
 } from './mongo-statement-planning';
 import { type FieldRename, type ModelRename, renameRefused } from './mongo-storage-renames';
@@ -74,10 +75,12 @@ export interface VariantDocumentRewrites {
 
 export interface VariantInput {
   readonly statements: readonly ResolvedMigrationStatement[];
-  readonly fromContract: ContractWithDomain | null;
+  readonly fromContract: Contract | null;
   readonly contract: MongoContract;
   /** The schema the plan starts from, with each renamed collection under its new name. */
   readonly schema: MongoSchemaIR;
+  /** The plan's collection renames. */
+  readonly collectionRenames: readonly { readonly from: string; readonly to: string }[];
   /** The collections the destination keeps. */
   readonly keptCollections: ReadonlySet<string>;
   readonly collectionAfterRenames: (collection: string) => string;
@@ -265,7 +268,7 @@ export const VARIANT_TWO_STEPS = inTwoSteps(
 function collectionRefusal(
   change: VariantChange,
   input: VariantInput,
-  fromContract: ContractWithDomain,
+  fromContract: Contract,
 ): MigrationPlannerConflict | undefined {
   const label = changeLabel(change, input, fromContract);
   const policy = collectionControlPolicy(input.contract, change.collection);
@@ -292,8 +295,7 @@ function collectionRefusal(
 interface MovingModels {
   readonly names: readonly string[];
   readonly to: string;
-  /** Whether the plan creates collection `to`. */
-  readonly created: boolean;
+  readonly order: DocumentMoveOrder;
 }
 
 /**
@@ -318,11 +320,12 @@ function variantRoute(
       moving: modelNamesText(move.names),
       from: change.collection,
       to: move.to,
-      created: move.created,
+      order: move.order,
     });
     return moves.length === 1 ? text : `For ${modelNamesText(move.names)}, ${text}`;
   });
-  const firstMove = `First move ${destinations}, keep ${variantText(change.model)} as it is, and plan that with migration plan${moves.length === 1 ? `: ${steps.join(' ')}` : `. ${steps.join(' ')}`} Under db update, apply that change, then move the documents out of collection ${quoted(change.collection)} by hand.`;
+  const assumes = `This assumes that first plan makes every change to ${moves.length === 1 ? `collection ${quoted(moves[0]?.to ?? '')}` : 'those collections'} that this plan makes.`;
+  const firstMove = `First move ${destinations}, keep ${variantText(change.model)} as it is, and plan that with migration plan${moves.length === 1 ? `: ${steps.join(' ')}` : `. ${steps.join(' ')}`} ${assumes} Under db update, apply that change, then move the documents out of collection ${quoted(change.collection)} by hand.`;
   if (staying.length === 0) {
     return `A model that moves out of collection ${quoted(change.collection)} leaves its documents in it, so make the change in two plans. ${firstMove} Then make the change to ${variantText(change.model)} and plan again. Or ${keep}.`;
   }
@@ -340,7 +343,7 @@ function variantRoute(
 function sharedCollectionRefusal(
   change: VariantChange,
   label: string,
-  fromContract: ContractWithDomain,
+  fromContract: Contract,
   input: VariantInput,
 ): MigrationPlannerConflict | undefined {
   const originCollection = collectionOfModel(fromContract.domain, change.model);
@@ -378,11 +381,29 @@ function sharedCollectionRefusal(
   const staying = others.filter((name) => !moving.includes(name));
   const moves = [...new Set(moving.map(destinationOf))]
     .filter((to): to is string => to !== undefined)
-    .map((to) => ({
-      names: moving.filter((name) => destinationOf(name) === to),
-      to,
-      created: planCreatesCollection(fromContract, input.contract, to),
-    }));
+    .map((to) => {
+      const names = moving.filter((name) => destinationOf(name) === to);
+      return {
+        names,
+        to,
+        order: documentMoveOrder({
+          schema: input.schema,
+          fromContract,
+          contract: input.contract,
+          from: change.collection,
+          to,
+          collectionRenames: input.collectionRenames,
+          rewrittenCollections: new Set([
+            ...input.fieldRenameCalls.map(({ collection }) => collection),
+            ...input.enumReplacements.map(({ options }) => options.collection),
+          ]),
+          storedNameMoves: movedStoredNames(
+            matchInputOf(fromContract, input),
+            names.map((name) => ({ namespaceId: change.model.namespaceId, model: name })),
+          ),
+        }),
+      };
+    });
   const effect =
     change.to === undefined
       ? 'deleting the documents with that value would delete the documents'
