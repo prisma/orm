@@ -3,33 +3,37 @@
 //
 // Type-checks each app under examples/ as it was at the last release's git tag, type tests
 // included, against the current build: a user who upgrades keeps their code and their committed
-// contracts, so the contracts are compiled as committed, never re-emitted. Each app's files apart
-// from node_modules are set aside under wip/, replaced with the tag's, checked with the tag's own
-// `typecheck` script (which runs any step the app needs first), and put back, also on failure.
-// The app's node_modules resolve @prisma/* to the current build, as a user's would.
+// contracts, so the contracts are compiled as committed, never re-emitted. Each app is extracted
+// from the tag into a folder of this run, .api-examples/<run>/examples/<app>, at the same depth as
+// in the repository and beside the tag's root tsconfig files. Its node_modules is a link to the
+// real app's, so @prisma/* resolves to the current build, as a user's would. The developer's app
+// folders are never written. The tag's own `typecheck` script runs there, with any step it has
+// before tsc; it must end in a tsc run, which is given `--pretty false`.
 //
 // The apps' type tests assert exact types, so a change the compatibility policy allows can fail
 // them. Such an error is recorded in examples/last-release-errors.json as
 // [{ "app": "prisma-8-demo", "file": "test/rows.test-d.ts", "line": 12, "code": "TS2344",
-//    "release": "8.0.0", "reason": "…" }]. The tag's files never change, so the location stays
-// valid for as long as that release is the last one. A record for another release is skipped and
-// listed as removable; a record that matches no error fails the run.
+//    "message": "Type '…' does not satisfy the constraint '…'.", "release": "8.0.0",
+//    "reason": "…" }]. The tag's files never change, so the record stays valid for as long as that
+// release is the last one, until the current build changes the type again. Each record must match
+// exactly one error (line 0 for an error with no location). A record for an earlier release is
+// skipped and listed as removable; one for a later release, or one that matches no error, fails.
 //
 // An error that is not recorded fails the run when the last release has no pre-release part
 // (`--ga` treats it as if it had none); otherwise it is reported. Needs network access to the
 // registry and to the origin remote.
 
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import {
   appendFileSync,
   existsSync,
-  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
-  renameSync,
   rmdirSync,
   rmSync,
+  symlinkSync,
 } from 'node:fs';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,20 +46,24 @@ import { LastReleaseError, lastRelease } from './last-release.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 
 export const RECORDS_FILE = join('examples', 'last-release-errors.json');
-export const ASIDE_FOLDER = join('wip', 'api-examples-current');
+export const RUN_FOLDER = '.api-examples';
 const TYPECHECK_TIMEOUT_MS = 10 * 60 * 1000;
+export const RETRY_WAITS_MS = [5_000, 15_000, 30_000];
+
+const VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
 
 const Records = type({
   '+': 'reject',
   app: 'string > 0',
   file: 'string > 0',
-  line: 'number.integer > 0',
+  line: 'number.integer >= 0',
   code: /^TS\d+$/,
-  release: 'string > 0',
+  message: 'string > 0',
+  release: VERSION,
   reason: /^[^\r\n]+$/,
 }).array();
 
-export class RecordsError extends Error {}
+export class ExamplesError extends Error {}
 
 export function readRecords(root) {
   const file = join(root, RECORDS_FILE);
@@ -64,25 +72,58 @@ export function readRecords(root) {
   try {
     parsed = JSON.parse(readFileSync(file, 'utf8'));
   } catch (error) {
-    throw new RecordsError(`${RECORDS_FILE}: ${error.message}`);
+    throw new ExamplesError(`${RECORDS_FILE}: ${error.message}`);
   }
   const records = Records(parsed);
   if (records instanceof type.errors) {
-    throw new RecordsError(
-      `${RECORDS_FILE}: ${records.summary}. Each record is { "app", "file", "line", "code", "release", "reason" }, with the reason on one line.`,
+    throw new ExamplesError(
+      `${RECORDS_FILE}: ${records.summary}. Each record is { "app", "file", "line", "code", "message", "release", "reason" }, with the release a version and the reason on one line.`,
     );
   }
   return records;
 }
 
+function comparePrerelease(a, b) {
+  const left = a.split('.');
+  const right = b.split('.');
+  for (let index = 0; index < Math.max(left.length, right.length); index++) {
+    if (left[index] === undefined) return -1;
+    if (right[index] === undefined) return 1;
+    const numeric = /^\d+$/.test(left[index]) && /^\d+$/.test(right[index]);
+    const order = numeric
+      ? Number(left[index]) - Number(right[index])
+      : compareCodeUnits(left[index], right[index]);
+    if (order !== 0) return order;
+  }
+  return 0;
+}
+
+export function compareVersions(a, b) {
+  const [, ...left] = a.match(VERSION);
+  const [, ...right] = b.match(VERSION);
+  for (let index = 0; index < 3; index++) {
+    const order = Number(left[index]) - Number(right[index]);
+    if (order !== 0) return order;
+  }
+  if (left[3] === undefined || right[3] === undefined) {
+    return (left[3] === undefined ? 1 : 0) - (right[3] === undefined ? 1 : 0);
+  }
+  return comparePrerelease(left[3], right[3]);
+}
+
 const git = (root, args, options = {}) =>
-  execFileSync('git', args, { cwd: root, maxBuffer: 1024 * 1024 * 1024, ...options });
+  execFileSync('git', args, {
+    cwd: root,
+    maxBuffer: 1024 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    ...options,
+  });
+
+const tagRef = (tag) => `refs/tags/${tag}`;
 
 function hasTag(root, tag) {
   try {
-    git(root, ['rev-parse', '--verify', '--quiet', `refs/tags/${tag}^{commit}`], {
-      stdio: 'ignore',
-    });
+    git(root, ['rev-parse', '--verify', '--quiet', `${tagRef(tag)}^{commit}`]);
     return true;
   } catch {
     return false;
@@ -94,17 +135,49 @@ function hasTag(root, tag) {
 export function fetchTag(root, tag) {
   if (hasTag(root, tag)) return;
   const shallow = git(root, ['rev-parse', '--is-shallow-repository'], { encoding: 'utf8' }).trim();
-  git(root, [
-    'fetch',
-    '--no-tags',
-    ...(shallow === 'true' ? ['--depth=1'] : []),
-    'origin',
-    `refs/tags/${tag}:refs/tags/${tag}`,
-  ]);
+  try {
+    git(root, [
+      'fetch',
+      '--no-tags',
+      ...(shallow === 'true' ? ['--depth=1'] : []),
+      'origin',
+      `${tagRef(tag)}:${tagRef(tag)}`,
+    ]);
+  } catch (error) {
+    throw new ExamplesError(
+      `the tag ${tag} could not be fetched from origin: ${String(error.stderr ?? error.message).trim()}`,
+    );
+  }
+}
+
+const sleepFor = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+
+const whyNotFound = (error) =>
+  error instanceof LastReleaseError
+    ? error.message
+    : `the registry could not be reached (${error.cause?.code ?? error.message})`;
+
+// The registry's `latest` is published before the release's tag is pushed, so for a short while
+// during a release the tag is missing. A few retries over about a minute ride that out.
+export async function findReleaseWithRetries(find, sleep = sleepFor) {
+  let waited = 0;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await find();
+    } catch (error) {
+      if (attempt === RETRY_WAITS_MS.length) {
+        throw new ExamplesError(
+          `the last release could not be found after ${attempt + 1} attempts over ${waited / 1000} s: ${whyNotFound(error)}`,
+        );
+      }
+      await sleep(RETRY_WAITS_MS[attempt]);
+      waited += RETRY_WAITS_MS[attempt];
+    }
+  }
 }
 
 export function appsAtTag(root, tag) {
-  const files = git(root, ['ls-tree', '-r', '--name-only', tag, '--', 'examples'], {
+  const files = git(root, ['ls-tree', '-r', '--name-only', tagRef(tag), '--', 'examples'], {
     encoding: 'utf8',
   }).split('\n');
   return new Set(
@@ -123,95 +196,73 @@ function currentApps(root) {
   );
 }
 
-const isNodeModules = (name) => name === 'node_modules';
-
-function holdsNodeModules(dir) {
-  return readdirSync(dir, { withFileTypes: true }).some(
-    (entry) =>
-      entry.isDirectory() && (isNodeModules(entry.name) || holdsNodeModules(join(dir, entry.name))),
-  );
+function extract(root, tag, paths, into) {
+  const archive = git(root, ['archive', '--format=tar', tagRef(tag), '--', ...paths]);
+  execFileSync('tar', ['-x', '-C', into], { input: archive });
 }
 
-// Moves everything in `from` into `to`, apart from node_modules folders at any depth; a folder
-// that holds one stays and is moved entry by entry.
-function moveAside(from, to) {
-  mkdirSync(to, { recursive: true });
-  for (const entry of readdirSync(from, { withFileTypes: true })) {
-    if (isNodeModules(entry.name)) continue;
-    const source = join(from, entry.name);
-    if (entry.isDirectory() && holdsNodeModules(source)) moveAside(source, join(to, entry.name));
-    else renameSync(source, join(to, entry.name));
+const isAlive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
   }
-}
-
-function clearApp(dir) {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (isNodeModules(entry.name)) continue;
-    const path = join(dir, entry.name);
-    if (entry.isDirectory() && holdsNodeModules(path)) clearApp(path);
-    else rmSync(path, { recursive: true, force: true });
-  }
-}
-
-function moveBack(from, to) {
-  for (const entry of readdirSync(from, { withFileTypes: true })) {
-    const source = join(from, entry.name);
-    const target = join(to, entry.name);
-    if (entry.isDirectory() && existsSync(target) && lstatSync(target).isDirectory()) {
-      moveBack(source, target);
-    } else renameSync(source, target);
-  }
-  rmSync(from, { recursive: true, force: true });
-}
-
-// The app's own files are kept in one of three folders, so that a run that was killed can be put
-// right by the next one: `<app>.moving` while they are moved aside, `<app>` while the tag's files
-// are in the app, and `<app>.restoring` while they are moved back.
-const asideFolders = (root, app) => {
-  const base = join(root, ASIDE_FOLDER, app);
-  return { moving: `${base}.moving`, aside: base, restoring: `${base}.restoring` };
 };
 
-function setAside(root, app) {
-  const { moving, aside } = asideFolders(root, app);
-  moveAside(join(root, 'examples', app), moving);
-  renameSync(moving, aside);
-}
-
-function putBack(root, app) {
-  const appDir = join(root, 'examples', app);
-  const { moving, aside, restoring } = asideFolders(root, app);
-  if (existsSync(aside)) {
-    clearApp(appDir);
-    renameSync(aside, restoring);
+// Each run has a folder of its own, named after its process, so runs at once never share files.
+// A folder whose process has gone is left from a run that was killed, and is removed.
+function startRunFolder(root) {
+  const runs = join(root, RUN_FOLDER);
+  if (existsSync(runs)) {
+    for (const name of readdirSync(runs)) {
+      const pid = Number(name.split('-')[0]);
+      if (!Number.isInteger(pid) || !isAlive(pid)) {
+        rmSync(join(runs, name), { recursive: true, force: true });
+      }
+    }
   }
-  for (const folder of [moving, restoring]) {
-    if (existsSync(folder)) moveBack(folder, appDir);
+  const dir = join(runs, `${process.pid}-${randomBytes(4).toString('hex')}`);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function endRunFolder(dir) {
+  rmSync(dir, { recursive: true, force: true });
+  try {
+    rmdirSync(dirname(dir));
+  } catch {}
+}
+
+function prepareRunFolder(root, tag, runDir) {
+  const rootFiles = git(root, ['ls-tree', '--name-only', tagRef(tag)], { encoding: 'utf8' })
+    .split('\n')
+    .filter((name) => /^tsconfig.*\.json$/.test(name));
+  if (rootFiles.length > 0) extract(root, tag, rootFiles, runDir);
+  if (existsSync(join(root, 'node_modules'))) {
+    symlinkSync(join(root, 'node_modules'), join(runDir, 'node_modules'));
   }
-  if (readdirSync(dirname(aside)).length === 0) rmdirSync(dirname(aside));
 }
 
-export function putBackLeftovers(root) {
-  const folder = join(root, ASIDE_FOLDER);
-  if (!existsSync(folder)) return [];
-  const apps = [
-    ...new Set(readdirSync(folder).map((name) => name.replace(/\.(moving|restoring)$/, ''))),
-  ];
-  for (const app of apps) putBack(root, app);
-  rmSync(folder, { recursive: true, force: true });
-  return apps;
+// The real app's node_modules folders, at any depth, relative to the app.
+function nodeModulesIn(dir, prefix = '') {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    if (!entry.isDirectory()) return [];
+    const path = join(prefix, entry.name);
+    return entry.name === 'node_modules' ? [path] : nodeModulesIn(join(dir, entry.name), path);
+  });
 }
 
-function extractApp(root, tag, app) {
-  const archive = git(root, ['archive', '--format=tar', tag, `examples/${app}`]);
-  execFileSync('tar', ['-x', '-C', root], { input: archive });
-}
+const TSC_LAST = /(?:^|&&)\s*tsc(?:\s[^&|;]*)?$/;
 
-const ERROR_LINE = /^(?:(.+)\((\d+),(\d+)\): )?error (TS\d+): (.*)$/;
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+const PLAIN_ERROR = /^(?:(.+)\((\d+),(\d+)\): )?error (TS\d+): (.*)$/;
+const PRETTY_ERROR = /^(.+):(\d+):(\d+) - error (TS\d+): (.*)$/;
 
 export function parseErrors(output) {
-  return output.split(/\r?\n/).flatMap((text) => {
-    const match = text.match(ERROR_LINE);
+  return output.split(/\r?\n/).flatMap((raw) => {
+    const text = raw.replace(ANSI, '');
+    const match = text.match(PLAIN_ERROR) ?? text.match(PRETTY_ERROR);
     if (!match) return [];
     const [, file, line, column, code, message] = match;
     return [
@@ -226,53 +277,89 @@ export function parseErrors(output) {
   });
 }
 
-function runTypecheck(appDir, script, env) {
-  const result = spawnSync('sh', ['-c', script], {
-    cwd: appDir,
-    env: { ...env, PATH: `${join(appDir, 'node_modules', '.bin')}${delimiter}${env.PATH ?? ''}` },
-    encoding: 'utf8',
-    maxBuffer: 1024 * 1024 * 1024,
-    timeout: TYPECHECK_TIMEOUT_MS,
+const running = new Set();
+
+const killGroup = (child) => {
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+  } catch {}
+};
+
+// The script runs in a process group of its own, so that a timeout or a stopped run kills the
+// tsc it started too, not only its shell.
+function runTypecheck(appDir, script, env, timeoutMs) {
+  return new Promise((resolveRun) => {
+    const child = spawn('sh', ['-c', `${script} --pretty false`], {
+      cwd: appDir,
+      env: { ...env, PATH: `${join(appDir, 'node_modules', '.bin')}${delimiter}${env.PATH ?? ''}` },
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    running.add(child);
+    let output = '';
+    let timedOut = false;
+    child.stdout.on('data', (chunk) => {
+      output += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      output += chunk;
+    });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killGroup(child);
+    }, timeoutMs);
+    const finish = (result) => {
+      clearTimeout(timer);
+      running.delete(child);
+      resolveRun({ output, timedOut, ...result });
+    };
+    child.on('error', (error) => finish({ error }));
+    child.on('close', (status, signal) => finish({ status, signal }));
   });
-  return {
-    status: result.status,
-    timedOut: result.error?.code === 'ETIMEDOUT',
-    error: result.error,
-    output: `${result.stdout ?? ''}${result.stderr ?? ''}`,
-  };
 }
 
-function checkApp({ root, tag, app, env }) {
-  const appDir = join(root, 'examples', app);
+async function checkApp({ root, tag, app, env, runDir, timeoutMs }) {
   const manifest = JSON.parse(
-    git(root, ['show', `${tag}:examples/${app}/package.json`], {
-      encoding: 'utf8',
-    }),
+    git(root, ['show', `${tagRef(tag)}:examples/${app}/package.json`], { encoding: 'utf8' }),
   );
   const script = manifest.scripts?.typecheck;
   if (typeof script !== 'string') {
     return { app, skipped: 'it has no typecheck script at the release' };
   }
-  if (!existsSync(join(appDir, 'node_modules'))) {
+  if (!TSC_LAST.test(script.trim())) {
+    return {
+      app,
+      errors: [],
+      problems: [`its typecheck script does not end in a tsc run: ${script}`],
+    };
+  }
+  const realApp = join(root, 'examples', app);
+  const links = nodeModulesIn(realApp);
+  if (!links.includes('node_modules')) {
     return { app, errors: [], problems: ['it has no node_modules; run pnpm install'] };
   }
   const started = performance.now();
-  setAside(root, app);
+  extract(root, tag, [`examples/${app}`], runDir);
+  const appDir = join(runDir, 'examples', app);
+  for (const link of links) {
+    if (existsSync(dirname(join(appDir, link)))) {
+      symlinkSync(join(realApp, link), join(appDir, link));
+    }
+  }
   let run;
   try {
-    extractApp(root, tag, app);
-    run = runTypecheck(appDir, script, env);
+    run = await runTypecheck(appDir, script.trim(), env, timeoutMs);
   } finally {
-    putBack(root, app);
+    rmSync(appDir, { recursive: true, force: true });
   }
   const errors = parseErrors(run.output);
   const problems = [];
-  if (run.timedOut) {
-    problems.push(`its typecheck did not finish in ${TYPECHECK_TIMEOUT_MS / 60000} minutes`);
-  } else if (run.error) problems.push(`its typecheck did not start: ${run.error.message}`);
+  const tail = () => run.output.trim().split('\n').slice(-20).join('\n');
+  if (run.timedOut) problems.push(`its typecheck did not finish in ${timeoutMs / 1000} s`);
+  else if (run.error) problems.push(`its typecheck did not start: ${run.error.message}`);
+  else if (run.signal) problems.push(`its typecheck was stopped by ${run.signal}:\n${tail()}`);
   else if (run.status !== 0 && errors.length === 0) {
-    const tail = run.output.trim().split('\n').slice(-20).join('\n');
-    problems.push(`\`${script}\` exited with ${run.status} without a type error:\n${tail}`);
+    problems.push(`\`${script}\` exited with ${run.status} without a type error:\n${tail()}`);
   }
   return { app, script, errors, problems, ms: Math.round(performance.now() - started) };
 }
@@ -281,29 +368,43 @@ const recordMatches = (record, app, error) =>
   record.app === app &&
   record.file === error.file &&
   record.line === error.line &&
-  record.code === error.code;
+  record.code === error.code &&
+  record.message === error.message;
 
-// Marks each error a record of this release covers, and lists the records that cover nothing
-// and the records of other releases.
+const recordLabel = (record) =>
+  `the record for ${record.app} ${record.file}:${record.line} ${record.code}`;
+
+// Marks each error a record of this release covers. Records of apps that were not checked are
+// left alone; records of earlier releases are listed as removable.
 export function applyRecords({ results, records, version, strict }) {
-  const current = records.filter((record) => record.release === version);
-  const removable = records.filter((record) => record.release !== version);
-  const unmatched = new Set(current);
-  for (const result of results) {
-    if (!result.errors) continue;
-    for (const error of result.errors) {
-      const record = current.find((each) => recordMatches(each, result.app, error));
-      if (record) {
-        unmatched.delete(record);
-        error.recorded = record.reason;
-      }
-      error.failsRun = strict && record === undefined;
+  const checked = new Map(
+    results.filter((result) => result.errors).map((result) => [result.app, result]),
+  );
+  const removable = [];
+  const problems = [];
+  for (const record of records) {
+    const order = compareVersions(record.release, version);
+    if (order < 0) removable.push(record);
+    else if (order > 0) {
+      problems.push(
+        `${recordLabel(record)} is for release ${record.release}, which is later than the last release ${version}.`,
+      );
+    } else if (checked.has(record.app)) {
+      const matches = checked
+        .get(record.app)
+        .errors.filter((error) => recordMatches(record, record.app, error));
+      if (matches.length === 0)
+        problems.push(`${recordLabel(record)} matches no error. Remove it.`);
+      else if (matches.length > 1) {
+        problems.push(
+          `${recordLabel(record)} matches ${matches.length} errors; it must match exactly one.`,
+        );
+      } else matches[0].recorded = record.reason;
     }
   }
-  const problems = [...unmatched].map(
-    (record) =>
-      `the record for ${record.app} ${record.file}:${record.line} ${record.code} matches no error. Remove it.`,
-  );
+  for (const result of checked.values()) {
+    for (const error of result.errors) error.failsRun = strict && error.recorded === undefined;
+  }
   return { removable, problems };
 }
 
@@ -323,6 +424,8 @@ function byFile(errors) {
   return [...files].sort(([a], [b]) => compareCodeUnits(a, b));
 }
 
+const count = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+
 const describeError = ({ file, line, column, code, message }) =>
   `${file}(${line},${column}): ${code} ${message}`;
 
@@ -335,11 +438,11 @@ const headline = ({ version, tag, strict }) =>
 const appFails = (result) =>
   (result.problems?.length ?? 0) > 0 || (result.errors ?? []).some((error) => error.failsRun);
 
-const appSummary = (result) => {
-  const recorded = result.errors.filter((error) => error.recorded !== undefined).length;
-  const files = byFile(result.errors).length;
-  return `${result.errors.length} errors in ${files} files (${recorded} recorded)`;
-};
+const recordedCount = (result) =>
+  result.errors.filter((error) => error.recorded !== undefined).length;
+
+const appSummary = (result) =>
+  `${count(result.errors.length, 'error')} in ${count(byFile(result.errors).length, 'file')} (${recordedCount(result)} recorded)`;
 
 export function reportText(report) {
   const lines = [`api:examples: ${headline(report)}`];
@@ -363,7 +466,7 @@ export function reportText(report) {
   }
   if (report.removable.length > 0) {
     lines.push(
-      `\nRecords for another release than ${report.version}, skipped; remove them:`,
+      `\nRecords for a release before ${report.version}, skipped; remove them:`,
       ...report.removable.map((record) => `  ${describeRecord(record)}`),
     );
   }
@@ -385,7 +488,7 @@ export function reportMarkdown(report) {
     '| --- | --- | --- | --- | --- |',
     ...checked.map(
       (result) =>
-        `| ${result.app} | ${result.errors.length} | ${result.errors.filter((error) => error.recorded !== undefined).length} | ${byFile(result.errors).length} | ${result.problems.length} |`,
+        `| ${result.app} | ${result.errors.length} | ${recordedCount(result)} | ${byFile(result.errors).length} | ${result.problems.length} |`,
     ),
     '',
   ];
@@ -412,7 +515,7 @@ export function reportMarkdown(report) {
   }
   if (report.removable.length > 0) {
     lines.push(
-      `Records for another release than ${report.version}, skipped; remove them:`,
+      `Records for a release before ${report.version}, skipped; remove them:`,
       '',
       ...report.removable.map((record) => `- ${cell(describeRecord(record))}`),
       '',
@@ -428,27 +531,51 @@ export async function checkExamples({
   only,
   env = process.env,
   findRelease = () => lastRelease({ root }),
-  stopped = () => false,
+  sleep,
+  timeoutMs = TYPECHECK_TIMEOUT_MS,
 }) {
-  const leftovers = putBackLeftovers(root);
-  const { version, tag } = await findRelease();
+  const { version, tag } = await findReleaseWithRetries(findRelease, sleep);
   const strict = ga || !isPrerelease(version);
-  const records = readRecords(root);
   fetchTag(root, tag);
   const atTag = appsAtTag(root, tag);
   const current = currentApps(root);
-  const apps = [...new Set([...atTag, ...current])]
+  const known = new Set([...atTag, ...current]);
+  const problems = (only ?? [])
+    .filter((app) => !known.has(app))
+    .map((app) => `--only names ${app}, which is not an app at the release or now`);
+  const apps = [...known]
     .filter((app) => only === undefined || only.includes(app))
     .sort(compareCodeUnits);
+  const records = readRecords(root).filter((record) => apps.includes(record.app));
+  const runDir = startRunFolder(root);
   const results = [];
-  for (const app of apps) {
-    if (stopped()) break;
-    if (!atTag.has(app)) results.push({ app, skipped: 'it was added after the release' });
-    else if (!current.has(app)) results.push({ app, skipped: 'it was removed after the release' });
-    else results.push(checkApp({ root, tag, app, env }));
+  try {
+    prepareRunFolder(root, tag, runDir);
+    for (const app of apps) {
+      if (!atTag.has(app)) results.push({ app, skipped: 'it was added after the release' });
+      else if (!current.has(app)) {
+        results.push({ app, skipped: 'it was removed after the release' });
+      } else results.push(await checkApp({ root, tag, app, env, runDir, timeoutMs }));
+    }
+  } finally {
+    endRunFolder(runDir);
   }
-  const { removable, problems } = applyRecords({ results, records, version, strict });
-  return { version, tag, strict, results, removable, problems, leftovers };
+  const applied = applyRecords({ results, records, version, strict });
+  return {
+    version,
+    tag,
+    strict,
+    results,
+    removable: applied.removable,
+    problems: [...problems, ...applied.problems],
+  };
+}
+
+// A stopped run kills the typechecks it started, which are in process groups of their own and so
+// do not get the terminal's signal. Its folder is removed by the next run.
+function stopOnSignal(signal) {
+  for (const child of running) killGroup(child);
+  process.exit(signal === 'SIGINT' ? 130 : 143);
 }
 
 export async function main({
@@ -458,17 +585,14 @@ export async function main({
   stdout = process.stdout,
   stderr = process.stderr,
   findRelease,
+  sleep,
 }) {
   const { values } = parseArgs({
     args,
     options: { ga: { type: 'boolean', default: false }, only: { type: 'string' } },
   });
-  let interrupted = false;
-  const stop = () => {
-    interrupted = true;
-  };
-  process.on('SIGINT', stop);
-  process.on('SIGTERM', stop);
+  process.on('SIGINT', stopOnSignal);
+  process.on('SIGTERM', stopOnSignal);
   let report;
   try {
     report = await checkExamples({
@@ -477,24 +601,18 @@ export async function main({
       only: values.only?.split(','),
       env,
       findRelease,
-      stopped: () => interrupted,
+      sleep,
     });
   } catch (error) {
-    if (!(error instanceof LastReleaseError || error instanceof RecordsError)) throw error;
+    if (!(error instanceof ExamplesError)) throw error;
     stderr.write(`api:examples: ${error.message}\n`);
     return 1;
   } finally {
-    process.off('SIGINT', stop);
-    process.off('SIGTERM', stop);
-  }
-  if (report.leftovers.length > 0) {
-    stderr.write(
-      `api:examples: put back the files a stopped run had set aside in ${report.leftovers.join(', ')}\n`,
-    );
+    process.off('SIGINT', stopOnSignal);
+    process.off('SIGTERM', stopOnSignal);
   }
   stdout.write(reportText(report));
   if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, reportMarkdown(report));
-  if (interrupted) return 130;
   return failsRun(report) ? 1 : 0;
 }
 

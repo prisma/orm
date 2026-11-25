@@ -1,4 +1,4 @@
-import { deepStrictEqual, match, strictEqual } from 'node:assert/strict';
+import { deepStrictEqual, match, rejects, strictEqual } from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import {
   existsSync,
@@ -13,14 +13,16 @@ import { dirname, join, relative } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
-  ASIDE_FOLDER,
+  applyRecords,
   checkExamples,
   failsRun,
+  findReleaseWithRetries,
   main,
   parseErrors,
   RECORDS_FILE,
+  RUN_FOLDER,
 } from './api-examples.mjs';
-import { lastRelease } from './last-release.mjs';
+import { LastReleaseError, lastRelease } from './last-release.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '..', '..');
@@ -49,41 +51,57 @@ function write(root, files) {
   }
 }
 
-const ROW = 'export type Row = { id: number };\nexport declare function getRow(): Row;\n';
-const PLANTED_ROW =
-  'export type Row = { id: number; name?: string };\nexport declare function getRow(): Row;\n';
-const ASSERTION_LINE = 4;
-const appIndex = (extra = '') =>
+const lib = (row) => `export declare function getRow(): ${row};\n`;
+const ROW = lib('{ id: number }');
+const OPTIONAL_NAME = lib('{ id: number; name?: string }');
+const STRING_ID = lib('{ id: string }');
+const BOOLEAN_ID = lib('{ id: boolean }');
+const EXACT_LINE = 5;
+const CONSTRAINT_LINE = 7;
+const ID_LINE = 9;
+
+const appIndex = ({ tagOnly }) =>
   [
     "import { getRow } from 'lib';",
     "import { generated } from './generated';",
+    tagOnly ? "import { tagOnly } from './tag-only';" : 'export const current = true;',
     'type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;',
     'export const exact: Equal<ReturnType<typeof getRow>, { id: number }> = true;',
-    `export { generated };${extra}`,
+    'type HasId<T extends { id: number }> = T;',
+    'export type Checked = HasId<ReturnType<typeof getRow>>;',
+    tagOnly ? 'export { generated, tagOnly };' : 'export { generated };',
+    "export const idIsNumber: Equal<ReturnType<typeof getRow>['id'], number> = true;",
     '',
   ].join('\n');
 
-const app = (name) => ({
+const TSC = 'tsc --project tsconfig.json --noEmit';
+
+const app = (
+  name,
+  { script = `node gen.mjs && ${TSC}`, compilerOptions = {}, files = {} } = {},
+) => ({
   [`examples/${name}/package.json`]: JSON.stringify({
     name,
     private: true,
-    scripts: { typecheck: 'node gen.mjs && tsc --project tsconfig.json --noEmit' },
+    scripts: { typecheck: script },
   }),
   [`examples/${name}/.gitignore`]: 'src/generated.ts\n',
   [`examples/${name}/gen.mjs`]:
     "import { writeFileSync } from 'node:fs';\nwriteFileSync('src/generated.ts', 'export const generated = 1;\\n');\n",
   [`examples/${name}/tsconfig.json`]: JSON.stringify({
-    compilerOptions: {
-      strict: true,
-      module: 'esnext',
-      moduleResolution: 'bundler',
-      skipLibCheck: true,
-      types: [],
-    },
+    extends: '../../tsconfig.base.json',
+    compilerOptions,
     include: ['src'],
   }),
-  [`examples/${name}/src/index.ts`]: appIndex(),
+  [`examples/${name}/src/index.ts`]: appIndex({ tagOnly: true }),
+  [`examples/${name}/src/tag-only.ts`]: 'export const tagOnly = 1;\n',
+  [`examples/${name}/src/generated.ts`]: 'export const generated = 1;\n',
+  ...Object.fromEntries(
+    Object.entries(files).map(([path, text]) => [`examples/${name}/${path}`, text]),
+  ),
 });
+
+const CURRENT_APPS = ['app', 'added', 'nostep', 'exits', 'killed', 'slow', 'pretty'];
 
 function linkNodeModules(appDir) {
   const modules = join(appDir, 'node_modules');
@@ -97,24 +115,50 @@ before(() => {
   mkdirSync(origin, { recursive: true });
   git(origin, 'init', '--quiet', '--initial-branch=main');
   write(origin, {
-    '.gitignore': 'node_modules\n/wip/\n',
+    '.gitignore': 'node_modules\n/wip/\n/.api-examples/\n',
+    'tsconfig.base.json': JSON.stringify({
+      compilerOptions: {
+        strict: true,
+        module: 'esnext',
+        moduleResolution: 'bundler',
+        skipLibCheck: true,
+        noEmit: true,
+        types: [],
+      },
+    }),
     'packages/lib/package.json': JSON.stringify({ name: 'lib', types: 'index.d.ts' }),
     'packages/lib/index.d.ts': ROW,
     ...app('app'),
     ...app('removed'),
+    ...app('nostep', { script: 'echo skipped' }),
+    ...app('exits', { script: `node -e "process.exit(3)" && ${TSC}` }),
+    ...app('killed', { script: `kill -KILL $$ && ${TSC}` }),
+    ...app('slow', {
+      script: `node slow.mjs && ${TSC}`,
+      files: {
+        'slow.mjs':
+          "import { writeFileSync } from 'node:fs';\nwriteFileSync(process.env.SLOW_PID_FILE, String(process.pid));\nsetInterval(() => {}, 1000);\n",
+      },
+    }),
+    ...app('pretty', {
+      compilerOptions: { pretty: true },
+      files: { 'src/broken.ts': "export const broken: number = 'x';\n" },
+    }),
   });
   git(origin, 'add', '.');
   git(origin, 'commit', '--quiet', '-m', 'release');
   git(origin, 'tag', 'v1.0.0');
   rmSync(join(origin, 'examples', 'removed'), { recursive: true });
-  write(origin, {
-    'examples/app/src/index.ts': appIndex('\nexport const current = true;'),
-    ...app('added'),
-  });
+  rmSync(join(origin, 'tsconfig.base.json'));
+  for (const name of CURRENT_APPS.filter((each) => each !== 'added')) {
+    rmSync(join(origin, 'examples', name, 'src', 'tag-only.ts'));
+    write(origin, { [`examples/${name}/src/index.ts`]: appIndex({ tagOnly: false }) });
+  }
+  write(origin, app('added'));
   git(origin, 'add', '-A');
   git(origin, 'commit', '--quiet', '-m', 'after the release');
   git(work, 'clone', '--quiet', '--depth=1', '--no-tags', `file://${origin}`, checkout);
-  for (const name of ['app', 'added']) linkNodeModules(join(checkout, 'examples', name));
+  for (const name of CURRENT_APPS) linkNodeModules(join(checkout, 'examples', name));
 });
 
 const findRelease =
@@ -126,28 +170,54 @@ const findRelease =
     });
 const releaseAs = (version) => async () => ({ ...(await findRelease()()), version });
 
-function withLib(text, run) {
+async function withLib(text, run) {
   const file = join(checkout, 'packages', 'lib', 'index.d.ts');
   writeFileSync(file, text);
-  return run().finally(() => writeFileSync(file, ROW));
+  try {
+    return await run();
+  } finally {
+    writeFileSync(file, ROW);
+  }
 }
 
-function withRecords(records, run) {
+async function withRecords(records, run) {
   const file = join(checkout, RECORDS_FILE);
   writeFileSync(file, JSON.stringify(records));
-  return run().finally(() => rmSync(file));
+  try {
+    return await run();
+  } finally {
+    rmSync(file);
+  }
 }
 
-const record = {
+const check = (options = {}) =>
+  checkExamples({ root: checkout, only: ['app'], findRelease: findRelease(), ...options });
+
+const resultFor = (report, name) => report.results.find((result) => result.app === name);
+const appResult = (report) => resultFor(report, 'app');
+const locations = (result) =>
+  result.errors.map(({ line, code, failsRun: fails, recorded }) => ({
+    line,
+    code,
+    fails,
+    recorded,
+  }));
+
+async function errorAt(text, line) {
+  const report = await withLib(text, () => check());
+  return appResult(report).errors.find((error) => error.line === line);
+}
+
+const recordFor = (error, overrides = {}) => ({
   app: 'app',
-  file: 'src/index.ts',
-  line: ASSERTION_LINE,
-  code: 'TS2322',
+  file: error.file,
+  line: error.line,
+  code: error.code,
+  message: error.message,
   release: '1.0.0',
   reason: 'rows may gain optional properties',
-};
-
-const appResult = (report) => report.results.find((result) => result.app === 'app');
+  ...overrides,
+});
 
 function snapshot(dir) {
   const files = {};
@@ -164,86 +234,159 @@ function snapshot(dir) {
 }
 
 describe('checkExamples', () => {
-  it('passes an app that compiles against the current build, after its step before', async () => {
-    const report = await checkExamples({ root: checkout, ga: true, findRelease: findRelease() });
+  it("passes an app that compiles against the current build, with the tag's root tsconfig", async () => {
+    const report = await check({ ga: true });
     deepStrictEqual(appResult(report).errors, []);
     deepStrictEqual(appResult(report).problems, []);
     strictEqual(failsRun(report), false);
   });
 
   it('compiles the app as it was at the tag, not as it is now', async () => {
-    write(checkout, { 'examples/app/src/index.ts': `${appIndex()}const broken: number = 'x';\n` });
+    write(checkout, { 'examples/app/src/extra.ts': "export const broken: number = 'x';\n" });
     try {
-      const report = await checkExamples({ root: checkout, ga: true, findRelease: findRelease() });
+      const report = await check({ ga: true });
       deepStrictEqual(appResult(report).errors, []);
+      deepStrictEqual(appResult(report).problems, []);
     } finally {
-      git(checkout, 'checkout', '--', 'examples/app/src/index.ts');
+      rmSync(join(checkout, 'examples', 'app', 'src', 'extra.ts'));
     }
   });
 
-  it('fails on a changed result type once the release is GA', async () => {
-    const report = await withLib(PLANTED_ROW, () =>
-      checkExamples({ root: checkout, findRelease: findRelease() }),
+  it("never writes in the developer's app folder, and leaves no run folder", async () => {
+    const appDir = join(checkout, 'examples', 'app');
+    write(appDir, {
+      'notes.txt': 'untracked\n',
+      'src/generated.ts': 'export const generated = 2;\n',
+    });
+    try {
+      const before = snapshot(appDir);
+      const status = git(checkout, 'status', '--porcelain', '--ignored');
+      const report = await withLib(OPTIONAL_NAME, () => check({ ga: true }));
+      strictEqual(failsRun(report), true);
+      deepStrictEqual(snapshot(appDir), before);
+      strictEqual(existsSync(join(appDir, 'src', 'tag-only.ts')), false);
+      strictEqual(git(checkout, 'status', '--porcelain', '--ignored'), status);
+      strictEqual(existsSync(join(checkout, RUN_FOLDER)), false);
+    } finally {
+      rmSync(join(appDir, 'notes.txt'));
+      write(appDir, { 'src/generated.ts': 'export const generated = 1;\n' });
+    }
+  });
+
+  it('removes the folders of runs whose process has gone', async () => {
+    const stale = join(checkout, RUN_FOLDER, '999999999-dead');
+    mkdirSync(join(stale, 'examples'), { recursive: true });
+    await check();
+    strictEqual(existsSync(stale), false);
+  });
+
+  it('keeps two runs at once apart', async () => {
+    const [plain, ga] = await withLib(OPTIONAL_NAME, () =>
+      Promise.all([
+        check({ findRelease: releaseAs('1.0.0-rc.1') }),
+        check({ ga: true, findRelease: releaseAs('1.0.0-rc.1') }),
+      ]),
     );
     deepStrictEqual(
-      appResult(report).errors.map(({ file, line, code, failsRun: fails }) => ({
-        file,
-        line,
-        code,
-        fails,
-      })),
-      [{ file: 'src/index.ts', line: ASSERTION_LINE, code: 'TS2322', fails: true }],
+      [plain, ga].map((report) => [appResult(report).errors.length, failsRun(report)]),
+      [
+        [1, false],
+        [1, true],
+      ],
     );
+  });
+
+  it('fails on a changed result type once the release is GA', async () => {
+    const report = await withLib(OPTIONAL_NAME, () => check());
+    deepStrictEqual(locations(appResult(report)), [
+      { line: EXACT_LINE, code: 'TS2322', fails: true, recorded: undefined },
+    ]);
     strictEqual(failsRun(report), true);
   });
 
   it('reports a changed result type and passes before GA, and fails when forced to', async () => {
-    await withLib(PLANTED_ROW, async () => {
-      const prerelease = await checkExamples({
-        root: checkout,
-        findRelease: releaseAs('1.0.0-rc.1'),
-      });
+    await withLib(OPTIONAL_NAME, async () => {
+      const prerelease = await check({ findRelease: releaseAs('1.0.0-rc.1') });
       strictEqual(appResult(prerelease).errors.length, 1);
       strictEqual(failsRun(prerelease), false);
-      const forced = await checkExamples({
-        root: checkout,
-        ga: true,
-        findRelease: releaseAs('1.0.0-rc.1'),
-      });
+      const forced = await check({ ga: true, findRelease: releaseAs('1.0.0-rc.1') });
       strictEqual(failsRun(forced), true);
     });
   });
 
   it('passes a recorded error', async () => {
-    const report = await withLib(PLANTED_ROW, () =>
-      withRecords([record], () => checkExamples({ root: checkout, findRelease: findRelease() })),
-    );
+    const error = await errorAt(OPTIONAL_NAME, EXACT_LINE);
+    const record = recordFor(error);
+    const report = await withLib(OPTIONAL_NAME, () => withRecords([record], () => check()));
     strictEqual(appResult(report).errors[0].recorded, record.reason);
     strictEqual(failsRun(report), false);
   });
 
-  it('fails on a record that matches no error', async () => {
-    const report = await withRecords([record], () =>
-      checkExamples({ root: checkout, findRelease: findRelease() }),
+  it('covers only the line a record names', async () => {
+    const error = await errorAt(STRING_ID, EXACT_LINE);
+    const report = await withLib(STRING_ID, () => withRecords([recordFor(error)], () => check()));
+    deepStrictEqual(
+      locations(appResult(report)).map(({ line, fails }) => ({ line, fails })),
+      [
+        { line: EXACT_LINE, fails: false },
+        { line: CONSTRAINT_LINE, fails: true },
+        { line: ID_LINE, fails: true },
+      ],
     );
+    strictEqual(failsRun(report), true);
+  });
+
+  it('covers only the message a record names, so a later break on the line fails', async () => {
+    const error = await errorAt(STRING_ID, CONSTRAINT_LINE);
+    const report = await withLib(BOOLEAN_ID, () => withRecords([recordFor(error)], () => check()));
+    const later = appResult(report).errors.find((each) => each.line === CONSTRAINT_LINE);
+    strictEqual(later.failsRun, true);
+    strictEqual(report.problems.length, 1);
+    match(report.problems[0], /matches no error/);
+  });
+
+  it('fails on a record that matches no error', async () => {
+    const error = await errorAt(OPTIONAL_NAME, EXACT_LINE);
+    const report = await withRecords([recordFor(error)], () => check());
     deepStrictEqual(report.problems, [
-      `the record for app src/index.ts:${ASSERTION_LINE} TS2322 matches no error. Remove it.`,
+      `the record for app src/index.ts:${EXACT_LINE} TS2322 matches no error. Remove it.`,
     ]);
     strictEqual(failsRun(report), true);
   });
 
   it('skips a record for an earlier release and lists it as removable', async () => {
-    const stale = { ...record, release: '0.9.0' };
-    const report = await withRecords([stale], () =>
-      checkExamples({ root: checkout, findRelease: findRelease() }),
-    );
+    const error = await errorAt(OPTIONAL_NAME, EXACT_LINE);
+    const stale = recordFor(error, { release: '0.9.0' });
+    const report = await withRecords([stale], () => check());
     deepStrictEqual(report.removable, [stale]);
     deepStrictEqual(report.problems, []);
     strictEqual(failsRun(report), false);
   });
 
+  it('ignores records for apps it does not check, skipped or left out by --only', async () => {
+    const error = await errorAt(OPTIONAL_NAME, EXACT_LINE);
+    const report = await withRecords(
+      [
+        recordFor(error, { app: 'added' }),
+        recordFor(error, { app: 'removed' }),
+        recordFor(error, { app: 'nostep', release: '2.0.0' }),
+      ],
+      () => check({ only: ['app', 'added'] }),
+    );
+    deepStrictEqual(report.problems, []);
+    strictEqual(failsRun(report), false);
+  });
+
+  it('fails when --only names something that is not an app', async () => {
+    const report = await check({ only: ['app', 'nope'] });
+    deepStrictEqual(report.problems, [
+      '--only names nope, which is not an app at the release or now',
+    ]);
+    strictEqual(failsRun(report), true);
+  });
+
   it('skips an app that did not exist at the tag, or no longer exists', async () => {
-    const report = await checkExamples({ root: checkout, findRelease: findRelease() });
+    const report = await check({ only: ['added', 'app', 'removed'] });
     deepStrictEqual(
       report.results.map(({ app: name, skipped }) => ({ name, skipped })),
       [
@@ -254,42 +397,141 @@ describe('checkExamples', () => {
     );
   });
 
-  it("puts the app's own files back after a failing run, ignored ones included", async () => {
-    const appDir = join(checkout, 'examples', 'app');
-    write(appDir, {
-      'src/index.ts': appIndex('\n// changed and not committed'),
-      'src/generated.ts': 'export const generated = 2;\n',
-      'notes.txt': 'untracked\n',
-    });
-    try {
-      const before = snapshot(appDir);
-      const status = git(checkout, 'status', '--porcelain', '--ignored');
-      const report = await withLib(PLANTED_ROW, () =>
-        checkExamples({ root: checkout, findRelease: findRelease() }),
-      );
-      strictEqual(failsRun(report), true);
-      deepStrictEqual(snapshot(appDir), before);
-      strictEqual(git(checkout, 'status', '--porcelain', '--ignored'), status);
-      strictEqual(existsSync(join(appDir, 'node_modules', 'lib', 'index.d.ts')), true);
-      strictEqual(existsSync(join(checkout, ASIDE_FOLDER)), false);
-    } finally {
-      rmSync(join(appDir, 'notes.txt'), { force: true });
-      git(checkout, 'checkout', '--', 'examples/app/src/index.ts');
-    }
+  it('reads errors whatever the tsconfig says about pretty output', async () => {
+    const report = await check({ only: ['pretty'] });
+    deepStrictEqual(
+      resultFor(report, 'pretty').errors.map(({ file, line, code }) => ({ file, line, code })),
+      [{ file: 'src/broken.ts', line: 1, code: 'TS2322' }],
+    );
   });
 
-  it('puts back the files a killed run left set aside', async () => {
-    const appDir = join(checkout, 'examples', 'app');
-    const before = snapshot(appDir);
-    const aside = join(checkout, ASIDE_FOLDER, 'app');
-    mkdirSync(aside, { recursive: true });
-    for (const name of readdirSync(appDir)) {
-      if (name !== 'node_modules') execFileSync('mv', [join(appDir, name), aside]);
+  it('is a problem when the typecheck script does not end in a tsc run', async () => {
+    const report = await check({ only: ['nostep'] });
+    deepStrictEqual(resultFor(report, 'nostep').problems, [
+      'its typecheck script does not end in a tsc run: echo skipped',
+    ]);
+    strictEqual(failsRun(report), true);
+  });
+
+  it('is a problem when the typecheck exits non-zero without a type error', async () => {
+    const report = await check({ only: ['exits'] });
+    match(resultFor(report, 'exits').problems[0], /exited with 3 without a type error/);
+    strictEqual(failsRun(report), true);
+  });
+
+  it('names the signal that stopped the typecheck', async () => {
+    const report = await check({ only: ['killed'] });
+    match(resultFor(report, 'killed').problems[0], /was stopped by SIGKILL/);
+  });
+
+  it('kills the whole typecheck, its children included, when it takes too long', {
+    timeout: 20_000,
+  }, async () => {
+    const pidFile = join(work, 'slow.pid');
+    const report = await check({
+      only: ['slow'],
+      timeoutMs: 1500,
+      env: { ...process.env, SLOW_PID_FILE: pidFile },
+    });
+    match(resultFor(report, 'slow').problems[0], /did not finish in 1\.5 s/);
+    const pid = Number(readFileSync(pidFile, 'utf8'));
+    let alive = true;
+    for (let attempt = 0; attempt < 20 && alive; attempt++) {
+      try {
+        process.kill(pid, 0);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      } catch {
+        alive = false;
+      }
     }
-    write(appDir, { 'src/index.ts': 'the tag version\n' });
-    const report = await checkExamples({ root: checkout, findRelease: findRelease() });
-    deepStrictEqual(report.leftovers, ['app']);
-    deepStrictEqual(snapshot(appDir), before);
+    strictEqual(alive, false);
+  });
+});
+
+describe('applyRecords', () => {
+  const error = (overrides = {}) => ({
+    file: 'src/a.ts',
+    line: 3,
+    column: 1,
+    code: 'TS2322',
+    message: 'Type "x" is not assignable.',
+    ...overrides,
+  });
+  const record = (overrides = {}) => ({
+    app: 'a',
+    file: 'src/a.ts',
+    line: 3,
+    code: 'TS2322',
+    message: 'Type "x" is not assignable.',
+    release: '1.0.0',
+    reason: 'allowed',
+    ...overrides,
+  });
+  const apply = (errors, records) =>
+    applyRecords({ results: [{ app: 'a', errors }], records, version: '1.0.0', strict: true });
+
+  it('fails a record that matches more than one error', () => {
+    const { problems } = apply([error(), error({ column: 9 })], [record()]);
+    deepStrictEqual(problems, [
+      'the record for a src/a.ts:3 TS2322 matches 2 errors; it must match exactly one.',
+    ]);
+  });
+
+  it('covers an error with no location by line 0', () => {
+    const unlocated = error({ file: '(no file)', line: 0, column: 0 });
+    const { problems } = apply([unlocated], [record({ file: '(no file)', line: 0 })]);
+    deepStrictEqual(problems, []);
+    strictEqual(unlocated.failsRun, false);
+  });
+
+  it('fails a record for a later release than the last', () => {
+    const { problems, removable } = apply([error()], [record({ release: '1.0.1' })]);
+    deepStrictEqual(problems, [
+      'the record for a src/a.ts:3 TS2322 is for release 1.0.1, which is later than the last release 1.0.0.',
+    ]);
+    deepStrictEqual(removable, []);
+  });
+
+  it('treats a pre-release as earlier than its release', () => {
+    const { removable } = apply([error()], [record({ release: '1.0.0-rc.3' })]);
+    strictEqual(removable.length, 1);
+  });
+});
+
+describe('findReleaseWithRetries', () => {
+  it('retries a failed lookup and returns the release once it is found', async () => {
+    const waits = [];
+    let calls = 0;
+    const release = await findReleaseWithRetries(
+      async () => {
+        calls++;
+        if (calls < 3) throw new LastReleaseError('the repository has no tag v1.0.0');
+        return { version: '1.0.0', tag: 'v1.0.0' };
+      },
+      async (ms) => waits.push(ms),
+    );
+    deepStrictEqual(release, { version: '1.0.0', tag: 'v1.0.0' });
+    strictEqual(waits.length, 2);
+  });
+
+  it('fails with one message saying why after the last attempt', async () => {
+    const waits = [];
+    await rejects(
+      findReleaseWithRetries(
+        async () => {
+          throw new TypeError('fetch failed', { cause: { code: 'ENOTFOUND' } });
+        },
+        async (ms) => waits.push(ms),
+      ),
+      (error) => {
+        strictEqual(
+          error.message,
+          `the last release could not be found after ${waits.length + 1} attempts over ${waits.reduce((a, b) => a + b, 0) / 1000} s: the registry could not be reached (ENOTFOUND)`,
+        );
+        return true;
+      },
+    );
+    strictEqual(waits.reduce((a, b) => a + b, 0) >= 45_000, true);
   });
 });
 
@@ -297,7 +539,7 @@ describe('main', () => {
   it('reports errors grouped by app and file, and exits with 1 when they fail', async () => {
     let out = '';
     const summary = join(work, 'summary.md');
-    const code = await withLib(PLANTED_ROW, () =>
+    const code = await withLib(OPTIONAL_NAME, () =>
       main({
         root: checkout,
         args: ['--only', 'app'],
@@ -309,21 +551,44 @@ describe('main', () => {
     );
     strictEqual(code, 1);
     match(out, /^api:examples: last release 1\.0\.0 \(tag v1\.0\.0\); an error fails/);
-    match(out, /\napp: 1 errors in 1 files \(0 recorded\); [\d.]+ s — FAILS\n/);
-    match(out, /\n {2}src\/index\.ts: 1\n {4}src\/index\.ts\(4,14\): TS2322 /);
+    match(out, /\napp: 1 error in 1 file \(0 recorded\); [\d.]+ s — FAILS\n/);
+    match(out, /\n {2}src\/index\.ts: 1\n {4}src\/index\.ts\(5,14\): TS2322 /);
     const markdown = readFileSync(summary, 'utf8');
     match(markdown, /\n\| app \| 1 \| 0 \| 1 \| 0 \|\n/);
-    match(markdown, /\n### app\n\n- `src\/index\.ts`: 1\n {2}- 4:14 TS2322 /);
+    match(markdown, /\n### app\n\n- `src\/index\.ts`: 1\n {2}- 5:14 TS2322 /);
+  });
+
+  it('fails a release lookup with one line, not a stack trace', async () => {
+    let err = '';
+    const code = await main({
+      root: checkout,
+      args: [],
+      env: {},
+      stdout: { write: () => {} },
+      stderr: { write: (text) => (err += text) },
+      findRelease: async () => {
+        throw new LastReleaseError(
+          '@prisma/orm-postgres@1.0.0 is the last release, but the repository has no tag v1.0.0',
+        );
+      },
+      sleep: async () => {},
+    });
+    strictEqual(code, 1);
+    match(
+      err,
+      /^api:examples: the last release could not be found after \d+ attempts over [\d.]+ s: .*no tag v1\.0\.0\n$/,
+    );
   });
 });
 
 describe('parseErrors', () => {
-  it('reads located and unlocated errors and ignores other output', () => {
+  it('reads plain and pretty errors, located or not, and ignores other output', () => {
     deepStrictEqual(
       parseErrors(
         [
           'src/a.ts(3,7): error TS2322: Type "x" is not assignable.',
           "  The types of 'id' are incompatible.",
+          '\u001b[96msrc/b.ts\u001b[0m:\u001b[93m4\u001b[0m:\u001b[93m2\u001b[0m - \u001b[91merror\u001b[0m\u001b[90m TS2344: \u001b[0mType "y" does not satisfy.',
           'error TS6053: File "tsconfig.base.json" not found.',
           'generated 3 files',
         ].join('\n'),
@@ -335,6 +600,13 @@ describe('parseErrors', () => {
           column: 7,
           code: 'TS2322',
           message: 'Type "x" is not assignable.',
+        },
+        {
+          file: 'src/b.ts',
+          line: 4,
+          column: 2,
+          code: 'TS2344',
+          message: 'Type "y" does not satisfy.',
         },
         {
           file: '(no file)',

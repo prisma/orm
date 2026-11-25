@@ -16,6 +16,7 @@ packages/e2e-tests/.tmp-output
 !/wip/.gitkeep
 # The last release, installed by `pnpm api:compat`.
 /.api-compat/
+/.api-examples/
 .pnpm-store
 .cursor/*
 !.cursor/rules-footprint.config.json
