@@ -38,12 +38,13 @@ const Owner = OwnerBase.relations({
   items: rel.hasMany(() => Item, { by: 'ownerId' }),
 }).sql({ table: 'write_owners' });
 
-const contract = defineContract({ models: { Owner, Item } });
+const contract = defineContract({ version: 18, models: { Owner, Item } });
 
 type Returning = 'with returning' | 'without returning';
 
 const withoutReturning = {
   ...postgresServerVersions[18],
+  postgres: { ...postgresServerVersions[18].postgres, returning: false },
   sql: { ...postgresServerVersions[18].sql, returning: false },
 };
 

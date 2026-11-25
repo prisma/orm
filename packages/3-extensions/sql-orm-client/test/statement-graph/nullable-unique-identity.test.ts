@@ -35,6 +35,7 @@ const withoutReturning: typeof postgresAdapter = {
   ...postgresAdapter,
   capabilities: {
     ...postgresServerVersions[18],
+    postgres: { ...postgresServerVersions[18].postgres, returning: false },
     sql: { ...postgresServerVersions[18].sql, returning: false },
   },
 };

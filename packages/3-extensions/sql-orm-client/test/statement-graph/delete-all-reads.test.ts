@@ -19,6 +19,7 @@ function adapterFor(strategy: Strategy, returning: Returning): typeof postgresAd
     ...postgresAdapter,
     capabilities: {
       ...postgresServerVersions[18],
+      postgres: { ...postgresServerVersions[18].postgres, returning: returns },
       sql: {
         ...postgresServerVersions[18].sql,
         returning: returns,

@@ -28,18 +28,21 @@ test('a vector column without a length reads as the plain vector type', () => {
 });
 
 test('a contract written in TypeScript types vector() and pgvector.Vector() columns as number[]', () => {
-  const contract = defineContract({ extensions: { pgvector } }, ({ field, model, type }) => ({
-    models: {
-      Doc: model('Doc', {
-        fields: {
-          id: field.column(type.Char(36)).id(),
-          column: field.column(vector()),
-          typeHelper: field.column(type.pgvector.Vector()),
-          fixed: field.column(vector(3)),
-        },
-      }),
-    },
-  }));
+  const contract = defineContract(
+    { version: 18, extensions: { pgvector } },
+    ({ field, model, type }) => ({
+      models: {
+        Doc: model('Doc', {
+          fields: {
+            id: field.column(type.Char(36)).id(),
+            column: field.column(vector()),
+            typeHelper: field.column(type.pgvector.Vector()),
+            fixed: field.column(vector(3)),
+          },
+        }),
+      },
+    }),
+  );
   type Fields = (typeof contract)['domain']['namespaces']['public']['models']['Doc']['fields'];
   type Output = FieldTypesFromDomain<
     { readonly public: { readonly models: { readonly Doc: { readonly fields: Fields } } } },

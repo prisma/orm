@@ -6,17 +6,20 @@ import { vector } from '../src/exports/column-types';
 import pgvector from '../src/exports/pack';
 import pgvectorRuntime from '../src/exports/runtime';
 
-const contract = defineContract({ extensions: { pgvector } }, ({ field, model, type }) => ({
-  models: {
-    Doc: model('Doc', {
-      fields: {
-        id: field.column(type.Char(36)).id(),
-        anyLength: field.column(vector()),
-        fixed: field.column(vector(3)),
-      },
-    }),
-  },
-}));
+const contract = defineContract(
+  { version: 18, extensions: { pgvector } },
+  ({ field, model, type }) => ({
+    models: {
+      Doc: model('Doc', {
+        fields: {
+          id: field.column(type.Char(36)).id(),
+          anyLength: field.column(vector()),
+          fixed: field.column(vector(3)),
+        },
+      }),
+    },
+  }),
+);
 
 function encodeInsert(row: { anyLength: number[]; fixed: number[] }) {
   const { sql, context } = postgresStatic({ contract, extensions: [pgvectorRuntime] });

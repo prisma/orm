@@ -25,6 +25,7 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import postgresPack from '@internal/target-postgres/pack';
+import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 
 // Postgres-bound `defineContract` for sql-orm-client tests. This mirrors
@@ -57,8 +58,13 @@ export const gen: ComposedAuthoringHelpers<
   undefined
 >['gen'] = composedHelpers.gen;
 
+// The target as PostgreSQL 18 provides it, as `@internal/postgres`'s `defineContract({ version: 18 })` binds it.
+const postgresTarget: Omit<typeof postgresPack, 'capabilities'> & {
+  readonly capabilities: (typeof postgresServerVersions)[18];
+} = { ...postgresPack, capabilities: postgresServerVersions[18] };
+
 type SqlFamily = typeof sqlFamilyPack;
-type PostgresPack = typeof postgresPack;
+type PostgresPack = typeof postgresTarget;
 
 type TypesConstraint = Record<string, StorageTypeInstance>;
 type ModelsConstraint = Record<string, ModelLike>;
@@ -150,7 +156,7 @@ export function defineContract(
     readonly models?: ModelsConstraint;
     readonly enums?: EnumsConstraint;
   },
-): PostgresResult<TypesConstraint, ModelsConstraint, undefined, EnumsConstraint> {
+): unknown {
   const extensionPacks: readonly Pick<ComponentMetadata, 'types' | 'dataTypes'>[] = Object.values(
     definition.extensions ?? {},
   );
@@ -162,7 +168,7 @@ export function defineContract(
     dataTypeLookup,
   };
   if (factory !== undefined) {
-    return buildBoundContract(sqlFamilyPack, postgresPack, bound, factory);
+    return buildBoundContract(sqlFamilyPack, postgresTarget, bound, factory);
   }
-  return buildBoundContract(sqlFamilyPack, postgresPack, bound);
+  return buildBoundContract(sqlFamilyPack, postgresTarget, bound);
 }
