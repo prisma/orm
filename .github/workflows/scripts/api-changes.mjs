@@ -5,6 +5,7 @@
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { compareCodeUnits, exportOfLine } from '../../../scripts/public-api/api-lines.mjs';
 
 export class ApiChangesError extends Error {
   constructor(message, status) {
@@ -24,52 +25,10 @@ const HEAD = 'HEAD';
 const GITHUB_API = 'https://api.github.com';
 const REQUEST_TIMEOUT_MS = 30_000;
 
-const IDENTIFIER = '[A-Za-z_$][\\w$]*';
-const DECLARATION = new RegExp(
-  `^(?:(?:abstract|declare|async)\\s+)*(?:class|interface|type|function\\*?|const|let|var|enum|namespace|module)\\s+(${IDENTIFIER})`,
-);
-const DEFAULT_EXPORT = /^export (?:type )?default = /;
-const TYPE_ONLY_MARKER = 'export type ';
-const FORWARD = new RegExp(`^export (?:type )?(${IDENTIFIER})(?: = | from )`);
-const STAR_FORWARD = /^everything from \S+$/;
-const AUGMENTATION = new RegExp(`^augments \\S+ interface ${IDENTIFIER}`);
-
-export function exportOfLine(line) {
-  const exported = /^(\.[^:]*): /.exec(line);
-  const subpath = exported?.[1];
-  let rest;
-  if (exported) rest = line.slice(exported[0].length);
-  else if (line.startsWith('(not exported) ')) rest = line.slice('(not exported) '.length);
-  else throw new ApiChangesError(`cannot read the api.txt line: ${line}`);
-  rest = rest.replace(/^deprecated: /, '');
-
-  const name = nameOf(rest);
-  if (name === undefined) {
-    throw new ApiChangesError(
-      `cannot tell which export the api.txt line belongs to: ${line}\nThe line format in scripts/public-api/flatten.mjs has changed; teach .github/workflows/scripts/api-changes.mjs to read it.`,
-    );
-  }
-  return { subpath, name };
-}
-
-function nameOf(rest) {
-  if (DEFAULT_EXPORT.test(rest)) return 'default';
-  if (STAR_FORWARD.test(rest)) return rest;
-  const augmentation = AUGMENTATION.exec(rest);
-  if (augmentation) return augmentation[0];
-  const declaration = rest.startsWith(TYPE_ONLY_MARKER)
-    ? DECLARATION.exec(rest.slice(TYPE_ONLY_MARKER.length))
-    : DECLARATION.exec(rest);
-  if (declaration) return declaration[1];
-  return FORWARD.exec(rest)?.[1];
-}
-
 export function exportLabel(packageName, { subpath, name }) {
   if (subpath === undefined) return `${packageName} (not exported): ${name}`;
   return `${packageName}${subpath.slice(1)}: ${name}`;
 }
-
-const compareCodeUnits = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 function linesOf(text) {
   if (text === undefined) return new Set();
