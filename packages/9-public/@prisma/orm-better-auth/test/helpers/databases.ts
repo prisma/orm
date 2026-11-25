@@ -55,16 +55,34 @@ function controlClientFor(target: TargetName, connection?: string) {
 }
 
 /** Emits PSL text in memory with the control client, as `prisma contract emit` does. */
-export async function emitContract(
+export function emitContract(
   target: TargetName,
   psl: string,
   workDir: WorkDir,
 ): Promise<EmittedContract> {
+  return emitContractFiles(target, [{ path: 'contract.prisma', text: psl }], workDir);
+}
+
+export interface PslFile {
+  /** The file's path relative to the directory the contract is emitted from. */
+  readonly path: string;
+  readonly text: string;
+}
+
+/** Emits a contract written over one or more PSL files, as `prisma contract emit` does for a config whose contract is a glob. */
+export async function emitContractFiles(
+  target: TargetName,
+  files: readonly PslFile[],
+  workDir: WorkDir,
+): Promise<EmittedContract> {
   const dir = workDir.nextPath(`psl-${target}`);
-  await mkdir(dir, { recursive: true });
-  const file = join(dir, 'contract.prisma');
-  await writeFile(file, psl);
-  const contractConfig = configFor(target, file).contract;
+  for (const file of files) {
+    await mkdir(join(dir, file.path, '..'), { recursive: true });
+    await writeFile(join(dir, file.path), file.text);
+  }
+  const [only] = files;
+  const input = files.length === 1 && only !== undefined ? only.path : '**/*.prisma';
+  const contractConfig = configFor(target, join(dir, input)).contract;
   if (contractConfig?.typesModule === undefined) throw new Error('The config has no contract');
   const emitted = await controlClientFor(target).emit({
     contractConfig: {
@@ -74,6 +92,7 @@ export async function emitContract(
     },
   });
   if (!emitted.ok) {
+    const psl = files.map((file) => `// ${file.path}\n${file.text}`).join('\n');
     throw new Error(
       `Emitting this PSL failed:\n${psl}\n${JSON.stringify(emitted.failure, null, 2)}`,
     );

@@ -1,3 +1,4 @@
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import {
   assertPlainNamedEntries,
@@ -143,6 +144,31 @@ describe('writeNamedEntry', () => {
       { kind: 'entity', entityKind: 'gadget', namespaceId: 'public' },
       'A "gadget" entity in namespace "public"',
       { kind: 'gadget', namespaceId: 'public' },
+    ],
+    [
+      { kind: 'table', namespaceId: UNBOUND_NAMESPACE_ID },
+      'A table',
+      { kind: 'table', namespaceId: UNBOUND_NAMESPACE_ID },
+    ],
+    [
+      { kind: 'model', namespaceId: UNBOUND_NAMESPACE_ID },
+      'A model',
+      { kind: 'model', namespaceId: UNBOUND_NAMESPACE_ID },
+    ],
+    [
+      { kind: 'enum', namespaceId: UNBOUND_NAMESPACE_ID },
+      'An enum',
+      { kind: 'enum', namespaceId: UNBOUND_NAMESPACE_ID },
+    ],
+    [
+      { kind: 'valueSet', namespaceId: UNBOUND_NAMESPACE_ID },
+      'A value set',
+      { kind: 'valueSet', namespaceId: UNBOUND_NAMESPACE_ID },
+    ],
+    [
+      { kind: 'entity', entityKind: 'gadget', namespaceId: UNBOUND_NAMESPACE_ID },
+      'A "gadget" entity',
+      { kind: 'gadget', namespaceId: UNBOUND_NAMESPACE_ID },
     ],
   ])('words %o as its subject and meta', (site, subject, meta) => {
     expect(() => writeNamedEntry({}, '__proto__', 1, site)).toThrow(

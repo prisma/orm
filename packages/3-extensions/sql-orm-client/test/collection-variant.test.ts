@@ -517,7 +517,7 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
 
   it('deleteAll with includes after variant("feature") scopes MTI predicates through the write subquery', async () => {
     const { collection, runtime } = createReturningMixedPolyCollection();
-    runtime.setNextResults([[{ id: 1 }], []]);
+    runtime.setNextResults([[{ id: 1 }], [{ id: 1 }]]);
 
     const mixedPoly = blindCast<
       MixedPolyCountCollection,
