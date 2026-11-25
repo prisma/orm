@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   collMod,
   dataTransform,
+  deleteDocuments,
   rawAggregate,
   renameCollection,
   setValidation,
@@ -61,39 +62,41 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
     );
   });
 
-  it('says to move the copy after the later validator update, or make it fit the validator, when that update does not check the documents', async () => {
-    const harness = makeHarness();
-    harness.driver.failAggregateWith(rejected());
+  describe('when a later validator update does not check the documents, says to make it check them and the copy skip validation, or make the copy fit', () => {
+    const copy = dataTransform('move User to members', {
+      run: () =>
+        rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
+    });
+    const advice = (collection: string) =>
+      `MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. A later operation of this migration updates the validator of collection ${collection} without checking the documents already in it. In the migration's migration.ts, set checkDocuments to true on that update and add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so the copy writes under the old validator and that update checks every document, the moved ones too: run the file with node, then run the command again. Or change the pipeline in the migration's migration.ts so the documents it writes fit the validator, run the file with node, then run the command again. The operations that ran before the failure stay applied.`;
 
-    const result = await execute(harness, [
-      dataTransform('move User to members', {
-        run: () =>
-          rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
-      }),
-      setValidation('members', { bsonType: 'object' }),
-    ]);
+    it.each([
+      [
+        'the update follows the copy',
+        [setValidation('members', { bsonType: 'object' })],
+        'members',
+      ],
+      [
+        'the delete of the moved documents comes between them, as the routes write a move',
+        [
+          deleteDocuments({ collection: 'users', filter: { kind: 'user' } }),
+          setValidation('members', { bsonType: 'object' }),
+        ],
+        'members',
+      ],
+      [
+        'the target is renamed between them',
+        [renameCollection('members', 'people'), setValidation('people', { bsonType: 'object' })],
+        'members, as collection people,',
+      ],
+    ])('%s', async (_name, later, collection) => {
+      const harness = makeHarness();
+      harness.driver.failAggregateWith(rejected());
 
-    expect(failureFields(result.assertNotOk()).why).toBe(
-      "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. A later operation of this migration updates the validator of collection members without checking the documents already in it. Move the copy to after that update in the migration's migration.ts, so the documents it writes have to fit only the new validator: run the file with node, then run the command again. Or change the pipeline in the migration's migration.ts so the documents it writes fit the validator, run the file with node, then run the command again. The operations that ran before the failure stay applied.",
-    );
-  });
+      const result = await execute(harness, [copy, ...later]);
 
-  it('says to also make the moved copy write into the later name when the target is renamed before the unchecked validator update', async () => {
-    const harness = makeHarness();
-    harness.driver.failAggregateWith(rejected());
-
-    const result = await execute(harness, [
-      dataTransform('move User to members', {
-        run: () =>
-          rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
-      }),
-      renameCollection('members', 'people'),
-      setValidation('people', { bsonType: 'object' }),
-    ]);
-
-    expect(failureFields(result.assertNotOk()).why).toBe(
-      "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. A later operation of this migration updates the validator of collection members, as collection people, without checking the documents already in it. Move the copy to after that update in the migration's migration.ts and make it write into collection people, so the documents it writes have to fit only the new validator: run the file with node, then run the command again. Or change the pipeline in the migration's migration.ts so the documents it writes fit the validator, run the file with node, then run the command again. The operations that ran before the failure stay applied.",
-    );
+      expect(failureFields(result.assertNotOk()).why).toBe(advice(collection));
+    });
   });
 
   describe('does not take a later precheck for the check of the documents against the new validator when it differs from that check', () => {
