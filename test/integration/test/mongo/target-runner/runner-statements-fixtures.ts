@@ -38,7 +38,7 @@ export function closedSchema(fields: readonly string[]) {
   };
 }
 
-interface MigrationRunnerCallbacks {
+export interface MigrationRunnerCallbacks {
   onOperationStart?(operation: MigrationPlanOperation): void;
 }
 
