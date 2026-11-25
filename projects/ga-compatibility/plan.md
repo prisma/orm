@@ -242,6 +242,8 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 
 **GA waits for it.** `8.0.0` is not released until this work is complete. No output ships uncorrected under a lower maturity level.
 
+**Survey.** Every command of the three repositories is surveyed in [research/2026-11-25-prisma-cli-surface-survey.md](research/2026-11-25-prisma-cli-surface-survey.md): 91 commands, their outputs, and 21 issues for the design to settle.
+
 **To decide when it starts.** Its design discussion has not been held. One question for it: project 6 puts a level in a flag's name (`--preview-foo`), while a command states its level only in its help text. Whether flags should follow commands, for one form across the tool.
 
 ## Moved out of this stream

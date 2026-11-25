@@ -140,7 +140,7 @@ The reasons:
 - "History" was considered for the ledger and rejected: a ledger has the exact meaning needed, an append-only record of what happened.
 - Policies are per database, so they cannot live in a per-space row.
 
-The concept is renamed everywhere, not only the tables, since no name can change after `8.0.0`: the client option `verifyMarker`, the flag `db verify --marker-only`, the error codes such as `CONTRACT.MARKER_MISSING`, the error fields such as `markerHash`, the `marker` object in `--json` output, the command-line messages, the glossary and the skill. The research behind this, with counts and paths, is in `wip/research/2026-11-25-prisma-table-names.md` on the planning session's worktree; run the search again when building.
+The concept is renamed everywhere, not only the tables, since no name can change after `8.0.0`: the client option `verifyMarker`, the flag `db verify --marker-only`, the error codes such as `CONTRACT.MARKER_MISSING`, the error fields such as `markerHash`, the `marker` object in `--json` output, the command-line messages, the glossary and the skill. The research behind this, with counts and paths, is in [research/2026-11-25-prisma-table-names.md](../research/2026-11-25-prisma-table-names.md); run the search again when building.
 
 MongoDB gets the same three collections, in place of its one `_prisma_migrations` collection. The decision record on MongoDB's migration state rejected separate collections because they doubled the setup. That no longer holds: there is a row per contract space, PostgreSQL has several tables, and the collection needs no setup today. Prisma 7 never created `_prisma_migrations` on MongoDB, so nothing reads the old name. The record is updated in place.
 
