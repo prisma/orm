@@ -11,6 +11,7 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.25"
   }
 }

@@ -4,7 +4,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma 8 for Postgres: the one package a Postgres application installs",
+  "description": "Prisma 8 for Postgres: the package a Postgres application installs for its database, beside the platform packages it names as peers",
   "keywords": [
     "prisma-orm-extension"
   ],
@@ -19,10 +19,6 @@
     "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.25",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "@types/node": "catalog:",
     "arktype": "catalog:",
     "pathe": "^2.0.3",
@@ -32,12 +28,20 @@
   },
   "devDependencies": {
     "@internal/postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "@repo/tsconfig": "workspace:8.0.0-rc.25",
     "@repo/tsdown": "workspace:8.0.0-rc.25",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "@types/pg": "^8.20.0",
     "pg": "^8.22.0",
     "temporal-polyfill": "^1.0.8",
