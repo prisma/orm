@@ -7,6 +7,7 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { ownVersionsAlreadyPublished, releaseTagsFor } from './publish-packages-utils.mjs';
 import {
+  formatPlanTable,
   planWorkspace,
   planWorkspaceThrough,
   readPublishedManifests,
@@ -43,13 +44,13 @@ function expectation(name: string): string {
 }
 
 describe('print-release-plan', () => {
-  it('prints the committed expectation for the root version', () => {
+  it('prints for the root version the committed expectation on the release candidates, and the plan the manifests hold after them', () => {
     assert.deepEqual(
       rows(printed()),
       rows(
         releaseOfRootVersion(rootVersion).line === 'release-candidates'
           ? expectation('root.txt').replaceAll('<root>', rootVersion)
-          : expectation(`${rootVersion}.txt`),
+          : formatPlanTable(planWorkspace(rootDir, rootVersion)),
       ),
     );
   });
@@ -156,7 +157,7 @@ describe('a dry run of set-version and the publish planning on a copy of the man
     }
   });
 
-  it('plans 8.0.1 and 8.1.0 from a tree stamped at 8.0.1 as it does from the release candidates, and marks what is not republished', () => {
+  it('plans 8.0.1 and 8.1.0 from trees stamped at 8.0.1 and 8.1.0 as it does from the release candidates, and marks what is not republished only for a later release', () => {
     const dir = scratchWorkspace();
     try {
       setVersion(dir, '8.0.1');
@@ -164,6 +165,11 @@ describe('a dry run of set-version and the publish planning on a copy of the man
       assert.deepEqual(fromStamped, planWorkspaceThrough(rootDir, '8.1.0'));
       assert.equal(fromStamped.previous['@prisma/orm-extension-paradedb'], '0.18.0');
       assert.deepEqual(planWorkspaceThrough(dir, '8.0.1'), planWorkspaceThrough(rootDir, '8.0.1'));
+      setVersion(dir, '8.1.0');
+      assert.deepEqual(planWorkspaceThrough(dir, '8.1.0'), {
+        plan: planWorkspaceThrough(rootDir, '8.1.0').plan,
+        previous: {},
+      });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
