@@ -28,6 +28,19 @@ describe('MongoMigrationPlanner, enum values that keep their names and trade or 
     ]);
   });
 
+  it('offers whole-number values no member stores when the next whole number is past the largest safe one', () => {
+    const [refusal] = refused(
+      plan({
+        from: users('from', { A: '9007199254740991', B: '9007199254740992' }),
+        to: users('to', { A: '9007199254740992', B: '9007199254740991' }),
+        schema: live,
+      }),
+    );
+    expect(refusal?.why).toContain(
+      'first give "Status.A" a stored value no member stores, such as "0"; give "Status.B" a stored value no member stores, such as "1";',
+    );
+  });
+
   it('refuses a chain of stored values', () => {
     expect(
       refused(

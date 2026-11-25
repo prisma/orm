@@ -428,15 +428,21 @@ function changeText(enums: EnumComparison, change: MemberMove): string {
   return `Cannot change the stored value of enum value ${memberText(enums, change.enumValue)} from ${valueText(change.from)} to ${valueText(change.to)}`;
 }
 
-/** A value no member of either enum stores, of the kind of `value`: the next whole number, or a marked string. */
+/** A value no member of either enum stores, of the kind of `value`: the next whole number, else the smallest unused one, or a marked string. */
 function temporaryValue(value: StoredValue, taken: readonly JsonValue[]): StoredValue {
-  const numbers = taken.flatMap((stored) => {
-    const number = typeof stored === 'string' ? Number(stored) : stored;
-    return typeof number === 'number' && Number.isFinite(number) ? [number] : [];
-  });
-  const nextWholeNumber = numbers.length === 0 ? 0 : Math.floor(Math.max(...numbers)) + 1;
-  if (typeof value === 'number') return nextWholeNumber;
-  if (typeof value === 'string' && /^-?\d+$/.test(value)) return String(nextWholeNumber);
+  if (typeof value === 'number' || (typeof value === 'string' && /^-?\d+$/.test(value))) {
+    const asValue = (whole: number): StoredValue =>
+      typeof value === 'number' ? whole : String(whole);
+    const unused = (whole: number) =>
+      Number.isSafeInteger(whole) && !taken.some((stored) => sameValue(stored, asValue(whole)));
+    const numbers = taken.flatMap((stored) => {
+      const number = typeof stored === 'string' ? Number(stored) : stored;
+      return typeof number === 'number' && Number.isFinite(number) ? [number] : [];
+    });
+    const next = numbers.length === 0 ? 0 : Math.floor(Math.max(...numbers)) + 1;
+    if (unused(next)) return asValue(next);
+    for (let whole = 0; ; whole += 1) if (unused(whole)) return asValue(whole);
+  }
   for (let index = 1; ; index += 1) {
     const candidate = `prisma_swap_${index}`;
     if (!taken.some((stored) => sameValue(stored, candidate))) return candidate;
