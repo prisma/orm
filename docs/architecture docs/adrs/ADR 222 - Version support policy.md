@@ -74,7 +74,7 @@ The workspace-level source of truth is `MIN_TYPESCRIPT_PEER` in `scripts/validat
 
 ### DB server versions
 
-Each target package is the authoritative source of truth for its database server floor: a constant in its `src/core/server-version.ts`, exported from its `server-version` entry point (`POSTGRES_MIN_SERVER_VERSION`, `MONGO_MIN_SERVER_VERSION`). A target's `package.json` carries no Prisma configuration or metadata; Prisma 8 reads configuration only from `prisma.config.ts`.
+Each target package is the authoritative source of truth for its database server floor: a constant in its `src/core/server-version.ts`, exported from its `server-version` entry point (`POSTGRES_MIN_SERVER_VERSION`, `MONGO_MIN_SERVER_VERSION`). PostgreSQL's floor is the first version in the target's table of the capabilities each version provides, and signing and the migration commands refuse a server older than it ([ADR 335](ADR%20335%20-%20A%20contract's%20capabilities%20follow%20from%20the%20database%20version%20its%20author%20states.md)). A target's `package.json` carries no Prisma configuration or metadata; Prisma 8 reads configuration only from `prisma.config.ts`.
 
 `prisma orm init` takes the floor from the facade too. Since [ADR 325](ADR%20325%20-%20init%20gets%20everything%20about%20a%20database%20from%20its%20facade.md), the package's init contribution reads the constant for its `serverRequirement`, and the CLI keeps no copy. There is nothing to drift, so there is no drift test.
 

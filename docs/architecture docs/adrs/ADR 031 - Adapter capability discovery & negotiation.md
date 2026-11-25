@@ -43,37 +43,24 @@ Each capability is documented with a short description, references, and conforma
 
 ### Surfacing capabilities
 
-Adapters expose two layers:
+Each capability is declared by the component that knows the fact ([ADR 335](ADR%20335%20-%20A%20contract's%20capabilities%20follow%20from%20the%20database%20version%20its%20author%20states.md)):
 
-- **Static**: baked into the adapter for the dialect or profile family
-  - Example: MySQL lacks lateral, Postgres has lateral
-- **Runtime**: discovered per connection profile by probing the server
-  - Example: server version, loaded extensions, config flags, SHOW values
+- **The target** declares what each database version provides, in a table by version
+  - Example: PostgreSQL has lateral joins in every supported version; a capability that arrives with a later version is in that version's row and the rows after it
+- **The driver** declares what the connection provides
+  - Example: interactive transactions
+- **The adapter** declares what it can write as a query
 
-### Discovery API
-
-```typescript
-type AdapterProfile = {
-  adapterName: 'postgres' | 'mysql' | 'sqlite' | string
-  adapterVersion: string
-  staticCaps: Set<CapabilityId>
-  runtimeCaps: Set<CapabilityId>
-  serverMeta: {
-    serverVersion?: string
-    extensions?: Record<string, string> // name -> version
-    limits?: { maxParams?: number; maxIdentifierLen?: number }
-  }
-  profileHash: string // see below
-}
-```
+The contract's author states the database version, and the contract lists that version's capabilities plus the connection's.
 
 ### Verification (pinned profile)
 
-During verification (`prisma-next verify` or runner apply):
-1. Adapter reports `staticCaps`
-2. Adapter runs lightweight probes to compute `runtimeCaps` and `serverMeta`
-3. Tooling checks that `(static ∪ runtime)` satisfies the contract-declared capability requirements
-4. On success, the runner writes the contract's `coreHash` and `profileHash` to the marker
+During verification (`prisma db verify`, `prisma db sign`, and before the runner applies):
+1. The adapter reads the server's version during introspection
+2. The target compares the capabilities the contract requires of the database with what that version provides
+3. On success, the contract's `storageHash` and `profileHash` are written to the marker; on failure nothing is signed or applied, and the error states the versions involved
+
+When a client is created, the capabilities the contract requires of the connection are compared with what the adapter and driver declare. The runtime does not probe the database.
 
 ### Feature flags
 
@@ -121,8 +108,8 @@ Stable error codes per ADR 027:
 
 ### Discovery cadence and caching
 
-- Discovery runs during verification and runner apply to confirm contract satisfaction
-- Revalidation occurs when verification is re-run; runtime does not renegotiate a new profile in pinned mode
+- The database is checked during verification and before the runner applies
+- The check is repeated when verification is re-run; the runtime does not check the database in pinned mode
 - Lanes receive a read-only view of declared capabilities from the contract
 
 ### Feature flags use cases
@@ -148,8 +135,7 @@ Adapters must produce the same SQL for the same Plan + effective capabilities se
 
 ### Negative
 
-- Slight startup cost for discovery probes
-- Adapter authors must maintain capability matrices and conformance tests
+- Target authors must maintain the table of capabilities by version, and it cannot change for a supported version within a major version
 - Some desirable fallbacks are not possible under the one-statement rule
 
 ## Alternatives considered
@@ -160,7 +146,7 @@ Adapters must produce the same SQL for the same Plan + effective capabilities se
 
 ## Implementation notes
 
-- Add `adapter.discover()` and `adapter.lower(plan, caps, hints)` to the SPI
+- A SQL target answers what a database lacks of a contract's requirements through `databaseCapabilitiesNotProvided`
 - Provide a shared `CapabilityRegistry` with docs and conformance hooks
 - Expose `profileHash` and declared capabilities in runtime diagnostics and telemetry
 
@@ -177,7 +163,7 @@ Adapters must produce the same SQL for the same Plan + effective capabilities se
 
 ## Migration
 
-- Existing Postgres adapter seeds static caps and a minimal discovery probe for `serverVersion` and common extensions
+- The PostgreSQL target holds the table of capabilities by version, and its adapter reads the server's version number during introspection
 - Lanes begin passing capability intents to lowerers
 - Gradually gate advanced features behind required caps with clear errors
 

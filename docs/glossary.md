@@ -225,7 +225,7 @@ Each plane has its own stack type:
 
 ### Capability
 
-A specific feature that a database may or may not support (e.g., `RETURNING` clauses, vector indexes). Your contract declares which capabilities it needs; the adapter reports which ones the database provides. Prisma 8 checks these match at startup, so you find out about missing features immediately rather than at query time.
+A specific feature that a database may or may not support (e.g., `RETURNING` clauses, vector indexes). Your contract declares which capabilities it needs; they follow from the database version you state for it. Signing a database checks that it provides them, and creating a client checks that its adapter and driver provide the rest, so you find out about missing features before any query runs.
 
 ### Codec
 

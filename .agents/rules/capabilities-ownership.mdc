@@ -1,19 +1,20 @@
 ---
-description: Capabilities are adapter-reported, contracts declare requirements
+description: Each capability is declared by the component that knows the fact; contracts declare requirements
 globs: ["docs/**"]
 alwaysApply: false
 ---
 
 # Capability Ownership
 
-**Capabilities describe the database environment and are reported by adapters.** The contract only declares required capabilities in `contract.capabilities` and pins the resulting `profileHash`.
+**A capability is declared by the component that knows the fact:** the target (what a database version provides), the driver (what the connection provides), the adapter (what it can write as a query). The contract only lists required capabilities in `contract.capabilities`. See ADR 335.
 
 ## Do
 
-- Describe capabilities as adapter-reported and negotiated at connect time
-- Frame contract capabilities as requirements, not definitions
+- Say the target declares the database's capabilities by version
+- Frame contract capabilities as requirements; signing checks the database, the client checks its stack
 
 ## Avoid
 
-- Wording that implies the contract owns or defines capabilities
-- Treating `sql.*` as a separate “SQL family” capability set rather than shared adapter keys
+- Wording that implies the contract defines capabilities, or that the client reads them from the database at connect time
+- Treating `sql.*` as a separate “SQL family” capability set rather than keys shared across targets
+</content>
