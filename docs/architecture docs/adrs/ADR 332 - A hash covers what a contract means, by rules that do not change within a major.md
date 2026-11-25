@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-24
 **Domain:** Contract & Schema, Migration System
-**Supersedes:** the lists of hash inputs in [ADR 004](ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md) ("What contributes to storageHash" and "What contributes to profileHash"), the profile hash inputs in [ADR 031](ADR%20031%20-%20Adapter%20capability%20discovery%20%26%20negotiation.md) and [ADR 117](ADR%20117%20-%20Extension%20capability%20keys.md), and in [ADR 010](ADR%20010%20-%20Canonicalization%20Rules.md) the statement that a change to the canonicalization rules is handled by emitting and signing again
+**Supersedes:** the lists of hash inputs in [ADR 004](ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md) ("What contributes to storageHash" and "What contributes to profileHash"), the profile hash inputs in [ADR 031](ADR%20031%20-%20Adapter%20capability%20discovery%20%26%20negotiation.md), [ADR 065](ADR%20065%20-%20Adapter%20capability%20schema%20%26%20negotiation%20v1.md) and [ADR 117](ADR%20117%20-%20Extension%20capability%20keys.md), and in [ADR 010](ADR%20010%20-%20Canonicalization%20Rules.md) the statement that a change to the canonicalization rules is handled by emitting and signing again
 
 ## At a glance
 
@@ -49,9 +49,13 @@ A release that writes different `storage` content for a contract produces a diff
 
 ### The capability list does not change within a major
 
-Within a major version, the capability list Prisma writes for an unchanged contract source and the same configuration does not change either, so the profile hash of an unchanged contract does not change. A release may add a capability only where no existing contract lists it, for example for a database version a target newly supports. A feature that needs a new capability on a database version Prisma already supports ships in a major.
+Within a major version, the capability list Prisma writes for an unchanged contract source and the same configuration does not change either, so the profile hash of an unchanged contract does not change. A release may add a capability only to a list that no existing contract was emitted with. A database version value that a release accepts gives the same list for the rest of the major.
 
-The reason is that nothing but `prisma db sign` moves a marker's profile hash. A capability change arrives with no migration, so `prisma db migrate` finds the storage hash unchanged and leaves the marker as it is, `prisma db verify` then fails on every signed database, and the runtime reports the marker as mismatched. The work on capabilities by database version says how a target's table of capabilities lets a release add one without changing an existing contract's list.
+This binds every component that declares capabilities, inside or outside this repository: a target, an adapter, an extension or a driver. A component that adds a capability on a database version already supported changes the list of every contract that uses it, so that change ships in a major. This is the cost of the rule. For example, the Postgres adapter gained three flags in November 2026 (`insertOnConflictTarget`, `jsonAggWithoutTruncation` and `outerReferencesInDerivedTables`); after `8.0.0`, each of them would have waited for a major.
+
+The reason is that a marker's profile hash moves only when a command writes the marker: `prisma db sign`, or `prisma db migrate` and `prisma db update` when they apply a change. A capability change arrives with no migration, so `prisma db migrate` reports the database as up to date and leaves the marker as it is, `prisma db verify` then fails on every signed database, and the runtime reports the marker as mismatched.
+
+What will hold the rule is a test in each target that pins, as literals, the capability list each supported database version gives, and fails with a message that a change to it needs a major. The work on capabilities by database version is to add that test.
 
 ## Why
 
@@ -72,4 +76,4 @@ The database's ledger keeps the migration hashes it recorded, and every migratio
 - **Hash the file as written, by the rules of its format version.** Rejected: it changes the hash as soon as a later format version lays out `storage` differently.
 - **Record which version of the hashing rules produced a hash, and support several.** Rejected: a project would hold hashes computed in two ways, and every comparison would have to convert one into the other. Git's plan for a new hash function lists mixing objects hashed two ways in one repository as a non-goal.
 - **Let the rules change in a minor release, with a command that rewrites hashes.** Rejected: an upgrade within a major must need no change to a user's files or database.
-- **Let a minor release add a capability to the list of an existing contract, and have users sign every database again.** Rejected for the same reason: such an upgrade changes every database's marker. Having `prisma db migrate` move the profile hash when only it differs was not chosen either, because it would make `db migrate` sign databases.
+- **Let a minor release add a capability to the list of an existing contract, and have users sign every database again.** Rejected for the same reason: such an upgrade changes every database's marker. Having `prisma db migrate` write the marker when only the profile hash differs was not chosen either: `db migrate` would then write the marker when it has nothing to apply, so upgrading Prisma alone would change every database's marker in the next deploy.
