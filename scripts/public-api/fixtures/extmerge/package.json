@@ -1,0 +1,9 @@
+{
+  "name": "fixture-extmerge",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./package.json": "./package.json"
+  }
+}
