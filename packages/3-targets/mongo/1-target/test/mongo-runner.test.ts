@@ -1061,7 +1061,7 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
 
     expect(failureFields(result.assertNotOk())).toMatchObject({
       code: 'MIGRATION.EXECUTION_FAILED',
-      why: expect.stringContaining("change the update in the migration's migration.ts"),
+      why: expect.stringContaining("change it in the migration's migration.ts"),
       meta: {
         operationId: 'data_transform.backfill-status',
         mongoCode: 13,
@@ -1417,6 +1417,43 @@ describe('MongoMigrationRunner, a stop after a copy, which has no check', () => 
       const result = await execute(harness, [copy, operation]);
 
       expect(failureFields(result.assertNotOk()).why).toContain(`${says} ${runsAgain}`);
+    },
+  );
+});
+
+describe("MongoMigrationRunner, a data transform's update that stops part way", () => {
+  const transform = dataTransform('backfill-status', { run: () => makeRunPlan() });
+  const runsAgain =
+    'An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again.';
+  const runsOverChanged =
+    'When the command runs again, this update runs again over every document its filter selects, those it already changed among them, so make the update give the same result when it runs twice, or restore the documents it changed before you run the command again.';
+
+  it.each([
+    {
+      stop: 'a value it cannot convert',
+      error: new MongoServerError({
+        ok: 0,
+        code: 241,
+        codeName: 'ConversionFailure',
+        errmsg: "Failed to parse number 'G1' in $convert",
+      }),
+      why: `MongoDB stopped the data transform's update: Failed to parse number 'G1' in $convert. Documents it updated before that value stay updated. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. ${runsOverChanged} Fix the update in the migration's migration.ts, run the file with node, then run the command again. ${runsAgain} The operations that ran before the failure stay applied.`,
+    },
+    {
+      stop: 'any other error',
+      error: new MongoServerError({ ok: 0, code: 2, codeName: 'BadValue', errmsg: 'bad value' }),
+      why: `Documents the update changed before the error stay changed. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. ${runsOverChanged} Fix what MongoDB names; when it comes from the update, change it in the migration's migration.ts and run the file with node. Then run the command again. ${runsAgain} The operations that ran before the failure stay applied.`,
+    },
+  ])(
+    'says at $stop that the update runs again over the documents it changed',
+    async ({ error, why }) => {
+      const harness = makeHarness();
+      harness.driver.failUpdateManyWith(error);
+      harness.driver.queueResponse([]);
+
+      const result = await execute(harness, [transform]);
+
+      expect(failureFields(result.assertNotOk()).why).toBe(why);
     },
   );
 });

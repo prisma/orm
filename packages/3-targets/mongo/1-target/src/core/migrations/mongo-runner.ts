@@ -370,6 +370,9 @@ function createTargetExistsRefusal(
  * `before` the one that stopped: those whose check shows they ran are skipped, and one with no
  * check, such as a copy in a dataTransform, runs again.
  */
+const UPDATE_RUNS_AGAIN =
+  'When the command runs again, this update runs again over every document its filter selects, those it already changed among them, so make the update give the same result when it runs twice, or restore the documents it changed before you run the command again.';
+
 function rerunText(runAgain: string, before: readonly AnyMongoMigrationOperation[]): string {
   return before.some(
     (operation) => isMongoDmlOperation(operation) && operation.postcheck.length === 0,
@@ -1314,7 +1317,7 @@ function rewriteFailure(
           'MIGRATION.EXECUTION_FAILED',
           `Operation ${op.id} failed: its update met a value MongoDB cannot convert`,
           {
-            why: `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. ${rerunText("Fix the update in the migration's migration.ts, run the file with node, then run the command again", position.plan.slice(0, position.operationIndex + 1))}`,
+            why: `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. ${UPDATE_RUNS_AGAIN} ${rerunText("Fix the update in the migration's migration.ts, run the file with node, then run the command again", position.plan.slice(0, position.operationIndex + 1))}`,
             meta: { operationId: op.id, mongoCode },
           },
         )
@@ -1322,7 +1325,7 @@ function rewriteFailure(
           'MIGRATION.EXECUTION_FAILED',
           `Operation ${op.id} failed: MongoDB error ${mongoError}: ${reason}`,
           {
-            why: `Documents the update changed before the error stay changed. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. Fix what MongoDB names; when it comes from the update, change the update in the migration's migration.ts so its filter and update work on a re-run, and run the file with node. ${rerunText('Then run the command again', position.plan.slice(0, position.operationIndex + 1))}`,
+            why: `Documents the update changed before the error stay changed. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. ${UPDATE_RUNS_AGAIN} Fix what MongoDB names; when it comes from the update, change it in the migration's migration.ts and run the file with node. ${rerunText('Then run the command again', position.plan.slice(0, position.operationIndex + 1))}`,
             meta: {
               operationId: op.id,
               mongoCode,

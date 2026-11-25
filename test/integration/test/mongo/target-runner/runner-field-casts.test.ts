@@ -339,7 +339,7 @@ describe('MongoMigrationRunner, a data transform whose update MongoDB cannot con
     };
   };
   const conversionWhy = (reason: string) =>
-    `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. Fix the update in the migration's migration.ts, run the file with node, then run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`;
+    `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. When the command runs again, this update runs again over every document its filter selects, those it already changed among them, so make the update give the same result when it runs twice, or restore the documents it changed before you run the command again. Fix the update in the migration's migration.ts, run the file with node, then run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`;
 
   it(
     "reports the user's update failing, not a type change, for a filled --convert",
@@ -476,7 +476,7 @@ describe('MongoMigrationRunner, a data transform whose update MongoDB refuses fo
         why: result.failure.why,
       }).toEqual({
         message: 'Operation data_transform.User.code failed',
-        why: "Documents the update changed before the error stay changed. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. Fix what MongoDB names; when it comes from the update, change the update in the migration's migration.ts so its filter and update work on a re-run, and run the file with node. Then run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.",
+        why: "Documents the update changed before the error stay changed. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. When the command runs again, this update runs again over every document its filter selects, those it already changed among them, so make the update give the same result when it runs twice, or restore the documents it changed before you run the command again. Fix what MongoDB names; when it comes from the update, change it in the migration's migration.ts and run the file with node. Then run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.",
       });
     },
     timeouts.spinUpMongoMemoryServer,
