@@ -54,6 +54,19 @@ describe('MongoMigrationPlanner, collection renames that swap, chain or take a n
     ]);
   });
 
+  it('offers no temporary collection name the database already has', () => {
+    const [conflict] = refused(
+      plan({
+        from: models('from', { User: 'users', Account: 'accounts' }),
+        to: models('to', { User: 'accounts', Account: 'users' }),
+        schema: schemaOf(['users', 'accounts', 'prisma_swap_accounts']),
+      }),
+    );
+    expect(conflict?.why).toContain(
+      'first give model "Account" the collection "prisma_swap_users" and model "User" the collection "prisma_swap_accounts_", collections nothing uses',
+    );
+  });
+
   it.each([
     [
       'User first',

@@ -93,6 +93,15 @@ function unused(used: readonly string[], name: string): string {
   return candidate;
 }
 
+/** The collection names a temporary name must avoid: those of both contracts and of the schema being planned from. */
+function usedCollections(contracts: Contracts, schema: MongoSchemaIR): readonly string[] {
+  return [
+    ...collectionsOf(contracts.fromContract),
+    ...collectionsOf(contracts.contract),
+    ...schema.collectionNames,
+  ];
+}
+
 function collectionsOf(contract: ContractWithDomain): readonly string[] {
   return Object.values(contract.storage.namespaces).flatMap((namespace) =>
     Object.keys(namespace.entries['collection'] ?? {}),
@@ -171,9 +180,10 @@ function collectionRoute(
   pair: readonly [CollectionChange, CollectionChange],
   changes: readonly CollectionChange[],
   contracts: Contracts,
+  schema: MongoSchemaIR,
 ): string {
   const linked = linkedChanges(pair, changes, (taker, freer) => taker.to === freer.from);
-  const used = [...collectionsOf(contracts.fromContract), ...collectionsOf(contracts.contract)];
+  const used = usedCollections(contracts, schema);
   const reserved: string[] = [];
   const moves = linked.map((moving) => {
     const through = unused([...used, ...reserved], moving.to);
@@ -268,11 +278,11 @@ function collectionRenameConflict(
       return renameRefused(
         undefined,
         `${label}: collection "${to}" is renamed in the same plan`,
-        `${text}, and ${collectionChangeText(moved)}. ${ORDER}, and without the renames the plan would read the ${misread(to)}. ${collectionRoute([change, moved], others, contracts)}`,
+        `${text}, and ${collectionChangeText(moved)}. ${ORDER}, and without the renames the plan would read the ${misread(to)}. ${collectionRoute([change, moved], others, contracts, schema)}`,
       );
     }
     const holders = originModelsIn(contracts.fromContract, to);
-    const used = [...collectionsOf(contracts.fromContract), ...collectionsOf(contracts.contract)];
+    const used = usedCollections(contracts, schema);
     return renameRefused(
       undefined,
       `${label}: the schema being planned from already has a collection "${to}"`,
@@ -284,7 +294,7 @@ function collectionRenameConflict(
     return renameRefused(
       undefined,
       `${label}: another rename in the same plan takes collection name "${from}"`,
-      `${text}, and ${collectionChangeText(takes)}. ${ORDER}. ${collectionRoute([change, takes], others, contracts)}`,
+      `${text}, and ${collectionChangeText(takes)}. ${ORDER}. ${collectionRoute([change, takes], others, contracts, schema)}`,
     );
   }
   return others.some((other) => other.to === from)
