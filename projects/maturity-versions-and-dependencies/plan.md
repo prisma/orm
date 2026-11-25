@@ -18,7 +18,7 @@ Slices 1 to 4 are in the order of what cannot be changed after `8.0.0`; slices 5
 | 3, [TML-3937](https://linear.app/prisma-company/issue/TML-3937) | Releasing `8.0.0`, one package alone, and an older major | prisma/orm | 2 | `8.0.0` |
 | 4, [TML-3938](https://linear.app/prisma-company/issue/TML-3938) | The public docs: what an application installs, the levels, and each package's level | prisma/web | 1 for the install instructions, 2 for the levels | the install instructions with the release that ships slice 1; the levels with `8.0.0` |
 | 5 | Every release's notes have a "How to upgrade" section | prisma/orm | nothing | the next release candidate after slice 1 |
-| 6 | Apps that create-prisma generates list the platform packages | prisma/create-prisma | the first release of prisma/orm that contains slice 1 | create-prisma's move to that release |
+| 6, [TML-3956](https://linear.app/prisma-company/issue/TML-3956) | Apps that create-prisma generates list the platform packages | prisma/create-prisma | the first release of prisma/orm that contains slice 1 | create-prisma's move to that release |
 
 Slices 1 and 2 are a stack. Slice 4's draft can be written while slice 3 is built. Slice 5 is independent of the others and starts after slice 1's pull request.
 
