@@ -1,13 +1,11 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../../src/collection';
 import { defineContract, field, model, rel } from '../contract-builder';
 import {
   buildTestContextFromContract,
   createMockRuntime,
-  perRelationPostgresAdapter,
+  perRelationCapabilities,
 } from '../helpers';
 
 const UserBase = model('User', {
@@ -31,18 +29,11 @@ const User = UserBase.relations({
 
 const contract = defineContract({ models: { Log, User } });
 
-const withoutReturning: typeof postgresAdapter = {
-  ...postgresAdapter,
-  capabilities: {
-    ...postgresCapabilitiesByVersion[18],
-    postgres: { ...postgresCapabilitiesByVersion[18].postgres, returning: false },
-    sql: { ...postgresCapabilitiesByVersion[18].sql, returning: false },
-  },
-};
+const withoutReturning = { sql: { returning: false } } as const;
 
-function logs(adapter: typeof postgresAdapter = postgresAdapter) {
+function logs(capabilities: Readonly<Record<string, Readonly<Record<string, boolean>>>> = {}) {
   const runtime = createMockRuntime();
-  const context = buildTestContextFromContract(contract, { adapter });
+  const context = buildTestContextFromContract(contract, { capabilities });
   const collection = new Collection({ runtime, context }, 'Log', { namespaceId: 'public' });
   return { runtime, collection: collection.where({ message: 'hello' }) };
 }
@@ -85,7 +76,7 @@ describe('a table whose only unique key has a nullable column', () => {
   });
 
   it('refuses a read with includes when includes load with one query per relation', async () => {
-    const { collection, runtime } = logs(perRelationPostgresAdapter);
+    const { collection, runtime } = logs(perRelationCapabilities);
 
     await expect(collection.include('author').all()).rejects.toThrow(includeRefusal);
     expect(runtime.executions).toEqual([]);
@@ -119,7 +110,7 @@ describe('a table whose only unique key has a nullable column', () => {
   });
 
   it('refuses a deleteAll() with includes when includes load with one query per relation', async () => {
-    const { collection, runtime } = logs(perRelationPostgresAdapter);
+    const { collection, runtime } = logs(perRelationCapabilities);
 
     expect(() => collection.include('author').deleteAll()).toThrow(includeRefusal);
     expect(runtime.executions).toEqual([]);

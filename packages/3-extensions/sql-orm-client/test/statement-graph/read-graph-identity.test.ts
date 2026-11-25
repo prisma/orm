@@ -7,7 +7,7 @@ import { defineContract, field, model, rel } from '../contract-builder';
 import {
   buildTestContextFromContract,
   createMockRuntime,
-  perRelationPostgresAdapter,
+  perRelationCapabilities,
 } from '../helpers';
 
 const UserBase = model('User', {
@@ -31,7 +31,7 @@ const User = UserBase.relations({
 
 const contract = defineContract({ models: { User, Log } });
 
-const context = buildTestContextFromContract(contract, { adapter: perRelationPostgresAdapter });
+const context = buildTestContextFromContract(contract, { capabilities: perRelationCapabilities });
 
 function collectionOf<ModelName extends 'User' | 'Log'>(modelName: ModelName) {
   return new Collection({ runtime: createMockRuntime(), context }, modelName, {

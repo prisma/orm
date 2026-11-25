@@ -1,3 +1,4 @@
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 /**
  * A contributed aggregate operation, end to end against PostgreSQL.
  *
@@ -27,7 +28,7 @@ import {
 } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import { timeouts, withCollectionRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
@@ -99,10 +100,10 @@ const ReadingWithSamples = Reading.relations({
 const contract = defineContract({ version: 18, models: { Reading: ReadingWithSamples, Sample } });
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
-    contract,
+    contract: withIncludeStrategy(contract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
       extensions: [contributedAggregates],
     }),
   });
@@ -110,8 +111,8 @@ function contextOf(strategy: IncludeStrategy) {
 
 /** The same contract over a stack the extension is absent from — what the contributed operations are measured against. */
 const targetOnlyContext = createExecutionContext({
-  contract,
-  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapterFor('join') }),
+  contract: withIncludeStrategy(contract, 'join'),
+  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
 });
 
 async function setupTables(runtime: PgIntegrationRuntime): Promise<void> {

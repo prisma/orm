@@ -4,6 +4,7 @@ import {
   timestampTemporalColumn,
   timestamptzTemporalColumn,
 } from '@internal/adapter-postgres/column-types';
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 import {
   type CodecCallContext,
   CodecDescriptorImpl,
@@ -24,7 +25,7 @@ import { createPostgresCodecRegistryWithBuiltins } from '@internal/target-postgr
 import { pgText } from '@internal/target-postgres/data-types';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import {
   expectPerRelationStatements,
   timeouts,
@@ -131,10 +132,10 @@ const contract = defineContract({
 });
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
-    contract,
+    contract: withIncludeStrategy(contract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
       extensions: [includedTextExtension],
     }),
   });

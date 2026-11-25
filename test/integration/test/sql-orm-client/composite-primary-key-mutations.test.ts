@@ -1,4 +1,5 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { Contract } from '@internal/contract/types';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -7,7 +8,7 @@ import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-r
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import { authorSqlContractFromPsl } from '../scalar-lists/psl-list-authoring';
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
@@ -43,10 +44,10 @@ const Account = AccountBase.relations({
 const accountsContract = defineContract({ version: 18, models: { Account, Note } });
 function accountsContext(strategy: IncludeStrategy) {
   return createExecutionContext({
-    contract: accountsContract,
+    contract: withIncludeStrategy(accountsContract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
     }),
   });
 }
@@ -112,8 +113,8 @@ async function withVehicles(
 ): Promise<void> {
   const contract = await authorVehiclesContract();
   const context = createExecutionContext({
-    contract,
-    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapterFor('join') }),
+    contract: withIncludeStrategy(contract, 'join'),
+    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
   });
   await withPushedContractRuntime(contract, async (runtime) => {
     await fn(new Collection({ runtime, context }, 'Vehicle', { namespaceId: 'public' }), runtime);

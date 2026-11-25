@@ -32,7 +32,6 @@ import {
   type SqlRuntimeExtensionDescriptor,
 } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
-import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { expect } from 'vitest';
 import { resolveIncludeRelation } from '../src/collection-contract';
 import {
@@ -275,7 +274,8 @@ export function buildTestContextFromContract<TContract extends FrameworkContract
   options?: {
     readonly mutationDefaultGenerators?: ReadonlyArray<RuntimeMutationDefaultGenerator>;
     readonly extensions?: ReadonlyArray<SqlRuntimeExtensionDescriptor<'postgres'>>;
-    readonly adapter?: typeof postgresAdapter;
+    /** Flags that replace the contract's, namespace by namespace, as a contract stating them would list them. */
+    readonly capabilities?: Readonly<Record<string, Readonly<Record<string, boolean>>>>;
   },
 ): ExecutionContext<TContract> {
   const generators = options?.mutationDefaultGenerators ?? [];
@@ -299,27 +299,30 @@ export function buildTestContextFromContract<TContract extends FrameworkContract
   }
 
   return createExecutionContext({
-    contract,
+    contract: withCapabilitiesReplaced(contract, options?.capabilities ?? {}),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: options?.adapter ?? postgresAdapter,
+      adapter: postgresAdapter,
       extensions,
     }),
   });
 }
 
-/** The Postgres adapter, reporting that the database cannot run the one-query include, so includes load with one query per relation. */
-export const perRelationPostgresAdapter: typeof postgresAdapter = {
-  ...postgresAdapter,
-  capabilities: {
-    ...postgresCapabilitiesByVersion[18],
-    sql: {
-      ...postgresCapabilitiesByVersion[18].sql,
-      outerReferencesInDerivedTables: false,
-      jsonAggWithoutTruncation: false,
-    },
-  },
-};
+function withCapabilitiesReplaced<TContract extends FrameworkContract<SqlStorage>>(
+  contract: TContract,
+  replaced: Readonly<Record<string, Readonly<Record<string, boolean>>>>,
+): TContract {
+  const capabilities = { ...contract.capabilities };
+  for (const [namespace, flags] of Object.entries(replaced)) {
+    capabilities[namespace] = { ...capabilities[namespace], ...flags };
+  }
+  return { ...contract, capabilities };
+}
+
+/** The capabilities under which the database cannot run the one-query include, so includes load with one query per relation. */
+export const perRelationCapabilities = {
+  sql: { outerReferencesInDerivedTables: false, jsonAggWithoutTruncation: false },
+} as const;
 
 const testContext: ExecutionContext<TestContract> = buildTestContextFromContract(baseTestContract);
 

@@ -5,7 +5,6 @@ import {
 } from '@internal/contract/types';
 import pgvectorRuntime from '@internal/extension-pgvector/runtime';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
-import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 
 const POSTGRES_DEFAULT_NAMESPACE_ID = 'public' as const;
 
@@ -118,25 +117,29 @@ export type IncludeStrategy = 'join' | 'query';
 
 export const includeStrategies: readonly IncludeStrategy[] = ['join', 'query'];
 
-type CapabilityMatrix = Readonly<Record<string, Readonly<Record<string, boolean>>>>;
-
 const strategyCapabilities: Record<IncludeStrategy, Record<string, boolean>> = {
   join: { jsonAgg: true, outerReferencesInDerivedTables: true, jsonAggWithoutTruncation: true },
   query: { outerReferencesInDerivedTables: false, jsonAggWithoutTruncation: false },
 };
 
-/** The Postgres adapter reporting `reported`, and under `'query'` that the database cannot run the one-query include. */
-export function postgresAdapterFor(
-  strategy: IncludeStrategy,
-  reported: CapabilityMatrix = postgresCapabilitiesByVersion[18],
-): typeof postgresAdapter {
+/** `contract`, with its `sql` flags replaced by `flags`, as a contract stating them would list them. */
+export function withSqlCapabilities<TContract extends FrameworkContract<SqlStorage>>(
+  contract: TContract,
+  flags: Readonly<Record<string, boolean>>,
+): TContract {
+  const capabilities = contract.capabilities;
   return {
-    ...postgresAdapter,
-    capabilities: {
-      ...reported,
-      sql: { ...reported['sql'], ...strategyCapabilities[strategy] },
-    },
+    ...contract,
+    capabilities: { ...capabilities, sql: { ...capabilities['sql'], ...flags } },
   };
+}
+
+/** `contract`, with the capabilities that make the ORM load includes in one query (`'join'`) or with one query per relation (`'query'`). */
+export function withIncludeStrategy<TContract extends FrameworkContract<SqlStorage>>(
+  contract: TContract,
+  strategy: IncludeStrategy,
+): TContract {
+  return withSqlCapabilities(contract, strategyCapabilities[strategy]);
 }
 
 const testContexts: Record<IncludeStrategy, ExecutionContext<TestContract>> = {
@@ -146,10 +149,10 @@ const testContexts: Record<IncludeStrategy, ExecutionContext<TestContract>> = {
 
 function testContextFor(strategy: IncludeStrategy): ExecutionContext<TestContract> {
   return createExecutionContext({
-    contract: baseTestContract,
+    contract: withIncludeStrategy(baseTestContract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
       extensions: [pgvectorRuntime],
     }),
   });
@@ -159,16 +162,16 @@ export function getTestContext(strategy: IncludeStrategy = 'join'): ExecutionCon
   return testContexts[strategy];
 }
 
-/** A context for a contract a test built itself, whose capabilities the adapter reports, with the include strategy's. */
+/** A context for a contract a test built itself, with the include strategy's capabilities. */
 export function contextFor<TContract extends FrameworkContract<SqlStorage>>(
   contract: TContract,
   strategy: IncludeStrategy,
 ): ExecutionContext<TContract> {
   return createExecutionContext({
-    contract,
+    contract: withIncludeStrategy(contract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy, contract.capabilities),
+      adapter: postgresAdapter,
       extensions: [pgvectorRuntime],
     }),
   });
@@ -195,10 +198,10 @@ const polyTestContract = deserializePolyContract();
 
 function polyTestContextFor(strategy: IncludeStrategy): ExecutionContext<PolyContract> {
   return createExecutionContext({
-    contract: polyTestContract,
+    contract: withIncludeStrategy(polyTestContract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
       extensions: [pgvectorRuntime],
     }),
   });

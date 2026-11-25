@@ -1,12 +1,17 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
-import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { describe, expect, it } from 'vitest';
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import {
+  type IncludeStrategy,
+  includeStrategies,
+  withIncludeStrategy,
+  withSqlCapabilities,
+} from './helpers';
 import {
   expectPerRelationStatements,
   timeouts,
@@ -42,25 +47,18 @@ const contract = defineContract({ version: 18, models: { Owner, Item } });
 
 type Returning = 'with returning' | 'without returning';
 
-const withoutReturning = {
-  ...postgresCapabilitiesByVersion[18],
-  postgres: { ...postgresCapabilitiesByVersion[18].postgres, returning: false },
-  sql: { ...postgresCapabilitiesByVersion[18].sql, returning: false },
-};
-
 function contextOf(
   strategy: IncludeStrategy,
   returning: Returning,
 ): ExecutionContext<typeof contract> {
   return createExecutionContext({
-    contract,
-    stack: createSqlExecutionStack({
-      target: postgresTarget,
-      adapter:
-        returning === 'with returning'
-          ? postgresAdapterFor(strategy)
-          : postgresAdapterFor(strategy, withoutReturning),
-    }),
+    contract: withIncludeStrategy(
+      returning === 'with returning'
+        ? contract
+        : withSqlCapabilities(contract, { returning: false }),
+      strategy,
+    ),
+    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
   });
 }
 

@@ -1,6 +1,4 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../../src/collection';
 import { deleteAllGraph } from '../../src/statement-graph/collection-graphs';
@@ -13,19 +11,12 @@ import { printGraph } from './print-graph';
 type Strategy = 'join' | 'query';
 type Returning = 'with RETURNING' | 'without RETURNING';
 
-function adapterFor(strategy: Strategy, returning: Returning): typeof postgresAdapter {
-  const returns = returning === 'with RETURNING';
+function capabilitiesFor(strategy: Strategy, returning: Returning) {
   return {
-    ...postgresAdapter,
-    capabilities: {
-      ...postgresCapabilitiesByVersion[18],
-      postgres: { ...postgresCapabilitiesByVersion[18].postgres, returning: returns },
-      sql: {
-        ...postgresCapabilitiesByVersion[18].sql,
-        returning: returns,
-        outerReferencesInDerivedTables: strategy === 'join',
-        jsonAggWithoutTruncation: strategy === 'join',
-      },
+    sql: {
+      returning: returning === 'with RETURNING',
+      outerReferencesInDerivedTables: strategy === 'join',
+      jsonAggWithoutTruncation: strategy === 'join',
     },
   };
 }
@@ -68,7 +59,7 @@ const tables = [
 function rowsOf(modelName: 'NoKey' | 'NullableKey', strategy: Strategy, returning: Returning) {
   const runtime = createMockRuntime();
   const context = buildTestContextFromContract(contract, {
-    adapter: adapterFor(strategy, returning),
+    capabilities: capabilitiesFor(strategy, returning),
   });
   const collection = new Collection({ runtime, context }, modelName, { namespaceId: 'public' });
   return { runtime, rows: collection.where({ message: 'hello' }) };
@@ -127,7 +118,7 @@ describe.each(tables)(
 
 function deleteAllUsers(strategy: Strategy, returning: Returning, withPosts: boolean): Graph {
   const context = buildTestContextFromContract(getTestContract(), {
-    adapter: adapterFor(strategy, returning),
+    capabilities: capabilitiesFor(strategy, returning),
   });
   const users = createCollectionFor('User', context.contract).collection.where({ name: 'Ada' });
   const state = withPosts ? users.include('posts').state : users.state;

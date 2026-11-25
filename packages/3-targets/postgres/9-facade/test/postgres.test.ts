@@ -52,14 +52,13 @@ vi.mock('pg', () => {
 });
 
 import { Client, Pool } from 'pg';
-import type { InteractiveTransactionsCapability } from '../src/exports/runtime';
+import { defineContract } from '../src/exports/contract-builder';
 import { buildNativeEnumsMapForNamespace } from '../src/runtime/native-enums';
 import postgres from '../src/runtime/postgres';
 
 const contract = createContract<SqlStorage>();
-const transactionalContract: Contract<SqlStorage> & {
-  readonly capabilities: InteractiveTransactionsCapability;
-} = { ...contract, capabilities: { sql: { interactiveTransactions: true } } };
+// The default capabilities list includes the driver's interactive transactions.
+const transactionalContract = defineContract({ version: 18 });
 
 function poolEndSpy() {
   return (Pool as unknown as { _endSpy: ReturnType<typeof vi.fn> })._endSpy;

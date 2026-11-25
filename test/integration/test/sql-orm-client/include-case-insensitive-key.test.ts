@@ -1,10 +1,11 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { includeStrategies, postgresAdapterFor } from './helpers';
+import { includeStrategies, withIncludeStrategy } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 
 const OwnerBase = model('Owner', {
@@ -36,10 +37,10 @@ describe.each(includeStrategies)('includes matched by a case-insensitive key (%s
     'attaches the rows the database matches, whatever the case each side stores',
     async () => {
       const context = createExecutionContext({
-        contract,
+        contract: withIncludeStrategy(contract, strategy),
         stack: createSqlExecutionStack({
           target: postgresTarget,
-          adapter: postgresAdapterFor(strategy),
+          adapter: postgresAdapter,
         }),
       });
       await withPushedContractRuntime(contract, async (runtime) => {

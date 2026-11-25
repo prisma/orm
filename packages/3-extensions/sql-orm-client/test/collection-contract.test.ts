@@ -45,7 +45,7 @@ describe('collection-contract capability detection', () => {
           lateral: true,
         },
       },
-    } as typeof contract;
+    } as unknown as typeof contract;
 
     expect(hasContractCapability(withTargetCapability, 'returning')).toBe(true);
     expect(hasContractCapability(withTargetCapability, 'lateral')).toBe(true);
@@ -60,7 +60,7 @@ describe('collection-contract capability detection', () => {
           returning: true,
         },
       },
-    } as typeof contract;
+    } as unknown as typeof contract;
 
     expect(() => assertReturningCapability(withTargetCapability, 'create()')).not.toThrow();
   });
