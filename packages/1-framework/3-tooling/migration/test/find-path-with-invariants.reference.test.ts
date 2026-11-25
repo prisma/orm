@@ -70,10 +70,10 @@ function unprunedSearch(
 }
 
 describe('findPathWithInvariants — agrees with an unpruned search', () => {
-  it('returns the same path on random small graphs with cycles, runs of same-hash migrations and shared providers', () => {
+  it('returns the same path on random small graphs with cycles, runs of self-edges and shared providers', () => {
     const invariantPool = ['a', 'b', 'c', 'd'];
     let satisfiable = 0;
-    let severalSameHashOnPath = 0;
+    let selfEdgeRunsOnPath = 0;
     for (let seed = 1; seed <= 3000; seed++) {
       const random = seededRandom(seed);
       const pick = <T>(xs: readonly T[]): T | undefined => xs[Math.floor(random() * xs.length)];
@@ -116,17 +116,14 @@ describe('findPathWithInvariants — agrees with an unpruned search', () => {
             expected[i + 1]?.from === e.to,
         )
       ) {
-        severalSameHashOnPath++;
+        selfEdgeRunsOnPath++;
       }
       expect({ seed, path: findPathWithInvariants(graph, fromHash, toHash, required) }).toEqual({
         seed,
         path: expected,
       });
     }
-    expect({ satisfiable, severalSameHashOnPath }).toEqual({
-      satisfiable: expect.any(Number),
-      severalSameHashOnPath: expect.any(Number),
-    });
-    console.log({ satisfiable, severalSameHashOnPath });
+    expect(satisfiable).toBeGreaterThan(1000);
+    expect(selfEdgeRunsOnPath).toBeGreaterThan(100);
   });
 });

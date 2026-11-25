@@ -37,7 +37,7 @@ const dirNames = (path: readonly MigrationEdge[] | null): readonly string[] | nu
 
 describe('findPathWithInvariants — states that can no longer cover a required invariant', () => {
   it(
-    'plans a fresh database through 40 same-hash migrations that each provide an invariant',
+    'plans a fresh database through 40 schema migrations each followed by a self-edge that provides an invariant',
     () => {
       const k = 40;
       const packages: OnDiskMigrationPackage[] = [];
@@ -57,23 +57,23 @@ describe('findPathWithInvariants — states that can no longer cover a required 
   );
 
   it(
-    'plans a fresh database through 40 data-only migrations on one contract that each provide an invariant',
+    'plans a fresh database through 40 self-edges on one contract that each provide an invariant',
     () => {
       const k = 40;
-      const selfLoops = Array.from({ length: k }, (_, i) =>
+      const selfEdges = Array.from({ length: k }, (_, i) =>
         pkg('H', 'H', `m_self_${i}`, [`inv-${i}`]),
       );
-      const graph = reconstructGraph([pkg(E, 'H', 'm_init'), ...selfLoops]);
+      const graph = reconstructGraph([pkg(E, 'H', 'm_init'), ...selfEdges]);
       const required = new Set(Array.from({ length: k }, (_, i) => `inv-${i}`));
       expect(dirNames(findPathWithInvariants(graph, E, 'H', required))).toEqual([
         'm_init',
-        ...selfLoops.map((p) => p.dirName),
+        ...selfEdges.map((p) => p.dirName),
       ]);
     },
     timeouts.vitestPackageDefault,
   );
 
-  it('skips a same-hash provider when a later migration on the route provides the invariant', () => {
+  it('skips a self-edge provider when a later migration on the route provides the invariant', () => {
     const graph = reconstructGraph([
       pkg(E, 'H1', 'm1'),
       pkg('H1', 'H1', 'm_self', ['X']),
