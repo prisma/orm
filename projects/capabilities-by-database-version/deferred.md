@@ -9,7 +9,7 @@ ADR 335 decides that each capability is declared by the component that knows the
 - Decision records: ADR 010, 016, 105, 114, 115, 116, 117, 118, 123, 157, 202, 210, 252, 261, 313.
 - Subsystem docs: `3. Query Lanes.md`, `6. Ecosystem Extensions & Packs.md`, and the parts of `5. Adapters & Targets.md` outside "Adapter capabilities and discovery".
 
-## The Supabase client's contract is not required to list anything
+## A contract source given no capabilities is not refused
 
 A config built without the PostgreSQL package's `defineConfig` that forgets `postgresContractCapabilities` emits a contract with no database capabilities, and nothing refuses it. Refusing it needs the SQL family to know that a target expects some. Done is a refusal at emit that names the missing call.
 
