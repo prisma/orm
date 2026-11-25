@@ -108,8 +108,12 @@ function listed(items: readonly string[]): string {
     : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
+function keysOf(flags: readonly CapabilityFlag[]): string {
+  return listed(flags.map(({ namespace, flag }) => `${namespace}.${flag}`));
+}
+
 /**
- * What a PostgreSQL database does not provide, said in versions, with what to do about it. The contract does not record the version it states, and its capabilities list can turn on a flag its version lacks, so the remedy says what the contract must require rather than which version to write. "N or later" holds because each row of the table holds every flag of the row before it.
+ * What a PostgreSQL database does not provide, said in versions, with what to do about it. The check cannot tell whether the stated version or the capabilities list turned a flag on, so the message always says to remove the flags from the list if the list turns them on; that is true either way. "N or later" holds because each row of the table holds every flag of the row before it.
  */
 export function postgresDatabaseCapabilitiesNotProvidedMessage(
   notProvided: PostgresDatabaseCapabilitiesNotProvided,
@@ -124,15 +128,20 @@ export function postgresDatabaseCapabilitiesNotProvidedMessage(
     const first = versions[0];
     return `This release of Prisma requires PostgreSQL ${first} or later. ${runs} Upgrade the database to PostgreSQL ${first} or later.`;
   }
-  const provided = rowVersionOf(notProvided.serverVersionNumber, table);
-  const required = versions.find((version) =>
-    notProvided.missing.every((flag) => rowHas(table, version, flag)),
-  );
-  if (required === undefined) {
-    const flags = listed(notProvided.missing.map(({ namespace, flag }) => `${namespace}.${flag}`));
-    return `Your contract requires ${flags} of the database, which no PostgreSQL version Prisma supports provides together. ${runs} Change your contract to require only what PostgreSQL ${provided} provides: the version it states and its capabilities list must not turn on what PostgreSQL ${provided} lacks.`;
+  const stated = rowVersionOf(notProvided.serverVersionNumber, table);
+  const firstVersionWith = (flag: CapabilityFlag) =>
+    versions.find((version) => rowHas(table, version, flag));
+  const inSomeVersion = notProvided.missing.filter((flag) => firstVersionWith(flag) !== undefined);
+  const inNoVersion = notProvided.missing.filter((flag) => firstVersionWith(flag) === undefined);
+  const noVersionProvides = 'which no PostgreSQL version Prisma supports provides';
+  if (inSomeVersion.length === 0) {
+    return `Your contract requires ${keysOf(inNoVersion)}, ${noVersionProvides}. ${runs} Remove ${inNoVersion.length === 1 ? 'it' : 'them'} from your contract's capabilities list.`;
   }
-  return `Your contract requires PostgreSQL ${required} or later. ${runs} Either upgrade the database, or change your contract to require only what PostgreSQL ${provided} provides: the version it states and its capabilities list must not turn on the features that need ${required}.`;
+  const required = Math.max(...inSomeVersion.map((flag) => firstVersionWith(flag) ?? 0));
+  const versioned = `Your contract requires PostgreSQL ${required} or later. ${runs} Either upgrade the database, or state version ${stated} for your contract, which turns off the features that need ${required}. If its capabilities list turns one of them on (${keysOf(inSomeVersion)}), remove it there.`;
+  return inNoVersion.length === 0
+    ? versioned
+    : `${versioned} It also requires ${keysOf(inNoVersion)}, ${noVersionProvides}: remove ${inNoVersion.length === 1 ? 'it' : 'them'} from its capabilities list.`;
 }
 
 /** What a PostgreSQL server at `serverVersionNumber` does not provide of `capabilities`, said in versions by PostgreSQL's table, or `undefined` when it provides them all. */

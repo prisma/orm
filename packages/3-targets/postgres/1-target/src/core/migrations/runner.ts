@@ -172,7 +172,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
   /**
    * Body of the migration runner without transaction management. The
    * caller ({@link PostgresMigrationRunner.execute}) owns the
-   * `BEGIN`/`COMMIT`/`ROLLBACK` lifecycle.
+   * `BEGIN`/`COMMIT`/`ROLLBACK` lifecycle, and checks the database's capabilities for every space before it calls this; a direct caller must do the same.
    */
   async executeOnConnection(
     options: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>,

@@ -3,7 +3,10 @@ import {
   postgresDatabaseCapabilitiesNotProvided,
   postgresDatabaseCapabilitiesNotProvidedMessage,
 } from '../src/core/database-capabilities-not-provided';
-import { postgresCapabilitiesByVersion } from '../src/core/server-version';
+import {
+  type CapabilitiesByVersion,
+  postgresCapabilitiesByVersion,
+} from '../src/core/server-version';
 
 // Every row of the shipped table is the same, since no PostgreSQL feature Prisma supports needs a version above 15. This table has a flag only from 17.
 const table = {
@@ -97,11 +100,11 @@ describe('the message for what a PostgreSQL database lacks', () => {
         table,
       ),
     ).toBe(
-      'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 16.4. Either upgrade the database, or change your contract to require only what PostgreSQL 16 provides: the version it states and its capabilities list must not turn on the features that need 17.',
+      'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 16.4. Either upgrade the database, or state version 16 for your contract, which turns off the features that need 17. If its capabilities list turns one of them on (sql.mergeReturning), remove it there.',
     );
   });
 
-  it('names the capabilities when no version provides them all', () => {
+  it('names the capabilities no version provides beside those a later version provides', () => {
     expect(
       postgresDatabaseCapabilitiesNotProvidedMessage(
         {
@@ -115,7 +118,25 @@ describe('the message for what a PostgreSQL database lacks', () => {
         table,
       ),
     ).toBe(
-      'Your contract requires sql.mergeReturning and postgres.elsewhere of the database, which no PostgreSQL version Prisma supports provides together. This database runs PostgreSQL 16.4. Change your contract to require only what PostgreSQL 16 provides: the version it states and its capabilities list must not turn on what PostgreSQL 16 lacks.',
+      'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 16.4. Either upgrade the database, or state version 16 for your contract, which turns off the features that need 17. If its capabilities list turns one of them on (sql.mergeReturning), remove it there. It also requires postgres.elsewhere, which no PostgreSQL version Prisma supports provides: remove it from its capabilities list.',
+    );
+  });
+
+  it('says to remove from the capabilities list what no version provides', () => {
+    expect(
+      postgresDatabaseCapabilitiesNotProvidedMessage(
+        {
+          kind: 'capabilities-missing',
+          serverVersionNumber: 160004,
+          missing: [
+            { namespace: 'postgres', flag: 'elsewhere' },
+            { namespace: 'postgres', flag: 'nowhere' },
+          ],
+        },
+        table,
+      ),
+    ).toBe(
+      "Your contract requires postgres.elsewhere and postgres.nowhere, which no PostgreSQL version Prisma supports provides. This database runs PostgreSQL 16.4. Remove them from your contract's capabilities list.",
     );
   });
 
@@ -156,22 +177,37 @@ describe('the message for a flag the capabilities list turned on', () => {
     const notProvided = notProvidedOn(160004, forVersion16WithMergeReturningTurnedOn);
 
     expect(notProvided && postgresDatabaseCapabilitiesNotProvidedMessage(notProvided, table)).toBe(
-      'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 16.4. Either upgrade the database, or change your contract to require only what PostgreSQL 16 provides: the version it states and its capabilities list must not turn on the features that need 17.',
+      'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 16.4. Either upgrade the database, or state version 16 for your contract, which turns off the features that need 17. If its capabilities list turns one of them on (sql.mergeReturning), remove it there.',
     );
   });
 });
 
-describe("PostgreSQL's table of versions", () => {
-  const versions = Object.keys(postgresCapabilitiesByVersion).map(Number);
+/** The pairs of a version and the one before it whose flags that are on the later version does not keep on. */
+function versionsDroppingAFlag(capabilitiesByVersion: CapabilitiesByVersion) {
+  const versions = Object.keys(capabilitiesByVersion).map(Number);
+  const flagsOn = (version: number) =>
+    Object.entries(capabilitiesByVersion[version] ?? {}).flatMap(([namespace, flags]) =>
+      Object.entries(flags).flatMap(([flag, on]) => (on ? [`${namespace}.${flag}`] : [])),
+    );
+  return versions.slice(1).flatMap((version, index) => {
+    const previous = versions[index] ?? version;
+    const dropped = flagsOn(previous).filter((flag) => !flagsOn(version).includes(flag));
+    return dropped.length === 0 ? [] : [{ version, previous, dropped }];
+  });
+}
 
-  it.each(versions.slice(1).map((version, index) => [version, versions[index]] as const))(
-    'gives %i every flag of %i, which the message\'s "PostgreSQL N or later" depends on: a version that drops a flag needs its own wording',
-    (version, previous) => {
-      const row =
-        postgresCapabilitiesByVersion[version as keyof typeof postgresCapabilitiesByVersion];
-      const before =
-        postgresCapabilitiesByVersion[previous as keyof typeof postgresCapabilitiesByVersion];
-      expect(row).toMatchObject(before);
-    },
-  );
+describe("PostgreSQL's table of versions", () => {
+  it('gives each version every flag that is on in the version before it, which the message\'s "PostgreSQL N or later" depends on: a version that drops a flag needs its own wording', () => {
+    expect(versionsDroppingAFlag(postgresCapabilitiesByVersion)).toEqual([]);
+  });
+
+  it('counts a flag written off and then turned on as gained, and one turned off as dropped', () => {
+    expect(
+      versionsDroppingAFlag({
+        15: { sql: { returning: true, mergeReturning: false } },
+        16: { sql: { returning: true, mergeReturning: true } },
+        17: { sql: { returning: false, mergeReturning: true } },
+      }),
+    ).toEqual([{ version: 17, previous: 16, dropped: ['sql.returning'] }]);
+  });
 });
