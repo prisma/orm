@@ -190,10 +190,13 @@ function refusingPolicy(source: PolicySource, forbids: string): string {
 const KEEP_APPLIED_MIGRATION =
   'If another database has already applied a migration listed here, keep it as it is.';
 
-function doItAnyway(source: PolicySource): string {
+/**
+ * How a refused change can still happen: only by the database's owner changing its policy. A ref's refusal gets no such sentence, because changing what a ref declares to get past a refusal is what ADR 334 rules out.
+ */
+function doItAnyway(source: PolicySource): readonly string[] {
   return source.kind === 'ref'
-    ? `To do it anyway, whoever owns that database must first change the data protection policy ${source.refName} declares.`
-    : 'To do it anyway, whoever owns the database must first change its data protection policy.';
+    ? []
+    : ['To do it anyway, whoever owns the database must first change its data protection policy.'];
 }
 
 function quotedList(names: readonly string[]): string {
@@ -295,7 +298,7 @@ function keepProtected(
           migrationPlan,
         )),
     ...(extensionSpaces.length === 0 ? [] : [extensionsOwnMigrations(extensionSpaces)]),
-    doItAnyway(refusal.source),
+    ...doItAnyway(refusal.source),
   ].join(' ');
 }
 
