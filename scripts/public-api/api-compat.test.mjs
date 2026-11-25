@@ -237,6 +237,19 @@ describe('the report', () => {
     match(markdown, /```json\n\{"path":"\.","export":"Db","test":"type"\}\n```/);
   });
 
+  it('keeps the job summary within the bytes it is given, saying the rest is in the log', () => {
+    const breaks = Array.from({ length: 200 }, (_, index) => ({
+      ...strictBreak,
+      name: `Export${index}`,
+    }));
+    const markdown = reportMarkdown(
+      { version: '8.0.0', results: [result({ breaks })], notReleased: [] },
+      { maxBytes: 4000 },
+    );
+    strictEqual(Buffer.byteLength(markdown) <= 4000, true);
+    match(markdown, /The rest is in the job log\.\n$/);
+  });
+
   it('keeps text such as <string> in the job summary', () => {
     const markdown = reportMarkdown({
       version: '8.0.0',
@@ -307,6 +320,25 @@ describe('removedPackageResults', () => {
         [{ name: '*', test: 'package', failsRun: strict }],
       );
     }
+  });
+
+  it('prints the record that would accept a removal', () => {
+    const outcome = removedPackageResults({
+      removed: ['@prisma/orm-gone'],
+      version: '8.0.0-rc.25',
+      strict: false,
+      records: [],
+    });
+    deepStrictEqual(outcome.results[0].breaks[0].record, {
+      package: '@prisma/orm-gone',
+      lastRelease: '8.0.0-rc.25',
+      reason: '…',
+    });
+    const text = reportText({ version: '8.0.0-rc.25', results: outcome.results, notReleased: [] });
+    match(
+      text,
+      /to record it in packages\/9-public\/removed-packages\.json: \{"package":"@prisma\/orm-gone"/,
+    );
   });
 
   it('lists a recorded removal as recorded', () => {
@@ -398,8 +430,28 @@ describe('main', () => {
     strictEqual((await run([], '8.0.0')).code, 1);
   });
 
+  it('starts no more workers than there are packages', async () => {
+    let workers;
+    await run(['--jobs', '1000000000'], '8.0.0-rc.25', {
+      check: async (jobs, count) => {
+        workers = count;
+        return [];
+      },
+    });
+    strictEqual(workers, 1);
+  });
+
+  it('does not read the removed-package records under --only', async () => {
+    const { code } = await run([], '8.0.0-rc.25', {
+      removedRecords: () => {
+        throw new RecordsError('packages/9-public/removed-packages.json: not JSON');
+      },
+    });
+    strictEqual(code, 0);
+  });
+
   it('rejects --jobs that is not a positive whole number', async () => {
-    for (const jobs of ['0', 'x', '1.5']) {
+    for (const jobs of ['0', 'x', '1.5', '99999999999999999999']) {
       const { code, err } = await run(['--jobs', jobs], '8.0.0');
       strictEqual(code, 1);
       match(err, /--jobs must be a positive whole number/);

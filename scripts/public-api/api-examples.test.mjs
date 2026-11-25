@@ -102,7 +102,17 @@ const app = (
   ),
 });
 
-const CURRENT_APPS = ['app', 'added', 'nostep', 'exits', 'killed', 'slow', 'pretty'];
+const CURRENT_APPS = [
+  'app',
+  'added',
+  'nostep',
+  'exits',
+  'killed',
+  'slow',
+  'pretty',
+  'precheck',
+  'misconfigured',
+];
 
 function linkNodeModules(appDir) {
   const modules = join(appDir, 'node_modules');
@@ -134,6 +144,10 @@ before(() => {
     ...app('nostep', { script: 'echo skipped' }),
     ...app('exits', { script: `node -e "process.exit(3)" && ${TSC}` }),
     ...app('killed', { script: `kill -KILL $$ && ${TSC}` }),
+    ...app('precheck', {
+      script: `node -e "console.log('src/x.ts(1,1): error TS2322: Type from a step before tsc.'); process.exit(1)" && ${TSC}`,
+    }),
+    ...app('misconfigured', { script: 'tsc --project tsconfig.missing.json --noEmit' }),
     ...app('slow', {
       script: `node slow.mjs && ${TSC}`,
       files: {
@@ -431,9 +445,22 @@ describe('checkExamples', () => {
     strictEqual(failsRun(report), true);
   });
 
-  it('is a problem when the typecheck exits non-zero without a type error', async () => {
-    const report = await check({ only: ['exits'] });
-    match(resultFor(report, 'exits').problems[0], /exited with 3 without a type error/);
+  it('is a problem when a step before its tsc run fails, whatever that step printed', async () => {
+    for (const name of ['exits', 'precheck']) {
+      const report = await check({ only: [name] });
+      match(resultFor(report, name).problems[0], /a step before its tsc run exited with [13]/);
+      deepStrictEqual(resultFor(report, name).errors, []);
+      strictEqual(failsRun(report), true);
+    }
+  });
+
+  it('is a problem, at any version, when the compiler cannot run as configured', async () => {
+    const report = await check({ only: ['misconfigured'], findRelease: releaseAs('1.0.0-rc.1') });
+    match(
+      resultFor(report, 'misconfigured').problems[0],
+      /the compiler could not run as configured: TS\d+/,
+    );
+    deepStrictEqual(resultFor(report, 'misconfigured').errors, []);
     strictEqual(failsRun(report), true);
   });
 
@@ -690,6 +717,25 @@ describe('the record printed for an error', () => {
     reason: '…',
   };
 
+  it('is not printed for errors a record cannot tell apart, which share a line and a message', () => {
+    const same = { file: 'src/a.ts', line: 3, code: 'TS2322', message: 'Same.', failsRun: true };
+    const text = reportText({
+      ...report,
+      results: [
+        {
+          app: 'demo',
+          errors: [
+            { ...same, column: 1 },
+            { ...same, column: 9 },
+          ],
+          problems: [],
+        },
+      ],
+    });
+    strictEqual(text.includes('to record it'), false);
+    match(text, /no record printed: 2 errors on this line have this message/);
+  });
+
   it('is printed, ready to paste, under each unrecorded error, and not under a recorded one', () => {
     const text = reportText(report);
     strictEqual(text.split('to record it').length - 1, 1);
@@ -701,6 +747,32 @@ describe('the record printed for an error', () => {
       reportMarkdown(report).includes(`\n\`\`\`json\n${JSON.stringify(printed)}\n\`\`\``),
       true,
     );
+  });
+});
+
+describe('the job summary, when long', () => {
+  it('stays within the bytes it is given', () => {
+    const errors = Array.from({ length: 300 }, (_, line) => ({
+      file: `src/f${line}.ts`,
+      line,
+      column: 1,
+      code: 'TS2322',
+      message: 'Type x.',
+    }));
+    const markdown = reportMarkdown(
+      {
+        version: '1.0.0',
+        tag: 'v1.0.0',
+        strict: true,
+        results: [{ app: 'a', errors, problems: [] }],
+        recorded: [],
+        removable: [],
+        problems: [],
+      },
+      { maxBytes: 5000 },
+    );
+    strictEqual(Buffer.byteLength(markdown) <= 5000, true);
+    match(markdown, /The rest is in the job log\.\n$/);
   });
 });
 
@@ -733,6 +805,44 @@ describe('the job summary', () => {
   });
 });
 
+describe('parseErrors, on a message of several lines', () => {
+  it('keeps the lines that explain the first, so two errors that differ only there differ', () => {
+    const [first, second] = parseErrors(
+      [
+        "src/a.ts(3,7): error TS2322: Type 'A' is not assignable to type 'B'.",
+        "  The types of 'id' are incompatible.",
+        "src/a.ts(3,7): error TS2322: Type 'A' is not assignable to type 'B'.",
+        "  The types of 'name' are incompatible.",
+      ].join('\n'),
+    );
+    strictEqual(first.message === second.message, false);
+    match(first.message, /The types of 'id' are incompatible\.$/);
+  });
+});
+
+describe('applyRecords, on an app whose check did not complete', () => {
+  it('leaves its records alone', () => {
+    const { problems } = applyRecords({
+      results: [{ app: 'a', errors: [], problems: ['it has no node_modules; run pnpm install'] }],
+      records: [
+        {
+          app: 'a',
+          file: 'src/a.ts',
+          line: 3,
+          code: 'TS2322',
+          message: 'm',
+          kind: 'allowed',
+          lastRelease: '1.0.0',
+          reason: 'r',
+        },
+      ],
+      version: '1.0.0',
+      strict: true,
+    });
+    deepStrictEqual(problems, []);
+  });
+});
+
 describe('parseErrors', () => {
   it('reads plain and pretty errors, located or not, and ignores other output', () => {
     deepStrictEqual(
@@ -751,7 +861,7 @@ describe('parseErrors', () => {
           line: 3,
           column: 7,
           code: 'TS2322',
-          message: 'Type "x" is not assignable.',
+          message: `Type "x" is not assignable. The types of 'id' are incompatible.`,
         },
         {
           file: 'src/b.ts',

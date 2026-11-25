@@ -46,6 +46,7 @@ import {
   readRecords as readRecordFile,
 } from './records.mjs';
 import { fetchReleaseTag, isPrerelease, LastReleaseError, lastRelease } from './release.mjs';
+import { withinBytes } from './summary.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -103,10 +104,20 @@ const isAlive = (pid) => {
 
 // Each run has a folder of its own, named after its process, so runs at once never share files.
 // A folder whose process has gone is left from a run that was killed, and is removed.
+// Another run can remove the folder between the two calls.
+function readdirOrNothing(dir) {
+  try {
+    return readdirSync(dir);
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
+}
+
 function startRunFolder(root) {
   const runs = join(root, RUN_FOLDER);
   if (existsSync(runs)) {
-    for (const name of readdirSync(runs)) {
+    for (const name of readdirOrNothing(runs)) {
       const pid = Number(name.split('-')[0]);
       if (!Number.isInteger(pid) || !isAlive(pid)) {
         rmSync(join(runs, name), { recursive: true, force: true });
@@ -145,27 +156,43 @@ function nodeModulesIn(dir, prefix = '') {
 }
 
 const TSC_LAST = /(?:^|&&)\s*tsc(?:\s[^&|;]*)?$/;
+// Printed just before the script's tsc run, so that a step before it that fails is told apart
+// from tsc finding errors.
+const TSC_MARKER = 'api:compat:examples: tsc starts';
+const withTscMarker = (script) =>
+  script.replace(
+    /(^|&&)(\s*tsc(?:\s[^&|;]*)?)$/,
+    (_, before, tsc) => `${before} echo '${TSC_MARKER}' &&${tsc}`,
+  );
+// Errors in the compiler's options, or files it cannot read: the check could not run.
+const SETUP_ERROR = /^TS(?:5\d{3}|6\d{3}|18003)$/;
 
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
 const PLAIN_ERROR = /^(?:(.+)\((\d+),(\d+)\): )?error (TS\d+): (.*)$/;
 const PRETTY_ERROR = /^(.+):(\d+):(\d+) - error (TS\d+): (.*)$/;
 
+// Each error, with the indented lines that explain it joined to its message, so that two errors
+// that differ only there are told apart.
 export function parseErrors(output) {
-  return output.split(/\r?\n/).flatMap((raw) => {
+  const errors = [];
+  for (const raw of output.split(/\r?\n/)) {
     const text = raw.replace(ANSI, '');
     const match = text.match(PLAIN_ERROR) ?? text.match(PRETTY_ERROR);
-    if (!match) return [];
-    const [, file, line, column, code, message] = match;
-    return [
-      {
+    if (match) {
+      const [, file, line, column, code, message] = match;
+      errors.push({
         file: file ?? '(no file)',
         line: line === undefined ? 0 : Number(line),
         column: column === undefined ? 0 : Number(column),
         code,
         message: normaliseMessage(message.trim()),
-      },
-    ];
-  });
+      });
+    } else if (errors.length > 0 && /^ {2,}[^\s~]/.test(text) && !/^ +\d+ /.test(text)) {
+      const last = errors.at(-1);
+      last.message = `${last.message} ${normaliseMessage(text.trim())}`;
+    }
+  }
+  return errors;
 }
 
 const running = new Set();
@@ -180,7 +207,7 @@ const killGroup = (child) => {
 // tsc it started too, not only its shell.
 function runTypecheck(appDir, script, env, timeoutMs) {
   return new Promise((resolveRun) => {
-    const child = spawn('sh', ['-c', `${script} --pretty false`], {
+    const child = spawn('sh', ['-c', `${withTscMarker(script)} --pretty false`], {
       cwd: appDir,
       env: { ...env, PATH: `${join(appDir, 'node_modules', '.bin')}${delimiter}${env.PATH ?? ''}` },
       detached: true,
@@ -243,16 +270,37 @@ async function checkApp({ root, tag, app, env, runDir, timeoutMs }) {
   } finally {
     rmSync(appDir, { recursive: true, force: true });
   }
-  const errors = parseErrors(run.output);
+  const tscRan = run.output.split(/\r?\n/).includes(TSC_MARKER);
+  const output = run.output
+    .split(/\r?\n/)
+    .filter((line) => line !== TSC_MARKER)
+    .join('\n');
+  const parsed = tscRan ? parseErrors(output) : [];
+  const setup = parsed.filter((error) => SETUP_ERROR.test(error.code));
+  const errors = parsed.filter((error) => !SETUP_ERROR.test(error.code));
   const problems = [];
-  const tail = () => run.output.trim().split('\n').slice(-20).join('\n');
+  const tail = () => output.trim().split('\n').slice(-20).join('\n');
   if (run.timedOut) problems.push(`its typecheck did not finish in ${timeoutMs / 1000} s`);
   else if (run.error) problems.push(`its typecheck did not start: ${run.error.message}`);
   else if (run.signal) problems.push(`its typecheck was stopped by ${run.signal}:\n${tail()}`);
-  else if (run.status !== 0 && errors.length === 0) {
+  else if (!tscRan) {
+    problems.push(
+      `a step before its tsc run exited with ${run.status}, so tsc did not run:\n${tail()}`,
+    );
+  } else if (setup.length > 0) {
+    problems.push(
+      `the compiler could not run as configured: ${setup.map((error) => `${error.code} ${error.message}`).join('; ')}`,
+    );
+  } else if (run.status !== 0 && errors.length === 0) {
     problems.push(`\`${script}\` exited with ${run.status} without a type error:\n${tail()}`);
   }
-  return { app, script, errors, problems, ms: Math.round(performance.now() - started) };
+  return {
+    app,
+    script,
+    errors: setup.length > 0 ? [] : errors,
+    problems,
+    ms: Math.round(performance.now() - started),
+  };
 }
 
 const recordMatches = (record, app, error) =>
@@ -268,8 +316,11 @@ const recordLabel = (record) =>
 // Marks each error a record of this release covers. Records of apps that were not checked are
 // left alone; records of earlier releases are listed as removable.
 export function applyRecords({ results, records, version, strict }) {
+  // An app whose check did not complete says nothing about its records.
   const checked = new Map(
-    results.filter((result) => result.errors).map((result) => [result.app, result]),
+    results
+      .filter((result) => result.errors && (result.problems ?? []).length === 0)
+      .map((result) => [result.app, result]),
   );
   const sorted = byLastRelease(records, version, recordLabel);
   const removable = sorted.removable;
@@ -322,6 +373,15 @@ const describeError = ({ file, line, column, code, message }) =>
 const describeRecord = ({ app, file, line, code, lastRelease: last, reason }) =>
   `${app} ${file}:${line} ${code} (last release ${last}): ${reason}`;
 
+const sameMessage = (errors, error) =>
+  errors.filter(
+    (other) =>
+      other.file === error.file &&
+      other.line === error.line &&
+      other.code === error.code &&
+      other.message === error.message,
+  ).length;
+
 // The record that would accept an error, ready to paste with its kind and reason.
 const recordOf = (app, { file, line, code, message }, lastRelease) => ({
   app,
@@ -368,8 +428,11 @@ export function reportText(report) {
       for (const error of errors) {
         lines.push(`    ${describeError(error)}${recordedLabel(error)}`);
         if (error.recorded === undefined) {
+          const twins = sameMessage(result.errors, error);
           lines.push(
-            `      to record it: ${JSON.stringify(recordOf(result.app, error, report.version))}`,
+            twins > 1
+              ? `      no record printed: ${twins} errors on this line have this message, so a record cannot tell them apart`
+              : `      to record it: ${JSON.stringify(recordOf(result.app, error, report.version))}`,
           );
         }
       }
@@ -406,7 +469,7 @@ const cell = (text) =>
     .replaceAll('\n', ' ');
 const SAMPLES_PER_FILE = 3;
 
-export function reportMarkdown(report) {
+export function reportMarkdown(report, { maxBytes } = {}) {
   const checked = report.results.filter((result) => !result.skipped);
   const lines = [
     `## The example apps of ${report.version} against this build`,
@@ -435,7 +498,9 @@ export function reportMarkdown(report) {
         : []),
     ]);
     items.push(...result.problems.map((problem) => `- problem: ${cell(problem)}`));
-    const unrecorded = result.errors.filter((error) => error.recorded === undefined);
+    const unrecorded = result.errors.filter(
+      (error) => error.recorded === undefined && sameMessage(result.errors, error) === 1,
+    );
     if (unrecorded.length > 0) {
       items.push(
         '',
@@ -468,7 +533,7 @@ export function reportMarkdown(report) {
     );
   }
   lines.push(...report.problems.map((problem) => `- problem: ${cell(problem)}`));
-  return `${lines.join('\n')}\n`;
+  return withinBytes(lines, maxBytes);
 }
 
 export async function checkExamples({

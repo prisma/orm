@@ -71,6 +71,7 @@ import {
   lastRelease,
   packagesAtTag,
 } from './release.mjs';
+import { withinBytes } from './summary.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const INSTALL_FOLDER = '.api-compat';
@@ -110,7 +111,15 @@ export function removedPackageResults({ removed, version, strict, records }) {
     results.push({
       name,
       removed: true,
-      breaks: record ? [] : [{ ...failure, failsRun: strict }],
+      breaks: record
+        ? []
+        : [
+            {
+              ...failure,
+              failsRun: strict,
+              record: { package: name, lastRelease: version, reason: '…' },
+            },
+          ],
       recorded: record ? [{ ...failure, kind: 'break', reason: record.reason }] : [],
       undecided: [],
       notCompared: [],
@@ -192,14 +201,23 @@ function runWorker(job) {
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
     });
     let reply;
+    let settled = false;
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
+      resolveResult(result);
+    };
     child.on('message', (message) => {
       reply = message;
     });
+    child.on('error', (error) => {
+      settle({ name: job.name, problems: [`the worker could not run: ${error.message}`] });
+    });
     child.on('exit', (code, signal) => {
-      if (reply?.result) resolveResult(reply.result);
+      if (reply?.result) settle(reply.result);
       else {
         const how = signal ? `on signal ${signal}` : `with exit code ${code}`;
-        resolveResult({
+        settle({
           name: job.name,
           problems: [reply?.error ?? `the worker stopped ${how} before it reported`],
         });
@@ -266,8 +284,11 @@ export function reportText({ version, strict, results, notReleased }) {
       const record = each.record && JSON.stringify(each.record);
       if (record && !printed.has(record)) {
         printed.add(record);
-        lines.push(`    to record it: ${record}`);
-        if (printed.size === 1) lines.push(`    ${FROM_DISK}`);
+        if (result.removed) lines.push(`    to record it in ${REMOVED_FILE}: ${record}`);
+        else {
+          lines.push(`    to record it: ${record}`);
+          if (printed.size === 1) lines.push(`    ${FROM_DISK}`);
+        }
       }
     }
     for (const each of result.undecided ?? []) {
@@ -307,7 +328,10 @@ const cell = (text) =>
     .replaceAll('|', '\\|')
     .replaceAll('\n', ' ');
 
-export function reportMarkdown({ version, strict = !isPrerelease(version), results, notReleased }) {
+export function reportMarkdown(
+  { version, strict = !isPrerelease(version), results, notReleased },
+  { maxBytes } = {},
+) {
   const lines = [
     `## Breaks since the last release, ${version}`,
     '',
@@ -359,7 +383,9 @@ export function reportMarkdown({ version, strict = !isPrerelease(version), resul
     if (toRecord.length > 0) {
       items.push(
         '',
-        `To record these breaks, add to \`${result.name.replace('@prisma/', 'packages/9-public/@prisma/')}/api-breaks.json\`, with the kind and the reason. The fingerprint is taken from the package’s \`api.txt\` as it is on disk: run \`pnpm build\` and \`pnpm api:update\` first, or it will not match.`,
+        result.removed
+          ? `To record the removal, add to \`${REMOVED_FILE}\`, with the reason:`
+          : `To record these breaks, add to \`${result.name.replace('@prisma/', 'packages/9-public/@prisma/')}/api-breaks.json\`, with the kind and the reason. The fingerprint is taken from the package’s \`api.txt\` as it is on disk: run \`pnpm build\` and \`pnpm api:update\` first, or it will not match.`,
         '',
         '```json',
         ...toRecord,
@@ -371,7 +397,7 @@ export function reportMarkdown({ version, strict = !isPrerelease(version), resul
   if (notReleased.length > 0) {
     lines.push(`Not checked, no release ${version}: ${notReleased.join(', ')}`, '');
   }
-  return `${lines.join('\n')}\n`;
+  return withinBytes(lines, maxBytes);
 }
 
 // The steps that reach the network, git or the registry, which a test replaces.
@@ -421,6 +447,9 @@ export async function main({
     return fail(`--jobs must be a positive whole number, not ${values.jobs}`);
   }
   const workers = Number(values.jobs);
+  if (!Number.isSafeInteger(workers)) {
+    return fail(`--jobs must be a positive whole number, not ${values.jobs}`);
+  }
 
   const inRepository = publishedPackageDirs(root).packageDirs.map((dir) => ({
     dir,
@@ -460,19 +489,22 @@ export async function main({
   const strict = values.ga || !isPrerelease(version);
 
   const results = [...plan.problems];
-  let removedRecords;
-  try {
-    removedRecords = readRemoved(root);
-  } catch (error) {
-    if (!(error instanceof RecordsError)) throw error;
-    return fail(error.message);
+  // Under --only, the packages removed are not known, so their records are neither read nor
+  // judged.
+  let removedRecords = [];
+  if (values.only === undefined) {
+    try {
+      removedRecords = readRemoved(root);
+    } catch (error) {
+      if (!(error instanceof RecordsError)) throw error;
+      return fail(error.message);
+    }
   }
-  // Under --only, the packages removed are not known, so their records are not judged.
   const removed = removedPackageResults({
     removed: plan.removed,
     version,
     strict,
-    records: values.only === undefined ? removedRecords : [],
+    records: removedRecords,
   });
   results.push(...removed.results);
   if (removed.problems.length > 0 || removed.removable.length > 0) {
@@ -537,7 +569,7 @@ export async function main({
   }
 
   jobs.sort((a, b) => b.cost - a.cost || compareCodeUnits(a.name, b.name));
-  results.push(...(await check(jobs, workers)));
+  results.push(...(await check(jobs, Math.min(workers, Math.max(jobs.length, 1)))));
   results.sort((a, b) => compareCodeUnits(a.name, b.name));
 
   const report = { version, strict, results, notReleased };
