@@ -32,15 +32,13 @@ The integration package sits between the library and the client, and follows two
 
 First, it is built only on the packages Prisma publishes, so anyone can write one.
 
-Second, the tables the library needs are models in the application's own contract, the file that describes its models and the tables behind them. The integration ships no models. Here `User` is a model an authentication library needs, and `Post` is the application's own:
+Second, the tables the library needs are models in the application's own contract, which describes its models and the tables behind them. The developer writes the contract's source, here in PSL, Prisma's language for models, and Prisma emits from it the contract the client is built from. The integration ships no models. Here `User` is a model an authentication library needs, and `Post` is the application's own:
 
 ```prisma
 model User {
   id    String @id
   email String @unique
   posts Post[]
-
-  @@map("user")
 }
 
 model Post {
@@ -59,7 +57,7 @@ The first library integration is `@prisma/orm-better-auth`, for the authenticati
 
 A **library integration** is a package that connects a library from outside Prisma, such as an authentication library, to an application's Prisma 8 client. Every library integration follows two rules.
 
-1. **It imports only what Prisma publishes.** Its code builds on the published packages `@prisma/orm-framework` and `@prisma/orm-family-sql`, on `@prisma/orm-toolchain` when it adds models to the contract, and on the client the application passes in. It imports none of this repository's private packages.
+1. **It imports only what Prisma publishes.** Its code builds on `@prisma/orm-framework`, on the published family package for the databases it supports (`@prisma/orm-family-sql` for SQL databases), on `@prisma/orm-toolchain` when it adds models to the contract, and on the client the application passes in. It imports none of this repository's private packages.
 2. **The tables the library needs are models in the application's contract.** The integration ships no models and no migrations of its own. It checks the application's contract against what the library needs and reports what is missing. On the developer's request it adds the missing models and fields to the contract's source. It never changes the database's tables.
 
 The next two sections take the rules one at a time: what each means, why it holds, and what it costs.
@@ -82,19 +80,19 @@ A library integration is written against that published set only, the same set a
 
 The integration declares the Prisma packages it uses as peer dependencies, at the exact version of the application's database package. The database package always installs all three, so the application ends up with one copy of each, shared by its client and the integration. The application still names only its database package and the integration: the peers are met by what the database package brings in, at that package's version.
 
-One copy matters, because the integration builds query filters with functions from `@prisma/orm-family-sql` and hands them to the client. Because they are peers, the package manager reports a version mismatch at install time. If they were regular dependencies, it would silently install a second copy of those functions beside the client's.
+One copy matters, because an integration builds values with functions from the family package, such as query filters from `@prisma/orm-family-sql`, and hands them to the client. Because they are peers, the package manager reports a version mismatch at install time. If they were regular dependencies, it would silently install a second copy of those functions beside the client's.
 
 `@prisma/orm-toolchain` is Prisma's tooling. An integration needs it only to find the contract's source files through the project's `prisma.config.ts`, and loads it only when the developer asks it to add models. An application that serves requests through the integration never loads Prisma's tooling. It is an exact peer like the others, because the config loader must read the project's config as the same version of Prisma's own commands reads it.
 
 ### How the rule is kept
 
-Two checks fail when the rule is broken. The lint `pnpm lint:consumer-internal-imports` treats the integration like an application and refuses any `@internal/*` name in its imports or its manifest. A test inside the package refuses any `@repo/*` name, the repository's other private prefix, apart from the shared build and TypeScript configuration.
+Two checks fail when the rule is broken, and each integration developed in this repository is added to both. Its directory goes in the list that `pnpm lint:consumer-internal-imports` scans; the lint treats it like an application and refuses any `@internal/*` name in its imports or its manifest. The package also carries a test that refuses any `@repo/*` name, the repository's other private prefix, apart from the shared build and TypeScript configuration.
 
 ### What it costs
 
 - **Looser types inside the package.** No published type says "a client whose contract contains these models". The integration treats the client loosely on the inside, and its correctness rests on the contract check described under rule 2 and on its tests.
 - **Gaps are worked around, and written down.** Where the published packages lack something, the integration carries its own small substitute and records it in its developer notes. Each one marks a gap to close in the published packages.
-- **The rule covers Prisma's packages, not the library's.** An integration may need a hook that the library itself labels internal. The integration then accepts only the library's minor version it has been tested against, because a new minor version may change the hook.
+- **The rule covers Prisma's packages, not the library's.** An integration may need a hook that the library itself labels internal. The integration then accepts only the library versions it has been tested against, because the library may change an internal hook in any release.
 
 ## Rule 2: the library's tables are models in the application's contract
 
@@ -120,7 +118,7 @@ Prisma 8 also lets a package own tables. Such a package ships a **contract space
 
 **It reports.** Wherever the library gives the integration a place to run that check, a problem stops the library with a message that says what to add or change, with the PSL to add.
 
-**It adds what is missing, when the developer asks.** A library usually has a command that generates the tables it needs. Under that command the integration adds the missing models and fields to the contract's source, like this:
+**It adds what is missing, when the developer asks.** A library usually has a command that generates the tables it needs. Under that command, when the contract's source is written in PSL, the integration adds the missing models and fields to the contract's source, like this:
 
 - It finds the contract's source files and the place for each new line with what Prisma publishes: the config loader and the PSL syntax tree.
 - It only adds lines. It does not reformat or reprint the file, so every line the developer wrote stays as it was.
