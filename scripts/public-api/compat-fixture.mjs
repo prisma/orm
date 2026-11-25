@@ -1,11 +1,12 @@
 // Runs checkPackage on the fixture packages under fixtures/compat, laid out as api-compat.mjs lays
 // out the real install. For the tests only.
 
-import { cpSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { checkPackage, stampVersion } from './compat.mjs';
+import { makeTwin } from './compat-install.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const fixtures = join(here, 'fixtures', 'compat');
@@ -27,6 +28,7 @@ export function fixtureCheck(work) {
       strict = true,
       stamp = true,
       dependencies = [],
+      installed = [],
       mustFail,
       budgetMs,
     } = {},
@@ -44,12 +46,23 @@ export function fixtureCheck(work) {
         recursive: true,
       });
     }
+    for (const { side, folder, name } of installed) {
+      const dir = side === 'release' ? releaseDir : currentDir;
+      cpSync(join(fixtures, folder), join(dir, 'node_modules', name), { recursive: true });
+    }
+    const twin = makeTwin({
+      releaseDir,
+      twinRoot: join(modules, '.twins'),
+      ownNames: new Set(['fixture-compat']),
+    });
+    symlinkSync(twin, join(modules, 'twin-fixture'));
     return checkPackage({
       name: 'fixture-compat',
       releaseDir,
       currentDir,
       releaseSpecifier: 'release-fixture',
       currentSpecifier: 'current-fixture',
+      twinSpecifier: 'twin-fixture',
       testFile: join(workDir, 'tests', 'fixture.ts'),
       records,
       version,

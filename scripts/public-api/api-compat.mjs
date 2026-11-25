@@ -2,19 +2,30 @@
 // Usage: node scripts/public-api/api-compat.mjs [--jobs <n>] [--only <package>,…] [--ga]
 //
 // Finds the breaks in each published package since the last release. The last release is
-// installed beside the current build (compat-install.mjs), and for each export a package declares
-// itself on one of its import paths a generated test asks whether the current build's type is
-// assignable to the release's, for the export's type and for its value (compat.mjs). Names a path
-// forwards from another package are checked in that package.
+// installed beside the current build, with a second copy of it, its twin (compat-install.mjs), and
+// for each export a package declares itself on one of its import paths a generated test asks
+// whether the current build's type is assignable to the release's, for the export's type, for its
+// value and for a class's constructor parameters (compat.mjs). Names a path forwards from another
+// package are checked in that package.
 //
 // One direction is enough: a new required member on a type users implement fails through the
 // exported function that accepts it, and a new member on a type users only receive passes.
-// "Type instantiation is excessively deep" is reported as undecided.
+//
+// The comparison is TypeScript's own, on declarations rewritten so that it compares what a user
+// relies on (compat-declarations.mjs): methods become function-typed properties, so that their
+// parameters compare contravariantly, and private members and unique symbols, which make two copies
+// of a declaration differ, are dropped or named. Each third-party version is read from one copy.
+// TypeScript cannot relate some generic types between two copies of their declaration, so a
+// failure is a break only when the same test passes between the release and its twin; otherwise
+// the test is made again with generic signatures erased one level deep, then with the structural
+// mapping of compat-structural.ts. What is still too deep ("type instantiation is excessively
+// deep", or a stack overflow), or has no time left in the package's budget, is reported as
+// undecided.
 //
 // A deliberate break is recorded in api-breaks.json beside the package's api.txt, as
-// [{ "path": ".", "export": "Db", "release": "8.0.0", "reason": "…" }]. The test gets
-// `// @ts-expect-error <reason>`, so the record fails once the break is undone, and a record for
-// another release than the last fails until it is removed.
+// [{ "path": ".", "export": "Db", "release": "8.0.0", "reason": "…" }]. A recorded export's breaks
+// are listed as recorded instead; the record fails the run once the export is decided and no longer
+// breaks, and a record for another release than the last fails until it is removed.
 //
 // A break fails the run when the last release has no pre-release part (`--ga` treats it as if it
 // had none) and the export's name does not start with preview_ or ea_. Otherwise it is reported.
@@ -306,6 +317,7 @@ export async function main({
         currentDir: dir,
         releaseSpecifier: aliasOf('release', name),
         currentSpecifier: aliasOf('current', name),
+        twinSpecifier: aliasOf('twin', name),
         testFile: join(installDir, 'tests', `${aliasOf('current', name)}.ts`),
         records: readRecords(dir, root),
         version,

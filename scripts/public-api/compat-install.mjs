@@ -6,6 +6,7 @@
 
 import { execFileSync } from 'node:child_process';
 import {
+  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -17,7 +18,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
-import { stampVersion } from './compat.mjs';
+import { stampVersion, TWIN_STAMP } from './compat.mjs';
 
 export class InstallError extends Error {}
 
@@ -116,6 +117,40 @@ export function peerDependencies(packageDirs, ownNames, versions) {
 
 export const aliasOf = (side, name) => `${side}-${name.replace(/^@prisma\//, '')}`;
 
+const isDeclarationOrManifest = (path) => !/\.([cm]?js|map)$/.test(path);
+
+// A second copy of an installed release, and of each of our packages it depends on, with a version
+// of its own: a comparison that fails between the release and its twin is one TypeScript cannot
+// make between two copies of a declaration, not a change. Only declarations are copied; the
+// third-party dependencies are links to the release's.
+export function makeTwin({ releaseDir, twinRoot, ownNames, copies = new Map() }) {
+  const source = realpathSync(releaseDir);
+  if (copies.has(source)) return copies.get(source);
+  const manifest = readManifest(source);
+  const dir = join(twinRoot, manifest.name);
+  copies.set(source, dir);
+  rmSync(dir, { recursive: true, force: true });
+  cpSync(source, dir, {
+    recursive: true,
+    filter: (path) =>
+      !path.slice(source.length).includes(`${sep}node_modules`) && isDeclarationOrManifest(path),
+  });
+  stampVersion(dir, TWIN_STAMP);
+  for (const field of DEPENDENCY_FIELDS) {
+    for (const name of Object.keys(manifest[field] ?? {})) {
+      const installed = findInstalled(source, name);
+      if (installed === undefined) continue;
+      const target = ownNames.has(name)
+        ? makeTwin({ releaseDir: installed, twinRoot, ownNames, copies })
+        : installed;
+      const link = join(dir, 'node_modules', name);
+      mkdirSync(dirname(link), { recursive: true });
+      symlinkSync(target, link);
+    }
+  }
+  return dir;
+}
+
 // Writes the install folder's manifest and workspace, installs, stamps every copy of our packages
 // with a version of its own, and links each current package beside its release.
 export function installRelease({ dir, packages, version, overrides, peers, ownNames }) {
@@ -159,9 +194,23 @@ export function installRelease({ dir, packages, version, overrides, peers, ownNa
     }
   }
 
+  const twinRoot = join(dir, 'twins');
+  rmSync(twinRoot, { recursive: true, force: true });
+  const copies = new Map();
   for (const { name, dir: currentDir } of packages) {
-    const link = join(dir, 'node_modules', aliasOf('current', name));
-    rmSync(link, { recursive: true, force: true });
-    symlinkSync(currentDir, link);
+    const links = {
+      current: currentDir,
+      twin: makeTwin({
+        releaseDir: join(dir, 'node_modules', aliasOf('release', name)),
+        twinRoot,
+        ownNames,
+        copies,
+      }),
+    };
+    for (const [side, target] of Object.entries(links)) {
+      const link = join(dir, 'node_modules', aliasOf(side, name));
+      rmSync(link, { recursive: true, force: true });
+      symlinkSync(target, link);
+    }
   }
 }
