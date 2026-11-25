@@ -29,8 +29,7 @@ export interface RequiredPeer {
  * dependency, directly or through another such package (the list can hold another facade:
  * MariaDB's names MySQL's), and every other required peer dependency those packages name, such as
  * `temporal-polyfill`, whose own peers are not followed. A peer marked optional in
- * `peerDependenciesMeta` is not required. An application lists each of them beside the target
- * package, so it loads under a package manager that installs no peer dependencies.
+ * `peerDependenciesMeta` is not required. An application lists each of them beside the facade, so it loads under a package manager that installs no peer dependencies.
  */
 export interface RequiredPeers {
   /** The facade as the application lists it: `name@version` when it names `@prisma/orm-*` peers, otherwise its bare name. */

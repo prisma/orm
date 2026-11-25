@@ -91,7 +91,7 @@ One of the packages extension authors build against: `@prisma/orm-framework`, `@
 
 ### Init contribution
 
-What a facade tells `prisma orm init`: the default export of its `init` entrypoint, typed `InitContribution`. It holds the starter contract, the `db.ts` and `.env.example` text, the driver packages, the quick reference and an optional server probe. Unlike a descriptor's contributions, no stack aggregates it; `init` loads it from the one facade the user chose. See [ADR 325](architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md).
+What a facade tells `prisma orm init`: the default export of its `init` entrypoint, typed `InitContribution`. It holds the starter contract, the `db.ts` and `.env.example` text, the driver packages, the quick reference and an optional server probe. Unlike a descriptor's contributions, no stack aggregates it; `init` loads it from the one facade the user chose. See [ADR 325](architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20database%20from%20its%20facade.md).
 
 ### Family
 

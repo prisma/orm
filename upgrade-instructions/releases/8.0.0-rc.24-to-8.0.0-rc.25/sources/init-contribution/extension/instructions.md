@@ -2,7 +2,7 @@
 changes:
   - id: target-package-exports-an-init-contribution
     summary: |
-      `prisma orm init` takes everything about a target from the target package: a package that wants `init` to set up a project on it exports an init contribution, typed `InitContribution` from `@prisma/orm-toolchain/cli/init-contribution`, as the default export of its `init` entrypoint. `@prisma/orm-postgres` and `@prisma/orm-mongo` export one. A package without it is not affected; `init` cannot set up a project on it, and the application writes `prisma.config.ts` by hand.
+      `prisma orm init` takes everything about a database from its facade: a package that wants `init` to set up a project on it exports an init contribution, typed `InitContribution` from `@prisma/orm-toolchain/cli/init-contribution`, as the default export of its `init` entrypoint. `@prisma/orm-postgres` and `@prisma/orm-mongo` export one. A package without it is not affected; `init` cannot set up a project on it, and the application writes `prisma.config.ts` by hand.
 ---
 
 # A target package can export an init contribution

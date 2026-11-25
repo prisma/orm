@@ -2,13 +2,13 @@
 
 **Status:** Accepted
 **Date:** 2026-11-24
-**Related:** [ADR 242 — Public npm surface](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md), [ADR 219 — Database driver coupling](ADR%20219%20-%20Database%20driver%20coupling%20-%20framework%20owns%20user-facing%20types%20and%20driver%20is%20a%20single-major%20peer%20dependency.md), [ADR 325 — `init` gets everything about a database from the facade](ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md), [ADR 328 — A library integration uses only published entrypoints](ADR%20328%20-%20A%20library%20integration%20uses%20only%20published%20entrypoints%20and%20its%20models%20live%20in%20the%20application%20contract.md)
+**Related:** [ADR 242 — Public npm surface](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md), [ADR 219 — Database driver coupling](ADR%20219%20-%20Database%20driver%20coupling%20-%20framework%20owns%20user-facing%20types%20and%20driver%20is%20a%20single-major%20peer%20dependency.md), [ADR 325 — `init` gets everything about a database from the facade](ADR%20325%20-%20init%20gets%20everything%20about%20a%20database%20from%20its%20facade.md), [ADR 328 — A library integration uses only published entrypoints](ADR%20328%20-%20A%20library%20integration%20uses%20only%20published%20entrypoints%20and%20its%20models%20live%20in%20the%20application%20contract.md)
 
 ## Decision
 
 An application must hold exactly one copy of each platform package. The platform packages hold the registries of data types and operations that the client and the extensions share, and two copies of one do not see each other: a data type an extension registers in one copy is missing from the other, and nothing reports it.
 
-There is one configuration under which the package manager alone guarantees one copy:
+One configuration makes the package manager alone give an application one copy, under every package manager, while an extension still works with any facade built on its target package:
 
 1. **The application declares every platform package as a dependency.**
 2. **Every package of ours that depends on a platform package, or on any other package of ours, declares it as a peer dependency.**
@@ -21,8 +21,9 @@ There is one configuration under which the package manager alone guarantees one 
   "@prisma/orm-family-sql": "^8.4.0",                   "@prisma/orm-target-postgres": "~8.4.0",
   "@prisma/orm-target-postgres": "^8.4.0",              "@prisma/orm-toolchain": "~8.4.0",
   "@prisma/orm-toolchain": "^8.4.0",                    "pg": "^8.22.0",
-  "@prisma/orm-extension-pgvector": "^8.3.0",           "temporal-polyfill": "^1.0.8"
-  "pg": "^8.22.0",                                    }
+  "@prisma/orm-extension-pgvector": "^8.3.0",           "@types/pg": "^8.20.0",
+  "pg": "^8.22.0",                                      "temporal-polyfill": "^1.0.8"
+  "@types/pg": "^8.20.0",                             }
   "temporal-polyfill": "^1.0.8"
 }
 ```
@@ -46,12 +47,12 @@ Application code still imports only from the facade and the extensions. The appl
 ### What keeps the configuration in place
 
 - **`prisma orm init` writes the application's declarations.** After installing the facade, it reads the peer dependencies from the facade's installed `package.json`, then from each `@prisma/orm-*` package named there, until no new name appears. It installs each of them, with the other required peers those manifests name, such as the database driver. It does not follow the peers of packages that are not ours: those are other projects' choices.
-- **The build refuses a manifest that breaks the second rule.** For each published package, it works out which packages of ours the built code imports, and fails unless the manifest names exactly those as peers. A second check, before publishing, fails if any published package lists one of ours under `dependencies`.
+- **The build refuses a manifest that breaks the second rule.** For each published package built from the internal packages, it works out which packages of ours that code depends on, and fails unless the manifest names exactly those as peers. A second check, before publishing, fails if any published package, including one built another way such as `@prisma/orm-better-auth`, lists one of ours under `dependencies`.
 - **An extension names the platform packages it uses, not a facade.** A PostgreSQL extension then works with any facade built on the PostgreSQL target package. An extension that imports a facade's own code names that facade as a peer, and works only with it; `@prisma/orm-extension-supabase` is one.
 
 The ranges themselves, on both sides, are set by the versioning rules in [Versioning](../../oss/versioning.md). This record decides only that the relation is a peer, and that the application declares the platform packages.
 
-## Why this is the only configuration
+## Why this configuration
 
 **An ordinary dependency can bring a second copy.** When package A lists package B as an ordinary dependency, the package manager gives A its own copy of B whenever the version A asks for differs from one already installed. An application on release `8.4` that adds an extension built for `8.3` would get:
 
@@ -68,9 +69,9 @@ node_modules/
 
 **The application has to declare them.** Yarn, in both its `node_modules` mode and its Plug'n'Play mode, installs no peer dependencies: a peer the application does not declare is missing, and the package that needs it cannot load. npm, pnpm and Bun install a missing peer by themselves, but without a line in `package.json` a later update can move one package and leave the others behind.
 
-**It was tested before it was chosen.** Six ways of arranging the dependencies were tried with stand-in packages on a local registry, under npm, pnpm, Yarn in both modes and Bun in both modes, in cases where an extension, a platform package or the facade was at another version than the rest. This was the only arrangement that gave one copy, or a reported mismatch, under all of them. The others are under "Alternatives considered", each with the reason it failed.
+**It was tested before it was chosen.** Six ways of arranging the dependencies were tried with stand-in packages on a local registry, under npm, pnpm, Yarn in both modes and Bun in both modes, in cases where an extension, a platform package or the facade was at another version than the rest. Two gave one copy, or a reported mismatch, under all of them: this one, and one in which an extension names only the facade, which ties the extension to that facade. The other four are under "Alternatives considered", with what went wrong.
 
-Two further benefits follow. **The package manager checks the versions:** when the application's lines and a package's peer ranges disagree, npm refuses the install, and pnpm, Yarn and Bun install and print a warning. **One package can be released alone:** a package that names another as a peer accepts any version its range allows, so a fix to one package does not force a release of the others.
+Two further benefits follow. **The package manager checks the versions:** when the application's lines and a package's peer ranges disagree, npm refuses the install, and pnpm, Yarn and Bun install and print a warning. **One package can be released alone** whenever the ranges admit more than one version: a package that names another as a peer accepts any version its range allows, so a fix to one package does not force a release of the others.
 
 ## Consequences
 
@@ -94,9 +95,12 @@ Two further benefits follow. **The package manager checks the versions:** when t
 
 ## Alternatives considered
 
-- **Every package names the others as ordinary dependencies, and the application declares only the facade.** Each package gets its own copy whenever its version differs from the application's, as in the tree above. Two copies under every package manager, with no report.
-- **The facade brings the platform packages as ordinary dependencies; extensions name them as peers.** Under npm, the facade's copies sit inside the facade's own folder, where the extension cannot see them, so the extension's peers get a second copy at the top level, with no warning. Under Yarn the extension cannot load at all, because the application does not declare what it names as peers.
-- **Peers everywhere, but the application declares only the facade.** Yarn installs no peer that is not declared, so the facade cannot load its platform packages.
-- **An extension names only the facade as its peer and reaches the platform packages through it.** One copy everywhere, but a PostgreSQL extension would then work with one facade only, and not with another facade for PostgreSQL.
+The first five were tried in the install trial described above; the sixth came from a second trial, and the last from experience.
+
+- **Ordinary dependencies, with an extension naming only the target package as a peer.** The application declares only the facade, which brings the platform packages; an extension brings the framework and family itself. An extension from another release gave two copies under every package manager, as in the tree above; pnpm, Yarn and Bun printed a warning about the target package, and none prevented it.
+- **The facade brings the platform packages as ordinary dependencies; extensions name them as peers.** Under npm, the facade's copies sit inside the facade's own folder, where the extension cannot see them, so the extension's peers got a second copy at the top level, with no warning. Under Yarn's Plug'n'Play mode the extension could not load, because the application does not declare what it names as peers.
+- **Peers everywhere, but the application declares only the facade.** Yarn installs no peer that is not declared, so the facade could not load its platform packages, and Bun gave two copies with an extension from another release.
+- **An extension names only the facade as its peer and reaches the platform packages through it.** One copy in every case, but a PostgreSQL extension would then work with one facade only, and not with another facade built on the PostgreSQL target package.
+- **An extension names only the target package as its peer, and reaches the framework and family through it.** One copy in most cases. When the application's lines for the facade and the target package disagreed, npm refused the install and the others gave two copies with a warning. When the application did not declare the target package, Yarn could not load it and Bun gave two copies.
 - **The platform packages name each other as ordinary dependencies, and only facades and extensions use peers.** The platform packages then bring copies of each other. Two copies under Bun when one platform package was updated alone, and under Yarn on a fresh install when a newer version of a platform package existed than the one the application declared.
 - **Detect a second copy when the application starts, and stop.** Prisma Composer deliberately loads a second copy of the ORM beside the application, so the check stopped working applications. A check that reports only two copies that are actually used together is a separate decision.

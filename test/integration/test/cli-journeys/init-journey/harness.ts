@@ -488,9 +488,7 @@ function rewritePackageJsonForTarballs(dir: string, cell: CellId, tarballs: Pack
 
   // The application lists every package the facade names as a peer, as
   // `init` does: pnpm resolves an unlisted peer through the registry, not
-  // through the tarball overrides, and the generated `migration.ts` imports
-  // the facade directly, which the isolated linker only exposes
-  // when it is listed.
+  // through the tarball overrides.
   const platformEntries = Object.fromEntries(
     platformPackagesOf(facade)
       .filter((name) => devDependencies[name] === undefined)
