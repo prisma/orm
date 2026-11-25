@@ -28,7 +28,7 @@ import {
   valueObjectStoredNamesOf,
   variantFilter,
 } from '@internal/mongo-contract';
-import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
+import { bsonTypesOfCodec, codecStoresValue } from '@internal/mongo-contract/data-type';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { type StoredValue, unrewritableKeyReason } from './migration-factories';
@@ -104,6 +104,8 @@ interface EnumComparison {
   readonly contract: MongoContract;
   readonly originEnum: ContractEnum;
   readonly destinationEnum: ContractEnum;
+  /** Whether the destination enum's codec stores the value. */
+  readonly stores: (value: JsonValue) => boolean;
 }
 
 function sameValue(left: JsonValue, right: JsonValue): boolean {
@@ -428,25 +430,29 @@ function changeText(enums: EnumComparison, change: MemberMove): string {
   return `Cannot change the stored value of enum value ${memberText(enums, change.enumValue)} from ${valueText(change.from)} to ${valueText(change.to)}`;
 }
 
-/** A value no member of either enum stores, of the kind of `value`: the next whole number, else the smallest unused one, or a marked string. */
-function temporaryValue(value: StoredValue, taken: readonly JsonValue[]): StoredValue {
+/** A value the enum's codec stores and no member of either enum stores, of the kind of `value`: the next whole number, else the smallest unused one, else a marked string; undefined when the codec stores none of them. */
+function temporaryValue(
+  enums: EnumComparison,
+  value: StoredValue,
+  taken: readonly JsonValue[],
+): StoredValue | undefined {
+  const free = (candidate: StoredValue) =>
+    enums.stores(candidate) && !taken.some((stored) => sameValue(stored, candidate));
+  const tries = Array.from({ length: taken.length + 1 }, (_, index) => index);
   if (typeof value === 'number' || (typeof value === 'string' && /^-?\d+$/.test(value))) {
     const asValue = (whole: number): StoredValue =>
       typeof value === 'number' ? whole : String(whole);
-    const unused = (whole: number) =>
-      Number.isSafeInteger(whole) && !taken.some((stored) => sameValue(stored, asValue(whole)));
     const numbers = taken.flatMap((stored) => {
       const number = typeof stored === 'string' ? Number(stored) : stored;
       return typeof number === 'number' && Number.isFinite(number) ? [number] : [];
     });
     const next = numbers.length === 0 ? 0 : Math.floor(Math.max(...numbers)) + 1;
-    if (unused(next)) return asValue(next);
-    for (let whole = 0; ; whole += 1) if (unused(whole)) return asValue(whole);
+    const whole = [next, ...tries].find(
+      (candidate) => Number.isSafeInteger(candidate) && free(asValue(candidate)),
+    );
+    if (whole !== undefined) return asValue(whole);
   }
-  for (let index = 1; ; index += 1) {
-    const candidate = `prisma_swap_${index}`;
-    if (!taken.some((stored) => sameValue(stored, candidate))) return candidate;
-  }
+  return tries.map((index) => `prisma_swap_${index + 1}`).find(free);
 }
 
 /**
@@ -501,19 +507,20 @@ function movesTwoPlans(
   const reserved: JsonValue[] = [...taken];
   const steps = moves.map((move) => {
     const waits = moves.some((other) => other !== move && sameValue(other.from, move.to));
-    const through = waits ? temporaryValue(move.to, reserved) : undefined;
+    const through = waits ? temporaryValue(enums, move.to, reserved) : undefined;
     if (through !== undefined) reserved.push(through);
-    return { move, through };
+    return { move, waits, through };
   });
-  const first = steps.map(({ move, through }) =>
-    through === undefined
-      ? `give ${memberText(enums, move.enumValue)} the stored value ${valueText(move.to)}`
-      : `give ${memberText(enums, move.enumValue)} a stored value no member stores, such as ${valueText(through)}`,
-  );
-  const second = steps.flatMap(({ move, through }) =>
-    through === undefined
-      ? []
-      : [`give ${memberText(enums, move.enumValue)} the stored value ${valueText(move.to)}`],
+  const first = steps.map(({ move, waits, through }) => {
+    const member = memberText(enums, move.enumValue);
+    if (!waits) return `give ${member} the stored value ${valueText(move.to)}`;
+    const example = through === undefined ? '' : `, such as ${valueText(through)}`;
+    return `give ${member} a stored value no member stores${example}`;
+  });
+  const second = steps.flatMap(({ move, waits }) =>
+    waits
+      ? [`give ${memberText(enums, move.enumValue)} the stored value ${valueText(move.to)}`]
+      : [],
   );
   return `Make the change in two plans: first ${first.join('; ')}; and plan and apply that; then ${second.join('; ')}; and plan again.`;
 }
@@ -636,7 +643,13 @@ export function planEnumValueRewrites(
     for (const [enumName, originEnum] of Object.entries(namespace.enum ?? {})) {
       const destinationEnum = contract.domain?.namespaces[namespaceId]?.enum?.[enumName];
       if (destinationEnum === undefined) continue;
-      const enums: EnumComparison = { fromContract, contract, originEnum, destinationEnum };
+      const enums: EnumComparison = {
+        fromContract,
+        contract,
+        originEnum,
+        destinationEnum,
+        stores: (value) => codecStoresValue(destinationEnum.codecId, value, input.lookups),
+      };
       const found = planEnum(enums, namespaceId, enumName, valueRenames, input);
       if (!found.ok) {
         conflicts.push(...found.failure);

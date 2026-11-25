@@ -6,6 +6,7 @@ export type {
 } from '../mongo-data-type';
 export {
   bsonTypesOfCodec,
+  codecStoresValue,
   codecTypeParamsProblem,
   isMongoDataType,
   mongoDataType,

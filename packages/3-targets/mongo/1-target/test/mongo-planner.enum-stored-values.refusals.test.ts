@@ -54,6 +54,23 @@ describe('MongoMigrationPlanner, enum values that keep their names and trade or 
     );
   });
 
+  it('offers values the codec stores when the next whole number is past its range', () => {
+    const int32 = {
+      codecId: 'mongo/int32@1',
+      types: { level: { codecId: 'mongo/int32@1', valueSet: 'Status' } },
+    };
+    const [refusal] = refused(
+      plan({
+        from: users('from', { A: 2147483647, B: 1 }, int32),
+        to: users('to', { A: 1, B: 2147483647 }, int32),
+        schema: live,
+      }),
+    );
+    expect(refusal?.why).toContain(
+      'first give "Status.A" a stored value no member stores, such as 0; give "Status.B" a stored value no member stores, such as 2;',
+    );
+  });
+
   it('refuses a chain of stored values', () => {
     expect(
       refused(

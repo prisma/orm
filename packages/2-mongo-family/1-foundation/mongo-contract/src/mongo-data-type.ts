@@ -81,6 +81,18 @@ export function codecTypeParamsProblem(
   return type === undefined ? undefined : dataTypeParamsProblem(type, typeParams);
 }
 
+/** Whether the data type the codec `codecId` represents stores `json`; true when the stack registers no such codec or data type. */
+export function codecStoresValue(codecId: string, json: JsonValue, lookups: TypeLookups): boolean {
+  const type = dataTypeOfCodec(codecId, lookups);
+  if (type === undefined) return true;
+  try {
+    type.fromContract(json, {});
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function dataTypeOfCodec(codecId: string, lookups: TypeLookups): DataType | undefined {
   const descriptor = lookups.codecLookup.descriptorFor(codecId);
   return descriptor === undefined ? undefined : lookups.dataTypeLookup.get(descriptor.dataType);
