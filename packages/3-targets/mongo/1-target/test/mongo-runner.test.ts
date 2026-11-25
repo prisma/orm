@@ -1114,11 +1114,28 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
         run: () =>
           rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
       }),
-      setValidation('members', { bsonType: 'object' }),
+      setValidation('members', { bsonType: 'object' }, { checkDocuments: true }),
     ]);
 
     expect(failureFields(result.assertNotOk()).why).toBe(
       "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. A later operation of this migration updates the validator of collection members: add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents. Run the file with node, then run the command again. The operations that ran before the failure stay applied.",
+    );
+  });
+
+  it('says the copy must fit the validator when the later validator update does not check the documents', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(rejected());
+
+    const result = await execute(harness, [
+      dataTransform('move User to members', {
+        run: () =>
+          rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
+      }),
+      setValidation('members', { bsonType: 'object' }),
+    ]);
+
+    expect(failureFields(result.assertNotOk()).why).toBe(
+      "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. A later operation of this migration updates the validator of collection members without checking the documents already in it, so change the pipeline in the migration's migration.ts so the documents it writes fit the validator, run the file with node, then run the command again. The operations that ran before the failure stay applied.",
     );
   });
 
@@ -1149,7 +1166,7 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
           rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
       }),
       renameCollection('members', 'people'),
-      setValidation('people', { bsonType: 'object' }),
+      setValidation('people', { bsonType: 'object' }, { checkDocuments: true }),
     ]);
 
     expect(failureFields(result.assertNotOk()).why).toContain(
@@ -1200,7 +1217,7 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
       message:
         'Operation data_transform.move User to members failed: the validator of collection archive.members rejected a document the copy wrote',
       why: expect.stringContaining(
-        "If a later validator update replaces the validator of collection archive.members, add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents, and run the file with node, then run the command again. Otherwise change the pipeline",
+        "If a later validator update checks the documents of collection archive.members against a new validator, add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents, and run the file with node, then run the command again. Otherwise change the pipeline",
       ),
     });
   });

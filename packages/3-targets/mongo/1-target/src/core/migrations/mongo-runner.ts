@@ -1213,7 +1213,7 @@ function copyTargetOf(plan: MongoQueryPlan): CopyTarget | undefined {
 
 /** What a later operation of the migration does to the validator of the collection a copy writes into, and the name the collection has by then. */
 type LaterValidator =
-  | { readonly kind: 'replaced' | 'removed'; readonly collection: string }
+  | { readonly kind: 'replaced' | 'unchecked' | 'removed'; readonly collection: string }
   | { readonly kind: 'none' }
   | { readonly kind: 'unknown' };
 
@@ -1239,14 +1239,25 @@ function laterValidator(
         command.collection === collection &&
         command.validator !== undefined
       ) {
+        if (Object.keys(command.validator).length === 0) return { kind: 'removed', collection };
         return {
-          kind: Object.keys(command.validator).length === 0 ? 'removed' : 'replaced',
+          kind: checksDocumentsOf(operation, collection) ? 'replaced' : 'unchecked',
           collection,
         };
       }
     }
   }
   return { kind: 'none' };
+}
+
+/** Whether `operation` checks, before it runs, that every document of `collection` fits its validator. */
+function checksDocumentsOf(operation: MongoMigrationPlanOperation, collection: string): boolean {
+  return operation.precheck.some(
+    ({ source }) =>
+      'command' in source &&
+      source.command instanceof RawAggregateCommand &&
+      source.command.collection === collection,
+  );
 }
 
 /** The document the validator rejected, as MongoDB's error names it, and where it is in the copy's source. */
@@ -1284,12 +1295,14 @@ function copyRejectedWhy(
     switch (later.kind) {
       case 'replaced':
         return `A later operation of this migration updates the validator of collection ${name}${renamed(later.collection)}: ${bypass}, so that update checks the moved documents. Run the file with node, then run the command again.`;
+      case 'unchecked':
+        return `A later operation of this migration updates the validator of collection ${name}${renamed(later.collection)} without checking the documents already in it, so ${orPipeline}.`;
       case 'removed':
         return `A later operation of this migration removes the validator of collection ${name}${renamed(later.collection)}: ${bypass}, so the copy does not have to fit the validator that is then removed. Run the file with node, then run the command again.`;
       case 'none':
         return `No later operation of this migration updates the validator of collection ${name}, so ${orPipeline}.`;
       case 'unknown':
-        return `If a later validator update replaces the validator of collection ${name}, ${bypass}, so that update checks the moved documents, and ${node}. Otherwise ${orPipeline}.`;
+        return `If a later validator update checks the documents of collection ${name} against a new validator, ${bypass}, so that update checks the moved documents, and ${node}. Otherwise ${orPipeline}.`;
     }
   })();
   return `MongoDB error ${failure.mongoError}: ${failure.reason}.${failure.document} ${written} ${advice}`;
