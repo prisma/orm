@@ -91,7 +91,7 @@ Simplified `defineConfig` that pre-wires all Postgres internals (family, target,
 // prisma.config.ts
 import { definePrismaConfig } from 'prisma/config';
 import { prismaContract } from '@prisma/orm-family-sql/contract-psl/provider';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgresContractCapabilities } from '@prisma/orm-postgres/config';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@prisma/orm-postgres/target/codec-ids';
 import postgresPack from '@prisma/orm-postgres/target/pack';
 import { postgresCreateNamespace } from '@prisma/orm-postgres/target/types';
@@ -102,6 +102,7 @@ export default definePrismaConfig({
       target: postgresPack,
       createNamespace: postgresCreateNamespace,
       enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
+      capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
       defaultControlPolicy: 'external',
     }),
     db: { connection: process.env['DATABASE_URL']! },
