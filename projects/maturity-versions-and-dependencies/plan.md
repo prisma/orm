@@ -87,7 +87,7 @@ Agreed with the operator on 2026-11-25, through the stream. From the next releas
 
 ### 4. The levels and each package's level in the Prisma 8 docs site
 
-**After this slice:** the Prisma 8 docs have a page that defines the four levels and says how to read one from a version and a name. Every page that introduces a database or an extension says its level. The five undefined labels used there today are gone. MongoDB, called "Early access" there today, becomes Preview, and MySQL and MariaDB, called "Early preview", become Early Access; the page says so, because "early access" then names a lower level than the one MongoDB had under that name. A short section says what a user of a package below GA does at each new minor, and that a monorepo keeps its applications on one minor unless its package manager keeps each workspace's packages apart. The page also states how long a major receives fixes.
+**After this slice:** the Prisma 8 docs have a page that defines the four levels and says how to read one from a version and a name. Every page that introduces a database or an extension says its level. The five undefined labels used there today are gone. MongoDB keeps "Early access"; MySQL and MariaDB ("Early preview") and SQLite ("Experimental") become Early Access. A short section says what a user of a package below GA does at each new minor, and that a monorepo keeps its applications on one minor unless its package manager keeps each workspace's packages apart. The page also states how long a major receives fixes.
 
 It is a pull request in prisma/web. It is written from the decision records of slices 1 and 2 and published with `8.0.0`.
 

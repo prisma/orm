@@ -95,13 +95,13 @@ Decided on 2026-11-24:
 | Level | Packages |
 | --- | --- |
 | GA | `@prisma/orm-postgres`, and what it depends on: `orm-framework`, `orm-toolchain`, `orm-family-sql`, `orm-target-postgres`. `orm-extension-pgvector`, `orm-extension-postgis`, `orm-postgres-contrib` (citext), `orm-extension-arktype-json`, `orm-extension-middleware-cache`, `orm-better-auth` |
-| Preview | `orm-mongo`, `orm-family-mongo`, `orm-target-mongo`, `orm-extension-supabase` |
-| Early Access | `orm-mysql`, `orm-target-mysql`, `orm-mariadb`, `orm-target-mariadb`, `orm-sqlite`, `orm-target-sqlite` |
+| Preview | `orm-extension-supabase` |
+| Early Access | `orm-mongo`, `orm-family-mongo`, `orm-target-mongo`, `orm-mysql`, `orm-target-mysql`, `orm-mariadb`, `orm-target-mariadb`, `orm-sqlite`, `orm-target-sqlite` |
 | Numbered `0.x` | `orm-extension-paradedb`, until it is removed from this repository |
 
 The cache middleware and the Better Auth integration were not named in that decision. On 2026-11-25 the operator put both at GA with the rest of the release, or at Release Candidate if either is found not ready before `8.0.0`.
 
-prisma.io calls MongoDB "Early access" and MySQL and MariaDB "Early preview". What it describes for MongoDB, a library that works with its gaps listed, is what Preview means here; what it describes for MySQL and MariaDB is Early Access. So the levels above stand, and the docs site takes the four names in slice 4.
+On 2026-11-25 the operator also moved MongoDB's three packages to Early Access: it promises less than they do today, they can be promoted later, and it keeps the "Early access" label prisma.io already gives MongoDB.
 
 MariaDB's packages depend on MySQL's, so MariaDB can never be at a higher level than MySQL.
 
