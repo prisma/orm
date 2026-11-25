@@ -40,6 +40,7 @@
 (not exported) interface DescriptorMigrationPackage, readonly required property metadata: MigrationMetadata
 (not exported) interface DescriptorMigrationPackage, readonly required property ops: MigrationOps
 (not exported) interface ExecuteDbSignSuccess
+(not exported) interface ExecuteDbSignSuccess, readonly required property changePolicy: readonly ChangeStrategy[] | undefined
 (not exported) interface ExecuteDbSignSuccess, readonly required property spaces: readonly DbSignSpaceOutcome[]
 (not exported) interface ExecuteDbVerifySuccess
 (not exported) interface ExecuteDbVerifySuccess, readonly required property appSpaceId: string
@@ -468,6 +469,7 @@
 ./cli/control-api: interface DbInitSuccess, readonly required property summary: string
 ./cli/control-api: interface DbSignOptions
 ./cli/control-api: interface DbSignOptions, readonly optional property connection?: unknown
+./cli/control-api: interface DbSignOptions, readonly optional property force?: boolean
 ./cli/control-api: interface DbSignOptions, readonly optional property onProgress?: OnControlProgress
 ./cli/control-api: interface DbSignOptions, readonly required property contract: Contract
 ./cli/control-api: interface DbSignOptions, readonly required property invocation: CliInvocation
@@ -541,6 +543,7 @@
 ./cli/control-api: interface ExecuteDbInitOptions, readonly required property mode: 'apply' | 'plan'
 ./cli/control-api: interface ExecuteDbInitOptions, readonly required property targetId: TTargetId
 ./cli/control-api: interface ExecuteDbInitOptions<TFamilyId extends string, TTargetId extends string> extends PlannerWarningsListener
+./cli/control-api: interface ExecuteDbSignOptions, readonly optional property force?: boolean
 ./cli/control-api: interface ExecuteDbSignOptions, readonly optional property onProgress?: OnControlProgress
 ./cli/control-api: interface ExecuteDbSignOptions, readonly optional property verifySnapshotContent?: SnapshotContentVerifier
 ./cli/control-api: interface ExecuteDbSignOptions, readonly required property contract: Contract

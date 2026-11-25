@@ -3914,16 +3914,33 @@
 ./contract/hashing-utils: type PathPattern = readonly PreserveEmptyPathSegment[]
 ./contract/hashing-utils: type PreserveEmptyPathSegment = '*' | readonly string[] | string
 ./contract/hashing-utils: type StorageSortPathSegment = '*' | string
+./contract/hashing: function assertContractHashes(options: AssertContractHashesOptions): void
 ./contract/hashing: function buildExecutionSection(input: { readonly target: string; readonly targetFamily: string; readonly defaults: ReadonlyArray<ExecutionMutationDefault>; }): ContractExecutionSection | undefined
 ./contract/hashing: function canonicalizeContract(contract: Contract, options: CanonicalizeContractOptions): string
 ./contract/hashing: function canonicalizeContractToObject(contract: Contract, options: CanonicalizeContractOptions): Record<string, unknown>
 ./contract/hashing: function computeExecutionHash(args: { target: string; targetFamily: string; execution: Record<string, unknown>; }): ExecutionHashBase<string>
 ./contract/hashing: function computeProfileHash(args: { target: string; targetFamily: string; capabilities: Record<string, Record<string, boolean>>; }): ProfileHashBase<string>
 ./contract/hashing: function computeStorageHash(args: ComputeStorageHashArgs): StorageHashBase<string>
+./contract/hashing: interface AssertContractHashesOptions
+./contract/hashing: interface AssertContractHashesOptions, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
+./contract/hashing: interface AssertContractHashesOptions, readonly optional property sortStorage?: StorageSort
+./contract/hashing: interface AssertContractHashesOptions, readonly required property contracts: readonly ExpectedContractHashes[]
 ./contract/hashing: interface CanonicalizeContractOptions
 ./contract/hashing: interface CanonicalizeContractOptions, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
 ./contract/hashing: interface CanonicalizeContractOptions, readonly optional property sortStorage?: StorageSort
 ./contract/hashing: interface CanonicalizeContractOptions, readonly required property serializeContract: SerializeContract
+./contract/hashing: interface ExpectedContractHashes
+./contract/hashing: interface ExpectedContractHashes, readonly optional property executionHash?: string
+./contract/hashing: interface ExpectedContractHashes, readonly required property contract: HashedContractSections
+./contract/hashing: interface ExpectedContractHashes, readonly required property name: string
+./contract/hashing: interface ExpectedContractHashes, readonly required property profileHash: string
+./contract/hashing: interface ExpectedContractHashes, readonly required property storageHash: string
+./contract/hashing: interface HashedContractSections
+./contract/hashing: interface HashedContractSections, readonly optional property execution?: Record<string, unknown>
+./contract/hashing: interface HashedContractSections, readonly required property capabilities: Record<string, Record<string, boolean>>
+./contract/hashing: interface HashedContractSections, readonly required property storage: Record<string, unknown>
+./contract/hashing: interface HashedContractSections, readonly required property target: string
+./contract/hashing: interface HashedContractSections, readonly required property targetFamily: string
 ./contract/hashing: type PreserveEmptyPredicate = (path: readonly string[]) => boolean
 ./contract/hashing: type SerializeContract = (contract: Contract) => JsonObject
 ./contract/hashing: type StorageSort = (storage: unknown) => unknown
@@ -4131,6 +4148,7 @@
 ./contract: export type const $: unique symbol
 ./contract: function applySpecifierDefaultControlPolicy(contract: Contract, specifierDefault: ControlPolicy | undefined): Contract
 ./contract: function asNamespaceId(value: string): NamespaceId
+./contract: function assertContractHashes(options: AssertContractHashesOptions): void
 ./contract: function buildEnumsMapForNamespace(domain: { readonly namespaces: Readonly<Record<string, { readonly enum?: Readonly<Record<string, ContractEnum>>; }>>; }, namespaceId: string, codecFor: EnumMemberCodecFor): Record<string, EnumAccessor>
 ./contract: function buildExecutionSection(input: { readonly target: string; readonly targetFamily: string; readonly defaults: ReadonlyArray<ExecutionMutationDefault>; }): ContractExecutionSection | undefined
 ./contract: function buildNamespacedEnums<TContract extends Contract>(domain: TContract['domain'], codecFor: EnumMemberCodecFor): NamespacedEnums<TContract>
@@ -4174,6 +4192,10 @@
 ./contract: interface ApplicationDomainNamespace
 ./contract: interface ApplicationDomainNamespace, readonly optional property enum?: Record<string, ContractEnum>
 ./contract: interface ApplicationDomainNamespace, readonly required property models: Record<string, ContractModelBase>
+./contract: interface AssertContractHashesOptions
+./contract: interface AssertContractHashesOptions, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
+./contract: interface AssertContractHashesOptions, readonly optional property sortStorage?: StorageSort
+./contract: interface AssertContractHashesOptions, readonly required property contracts: readonly ExpectedContractHashes[]
 ./contract: interface CanonicalizeContractOptions
 ./contract: interface CanonicalizeContractOptions, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
 ./contract: interface CanonicalizeContractOptions, readonly optional property sortStorage?: StorageSort
@@ -4252,11 +4274,23 @@
 ./contract: interface EnumMemberCodec, readonly required property dataType: { fromContract(json: JsonValue, params: Readonly<Record<string, unknown>>): unknown; toContract(value: unknown): JsonValue; readonly equalityKey?: (json: JsonValue) => string; }
 ./contract: interface EnumMemberCodec, required method fromDataTypeValue(value: unknown): unknown
 ./contract: interface EnumMemberCodec, required method toDataTypeValue(value: unknown): unknown
+./contract: interface ExpectedContractHashes
+./contract: interface ExpectedContractHashes, readonly optional property executionHash?: string
+./contract: interface ExpectedContractHashes, readonly required property contract: HashedContractSections
+./contract: interface ExpectedContractHashes, readonly required property name: string
+./contract: interface ExpectedContractHashes, readonly required property profileHash: string
+./contract: interface ExpectedContractHashes, readonly required property storageHash: string
 ./contract: interface FieldType
 ./contract: interface FieldType, readonly optional property items?: FieldType
 ./contract: interface FieldType, readonly optional property properties?: Record<string, FieldType>
 ./contract: interface FieldType, readonly required property nullable: boolean
 ./contract: interface FieldType, readonly required property type: string
+./contract: interface HashedContractSections
+./contract: interface HashedContractSections, readonly optional property execution?: Record<string, unknown>
+./contract: interface HashedContractSections, readonly required property capabilities: Record<string, Record<string, boolean>>
+./contract: interface HashedContractSections, readonly required property storage: Record<string, unknown>
+./contract: interface HashedContractSections, readonly required property target: string
+./contract: interface HashedContractSections, readonly required property targetFamily: string
 ./contract: interface LedgerEntryRecord
 ./contract: interface LedgerEntryRecord, readonly required property appliedAt: Date
 ./contract: interface LedgerEntryRecord, readonly required property from: null | string
