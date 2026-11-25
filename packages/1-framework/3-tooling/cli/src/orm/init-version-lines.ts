@@ -78,7 +78,8 @@ function withoutWorkspaceProtocol(range: string): string {
 /**
  * Whether a required peer's version or range admits an installed version, as Semantic Versioning
  * reads it: an exact version only itself; a tilde or a caret any version from the one it names, of
- * the same release (major and minor) for a tilde and of the same major for a caret. A pre-release
+ * the same release (major and minor) for a tilde and of the same major for a caret, except that a
+ * caret on `0.y.z` stays within `0.y`, and on `0.0.z` admits only `0.0.z`. A pre-release
  * is admitted only by a range that names a pre-release of the same `X.Y.Z`, so `~8.0.1-ea.0` does
  * not admit `8.0.0-rc.26`. `undefined` for any other range, which this cannot judge; the installed
  * copy then decides.
@@ -93,7 +94,9 @@ export function requirementAdmits(requirement: string, version: string): boolean
   const installed = semverOf(exactVersionOf(version) ?? '');
   if (from === undefined) return undefined;
   if (installed === undefined || installed.major !== from.major) return false;
-  if (operator === '~' && installed.minor !== from.minor) return false;
+  const caretOnZero = operator === '^' && from.major === 0;
+  if ((operator === '~' || caretOnZero) && installed.minor !== from.minor) return false;
+  if (caretOnZero && from.minor === 0 && installed.patch !== from.patch) return false;
   if (
     installed.pre.length > 0 &&
     (from.pre.length === 0 || installed.minor !== from.minor || installed.patch !== from.patch)
