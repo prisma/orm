@@ -191,13 +191,23 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 - State the event for Node.js, Bun, Deno, TypeScript, PostgreSQL, MongoDB, the other databases and each driver, and publish it on the supported-versions page (task 6), and revise the decision record on version support, which says "We raise floors freely".
 - CI runs against each supported version of Node.js, each database and each driver, and against the newest and the next TypeScript release. Each package declares its Node.js minimum, and a check fails when a declared minimum rises (task 20). prisma/orm#30669, open since October, declares one Node.js range on every package.
 
-### 12. Publish the compatibility policy in the user docs
+### 12. Publish one versioning and compatibility policy for Prisma's open-source products, and a page for each product that applies it
 
-**Purpose.** A user can read the promise itself.
+**Purpose.** A user can read the promise itself, and the ORM, the `prisma` command-line tool and Composer make the same promise in the same words.
 
-**What it achieves.** A page in the Prisma 8 docs tells an application developer and an extension author what a release will never break, what may change and how they will be told, and how long Prisma 8 receives fixes.
+**Why a general policy.** Project 13 brings every command of the `prisma` tool under the policy, Composer's included, and its work runs in the prisma-cli repository and in Composer's command-line package as well as here. Those repositories need a policy written for any product, not one written for the ORM. Other Prisma products can adopt it later without changing it.
 
-**How, where we know.** It is the spec rewritten for users, not a new design. It is written last, once the other projects are complete, so that it states what was built and includes what we learned on the way (task 23).
+**What it achieves.**
+
+- One general policy, published on prisma.io from prisma/web. It names no product. It says what each part of a version number means; defines the three maturity levels and how a user sees each one (a version suffix on a package, the level in an API's name, the level in a command's help text); says what is promised for each kind of thing a product exposes (code APIs, data it stores, commands and their machine-readable output, configuration); how a change is classified and announced; and how long the previous major receives fixes.
+- A short page for each product: the ORM, the `prisma` tool and Composer. It lists what the product exposes (its packages, its commands, what it stores) and any exception to the general policy.
+- Each repository's own versioning document links to the general policy, and its checks and release scripts apply it.
+
+**How, where we know.**
+
+- Split [spec.md](spec.md) into the general policy and the ORM's page. Section 13 of the spec says which part goes where.
+- Publish it as soon as it is written, not after the other projects. It sets the requirements for each maturity level, and project 6 is setting every ORM package to its real level now, so what we publish matches what we ship. Where something does not yet match, we say so and say that it is being worked on.
+- Prior art to verify before citing: Google Cloud's single page of launch stages, which every product refers to, and the Kubernetes deprecation policy, which covers its API, its command-line flags and its feature flags with rules for each maturity level.
 
 ### 13. Keep scripts and agents that drive the `prisma` command-line tool working, by designing every command's flags, exit codes and machine-readable output before `8.0.0` and checking them in CI
 

@@ -208,7 +208,25 @@ Where the correct edit depends on what the user meant, the tool finds every affe
 - The author of a change states its class from section 5.2. The reviewer checks it.
 - An automated check compares each package's exported API with the last release. It fails on a removal or an incompatible change to anything GA. It also reports every added API, and an addition is merged only when the reviewer approves it as intended. An API we expose by accident is one we are then bound to support.
 
-## 13. Alternatives rejected
+## 13. Where each part is published
+
+This policy is published in two parts (project 12 of the [plan](plan.md)): a general policy for every Prisma open-source product, and a page for each product. The ORM's part of this spec becomes the ORM's page. The `prisma` command-line tool and Composer get pages of their own.
+
+| Section | Goes to |
+| --- | --- |
+| 1. Goal | Both: the general policy states it for any product, the ORM's page for the ORM |
+| 2. Definitions | The general policy, except the terms about extensions, which stay on the ORM's page |
+| 3. What an application depends on | The ORM's page |
+| 4.1, 4.2, 4.4 | The general policy |
+| 4.3 Who each package is for | The ORM's page |
+| 5. API and behaviour compatibility | The general policy. 5.5 lists what the ORM runs on, which goes on the ORM's page |
+| 6.1, 6.3, 6.4, 6.5 | The ORM's page |
+| 6.2 Format versions | The general policy |
+| 7. Runtime marker check | The ORM's page |
+| 8 to 12 | The general policy |
+| Commands and their machine-readable output (project 13) | The general policy; each product's page lists its commands |
+
+## 14. Alternatives rejected
 
 - **Guides or the agent skill as the definition of specified behaviour.** Rejected: they are written for convenience, not precision, and two sources of truth disagree.
 - **Feature flags for new functionality.** Rejected in favour of extensions.
