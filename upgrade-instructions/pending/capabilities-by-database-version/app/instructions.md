@@ -23,7 +23,7 @@ changes:
         - '(?<![\s\S])(?=[\s\S]*"target"\s*:\s*"postgres")(?![\s\S]*"interactiveTransactions")'
   - id: postgres-transaction-needs-interactive-transactions
     summary: |
-      `db.transaction(...)` on a PostgreSQL client, a serverless connection or a Supabase role-bound client needs the contract to list `sql.interactiveTransactions`. The default capabilities list includes it; a stated list that leaves it out removes `transaction()` at type level and makes it throw `ORM.CAPABILITY_MISSING` at run time.
+      `db.transaction(...)` on a PostgreSQL client, a serverless connection or a Supabase role-bound client needs the contract to list `sql.interactiveTransactions`. The default capabilities list includes it; a stated list that leaves it out makes the callback passed to `transaction()` a type error, and makes `transaction()` throw `ORM.CAPABILITY_MISSING` at run time.
   - id: postgres-hand-built-contract-lists-capabilities
     summary: |
       The client no longer adds its target's, adapter's and driver's capabilities to the contract's. A contract built by hand, not emitted, must list every capability it uses.
@@ -148,7 +148,7 @@ contract: {
 },
 ```
 
-A list without the driver's set has no `sql.interactiveTransactions`, so the client has no `transaction()`. See `postgres-transaction-needs-interactive-transactions`.
+A list without the driver's set has no `sql.interactiveTransactions`, so the callback passed to `transaction()` is a type error. See `postgres-transaction-needs-interactive-transactions`.
 
 ### 4. Emit the contract
 
@@ -236,7 +236,9 @@ A server older than PostgreSQL 15 is always refused. For example, for PostgreSQL
 
 Upgrade such a database to PostgreSQL 15 or later. When the server's version cannot be read, the refusal says:
 
-> Prisma could not read this database's PostgreSQL version, so it cannot check that the database provides what your contract requires. Versions 15 to 18 provide the same capabilities today, so a contract for any supported version passes on any of them.
+> Prisma could not read this database's PostgreSQL version, so it cannot check that the database provides what your contract requires. Check that the connection reaches a PostgreSQL server, and that SHOW server_version_num returns its version there.
+
+Point the connection at a PostgreSQL server that reports its version, then run the command again.
 
 ## `postgres-capability-flags-removed`
 
