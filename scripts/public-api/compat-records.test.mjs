@@ -4,9 +4,11 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { brokenExports, fixtureCheck, fixtures, names, workFolder } from './compat-fixture.mjs';
 import { stampVersion } from './compat-install.mjs';
-import { apiFingerprint } from './records.mjs';
+import { apiFingerprint } from './fingerprint.mjs';
 
 const work = workFolder('api-compat-records-tests');
+// Where a record of the fixture package would be, as for a published one.
+const recordsFile = 'packages/9-public/fixture-compat/api-breaks.json';
 const check = fixtureCheck(work);
 
 const fingerprint = (fixture, path, name) =>
@@ -84,7 +86,7 @@ describe('checkPackage with recorded breaks', () => {
   it('fails once the recorded break is undone', () => {
     const { problems } = check('unchanged', { records: [record] });
     deepStrictEqual(problems, [
-      '. format (value): the recorded break is no longer a break. Remove the record.',
+      `fixture-compat: format (value): the recorded break is no longer a break. Remove the record from ${recordsFile}.`,
     ]);
   });
 
@@ -94,6 +96,10 @@ describe('checkPackage with recorded breaks', () => {
       { path: '.', name: 'format', test: 'value', failsRun: false },
     ]);
     match(result.breaks[0].note, /^a record for an earlier state of this export exists/);
+    match(
+      result.breaks[0].note,
+      /TypeScript's message may name only the first difference; check the export's changed lines in api\.txt\.$/,
+    );
     deepStrictEqual(result.problems, []);
   });
 
@@ -167,7 +173,7 @@ describe('checkPackage with a recorded break of one test', () => {
     });
     deepStrictEqual(problems, [
       '. format: a break is recorded for its type test, which this export does not have. Remove the record or correct its test.',
-      '. format (type): the recorded break is no longer a break. Remove the record.',
+      `fixture-compat: format (type): the recorded break is no longer a break. Remove the record from ${recordsFile}.`,
     ]);
   });
 });
@@ -204,7 +210,7 @@ describe('checkPackage on import paths', () => {
       records: [pathRecord],
     });
     deepStrictEqual(problems, [
-      './sub * (path): the recorded break is no longer a break. Remove the record.',
+      `fixture-compat/sub: * (path): the recorded break is no longer a break. Remove the record from ${recordsFile}.`,
     ]);
   });
 

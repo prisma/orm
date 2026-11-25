@@ -867,3 +867,13 @@ describe('run', () => {
     assert.ok(text.includes('## Description check'), 'the failure is kept');
   });
 });
+
+describe('failureMessage', () => {
+  it('ends with an example section in a markdown code block, so the job summary does not render it as a heading', () => {
+    const message = failureMessage({ section: false, missing: [], withoutReason: [] }, []);
+    assert.match(
+      message,
+      /For example:\n\n```markdown\n## API changes\n\n- `@prisma\/orm-postgres\/config: defineConfig`: [^\n]*\n- [^\n]*\n```$/,
+    );
+  });
+});

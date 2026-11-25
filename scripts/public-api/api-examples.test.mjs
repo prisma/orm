@@ -20,6 +20,7 @@ import {
   parseErrors,
   RUN_FOLDER,
   reportMarkdown,
+  reportText,
 } from './api-examples.mjs';
 import { EXAMPLES_FILE } from './records.mjs';
 import { LastReleaseError, lastRelease } from './release.mjs';
@@ -642,6 +643,64 @@ describe('the message of an error', () => {
       strict: true,
     });
     deepStrictEqual(problems, []);
+  });
+});
+
+describe('the record printed for an error', () => {
+  const report = {
+    version: '1.0.0',
+    tag: 'v1.0.0',
+    strict: true,
+    results: [
+      {
+        app: 'demo',
+        errors: [
+          {
+            file: 'src/a.ts',
+            line: 3,
+            column: 7,
+            code: 'TS2322',
+            message: 'Type <x> is wrong.',
+            failsRun: true,
+          },
+          {
+            file: 'src/b.ts',
+            line: 1,
+            column: 1,
+            code: 'TS2344',
+            message: 'Recorded.',
+            recorded: { kind: 'allowed', reason: 'r' },
+          },
+        ],
+        problems: [],
+      },
+    ],
+    recorded: [],
+    removable: [],
+    problems: [],
+  };
+  const printed = {
+    app: 'demo',
+    file: 'src/a.ts',
+    line: 3,
+    code: 'TS2322',
+    message: 'Type <x> is wrong.',
+    kind: 'break',
+    lastRelease: '1.0.0',
+    reason: '…',
+  };
+
+  it('is printed, ready to paste, under each unrecorded error, and not under a recorded one', () => {
+    const text = reportText(report);
+    strictEqual(text.split('to record it').length - 1, 1);
+    strictEqual(text.includes(`\n      to record it: ${JSON.stringify(printed)}\n`), true);
+  });
+
+  it('is in the job summary as a JSON block', () => {
+    strictEqual(
+      reportMarkdown(report).includes(`\n\`\`\`json\n${JSON.stringify(printed)}\n\`\`\``),
+      true,
+    );
   });
 });
 

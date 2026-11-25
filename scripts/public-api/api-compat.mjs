@@ -234,10 +234,19 @@ const RECORDED = [
 const recordedOfKind = (result, kind) =>
   (result.recorded ?? []).filter((each) => each.kind === kind);
 
-export function reportText({ version, results, notReleased }) {
-  const lines = [
-    `api:compat: last release ${version}; ${isPrerelease(version) ? 'a pre-release, so breaks are reported and do not fail' : 'breaks fail unless recorded'}`,
-  ];
+const FROM_DISK =
+  'the fingerprint is taken from the package’s api.txt as it is on disk: run pnpm build and pnpm api:update first, or it will not match';
+
+// Whether breaks fail: from the release's version, or from --ga.
+const headline = (version, strict = !isPrerelease(version)) =>
+  !strict
+    ? `last release ${version}; a pre-release, so breaks are reported and do not fail`
+    : isPrerelease(version)
+      ? `last release ${version}, treated as GA (--ga); breaks fail unless recorded`
+      : `last release ${version}; breaks fail unless recorded`;
+
+export function reportText({ version, strict, results, notReleased }) {
+  const lines = [`api:compat: ${headline(version, strict)}`];
   for (const result of results) {
     const counts = result.counts;
     const head = counts
@@ -258,6 +267,7 @@ export function reportText({ version, results, notReleased }) {
       if (record && !printed.has(record)) {
         printed.add(record);
         lines.push(`    to record it: ${record}`);
+        if (printed.size === 1) lines.push(`    ${FROM_DISK}`);
       }
     }
     for (const each of result.undecided ?? []) {
@@ -297,13 +307,13 @@ const cell = (text) =>
     .replaceAll('|', '\\|')
     .replaceAll('\n', ' ');
 
-export function reportMarkdown({ version, results, notReleased }) {
+export function reportMarkdown({ version, strict = !isPrerelease(version), results, notReleased }) {
   const lines = [
     `## Breaks since the last release, ${version}`,
     '',
-    isPrerelease(version)
-      ? 'The last release is a pre-release, so breaks are reported and do not fail the job.'
-      : 'A break fails the job unless it is recorded in the package’s `api-breaks.json`.',
+    strict
+      ? 'A break fails the job unless it is recorded in the package’s `api-breaks.json`.'
+      : 'The last release is a pre-release, so breaks are reported and do not fail the job.',
     '',
     '| Package | Comparisons | Forwarded names | Breaks | Undecided | Not compared | Recorded breaks | Recorded allowed | Problems |',
     '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
@@ -349,7 +359,7 @@ export function reportMarkdown({ version, results, notReleased }) {
     if (toRecord.length > 0) {
       items.push(
         '',
-        `To record these breaks, add to \`${result.name.replace('@prisma/', 'packages/9-public/@prisma/')}/api-breaks.json\`, with the kind and the reason:`,
+        `To record these breaks, add to \`${result.name.replace('@prisma/', 'packages/9-public/@prisma/')}/api-breaks.json\`, with the kind and the reason. The fingerprint is taken from the package’s \`api.txt\` as it is on disk: run \`pnpm build\` and \`pnpm api:update\` first, or it will not match.`,
         '',
         '```json',
         ...toRecord,
@@ -530,7 +540,7 @@ export async function main({
   results.push(...(await check(jobs, workers)));
   results.sort((a, b) => compareCodeUnits(a.name, b.name));
 
-  const report = { version, results, notReleased };
+  const report = { version, strict, results, notReleased };
   stdout.write(reportText(report));
   if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, reportMarkdown(report));
   return results.some(failsRun) ? 1 : 0;

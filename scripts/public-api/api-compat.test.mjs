@@ -137,6 +137,7 @@ describe('the report', () => {
         '@prisma/orm-a: 10 exports on 2 paths; 8 comparisons, and 3 forwarded names checked only for existence (they are compared in the package that declares them); breaks 1, undecided 1, not compared 1, recorded 2; 1.5 s, 900 MB — FAILS',
         "  break  @prisma/orm-a: Db (type): Property 'scope' is missing",
         '    to record it: {"path":".","export":"Db","test":"type"}',
+        '    the fingerprint is taken from the package’s api.txt as it is on disk: run pnpm build and pnpm api:update first, or it will not match',
         '  undecided (native)  @prisma/orm-a: JsonObject (type): excessively deep',
         '  decided member by member  @prisma/orm-a: Shape (type)',
         '  not compared  @prisma/orm-a: Only (type): the last release has it as never or any',
@@ -161,6 +162,11 @@ describe('the report', () => {
     }));
     const report = { version: '8.0.0', results: [result({ breaks })], notReleased: [] };
     strictEqual(reportText(report).split('to record it').length - 1, 1);
+    match(
+      reportText(report),
+      /\n {4}the fingerprint is taken from the package’s api\.txt as it is on disk: run pnpm build and pnpm api:update first, or it will not match\n/,
+    );
+    match(reportMarkdown(report), /taken from the package’s `api\.txt` as it is on disk/);
     match(reportText(report), /\n {4}note: a record for an earlier state of this export exists\n/);
     strictEqual(reportMarkdown(report).split('"export":"Shape"').length - 1, 1);
   });
@@ -376,6 +382,10 @@ describe('main', () => {
     match(reported.out, /break \(reported only\) {2}@prisma\/orm-framework: x \(value\): removed/);
     const forced = await run(['--ga'], '8.0.0-rc.25');
     deepStrictEqual([forced.code, forced.strictness], [1, [true]]);
+    match(
+      forced.out,
+      /^api:compat: last release 8\.0\.0-rc\.25, treated as GA \(--ga\); breaks fail unless recorded\n/,
+    );
   });
 
   it('leaves the removed-package records alone under --only, which cannot tell what was removed', async () => {

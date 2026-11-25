@@ -279,7 +279,7 @@ export function failureMessage({ section, missing, withoutReason }, groups) {
   }
   if (groups.some(isRecord)) parts.push(RECORDS_FORM);
   parts.push(
-    `For example:\n\n${SECTION}\n\n- \`@prisma/orm-postgres/config: defineConfig\`: added so a config file can name the database URL.\n- \`@prisma/orm-framework\`: regenerated after the TypeScript upgrade, no API change.`,
+    `For example:\n\n\`\`\`markdown\n${SECTION}\n\n- \`@prisma/orm-postgres/config: defineConfig\`: added so a config file can name the database URL.\n- \`@prisma/orm-framework\`: regenerated after the TypeScript upgrade, no API change.\n\`\`\``,
   );
   return parts.join('\n\n');
 }

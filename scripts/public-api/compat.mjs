@@ -9,9 +9,10 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { createCompareHost } from './compat-declarations.mjs';
 import { COMPILER_OPTIONS } from './compiler-options.mjs';
+import { apiFingerprint } from './fingerprint.mjs';
 import { entryPointsOf } from './read-api.mjs';
 import { packageOf, readExports, TYPE_FLAGS, VALUE_FLAGS } from './read-exports.mjs';
-import { apiFingerprint, byLastRelease, normaliseMessage } from './records.mjs';
+import { BREAKS_FILE, byLastRelease, exportLabel, normaliseMessage } from './records.mjs';
 import { isExemptExport } from './release.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -27,7 +28,7 @@ const UNCONFIRMED =
   ' (not confirmed against the copy of the last release: the time ran out; raise the budget)';
 const OUT_OF_STACK = 'not decided: TypeScript ran out of stack comparing it';
 const OUTDATED =
-  'a record for an earlier state of this export exists; the export, or a declaration it names in api.txt, has changed since, so it is judged again. If the break is still intended, replace the record with this one';
+  "a record for an earlier state of this export exists; the export, or a declaration it uses as a type in api.txt, has changed since, so it is judged again. If the break is still intended, replace the record with this one. TypeScript's message may name only the first difference; check the export's changed lines in api.txt.";
 const UNRELATABLE =
   "TypeScript's own comparison fails between the last release and a copy of it too, so it cannot compare the two copies here";
 const STRUCTURAL_ONLY = `not decided: ${UNRELATABLE}, and only the structural comparison, which instantiates generic signatures with their constraints, passes`;
@@ -1002,10 +1003,12 @@ export function checkPackage({
   const recorded = [];
   for (const record of applied) {
     const found = breaks.filter(sameTest(record));
-    const label = `${record.path} ${record.export} (${record.test})`;
+    const label = `${exportLabel(name, record.path, record.export)} (${record.test})`;
     if (found.length === 0) {
       if (!undecided.some(sameTest(record))) {
-        problems.add(`${label}: the recorded break is no longer a break. Remove the record.`);
+        problems.add(
+          `${label}: the recorded break is no longer a break. Remove the record from packages/9-public/${name}/${BREAKS_FILE}.`,
+        );
       }
     } else if (record.fingerprint !== fingerprintOf(record.path, record.export)) {
       for (const each of found) outdated.add(each);

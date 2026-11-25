@@ -322,6 +322,18 @@ const describeError = ({ file, line, column, code, message }) =>
 const describeRecord = ({ app, file, line, code, lastRelease: last, reason }) =>
   `${app} ${file}:${line} ${code} (last release ${last}): ${reason}`;
 
+// The record that would accept an error, ready to paste with its kind and reason.
+const recordOf = (app, { file, line, code, message }, lastRelease) => ({
+  app,
+  file,
+  line,
+  code,
+  message,
+  kind: 'break',
+  lastRelease,
+  reason: '…',
+});
+
 const recordedLabel = ({ recorded }) =>
   recorded === undefined
     ? ''
@@ -355,6 +367,11 @@ export function reportText(report) {
       lines.push(`  ${file}: ${errors.length}`);
       for (const error of errors) {
         lines.push(`    ${describeError(error)}${recordedLabel(error)}`);
+        if (error.recorded === undefined) {
+          lines.push(
+            `      to record it: ${JSON.stringify(recordOf(result.app, error, report.version))}`,
+          );
+        }
       }
     }
     for (const problem of result.problems) lines.push(`  problem  ${problem}`);
@@ -418,6 +435,17 @@ export function reportMarkdown(report) {
         : []),
     ]);
     items.push(...result.problems.map((problem) => `- problem: ${cell(problem)}`));
+    const unrecorded = result.errors.filter((error) => error.recorded === undefined);
+    if (unrecorded.length > 0) {
+      items.push(
+        '',
+        `To accept these errors, add to \`${EXAMPLES_FILE}\`, with the kind and the reason:`,
+        '',
+        '```json',
+        ...unrecorded.map((error) => JSON.stringify(recordOf(result.app, error, report.version))),
+        '```',
+      );
+    }
     if (items.length > 0) lines.push(`### ${result.app}`, '', ...items, '');
   }
   for (const { kind, heading } of RECORD_KINDS) {
