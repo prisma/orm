@@ -105,7 +105,6 @@ export default function postgres<
   const context = createExecutionContext<TContract, PostgresTargetId>({
     contract,
     stack,
-    driver: postgresDriver,
   });
   const {
     sql,

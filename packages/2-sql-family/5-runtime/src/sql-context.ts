@@ -9,8 +9,8 @@ import type {
   ComponentMetadata,
 } from '@internal/framework-components/components';
 import {
+  type CapabilityMatrix,
   checkContractComponentRequirements,
-  mergeCapabilityMatrices,
 } from '@internal/framework-components/components';
 import {
   createExecutionStack,
@@ -80,7 +80,12 @@ export interface SqlRuntimeTargetDescriptor<
     TTargetId
   >,
 > extends RuntimeTargetDescriptor<'sql', TTargetId, TTargetInstance>,
-    SqlStaticContributions {}
+    SqlStaticContributions {
+  /**
+   * The capabilities that are facts about the target's database, in any version it supports. Signing checks the database for them, so a client does not ask its adapter or driver to provide them. A target that declares none leaves every capability to the adapter, the driver and the extensions.
+   */
+  readonly databaseCapabilities?: CapabilityMatrix;
+}
 
 export interface SqlRuntimeAdapterDescriptor<
   TTargetId extends string = string,
@@ -492,34 +497,10 @@ export function createExecutionContext<
 >(options: {
   readonly contract: TContract;
   readonly stack: SqlExecutionStack<TTargetId>;
-  /**
-   * Optional driver descriptor. When provided, its `capabilities` are folded into the contract's capability matrix alongside the target, adapter, and extension packs — matching the merge `enrichContract` performs at CLI emit time. The driver is *only* consulted as a capability source here; runtime driver lifecycle is wired separately via {@link instantiateExecutionStack} + `runtime.connect`.
-   */
-  readonly driver?: RuntimeDriverDescriptor<
-    'sql',
-    TTargetId,
-    unknown,
-    SqlRuntimeDriverInstance<TTargetId>
-  >;
 }): ExecutionContext<TContract> {
-  const { stack, driver } = options;
+  const { contract, stack } = options;
 
-  assertExecutionStackContractRequirements(options.contract, stack);
-
-  const capabilityContributors: ReadonlyArray<{ readonly capabilities?: unknown }> = [
-    stack.target,
-    stack.adapter,
-    ...(driver ? [driver] : []),
-    ...stack.extensions,
-  ];
-  const mergedCapabilities = mergeCapabilityMatrices(
-    options.contract.capabilities,
-    capabilityContributors,
-  );
-  const contract: TContract = {
-    ...options.contract,
-    capabilities: mergedCapabilities,
-  };
+  assertExecutionStackContractRequirements(contract, stack);
 
   const contributors: Array<SqlStaticContributions & ComponentDescriptor<string>> = [
     stack.target,

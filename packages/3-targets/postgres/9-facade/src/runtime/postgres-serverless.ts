@@ -125,7 +125,6 @@ export default function postgresServerless<
   const context = createExecutionContext<TContract, PostgresTargetId>({
     contract,
     stack,
-    driver: postgresDriver,
   });
   const { sql, raw, enums, nativeEnums, toSql } = buildPostgresStaticContext<TContract>(
     contract,
