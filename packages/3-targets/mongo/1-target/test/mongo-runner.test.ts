@@ -1542,6 +1542,14 @@ describe("MongoMigrationRunner, a data transform's update that stops part way", 
       },
       rows: [{ _id: 1 }],
     },
+    {
+      nearMiss: 'whose check asks whether another field exists',
+      check: {
+        source: () => rawAggregate(RUN_COLLECTION, [{ $match: runFilter }, { $limit: 1 }]),
+        filter: MongoExistsExpr.exists('email'),
+      },
+      rows: [{ _id: 1, email: 'ada@example.com' }],
+    },
   ])(
     'says a re-run may run over the documents it changed for an update $nearMiss',
     async ({ check, rows }) => {
