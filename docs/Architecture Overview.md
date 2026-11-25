@@ -54,7 +54,7 @@ Prisma 8 is organized around two planes that share the contract and a pinned cap
 Both planes operate on the same shared artifacts (produced and consumed via a small Common "shared" plane):
 
 - **Data Contract:** Generated from PSL + TypeScript builders + extension manifests and distributed as JSON alongside TypeScript definitions, including `storageHash` and optional `executionHash` for execution defaults
-- **Capability profile:** The contract declares required capabilities (and optional adapter pins) and emits a pinned `profileHash`. The runner verifies the database satisfies the contract and writes the same `profileHash` to the marker (ADR 117, ADR 021)
+- **Capability profile:** The contract lists its capabilities in `capabilities`, and its `profileHash` covers that list, the target and the family ([ADR 332](architecture%20docs/adrs/ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md)). The runner verifies the database satisfies the contract and writes the same `profileHash` to the marker (ADR 117, ADR 021)
 - **Plan Factories:** Compile declarative inputs into deterministic plans with hash-stamped metadata (DSL, ORM, Raw SQL, TypedSQL)
 - **Guardrail Plugins:** Applied during plan creation and runtime execution
 - **Marker and ledger:** Database marker storing `storageHash` and `profileHash` plus an append-only ledger of applied edges for verification and audit (ADR 021, ADR 001)

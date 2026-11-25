@@ -14,7 +14,7 @@ A SHA-256 hash of the meaningful storage components (storage layout and related 
 A SHA-256 hash of execution defaults (for example, execution-time defaults or policies encoded under the `execution` section). Used to detect drift in execution semantics without altering the storage hash.
 
 ### ProfileHash
-A SHA-256 hash of the pinned capability profile derived from declared requirements, negotiated adapter capabilities, and optional adapter pins. It does not change the logical meaning of the data contract. The migration runner verifies that the database satisfies these requirements and writes the same `profileHash` to the marker. At runtime, equality with the marker is enforced.
+A SHA-256 hash of the contract's `targetFamily`, `target` and `capabilities` section, which `prisma contract emit` fills from the configured target, adapter and extensions ([ADR 332](../architecture%20docs/adrs/ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md)). It does not change the logical meaning of the data contract. The migration runner verifies that the database satisfies these requirements and writes the same `profileHash` to the marker. At runtime, equality with the marker is enforced.
 
 ### Capability Key
 A canonical identifier for a database or extension feature (e.g., `sql.lateral`, `sql.returning`, `pgvector.ivfflat`). Capability keys are namespaced and follow a stability contract where core capabilities are reserved and extension capabilities are prefixed by pack namespace. Used for adapter negotiation and feature gating.

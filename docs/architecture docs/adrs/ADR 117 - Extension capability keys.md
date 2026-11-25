@@ -1,5 +1,7 @@
 # ADR 117 — Extension capability keys
 
+**Profile hash inputs superseded by** [ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md): the profile hash covers only `targetFamily`, `target` and the contract's `capabilities` section, with no adapter pins or pack choices, and the rules do not change within a major.
+
 ## Context
 
 Targets like Postgres can be extended with packs such as pgvector and PostGIS. These introduce new types, operators, indexes, and DDL features that must be surfaced to:
