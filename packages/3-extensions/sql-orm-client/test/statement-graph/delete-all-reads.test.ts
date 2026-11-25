@@ -1,24 +1,37 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../../src/collection';
 import { deleteAllGraph } from '../../src/statement-graph/collection-graphs';
 import type { Graph } from '../../src/statement-graph/graph';
 import { createCollectionFor } from '../collection-fixtures';
 import { defineContract, field, model, rel } from '../contract-builder';
-import { buildTestContextFromContract, createMockRuntime, getTestContract } from '../helpers';
+import {
+  buildTestContextFromContract,
+  createMockRuntime,
+  getTestContract,
+  statedCapabilities,
+  withCapabilities,
+} from '../helpers';
 import { printGraph } from './print-graph';
 
 type Strategy = 'join' | 'query';
 type Returning = 'with RETURNING' | 'without RETURNING';
 
-function capabilitiesFor(strategy: Strategy, returning: Returning) {
-  return {
-    sql: {
-      returning: returning === 'with RETURNING',
-      outerReferencesInDerivedTables: strategy === 'join',
-      jsonAggWithoutTruncation: strategy === 'join',
-    },
-  };
+function stated<TContract extends Contract<SqlStorage>>(
+  contract: TContract,
+  strategy: Strategy,
+  returning: Returning,
+) {
+  if (strategy === 'join') {
+    return returning === 'with RETURNING'
+      ? contract
+      : withCapabilities(contract, statedCapabilities.withoutReturning);
+  }
+  return returning === 'with RETURNING'
+    ? withCapabilities(contract, statedCapabilities.perRelation)
+    : withCapabilities(contract, statedCapabilities.perRelationWithoutReturning);
 }
 
 const cases = [
@@ -58,9 +71,7 @@ const tables = [
 
 function rowsOf(modelName: 'NoKey' | 'NullableKey', strategy: Strategy, returning: Returning) {
   const runtime = createMockRuntime();
-  const context = buildTestContextFromContract(contract, {
-    capabilities: capabilitiesFor(strategy, returning),
-  });
+  const context = buildTestContextFromContract(stated(contract, strategy, returning));
   const collection = new Collection({ runtime, context }, modelName, { namespaceId: 'public' });
   return { runtime, rows: collection.where({ message: 'hello' }) };
 }
@@ -117,9 +128,7 @@ describe.each(tables)(
 );
 
 function deleteAllUsers(strategy: Strategy, returning: Returning, withPosts: boolean): Graph {
-  const context = buildTestContextFromContract(getTestContract(), {
-    capabilities: capabilitiesFor(strategy, returning),
-  });
+  const context = buildTestContextFromContract(stated(getTestContract(), strategy, returning));
   const users = createCollectionFor('User', context.contract).collection.where({ name: 'Ada' });
   const state = withPosts ? users.include('posts').state : users.state;
   const graph = deleteAllGraph(

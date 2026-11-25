@@ -112,7 +112,7 @@ async function withVehicles(
   ) => Promise<void>,
 ): Promise<void> {
   const contract = await authorVehiclesContract();
-  const context = createExecutionContext({
+  const context = createExecutionContext<Contract<SqlStorage>>({
     contract: withIncludeStrategy(contract, 'join'),
     stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
   });

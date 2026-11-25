@@ -11,7 +11,7 @@ import {
   buildTestContextFromContract,
   createMockRuntime,
   getTestContract,
-  perRelationCapabilities,
+  perRelation,
 } from '../helpers';
 import { sent } from './sent-statements';
 
@@ -26,9 +26,10 @@ function tasks() {
   return { tasks: collection.where({ title: 'Crash' } as never), runtime };
 }
 
-function usersWith(capabilities: Readonly<Record<string, Readonly<Record<string, boolean>>>>) {
+function usersWith(onePerRelation: boolean) {
   const runtime = createMockRuntime();
-  const context = buildTestContextFromContract(getTestContract(), { capabilities });
+  const contract = getTestContract();
+  const context = buildTestContextFromContract(onePerRelation ? perRelation(contract) : contract);
   const collection = new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
   return { users: collection.where({ name: 'Ada' }), runtime };
 }
@@ -36,14 +37,14 @@ function usersWith(capabilities: Readonly<Record<string, Readonly<Record<string,
 const strategies = [
   {
     strategy: 'the include read in the same query',
-    capabilities: {},
+    onePerRelation: false,
     results: (users: readonly { id: number; name: string; title: string }[]) => [
       users.map(({ id, name, title }) => ({ id, name, posts: JSON.stringify([{ title }]) })),
     ],
   },
   {
     strategy: 'one query per relation',
-    capabilities: perRelationCapabilities,
+    onePerRelation: true,
     results: (users: readonly { id: number; name: string; title: string }[]) => [
       users.map(({ id, name }) => ({ id, name })),
       users.map(({ id, title }) => ({ __prisma_parent_key_0: id, title })),
@@ -58,9 +59,9 @@ const found = [
 
 describe.each(strategies)(
   'deleteAll() with includes, under $strategy',
-  ({ capabilities, results }) => {
+  ({ onePerRelation, results }) => {
     it('returns only the rows read that its DELETE removed', async () => {
-      const { users, runtime } = usersWith(capabilities);
+      const { users, runtime } = usersWith(onePerRelation);
       runtime.setNextResults([...results(found), [{ id: 2, name: 'Ada' }]]);
 
       const rows = await users
@@ -76,7 +77,7 @@ describe.each(strategies)(
     });
 
     it('leaves out the key it read only to match the deleted rows, when the caller did not select it', async () => {
-      const { users, runtime } = usersWith(capabilities);
+      const { users, runtime } = usersWith(onePerRelation);
       runtime.setNextResults([...results(found.slice(0, 1)), [{ id: 1, name: 'Ada' }]]);
 
       const rows = await users

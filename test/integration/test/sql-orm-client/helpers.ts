@@ -66,10 +66,13 @@ export function getTestContract(): TestContract {
  * `TCaps`, which the framework `Contract` interface already permits
  * (`capabilities: Record<string, Record<string, boolean>>`).
  */
-export function withCapabilities<TCaps extends Record<string, Record<string, boolean>>>(
-  contract: TestContract,
+export function withCapabilities<
+  TContract extends FrameworkContract<SqlStorage>,
+  TCaps extends Record<string, Record<string, boolean>>,
+>(
+  contract: TContract,
   capabilities: TCaps,
-): Omit<TestContract, 'capabilities'> & { readonly capabilities: TCaps } {
+): Omit<TContract, 'capabilities'> & { readonly capabilities: TCaps } {
   return { ...contract, capabilities };
 }
 
@@ -117,29 +120,20 @@ export type IncludeStrategy = 'join' | 'query';
 
 export const includeStrategies: readonly IncludeStrategy[] = ['join', 'query'];
 
-const strategyCapabilities: Record<IncludeStrategy, Record<string, boolean>> = {
-  join: { jsonAgg: true, outerReferencesInDerivedTables: true, jsonAggWithoutTruncation: true },
-  query: { outerReferencesInDerivedTables: false, jsonAggWithoutTruncation: false },
-};
-
-/** `contract`, with its `sql` flags replaced by `flags`, as a contract stating them would list them. */
-export function withSqlCapabilities<TContract extends FrameworkContract<SqlStorage>>(
-  contract: TContract,
-  flags: Readonly<Record<string, boolean>>,
-): TContract {
-  const capabilities = contract.capabilities;
-  return {
-    ...contract,
-    capabilities: { ...capabilities, sql: { ...capabilities['sql'], ...flags } },
-  };
-}
-
-/** `contract`, with the capabilities that make the ORM load includes in one query (`'join'`) or with one query per relation (`'query'`). */
+/**
+ * `contract`, as it would be stated with the include strategy's capabilities added to its list: under `'query'` the database cannot run the one-query include, so the contract does not list the two capabilities it needs. Its type stays the contract's: these flags change what the ORM sends, not its types, and the contexts the tests share are typed by the contract they are built from.
+ */
 export function withIncludeStrategy<TContract extends FrameworkContract<SqlStorage>>(
   contract: TContract,
   strategy: IncludeStrategy,
 ): TContract {
-  return withSqlCapabilities(contract, strategyCapabilities[strategy]);
+  if (strategy === 'join') return contract;
+  const {
+    outerReferencesInDerivedTables: _outer,
+    jsonAggWithoutTruncation: _whole,
+    ...sql
+  } = contract.capabilities['sql'] ?? {};
+  return { ...contract, capabilities: { ...contract.capabilities, sql } };
 }
 
 const testContexts: Record<IncludeStrategy, ExecutionContext<TestContract>> = {

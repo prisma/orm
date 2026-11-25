@@ -35,36 +35,6 @@ describe('collection-contract capability detection', () => {
     expect(hasContractCapability(withTopLevelCapability, 'returning')).toBe(true);
   });
 
-  it('detects target-scoped capability flags from generated contracts', () => {
-    const contract = getTestContract();
-    const withTargetCapability = {
-      ...contract,
-      capabilities: {
-        postgres: {
-          returning: true,
-          lateral: true,
-        },
-      },
-    } as unknown as typeof contract;
-
-    expect(hasContractCapability(withTargetCapability, 'returning')).toBe(true);
-    expect(hasContractCapability(withTargetCapability, 'lateral')).toBe(true);
-  });
-
-  it('assertReturningCapability accepts target-scoped returning flags', () => {
-    const contract = getTestContract();
-    const withTargetCapability = {
-      ...contract,
-      capabilities: {
-        postgres: {
-          returning: true,
-        },
-      },
-    } as unknown as typeof contract;
-
-    expect(() => assertReturningCapability(withTargetCapability, 'create()')).not.toThrow();
-  });
-
   it('assertReturningCapability throws when returning is unavailable', () => {
     const contract = { ...getTestContract(), capabilities: {} };
     expect(() => assertReturningCapability(contract, 'create()')).toThrow(
