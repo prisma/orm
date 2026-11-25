@@ -13,14 +13,71 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
-import { stampVersion, TWIN_STAMP } from './compat.mjs';
-
 export class InstallError extends Error {}
+
+export const STAMP = 'last-release';
+export const TWIN_STAMP = 'twin';
+
+// TypeScript treats two copies of a package with the same name and version as one and reads only
+// the first, so the release's copy gets a version of its own, and so does its second copy. The
+// manifest is replaced, not written in place, because pnpm hard-links it from its global store.
+export function stampVersion(packageDir, stamp = STAMP) {
+  const file = join(packageDir, 'package.json');
+  const manifest = JSON.parse(readFileSync(file, 'utf8'));
+  const version = manifest.version.replace(new RegExp(`-(${STAMP}|${TWIN_STAMP})$`), '');
+  if (manifest.version === `${version}-${stamp}`) return;
+  manifest.version = `${version}-${stamp}`;
+  writeFileSync(`${file}.new`, `${JSON.stringify(manifest, null, 2)}\n`);
+  renameSync(`${file}.new`, file);
+}
+
+const SUPPLY_CHAIN_KEYS = [
+  'blockExoticSubdeps',
+  'minimumReleaseAge',
+  'minimumReleaseAgeExclude',
+  'trustPolicy',
+  'trustPolicyExclude',
+];
+
+const scalar = (text) => {
+  const value = text
+    .replace(/\s+#.*$/, '')
+    .trim()
+    .replace(/^(['"])(.*)\1$/, '$2');
+  if (value === 'true' || value === 'false') return value === 'true';
+  return /^\d+$/.test(value) ? Number(value) : value;
+};
+
+// The repository's supply-chain settings, from its pnpm-workspace.yaml, for the install of the
+// last release. They are top-level scalars and lists of scalars, which is all this reads. Our own
+// packages are excluded from the release-age cooldown, since the last release may be minutes old.
+export function supplyChainSettings(workspaceYaml) {
+  const settings = {};
+  let list;
+  for (const line of workspaceYaml.split('\n')) {
+    const key = /^([A-Za-z]+):\s*(.*)$/.exec(line);
+    if (key) {
+      list = undefined;
+      if (!SUPPLY_CHAIN_KEYS.includes(key[1])) continue;
+      if (key[2].replace(/#.*$/, '').trim() === '') settings[key[1]] = list = [];
+      else settings[key[1]] = scalar(key[2]);
+      continue;
+    }
+    const item = /^\s+-\s+(.*)$/.exec(line);
+    if (item && list) list.push(scalar(item[1]));
+    else if (line.trim() !== '' && !/^\s*#/.test(line)) list = undefined;
+  }
+  if (settings.minimumReleaseAge !== undefined) {
+    settings.minimumReleaseAgeExclude = [...(settings.minimumReleaseAgeExclude ?? []), '@prisma/*'];
+  }
+  return settings;
+}
 
 const DEPENDENCY_FIELDS = ['dependencies', 'peerDependencies', 'optionalDependencies'];
 
@@ -153,7 +210,15 @@ export function makeTwin({ releaseDir, twinRoot, ownNames, copies = new Map() })
 
 // Writes the install folder's manifest and workspace, installs, stamps every copy of our packages
 // with a version of its own, and links each current package beside its release.
-export function installRelease({ dir, packages, version, overrides, peers, ownNames }) {
+export function installRelease({
+  dir,
+  packages,
+  version,
+  overrides,
+  peers,
+  ownNames,
+  settings = {},
+}) {
   mkdirSync(dir, { recursive: true });
   const dependencies = {
     ...peers,
@@ -167,7 +232,7 @@ export function installRelease({ dir, packages, version, overrides, peers, ownNa
   );
   writeFileSync(
     join(dir, 'pnpm-workspace.yaml'),
-    `${JSON.stringify({ packages: [], fetchRetries: 5, overrides }, null, 2)}\n`,
+    `${JSON.stringify({ packages: [], fetchRetries: 5, ...settings, overrides }, null, 2)}\n`,
   );
   execFileSync(
     'pnpm',

@@ -5,10 +5,12 @@ import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   failsRun,
+  main,
   PackageSelectionError,
   planPackages,
   RecordsError,
   readRecords,
+  removedPackageResults,
   reportMarkdown,
   reportText,
   selectPackages,
@@ -29,7 +31,8 @@ const record = {
   path: '.',
   export: 'Db',
   test: 'type',
-  release: '8.0.0',
+  lastRelease: '8.0.0',
+  message: "Property 'scope' is missing",
   reason: 'Db takes a scope now',
 };
 
@@ -42,14 +45,19 @@ describe('readRecords', () => {
     deepStrictEqual(readRecords(packageWithRecords(JSON.stringify([record])), work), [record]);
   });
 
-  it('rejects a record without a reason or a test, with a reason on two lines, or with an unknown test', () => {
+  it('rejects a record without a reason, a test or a message, with a reason on two lines, an unknown test, a last release that is not a version, or the old release field', () => {
     const { reason: _, ...withoutReason } = record;
     const { test: __, ...withoutTest } = record;
+    const { message: ___, ...withoutMessage } = record;
+    const { lastRelease, ...rest } = record;
     for (const records of [
       [withoutReason],
       [withoutTest],
+      [withoutMessage],
       [{ ...record, reason: 'one\ntwo' }],
       [{ ...record, test: 'member' }],
+      [{ ...record, lastRelease: 'eight' }],
+      [{ ...rest, release: lastRelease }],
     ]) {
       throws(() => readRecords(packageWithRecords(JSON.stringify(records)), work), RecordsError);
     }
@@ -105,7 +113,7 @@ describe('the report', () => {
         undecided: [
           { ...strictBreak, name: 'JsonObject', stage: 'native', message: 'excessively deep' },
         ],
-        fallbacks: [{ path: '.', name: 'Shape', test: 'type', decidedBy: 'members' }],
+        decidedByMembers: [{ path: '.', name: 'Shape', test: 'type' }],
         recorded: [{ path: './x', name: 'Old', test: 'path', reason: 'gone on purpose' }],
         notCompared: [
           {
@@ -115,7 +123,7 @@ describe('the report', () => {
             reason: 'the last release has it as never or any',
           },
         ],
-        removable: [{ path: '.', export: 'Gone', test: 'value', release: '7.9.0' }],
+        removable: [{ path: '.', export: 'Gone', test: 'value', lastRelease: '7.9.0' }],
       }),
     ],
     notReleased: ['@prisma/orm-new'],
@@ -133,7 +141,7 @@ describe('the report', () => {
         '  decided member by member  . Shape (type)',
         '  not compared  . Only (type): the last release has it as never or any',
         '  recorded  ./x Old (path): gone on purpose',
-        '  removable record  . Gone (value): for release 7.9.0, earlier than the last',
+        '  removable record  . Gone (value): for the last release 7.9.0, earlier than this one',
         '',
         'Not checked, no release 8.0.0: @prisma/orm-new',
         '',
@@ -150,7 +158,7 @@ describe('the report', () => {
     );
     match(
       markdown,
-      /- removable record: `\.` `Gone` \(value\): for release 7\.9\.0, earlier than the last/,
+      /- removable record: \. Gone \(value\): for the last release 7\.9\.0, earlier than this one/,
     );
     match(markdown, /- undecided \(native\): `\.` `JsonObject` \(type\): excessively deep/);
     match(markdown, /- decided member by member: `\.` `Shape` \(type\)/);
@@ -174,7 +182,7 @@ describe('selectPackages', () => {
 });
 
 describe('planPackages', () => {
-  it('checks the packages the release tag has, and fails on one missing from the repository or the registry', () => {
+  it('checks the packages the release tag has, lists one the repository no longer has as removed, and fails on one missing from the registry', () => {
     const plan = planPackages({
       version: '8.0.0',
       atTag: ['@prisma/orm-a', '@prisma/orm-gone', '@prisma/orm-lagging'],
@@ -188,11 +196,8 @@ describe('planPackages', () => {
     deepStrictEqual(plan, {
       check: [{ name: '@prisma/orm-a', dir: 'a' }],
       notReleased: ['@prisma/orm-new'],
+      removed: ['@prisma/orm-gone'],
       problems: [
-        {
-          name: '@prisma/orm-gone',
-          problems: ['the release v8.0.0 has this package, but the repository no longer does'],
-        },
         {
           name: '@prisma/orm-lagging',
           problems: [
@@ -201,5 +206,112 @@ describe('planPackages', () => {
         },
       ],
     });
+  });
+});
+
+describe('removedPackageResults', () => {
+  const gone = { package: '@prisma/orm-gone', lastRelease: '8.0.0-rc.25', reason: 'merged' };
+  const breaksOf = (outcome) => outcome.results.flatMap((each) => each.breaks);
+
+  it('reports a removed package as a break that fails the run only once the release is GA', () => {
+    for (const strict of [false, true]) {
+      deepStrictEqual(
+        breaksOf(
+          removedPackageResults({
+            removed: ['@prisma/orm-gone'],
+            version: '8.0.0-rc.25',
+            strict,
+            records: [],
+          }),
+        ).map(({ name, test, failsRun: fails }) => ({ name, test, failsRun: fails })),
+        [{ name: '*', test: 'package', failsRun: strict }],
+      );
+    }
+  });
+
+  it('lists a recorded removal as recorded', () => {
+    const outcome = removedPackageResults({
+      removed: ['@prisma/orm-gone'],
+      version: '8.0.0-rc.25',
+      strict: true,
+      records: [gone],
+    });
+    deepStrictEqual(breaksOf(outcome), []);
+    deepStrictEqual(
+      outcome.results[0].recorded.map(({ reason }) => reason),
+      ['merged'],
+    );
+    deepStrictEqual(outcome.problems, []);
+  });
+
+  it('fails on a record for a package the repository still has, and lists one for an earlier release as removable', () => {
+    const outcome = removedPackageResults({
+      removed: [],
+      version: '8.0.0-rc.25',
+      strict: true,
+      records: [gone, { ...gone, package: '@prisma/orm-old', lastRelease: '8.0.0-rc.1' }],
+    });
+    deepStrictEqual(outcome.problems, [
+      '@prisma/orm-gone: the record is for a package the repository still has, or that was not released. Remove it.',
+    ]);
+    deepStrictEqual(
+      outcome.removable.map(({ package: name }) => name),
+      ['@prisma/orm-old'],
+    );
+  });
+});
+
+describe('main', () => {
+  const root = join(here, '..', '..');
+  const breakIn = (job) => ({
+    name: job.name,
+    counts: { paths: 1, exports: 1, forwarded: 0, tests: 1, notCompared: 0 },
+    breaks: [{ path: '.', name: 'x', test: 'value', message: 'removed', failsRun: job.strict }],
+    undecided: [],
+    notCompared: [],
+    recorded: [],
+    removable: [],
+    problems: [],
+    ms: 1,
+    maxRssMb: 1,
+  });
+  const run = (args, version) => {
+    let out = '';
+    let err = '';
+    const strictness = [];
+    return main({
+      root,
+      args: ['--only', 'orm-framework', ...args],
+      env: {},
+      stdout: { write: (text) => (out += text) },
+      stderr: { write: (text) => (err += text) },
+      findRelease: async () => ({ version, tag: `v${version}` }),
+      fetchTag: () => {},
+      packagesAt: () => ['@prisma/orm-framework'],
+      released: async () => true,
+      install: () => {},
+      check: async (jobs) => jobs.map((job) => (strictness.push(job.strict), breakIn(job))),
+    }).then((code) => ({ code, out, err, strictness }));
+  };
+
+  it('reports a break against a pre-release and exits 0, and fails it with --ga', async () => {
+    const reported = await run([], '8.0.0-rc.25');
+    deepStrictEqual([reported.code, reported.strictness], [0, [false]]);
+    match(reported.out, /a pre-release, so breaks are reported and do not fail/);
+    match(reported.out, /break \(reported only\) {2}\. x \(value\): removed/);
+    const forced = await run(['--ga'], '8.0.0-rc.25');
+    deepStrictEqual([forced.code, forced.strictness], [1, [true]]);
+  });
+
+  it('fails a break against a GA release', async () => {
+    strictEqual((await run([], '8.0.0')).code, 1);
+  });
+
+  it('rejects --jobs that is not a positive whole number', async () => {
+    for (const jobs of ['0', 'x', '1.5']) {
+      const { code, err } = await run(['--jobs', jobs], '8.0.0');
+      strictEqual(code, 1);
+      match(err, /--jobs must be a positive whole number/);
+    }
   });
 });

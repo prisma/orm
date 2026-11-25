@@ -3,7 +3,12 @@ import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { aliasOf, peerDependencies, thirdPartyVersions } from './compat-install.mjs';
+import {
+  aliasOf,
+  peerDependencies,
+  supplyChainSettings,
+  thirdPartyVersions,
+} from './compat-install.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const work = join(here, '..', '..', 'wip', `api-compat-install-tests-${process.pid}`);
@@ -98,5 +103,33 @@ describe('peerDependencies', () => {
       peerDependencies([dir], new Set(['@prisma/orm-peers', '@prisma/orm-a']), { vite: '8.0.9' }),
       { vite: '8.0.9' },
     );
+  });
+});
+
+describe('supplyChainSettings', () => {
+  it('copies the repository’s supply-chain settings and exempts our own packages from the release-age cooldown', () => {
+    const yaml = [
+      'packages:',
+      "  - 'packages/*'",
+      'blockExoticSubdeps: true',
+      'fetchRetries: 5',
+      'minimumReleaseAge: 1440 # a day',
+      '# a comment',
+      'minimumReleaseAgeExclude:',
+      "  - '@prisma/dev'",
+      'trustPolicy: no-downgrade',
+      'trustPolicyExclude:',
+      '  # why',
+      '  - chokidar@4.0.3',
+      'catalog:',
+      '  typescript: 5.9.3',
+    ].join('\n');
+    deepStrictEqual(supplyChainSettings(yaml), {
+      blockExoticSubdeps: true,
+      minimumReleaseAge: 1440,
+      minimumReleaseAgeExclude: ['@prisma/dev', '@prisma/*'],
+      trustPolicy: 'no-downgrade',
+      trustPolicyExclude: ['chokidar@4.0.3'],
+    });
   });
 });
