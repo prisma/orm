@@ -9,6 +9,6 @@ import { releaseOfRootVersion } from '@internal/publish-surface/release-plan';
 export function versionOutsideTheRelease(rootVersion: string): string {
   const root = releaseOfRootVersion(rootVersion);
   return root.line === 'release-candidates'
-    ? `${root.release.major}.${root.release.minor}.0-rc.${(root.rcCounter ?? 0) + 1}`
+    ? `${root.release.major}.${root.release.minor}.0-rc.${root.rcCounter + 1}`
     : `${root.release.major + 1}.0.0`;
 }

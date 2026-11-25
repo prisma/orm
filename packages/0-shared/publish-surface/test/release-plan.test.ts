@@ -7,6 +7,7 @@ import {
   parseVersion,
   planInputFor,
   planRelease,
+  type ReleaseLine,
   type ReleasePlanInput,
   releaseOfRootVersion,
   rootVersionOfRelease,
@@ -54,14 +55,17 @@ const AT_8_0: Record<string, string> = Object.fromEntries(
 
 const GA = new Set(['framework', 'family', 'target', 'postgres', 'pgvector']);
 
+type PlanContext = Omit<ReleasePlanInput, keyof ReleaseLine>;
+
 function input(
-  overrides: Partial<ReleasePlanInput> & { levelChanges?: Record<string, Numbering> },
+  overrides: Partial<PlanContext> &
+    ({ readonly line?: 'levels' } | Extract<ReleaseLine, { line: 'release-candidates' }>) & {
+      levelChanges?: Record<string, Numbering>;
+    },
 ): ReleasePlanInput {
   const { levelChanges = {}, ...rest } = overrides;
-  return {
+  const context: PlanContext = {
     release: { major: 8, minor: 1 },
-    line: 'levels',
-    rcCounter: undefined,
     current: AT_8_1,
     numbering: new Map(
       Object.entries(graph).map(([name, entry]) => [name, levelChanges[name] ?? entry.numbering]),
@@ -73,6 +77,9 @@ function input(
     dev: undefined,
     ...rest,
   };
+  return rest.line === 'release-candidates'
+    ? { ...context, line: 'release-candidates', rcCounter: rest.rcCounter }
+    : { ...context, line: 'levels' };
 }
 
 /** One package's line of a plan: version, tag, and each range, in the order the package names them. */
@@ -296,8 +303,8 @@ describe('planRelease', () => {
         'ghost',
       ],
       [
-        'the release candidates without a counter',
-        input({ line: 'release-candidates', release: { major: 8, minor: 0 } }),
+        'a release-candidate counter that is not a count',
+        input({ line: 'release-candidates', rcCounter: -1, release: { major: 8, minor: 0 } }),
         'rcCounter',
       ],
       [
@@ -609,6 +616,20 @@ describe('no range release 8.0 writes admits a published release candidate', () 
   });
 });
 
+describe('ReleaseLine', () => {
+  it('holds a release-candidate counter on the release-candidate line only', () => {
+    const lines: ReleaseLine[] = [
+      { line: 'release-candidates', rcCounter: 26 },
+      { line: 'levels' },
+      // @ts-expect-error the levels line has no release-candidate counter
+      { line: 'levels', rcCounter: 26 },
+      // @ts-expect-error the release-candidate line needs its counter
+      { line: 'release-candidates' },
+    ];
+    expect(lines).toHaveLength(4);
+  });
+});
+
 describe('releaseOfRootVersion', () => {
   it.each([
     [
@@ -624,22 +645,10 @@ describe('releaseOfRootVersion', () => {
       '8.0.0-rc.26-dev.3',
       { release: { major: 8, minor: 0 }, line: 'release-candidates', rcCounter: 26, dev: 3 },
     ],
-    [
-      '8.0.1',
-      { release: { major: 8, minor: 0 }, line: 'levels', rcCounter: undefined, dev: undefined },
-    ],
-    [
-      '8.0.1-dev.2',
-      { release: { major: 8, minor: 0 }, line: 'levels', rcCounter: undefined, dev: 2 },
-    ],
-    [
-      '8.1.0',
-      { release: { major: 8, minor: 1 }, line: 'levels', rcCounter: undefined, dev: undefined },
-    ],
-    [
-      '8.1.0-dev.7',
-      { release: { major: 8, minor: 1 }, line: 'levels', rcCounter: undefined, dev: 7 },
-    ],
+    ['8.0.1', { release: { major: 8, minor: 0 }, line: 'levels', dev: undefined }],
+    ['8.0.1-dev.2', { release: { major: 8, minor: 0 }, line: 'levels', dev: 2 }],
+    ['8.1.0', { release: { major: 8, minor: 1 }, line: 'levels', dev: undefined }],
+    ['8.1.0-dev.7', { release: { major: 8, minor: 1 }, line: 'levels', dev: 7 }],
   ])('reads %s', (version, expected) => {
     expect(releaseOfRootVersion(version)).toEqual(expected);
   });
@@ -707,7 +716,6 @@ describe('planInputFor', () => {
     ).toEqual({
       release: { major: 8, minor: 1 },
       line: 'levels',
-      rcCounter: undefined,
       dev: undefined,
       current: { '@prisma/orm-framework': '8.1.0', '@prisma/orm-postgres': '8.1.0' },
       uses: { '@prisma/orm-framework': [], '@prisma/orm-postgres': ['@prisma/orm-framework'] },

@@ -38,13 +38,23 @@ export interface ParsedVersion {
   readonly dev: number | undefined;
 }
 
-export interface ReleasePlanInput {
+/**
+ * The line a release is on: `release-candidates` while every package is published as
+ * `X.Y.0-rc.N`, with `N` as its counter; `levels` after, where nothing has a counter.
+ */
+export type ReleaseLine =
+  | { readonly line: 'release-candidates'; readonly rcCounter: number }
+  | { readonly line: 'levels' };
+
+/** The release a root version stands for. */
+export type RootRelease = ReleaseLine & {
   /** The release's major and minor version. */
   readonly release: { readonly major: number; readonly minor: number };
-  /** `release-candidates` while every package is published as `X.Y.0-rc.N`; `levels` after. */
-  readonly line: 'release-candidates' | 'levels';
-  /** The `N` of `X.Y.0-rc.N` on the release-candidate line. */
-  readonly rcCounter: number | undefined;
+  /** The development build counter, for a `-dev.N` build. */
+  readonly dev: number | undefined;
+};
+
+export type ReleasePlanInput = RootRelease & {
   /** Each published package's current version. */
   readonly current: Readonly<Record<string, string>>;
   readonly numbering: ReadonlyMap<string, Numbering>;
@@ -55,9 +65,7 @@ export interface ReleasePlanInput {
   readonly everGa: ReadonlySet<string>;
   /** The packages that get a fix within the current minor. */
   readonly bump: readonly string[];
-  /** The development build counter, for a `-dev.N` build. */
-  readonly dev: number | undefined;
-}
+};
 
 export interface PlannedPackage {
   readonly version: string;
@@ -137,7 +145,7 @@ export function planRelease(input: ReleasePlanInput): ReleasePlan {
   checkInput(input, names);
   const versions =
     input.line === 'release-candidates'
-      ? candidateVersions(input, names)
+      ? candidateVersions(input.release, input.rcCounter, names)
       : levelVersions(input, names);
   const plan: Record<string, PlannedPackage> = {};
   for (const name of names) {
@@ -196,10 +204,8 @@ function checkInput(input: ReleasePlanInput, names: readonly string[]): void {
     );
   }
   if (input.line === 'release-candidates') {
-    if (input.rcCounter === undefined || !isCount(input.rcCounter)) {
-      throw new ReleasePlanError(
-        `rcCounter ${input.rcCounter} is required on the release-candidate line`,
-      );
+    if (!isCount(input.rcCounter)) {
+      throw new ReleasePlanError(`rcCounter ${input.rcCounter} is not a release-candidate counter`);
     }
     if (input.bump.length > 0) {
       throw new ReleasePlanError(
@@ -224,10 +230,11 @@ function parseCurrent(input: ReleasePlanInput, name: string): ParsedVersion {
 }
 
 function candidateVersions(
-  input: ReleasePlanInput,
+  release: ReleasePlanInput['release'],
+  rcCounter: number,
   names: readonly string[],
 ): Record<string, string> {
-  const version = `${input.release.major}.${input.release.minor}.0-rc.${input.rcCounter}`;
+  const version = `${release.major}.${release.minor}.0-rc.${rcCounter}`;
   return Object.fromEntries(names.map((name) => [name, version]));
 }
 
@@ -398,13 +405,6 @@ function isCount(value: number): boolean {
   return Number.isInteger(value) && value >= 0;
 }
 
-export interface RootRelease {
-  readonly release: { readonly major: number; readonly minor: number };
-  readonly line: 'release-candidates' | 'levels';
-  readonly rcCounter: number | undefined;
-  readonly dev: number | undefined;
-}
-
 /**
  * The release a root version stands for. The root version is `8.0.0-rc.N` on the release-candidate
  * line and `rootVersionOfRelease` on the levels line, either followed by `-dev.N` for a development
@@ -429,7 +429,7 @@ export function releaseOfRootVersion(version: string): RootRelease {
   if (parsed.level === undefined) {
     const root = rootVersionOfRelease(release);
     if (formatVersion({ ...parsed, dev: undefined }) === root) {
-      return { release, line: 'levels', rcCounter: undefined, dev: parsed.dev };
+      return { release, line: 'levels', dev: parsed.dev };
     }
     if (parsed.major === 8 && parsed.minor === 0 && parsed.patch === 0) {
       throw new ReleasePlanError(
