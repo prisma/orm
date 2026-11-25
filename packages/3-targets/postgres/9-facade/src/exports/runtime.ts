@@ -5,7 +5,6 @@ export { buildNamespacedNativeEnums, type NamespacedNativeEnums } from '../runti
 export type {
   PostgresBindingOptions,
   PostgresClient,
-  PostgresClientMembers,
   PostgresOptions,
   PostgresOptionsBase,
 } from '../runtime/postgres';
@@ -13,9 +12,8 @@ export { default } from '../runtime/postgres';
 export type {
   InteractiveTransactionsCapability,
   PostgresQueryMembers,
+  PostgresTransactionCallback,
   PostgresTransactionContext,
-  PostgresTransactionMember,
-  PostgresTransactionMemberFor,
 } from '../runtime/postgres-members';
 export type {
   PostgresCursorOptions,
@@ -24,4 +22,4 @@ export type {
 } from '../runtime/postgres-options';
 export type { PostgresRuntime } from '../runtime/postgres-runtime';
 export { PostgresRuntimeImpl } from '../runtime/postgres-runtime';
-export type { PostgresStackProvides } from '../runtime/stack-capabilities';
+export type { PostgresStackProvides, RequiresCapabilities } from '../runtime/stack-capabilities';

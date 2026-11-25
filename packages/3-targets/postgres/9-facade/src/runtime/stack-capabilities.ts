@@ -51,12 +51,25 @@ export type CapabilitiesNotProvided<
   | EnabledFlagNames<DriverCapabilities>
 >;
 
-/** Nothing when every capability is provided; otherwise a property no options object has, named for each capability the stack lacks, so creating the client is a type error that names it. */
-export type StackProvides<Missing extends string> = [Missing] extends [never]
-  ? unknown
-  : {
-      readonly [Capability in Missing as `the adapter and driver do not provide ${Capability}`]: never;
-    };
+// True only for a known, non-empty set of capabilities: `never` (nothing missing) and `any` give false.
+type NamesSomething<Missing> = [Missing] extends [1 & Missing] ? false : true;
+
+/**
+ * Nothing when `Missing` is empty; otherwise a property no value has, named `${Reason} ${capability}` for each capability, so the value given there is a type error that names it.
+ *
+ * The verdict is the false branch when nothing is missing. For a contract type that is still a type parameter, TypeScript checks only that branch, so a function generic over contracts compiles; the check applies where the contract is known.
+ */
+export type RequiresCapabilities<Missing extends string, Reason extends string> = [
+  NamesSomething<Missing>,
+] extends [true]
+  ? { readonly [Capability in Missing as `${Reason} ${Capability}`]: never }
+  : unknown;
+
+/** Creating the client is a type error naming each capability its adapter and driver lack. */
+export type StackProvides<Missing extends string> = RequiresCapabilities<
+  Missing,
+  'the adapter and driver do not provide'
+>;
 
 /** The check `postgres()` and `postgresServerless()` make against their adapter and driver. */
 export type PostgresStackProvides<TContract extends Contract<SqlStorage>> = StackProvides<

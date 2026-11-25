@@ -7,7 +7,6 @@ export type {
 export type {
   PostgresServerlessClient,
   PostgresServerlessConnection,
-  PostgresServerlessConnectionMembers,
   PostgresServerlessOptions,
   PostgresServerlessOptionsBase,
 } from '../runtime/postgres-serverless';

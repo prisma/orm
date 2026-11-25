@@ -39,6 +39,7 @@
 (not exported) interface PostgresQueryMembersOptions<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses>
 (not exported) interface PostgresRuntimeBoundMembers, readonly required property orm: OrmClient<TContract, TCollections>
 (not exported) interface PostgresRuntimeBoundMembers, required method runtime(): Runtime
+(not exported) interface PostgresRuntimeBoundMembers, required method transaction<R>(fn: PostgresTransactionCallback<TContract, TCollections, R>, options?: PostgresTransactionOptions): Promise<R>
 (not exported) interface PostgresRuntimeBoundMembers<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> extends PrepareMember<TContract>
 (not exported) interface PostgresStaticMembers, readonly required property stack: SqlExecutionStackWithDriver<PostgresTargetId>
 (not exported) interface PostgresStaticMembers<TContract extends Contract<SqlStorage>> extends PostgresStaticContext<TContract>
@@ -69,11 +70,13 @@
 (not exported) type FullTextOptions<Groups, Language, ColumnOf> = { readonly language: Language; readonly weightGroups: ColumnGroups<Groups, ColumnOf>; }
 (not exported) type GroupColumns<Group, ColumnOf> = { readonly [Member in keyof Group]: Group[Member] extends keyof ColumnOf ? ColumnOf[Group[Member]] : Group[Member]; }
 (not exported) type GroupFieldNames<Group> = Group extends readonly unknown[] ? { readonly [Member in keyof Group]: FieldNameOf<Group[Member]>; } : readonly [FieldNameOf<Group>]
+(not exported) type InteractiveTransactionsNotListed<TContract extends Contract<SqlStorage>> = TContract['capabilities'] extends InteractiveTransactionsCapability ? never : 'sql.interactiveTransactions'
 (not exported) type Known<Set> = { [Key in keyof Set as string extends Key ? never : Key]: Set[Key]; }
 (not exported) type MembersAccessorMap<Members extends readonly EnumMember_2<string, unknown>[]> = { readonly [M in Members[number] as M['name']]: M['value']; }
 (not exported) type MembersToNames<Members extends readonly EnumMember_2<string, unknown>[]> = { readonly [K in keyof Members]: Members[K] extends EnumMember_2<infer N, unknown> ? N : never; }
 (not exported) type MembersToValues<Members extends readonly EnumMember_2<string, unknown>[]> = { readonly [K in keyof Members]: Members[K] extends EnumMember_2<string, infer V> ? V : never; }
 (not exported) type ModelsConstraint = Record<string, ModelLike>
+(not exported) type NamesSomething<Missing> = [Missing] extends [1 & Missing] ? false : true
 (not exported) type NamespaceValueSetEntries<TNs> = TNs extends { readonly entries: { readonly valueSet?: infer E; }; } ? unknown extends E ? Record<never, never> : Present<E> : Record<never, never>
 (not exported) type NamespacesConstraint = readonly string[] | undefined
 (not exported) type OrmClient<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses> = ReturnType<typeof orm<TContract, TCollections>>
@@ -92,7 +95,7 @@
 (not exported) type PostgresTargetId = 'postgres'
 (not exported) type Present<T> = Exclude<T, undefined>
 (not exported) type SqlFamily = typeof sqlFamilyPack
-(not exported) type StackProvides<Missing extends string> = [Missing] extends [never] ? unknown : { readonly [Capability in Missing as `the adapter and driver do not provide ${Capability}`]: never; }
+(not exported) type StackProvides<Missing extends string> = RequiresCapabilities<Missing, 'the adapter and driver do not provide'>
 (not exported) type ValueSetEntriesToEnumEntries<Entries, DomainEnumNames> = { readonly [K in keyof Entries as Exclude<K, DomainEnumNames>]: Entries[K] extends ValueSetEntry ? ValueSetToEnumEntry<Entries[K]> : never; }
 (not exported) type ValueSetEntry = { readonly values: readonly unknown[]; }
 (not exported) type ValueSetMembers<Values extends readonly unknown[]> = { readonly [I in keyof Values]: { readonly name: Extract<Values[I], string>; readonly value: Values[I]; }; }
@@ -352,8 +355,8 @@
 ./runtime: interface PostgresBindingOptions, readonly optional property binding?: PostgresBinding
 ./runtime: interface PostgresBindingOptions, readonly optional property pg?: Client | Pool
 ./runtime: interface PostgresBindingOptions, readonly optional property url?: string
-./runtime: interface PostgresClientMembers, required method connect(bindingInput?: PostgresBindingInput): Promise<Runtime>
-./runtime: interface PostgresClientMembers<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> extends PostgresQueryMembers<TContract, TCollections>, PostgresStaticMembers<TContract>, PostgresRuntimeBoundMembers<TContract, TCollections>, PostgresLifecycleMembers
+./runtime: interface PostgresClient, required method connect(bindingInput?: PostgresBindingInput): Promise<Runtime>
+./runtime: interface PostgresClient<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> extends PostgresQueryMembers<TContract, TCollections>, PostgresStaticMembers<TContract>, PostgresRuntimeBoundMembers<TContract, TCollections>, PostgresLifecycleMembers
 ./runtime: interface PostgresCursorOptions
 ./runtime: interface PostgresCursorOptions, readonly optional property batchSize?: number | undefined
 ./runtime: interface PostgresOptionsBase extends PostgresExecutionOptions
@@ -371,17 +374,15 @@
 ./runtime: interface PostgresTransactionContext, readonly required property nativeEnums: NamespacedNativeEnums<TContract>
 ./runtime: interface PostgresTransactionContext, required method transaction<R>(fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>): Promise<R>
 ./runtime: interface PostgresTransactionContext<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> extends TransactionContext, PostgresQueryMembers<TContract, TCollections>
-./runtime: interface PostgresTransactionMember, required method transaction<R>(fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>, options?: PostgresTransactionOptions): Promise<R>
-./runtime: interface PostgresTransactionMember<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses>
 ./runtime: interface PostgresTransactionOptions
 ./runtime: interface PostgresTransactionOptions, readonly optional property isolationLevel?: PostgresIsolationLevel | undefined
 ./runtime: interface PostgresTransactionOptions, readonly optional property timeout?: null | number | undefined
 ./runtime: type NamespacedNativeEnums<TContract extends Contract> = { readonly [Ns in keyof TContract['storage']['namespaces']]: EnumEntriesToAccessors<ValueSetEntriesToEnumEntries<NamespaceValueSetEntries<TContract['storage']['namespaces'][Ns]>, DomainEnumNames<TContract, Ns>>>; }
 ./runtime: type PostgresBinding = { readonly kind: 'pgClient'; readonly client: Client; } | { readonly kind: 'pgPool'; readonly pool: Pool; } | { readonly kind: 'url'; readonly url: string; }
-./runtime: type PostgresClient<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = PostgresClientMembers<TContract, TCollections> & PostgresTransactionMemberFor<TContract, TCollections>
 ./runtime: type PostgresOptions<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = PostgresBindingOptions & PostgresOptionsBase & { readonly contract: TContract; readonly collections?: TCollections; }
 ./runtime: type PostgresStackProvides<TContract extends Contract<SqlStorage>> = StackProvides<CapabilitiesNotProvided<TContract['capabilities'], typeof postgresCapabilitiesByVersion, typeof postgresAdapterCapabilities, typeof postgresDriverCapabilities>>
-./runtime: type PostgresTransactionMemberFor<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = TContract['capabilities'] extends InteractiveTransactionsCapability ? PostgresTransactionMember<TContract, TCollections> : unknown
+./runtime: type PostgresTransactionCallback<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses, R> = ((tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>) & RequiresCapabilities<InteractiveTransactionsNotListed<TContract>, 'the contract does not list'>
+./runtime: type RequiresCapabilities<Missing extends string, Reason extends string> = [NamesSomething<Missing>] extends [true] ? { readonly [Capability in Missing as `${Reason} ${Capability}`]: never; } : unknown
 ./schema-ir/types: everything from @prisma/orm-family-sql/schema-ir/types
 ./serverless: export IsolationLevel = postgresIsolationLevels from @prisma/orm-target-postgres/target/runtime
 ./serverless: export default = function postgresServerless<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses>(options: PostgresServerlessOptions<TContract, TCollections> & PostgresStackProvides<TContract>): PostgresServerlessClient<TContract, TCollections>
@@ -390,12 +391,11 @@
 ./serverless: interface PostgresCursorOptions, readonly optional property batchSize?: number | undefined
 ./serverless: interface PostgresServerlessClient, required method connect(binding: { readonly url: string; }): Promise<PostgresServerlessConnection<TContract, TCollections>>
 ./serverless: interface PostgresServerlessClient<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> extends PostgresStaticMembers<TContract>
-./serverless: interface PostgresServerlessConnectionMembers<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> extends PostgresQueryMembers<TContract, TCollections>, PostgresStaticMembers<TContract>, PostgresRuntimeBoundMembers<TContract, TCollections>, PostgresLifecycleMembers
+./serverless: interface PostgresServerlessConnection<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> extends PostgresQueryMembers<TContract, TCollections>, PostgresStaticMembers<TContract>, PostgresRuntimeBoundMembers<TContract, TCollections>, PostgresLifecycleMembers
 ./serverless: interface PostgresServerlessOptionsBase extends PostgresExecutionOptions
 ./serverless: interface PostgresTransactionOptions
 ./serverless: interface PostgresTransactionOptions, readonly optional property isolationLevel?: PostgresIsolationLevel | undefined
 ./serverless: interface PostgresTransactionOptions, readonly optional property timeout?: null | number | undefined
-./serverless: type PostgresServerlessConnection<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = PostgresServerlessConnectionMembers<TContract, TCollections> & PostgresTransactionMemberFor<TContract, TCollections>
 ./serverless: type PostgresServerlessOptions<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = PostgresServerlessOptionsBase & { readonly contract: TContract; readonly collections?: TCollections; }
 ./static: export default = function postgresStatic<TContract extends Contract<SqlStorage>>(options: { readonly contract: TContract; readonly extensions?: readonly SqlRuntimeExtensionDescriptor<PostgresTargetId>[]; }): PostgresStaticContext<TContract>
 ./static: function contractFromJson<TContract extends Contract<SqlStorage>>(json: unknown): TContract

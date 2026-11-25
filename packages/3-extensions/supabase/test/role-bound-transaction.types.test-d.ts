@@ -11,12 +11,18 @@ type WithoutInteractiveTransactions = Contract<SqlStorage> & {
   readonly capabilities: { readonly sql: { readonly returning: true } };
 };
 
-test('a role-bound client has transaction() when its contract lists interactive transactions', () => {
-  expectTypeOf<RoleBoundDb<WithInteractiveTransactions>>().toHaveProperty('transaction');
-  expectTypeOf<ServiceRoleDb<WithInteractiveTransactions>>().toHaveProperty('transaction');
+test('a role-bound client runs transaction() when its contract lists interactive transactions', () => {
+  const user = {} as RoleBoundDb<WithInteractiveTransactions>;
+  const service = {} as ServiceRoleDb<WithInteractiveTransactions>;
+  expectTypeOf(user.transaction(async () => 1)).toEqualTypeOf<Promise<number>>();
+  expectTypeOf(service.transaction(async () => 1)).toEqualTypeOf<Promise<number>>();
 });
 
-test('a role-bound client has no transaction() when its contract does not list them', () => {
-  expectTypeOf<RoleBoundDb<WithoutInteractiveTransactions>>().not.toHaveProperty('transaction');
-  expectTypeOf<ServiceRoleDb<WithoutInteractiveTransactions>>().not.toHaveProperty('transaction');
+test('transaction() is a type error on a role-bound client whose contract does not list them', () => {
+  const user = {} as RoleBoundDb<WithoutInteractiveTransactions>;
+  const service = {} as ServiceRoleDb<WithoutInteractiveTransactions>;
+  // @ts-expect-error the contract does not list sql.interactiveTransactions
+  user.transaction(async () => 1);
+  // @ts-expect-error the contract does not list sql.interactiveTransactions
+  service.transaction(async () => 1);
 });

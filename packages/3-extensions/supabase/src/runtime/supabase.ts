@@ -18,12 +18,12 @@ import { buildPostgresStaticContext } from '@internal/postgres/internal/static-c
 import { buildPostgresQueryMembers } from '@internal/postgres/internal/transaction-members';
 import { validatePostgresContract } from '@internal/postgres/internal/validate-contract';
 import type {
-  InteractiveTransactionsCapability,
   NamespacedNativeEnums,
   PostgresBinding,
   PostgresBindingOptions,
   PostgresOptionsBase,
   PostgresQueryMembers,
+  PostgresTransactionCallback,
   PostgresTransactionContext,
   PostgresTransactionOptions,
 } from '@internal/postgres/runtime';
@@ -87,7 +87,7 @@ type KeyMaterial =
   | { readonly kind: 'secret'; readonly key: Uint8Array }
   | { readonly kind: 'jwks'; readonly keyset: ReturnType<typeof createRemoteJWKSet> };
 
-export interface RoleBoundDbMembers<
+export interface RoleBoundDb<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
 > extends PostgresQueryMembers<TContract, TCollections>,
@@ -95,26 +95,11 @@ export interface RoleBoundDbMembers<
     PreparedStatementExecuteTarget {
   readonly enums: NamespacedEnums<TContract>;
   readonly nativeEnums: NamespacedNativeEnums<TContract>;
-}
-
-export interface RoleBoundTransactionMember<
-  TContract extends Contract<SqlStorage>,
-  TCollections extends CollectionClasses = NoCollectionClasses,
-> {
   transaction<R>(
-    fn: (tx: SupabaseTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+    fn: PostgresTransactionCallback<TContract, TCollections, R>,
     options?: PostgresTransactionOptions,
   ): Promise<R>;
 }
-
-/** A client bound to one role. It has `transaction()` when its contract lists interactive transactions. */
-export type RoleBoundDb<
-  TContract extends Contract<SqlStorage>,
-  TCollections extends CollectionClasses = NoCollectionClasses,
-> = RoleBoundDbMembers<TContract, TCollections> &
-  (TContract['capabilities'] extends InteractiveTransactionsCapability
-    ? RoleBoundTransactionMember<TContract, TCollections>
-    : unknown);
 
 /** A transaction on a role-bound client: a Postgres transaction, run under the bound role. */
 export type SupabaseTransactionContext<
@@ -470,19 +455,7 @@ export default async function supabase<
     }
   }
 
-  type RoleBoundDbWithTransaction = RoleBoundDbMembers<TContract, TCollections> &
-    RoleBoundTransactionMember<TContract, TCollections>;
-
-  function offeredByTheContract<Db extends RoleBoundDbWithTransaction>(
-    db: Db,
-  ): Omit<Db, 'transaction'> & RoleBoundDb<TContract, TCollections> {
-    return blindCast<
-      Omit<Db, 'transaction'> & RoleBoundDb<TContract, TCollections>,
-      'transaction() is present at run time; its type follows the contract, which a generic TContract leaves undecided'
-    >(db);
-  }
-
-  function buildRoleBoundDb(binding: SupabaseRoleBinding): RoleBoundDbWithTransaction {
+  function buildRoleBoundDb(binding: SupabaseRoleBinding): RoleBoundDb<TContract, TCollections> {
     const role = roleScope(runtime, binding);
     const roleOrm: OrmClient<TContract, TCollections> = orm<TContract, TCollections>({
       runtime: role,
@@ -513,7 +486,7 @@ export default async function supabase<
       });
     }
 
-    const roleBound: RoleBoundDbWithTransaction = {
+    const roleBound: RoleBoundDb<TContract, TCollections> = {
       sql: appSql,
       orm: roleOrm,
       raw,
@@ -592,20 +565,15 @@ export default async function supabase<
         ? roleStr
         : SupabaseRole.members.Authenticated;
       const binding: SupabaseRoleBinding = { role, claims: payload };
-      return offeredByTheContract(buildRoleBoundDb(binding));
+      return buildRoleBoundDb(binding);
     },
 
     asAnon(): RoleBoundDb<TContract, TCollections> {
-      return offeredByTheContract(
-        buildRoleBoundDb({ role: SupabaseRole.members.Anon, claims: {} }),
-      );
+      return buildRoleBoundDb({ role: SupabaseRole.members.Anon, claims: {} });
     },
 
     asServiceRole(): ServiceRoleDb<TContract, TCollections> {
-      return offeredByTheContract({
-        ...buildRoleBoundDb(serviceRoleBinding),
-        supabase: supabaseInternal,
-      });
+      return { ...buildRoleBoundDb(serviceRoleBinding), supabase: supabaseInternal };
     },
 
     close: closeDb,

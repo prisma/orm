@@ -35,6 +35,7 @@ import type { PostgresStaticContext } from '../static/postgres-static';
 import type { NamespacedNativeEnums } from './native-enums';
 import { type PostgresTransactionOptions, validateTransactionOptions } from './postgres-options';
 import type { PostgresTargetId } from './postgres-target-id';
+import type { RequiresCapabilities } from './stack-capabilities';
 
 type OrmClient<
   TContract extends Contract<SqlStorage>,
@@ -122,14 +123,8 @@ export interface PostgresRuntimeBoundMembers<
 > extends PrepareMember<TContract> {
   readonly orm: OrmClient<TContract, TCollections>;
   runtime(): Runtime;
-}
-
-export interface PostgresTransactionMember<
-  TContract extends Contract<SqlStorage>,
-  TCollections extends CollectionClasses = NoCollectionClasses,
-> {
   transaction<R>(
-    fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+    fn: PostgresTransactionCallback<TContract, TCollections, R>,
     options?: PostgresTransactionOptions,
   ): Promise<R>;
 }
@@ -139,13 +134,18 @@ export interface InteractiveTransactionsCapability {
   readonly sql: { readonly interactiveTransactions: true };
 }
 
-/** `transaction()`, offered only to a contract that lists interactive transactions. */
-export type PostgresTransactionMemberFor<
+type InteractiveTransactionsNotListed<TContract extends Contract<SqlStorage>> =
+  TContract['capabilities'] extends InteractiveTransactionsCapability
+    ? never
+    : 'sql.interactiveTransactions';
+
+/** The callback `transaction()` runs. For a contract that does not list interactive transactions, no callback satisfies it, and the type error names the capability. */
+export type PostgresTransactionCallback<
   TContract extends Contract<SqlStorage>,
-  TCollections extends CollectionClasses = NoCollectionClasses,
-> = TContract['capabilities'] extends InteractiveTransactionsCapability
-  ? PostgresTransactionMember<TContract, TCollections>
-  : unknown;
+  TCollections extends CollectionClasses,
+  R,
+> = ((tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>) &
+  RequiresCapabilities<InteractiveTransactionsNotListed<TContract>, 'the contract does not list'>;
 
 export interface PostgresLifecycleMembers {
   close(): Promise<void>;
@@ -174,9 +174,7 @@ export function buildPostgresRuntimeBoundMembers<
   TCollections extends CollectionClasses,
 >(
   options: PostgresRuntimeBoundMembersOptions<TContract, TCollections>,
-): PostgresRuntimeBoundMembers<TContract, TCollections> &
-  PostgresTransactionMember<TContract, TCollections> &
-  RuntimeScope {
+): PostgresRuntimeBoundMembers<TContract, TCollections> & RuntimeScope {
   const {
     context,
     collections,

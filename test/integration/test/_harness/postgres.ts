@@ -4,10 +4,7 @@ import postgresDriverControl from '@internal/driver-postgres/control';
 import sqlFamilyControl, { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
-import postgres, {
-  type PostgresClientMembers,
-  type PostgresTransactionMember,
-} from '@internal/postgres/runtime';
+import postgres from '@internal/postgres/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import postgresTargetControl from '@internal/target-postgres/control';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
@@ -62,9 +59,7 @@ const frameworkComponents = [
   postgresDriverControl,
 ] as const;
 
-// Every port runs interactive transactions, so its contract lists them.
-type PortClient<TContract extends Contract<SqlStorage>> = PostgresClientMembers<TContract> &
-  PostgresTransactionMember<TContract>;
+type PortClient<TContract extends Contract<SqlStorage>> = ReturnType<typeof postgres<TContract>>;
 
 export interface PortContext<TContract extends Contract<SqlStorage>> {
   /** Full Postgres facade for SQL builder and runtime access. */
@@ -189,11 +184,11 @@ export async function withPostgresPort<TContract extends Contract<SqlStorage>>(
     await clearRows(database.connectionString);
   }
 
-  const client = postgres<Contract<SqlStorage>>({
+  const client = postgres({
     contract,
     url: database.connectionString,
     verifyMarker: false,
-  }) as unknown as PortClient<TContract>;
+  });
   const runtime = await client.connect();
   try {
     await fn({
