@@ -52,6 +52,16 @@ function hasTransaction(db: PrismaClientLike): db is TransactionalPrismaClientLi
   return 'transaction' in db && typeof db.transaction === 'function';
 }
 
+// A Postgres client runs transaction() only for a contract that lists interactive transactions, as its type says. SQLite contracts do not list the capability until the SQLite driver declares it.
+const targetsWhoseTransactionsNeedTheCapability = ['postgres'];
+
+function listsInteractiveTransactions(contract: SqlContract): boolean {
+  return (
+    !targetsWhoseTransactionsNeedTheCapability.includes(contract.target) ||
+    contract.capabilities['sql']?.['interactiveTransactions'] === true
+  );
+}
+
 const supportedTargets = ['postgres', 'sqlite'];
 
 function assertClient(db: PrismaClientLike, adapterOptions: PrismaAdapterOptions): void {
@@ -68,9 +78,15 @@ function assertClient(db: PrismaClientLike, adapterOptions: PrismaAdapterOptions
   if (namespace !== undefined && !Object.hasOwn(contract.domain.namespaces, namespace)) {
     throw new BetterAuthError(`Namespace "${namespace}" is not in your Prisma contract.`);
   }
-  if (adapterOptions.transaction === true && !hasTransaction(db)) {
+  if (adapterOptions.transaction !== true) return;
+  if (!hasTransaction(db)) {
     throw new BetterAuthError(
-      'The transaction option runs Better Auth transactions through the client’s transaction(), which this client does not have. Its contract does not list interactive transactions, so turn the option off.',
+      'The transaction option runs Better Auth transactions through the client’s transaction(), which this object does not have. Pass the Prisma client, or turn the option off.',
+    );
+  }
+  if (!listsInteractiveTransactions(contract)) {
+    throw new BetterAuthError(
+      'The transaction option runs Better Auth transactions through the client’s transaction(), and this client’s contract does not list capability sql.interactiveTransactions. State a capabilities list that includes the driver’s, or turn the option off.',
     );
   }
 }
