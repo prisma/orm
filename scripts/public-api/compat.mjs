@@ -73,8 +73,9 @@ export function generateTests({
   records,
   version,
 }) {
-  const entryPoints = entryPointsOf(releaseDir);
-  const { paths } = readExports(releaseDir, entryPoints);
+  const releaseRoot = realpathSync(releaseDir);
+  const entryPoints = entryPointsOf(releaseRoot);
+  const { paths } = readExports(releaseRoot, entryPoints);
   const helpers = relative(dirname(testFile), HELPERS).split(sep).join('/').replace(/\.ts$/, '.js');
   const lines = [
     `import type { requireAssignableTo, StructuralNew, StructuralOld } from '${helpers.startsWith('.') ? helpers : `./${helpers}`}';`,

@@ -14,6 +14,8 @@ coverage
 packages/e2e-tests/.tmp-output
 /wip/*
 !/wip/.gitkeep
+# The last release, installed by `pnpm api:compat`.
+/.api-compat/
 .pnpm-store
 .cursor/*
 !.cursor/rules-footprint.config.json
