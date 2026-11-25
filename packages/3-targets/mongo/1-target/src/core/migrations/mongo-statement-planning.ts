@@ -371,7 +371,10 @@ export function planStatements(input: {
                 label,
                 renamedCollections,
                 schema,
-                fieldRenames,
+                [
+                  ...fieldRenames,
+                  ...(input.fromContract === null ? [] : unstatedFieldRenamesOf(pairing)),
+                ],
                 planning,
                 pairing,
               );
