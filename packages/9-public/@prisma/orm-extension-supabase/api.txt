@@ -36,10 +36,11 @@
 ./runtime: export IsolationLevel from @prisma/orm-postgres/runtime
 ./runtime: export default = const supabaseRuntimeDescriptor: SqlRuntimeExtensionDescriptor<'postgres'>
 ./runtime: function supabase<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses>(options: SupabaseOptions<TContract, TCollections>): Promise<SupabaseDb<TContract, TCollections>>
-./runtime: interface RoleBoundDb, readonly required property enums: NamespacedEnums<TContract>
-./runtime: interface RoleBoundDb, readonly required property nativeEnums: NamespacedNativeEnums<TContract>
-./runtime: interface RoleBoundDb, required method transaction<R>(fn: (tx: SupabaseTransactionContext<TContract, TCollections>) => PromiseLike<R>, options?: PostgresTransactionOptions): Promise<R>
-./runtime: interface RoleBoundDb<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> extends PostgresQueryMembers<TContract, TCollections>, PreparedStatementQueryTarget, PreparedStatementExecuteTarget
+./runtime: interface RoleBoundDbMembers, readonly required property enums: NamespacedEnums<TContract>
+./runtime: interface RoleBoundDbMembers, readonly required property nativeEnums: NamespacedNativeEnums<TContract>
+./runtime: interface RoleBoundDbMembers<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> extends PostgresQueryMembers<TContract, TCollections>, PreparedStatementQueryTarget, PreparedStatementExecuteTarget
+./runtime: interface RoleBoundTransactionMember, required method transaction<R>(fn: (tx: SupabaseTransactionContext<TContract, TCollections>) => PromiseLike<R>, options?: PostgresTransactionOptions): Promise<R>
+./runtime: interface RoleBoundTransactionMember<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses>
 ./runtime: interface RoleSession extends RuntimeConnection
 ./runtime: interface SupabaseDb, readonly required property context: ExecutionContext<TContract>
 ./runtime: interface SupabaseDb, readonly required property stack: SqlExecutionStackWithDriver<SupabaseTargetId>
@@ -62,6 +63,7 @@
 ./runtime: interface SupabaseRoleScope, required method connection(): Promise<RoleSession>
 ./runtime: interface SupabaseRuntime extends PostgresRuntime
 ./runtime: interface SupabaseRuntime, required method forRole(binding: SupabaseRoleBinding): SupabaseRoleScope
+./runtime: type RoleBoundDb<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = RoleBoundDbMembers<TContract, TCollections> & (TContract['capabilities'] extends InteractiveTransactionsCapability ? RoleBoundTransactionMember<TContract, TCollections> : unknown)
 ./runtime: type ServiceRoleDb<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = RoleBoundDb<TContract, TCollections> & { readonly supabase: SupabaseInternalDb; }
 ./runtime: type SupabaseExtensionContract = Contract_2
 ./runtime: type SupabaseOptions<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = SupabaseBindingOptions & PostgresOptionsBase & (JwksUrlOption | JwtSecretOption) & { readonly contract: TContract; readonly collections?: TCollections; }

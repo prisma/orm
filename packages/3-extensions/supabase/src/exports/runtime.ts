@@ -7,6 +7,8 @@ export { IsolationLevel } from '@internal/postgres/runtime';
 export type { SupabaseExtensionContract } from '../runtime/ext-contract-type';
 export type {
   RoleBoundDb,
+  RoleBoundDbMembers,
+  RoleBoundTransactionMember,
   ServiceRoleDb,
   SupabaseDb,
   SupabaseInternalDb,
