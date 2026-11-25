@@ -41,6 +41,19 @@ describe('MongoMigrationPlanner, enum values that keep their names and trade or 
     );
   });
 
+  it('offers the smallest unused whole number when the next whole number is past the largest safe one and no member stores it', () => {
+    const [refusal] = refused(
+      plan({
+        from: users('from', { A: '9007199254740994', B: '1' }),
+        to: users('to', { A: '1', B: '9007199254740994' }),
+        schema: live,
+      }),
+    );
+    expect(refusal?.why).toContain(
+      'first give "Status.A" a stored value no member stores, such as "0"; give "Status.B" a stored value no member stores, such as "2";',
+    );
+  });
+
   it('refuses a chain of stored values', () => {
     expect(
       refused(
