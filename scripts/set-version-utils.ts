@@ -53,7 +53,7 @@ export function rewriteWorkspaceDeps(packageJson: MutablePackageJson, version: s
 
 /**
  * The manifest in `text` when it pins a package with `workspace:`, else `undefined`. A tracked
- * manifest without such a pin is left unread, so a fixture that is not valid JSON on purpose does
+ * manifest without such a pin is not parsed, so a fixture that is not valid JSON on purpose does
  * not stop a version bump.
  */
 export function lockstepManifest(text: string): MutablePackageJson | undefined {
