@@ -11,28 +11,38 @@
 // One direction is enough: a new required member on a type users implement fails through the
 // exported function that accepts it, and a new member on a type users only receive passes.
 //
+// A class also gets a test that each abstract member a subclass implements still accepts what the
+// release's did.
+//
 // The comparison is TypeScript's own, on declarations rewritten so that it compares what a user
 // relies on (compat-declarations.mjs): methods become function-typed properties, so that their
-// parameters compare contravariantly, and private members and unique symbols, which make two copies
-// of a declaration differ, are dropped or named. Each third-party version is read from one copy.
+// parameters compare contravariantly; protected members move to a string key; private members
+// become a marker naming their class; and unique symbols, which differ between two copies of a
+// declaration, are named by package and name. Each third-party version is read from one copy.
+//
 // TypeScript cannot relate some generic types between two copies of their declaration, so a
-// failure is a break only when the same test passes between the release and its twin; otherwise
-// the test is made again with generic signatures erased one level deep, then with the structural
-// mapping of compat-structural.ts. What is still too deep ("type instantiation is excessively
-// deep", or a stack overflow), or has no time left in the package's budget, is reported as
-// undecided.
+// failure is a break when the same test passes between the release and its twin, and also when
+// there was no time left to try. When it fails there too, the export is compared member by member
+// with the same rule. What still cannot be compared goes to the structural mapping of
+// compat-structural.ts, whose failure is a break and whose pass is not a verdict, since it
+// instantiates generic signatures with their constraints. What is not decided is reported as
+// undecided, with the stage it ended at: native (too deep, or a stack overflow), member, or
+// structural.
 //
 // A deliberate break is recorded in api-breaks.json beside the package's api.txt, as
-// [{ "path": ".", "export": "Db", "release": "8.0.0", "reason": "…" }]. A recorded export's breaks
-// are listed as recorded instead; the record fails the run once the export is decided and no longer
-// breaks, and a record for another release than the last fails until it is removed.
+// [{ "path": ".", "export": "Db", "test": "type", "release": "8.0.0", "reason": "…" }], where the
+// test is type, value, constructor, abstract, exists, or path for a removed import path (export
+// "*"). A record covers the breaks of that one test of the export, which are listed as recorded
+// instead. It fails the run once that test is decided and no longer breaks. A record for a later
+// release than the last fails the run; one for an earlier release is skipped and listed as
+// removable.
 //
 // A break fails the run when the last release has no pre-release part (`--ga` treats it as if it
 // had none) and the export's name does not start with preview_ or ea_. Otherwise it is reported.
 // Needs `pnpm build` and network access to the registry.
 
 import { fork } from 'node:child_process';
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,7 +64,6 @@ import {
   lastRelease,
   packagesAtTag,
 } from './last-release.mjs';
-import { entryPointsOf } from './read-api.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const INSTALL_FOLDER = '.api-compat';
@@ -63,6 +72,7 @@ const Records = type({
   '+': 'reject',
   path: 'string > 0',
   export: 'string > 0',
+  test: "'type' | 'value' | 'constructor' | 'abstract' | 'exists' | 'path'",
   release: 'string > 0',
   reason: /^[^\r\n]+$/,
 }).array();
@@ -81,10 +91,33 @@ export function readRecords(packageDir, root) {
   const records = Records(parsed);
   if (records instanceof type.errors) {
     throw new RecordsError(
-      `${relative(root, file)}: ${records.summary}. Each record is { "path", "export", "release", "reason" }, with the reason on one line.`,
+      `${relative(root, file)}: ${records.summary}. Each record is { "path", "export", "test", "release", "reason" }, where the test is type, value, constructor, abstract, exists or path, and the reason is on one line.`,
     );
   }
   return records;
+}
+
+function declarationBytes(dir) {
+  if (!existsSync(dir)) return 0;
+  return readdirSync(dir, { withFileTypes: true }).reduce((total, entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return total + declarationBytes(path);
+    return /\.d\.[cm]?ts$/.test(entry.name) ? total + statSync(path).size : total;
+  }, 0);
+}
+
+// The size of the declarations a package's comparison reads, its own and those of our packages it
+// depends on, directly or not, which is what its time and memory grow with. The costliest start
+// first, so that none of them starts last.
+export function comparisonCost(name, dirsByName, seen = new Set()) {
+  const dir = dirsByName.get(name);
+  if (dir === undefined || seen.has(name)) return 0;
+  seen.add(name);
+  const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+  return Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies }).reduce(
+    (total, dependency) => total + comparisonCost(dependency, dirsByName, seen),
+    declarationBytes(join(dir, 'dist')),
+  );
 }
 
 export class PackageSelectionError extends Error {}
@@ -184,12 +217,17 @@ export function reportText({ version, results, notReleased }) {
     for (const each of result.breaks ?? []) {
       lines.push(`  break${each.failsRun ? '' : ' (reported only)'}  ${describeFailure(each)}`);
     }
-    for (const each of result.undecided ?? []) lines.push(`  undecided  ${describeFailure(each)}`);
+    for (const each of result.undecided ?? []) {
+      lines.push(`  undecided (${each.stage})  ${describeFailure(each)}`);
+    }
+    for (const each of result.fallbacks ?? []) {
+      lines.push(`  decided member by member  ${each.path} ${each.name} (${each.test})`);
+    }
     for (const each of result.notCompared ?? []) {
       lines.push(`  not compared  ${describeFailure({ ...each, message: each.reason })}`);
     }
     for (const each of result.recorded ?? []) {
-      lines.push(`  recorded  ${each.path} ${each.name}: ${each.reason}`);
+      lines.push(`  recorded  ${each.path} ${each.name} (${each.test}): ${each.reason}`);
     }
     for (const each of result.removable ?? []) {
       lines.push(`  removable record  ${removableText(each)}`);
@@ -203,7 +241,7 @@ export function reportText({ version, results, notReleased }) {
 }
 
 const removableText = (each) =>
-  `${each.path} ${each.export}: for release ${each.release}, earlier than the last`;
+  `${each.path} ${each.export} (${each.test}): for release ${each.release}, earlier than the last`;
 
 const cell = (text) => String(text).replaceAll('|', '\\|').replaceAll('\n', ' ');
 
@@ -231,18 +269,22 @@ export function reportMarkdown({ version, results, notReleased }) {
       ),
       ...(result.undecided ?? []).map(
         (each) =>
-          `- undecided: \`${each.path}\` \`${each.name}\` (${each.test}): ${cell(each.message)}`,
+          `- undecided (${each.stage}): \`${each.path}\` \`${each.name}\` (${each.test}): ${cell(each.message)}`,
+      ),
+      ...(result.fallbacks ?? []).map(
+        (each) => `- decided member by member: \`${each.path}\` \`${each.name}\` (${each.test})`,
       ),
       ...(result.notCompared ?? []).map(
         (each) =>
           `- not compared: \`${each.path}\` \`${each.name}\` (${each.test}): ${cell(each.reason)}`,
       ),
       ...(result.recorded ?? []).map(
-        (each) => `- recorded: \`${each.path}\` \`${each.name}\`: ${cell(each.reason)}`,
+        (each) =>
+          `- recorded: \`${each.path}\` \`${each.name}\` (${each.test}): ${cell(each.reason)}`,
       ),
       ...(result.removable ?? []).map(
         (each) =>
-          `- removable record: \`${each.path}\` \`${each.export}\`: for release ${each.release}, earlier than the last`,
+          `- removable record: \`${each.path}\` \`${each.export}\` (${each.test}): for release ${each.release}, earlier than the last`,
       ),
       ...result.problems.map((problem) => `- problem: ${cell(problem)}`),
     ];
@@ -280,6 +322,7 @@ export async function main({
     name: JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name,
   }));
   const ownNames = new Set(inRepository.map(({ name }) => name));
+  const dirsByName = new Map(inRepository.map(({ name, dir }) => [name, dir]));
   let selected;
   let version;
   let plan;
@@ -323,7 +366,7 @@ export async function main({
         version,
         strict: values.ga || !isPrerelease(version),
         ownNames: [...ownNames],
-        size: entryPointsOf(dir).length,
+        cost: comparisonCost(name, dirsByName),
       });
     } catch (error) {
       results.push({ name, problems: [error.message] });
@@ -354,7 +397,7 @@ export async function main({
     return fail(`installing the last release failed: ${error.message}`);
   }
 
-  jobs.sort((a, b) => b.size - a.size || compareCodeUnits(a.name, b.name));
+  jobs.sort((a, b) => b.cost - a.cost || compareCodeUnits(a.name, b.name));
   results.push(...(await runAll(jobs, workers)));
   results.sort((a, b) => compareCodeUnits(a.name, b.name));
 
