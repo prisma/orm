@@ -9,7 +9,7 @@ From `8.0.0`, Prisma 8 promises that an application upgrades to any later `8.x` 
 | The API lists are current | `Lint` job, `pnpm api:check` | Each published package's `api.txt` matches the build | Fails | Fails |
 | The description names each change | `API changes` workflow | A pull request that changes an `api.txt` gets a comment listing the changed lines, and its description must name each changed export | Fails | Fails |
 | Type tests against the last release | `api-compat` job, `pnpm api:compat` | Each export of the last release still fits the current build | Reports | Fails |
-| The last release's example apps | `typecheck` job, `pnpm api:examples` | The example apps as they were at the last release compile against the current build | Reports | Fails |
+| The last release's example apps | `api-compat` job, `pnpm api:examples` | The example apps as they were at the last release compile against the current build | Reports | Fails |
 
 "Reports" means the job lists what it found in its summary and passes. The type tests and the example apps start to fail by themselves at the first release whose version has no pre-release part; nothing is switched on.
 
@@ -79,15 +79,15 @@ A break in a generally available export is an exception to the compatibility pol
 
 ## The last release's example apps fail
 
-`pnpm api:examples` replaces each app's files under `examples/`, apart from `node_modules`, with the last release's, runs the app's `typecheck` script, and puts the app's own files back. The apps' committed contracts are compiled as they were, because a contract must keep working without being emitted again.
+`pnpm api:examples` extracts each app under `examples/` as it was at the last release into a folder of its own (`.api-examples/`), links the app's installed `node_modules` into it, and runs the app's `typecheck` script there. Your own app folders are not touched. The apps' committed contracts are compiled as they were, because a contract must keep working without being emitted again.
 
 An error there is a change a user's code would see. The apps' type tests assert exact types, so an addition the policy allows, such as a new optional property on a result row, also fails them. Record such an error, or a deliberate break, in `examples/last-release-errors.json`:
 
 ```json
-[{ "app": "prisma-8-demo", "file": "test/rows.test-d.ts", "line": 12, "code": "TS2344", "release": "8.1.0", "reason": "Rows gain the optional createdBy field" }]
+[{ "app": "prisma-8-demo", "file": "test/rows.test-d.ts", "line": 12, "code": "TS2344", "message": "<TypeScript's message, as the job reports it>", "release": "8.1.0", "reason": "Rows gain the optional createdBy field" }]
 ```
 
-An error is identified by app, file, line and error code at the last release's tag, which do not change while that release is the last. A record that matches no error fails.
+A record matches one error by app, file, line, code and message, so copy the message from the job's report. A record that matches no error, or more than one, fails.
 
 ## What the checks do not see
 

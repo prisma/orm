@@ -93,11 +93,11 @@ The helper is written twice, once for each side, because when both sides use one
 
 The apps under `examples/` import the published packages by name, and their type tests state exact result types against real contracts (the `contract.json` and `contract.d.ts` files that `prisma contract emit` writes from the app's contract source, which each app commits).
 
-Compiling the apps as they are on the pull request's branch is not enough, because the same pull request can edit an app to fit its own break. So CI replaces each app's files, apart from its installed dependencies, with the files at the last release's git tag, and compiles them. The installed dependencies are links into the repository's workspace, so `@prisma/*` resolves to the current build through each package's `exports`, as it would for a user who upgraded.
+Compiling the apps as they are on the pull request's branch is not enough, because the same pull request can edit an app to fit its own break. So CI extracts each app's files at the last release's git tag into a folder of its own, at the same depth as in the repository, links the app's installed dependencies into it, and compiles it. The installed dependencies are links into the repository's workspace, so `@prisma/*` resolves to the current build through each package's `exports`, as it would for a user who upgraded.
 
 The committed contracts are compiled as they were at the tag and never emitted again, because the compatibility policy promises that a contract and its generated types keep working in every later release without being emitted again.
 
-The apps' type tests assert exact types, so they also fail on additions the policy allows, such as a new optional property on a result row. Such an error is recorded with its reason, like a deliberate break. An error is identified by app, file, line and error code; the tag's files never change, so a record stays valid while that release is the last, and records are replaced when the next release becomes the last.
+The apps' type tests assert exact types, so they also fail on additions the policy allows, such as a new optional property on a result row. Such an error is recorded with its reason, like a deliberate break. A record names the app, file, line, error code and message, and must match exactly one error, so a later break on a recorded line is not hidden by it. The tag's files never change, so a record stays valid while that release is the last and its build's types do not change again, and records are replaced when the next release becomes the last.
 
 ## How a change is made visible
 
