@@ -2,7 +2,12 @@ import { readFile } from 'node:fs/promises';
 import type { ContractConfig, ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { ControlPolicy } from '@internal/contract/types';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
-import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
+import {
+  type CapabilityMatrix,
+  type ExtensionPackRef,
+  mergeCapabilityMatrices,
+  type TargetPackRef,
+} from '@internal/framework-components/components';
 import {
   buildSymbolTable,
   createBinder,
@@ -30,6 +35,8 @@ export interface PrismaContractOptions {
   readonly defaultControlPolicy?: ControlPolicy;
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
+  /** Capabilities the contract requires beyond those of the configured components, such as the connection's. They join the context's, later flags winning. */
+  readonly capabilities?: CapabilityMatrix;
 }
 
 /**
@@ -105,7 +112,12 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
         controlMutationDefaults: context.controlMutationDefaults,
         generatorFunctions: context.generatorFunctions,
         createNamespace: options.createNamespace,
-        capabilities: context.capabilities,
+        capabilities:
+          options.capabilities === undefined
+            ? context.capabilities
+            : mergeCapabilityMatrices(context.capabilities, [
+                { capabilities: options.capabilities },
+              ]),
         codecLookup: context.codecLookup,
         dataTypes: context.dataTypes,
         ...ifDefined('enumInferenceCodecs', options.enumInferenceCodecs),
