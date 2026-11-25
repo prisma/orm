@@ -8,6 +8,7 @@ import {
   createExecutionContext,
   createSqlExecutionStack,
   toRuntimeOptions,
+  warnOfCapabilitiesNotProvided,
 } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { InternalError } from '@internal/utils/internal-error';
@@ -39,7 +40,7 @@ import {
 } from './postgres-options';
 import { PostgresRuntimeImpl } from './postgres-runtime';
 import type { PostgresTargetId } from './postgres-target-id';
-import { type PostgresStackProvides, warnWhenStackLacksCapabilities } from './stack-capabilities';
+import type { PostgresStackProvides } from './stack-capabilities';
 
 export interface PostgresClient<
   TContract extends Contract<SqlStorage>,
@@ -109,7 +110,7 @@ export default function postgres<
     contract,
     stack,
   });
-  warnWhenStackLacksCapabilities(contract, stack, options);
+  warnOfCapabilitiesNotProvided(contract, stack, options);
   const {
     sql,
     raw: rawSqlTag,

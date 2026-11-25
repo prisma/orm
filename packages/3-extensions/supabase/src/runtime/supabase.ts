@@ -43,15 +43,18 @@ import type {
   ExecutionContext,
   SqlExecutionStackWithDriver,
   SqlRuntimeExtensionDescriptor,
+  StackProvides,
   ToSqlMember,
   TransactionContext,
 } from '@internal/sql-runtime';
 import {
   activitySource,
+  assertInteractiveTransactionsListed,
   createExecutionContext,
   createSqlExecutionStack,
   delegatingRuntime,
   toRuntimeOptions,
+  warnOfCapabilitiesNotProvided,
   withTransaction,
   withTransactionMembers,
 } from '@internal/sql-runtime';
@@ -182,6 +185,16 @@ export type SupabaseOptions<
     readonly contract: TContract;
     readonly collections?: TCollections;
   };
+
+/** The check `supabase()` makes against the target, adapter and driver it runs with. A function generic over contracts is checked only when the client is created. */
+type SupabaseStackProvides<TContract extends Contract<SqlStorage>> = StackProvides<
+  TContract,
+  {
+    readonly target: typeof postgresTarget;
+    readonly adapter: typeof postgresAdapter;
+    readonly driver: typeof postgresDriver;
+  }
+>;
 
 const contractSerializer = new PostgresContractSerializer();
 
@@ -348,7 +361,9 @@ function buildExtensionContract(): SupabaseExtensionContract {
 export default async function supabase<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
->(options: SupabaseOptions<TContract, TCollections>): Promise<SupabaseDb<TContract, TCollections>> {
+>(
+  options: SupabaseOptions<TContract, TCollections> & SupabaseStackProvides<TContract>,
+): Promise<SupabaseDb<TContract, TCollections>> {
   const keyMaterial = resolveKeyMaterial(options);
   const cursor = validateCursorOptions(options.cursor, 'supabase');
   const transactionOptions = validateTransactionOptions(options.transactionOptions);
@@ -363,6 +378,7 @@ export default async function supabase<
   });
 
   const context = createExecutionContext({ contract, stack });
+  warnOfCapabilitiesNotProvided(contract, stack, options);
 
   checkCollectionClasses(contract, options.collections);
 
@@ -504,6 +520,7 @@ export default async function supabase<
         fn: (tx: SupabaseTransactionContext<TContract, TCollections>) => PromiseLike<R>,
         localOptions?: PostgresTransactionOptions,
       ): Promise<R> {
+        assertInteractiveTransactionsListed(context.contract);
         const local = validateTransactionOptions(localOptions);
         const isolationLevel =
           local?.isolationLevel !== undefined

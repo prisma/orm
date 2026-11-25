@@ -107,7 +107,7 @@ type PostgresBaseScaffold<
   /** The PostgreSQL version the database runs. The contract requires the capabilities that version provides. */
   readonly version: Version;
   /**
-   * The capabilities the connection provides, one set per component, merged over the version's in order: a later set's flag replaces an earlier one's, and `false` turns a flag off. Defaults to those of the adapter and the driver the client runs with; a list given here replaces the default.
+   * The capabilities the connection provides, one set per component, merged over the version's in order: a later set's flag replaces an earlier one's, and `false` turns a flag off. Defaults to `defaultConnectionCapabilities`, the sets of the adapter and the driver the client runs with. A list given here replaces the default, so a list that keeps the driver's interactive transactions starts from it: `capabilities: [...defaultConnectionCapabilities, { sql: { insertOnConflictTarget: false } }]`.
    *
    * At type level, every set written at a fixed position in the list, as a literal or `as const`, is merged, before or after a spread. A spread of a list typed as an array, and a set typed as `CapabilityMatrix`, still apply at run time but add nothing to the contract's type, so a `false` in them leaves the flag in the type.
    */

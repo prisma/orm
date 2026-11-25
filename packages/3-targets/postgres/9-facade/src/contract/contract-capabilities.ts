@@ -14,7 +14,7 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { postgresError } from '../errors';
 
-/** The capabilities of the adapter and the driver the facade's client runs with, which a contract requires unless it states its own list. */
+/** The capabilities of the adapter and the driver the facade's client runs with, which a contract requires unless it states its own list. A stated list replaces it; spread it into the list to extend it. */
 export const defaultConnectionCapabilities = [
   postgresAdapterCapabilities,
   postgresDriverCapabilities,
@@ -23,7 +23,7 @@ export const defaultConnectionCapabilities = [
 export type DefaultConnectionCapabilities = typeof defaultConnectionCapabilities;
 
 /**
- * The capabilities the connection provides, one set per component, merged over the version's in order: a later set's flag replaces an earlier one's, and `false` turns a flag off. Defaults to those of the adapter and the driver the client runs with; a list given here replaces the default.
+ * The capabilities the connection provides, one set per component, merged over the version's in order: a later set's flag replaces an earlier one's, and `false` turns a flag off. Defaults to `defaultConnectionCapabilities`, the sets of the adapter and the driver the client runs with. A list given here replaces the default, so a list that keeps the driver's interactive transactions starts from it: `capabilities: [...defaultConnectionCapabilities, { sql: { insertOnConflictTarget: false } }]`.
  *
  * At type level, every set written at a fixed position in the list, as a literal or `as const`, is merged, before or after a spread. A spread of a list typed as an array, and a set typed as `CapabilityMatrix`, still apply at run time but add nothing to the contract's type, so a `false` in them leaves the flag in the type.
  */

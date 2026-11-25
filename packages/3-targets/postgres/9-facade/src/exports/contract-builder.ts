@@ -40,11 +40,12 @@ export type {
   VarBit,
   Varchar,
 } from '@internal/target-postgres/codec-types';
-export type {
-  CapabilitiesList,
-  DefaultConnectionCapabilities,
-  PostgresCapabilitiesInput,
-  PostgresContractCapabilities,
+export {
+  type CapabilitiesList,
+  type DefaultConnectionCapabilities,
+  defaultConnectionCapabilities,
+  type PostgresCapabilitiesInput,
+  type PostgresContractCapabilities,
 } from '../contract/contract-capabilities';
 export { defineContract, type PostgresDefineContract } from '../contract/define-contract';
 export { enumType } from '../contract/enum-type';

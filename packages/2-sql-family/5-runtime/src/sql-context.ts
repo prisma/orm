@@ -8,10 +8,7 @@ import type {
   ComponentDescriptor,
   ComponentMetadata,
 } from '@internal/framework-components/components';
-import {
-  type CapabilityMatrix,
-  checkContractComponentRequirements,
-} from '@internal/framework-components/components';
+import { checkContractComponentRequirements } from '@internal/framework-components/components';
 import {
   createExecutionStack,
   type RuntimeAdapterDescriptor,
@@ -82,9 +79,9 @@ export interface SqlRuntimeTargetDescriptor<
 > extends RuntimeTargetDescriptor<'sql', TTargetId, TTargetInstance>,
     SqlStaticContributions {
   /**
-   * The capabilities that are facts about the target's database, in any version it supports. Signing checks the database for them, so a client does not ask its adapter or driver to provide them. A target that declares none leaves every capability to the adapter, the driver and the extensions.
+   * The capabilities that are facts about the target's database, whichever version it runs, each as `true`: the set of their names, not what one database provides. Signing checks the database for them, so a client does not ask its adapter or driver to provide them. A target that declares none leaves every capability to the adapter and the driver.
    */
-  readonly databaseCapabilities?: CapabilityMatrix;
+  readonly databaseCapabilities?: Readonly<Record<string, Readonly<Record<string, true>>>>;
 }
 
 export interface SqlRuntimeAdapterDescriptor<

@@ -295,7 +295,7 @@ A contract build derives the check of a value object column on Postgres, and a m
 
 ### CONTRACT.CAPABILITIES_NOT_PROVIDED
 
-The contract requires capabilities that the client's adapter and driver do not provide, for example interactive transactions on a driver that has none. Capabilities that are facts about the database are left out, since signing checks the database for them. The PostgreSQL client reports it as a warning through its `log` when it is created, once, and `verifyMarker: false` turns it off, as it turns off the signature warning. Fix path: state a capabilities list that matches the driver the application runs with, emit the contract, and sign the database again. Payload: `missing`, each capability as `namespace.flag`.
+The contract requires capabilities that the client's adapter and driver do not provide, for example interactive transactions on a driver that has none. Capabilities that are facts about the database are left out, since signing checks the database for them; extensions provide none. The PostgreSQL and Supabase clients report it as a warning through their `log` when they are created, once, and `verifyMarker: false` turns it off, as it turns off the signature warning. The same check is a type error where the client is created, for a contract whose type is known. Fix path: a contract emitted by an earlier Prisma version is emitted again; otherwise state the capabilities of the driver the application runs with where the contract is written, emit the contract, and sign the database again. Payload: `missing`, each capability as `namespace.flag`.
 
 ### CONTRACT.CAST_REFUSED
 
@@ -1121,7 +1121,7 @@ An argument to an ORM client or query-builder method, including the input of a n
 
 ### ORM.CAPABILITY_MISSING
 
-The operation needs a contract capability the contract does not declare; the payload names it in `capability` and the operation in `action` or `method`.
+The operation needs a contract capability the contract does not declare; the payload names it in `capability` and the operation in `action` or `method`. `transaction()` on a PostgreSQL client, a serverless connection or a Supabase role-bound client raises it for a contract that does not list `sql.interactiveTransactions`.
 
 ### ORM.COLUMN_AMBIGUOUS
 

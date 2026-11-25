@@ -1,12 +1,12 @@
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import type { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
+import type { StackProvides } from '@internal/sql-runtime';
+import type postgresTarget from '@internal/target-postgres/runtime';
 import { expectTypeOf, test } from 'vitest';
 import { defineContract } from '../src/exports/contract-builder';
 import postgres from '../src/exports/runtime';
 import postgresServerless from '../src/exports/serverless';
-import type { CapabilitiesNotProvided, StackProvides } from '../src/runtime/stack-capabilities';
 
 const url = 'postgres://localhost/db';
 
@@ -45,46 +45,41 @@ test('creating a client from a known contract is a type error when its adapter a
   postgresServerless({ contract });
 });
 
-// The facade's own driver provides interactive transactions, so this driver set stands for one that does not, such as a driver over HTTP.
-const driverOverHttp = {} as const;
-
-function clientWithDriver<DriverCapabilities>(_driver: DriverCapabilities) {
-  return <Capabilities>(
-    _options: { readonly contract: { readonly capabilities: Capabilities } } & StackProvides<
-      CapabilitiesNotProvided<
-        Capabilities,
-        typeof postgresCapabilitiesByVersion,
-        typeof postgresAdapter.capabilities,
-        DriverCapabilities
-      >
-    >,
-  ): void => {};
+// The facade's own driver provides interactive transactions, so this stack stands for one whose driver does not, such as a driver over HTTP.
+interface StackOverHttp {
+  readonly target: typeof postgresTarget;
+  readonly adapter: typeof postgresAdapter;
+  readonly driver: { readonly capabilities: Record<never, never> };
 }
 
+const emitAgain =
+  ': emit the contract again, and if it still requires it, state the capabilities of the driver the application runs with';
+
 test('with a driver that lacks interactive transactions, a contract that requires them is a type error that names them', () => {
-  const create = clientWithDriver(driverOverHttp);
   expectTypeOf<
-    CapabilitiesNotProvided<
-      (typeof withTheDefaultList)['capabilities'],
-      typeof postgresCapabilitiesByVersion,
-      typeof postgresAdapter.capabilities,
-      typeof driverOverHttp
-    >
-  >().toEqualTypeOf<'sql.interactiveTransactions'>();
-  // @ts-expect-error the adapter and driver do not provide sql.interactiveTransactions
-  create({ contract: withTheDefaultList });
-  create({ contract: withoutInteractiveTransactions });
+    keyof StackProvides<typeof withTheDefaultList, StackOverHttp>
+  >().toEqualTypeOf<`the adapter and driver do not provide sql.interactiveTransactions${typeof emitAgain}`>();
+  expectTypeOf<
+    StackProvides<typeof withoutInteractiveTransactions, StackOverHttp>
+  >().toEqualTypeOf<unknown>();
 });
 
 test("the database's capabilities are left to signing, so no adapter or driver need provide them", () => {
+  interface DatabaseOnly {
+    readonly target: typeof postgresTarget;
+    readonly adapter: { readonly capabilities: Record<never, never> };
+    readonly driver: { readonly capabilities: Record<never, never> };
+  }
   expectTypeOf<
-    CapabilitiesNotProvided<
-      (typeof withoutInteractiveTransactions)['capabilities'],
-      typeof postgresCapabilitiesByVersion,
-      Record<never, never>,
-      Record<never, never>
-    >
-  >().toBeNever();
+    StackProvides<typeof withoutInteractiveTransactions, DatabaseOnly>
+  >().toEqualTypeOf<unknown>();
+});
+
+test('a contract typed as any passes both checks, as at run time it is checked from its values', () => {
+  // JSON.parse returns any.
+  const contract: ReturnType<typeof JSON.parse> = withoutInteractiveTransactions;
+  const db = postgres({ contract, url });
+  db.transaction(async () => 1);
 });
 
 test('a function that wraps the client for any contract compiles, and keeps the client’s members', () => {

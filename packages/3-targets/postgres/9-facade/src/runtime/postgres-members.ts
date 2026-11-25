@@ -17,6 +17,7 @@ import type {
   BindSiteParams,
   Declaration,
   ExecutionContext,
+  InteractiveTransactionsListed,
   ParamsFromDeclaration,
   Runtime,
   SqlExecutionStackWithDriver,
@@ -25,6 +26,7 @@ import type {
 } from '@internal/sql-runtime';
 import {
   activitySource,
+  assertInteractiveTransactionsListed,
   delegatingActivitySource,
   delegatingRuntime,
   withTransaction,
@@ -35,7 +37,6 @@ import type { PostgresStaticContext } from '../static/postgres-static';
 import type { NamespacedNativeEnums } from './native-enums';
 import { type PostgresTransactionOptions, validateTransactionOptions } from './postgres-options';
 import type { PostgresTargetId } from './postgres-target-id';
-import type { RequiresCapabilities } from './stack-capabilities';
 
 type OrmClient<
   TContract extends Contract<SqlStorage>,
@@ -129,23 +130,13 @@ export interface PostgresRuntimeBoundMembers<
   ): Promise<R>;
 }
 
-/** The capability a contract lists when the application runs transactions whose statements it sends one at a time. */
-export interface InteractiveTransactionsCapability {
-  readonly sql: { readonly interactiveTransactions: true };
-}
-
-type InteractiveTransactionsNotListed<TContract extends Contract<SqlStorage>> =
-  TContract['capabilities'] extends InteractiveTransactionsCapability
-    ? never
-    : 'sql.interactiveTransactions';
-
 /** The callback `transaction()` runs. For a contract that does not list interactive transactions, no callback satisfies it, and the type error names the capability. */
 export type PostgresTransactionCallback<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses,
   R,
 > = ((tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>) &
-  RequiresCapabilities<InteractiveTransactionsNotListed<TContract>, 'the contract does not list'>;
+  InteractiveTransactionsListed<TContract>;
 
 export interface PostgresLifecycleMembers {
   close(): Promise<void>;
@@ -240,6 +231,7 @@ export function buildPostgresRuntimeBoundMembers<
       fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
       localOptions?: PostgresTransactionOptions,
     ): Promise<R> {
+      assertInteractiveTransactionsListed(context.contract);
       const local = validateTransactionOptions(localOptions);
       const isolationLevel =
         local?.isolationLevel !== undefined

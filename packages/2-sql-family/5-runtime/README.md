@@ -56,7 +56,7 @@ for await (const row of db.query(plan)) {
 }
 ```
 
-Pass `verifyMarker: false` to skip the marker read entirely — e.g. during a known-skewed deploy window where contract drift is expected and tolerated.
+Pass `verifyMarker: false` to skip the marker read entirely — e.g. during a known-skewed deploy window where contract drift is expected and tolerated. The same setting turns off the warning a client gives when it is created and its adapter and driver do not provide a capability the contract requires (`CONTRACT.CAPABILITIES_NOT_PROVIDED`).
 
 ```typescript
 const db = postgres({

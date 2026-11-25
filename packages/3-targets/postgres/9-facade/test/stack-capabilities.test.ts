@@ -23,7 +23,7 @@ const notProvided = {
   scope: 'stack-verification',
   missing: ['http.batch'],
   message:
-    "The contract requires http.batch, which the client's adapter and driver do not provide. State a capabilities list that matches the driver the application runs with, emit the contract, and sign the database again.",
+    "The contract requires http.batch, which the client's adapter and driver do not provide. A contract emitted by an earlier Prisma version is emitted again. Otherwise state the capabilities of the driver the application runs with where the contract is written, emit the contract, and sign the database again.",
 };
 
 // Typed as any contract, so the compile-time check, tested in stack-capabilities.types.test-d.ts, leaves the run-time one to be seen.

@@ -1,19 +1,26 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { databaseCapabilitiesOf, postgresDatabaseCapabilities } from '../src/core/server-version';
 import postgresRuntimeTarget from '../src/exports/runtime';
-import {
-  databaseCapabilitiesOf,
-  postgresCapabilitiesByVersion,
-  postgresDatabaseCapabilities,
-} from '../src/exports/server-version';
+import { postgresCapabilitiesByVersion } from '../src/exports/server-version';
 
 describe("the database's capabilities", () => {
-  it('are every flag any row of a table provides', () => {
-    expect(
-      databaseCapabilitiesOf({
-        15: { sql: { returning: true } },
-        17: { sql: { returning: true, mergeReturning: true }, postgres: { uuidv7: true } },
-      }),
-    ).toEqual({ sql: { returning: true, mergeReturning: true }, postgres: { uuidv7: true } });
+  it('are every flag any row of a table names, each as true, with its names known to the type', () => {
+    const capabilities = databaseCapabilitiesOf({
+      15: { sql: { returning: true, legacy: false } },
+      17: { sql: { returning: true, mergeReturning: true }, postgres: { uuidv7: true } },
+    });
+    expect(capabilities).toEqual({
+      sql: { returning: true, legacy: true, mergeReturning: true },
+      postgres: { uuidv7: true },
+    });
+    expectTypeOf(capabilities).toEqualTypeOf<{
+      readonly sql: {
+        readonly returning: true;
+        readonly legacy: true;
+        readonly mergeReturning: true;
+      };
+      readonly postgres: { readonly uuidv7: true };
+    }>();
   });
 
   it('are, for PostgreSQL, the flags of its table of versions', () => {

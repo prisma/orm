@@ -9,6 +9,7 @@ export { type Prisma7SchemaOptions, prisma7Schema } from '../config/prisma7-sche
 export {
   type CapabilitiesList,
   type DefaultConnectionCapabilities,
+  defaultConnectionCapabilities,
   type PostgresCapabilitiesInput,
   type PostgresContractCapabilities,
   postgresContractCapabilities,

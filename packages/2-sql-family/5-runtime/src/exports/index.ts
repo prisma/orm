@@ -108,5 +108,11 @@ export {
   withTransaction,
   withTransactionMembers,
 } from '../sql-runtime';
-export { capabilitiesTheStackDoesNotProvide } from '../stack-capabilities';
+export {
+  assertInteractiveTransactionsListed,
+  type InteractiveTransactionsCapability,
+  type InteractiveTransactionsListed,
+  type StackProvides,
+  warnOfCapabilitiesNotProvided,
+} from '../stack-capabilities';
 export { createToSql, type RenderedSql, type ToSqlMember } from '../to-sql';
