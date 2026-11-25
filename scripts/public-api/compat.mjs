@@ -818,16 +818,28 @@ function compileTests({
 // Each comparison is first TypeScript's own, on declarations rewritten as compat-declarations.mjs
 // describes; the pipeline is described in api-compat.mjs.
 // The exports of a package, as `path\0name`, whose declarations reach, through the names they
-// use, a declaration of one of `targets`: `package:name` of a class or unique symbol. The compiler's
+// use, a declaration of one of `targets`: `package:name` of a class, and `package:name` or
+// `package:Class.name` of a unique symbol, named as the comparison host names them. The compiler's
 // own library files are not followed. One walk records which declarations each one names; the
 // declarations that reach a target are then found backwards from the targets.
-function exportsReaching(program, entryPoints, targets) {
+function exportsReaching(program, entryPoints, { classes, symbols }) {
   const checker = program.getTypeChecker();
+  const isUniqueSymbol = (type) =>
+    type !== undefined &&
+    ts.isTypeOperatorNode(type) &&
+    type.operator === ts.SyntaxKind.UniqueKeyword;
   const isTarget = (declaration) => {
     const name = declaration.name;
     if (!name || !ts.isIdentifier(name)) return false;
     const owner = packageOf(declaration.getSourceFile().fileName)?.name;
-    return targets.has(`${owner}:${name.text}`);
+    if (ts.isClassDeclaration(declaration)) return classes.has(`${owner}:${name.text}`);
+    if (!isUniqueSymbol(declaration.type)) return false;
+    if (ts.isVariableDeclaration(declaration)) return symbols.has(`${owner}:${name.text}`);
+    if (ts.isPropertyDeclaration(declaration) && ts.isClassDeclaration(declaration.parent)) {
+      const className = declaration.parent.name?.text;
+      return symbols.has(`${owner}:${className ? `${className}.` : ''}${name.text}`);
+    }
+    return false;
   };
   const declarationsOf = (symbol) => {
     const resolved =
@@ -1158,7 +1170,7 @@ export function checkPackage({
     ...[...host.mergedSymbols].map((each) => ({ key: each, label: `unique symbol ${each}` })),
   ];
   if (ambiguous.length > 0) {
-    const targets = new Set(ambiguous.map(({ key }) => key));
+    const targets = { classes: host.mergedClasses, symbols: host.mergedSymbols };
     const current = currentProgram(currentDir);
     const reaching = new Set([
       ...exportsReaching(generated.program, generated.entryPoints, targets),

@@ -120,6 +120,15 @@ describe('checkPackage, with the release treated as GA', () => {
     deepStrictEqual([brokenExports(result), result.notCompared], [[], []]);
   });
 
+  it('leaves undecided an export that reaches two static unique symbols with one name', () => {
+    const result = check('static-symbol-swapped', { release: 'static-symbol-release' });
+    deepStrictEqual(brokenExports(result), []);
+    deepStrictEqual(
+      result.undecided.map(({ name, test }) => `${name} ${test}`),
+      ['keyed value'],
+    );
+  });
+
   it('fails when the release imports a file of its own that is missing', () => {
     const { problems } = check('relative-release', { release: 'relative-missing' });
     strictEqual(problems.length, 1);
