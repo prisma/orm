@@ -25,6 +25,22 @@ Four things follow from this.
 
 This matters most for MySQL and MariaDB, where behaviour changes between versions, and not only by addition.
 
+## What a capability flag is
+
+Agreed 2026-11-25.
+
+A capability flag is a yes-or-no fact about the environment that a query client, such as the SQL query builder or the ORM client, reads to decide what it offers or how it writes a query. The capability layer does not say which. Only the client knows whether it changes its interface, its behaviour, or both, depending on a flag.
+
+The facts come from three places:
+
+1. **The database itself:** the engine, its version, and the service it runs on. MySQL has no `RETURNING`. `MERGE … RETURNING` needs PostgreSQL 17. A managed service such as Aurora can differ from the version it reports.
+2. **How that database is configured:** server settings, such as MySQL's `sql_mode` or the `GROUP_CONCAT` length limit behind `sql.jsonAggWithoutTruncation`, and topology, such as a MongoDB replica set, which transactions need.
+3. **The connection:** the adapter, the driver and the transport. It can narrow what the database offers: an HTTP driver or PgBouncer in transaction mode allows no interactive transactions or no session state. It may also widen it, with batching or pipelining. With SQLite the driver embeds the engine, so it decides the first kind too.
+
+Kinds 1 and 2 describe the database. They are in the contract and its profile hash, and signing checks them. Kind 3 describes one connection to that database. A database is often migrated over a direct connection and queried by the application over a pooler or an HTTP driver, so kind 3 belongs to the runtime stack, not to the contract.
+
+Adding operations and data types is not a capability. It goes through the operation registry and the codecs. The flags extensions declare today (`pgvector.cosine`, `postgis.geometry`, `paradedb/bm25`, in each extension's `descriptor-meta.ts`) are read by nothing and are removed. How an extension's operation depends on the version of the database extension installed, such as HNSW indexes needing pgvector 0.5, belongs to the extension system.
+
 ## The design
 
 ### The contract states capabilities, never a version
