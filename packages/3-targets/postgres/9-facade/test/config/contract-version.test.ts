@@ -1,5 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { executeContractEmit } from '@internal/cli/control-api';
 import type { PrismaConfig } from '@internal/config/config-types';
 import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
@@ -7,7 +6,8 @@ import { join, resolve } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineConfig, defineConfigFor } from '../../src/config/define-config';
 import { createPostgresControlClient } from '../../src/exports/control';
-import { version16Capabilities, versionsWithALaterFeature } from '../support/version-table';
+import { scratchDir } from '../support/scratch';
+import { versionsWithALaterFeature } from '../support/version-table';
 
 const removedFlags = {
   postgres: ['orderBy', 'limit', 'lateral', 'jsonAgg', 'returning'],
@@ -23,7 +23,7 @@ afterEach(async () => {
 });
 
 async function schemaDir(): Promise<{ readonly dir: string; readonly schemaPath: string }> {
-  const dir = await mkdtemp(join(tmpdir(), 'postgres-contract-version-'));
+  const dir = await scratchDir('postgres-contract-version-');
   tempDirs.push(dir);
   const schemaPath = join(dir, 'contract.prisma');
   await writeFile(schemaPath, '// use prisma-8\nmodel User {\n  id Int @id\n}\n', 'utf-8');
@@ -79,30 +79,34 @@ describe('the contract entry of the config', () => {
 });
 
 describe('contract emit', () => {
-  it('writes the row of the version a Prisma schema contract states, and its capabilities list', async () => {
-    const { dir, schemaPath } = await schemaDir();
+  it.each([16, 17] as const)(
+    'writes the row of version %i a Prisma schema contract states, and its capabilities list',
+    async (version) => {
+      const { dir, schemaPath } = await schemaDir();
 
-    const capabilities = await emittedCapabilities(
-      defineConfigFor(versionsWithALaterFeature)({
-        contract: {
-          path: schemaPath,
-          version: 16,
-          capabilities: [{ sql: { interactiveTransactions: true } }, { http: { batch: true } }],
-        },
-      }),
-      dir,
-    );
+      const capabilities = await emittedCapabilities(
+        defineConfigFor(versionsWithALaterFeature)({
+          contract: {
+            path: schemaPath,
+            version,
+            capabilities: [{ sql: { interactiveTransactions: true } }, { http: { batch: true } }],
+          },
+        }),
+        dir,
+      );
 
-    expect(capabilities).toEqual({
-      ...version16Capabilities,
-      sql: { ...version16Capabilities.sql, interactiveTransactions: true },
-      http: { batch: true },
-    });
-    expectNoRemovedFlags(capabilities);
-  });
+      const row = versionsWithALaterFeature[version];
+      expect(capabilities).toEqual({
+        ...row,
+        sql: { ...row.sql, interactiveTransactions: true },
+        http: { batch: true },
+      });
+      expectNoRemovedFlags(capabilities);
+    },
+  );
 
   it('writes exactly the capabilities of a TypeScript contract: its row and its list, nothing added', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'postgres-contract-version-'));
+    const dir = await scratchDir('postgres-contract-version-');
     tempDirs.push(dir);
 
     const capabilities = await emittedCapabilities(

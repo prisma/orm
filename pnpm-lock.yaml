@@ -3434,6 +3434,9 @@ importers:
       '@internal/operations':
         specifier: workspace:8.0.0-rc.25
         version: link:../../1-framework/1-core/operations
+      '@internal/postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../3-targets/postgres/9-facade
       '@internal/sql-contract-psl':
         specifier: workspace:8.0.0-rc.25
         version: link:../../2-sql-family/2-authoring/contract-psl

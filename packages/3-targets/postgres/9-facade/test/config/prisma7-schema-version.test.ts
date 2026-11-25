@@ -1,11 +1,11 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { executeContractEmit } from '@internal/cli/control-api';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
 import { prisma7Schema, prisma7SchemaFor } from '../../src/config/prisma7-schema';
-import { version16Capabilities, versionsWithALaterFeature } from '../support/version-table';
+import { scratchDir } from '../support/scratch';
+import { versionsWithALaterFeature } from '../support/version-table';
 
 const tempDirs: string[] = [];
 
@@ -28,31 +28,34 @@ describe('prisma7Schema', () => {
     ).toThrow('State the PostgreSQL version your database runs beside the Prisma 7 schema path');
   });
 
-  it("emits the row of the version it states and its capabilities list, which the config's target does not carry", async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'postgres-prisma7-version-'));
-    tempDirs.push(dir);
-    const schemaPath = join(dir, 'schema.prisma');
-    await writeFile(
-      schemaPath,
-      'datasource db {\n  provider = "postgresql"\n}\nmodel User {\n  id Int @id\n}\n',
-      'utf-8',
-    );
-    const config = defineConfig({
-      contract: prisma7SchemaFor(versionsWithALaterFeature)(schemaPath, {
-        version: 16,
-        capabilities: [{ sql: { interactiveTransactions: true } }],
-      }),
-    });
+  it.each([16, 17] as const)(
+    "emits the row of version %i it states and its capabilities list, which the config's target does not carry",
+    async (version) => {
+      const dir = await scratchDir('postgres-prisma7-version-');
+      tempDirs.push(dir);
+      const schemaPath = join(dir, 'schema.prisma');
+      await writeFile(
+        schemaPath,
+        'datasource db {\n  provider = "postgresql"\n}\nmodel User {\n  id Int @id\n}\n',
+        'utf-8',
+      );
+      const config = defineConfig({
+        contract: prisma7SchemaFor(versionsWithALaterFeature)(schemaPath, {
+          version,
+          capabilities: [{ sql: { interactiveTransactions: true } }],
+        }),
+      });
 
-    await executeContractEmit({ config, cwd: dir, outputPath: dir });
-    const contract = JSON.parse(await readFile(join(dir, 'contract.json'), 'utf-8'));
+      await executeContractEmit({ config, cwd: dir, outputPath: dir });
+      const contract = JSON.parse(await readFile(join(dir, 'contract.json'), 'utf-8'));
 
-    expect({ target: config.target.capabilities, contract: contract.capabilities }).toEqual({
-      target: {},
-      contract: {
-        ...version16Capabilities,
-        sql: { ...version16Capabilities.sql, interactiveTransactions: true },
-      },
-    });
-  });
+      expect({ target: config.target.capabilities, contract: contract.capabilities }).toEqual({
+        target: {},
+        contract: {
+          ...versionsWithALaterFeature[version],
+          sql: { ...versionsWithALaterFeature[version].sql, interactiveTransactions: true },
+        },
+      });
+    },
+  );
 });

@@ -1,32 +1,12 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   POSTGRES_MIN_SERVER_VERSION,
+  POSTGRES_NEWEST_VERSION,
   type PostgresVersion,
   postgresCapabilitiesByVersion,
   postgresCapabilitiesForVersion,
+  postgresCapabilitiesForVersionIn,
 } from '../src/exports/server-version';
-
-const everyVersionsCapabilities = {
-  postgres: { distinctOn: true, forNoKeyUpdate: true, forKeyShare: true },
-  sql: {
-    returning: true,
-    defaultInInsert: true,
-    lateral: true,
-    scalarList: true,
-    checkConstraint: true,
-    insertOnConflictSkip: true,
-    insertOnConflictWithoutTarget: true,
-    insertOnConflictTarget: true,
-    forUpdate: true,
-    forShare: true,
-    lockOf: true,
-    lockNowait: true,
-    lockSkipLocked: true,
-    jsonAgg: true,
-    outerReferencesInDerivedTables: true,
-    jsonAggWithoutTruncation: true,
-  },
-};
 
 function refusalOf(version: unknown): unknown {
   try {
@@ -38,13 +18,13 @@ function refusalOf(version: unknown): unknown {
 }
 
 describe('the capabilities by PostgreSQL version', () => {
-  it('lists versions 15 to 18, each with the capabilities PostgreSQL 15 already has', () => {
-    expect(postgresCapabilitiesByVersion).toEqual({
-      15: everyVersionsCapabilities,
-      16: everyVersionsCapabilities,
-      17: everyVersionsCapabilities,
-      18: everyVersionsCapabilities,
-    });
+  it('lists versions 15 to 18', () => {
+    expect(Object.keys(postgresCapabilitiesByVersion)).toEqual(['15', '16', '17', '18']);
+  });
+
+  it('names 18 as the newest version, typed as the literal', () => {
+    expect(POSTGRES_NEWEST_VERSION).toBe(18);
+    expectTypeOf(POSTGRES_NEWEST_VERSION).toEqualTypeOf<18>();
   });
 
   it('takes the minimum server version from its first row, typed as the literal', () => {
@@ -58,8 +38,8 @@ describe('the capabilities by PostgreSQL version', () => {
 
   it('resolves a version against the table it is given', () => {
     const table = { 3: { sql: { a: true } }, 5: { sql: { a: true, b: true } } } as const;
-    expect(postgresCapabilitiesForVersion(5, table)).toBe(table[5]);
-    expect(() => postgresCapabilitiesForVersion(4 as 3, table)).toThrow(
+    expect(postgresCapabilitiesForVersionIn(table, 5)).toBe(table[5]);
+    expect(() => postgresCapabilitiesForVersionIn(table, 4 as 3)).toThrow(
       'PostgreSQL 4 is not supported. The supported versions are 3, 5.',
     );
   });

@@ -1,7 +1,11 @@
 import { blindCast } from '@internal/utils/casts';
 import { postgresError } from './errors';
 
-/** For each PostgreSQL version, the capabilities that version provides. */
+/**
+ * For each PostgreSQL version, the capabilities that version provides.
+ *
+ * @internal The shape of `postgresCapabilitiesByVersion`, named for the facade's tests.
+ */
 export type CapabilitiesByVersion = Readonly<
   Record<number, Readonly<Record<string, Readonly<Record<string, boolean>>>>>
 >;
@@ -68,17 +72,14 @@ function versionRefusal(version: unknown, table: CapabilitiesByVersion): string 
 }
 
 /**
- * The capabilities `table` lists for PostgreSQL `version`, refusing a version the table does not list. The table defaults to the one Prisma 8 ships; tests pass their own.
+ * The capabilities `table` lists for PostgreSQL `version`, refusing a version the table does not list.
+ *
+ * @internal The PostgreSQL facade uses it so its tests can pass a table whose rows differ; everything else calls `postgresCapabilitiesForVersion`.
  */
-export function postgresCapabilitiesForVersion<
+export function postgresCapabilitiesForVersionIn<
+  const Table extends CapabilitiesByVersion,
   const Version extends keyof Table & number,
-  const Table extends CapabilitiesByVersion = typeof postgresCapabilitiesByVersion,
->(
-  version: Version,
-  table: Table = blindCast<Table, 'Table defaults to the shipped table when none is passed'>(
-    postgresCapabilitiesByVersion,
-  ),
-): Table[Version] {
+>(table: Table, version: Version): Table[Version] {
   if (typeof version === 'number' && Object.hasOwn(table, version)) {
     return table[version];
   }
@@ -86,3 +87,18 @@ export function postgresCapabilitiesForVersion<
     meta: { version: String(version), supportedVersions: Object.keys(table) },
   });
 }
+
+/** The capabilities PostgreSQL `version` provides, refusing a version Prisma 8 does not support. */
+export function postgresCapabilitiesForVersion<const Version extends PostgresVersion>(
+  version: Version,
+): (typeof postgresCapabilitiesByVersion)[Version] {
+  return postgresCapabilitiesForVersionIn(postgresCapabilitiesByVersion, version);
+}
+
+/** The newest PostgreSQL version Prisma 8 supports: the last row of the table. */
+type LastOf<Items> = Items extends readonly [...unknown[], infer Last] ? Last : never;
+
+export const POSTGRES_NEWEST_VERSION = blindCast<
+  LastOf<typeof postgresVersions>,
+  'the last entry of a non-empty tuple'
+>(postgresVersions[postgresVersions.length - 1]);

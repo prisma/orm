@@ -1,5 +1,5 @@
+export type { CapabilityMatrix } from '@internal/framework-components/components';
 export type {
-  CapabilitySet,
   CheckNode,
   ComposedAuthoringHelpers,
   ContractDefinition,
@@ -40,7 +40,13 @@ export type {
   VarBit,
   Varchar,
 } from '@internal/target-postgres/codec-types';
-export { defineContract } from '../contract/define-contract';
+export type {
+  CapabilitiesList,
+  DefaultConnectionCapabilities,
+  PostgresCapabilitiesInput,
+  PostgresContractCapabilities,
+} from '../contract/contract-capabilities';
+export { defineContract, type PostgresDefineContract } from '../contract/define-contract';
 export { enumType } from '../contract/enum-type';
 export { type ExtensionHandle, extension } from '../contract/extension';
 export { field, gen, type } from '../contract/field';

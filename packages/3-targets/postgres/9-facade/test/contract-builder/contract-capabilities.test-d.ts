@@ -1,8 +1,9 @@
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import postgresDriver from '@internal/driver-postgres/runtime';
-import type { CapabilitySet } from '@internal/sql-contract-ts/contract-builder';
+import type { CapabilityMatrix } from '@internal/framework-components/components';
 import { expectTypeOf, test } from 'vitest';
 import { defineContractFor } from '../../src/contract/define-contract';
+import { postgresContractCapabilities } from '../../src/exports/config';
 import { defineContract, field, model } from '../../src/exports/contract-builder';
 import postgres from '../../src/exports/runtime';
 import { versionsWithALaterFeature } from '../support/version-table';
@@ -52,7 +53,7 @@ test('the capabilities list reaches the type in order, with false turning a flag
 });
 
 test('a set with a wide type keeps the row in the type', () => {
-  const wide: CapabilitySet = { sql: { interactiveTransactions: true } };
+  const wide: CapabilityMatrix = { sql: { interactiveTransactions: true } };
   const contract = defineContract({ version: 18, capabilities: [wide] });
   expectTypeOf(contract.capabilities.postgres.forNoKeyUpdate).toEqualTypeOf<true>();
   expectTypeOf(contract.capabilities.sql.returning).toEqualTypeOf<true>();
@@ -68,4 +69,22 @@ test("the runtime adapter's and driver's capabilities are a list a contract acce
 test('a single set where the list belongs is refused', () => {
   // @ts-expect-error the capabilities are a list of sets, not one set
   defineContract({ version: 18, capabilities: { sql: { interactiveTransactions: true } } });
+});
+
+test('a list typed as an array keeps the version row in the type', () => {
+  const list: CapabilityMatrix[] = [{ sql: { interactiveTransactions: true } }];
+  const contract = defineContract({ version: 18, capabilities: list, models: { User } });
+  expectTypeOf(contract.capabilities.postgres.forNoKeyUpdate).toEqualTypeOf<true>();
+  const db = postgres({ contract, url: 'postgres://localhost/db' });
+  db.orm.public.User.forUpdate();
+  db.orm.public.User.forNoKeyUpdate();
+  expectTypeOf(
+    postgresContractCapabilities({ version: 17, capabilities: list }).sql.returning,
+  ).toEqualTypeOf<true>();
+});
+
+test('a set with a wide type that turns a flag off leaves the flag in the type, a documented limit', () => {
+  const off: CapabilityMatrix = { sql: { returning: false } };
+  const contract = defineContract({ version: 18, capabilities: [off] });
+  expectTypeOf(contract.capabilities.sql.returning).toEqualTypeOf<true>();
 });

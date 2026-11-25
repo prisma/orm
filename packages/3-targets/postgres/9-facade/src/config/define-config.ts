@@ -13,7 +13,6 @@ import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/cod
 import postgresPackRef from '@internal/target-postgres/pack';
 import {
   type CapabilitiesByVersion,
-  type PostgresVersion,
   postgresCapabilitiesByVersion,
 } from '@internal/target-postgres/server-version';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -21,6 +20,8 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 import {
+  type CapabilitiesInputFor,
+  type CapabilitiesList,
   contractCapabilitiesFor,
   type PostgresCapabilitiesInput,
   supportedVersionsText,
@@ -30,15 +31,25 @@ import { contractBuilderModule, contractTypesModule, controlComponents } from '.
 import { moduleBase } from './module-base';
 
 /**
- * A contract file and the database it is written for. A Prisma schema (`.prisma`, a glob or a directory) states the PostgreSQL `version` and the optional `capabilities` list here; a TypeScript contract (`.ts`) states them in `defineContract`.
+ * A contract file and the database it is written for, for any table of versions. A Prisma schema (`.prisma`, a glob or a directory) states the PostgreSQL `version` and the optional `capabilities` list here; a TypeScript contract (`.ts`) states them in `defineContract`, so its entry takes neither.
  */
-export type PostgresContractEntry<Version extends number = PostgresVersion> =
-  | { readonly path: `${string}.ts`; readonly version?: never; readonly capabilities?: never }
-  | ({ readonly path: string } & PostgresCapabilitiesInput<Version>);
+type ContractEntryFor<Version extends number, Path extends string = string> = {
+  readonly path: Path;
+} & (Path extends `${string}.ts`
+  ? { readonly version?: never; readonly capabilities?: never }
+  : CapabilitiesInputFor<Version, CapabilitiesList>);
 
-export interface PostgresConfigOptions<Version extends number = PostgresVersion> {
+/** The contract entry of a PostgreSQL config: a Prisma schema states its PostgreSQL `version` and optional `capabilities` list here; a TypeScript contract (`.ts`) takes neither. */
+export type PostgresContractEntry<Path extends string = string> = {
+  readonly path: Path;
+} & (Path extends `${string}.ts`
+  ? { readonly version?: never; readonly capabilities?: never }
+  : PostgresCapabilitiesInput);
+
+/** The options of the PostgreSQL `defineConfig`. */
+export interface PostgresConfigOptions<Path extends string = string> {
   /** The contract entry, a TypeScript contract path, or a ready `ContractConfig` such as `prisma7Schema(...)`. A ready `ContractConfig` writes the capabilities it was given and no others. */
-  readonly contract: `${string}.ts` | PostgresContractEntry<Version> | ContractConfig;
+  readonly contract: `${string}.ts` | PostgresContractEntry<Path> | ContractConfig;
   readonly output?: string;
   readonly db?: {
     readonly connection?: string;
@@ -49,6 +60,14 @@ export interface PostgresConfigOptions<Version extends number = PostgresVersion>
   };
   readonly formatter?: FormatterConfig;
 }
+
+/** The options of a `defineConfig` for any table of versions. */
+type ConfigOptionsFor<Version extends number, Path extends string = string> = Omit<
+  PostgresConfigOptions<Path>,
+  'contract'
+> & {
+  readonly contract: `${string}.ts` | ContractEntryFor<Version, Path> | ContractConfig;
+};
 
 const postgresContractTarget = { target: postgresPackRef, contractBuilderModule };
 
@@ -79,7 +98,10 @@ function contractConfigFromEntry(
   }
   const capabilities = contractCapabilitiesFor(
     table,
-    blindCast<PostgresCapabilitiesInput<number>, 'checked by contractCapabilitiesFor'>(entry),
+    blindCast<
+      CapabilitiesInputFor<number, CapabilitiesList>,
+      'contractCapabilitiesFor refuses a missing or unsupported version and a capabilities value that is not a list'
+    >(entry),
     `State the PostgreSQL version your database runs beside the contract path, for example contract: { path: '${entry.path}', version: 18 }. ${supportedVersionsText}`,
   );
   return prismaContract(entry.path, {
@@ -93,7 +115,10 @@ function contractConfigFromEntry(
 
 function resolveContractConfig(
   table: CapabilitiesByVersion,
-  options: PostgresConfigOptions<number>,
+  options: {
+    readonly contract: `${string}.ts` | UntypedEntry | ContractConfig;
+    readonly output?: string | undefined;
+  },
 ): ContractConfig {
   const explicitOutput =
     options.output !== undefined ? join(options.output, 'contract.json') : undefined;
@@ -119,8 +144,8 @@ function resolveContractConfig(
 
 /** The PostgreSQL `defineConfig` for `table`. The facade exports it for the table Prisma 8 ships; tests pass a table whose rows differ. */
 export function defineConfigFor<const Table extends CapabilitiesByVersion>(table: Table) {
-  return function defineConfig(
-    options: PostgresConfigOptions<keyof Table & number>,
+  return function defineConfig<const Path extends string>(
+    options: ConfigOptionsFor<keyof Table & number, Path>,
   ): PrismaConfig<'sql', 'postgres'> {
     const contractConfig = resolveContractConfig(table, options);
     return coreDefineConfig({
@@ -134,5 +159,9 @@ export function defineConfigFor<const Table extends CapabilitiesByVersion>(table
   };
 }
 
-export const defineConfig: (options: PostgresConfigOptions) => PrismaConfig<'sql', 'postgres'> =
-  defineConfigFor(postgresCapabilitiesByVersion);
+/** The type of the PostgreSQL `defineConfig`. */
+export type PostgresDefineConfig = <const Path extends string>(
+  options: PostgresConfigOptions<Path>,
+) => PrismaConfig<'sql', 'postgres'>;
+
+export const defineConfig: PostgresDefineConfig = defineConfigFor(postgresCapabilitiesByVersion);

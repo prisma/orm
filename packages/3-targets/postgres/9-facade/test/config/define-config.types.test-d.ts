@@ -26,3 +26,14 @@ it('reads prisma7Schema from the schema path and the database version; the outpu
   // @ts-expect-error 14 is not a supported PostgreSQL version
   prisma7Schema('x.prisma', { version: 14 });
 });
+
+it('refuses, at type level, a Prisma schema path without a version and a TypeScript entry with one', () => {
+  // @ts-expect-error a Prisma schema path states its version in the contract entry
+  defineConfig({ contract: './prisma/contract.prisma' });
+  // @ts-expect-error the entry of a Prisma schema needs a version
+  defineConfig({ contract: { path: './prisma/contract.prisma' } });
+  // @ts-expect-error a TypeScript contract states its version in defineContract
+  defineConfig({ contract: { path: './prisma/contract.ts', version: 17 } });
+  defineConfig({ contract: { path: './prisma/contract.ts' } });
+  defineConfig({ contract: './prisma/contract.ts' });
+});

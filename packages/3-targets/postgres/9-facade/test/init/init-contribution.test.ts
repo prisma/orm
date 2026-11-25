@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import type { ReadmeInput } from '@internal/cli/init-contribution';
 import type { ContractSourceFormat } from '@internal/config/config-types';
-import { POSTGRES_MIN_SERVER_VERSION } from '@internal/target-postgres/server-version';
+import {
+  POSTGRES_MIN_SERVER_VERSION,
+  POSTGRES_NEWEST_VERSION,
+} from '@internal/target-postgres/server-version';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import contribution from '../../src/exports/init';
@@ -102,11 +105,14 @@ describe('templates', () => {
       }
     });
 
-    it('uses the callback-factory defineContract signature', () => {
+    it('uses the callback-factory defineContract signature, stating the newest PostgreSQL version', () => {
       const schema = contribution.starterContract('typescript');
 
+      expect(POSTGRES_NEWEST_VERSION).toBe(18);
       expect(schema).toMatch(
-        /defineContract\(\s*\{\s*\},\s*\(\{ field, model, rel(, gen)?, type \}\) => [({]/,
+        new RegExp(
+          `defineContract\\(\\s*\\{ version: ${POSTGRES_NEWEST_VERSION} \\},\\s*\\(\\{ field, model, rel(, gen)?, type \\}\\) => [({]`,
+        ),
       );
       expect(schema).not.toMatch(/\{ family:/);
       expect(schema).toContain('models: {');

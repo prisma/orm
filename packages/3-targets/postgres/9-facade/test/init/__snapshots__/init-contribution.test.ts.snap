@@ -224,7 +224,7 @@ Your data contract is the heart of your application. It lives at [\`src/prisma/c
 import { defineContract } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract(
-  {},
+  { version: 18 },
   ({ field, model, gen, type }) => ({
     models: {
       User: model('User', {
@@ -327,7 +327,7 @@ If this project lives inside a pnpm workspace, a few things are worth knowing:
 exports[`templates > per-cell snapshots (FR5.4) > postgres + typescript > starterSchema is stable 1`] = `
 "import { defineContract, now } from '@internal/postgres/contract-builder';
 
-export const contract = defineContract({}, ({ field, model, rel, gen, type }) => {
+export const contract = defineContract({ version: 18 }, ({ field, model, rel, gen, type }) => {
   const User = model('User', {
     fields: {
       id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),

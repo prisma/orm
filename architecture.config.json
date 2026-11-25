@@ -655,6 +655,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/postgres/2-adapter/src/exports/capabilities.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/postgres/2-adapter/src/exports/adapter.ts",
       "domain": "targets",
       "layer": "adapters",

@@ -99,6 +99,7 @@ const mongoContractPslProvider = shellModule('orm-family-mongo', 'contract-psl/p
 const targetMongoPack = shellModule('orm-target-mongo', 'target/pack');
 const targetPostgresPack = shellModule('orm-target-postgres', 'target/pack');
 const targetPostgresTypes = shellModule('orm-target-postgres', 'target/types');
+const postgresConfig = shellModule('orm-postgres', 'config');
 const frameworkConfigTypes = shellModule('orm-framework', 'config/config-types');
 
 // Some example configs guard against a missing DATABASE_URL at module load time.
@@ -283,9 +284,10 @@ function rewriteContractSnapshotSpecifiers(source, snapshotsImportPath, toHash, 
  * Build the TypeScript source for the temporary regen config.
  *
  * For mongo chains the override uses `mongoContract(schemaPath, { target })`.
- * For sql chains it uses `prismaContract(schemaPath, { target, createNamespace })`
- * — the same options the postgres `defineConfig` helper passes — so the emitted
- * contract is identical in shape to what the real config would produce.
+ * For sql chains it uses `prismaContract(schemaPath, { target, createNamespace, capabilities })`
+ * with the capabilities of PostgreSQL 18, which every example states — the same options the
+ * postgres `defineConfig` helper passes — so the emitted contract is identical in shape to what
+ * the real config would produce.
  *
  * The result is passed through `defineConfig` so the export carries the
  * config-format version marker the loader requires. Spreading `realConfig`
@@ -304,6 +306,7 @@ function buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily) {
       `import { prismaContract } from '${sqlContractPslProvider}';\n` +
       `import postgresPackRef from '${targetPostgresPack}';\n` +
       `import { postgresCreateNamespace } from '${targetPostgresTypes}';\n` +
+      `import { postgresContractCapabilities } from '${postgresConfig}';\n` +
       `import realConfig from '${realConfigAbsPath}';\n\n` +
       'export default definePrismaConfig({\n' +
       '  orm: defineConfig({\n' +
@@ -312,6 +315,7 @@ function buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily) {
       `      ...prismaContract('${schemaSrc}', {\n` +
       '        target: postgresPackRef,\n' +
       '        createNamespace: postgresCreateNamespace,\n' +
+      '        capabilities: postgresContractCapabilities({ version: 18 }),\n' +
       '      }),\n' +
       '      typesModule: realConfig.orm.contract.typesModule,\n' +
       '    },\n' +

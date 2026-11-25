@@ -1,5 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { executeContractEmit } from '@internal/cli/control-api';
 import type { PrismaConfig } from '@internal/config/config-types';
 import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
@@ -7,6 +6,7 @@ import { join, resolve } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
 import { prisma7Schema } from '../../src/config/prisma7-schema';
+import { scratchDir } from '../support/scratch';
 import { connectionList } from './fixtures/connection-list';
 
 const tempDirs: string[] = [];
@@ -20,7 +20,7 @@ afterEach(async () => {
 async function emitted(
   configFor: (dir: string) => Promise<PrismaConfig<'sql', 'postgres'>>,
 ): Promise<unknown> {
-  const dir = await mkdtemp(join(tmpdir(), 'postgres-capabilities-routes-'));
+  const dir = await scratchDir('postgres-capabilities-routes-');
   tempDirs.push(dir);
   const config = await configFor(dir);
   await executeContractEmit({ config, cwd: dir, outputPath: dir });

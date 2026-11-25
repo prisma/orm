@@ -95,6 +95,17 @@ describe('the capabilities list of a TypeScript contract', () => {
     });
   });
 
+  it('refuses a single set where the list belongs, as a JavaScript caller might pass it', () => {
+    expect(() =>
+      defineContract({
+        version: 18,
+        capabilities: { sql: { interactiveTransactions: true } } as unknown as [],
+      }),
+    ).toThrow(
+      'capabilities is a list of capability sets, for example capabilities: [{ sql: { interactiveTransactions: true } }].',
+    );
+  });
+
   it('defaults to the adapter and driver the client runs with, which add nothing yet', () => {
     expect(defineContract({ version: 17 }).capabilities).toEqual(
       defineContract({ version: 17, capabilities: [] }).capabilities,

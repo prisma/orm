@@ -12,7 +12,6 @@ import type {
   SqlNamespaceInput,
 } from '@internal/sql-contract/types';
 import type {
-  CapabilitySet,
   ComposedAuthoringHelpers,
   ContractInput,
   EnumTypeHandle,
@@ -29,7 +28,8 @@ import {
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { blindCast } from '@internal/utils/casts';
 import {
-  type ContractCapabilities,
+  type CapabilitiesList,
+  type ContractCapabilitiesFor,
   contractCapabilitiesFor,
   type DefaultConnectionCapabilities,
   supportedVersionsText,
@@ -39,7 +39,7 @@ import type { RlsEntityHandle } from './rls';
 
 type SqlFamily = typeof sqlFamilyPack;
 type PostgresPack = typeof postgresPack;
-type ConnectionCapabilitiesConstraint = readonly CapabilitySet[];
+type ConnectionCapabilitiesConstraint = CapabilitiesList;
 
 type DatabaseTypesConstraint = Record<string, AuthoredStorageTypeInstance>;
 type ModelsConstraint = Record<string, ModelLike>;
@@ -72,7 +72,9 @@ type PostgresResult<
       readonly extensions?: Extensions;
       readonly enums?: Enums;
       readonly namespaces?: Namespaces;
-      readonly adapter: PostgresContributions<ContractCapabilities<Table, Version, Capabilities>>;
+      readonly adapter: PostgresContributions<
+        ContractCapabilitiesFor<Table, Version, Capabilities>
+      >;
       readonly foreignKeyDefaults?: ForeignKeyDefaults;
       readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
       readonly codecLookup: CodecLookupWithDescriptors;
@@ -106,6 +108,8 @@ type PostgresBaseScaffold<
   readonly version: Version;
   /**
    * The capabilities the connection provides, one set per component, merged over the version's in order: a later set's flag replaces an earlier one's, and `false` turns a flag off. Defaults to those of the adapter and the driver the client runs with; a list given here replaces the default.
+   *
+   * Only sets the type knows, written as literals or `as const`, reach the contract's type. A set typed as `CapabilityMatrix` still applies at run time, but adds nothing to the type, and a `false` in it leaves the flag in the type.
    */
   readonly capabilities?: Capabilities;
   /** Contract-wide defaults for foreign keys' `constraint` and `index`. */
@@ -158,8 +162,8 @@ type PostgresScaffold<
   readonly namespaces?: Namespaces;
 };
 
-/** The PostgreSQL `defineContract`, whose version selects a row of `Table`. */
-export interface PostgresDefineContract<Table extends CapabilitiesByVersion> {
+/** A `defineContract` whose version selects a row of `Table`. */
+export interface DefineContractFor<Table extends CapabilitiesByVersion> {
   <
     const Version extends keyof Table & number,
     const Capabilities extends ConnectionCapabilitiesConstraint = DefaultConnectionCapabilities,
@@ -249,7 +253,7 @@ type AnyPostgresDefinition = PostgresDefinition<
 /** The PostgreSQL `defineContract` for `table`. The facade exports it for the table Prisma 8 ships; tests pass a table whose rows differ. */
 export function defineContractFor<const Table extends CapabilitiesByVersion>(
   table: Table,
-): PostgresDefineContract<Table> {
+): DefineContractFor<Table> {
   function defineContract(
     definition: AnyPostgresDefinition,
     factory?: (helpers: ComposedAuthoringHelpers<SqlFamily, PostgresPack, undefined>) => {
@@ -286,11 +290,15 @@ export function defineContractFor<const Table extends CapabilitiesByVersion>(
     return buildBoundContract(sqlFamilyPack, postgresPack, bound);
   }
   return blindCast<
-    PostgresDefineContract<Table>,
+    DefineContractFor<Table>,
     'the implementation passes the capabilities its overloads name for Table to buildBoundContract; TypeScript cannot check overloads that name the outer type parameter against it'
   >(defineContract);
 }
 
+/** The type of the PostgreSQL `defineContract`. */
+export type PostgresDefineContract = DefineContractFor<typeof postgresCapabilitiesByVersion>;
+
 /** Defines a PostgreSQL contract. `version` selects the capabilities the contract requires. */
-export const defineContract: PostgresDefineContract<typeof postgresCapabilitiesByVersion> =
-  defineContractFor(postgresCapabilitiesByVersion);
+export const defineContract: PostgresDefineContract = defineContractFor(
+  postgresCapabilitiesByVersion,
+);

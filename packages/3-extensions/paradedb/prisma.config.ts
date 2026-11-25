@@ -15,9 +15,9 @@
 import postgresAdapter from '@internal/adapter-postgres/control';
 import { defineConfig as ormConfig } from '@internal/cli/config-types';
 import sql from '@internal/family-sql/control';
+import { postgresContractCapabilities } from '@internal/postgres/config';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
-import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { definePrismaConfig } from '@prisma/cli-engine';
 
@@ -28,7 +28,7 @@ export default definePrismaConfig({
     adapter: postgresAdapter,
     contract: {
       ...prismaContract('src/contract.prisma', {
-        capabilities: postgresCapabilitiesByVersion[18],
+        capabilities: postgresContractCapabilities({ version: 15 }),
         target: postgres,
         createNamespace: postgresCreateNamespace,
       }),
