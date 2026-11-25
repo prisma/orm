@@ -3893,7 +3893,6 @@
 ./contract/enum-accessor: type NamespaceEnumAccessors<TContract extends Contract, NsId extends keyof TContract['domain']['namespaces']> = EnumEntriesToAccessors<NamespaceEnumEntries<TContract['domain']['namespaces'][NsId]>>
 ./contract/enum-accessor: type NamespacedEnums<TContract extends Contract> = { readonly [Ns in keyof TContract['domain']['namespaces']]: NamespaceEnumAccessors<TContract, Ns>; }
 ./contract/format-version: const CONTRACT_FORMAT_VERSIONS: readonly [1]
-./contract/format-version: function formatVersionErrorAt(error: StructuredError, path: string): StructuredError
 ./contract/format-version: function isFormatVersionError(error: unknown): error is StructuredError
 ./contract/format-version: function readFormatVersion<TVersion extends number>(document: unknown, options: ReadFormatVersionOptions<TVersion>): TVersion
 ./contract/format-version: interface ReadFormatVersionOptions, readonly optional property bundledIn?: string | undefined
@@ -3945,6 +3944,7 @@
 ./contract/hashing: type SerializeContract = (contract: Contract) => JsonObject
 ./contract/hashing: type StorageSort = (storage: unknown) => unknown
 ./contract/internal/format-version: function carriesFormatVersion(value: unknown): boolean
+./contract/internal/format-version: function formatVersionErrorAt(error: StructuredError, path: string): StructuredError
 ./contract/internal/format-version: function isContractBuiltInMemory(value: unknown): boolean
 ./contract/is-plain-record: function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>>
 ./contract/resolve-domain-model: function resolveDomainModel(domain: ApplicationDomain, modelName: string): ResolvedDomainModel | undefined
@@ -4154,7 +4154,6 @@
 ./contract: function buildNamespacedEnums<TContract extends Contract>(domain: TContract['domain'], codecFor: EnumMemberCodecFor): NamespacedEnums<TContract>
 ./contract: function canonicalizeContract(contract: Contract, options: CanonicalizeContractOptions): string
 ./contract: function canonicalizeContractToObject(contract: Contract, options: CanonicalizeContractOptions): Record<string, unknown>
-./contract: function carriesFormatVersion(value: unknown): boolean
 ./contract: function compareByNameProperty(a: unknown, b: unknown): number
 ./contract: function compareCodeUnits(a: string, b: string): number
 ./contract: function computeExecutionHash(args: { target: string; targetFamily: string; execution: Record<string, unknown>; }): ExecutionHashBase<string>
@@ -4168,11 +4167,9 @@
 ./contract: function domainModelsAtDefaultNamespace(domain: ApplicationDomain): Record<string, ContractModelBase>
 ./contract: function effectiveControlPolicy(nodeControl: ControlPolicy | undefined, defaultControlPolicy: ControlPolicy | undefined): ControlPolicy
 ./contract: function executionHash<const T extends string>(value: T): ExecutionHashBase<T>
-./contract: function formatVersionErrorAt(error: StructuredError, path: string): StructuredError
 ./contract: function governingControlPolicy(subject: undefined | { readonly explicitNodeControlPolicy?: ControlPolicy | undefined; }, defaultControlPolicy: ControlPolicy | undefined): ControlPolicy
 ./contract: function isColumnDefault(value: unknown): value is ColumnDefault
 ./contract: function isColumnDefaultLiteralInputValue(value: unknown): value is ColumnDefaultLiteralInputValue
-./contract: function isContractBuiltInMemory(value: unknown): boolean
 ./contract: function isExecutionMutationDefaultValue(value: unknown): value is ExecutionMutationDefaultValue
 ./contract: function isFormatVersionError(error: unknown): error is StructuredError
 ./contract: function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>>

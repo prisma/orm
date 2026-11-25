@@ -24,6 +24,7 @@ import {
   createSqlExecutionStack,
 } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
+import type { JsonObject } from '@internal/utils/json';
 import type { Contract as ExecutionDefaultedTagsContract } from './fixtures/execution-defaulted-tags/generated/contract';
 import executionDefaultedTagsContractJson from './fixtures/execution-defaulted-tags/generated/contract.json' with {
   type: 'json',
@@ -43,6 +44,11 @@ const postgresContractSerializer = new PostgresContractSerializer();
 
 export function deserializeTestContract(json: unknown = contractJson): TestContract {
   return postgresContractSerializer.deserializeContract(json) as TestContract;
+}
+
+/** The contract file Prisma writes for `contract`: a test that edits a built contract clones this, so the edited copy reads back as a file. */
+export function printTestContract(contract: TestContract): JsonObject {
+  return postgresContractSerializer.serializeContract(contract);
 }
 
 const baseTestContract = deserializeTestContract();
@@ -235,7 +241,7 @@ export interface MockRuntime extends RuntimeQueryable {
  * - Feature (MTI, table: features, value: feature) with `priority` field
  */
 export function buildMixedPolyContract(): TestContract {
-  const raw = JSON.parse(JSON.stringify(getTestContract()));
+  const raw = JSON.parse(JSON.stringify(printTestContract(getTestContract())));
 
   const domainModels = unboundDomainModels(raw);
   domainModels['Task'] = {
@@ -317,7 +323,7 @@ export function buildMixedPolyContract(): TestContract {
  * - Regular (STI, table: users, value: regular) with `plan` field
  */
 export function buildStiPolyContract(): TestContract {
-  const raw = JSON.parse(JSON.stringify(getTestContract()));
+  const raw = JSON.parse(JSON.stringify(printTestContract(getTestContract())));
   const domainModels = unboundDomainModels(raw);
 
   const userModel = domainModels['User']!;

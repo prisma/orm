@@ -6,7 +6,12 @@ import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import { withReturningCapability } from './collection-fixtures';
 import type { MockRuntime, TestContract } from './helpers';
-import { createMockRuntime, deserializeTestContract, getTestContract } from './helpers';
+import {
+  createMockRuntime,
+  deserializeTestContract,
+  getTestContract,
+  printTestContract,
+} from './helpers';
 import { unboundTables } from './unbound-tables';
 
 // Synthetic 36-char Tag ids — Tag.id is typed `Char<36>` in the test contract.
@@ -29,7 +34,7 @@ function buildTagWithUpdatedAtContract(
   codecId: 'pg/timestamptz-temporal@1' | 'pg/timestamptz-string@1' = 'pg/timestamptz-temporal@1',
 ): TestContract {
   const contract = JSON.parse(
-    JSON.stringify(withReturningCapability(getTestContract())),
+    JSON.stringify(printTestContract(withReturningCapability(getTestContract()))),
   ) as TestContract;
 
   const tagModel = contract.domain.namespaces['public']!.models['Tag'] as

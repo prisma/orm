@@ -87,13 +87,14 @@ function withSqlToOneRelationNullability(contract: Contract<SqlStorage>): Contra
  *    defaults to identity. Targets that need to attach target-only
  *    fields (e.g. target-specific derived storage fields) override it.
  *
- * Default `serializeContract` is identity over the contract — concrete
- * SQL targets ship JSON-clean class instances, so the contract value
- * can be stringified directly. The non-enumerable family-level `kind`
- * discriminator on `SqlNode` instances stays out of the persisted
- * envelope automatically. Targets that need to canonicalize on the way
- * out (key ordering, dropping computed-only fields) override
- * `serializeContract` directly.
+ * `deserializeContract` reads the file's format version first and hands the
+ * file to the unit for that version; `serializeContract` prints the
+ * version this release writes. The version 1 printer is identity over the
+ * contract — concrete SQL targets ship JSON-clean class instances, so the
+ * value can be stringified directly. The non-enumerable family-level `kind`
+ * discriminator on `SqlNode` instances stays out of the persisted envelope
+ * automatically. Targets that need to canonicalize on the way out (key
+ * ordering, dropping computed-only fields) override `printContractV1`.
  */
 export abstract class SqlContractSerializerBase<TContract extends Contract<SqlStorage>>
   implements ContractSerializer<TContract>

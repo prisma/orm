@@ -1,4 +1,5 @@
-import { formatVersionErrorAt, isFormatVersionError } from '@internal/contract/format-version';
+import { isFormatVersionError } from '@internal/contract/format-version';
+import { formatVersionErrorAt } from '@internal/contract/internal/format-version';
 import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
 import {
