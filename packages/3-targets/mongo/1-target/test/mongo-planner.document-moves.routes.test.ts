@@ -249,4 +249,56 @@ describe('MongoMigrationPlanner, the move route reads the plan the route tells t
       });
     });
   });
+
+  it('prints copy calls that evaluate, pasted, to the pipeline the route describes', () => {
+    const person = {
+      collection: 'people',
+      fields: ['_id', 'kind'],
+      discriminator: 'kind',
+      storedAs: { kind: 'k-ind' },
+    };
+    const from = contract(
+      'from',
+      {
+        Admin: ADMIN,
+        User: { collection: 'users', fields: ['_id', 'user', 'name', 'extra'] },
+        Person: { ...person, variants: { Staff: 'staff' } },
+        Staff: { fields: ['sev'], base: 'Person' },
+      },
+      { users: {}, people: {} },
+    );
+    const to = contract(
+      'to',
+      {
+        Admin: ADMIN,
+        Person: { ...person, variants: { Staff: 'staff', Member: 'mem"ber' } },
+        Staff: { fields: ['sev'], base: 'Person' },
+        Member: { fields: ['user', 'name'], base: 'Person', storedAs: { name: 'full name' } },
+      },
+      { users: {}, people: {} },
+    );
+    const [conflict] = refusal(
+      plan({
+        from,
+        to,
+        schema: [schemaCollection('users'), schemaCollection('people')],
+        statements: [renameModel('User', 'Member')],
+      }),
+    );
+    const call = /rawAggregate\(.*?\]\)/.exec(conflict?.why ?? '')?.[0] ?? '';
+    const pasted = call.replace(/<a filter[^>]*>/, '{}');
+    const captured: unknown[] = [];
+    new Function('rawAggregate', `return ${pasted};`)((...args: unknown[]) => captured.push(args));
+    expect(captured).toEqual([
+      [
+        'users',
+        [
+          { $match: {} },
+          { $set: { 'full name': '$name', 'k-ind': { $literal: 'mem"ber' } } },
+          { $unset: ['name', 'extra'] },
+          { $merge: { into: 'people' } },
+        ],
+      ],
+    ]);
+  });
 });

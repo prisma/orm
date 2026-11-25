@@ -3,6 +3,7 @@ import {
   type ModelCoordinate,
   modelDisplayName,
 } from '@internal/framework-components/control';
+import { jsonToTsSource } from '@internal/ts-render';
 import type { DocumentCopy, DocumentMove } from './mongo-document-moves';
 
 /** Joins items into text: "a", "a and b", "a, b and c". */
@@ -52,19 +53,6 @@ export function handWrittenRoute(what: string): string {
   return `With migration plan, write this change as a hand-written migration instead: ${handWrittenMigrationSteps(what)}`;
 }
 
-/** A value as JavaScript source: keys unquoted where they can be, strings in double quotes. */
-export function javaScriptText(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(javaScriptText).join(', ')}]`;
-  if (typeof value === 'object' && value !== null) {
-    const entries = Object.entries(value).map(
-      ([key, each]) =>
-        `${/^[A-Za-z_$][\w$]*$/.test(key) ? key : JSON.stringify(key)}: ${javaScriptText(each)}`,
-    );
-    return entries.length === 0 ? '{}' : `{ ${entries.join(', ')} }`;
-  }
-  return JSON.stringify(value);
-}
-
 function movingText({ copies }: DocumentMove): string {
   return modelNamesText(copies.flatMap((copy) => copy.models));
 }
@@ -97,19 +85,20 @@ function bypassText({ to, order, copies }: DocumentMove): string {
 function copyCall(move: DocumentMove, copy: DocumentCopy, selects: string): string {
   const pipeline = [
     `{ $match: <a filter that selects only ${selects}> }`,
-    ...copy.fieldStages.map(javaScriptText),
-    `{ $merge: { into: ${JSON.stringify(move.to)} } }`,
+    ...[...copy.fieldStages, { $merge: { into: move.to } }].map(jsonToTsSource),
   ].join(', ');
-  const bypass = move.order.bypassDocumentValidation ? ', { bypassDocumentValidation: true }' : '';
-  return `rawAggregate(${JSON.stringify(move.from)}, [${pipeline}]${bypass})`;
+  const bypass = move.order.bypassDocumentValidation
+    ? `, ${jsonToTsSource({ bypassDocumentValidation: true })}`
+    : '';
+  return `rawAggregate(${jsonToTsSource(move.from)}, [${pipeline}]${bypass})`;
 }
 
 function copiesText(move: DocumentMove): string {
   const { from, to, copies } = move;
   const [only] = copies;
   return copies.length === 1 && only !== undefined
-    ? `Its run copies the documents of ${movingText(move)} into collection "${to}", such as ${copyCall(move, only, 'those documents')}. Then it deletes them with deleteDocuments({ collection: ${JSON.stringify(from)}, filter: <the same filter> }).`
-    : `Its run copies the documents of ${movingText(move)} into collection "${to}", with one copy for each group of models whose documents change alike on the way: ${joinedList(copies.map((copy) => `${copyCall(move, copy, `the documents of ${modelNamesText(copy.models)}`)} for ${modelNamesText(copy.models)}`))}. Then it deletes them with deleteDocuments({ collection: ${JSON.stringify(from)}, filter: <a filter that selects the documents of all of them> }).`;
+    ? `Its run copies the documents of ${movingText(move)} into collection "${to}", such as ${copyCall(move, only, 'those documents')}. Then it deletes them with deleteDocuments({ collection: ${jsonToTsSource(from)}, filter: <the same filter> }).`
+    : `Its run copies the documents of ${movingText(move)} into collection "${to}", with one copy for each group of models whose documents change alike on the way: ${joinedList(copies.map((copy) => `${copyCall(move, copy, `the documents of ${modelNamesText(copy.models)}`)} for ${modelNamesText(copy.models)}`))}. Then it deletes them with deleteDocuments({ collection: ${jsonToTsSource(from)}, filter: <a filter that selects the documents of all of them> }).`;
 }
 
 function droppedText({ copies }: DocumentMove): string {
