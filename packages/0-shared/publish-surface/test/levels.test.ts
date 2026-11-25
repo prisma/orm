@@ -47,7 +47,7 @@ describe('the declared level of each published package', () => {
       '@prisma/orm-extension-paradedb': { firstVersion: '0.1.0' },
       '@prisma/orm-extension-pgvector': 'ga',
       '@prisma/orm-extension-postgis': 'ga',
-      '@prisma/orm-extension-supabase': 'preview',
+      '@prisma/orm-extension-supabase': 'ea',
       '@prisma/orm-family-mongo': 'ea',
       '@prisma/orm-family-sql': 'ga',
       '@prisma/orm-framework': 'ga',

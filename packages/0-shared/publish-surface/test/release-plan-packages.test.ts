@@ -13,7 +13,7 @@ const AT_8_0_0 = `
     extension-paradedb          0.1.0            latest  family-sql ^8.0.0, framework ^8.0.0, toolchain ^8.0.0
     extension-pgvector          8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
     extension-postgis           8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
-    extension-supabase          8.0.0-preview.0  latest  family-sql ^8.0.0, framework ^8.0.0, postgres ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
+    extension-supabase          8.0.0-ea.0       latest  family-sql ^8.0.0, framework ^8.0.0, postgres ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
     family-mongo                8.0.0-ea.0       latest  framework ~8.0.0, toolchain ~8.0.0
     family-sql                  8.0.0            latest  framework ~8.0.0, toolchain ~8.0.0
     framework                   8.0.0            latest  -
@@ -38,7 +38,7 @@ const AT_8_1_0 = `
     extension-paradedb          0.1.0            latest  family-sql ^8.1.0, framework ^8.1.0, toolchain ^8.1.0
     extension-pgvector          8.1.0            latest  family-sql ^8.1.0, framework ^8.1.0, target-postgres ^8.1.0, toolchain ^8.1.0
     extension-postgis           8.1.0            latest  family-sql ^8.1.0, framework ^8.1.0, target-postgres ^8.1.0, toolchain ^8.1.0
-    extension-supabase          8.1.0-preview.0  latest  family-sql ^8.1.0, framework ^8.1.0, postgres ^8.1.0, target-postgres ^8.1.0, toolchain ^8.1.0
+    extension-supabase          8.1.0-ea.0       latest  family-sql ^8.1.0, framework ^8.1.0, postgres ^8.1.0, target-postgres ^8.1.0, toolchain ^8.1.0
     family-mongo                8.1.0-ea.0       latest  framework ~8.1.0, toolchain ~8.1.0
     family-sql                  8.1.0            latest  framework ~8.1.0, toolchain ~8.1.0
     framework                   8.1.0            latest  -
