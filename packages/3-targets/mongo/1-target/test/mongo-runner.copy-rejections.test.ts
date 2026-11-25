@@ -1,3 +1,4 @@
+import { MongoExistsExpr } from '@internal/mongo-query-ast/control';
 import { ObjectId } from 'bson';
 import { MongoServerError } from 'mongodb';
 import { describe, expect, it } from 'vitest';
@@ -75,6 +76,34 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
 
     expect(failureFields(result.assertNotOk()).why).toBe(
       "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. A later operation of this migration updates the validator of collection members without checking the documents already in it, so change the pipeline in the migration's migration.ts so the documents it writes fit the validator, run the file with node, then run the command again. The operations that ran before the failure stay applied.",
+    );
+  });
+
+  it('does not take a later precheck that only reads the target for the check of its documents against the new validator', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(rejected());
+    const update = setValidation('members', { bsonType: 'object' });
+
+    const result = await execute(harness, [
+      dataTransform('move User to members', {
+        run: () =>
+          rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
+      }),
+      {
+        ...update,
+        precheck: [
+          {
+            description: 'members holds a document',
+            source: rawAggregate('members', [{ $limit: 1 }]),
+            filter: MongoExistsExpr.exists('_id'),
+            expect: 'exists',
+          },
+        ],
+      },
+    ]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      'A later operation of this migration updates the validator of collection members without checking the documents already in it',
     );
   });
 

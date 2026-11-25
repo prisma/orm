@@ -1242,7 +1242,9 @@ function laterValidator(
       ) {
         if (Object.keys(command.validator).length === 0) return { kind: 'removed', collection };
         return {
-          kind: checksDocumentsOf(operation, collection) ? 'replaced' : 'unchecked',
+          kind: checksDocumentsOf(operation, collection, command.validator)
+            ? 'replaced'
+            : 'unchecked',
           collection,
         };
       }
@@ -1251,14 +1253,30 @@ function laterValidator(
   return { kind: 'none' };
 }
 
-/** Whether `operation` checks, before it runs, that every document of `collection` fits its validator. */
-function checksDocumentsOf(operation: MongoMigrationPlanOperation, collection: string): boolean {
-  return operation.precheck.some(
-    ({ source }) =>
-      'command' in source &&
-      source.command instanceof RawAggregateCommand &&
-      source.command.collection === collection,
-  );
+/** Whether `operation` checks, before it runs, that no document of `collection` fails `validator`: a precheck that finds no document matching `{ $nor: [validator] }`. */
+function checksDocumentsOf(
+  operation: MongoMigrationPlanOperation,
+  collection: string,
+  validator: Readonly<Record<string, unknown>>,
+): boolean {
+  const rejected = canonicalize({ $nor: [validator] });
+  return operation.precheck.some((check) => {
+    const { source } = check;
+    if (
+      check.expect !== 'notExists' ||
+      !('command' in source) ||
+      !(source.command instanceof RawAggregateCommand) ||
+      source.command.collection !== collection
+    ) {
+      return false;
+    }
+    const [first, ...rest] = source.command.pipeline;
+    return (
+      first !== undefined &&
+      canonicalize(Reflect.get(first, '$match')) === rejected &&
+      rest.every((stage) => Object.keys(stage).length === 1 && Object.hasOwn(stage, '$limit'))
+    );
+  });
 }
 
 /** The document the validator rejected, as MongoDB's error names it, and where it is in the copy's source. */
