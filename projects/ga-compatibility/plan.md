@@ -199,7 +199,7 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 
 **How, where we know.** It is the spec rewritten for users, not a new design. It is written last, once the other projects are complete, so that it states what was built and includes what we learned on the way (task 23).
 
-### 13. Keep scripts and agents that drive the command-line tool working, by designing its flags, exit codes and JSON output before `8.0.0` and checking them in CI
+### 13. Keep scripts and agents that drive the command-line tool working, by designing its flags, exit codes and machine-readable output before `8.0.0` and checking them in CI
 
 **Purpose.** A script or an agent that calls a command and reads its result keeps working across every `8.x` release, and can tell what each field of the output means.
 
@@ -207,21 +207,23 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 
 **What it achieves.**
 
-- What a script may depend on is written down: each command's name, flags, exit codes and `--json` document.
-- Each `--json` document follows one set of principles, and the ones that do not are corrected before `8.0.0`, because a format cannot change after it.
+- What a script may depend on is written down: each command's name, flags, exit codes and every output a program reads. That is all output not written for a person: the `--json` documents, the data lines a command prints to stdout, and the Markdown output, which agents read.
+- Each of those outputs follows one set of principles, and the ones that do not are corrected before `8.0.0`, because a format cannot change after it.
 - A check in CI fails when any of these changes incompatibly, as project 4's does for exports.
 
 **How, where we know.**
 
-- Survey every command: its flags, its exit codes and its `--json` output. The `--json` output is the largest part. Today nobody has designed it: each command's document is whatever was chosen when the command was written.
-- Settle the principles in a decision record: what a document reports (the result, or the input given back), stable names, one meaning for each field, how an error is shaped, what a reader must ignore so that an added field does not break it, how a format is versioned, and which maturity level it has. The "JSON semantics" section of the CLI Style Guide is the starting point.
+- Survey every command: its flags, its exit codes and each machine-readable output it has. The `--json` output is the largest part. Today nobody has designed it: each command's document is whatever was chosen when the command was written. The data lines already have a rule in the CLI Style Guide (tab-separated fields, new fields only appended). The Markdown output has none in this repository, so the survey starts by finding where it is produced, which may be `@prisma/cli-engine`, and what in it a reader can depend on.
+- Settle the principles in a decision record, for every machine-readable format: what a document reports (the result, or the input given back), stable names, one meaning for each field, how an error is shaped, what a reader must ignore so that an added field does not break it, how a format is versioned, and which maturity level it has. The "JSON semantics" section of the CLI Style Guide is the starting point.
 - Bring each command into line, and add the check.
 
 **The example that raised it.** `prisma orm init --json`, whose schema is in `packages/1-framework/3-tooling/cli/src/commands/init/output.ts` and is published as `@prisma/orm-toolchain/cli/init-output`. Its `package` field is one string, the database package, although `init` installs many packages, which it reports separately under `packagesInstalled`. Its `target` field held `'postgres'` or `'mongodb'` until prisma/orm#31093; since then it holds a short name for a database in Prisma's list and a package name for any other, so a reader cannot tell which kind of value it has. Nothing documented reads either field.
 
 **Already decided.** The input flag `--target` keeps its name. Project 6 changes no JSON format.
 
-**To decide when it starts.** Its design discussion has not been held. One question for it: whether a command whose output has not been corrected by `8.0.0` can ship that output below GA, and how a user would see that.
+**GA waits for it.** `8.0.0` is not released until this work is complete. No output ships uncorrected under a lower maturity level.
+
+**To decide when it starts.** Its design discussion has not been held.
 
 ## Moved out of this stream
 
