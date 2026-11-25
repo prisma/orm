@@ -77,24 +77,45 @@ A profile is the target as one database version provides it: the same target, wi
 
 A behaviour that a later version drops is a capability the later profile does not have. Capabilities that describe behaviour already exist, for example `sql.jsonAggWithoutTruncation`, which MariaDB's adapter turns off.
 
-### The user selects the profile once, in the config
+### The contract states the version and the connection capabilities it requires
 
-Agreed 2026-11-25. The profile matters only where the contract is emitted: emitting turns the profile into the contract's list of required capabilities. Signing and the client both work from the contract, so the client takes no version and no profile. The user selects the profile in the config, as a required option:
+Agreed 2026-11-25. The database version and the capabilities required of the connection both choose the contract's requirements, so they belong where the contract is written, not among the settings for the commands. Emitting turns them into the contract's list of required capabilities. Signing and the client both work from the contract, so the client takes no version and no profile.
 
-```ts
-export default defineConfig({
-  contract: './prisma/contract.prisma',
-  db: { version: 17, url: env('DATABASE_URL') },
-});
-```
-
-Whether the option is a version number, as shown, or a named profile object is not decided.
-
-There is no default profile:
+**The version** selects which profile of the target the contract is emitted for. It is required and has no default:
 
 - A default of the oldest version would give users fewer features than their database has.
 - A default of the recommended version would change every user's contract when the recommendation moves.
 - With no default, "recommended" is only what the docs and `orm init` write. Moving the recommendation changes no existing project.
+
+Whether it is written as a version number or as a named profile object is not decided.
+
+**The connection capabilities** are those a database version cannot imply, because the driver or adapter provides them. Interactive transactions are the example: the driver provides them, never the database, and a driver that works over HTTP does not declare them. The user passes them in, usually by taking them from the driver the application runs with. When they are omitted, the facade supplies the capabilities of its default driver, which is the driver its client uses by default.
+
+**A contract written in TypeScript** states both in `defineContract`, which already has a `capabilities` input:
+
+```ts
+export const contract = defineContract({
+  target: postgres({ version: 17 }),
+  capabilities: neonHttp.capabilities,
+  // models…
+});
+```
+
+**A contract written in the Prisma schema language** cannot state either today: the file names no target and cannot import a driver. For now both are given in the config's contract entry, beside the path to the file. The version goes to the target the config builds, not to the interpreter that reads the file. The names below are illustrative:
+
+```ts
+import neonHttp from 'prisma-orm-driver-neon-http';
+
+export default defineConfig({
+  contract: prismaContract('./prisma/contract.prisma', {
+    version: 17,
+    capabilities: neonHttp.capabilities,
+  }),
+  db: { url: env('DATABASE_URL') },
+});
+```
+
+This is a compromise. The idiomatic form is syntax in the Prisma schema language, so that the contract file states its own requirements. **By the end of this project that syntax must at least be designed, and preferably built.** When it exists, the config options keep working until the next major version, as the compatibility policy requires.
 
 An earlier draft put the version in the name the user imports (`postgres18`), in the config and again in the client. The client no longer needs it. Hibernate 6 deprecated its versioned dialect classes in favour of a setting; see the [prior art](2026-11-25-capability-prior-art.md).
 
@@ -149,8 +170,9 @@ It is not purely additive.
 
 ## Open
 
-- Whether the config option is a version number or a named profile object.
-- How the application states in its contract that it requires a capability the connection provides, such as interactive transactions. A database version cannot imply it.
+- Whether the version is written as a version number or as a named profile object.
+- The syntax in the Prisma schema language for the version and the connection capabilities. It must be designed by the end of the project.
+- The form of the capabilities value, so that a driver's declared capabilities can be passed in directly.
 - Which versions get a profile for each target at GA, and which is recommended.
 - What the minimum server version constants become once profiles exist. A database older than the oldest profile fails the capability check, so the constants may no longer be needed.
 - MongoDB: the same design should apply, and has not been checked against the MongoDB family's code.
