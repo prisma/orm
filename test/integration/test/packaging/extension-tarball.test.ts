@@ -171,7 +171,7 @@ describe('an extension pack installed next to the facade it extends', () => {
 
 // What the peer buys: an application that upgrades the facade without
 // upgrading the extension would, under a hard dependency, quietly end up
-// with two copies of the target shell and two codec registries. As a peer
+// with two copies of the target shell, neither recognising values the other made. As a peer
 // under strict resolution the same combination cannot install at all.
 describe('an extension pack next to a target shell of a different version', () => {
   let scratch: string;

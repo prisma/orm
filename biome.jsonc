@@ -20,7 +20,11 @@
       "!**/mongo-contract.json",
       "!**/migrations/*/*/migration.json",
       "!**/migrations/*/*/ops.json",
-      "!**/planner-golden/fixtures/*/planned.golden.json"
+      "!**/planner-golden/fixtures/*/planned.golden.json",
+      // Declaration files written the way the bundler writes them, as input to scripts/public-api.
+      "!scripts/public-api/fixtures/**/*.d.mts",
+      // A package.json that cannot be parsed, as input to scripts/public-api.
+      "!scripts/public-api/fixtures/root-broken/packages/9-public/@prisma/malformed/package.json"
     ]
   },
   "formatter": {
