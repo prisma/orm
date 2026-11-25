@@ -72,10 +72,10 @@ If the break is not intended, change the code. If it is, record it.
 A break in a generally available export is an exception to the compatibility policy, and the release notes must name it. Record it in the package's `api-breaks.json`, beside its `api.txt`:
 
 ```json
-[{ "path": "./builder", "export": "Db", "release": "8.1.0", "reason": "Join scopes merge by name; see the release notes" }]
+[{ "path": "./builder", "export": "Db", "test": "type", "release": "8.1.0", "reason": "Join scopes merge by name; see the release notes" }]
 ```
 
-`release` is the last release the break is measured against, as the job reports it. The reason is one line. Once the break is undone, the record fails, so it cannot go stale silently. When the next release is published, records for the earlier one are skipped and listed as removable; delete them.
+`test` is the kind of test that broke, as the job reports it: `type`, `value`, `constructor`, `abstract`, `exists` or `path`. `release` is the last release the break is measured against. The reason is one line. Once the break is undone, the record fails, so it cannot go stale silently. When the next release is published, records for the earlier one are skipped and listed as removable; delete them.
 
 ## The last release's example apps fail
 

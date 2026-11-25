@@ -38,7 +38,7 @@ Every pull request is checked against the last release in three ways.
 
 **The last release** is the version under the registry's `latest` tag for `@prisma/orm-postgres`, and its git tag is `v<version>`. This assumes every package is released at one version; when packages get versions of their own, the lookup becomes per package.
 
-**A deliberate break** is recorded with the release it is measured against and its reason. A record for the last release lists that export's breaks as recorded; once the export is compared and no longer breaks, the record fails, so it cannot outlive its break. A record for an earlier release is skipped and listed as removable in the job's report.
+**A deliberate break** is recorded with the release it is measured against and its reason. A record names the export and the kind of test (its type, its value, its constructor), so it covers one kind of break and not every change to the export. A record for the last release lists that test's break as recorded; once the export is compared and no longer breaks, the record fails, so it cannot outlive its break. A record for an earlier release is skipped and listed as removable in the job's report.
 
 ## Why
 
@@ -76,12 +76,12 @@ type t4 = [requireAssignableTo<typeof c0.createCacheMiddleware, typeof r0.create
   interface Now  { get(key: string): void }   // assignable to Last as a method, not as a property
   ```
 
-- Private, protected and `#private` members are dropped. TypeScript treats two copies of a class with private members as unrelated, and users cannot reach them.
-- Each `unique symbol` constant becomes a string literal named after its module and name, because two copies of a unique symbol are different symbols. Keys made from it are still compared.
+- Private and `#private` members, which users cannot reach and which make TypeScript treat two copies of a class as unrelated, are replaced by one marker property naming the class, so two copies of one class still match and one class swapped for another does not. Protected members stay, under a key of their own, because extensions subclass our base classes and use them; each abstract member of a class is also checked to accept what the last release's accepted, since a subclass users write overrides it.
+- Each `unique symbol` constant becomes a string literal named after its package and name, because two copies of a unique symbol are different symbols. Keys made from it are still compared, and moving the constant to another file changes nothing.
 
-In third-party declarations only private and protected members are dropped: rewriting their methods would change how TypeScript compares arrays and other built-in types.
+In third-party declarations only private members are replaced: rewriting their methods would change how TypeScript compares arrays and other built-in types.
 
-**When TypeScript cannot relate two copies.** For some generic types TypeScript cannot tell that two copies of one declaration are the same, and a comparison fails although nothing changed. So the release is installed twice, the second copy called its twin, and a failure counts as a break only when the same test passes between the release and its twin. When it fails there too, the test is made again with the generic signatures instantiated at their constraints, and then with a helper that maps the types member by member. A test none of these decides is reported as undecided, neither a break nor a pass.
+**When TypeScript cannot relate two copies.** For some generic types TypeScript cannot tell that two copies of one declaration are the same, and a comparison fails although nothing changed. So the release is installed twice, the second copy called its twin, and a failure counts as a break only when the same test passes between the release and its twin. When it fails there too, the export is compared through a helper that maps the types member by member; a failure there is a break. What that does not decide is split into one native test per member, each under the same twin rule. An export passes only when it is decided: a pass through the mapping helper is not enough, because the helper fixes type parameters at their constraints and cannot see a change that depends on them. Anything else is reported as undecided, with the step it stopped at, never as a pass.
 
 **Making sure the comparison is real.**
 
@@ -89,7 +89,7 @@ In third-party declarations only private and protected members are dropped: rewr
 - The release's third-party dependencies are installed at the versions in the repository's lockfile, and every import of one third-party name and version is resolved to one copy, so that a difference in, say, `pg` or its peers is not reported as ours.
 - Every generated file ends with a line that must not compile. If it compiles, the compiler did not check the file, and the run fails.
 - A type from the release that cannot be resolved would be treated as `any` and pass everything; an unresolved import is reported as a failure.
-- When TypeScript stops with "type instantiation is excessively deep", it caches the failure and lets later tests of the same type pass unchecked, so every test after it is compiled again without it. A test that overflows the compiler's stack is isolated the same way. Both are reported as undecided, as is any test left when the package's time budget runs out.
+- When TypeScript stops with "type instantiation is excessively deep", it caches the failure and lets later tests of the same type pass unchecked, so every test after it is compiled again without it. A test that overflows the compiler's stack is isolated the same way. Both are reported as undecided. A failure that could not be confirmed against the twin before the package's time ran out is reported as a break, so a slow machine cannot hide one.
 
 **Re-exports.** A database's package, such as `@prisma/orm-postgres`, re-exports most of the import paths of the database-independent packages it is built on. A re-exported name gets only a test that it still exists; its type is compared in the package that declares it.
 
@@ -125,7 +125,7 @@ Review agents are told what to look for, in `packages/9-public/AGENTS.md` and in
 
 - A break in a generally available export cannot merge unless someone records why, and the release notes must name it. A new export cannot merge unless the description names it.
 - Some changed lines are not API changes, and the description must still mention them, at least by package.
-- The type tests install a release from the registry on every run, so they depend on the registry being reachable. Measured in November 2026, a run over all packages took about three minutes on a laptop with three packages at a time, and up to 4.3 GB of memory for the largest.
+- The type tests install a release from the registry on every run, so they depend on the registry being reachable. Measured in November 2026, a run over all packages took about three minutes on a laptop with three packages at a time, and up to 6 GB of memory for the largest, so CI runs two at a time.
 - When the last release moves forward, its records stop applying and are listed as removable.
 
 ## What the checks do not see
@@ -135,8 +135,7 @@ Review agents are told what to look for, in `packages/9-public/AGENTS.md` and in
 - **Some modifiers.** A property made `readonly`, or a change to a `protected` member, is not seen.
 - **Members of a namespace that holds only types.**
 - **Third-party types.** Both sides use the same third-party versions, so a dependency upgrade that changes our API is not seen.
-- **Undecided comparisons.** A break inside a comparison TypeScript cannot decide, or cannot relate between two copies, is not seen. On the packages in November 2026 that was under one per cent of comparisons, mostly generic builders.
-- **A unique symbol that moves to another file.** Its key changes name, and the change is reported as a break.
+- **Undecided comparisons.** A break inside a comparison TypeScript cannot decide is not seen. In November 2026 that was about one comparison in a hundred: generic builders and clients that TypeScript cannot relate between two copies, among them the SQL family's `orm` and `Collection`, and the Mongo query builder, which overflows the compiler's stack. The example apps cover their result types as far as the apps use them.
 - **Result types the example apps do not exercise.** Coverage grows with the apps' type tests.
 - **Behaviour.** Runtime behaviour, error codes, command output and file formats are outside these checks.
 
