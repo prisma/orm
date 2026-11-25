@@ -7,7 +7,19 @@ const TARGET = 'b'.repeat(64);
 const invocation: CliInvocation = { cwd: '/work/app', configPath: undefined, dbGiven: true };
 
 describe('errorPolicyMismatch', () => {
-  it('names each differing setting the ref declares, and the two ways to make them agree', () => {
+  const APPLY = "Have whoever owns the database apply the ref's policies in a deploy.";
+  const MATCH = 'Make the ref declare what the database has, and have the change reviewed.';
+
+  function advice(differences: Parameters<typeof errorPolicyMismatch>[0]['differences']) {
+    const { fix, nextActions } = errorPolicyMismatch({
+      spaceId: 'app',
+      refName: 'production',
+      differences,
+    }).toEnvelope();
+    return { fix, nextActions };
+  }
+
+  it('names each differing setting the ref declares, and for a stricter ref advises applying it', () => {
     const differences = [
       {
         setting: 'change',
@@ -20,8 +32,6 @@ describe('errorPolicyMismatch', () => {
         inForce: 'data-loss-with-consent',
       },
     ] as const;
-    const recovery =
-      "Make the ref match the database, or have whoever owns the database apply the ref's policies.";
 
     expect(
       errorPolicyMismatch({ spaceId: 'app', refName: 'production', differences }).toEnvelope(),
@@ -31,9 +41,56 @@ describe('errorPolicyMismatch', () => {
       severity: 'error',
       summary: "The ref's policies differ from the database's",
       why: 'production declares change: migrate; the database has change: migrate, reconcile. production declares dataProtection.dataLoss: data-loss-forbidden; the database has dataProtection.dataLoss: data-loss-with-consent.',
-      fix: recovery,
-      nextActions: [{ kind: 'user-choice', label: recovery }],
+      fix: APPLY,
+      nextActions: [{ kind: 'user-choice', label: APPLY }],
       meta: { spaceId: 'app', refName: 'production', differences },
+    });
+  });
+
+  it('advises a looser ref to declare what the database has, never to loosen the database', () => {
+    expect(
+      advice([
+        {
+          setting: 'dataProtection.accessWidening',
+          declared: 'access-widening-permitted',
+          inForce: 'access-widening-forbidden',
+        },
+      ]),
+    ).toEqual({ fix: MATCH, nextActions: [{ kind: 'user-choice', label: MATCH }] });
+  });
+
+  it('advises a ref that permits more change strategies to declare what the database has', () => {
+    expect(
+      advice([{ setting: 'change', declared: ['migrate', 'reconcile'], inForce: ['migrate'] }]),
+    ).toEqual({ fix: MATCH, nextActions: [{ kind: 'user-choice', label: MATCH }] });
+  });
+
+  it('advises applying the ref when matching the database would loosen the ref too', () => {
+    expect(advice([{ setting: 'change', declared: ['reconcile'], inForce: ['migrate'] }])).toEqual({
+      fix: APPLY,
+      nextActions: [{ kind: 'user-choice', label: APPLY }],
+    });
+  });
+
+  it('gives both sentences, each naming its settings, when the ref is looser in one and stricter in another', () => {
+    const match = `For dataProtection.dataLoss: ${MATCH}`;
+    const apply = `For change: ${APPLY}`;
+
+    expect(
+      advice([
+        { setting: 'change', declared: ['migrate'], inForce: ['migrate', 'reconcile'] },
+        {
+          setting: 'dataProtection.dataLoss',
+          declared: 'data-loss-permitted',
+          inForce: 'data-loss-with-consent',
+        },
+      ]),
+    ).toEqual({
+      fix: `${match} ${apply}`,
+      nextActions: [
+        { kind: 'user-choice', label: match },
+        { kind: 'user-choice', label: apply },
+      ],
     });
   });
 });

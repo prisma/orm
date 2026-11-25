@@ -24,6 +24,9 @@ import { migrationShowCommand } from './migration/show';
 import { migrationStatusCommand } from './migration/status';
 import { refDeleteCommand } from './ref/delete';
 import { refListCommand } from './ref/list';
+import { refPolicyDeleteCommand } from './ref/policy/delete';
+import { refPolicySetCommand } from './ref/policy/set';
+import { refPolicyShowCommand } from './ref/policy/show';
 import { refSetCommand } from './ref/set';
 
 /**
@@ -52,6 +55,9 @@ const commands: Readonly<Record<string, AnyCommand>> = {
   'migration plan': migrationPlanCommand,
   'migration ref delete': refDeleteCommand,
   'migration ref list': refListCommand,
+  'migration ref policy delete': refPolicyDeleteCommand,
+  'migration ref policy set': refPolicySetCommand,
+  'migration ref policy show': refPolicyShowCommand,
   'migration ref set': refSetCommand,
   'migration show': migrationShowCommand,
   'migration status': migrationStatusCommand,

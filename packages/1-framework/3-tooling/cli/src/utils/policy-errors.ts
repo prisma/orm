@@ -11,6 +11,7 @@ import { shellQuoted } from '../control-api/statements/statement-flag';
 import { ActionableCliError } from './cli-errors';
 import { type DataProtectionSetting, FORBIDDEN_LEVEL } from './data-protection-settings';
 import { chooseAction, runCommandAction } from './next-actions';
+import { policyMoveEffect, refToDatabaseMove } from './policy-settings';
 import { type CliInvocation, cliCommand, printedWayToTarget, quotedPlan } from './printed-command';
 
 /** `change: migrate; dataProtection.dataLoss: data-loss-forbidden`: the declared side of each difference. */
@@ -33,18 +34,39 @@ export function errorPolicyMismatch(args: {
         `${refName} declares ${setting}: ${databasePolicyValueText(declared)}; the database has ${setting}: ${databasePolicyValueText(inForce)}.`,
     )
     .join(' ');
-  const recovery =
-    "Make the ref match the database, or have whoever owns the database apply the ref's policies.";
+  const recoveries = mismatchRecoveries(differences);
   return new ActionableCliError(
     'MIGRATION.POLICY_MISMATCH',
     "The ref's policies differ from the database's",
     {
       why,
-      fix: recovery,
-      nextActions: [chooseAction(recovery)],
+      fix: recoveries.join(' '),
+      nextActions: recoveries.map(chooseAction),
       meta: { spaceId, refName, differences },
     },
   );
+}
+
+const DECLARE_WHAT_THE_DATABASE_HAS =
+  'Make the ref declare what the database has, and have the change reviewed.';
+const APPLY_THE_REF = "Have whoever owns the database apply the ref's policies in a deploy.";
+
+/**
+ * Making the ref declare what the database has is advised only where that tightens the ref; any other difference is resolved by the database's owner, so no advice loosens a ref.
+ */
+function mismatchRecoveries(differences: readonly DatabasePolicyDifference[]): readonly string[] {
+  const refLooser = differences.filter(
+    (difference) => policyMoveEffect(refToDatabaseMove(difference)) === 'tightens',
+  );
+  const others = differences.filter((difference) => !refLooser.includes(difference));
+  if (others.length === 0) return [DECLARE_WHAT_THE_DATABASE_HAS];
+  if (refLooser.length === 0) return [APPLY_THE_REF];
+  const settings = (group: readonly DatabasePolicyDifference[]) =>
+    group.map(({ setting }) => setting).join(', ');
+  return [
+    `For ${settings(refLooser)}: ${DECLARE_WHAT_THE_DATABASE_HAS}`,
+    `For ${settings(others)}: ${APPLY_THE_REF}`,
+  ];
 }
 
 export type ChangePolicyCheckedCommand = 'db update' | 'db sign' | 'db migrate';

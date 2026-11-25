@@ -32,6 +32,9 @@ import { normalizeError } from './normalize-error';
 import { runPackageManager } from './package-manager-runner';
 import { refDeleteCommand } from './ref/delete';
 import { refListCommand } from './ref/list';
+import { refPolicyDeleteCommand } from './ref/policy/delete';
+import { refPolicySetCommand } from './ref/policy/set';
+import { refPolicyShowCommand } from './ref/policy/show';
 import { refSetCommand } from './ref/set';
 import { resolveTelemetryHooks } from './telemetry/reporting';
 
@@ -88,6 +91,20 @@ export const BIN_GROUPS = {
       'environment name — staging, production — to a contract hash, so a command\n' +
       'can name the environment instead of the hash.',
   },
+  'migration ref policy': {
+    brief: 'The policies a ref declares for its database',
+    description:
+      'Read and write the policies field of migrations/app/refs/<ref>.json. A ref\n' +
+      'names an environment, such as staging or production, and its policies say\n' +
+      "how that environment's database may change. The change policy says whether\n" +
+      'it changes through migrations (migrate), through db update (reconcile), or\n' +
+      'both. The data protection policy says whether a change may lose data, and\n' +
+      'whether it may widen who can read or write data. These are not the control\n' +
+      'policy of a database object.\n\n' +
+      'These commands change only the ref file and never connect to a database. A\n' +
+      "database takes on a ref's policies only in a deploy its owner gives consent\n" +
+      'to; the help of db migrate says how.',
+  },
   ...telemetry.groups,
 } as const;
 
@@ -116,6 +133,9 @@ export function createBinCommands(createClient: CreateControlClient): MountedTre
     'migration plan': createMigrationPlanCommand(createClient),
     'migration ref delete': refDeleteCommand,
     'migration ref list': refListCommand,
+    'migration ref policy delete': refPolicyDeleteCommand,
+    'migration ref policy set': refPolicySetCommand,
+    'migration ref policy show': refPolicyShowCommand,
     'migration ref set': refSetCommand,
     'migration show': migrationShowCommand,
     'migration status': migrationStatusCommand,
