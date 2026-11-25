@@ -1,3 +1,4 @@
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { mergeTables } from '../src/merge-tables';
 import { baseTable, column, ownTable, table } from './merge-tables-support';
@@ -15,19 +16,23 @@ describe('mergeTables', () => {
     ]);
   });
 
-  it('refuses two tables with the same name in one namespace', () => {
+  it.each([
+    ['public', 'buildSqlContractFromDefinition: duplicate table "task" in namespace "public".'],
+    [UNBOUND_NAMESPACE_ID, 'buildSqlContractFromDefinition: duplicate table "task".'],
+  ])('refuses two tables with the same name in namespace %s', (namespaceId, message) => {
     expect(() =>
       mergeTables(
         [
-          ownTable(table('task', [column('Task', 'id')])),
-          ownTable(table('task', [column('Job', 'id')])),
+          ownTable(table('task', [column('Task', 'id')], namespaceId)),
+          ownTable(table('task', [column('Job', 'id')], namespaceId)),
         ],
         [],
       ),
     ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.NAME_DUPLICATE',
-        meta: { kind: 'table', name: 'task', namespaceId: 'public' },
+        message,
+        meta: { kind: 'table', name: 'task', namespaceId },
       }),
     );
   });

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   lookUpRegistryKeywords,
+  lookUpRegistryPeers,
   REGISTRY_LOOKUP_TIMEOUT_MILLIS,
   REGISTRY_MANIFEST_LIMIT_BYTES,
 } from '../../src/orm/registry-keywords';
@@ -248,5 +249,36 @@ describe('lookUpRegistryKeywords', () => {
     run.abort(reason);
 
     await expect(pending).rejects.toBe(reason);
+  });
+});
+
+describe('lookUpRegistryPeers', () => {
+  const options = { env: {}, signal: new AbortController().signal };
+
+  it('reads the version and peers a version publishes', async () => {
+    answer(
+      manifest({
+        name: '@prisma/orm-family-sql',
+        version: '8.1.0',
+        peerDependencies: { '@prisma/orm-framework': '8.1.0', typescript: '>=5.9' },
+      }),
+    );
+
+    const result = await lookUpRegistryPeers('@prisma/orm-family-sql', '8.1.0', options);
+
+    expect({ result, urls: requested.map(({ url }) => url) }).toEqual({
+      result: {
+        version: '8.1.0',
+        peerDependencies: { '@prisma/orm-framework': '8.1.0', typescript: '>=5.9' },
+        peerDependenciesMeta: undefined,
+      },
+      urls: ['https://registry.npmjs.org/@prisma%2Form-family-sql/8.1.0'],
+    });
+  });
+
+  it('gives nothing for a version the registry does not have', async () => {
+    answer(manifest({ error: 'not found' }, 404));
+
+    expect(await lookUpRegistryPeers('@prisma/orm-framework', '0.0.0', options)).toBeUndefined();
   });
 });

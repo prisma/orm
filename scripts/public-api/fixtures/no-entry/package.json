@@ -1,0 +1,8 @@
+{
+  "name": "fixture-no-entry",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json"
+  }
+}

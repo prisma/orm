@@ -1,6 +1,9 @@
 {
   "cSpell.words": ["arktype", "codegen", "Lowerer", "pgvector"],
   "editor.defaultFormatter": "biomejs.biome",
+  "search.exclude": {
+    "packages/9-public/@prisma/*/api.txt": true
+  },
   "typescript.tsdk": "node_modules/typescript/lib",
   "[typescript]": {
     "editor.defaultFormatter": "biomejs.biome"

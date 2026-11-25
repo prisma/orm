@@ -19,7 +19,11 @@
   },
   "dependencies": {
     "@prisma/orm-better-auth": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "better-auth": "1.7.27",
     "dotenv": "^17.4.2",
     "next": "^16.4.5",

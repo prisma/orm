@@ -2,6 +2,7 @@ import type { ForeignKeyAuthoringInput } from '@internal/sql-contract/foreign-ke
 import type { TableProperties } from './contract-definition';
 import { contractError } from './contract-errors';
 import type { ColumnSite } from './declaration-sites';
+import { inNamespace } from './namespace-id';
 import {
   columnsPhrase,
   mergeSharedTable,
@@ -52,7 +53,7 @@ export function mergeTables(
     if (tables.has(key)) {
       throw contractError(
         'CONTRACT.NAME_DUPLICATE',
-        `buildSqlContractFromDefinition: duplicate table "${table.tableName}" in namespace "${table.namespaceId}".`,
+        `buildSqlContractFromDefinition: duplicate table "${table.tableName}"${inNamespace(table.namespaceId)}.`,
         { meta: { kind: 'table', name: table.tableName, namespaceId: table.namespaceId } },
       );
     }
@@ -71,7 +72,7 @@ export function mergeTables(
     if (tableNodeKeys.has(key)) {
       throw contractError(
         'CONTRACT.NAME_DUPLICATE',
-        `Table "${tableNode.tableName}" in namespace "${tableNode.namespaceId}" is declared by two table nodes.`,
+        `Table "${tableNode.tableName}"${inNamespace(tableNode.namespaceId)} is declared by two table nodes.`,
         { meta: { kind: 'table', name: tableNode.tableName, namespaceId: tableNode.namespaceId } },
       );
     }

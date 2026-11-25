@@ -1,3 +1,5 @@
+import { inNamespace } from './namespace-id';
+
 /**
  * Where a column or a table reference was declared: by a model, or by a table node. Errors name the declaration the author wrote. A table node is named with its namespace, because only the namespace tells two table nodes of one name apart.
  */
@@ -35,7 +37,7 @@ export function columnSiteMeta(site: ColumnSite): Record<string, string> {
 export function referenceOwnerSubject(owner: ReferenceOwner): string {
   return owner.kind === 'model'
     ? `model "${owner.modelName}"`
-    : `table "${owner.tableName}" in namespace "${owner.namespaceId}"`;
+    : `table "${owner.tableName}"${inNamespace(owner.namespaceId)}`;
 }
 
 /** The error metadata that locates the owner. */

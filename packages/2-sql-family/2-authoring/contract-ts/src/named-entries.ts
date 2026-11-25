@@ -1,4 +1,5 @@
 import { contractError } from './contract-errors';
+import { inNamespace } from './namespace-id';
 
 /** What a name names, and where: the kind of entry it keys, with what the place it was declared tells. */
 export type NameSite =
@@ -38,13 +39,11 @@ function nameSiteSubject(site: NameSite): string {
       }
       return 'A namespace';
     case 'table':
-      return `A table in namespace "${site.namespaceId}"`;
+      return `A table${inNamespace(site.namespaceId)}`;
     case 'column':
       return `A column of table "${site.tableName}"`;
     case 'model':
-      return site.namespaceId === undefined
-        ? 'A model'
-        : `A model in namespace "${site.namespaceId}"`;
+      return `A model${inNamespace(site.namespaceId)}`;
     case 'field':
       return site.modelName === undefined
         ? 'A field of a model'
@@ -52,9 +51,9 @@ function nameSiteSubject(site: NameSite): string {
     case 'relation':
       return `A relation of model "${site.modelName}"`;
     case 'enum':
-      return `An enum in namespace "${site.namespaceId}"`;
+      return `An enum${inNamespace(site.namespaceId)}`;
     case 'valueSet':
-      return `A value set in namespace "${site.namespaceId}"`;
+      return `A value set${inNamespace(site.namespaceId)}`;
     case 'valueObject':
       return 'A value object';
     case 'valueObjectField':
@@ -64,7 +63,7 @@ function nameSiteSubject(site: NameSite): string {
     case 'extensionAlias':
       return 'An extension alias';
     case 'entity':
-      return `A "${site.entityKind}" entity in namespace "${site.namespaceId}"`;
+      return `A "${site.entityKind}" entity${inNamespace(site.namespaceId)}`;
   }
 }
 
