@@ -56,6 +56,7 @@
       "lateral": true,
       "limit": true,
       "orderBy": true,
+      "pgvector.cosine": true,
       "returning": true
     },
     "sql": {
@@ -78,7 +79,7 @@
       "scalarList": true
     }
   },
-  "profileHash": "833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174",
+  "profileHash": "05fee026a2eb255ad9dc9df83725541c32dedb96fec1dea5ea51715c03c45ff2",
   "meta": {},
   "storage": {
     "storageHash": "091d0544d66a5717fdb9008a63b1412960dce78bf56ad81f2ef92edc9bff2fad",

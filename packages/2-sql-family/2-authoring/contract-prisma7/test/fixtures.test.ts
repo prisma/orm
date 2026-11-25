@@ -7,7 +7,7 @@ import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { basename, dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { prisma7Contract } from '../src/provider';
-import { composedExtensionsOf, postgresSourceContext, withComposedExtensions } from './support';
+import { composedExtensionsOf, postgresSourceContextWithPacks } from './support';
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const update = process.env['UPDATE_PRISMA7_FIXTURES'] === '1';
@@ -167,8 +167,8 @@ describe('Prisma 7 fixtures', () => {
         : join(fixturesDir, caseName, 'schema.prisma');
       const config = prisma7Contract(schemaPath, { binding: prisma7PostgresBinding });
       const result = await config.source.load(
-        withComposedExtensions(
-          postgresSourceContext([schemaPath]),
+        await postgresSourceContextWithPacks(
+          [schemaPath],
           composedExtensionsOf(join(fixturesDir, caseName)),
         ),
       );

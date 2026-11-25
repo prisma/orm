@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import type { ContractSourceContext } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
@@ -55,27 +55,24 @@ export function composedExtensionsOf(caseDirectory: string): readonly string[] {
 
 const extensionPacksDir = join(fixturesDir, '../../../../../3-extensions');
 
-/** The contract the extension pack `packId` publishes, read from the pack's `src/contract.json`. */
-export function packContract(packId: string): Contract {
-  const path = join(extensionPacksDir, packId, 'src/contract.json');
-  return new PostgresContractSerializer().deserializeContract(
-    JSON.parse(readFileSync(path, 'utf8')),
+/**
+ * The control descriptor of the extension pack `packId`, loaded from the pack's build output by id: the pack depends on this package through the Postgres facade, so it cannot be a dependency here.
+ */
+async function packDescriptor(
+  packId: string,
+): Promise<ControlExtensionDescriptor<'sql', 'postgres'>> {
+  const module: { readonly default: ControlExtensionDescriptor<'sql', 'postgres'> } = await import(
+    pathToFileURL(join(extensionPacksDir, packId, 'dist/control.mjs')).href
   );
+  return module.default;
 }
 
-/** `context` with the extension packs whose ids are `packIds` composed as well, each with the contract it publishes. */
-export function withComposedExtensions(
-  context: ContractSourceContext,
+/** The composition `prisma contract emit` builds for a Postgres config with the extension packs whose ids are `packIds`. */
+export async function postgresSourceContextWithPacks(
+  resolvedInputs: readonly string[],
   packIds: readonly string[],
-): ContractSourceContext {
-  return {
-    ...context,
-    composedExtensions: [...context.composedExtensions, ...packIds],
-    composedExtensionContracts: new Map([
-      ...context.composedExtensionContracts,
-      ...packIds.map((packId): [string, Contract] => [packId, packContract(packId)]),
-    ]),
-  };
+): Promise<ContractSourceContext> {
+  return postgresSourceContext(resolvedInputs, await Promise.all(packIds.map(packDescriptor)));
 }
 
 /** The Postgres composition with one default function unregistered. */

@@ -101,4 +101,4 @@ A directory input is read file by file in sorted path order, nested directories 
 
 ## Tests
 
-`test/fixtures/<case>/schema.prisma` with either `expected-contract.json` or `expected-diagnostics.json`; `test/fixtures.test.ts` runs every case through the real Postgres pack. Set `UPDATE_PRISMA7_FIXTURES=1` to rewrite the expected files after an intentional change. A case with a `composed-extensions.json` (a list of extension pack ids) is read with those packs composed.
+`test/fixtures/<case>/schema.prisma` with either `expected-contract.json` or `expected-diagnostics.json`; `test/fixtures.test.ts` runs every case through the real Postgres pack. Set `UPDATE_PRISMA7_FIXTURES=1` to rewrite the expected files after an intentional change. A case with a `composed-extensions.json` (a list of extension pack ids) is read with those packs composed, each pack's control descriptor loaded from its build output, so `pnpm build` must have run.
