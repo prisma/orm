@@ -47,6 +47,7 @@ import {
   documentCollectionOf,
   isRootModel,
   modelCoordinates,
+  modelsADropLoses,
   sameModel,
 } from './mongo-model-coordinates';
 import {
@@ -735,6 +736,7 @@ interface MoveDestination {
 /** Models the plan without the statements removes from a collection that keeps other models, which still read their documents. */
 interface LeftBehind {
   readonly moving: readonly ModelCoordinate[];
+  /** The root models the destination stores in the source collection, which read the documents left there. */
   readonly staying: readonly ModelCoordinate[];
   /** The source collection, by its name after the plan's renames. */
   readonly from: string;
@@ -759,7 +761,9 @@ function removedText(
   const moving = left.flatMap((each) => each.moving);
   const one = moving.length === 1;
   const stillRead = ({ staying }: LeftBehind) =>
-    `${modelsText(staying)} still read${staying.length === 1 ? 's' : ''} them`;
+    staying.length === 0
+      ? 'no model reads them'
+      : `${modelsText(staying)} still read${staying.length === 1 ? 's' : ''} them`;
   const [only] = left;
   const places = left.map(
     (each) =>
@@ -868,6 +872,13 @@ function sharedRouteOf(input: {
       : group.changes;
   const leavingModels = (group: RefusedGroup, plan: StatementPlan | undefined) =>
     leavingChanges(group, plan).flatMap((change) => change.renames.map((rename) => rename.from));
+  /** The models the plan without the statements asks about: every model its drop of the source loses, or the models that leave. */
+  const askedModels = (group: RefusedGroup, plan: StatementPlan | undefined) => {
+    const leaving = leavingModels(group, plan);
+    if (!dropsSource(group, plan)) return leaving;
+    const lost = modelsADropLoses(fromContract, sourceOf(group));
+    return [...leaving, ...lost.filter((model) => !leaving.some((each) => sameModel(each, model)))];
+  };
   const leavesBehind = (group: RefusedGroup, plan: StatementPlan | undefined) =>
     group.shared.kind === 'split' &&
     leavingChanges(group, plan).every((change) =>
@@ -889,7 +900,13 @@ function sharedRouteOf(input: {
     );
   const opening = `Leave out ${statementsText} to plan the change without moving them.`;
   const leftBehindGroup = (group: RefusedGroup, plan: StatementPlan | undefined) =>
-    leavesBehind(group, plan) && staysIn(group).length > 0 && !dropsSource(group, plan);
+    leavesBehind(group, plan) && !dropsSource(group, plan);
+  const readersOfSource = (group: RefusedGroup, plan: StatementPlan | undefined) =>
+    modelCoordinates(contract).filter(
+      (model) =>
+        documentCollectionOf(contract, model) === sourceAfter(group, plan) &&
+        isRootModel(contract, model),
+    );
 
   /** What the plan without the statements does to each group's models; `kept` when the route then keeps the data it asks about. */
   const consequences = (plan: StatementPlan | undefined, kept: boolean): string => {
@@ -902,7 +919,7 @@ function sharedRouteOf(input: {
             removedText(
               left.map((group) => ({
                 moving: movingModelsOf(group),
-                staying: staysIn(group),
+                staying: readersOfSource(group, plan),
                 from: sourceAfter(group, plan),
               })),
               byCollection(
@@ -923,7 +940,7 @@ function sharedRouteOf(input: {
         ? []
         : [
             askedText(
-              asked.flatMap((group) => leavingModels(group, plan)),
+              asked.flatMap((group) => askedModels(group, plan)),
               kept,
             ),
           ]),
@@ -993,13 +1010,20 @@ function sharedRouteOf(input: {
         ),
       ),
     );
-    const askedModels = asked.flatMap((group) => leavingModels(group, plan));
+    const asking = asked.flatMap((group) => askedModels(group, plan));
+    const copied = asked.flatMap((group) => leavingModels(group, plan));
+    const uncopied = asking.filter((model) => !copied.some((each) => sameModel(each, model)));
+    const plural = asked.length === 1 ? '' : 's';
     const dropped = joinedList(asked.map((group) => `"${sourceAfter(group, plan)}"`));
+    const kept =
+      uncopied.length === 0
+        ? `so they keep the documents, and the drop removes only the emptied collection${plural}.`
+        : `so they keep the documents of ${modelsText(copied)}. No copy moves the documents of ${modelsText(uncopied)}: the drop deletes them.`;
     const answer =
-      askedModels.length === 0
-        ? ''
-        : `, and answer its question about ${modelsText(askedModels)} with the --delete it offers: the copies below run before the plan drops collection${asked.length === 1 ? '' : 's'} ${dropped}, so they keep the documents, and the drop removes only the emptied collection${asked.length === 1 ? '' : 's'}`;
-    return `${consequences(plan, true)}\n\nWith migration plan, keep the documents by moving them in the migration that plan writes. Plan the change without ${statementsText}${answer}.\n\n${documentMovesText(moves)}`;
+      asking.length === 0
+        ? '.'
+        : `, and answer its question about ${modelsText(asking)} with the --delete it offers: the copies below run before the plan drops collection${plural} ${dropped}, ${kept}`;
+    return `${consequences(plan, true)}\n\nWith migration plan, keep the documents by moving them in the migration that plan writes. Plan the change without ${statementsText}${answer}\n\n${documentMovesText(moves)}`;
   };
 
   let built: string | undefined;

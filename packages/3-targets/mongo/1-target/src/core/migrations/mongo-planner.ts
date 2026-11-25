@@ -35,7 +35,12 @@ import {
 import { documentsNotRewrittenWarnings } from './mongo-documents-not-rewritten';
 import { planEnumValueRewrites } from './mongo-enum-value-planning';
 import { planFieldFills } from './mongo-field-fills';
-import { documentCollectionOf, isRootModel, modelCoordinates } from './mongo-model-coordinates';
+import {
+  documentCollectionOf,
+  isRootModel,
+  modelCoordinates,
+  modelsADropLoses,
+} from './mongo-model-coordinates';
 import {
   type DiscriminatorFilter,
   type OrderedRewrite,
@@ -83,24 +88,6 @@ export type PlanCallsResult =
       readonly warnings: readonly MigrationPlannerConflict[];
     }
   | { readonly kind: 'failure'; readonly conflicts: MigrationPlannerConflict[] };
-
-/**
- * The models of `fromContract` whose documents a drop of `collection` loses, sorted by name: its
- * root models, which variants stored there belong to, else the variants that store their documents
- * there themselves.
- */
-function modelsADropLoses(
-  fromContract: ContractWithDomain,
-  collection: string,
-): readonly ModelCoordinate[] {
-  const storing = modelCoordinates(fromContract).filter(
-    (model) => documentCollectionOf(fromContract, model) === collection,
-  );
-  const roots = storing.filter((model) => isRootModel(fromContract, model));
-  return [...(roots.length > 0 ? roots : storing)].sort((a, b) =>
-    modelDisplayName(a).localeCompare(modelDisplayName(b)),
-  );
-}
 
 /**
  * Each collection drop of the plan, with every model whose documents it loses. When such a model

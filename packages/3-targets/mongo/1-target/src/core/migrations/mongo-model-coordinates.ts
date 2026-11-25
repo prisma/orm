@@ -1,5 +1,5 @@
 import { asNamespaceId, type ContractWithDomain } from '@internal/contract/types';
-import type { ModelCoordinate } from '@internal/framework-components/control';
+import { type ModelCoordinate, modelDisplayName } from '@internal/framework-components/control';
 import { collectionOfModel, embeddingModelOf, mongoModelsOf } from '@internal/mongo-contract';
 
 export function modelCoordinates(contract: ContractWithDomain): readonly ModelCoordinate[] {
@@ -47,5 +47,23 @@ export function rootModelOf(contract: ContractWithDomain, model: ModelCoordinate
 export function hasCollection(contract: ContractWithDomain, name: string): boolean {
   return Object.values(contract.storage.namespaces).some((namespace) =>
     Object.hasOwn(namespace.entries['collection'] ?? {}, name),
+  );
+}
+
+/**
+ * The models of `fromContract` whose documents a drop of `collection` loses, sorted by name: its
+ * root models, which variants stored there belong to, else the variants that store their documents
+ * there themselves.
+ */
+export function modelsADropLoses(
+  fromContract: ContractWithDomain,
+  collection: string,
+): readonly ModelCoordinate[] {
+  const storing = modelCoordinates(fromContract).filter(
+    (model) => documentCollectionOf(fromContract, model) === collection,
+  );
+  const roots = storing.filter((model) => isRootModel(fromContract, model));
+  return [...(roots.length > 0 ? roots : storing)].sort((a, b) =>
+    modelDisplayName(a).localeCompare(modelDisplayName(b)),
   );
 }
