@@ -207,7 +207,7 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 
 **What it achieves.**
 
-- What a script may depend on is written down: each command's name, flags, exit codes and every output a program reads. That is all output not written for a person: the `--json` documents, the data lines a command prints to stdout, and the Markdown output, which agents read.
+- What a script may depend on is written down: each command's name, flags, exit codes and every output a program reads. That is all output not written for a person: the `--json` documents, the data lines a command prints to stdout, the Markdown output, which agents read, and any file a command writes for a program to read, such as a report.
 - Each of those outputs follows one set of principles, and the ones that do not are corrected before `8.0.0`, because a format cannot change after it.
 - A check in CI fails when any of these changes incompatibly, as project 4's does for exports.
 
@@ -218,6 +218,8 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 - Bring each command into line, and add the check.
 
 **The example that raised it.** `prisma orm init --json`, whose schema is in `packages/1-framework/3-tooling/cli/src/commands/init/output.ts` and is published as `@prisma/orm-toolchain/cli/init-output`. Its `package` field is one string, the database package, although `init` installs many packages, which it reports separately under `packagesInstalled`. Its `target` field held `'postgres'` or `'mongodb'` until prisma/orm#31093; since then it holds a short name for a database in Prisma's list and a package name for any other, so a reader cannot tell which kind of value it has. Nothing documented reads either field.
+
+**Outside it.** Commands that other products add to the `prisma` tool, such as Composer's `prisma deploy` and its `--report` file. The policy treats Composer as a user of the ORM, not as part of it. Their formats are those products' to keep stable.
 
 **Already decided.** The input flag `--target` keeps its name. Project 6 changes no JSON format.
 
