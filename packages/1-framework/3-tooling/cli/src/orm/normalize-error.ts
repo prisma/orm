@@ -65,7 +65,8 @@ function conformsToProtocol(error: unknown): error is CliStructuredError {
 
 /**
  * Turns the transitional `fix` prose into typed actions. A multi-line fix is
- * several pieces of advice, so it becomes one action per line.
+ * several pieces of advice, so it becomes one action per line. A line keeps its
+ * indentation, which lays out code the advice shows.
  */
 function actionsFromFix(fix: string | undefined): readonly NextAction[] {
   if (fix === undefined) {
@@ -73,7 +74,7 @@ function actionsFromFix(fix: string | undefined): readonly NextAction[] {
   }
   return fix
     .split('\n')
-    .map((line) => line.trim())
+    .map((line) => line.trimEnd())
     .filter((line) => line.length > 0)
     .map((label) => ({ kind: 'user-choice', label }) satisfies NextAction);
 }

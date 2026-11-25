@@ -31,7 +31,7 @@ describe('normalizeError', () => {
       });
     });
 
-    it('splits multi-line fix prose into one action per line', () => {
+    it('splits multi-line fix prose into one action per line, each with its indentation', () => {
       const multiline = new CliStructuredError(
         'MIGRATION.PATH_UNREACHABLE',
         'Cannot reach target',
@@ -42,8 +42,8 @@ describe('normalizeError', () => {
 
       expect(normalizeError(multiline).nextActions).toEqual([
         { kind: 'user-choice', label: 'Plan the missing edge, then apply it:' },
-        { kind: 'user-choice', label: '1. {bin} migration plan' },
-        { kind: 'user-choice', label: '2. {bin} db migrate' },
+        { kind: 'user-choice', label: '  1. {bin} migration plan' },
+        { kind: 'user-choice', label: '  2. {bin} db migrate' },
       ]);
     });
   });
@@ -202,6 +202,19 @@ describe('toEngineDiagnostic', () => {
       where: { path: '/app/prisma.config.ts' },
       nextActions: [{ kind: 'user-choice', label: "Run '{bin} orm init' to create a config file" }],
     });
+  });
+
+  it('keeps the indentation of a fix line, so code in the advice keeps its layout', () => {
+    const raised = new CliStructuredError('MIGRATION.PLANNING_FAILED', 'Planning failed', {
+      fix: 'Add this call:\n\n  rawAggregate("users", [\n    { $match: {} },\n  ])  \n',
+    });
+
+    expect(toEngineDiagnostic(raised).nextActions.map(({ label }) => label)).toEqual([
+      'Add this call:',
+      '  rawAggregate("users", [',
+      '    { $match: {} },',
+      '  ])',
+    ]);
   });
 
   it('always carries a next-action list', () => {
