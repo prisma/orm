@@ -165,7 +165,7 @@ Each project brings its code changes, its checks and its documentation together,
 | 10 | ⏳ | Make the changes an upgrade needs with a deterministic tool, not a guide | Later | Will | Not started | |
 | 11 | ⏳ | Follow each maker's lifetime for supported versions of Node.js, TypeScript and databases, and test them in CI | Later | Will | Not started | |
 | 12 | ⏳ | Publish the compatibility policy in the user docs | Aim | Will | Not started. Written last | |
-| 13 | ⏳ | Keep scripts and agents that drive the command-line tool working, by designing its flags, exit codes and machine-readable output before `8.0.0` and checking them in CI | Must | Will | Not started. Added 2026-11-25. Needs a design discussion | |
+| 13 | ⏳ | Keep scripts and agents that drive the `prisma` command-line tool working, by designing every command's flags, exit codes and machine-readable output before `8.0.0` and checking them in CI | Must | Will | Not started. Added 2026-11-25. Needs a design discussion | |
 
 ## Databases
 
