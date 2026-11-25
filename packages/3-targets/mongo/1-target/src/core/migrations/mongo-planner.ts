@@ -287,9 +287,12 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
 
   /**
    * The renames of the plan. The refusals whose route tells the user to plan without some statements
-   * read that plan: this planner's whole plan of the same contracts without them, made once. A plan
-   * without them has no statement the shared-collection rule refuses, so it builds no route of its
-   * own, and there is one level of re-planning.
+   * read that plan: this planner's whole plan of the same contracts without them. Each nested plan
+   * has fewer statements, so re-planning ends. It can go deeper than one level when leaving a
+   * statement out pairs an origin model with a destination model of the same name, which the CLI's
+   * resolver prevents by refusing a rename onto a name the origin has or from a name the
+   * destination has. Each level makes its plan without the statements once, so the re-planning
+   * stays linear in the number of levels.
    */
   #statementPlanOf(
     options: MongoPlanOptions,
