@@ -283,3 +283,35 @@ describe('MongoMigrationPlanner, a route whose move has several copies', () => {
     );
   });
 });
+
+describe('MongoMigrationPlanner, a route when the plan without the statements drops the source collection', () => {
+  const from = contract(
+    'from',
+    {
+      User: { collection: 'users', fields: ['_id', 'user'] },
+      Admin: ADMIN,
+      Auditor: { collection: 'users', fields: ['_id', 'auditor'] },
+    },
+    { users: {} },
+  );
+  const to = contract(
+    'to',
+    {
+      Member: { collection: 'members', fields: ['_id', 'user'] },
+      Admin: { collection: 'admins', fields: ['_id', 'admin'] },
+      Auditor: { collection: 'auditors', fields: ['_id', 'auditor'] },
+    },
+    { members: {}, admins: {}, auditors: {} },
+  );
+  const schema = [schemaCollection('users')];
+
+  it('moves the documents of every model leaving the collection, and says to answer the drop question with --delete', () => {
+    expect({
+      followedDrops: dropsOf(plan({ from, to, schema })),
+      why: routeOf(plan({ from, to, schema, statements: [renameModel('User', 'Member')] })),
+    }).toEqual({
+      followedDrops: ['Drop collection users', 'Drop collection users', 'Drop collection users'],
+      why: 'A collection rename moves every document of the collection, and the documents of models "Admin" and "Auditor" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write.\n\nLeave out --rename User:Member to plan the change without moving them. The plan then asks about the data of models "User", "Admin" and "Auditor", which it drops. Its question offers this same rename again, which is refused again for the same reason. Answered with the --delete it also offers, it plans the change; under db update that deletes the data.\n\nWith migration plan, keep the documents by moving them in the migration that plan writes. Plan the change without --rename User:Member, and answer its question about models "User", "Admin" and "Auditor" with the --delete it offers: the copies below run before the plan drops collection "users", so they keep the documents, and the drop removes only the emptied collection.\n\nFor model "User", in the operations of the migration.ts it writes, right after the creation of collection "members" and before the plan\'s own operations on collection "users", add a dataTransform. Its run copies the documents of model "User" into collection "members":\n\n  rawAggregate("users", [\n    { $match: <a filter that selects only those documents> },\n    { $merge: { into: "members" } },\n  ])\n\nAfter it, add the operation that deletes the documents of model "User" from collection "users":\n\n  deleteDocuments({ collection: "users", filter: <the same filter> })\n\nThe filter must tell those documents apart from the other documents of collection "users", which can hold the same values in the fields they share, a discriminator value among them. Filter by a field only model "User" stores. If it stores none, no field tells its documents apart: select them by their _id values instead.\n\nFor model "Admin", in the operations of the migration.ts it writes, right after the creation of collection "admins" and before the plan\'s own operations on collection "users", add a dataTransform. Its run copies the documents of model "Admin" into collection "admins":\n\n  rawAggregate("users", [\n    { $match: <a filter that selects only those documents> },\n    { $merge: { into: "admins" } },\n  ])\n\nAfter it, add the operation that deletes the documents of model "Admin" from collection "users":\n\n  deleteDocuments({ collection: "users", filter: <the same filter> })\n\nThe filter must tell those documents apart from the other documents of collection "users", which can hold the same values in the fields they share, a discriminator value among them. Filter by a field only model "Admin" stores. If it stores none, no field tells its documents apart: select them by their _id values instead.\n\nFor model "Auditor", in the operations of the migration.ts it writes, right after the creation of collection "auditors" and before the plan\'s own operations on collection "users", add a dataTransform. Its run copies the documents of model "Auditor" into collection "auditors":\n\n  rawAggregate("users", [\n    { $match: <a filter that selects only those documents> },\n    { $merge: { into: "auditors" } },\n  ])\n\nAfter it, add the operation that deletes the documents of model "Auditor" from collection "users":\n\n  deleteDocuments({ collection: "users", filter: <the same filter> })\n\nThe filter must tell those documents apart from the other documents of collection "users", which can hold the same values in the fields they share, a discriminator value among them. Filter by a field only model "Auditor" stores. If it stores none, no field tells its documents apart: select them by their _id values instead.\n\nAll 3 dataTransforms go in that one migration.ts. Run it to emit its ops.json, and apply it once with db migrate.\n\nStop writes to each collection the documents move out of until the apply ends: the delete also removes a document of those models written there after the copy, and that document was not copied. $merge matches documents by _id, so a moved document whose _id a document of the collection it moves into already holds is merged into that document. Check first that no _id is in both collections.\n\nIf the apply stops, fix what stopped it and run db migrate again.',
+    });
+  });
+});

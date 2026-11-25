@@ -40,7 +40,7 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
-import { renameInSchema } from './mongo-collection-plan';
+import { collectionPlanOf, collectionPlanSchemasOf, renameInSchema } from './mongo-collection-plan';
 import { collectionControlPolicy, managedOnBothSides } from './mongo-control-policy';
 import { documentMoveOf, type MovingModel } from './mongo-document-moves';
 import {
@@ -811,9 +811,33 @@ function sharedRouteOf(input: {
   const statementsText = joinedList(
     leftOutStatements.map((each) => renameFlag(each, fromContract, contract)),
   );
-  const leavesBehind = (group: RefusedGroup) =>
+  let leftOutResult: { readonly value: ReturnType<PlanWithout> } | undefined;
+  const leftOutPlan = () => {
+    leftOutResult ??= { value: input.planWithout(leftOutStatements) };
+    return leftOutResult.value;
+  };
+  const sourceOf = (group: RefusedGroup) => group.changes[0]?.from ?? '';
+  const sourceAfter = (group: RefusedGroup, plan: StatementPlan | undefined) =>
+    plan?.renamedCollections.get(sourceOf(group)) ?? sourceOf(group);
+  const dropsSource = (group: RefusedGroup, plan: StatementPlan | undefined) => {
+    if (plan === undefined || group.shared.kind !== 'split') return false;
+    const planned = collectionPlanOf(
+      sourceAfter(group, plan),
+      collectionPlanSchemasOf(plan.schema, contract),
+      { contract, fromContract },
+    );
+    return planned.kind === 'planned' && planned.diff.collDrops.length > 0;
+  };
+  /** The changes that move documents out of a group's source: every one from it when the plan without the statements drops it. */
+  const leavingChanges = (group: RefusedGroup, plan: StatementPlan | undefined) =>
+    dropsSource(group, plan)
+      ? input.collections.changes.filter((change) => change.from === sourceOf(group))
+      : group.changes;
+  const leavingModels = (group: RefusedGroup, plan: StatementPlan | undefined) =>
+    leavingChanges(group, plan).flatMap((change) => change.renames.map((rename) => rename.from));
+  const leavesBehind = (group: RefusedGroup, plan: StatementPlan | undefined) =>
     group.shared.kind === 'split' &&
-    group.changes.every((change) =>
+    leavingChanges(group, plan).every((change) =>
       change.renames.every((renamed) => isRootModel(fromContract, renamed.from)),
     );
   const becomesVariant = (group: RefusedGroup) =>
@@ -831,21 +855,13 @@ function sharedRouteOf(input: {
         !renames.some((renamed) => sameModel(renamed.to, model)),
     );
   const opening = `Leave out ${statementsText} to plan the change without moving them.`;
-  let leftOutResult: { readonly value: ReturnType<PlanWithout> } | undefined;
-  const leftOutPlan = () => {
-    leftOutResult ??= { value: input.planWithout(leftOutStatements) };
-    return leftOutResult.value;
-  };
-  const leftBehindGroup = (group: RefusedGroup) => leavesBehind(group) && staysIn(group).length > 0;
+  const leftBehindGroup = (group: RefusedGroup, plan: StatementPlan | undefined) =>
+    leavesBehind(group, plan) && staysIn(group).length > 0 && !dropsSource(group, plan);
 
   /** What the plan without the statements does to each group's models; `kept` when the route then keeps the data it asks about. */
   const consequences = (plan: StatementPlan | undefined, kept: boolean): string => {
-    const left = groups.filter(leftBehindGroup);
-    const asked = groups.filter((group) => !leftBehindGroup(group));
-    const fromOf = (group: RefusedGroup) => {
-      const from = group.changes[0]?.from ?? '';
-      return plan?.renamedCollections.get(from) ?? from;
-    };
+    const left = groups.filter((group) => leftBehindGroup(group, plan));
+    const asked = groups.filter((group) => !leftBehindGroup(group, plan));
     const removed =
       left.length === 0
         ? []
@@ -854,7 +870,7 @@ function sharedRouteOf(input: {
               left.map((group) => ({
                 moving: movingModelsOf(group),
                 staying: staysIn(group),
-                from: fromOf(group),
+                from: sourceAfter(group, plan),
               })),
               byCollection(
                 left.flatMap((group) =>
@@ -870,7 +886,14 @@ function sharedRouteOf(input: {
     return [
       opening,
       ...removed,
-      ...(asked.length === 0 ? [] : [askedText(asked.flatMap(movingModelsOf), kept)]),
+      ...(asked.length === 0
+        ? []
+        : [
+            askedText(
+              asked.flatMap((group) => leavingModels(group, plan)),
+              kept,
+            ),
+          ]),
     ].join(' ');
   };
 
@@ -879,6 +902,7 @@ function sharedRouteOf(input: {
 
   const handWritten = (): string => {
     const leftOut = leftOutPlan();
+    const plan = leftOut.ok ? leftOut.value : undefined;
     const what = joinedList(
       groups.map((group) => {
         if (group.shared.kind === 'merged') {
@@ -892,21 +916,21 @@ function sharedRouteOf(input: {
             : `the documents of ${moving}, and those of ${modelsText(storedElsewhere)} that collection "${to}" does not already hold, into collection "${to}"`;
         }
         return joinedList(
-          group.changes.map(
+          leavingChanges(group, plan).map(
             (change) =>
               `the documents of ${modelsText(change.renames.map((renamed) => renamed.from))} into collection "${change.to}"`,
           ),
         );
       }),
     );
-    return `${consequences(leftOut.ok ? leftOut.value : undefined, false)}${refusedText(leftOut)}\n\n${handWrittenRoute(what)}`;
+    return `${consequences(plan, false)}${refusedText(leftOut)}\n\n${handWrittenRoute(what)}`;
   };
 
   const leaveBehind = (): string => {
     const leftOut = leftOutPlan();
     if (!leftOut.ok) return `${consequences(undefined, false)}${refusedText(leftOut)}`;
     const plan = leftOut.value;
-    const asked = groups.filter((group) => staysIn(group).length === 0);
+    const asked = groups.filter((group) => !leftBehindGroup(group, plan));
     const match: ModelMatchInput = {
       statements,
       models,
@@ -920,7 +944,7 @@ function sharedRouteOf(input: {
       collectionAfterRenames: (name) => name,
     };
     const moves = groups.flatMap((group) =>
-      group.changes.map((change) =>
+      leavingChanges(group, plan).map((change) =>
         documentMoveOf(
           {
             schema: plan.schema,
@@ -936,13 +960,8 @@ function sharedRouteOf(input: {
         ),
       ),
     );
-    const askedModels = asked.flatMap(movingModelsOf);
-    const dropped = joinedList(
-      asked.map(
-        (group) =>
-          `"${plan.renamedCollections.get(group.changes[0]?.from ?? '') ?? group.changes[0]?.from}"`,
-      ),
-    );
+    const askedModels = asked.flatMap((group) => leavingModels(group, plan));
+    const dropped = joinedList(asked.map((group) => `"${sourceAfter(group, plan)}"`));
     const answer =
       askedModels.length === 0
         ? ''
@@ -956,7 +975,10 @@ function sharedRouteOf(input: {
     printerKind: printerGroup.shared.kind,
     statementsText,
     text: () => {
-      built ??= groups.every(leavesBehind) ? leaveBehind() : handWritten();
+      if (built !== undefined) return built;
+      const leftOut = leftOutPlan();
+      const plan = leftOut.ok ? leftOut.value : undefined;
+      built = groups.every((group) => leavesBehind(group, plan)) ? leaveBehind() : handWritten();
       return built;
     },
     leftOutRefusals: () => {

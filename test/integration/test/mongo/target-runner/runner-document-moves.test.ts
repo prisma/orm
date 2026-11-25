@@ -584,4 +584,72 @@ describe('a plan that moves documents into a collection whose validator it then 
       guests: [{ b: 'Bob' }, { visitor: 'Vic' }],
     });
   });
+
+  it('keeps the documents of every model when one is renamed and the others move to their own collections, and the plan without the statement drops the source', async () => {
+    const from = contract(
+      'from',
+      {
+        User: { collection: 'users', fields: { user: 'user' } },
+        Admin: { collection: 'users', fields: { admin: 'admin' } },
+        Auditor: { collection: 'users', fields: { auditor: 'auditor' } },
+      },
+      {},
+    );
+    const to = contract(
+      'to',
+      {
+        Member: { collection: 'members', fields: { user: 'user' } },
+        Admin: { collection: 'admins', fields: { admin: 'admin' } },
+        Auditor: { collection: 'auditors', fields: { auditor: 'auditor' } },
+      },
+      {},
+    );
+    await db()
+      .collection('users')
+      .insertMany([{ user: 'Linus' }, { admin: 'Ada' }, { auditor: 'Grace' }]);
+    await initMarker(from);
+    const refused = new MongoMigrationPlanner().plan({
+      contract: to,
+      schema: await introspectSchema(db()),
+      policy,
+      fromContract: from,
+      origin: { storageHash: from.storage.storageHash },
+      statements: [renameModel('User', 'Member')],
+      frameworkComponents: [],
+      snapshotsImportPath: '../../snapshots',
+    });
+    const route = refused.kind === 'failure' ? (refused.conflicts[0]?.why ?? '') : '';
+    const filters = ['user', 'admin', 'auditor'].flatMap((field) => {
+      const filter = { [field]: { $exists: true } };
+      return [filter, filter];
+    });
+    const planned = await plannedOperations(from, to);
+    const created = planned.filter(({ label }) => label.startsWith('Create collection')).length;
+    const operations = [
+      ...planned.slice(0, created),
+      ...pastedOperations(route, filters),
+      ...planned.slice(created),
+    ];
+    const result = await runOperations(operations, from, to, { policy });
+    expect({
+      planned: planned.map(({ label }) => label),
+      ok: result.ok,
+      usersDropped: !(await db().listCollections().toArray()).some(({ name }) => name === 'users'),
+      members: await documents('members'),
+      admins: await documents('admins'),
+      auditors: await documents('auditors'),
+    }).toEqual({
+      planned: [
+        'Create collection admins',
+        'Create collection auditors',
+        'Create collection members',
+        'Drop collection users',
+      ],
+      ok: true,
+      usersDropped: true,
+      members: [{ user: 'Linus' }],
+      admins: [{ admin: 'Ada' }],
+      auditors: [{ auditor: 'Grace' }],
+    });
+  });
 });
