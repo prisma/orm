@@ -190,7 +190,7 @@ describe('sql() builder structured error codes', () => {
     expect(error).toMatchObject({
       code: 'ORM.CAPABILITY_MISSING',
       message:
-        'lateralJoin() requires capability sql.lateral. If the database provides it, state a database version that does, or add it to the capabilities list, where the contract is written, and emit the contract again.',
+        'lateralJoin() requires capability sql.lateral. The contract does not list capability "sql.lateral". A contract lists the capabilities its database and connection provide; the database package\'s documentation says how to state them.',
       meta: { method: 'lateralJoin', capability: 'sql.lateral' },
     });
   });

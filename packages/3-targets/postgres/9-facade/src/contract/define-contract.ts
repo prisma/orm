@@ -109,7 +109,7 @@ type PostgresBaseScaffold<
   /**
    * The capabilities the connection provides, one set per component, merged over the version's in order: a later set's flag replaces an earlier one's, and `false` turns a flag off. Defaults to those of the adapter and the driver the client runs with; a list given here replaces the default.
    *
-   * Only sets the type knows, written as literals or `as const`, reach the contract's type. A set typed as `CapabilityMatrix` still applies at run time, but adds nothing to the type, and a `false` in it leaves the flag in the type.
+   * At type level, every set written at a fixed position in the list, as a literal or `as const`, is merged, before or after a spread. A spread of a list typed as an array, and a set typed as `CapabilityMatrix`, still apply at run time but add nothing to the contract's type, so a `false` in them leaves the flag in the type.
    */
   readonly capabilities?: Capabilities;
   /** Contract-wide defaults for foreign keys' `constraint` and `index`. */

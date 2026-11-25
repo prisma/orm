@@ -423,7 +423,7 @@ export function assertCapability(
       if (!ctx.capabilities[ns]?.[key]) {
         throw structuredError(
           'ORM.CAPABILITY_MISSING',
-          `${methodName}() requires capability ${ns}.${key}. ${missingCapabilityRemedy}`,
+          `${methodName}() requires capability ${ns}.${key}. ${missingCapabilityRemedy([`${ns}.${key}`])}`,
           { meta: { method: methodName, capability: `${ns}.${key}` } },
         );
       }

@@ -400,7 +400,7 @@ describe('a nested create of a variant stored in its own table', () => {
     ).toMatchObject({
       code: 'ORM.CAPABILITY_MISSING',
       message:
-        'create() requires contract capability "returning". If the database provides it, state a database version that does, or add it to the capabilities list, where the contract is written, and emit the contract again.',
+        'create() requires contract capability "returning". The contract does not list capability "returning". A contract lists the capabilities its database and connection provide; the database package\'s documentation says how to state them.',
       meta: { capability: 'returning', action: 'create()' },
     });
   });

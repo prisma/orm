@@ -76,7 +76,7 @@ export class Update extends StatementNode<Inputs> {
     }
     throw ormError(
       'ORM.CAPABILITY_MISSING',
-      `${action} on model "${this.owner.modelName}" cannot read back the rows it updates: it sets key column "${column}" by an expression, and without capability "returning" the database does not report the value it wrote. ${missingCapabilityRemedy}`,
+      `${action} on model "${this.owner.modelName}" cannot read back the rows it updates: it sets key column "${column}" by an expression, and without capability "returning" the database does not report the value it wrote. ${missingCapabilityRemedy(['returning'])}`,
       { meta: { capability: 'returning', action } },
     );
   }

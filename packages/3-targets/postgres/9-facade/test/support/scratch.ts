@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { join } from 'pathe';
 
-const scratchRoot = join(import.meta.dirname, '..', '..', '.tmp-output');
+const scratchRoot = join(import.meta.dirname, '..', '..', '.vitest', 'scratch');
 
 /** A new directory inside this package for a test's files. The test removes it. */
 export async function scratchDir(prefix: string): Promise<string> {

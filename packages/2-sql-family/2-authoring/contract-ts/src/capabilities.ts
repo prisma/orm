@@ -33,10 +33,12 @@ type KnownCapabilities<Set> = string extends keyof Set ? Record<never, never> : 
 
 type MergeFrom<Merged, Sets> = Sets extends readonly [infer Head, ...infer Tail]
   ? MergeFrom<OverrideCapabilities<Merged, KnownCapabilities<Head>>, Tail>
-  : Merged;
+  : Sets extends readonly [...infer Rest, infer Last]
+    ? OverrideCapabilities<MergeFrom<Merged, Rest>, KnownCapabilities<Last>>
+    : Merged;
 
 /**
- * The capability sets of a list merged in order, a later set's flags replacing an earlier one's. Entries the type knows at the front of the list are merged; a rest of unknown length adds nothing.
+ * The capability sets of a list merged in order, a later set's flags replacing an earlier one's. Every set at a fixed position, before or after a spread of unknown length, is merged; the spread itself adds nothing, and neither does a set whose type is `CapabilityMatrix`.
  */
 export type MergeCapabilitySets<Sets> = MergeFrom<Record<never, never>, Sets>;
 

@@ -577,7 +577,7 @@ export function requireOnlyCollidingKey(
   if (colliding === undefined) return;
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${action} on model "${modelName}" requires contract capability "insertOnConflictTarget": without it the conflict clause applies to every unique key, and the create values can also collide on (${colliding.join(', ')}), which would update a row other than the one conflictOn names. ${missingCapabilityRemedy}`,
+    `${action} on model "${modelName}" requires contract capability "insertOnConflictTarget": without it the conflict clause applies to every unique key, and the create values can also collide on (${colliding.join(', ')}), which would update a row other than the one conflictOn names. ${missingCapabilityRemedy(['insertOnConflictTarget'])}`,
     { meta: { capability: 'insertOnConflictTarget', action } },
   );
 }

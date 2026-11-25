@@ -33,7 +33,7 @@ export function generatedKeyColumn(options: InsertedRows): string | undefined {
   const refused = (problem: string) =>
     ormError(
       'ORM.CAPABILITY_MISSING',
-      `${method} on model "${modelName}" ${problem} ${missingCapabilityRemedy}`,
+      `${method} on model "${modelName}" ${problem} ${missingCapabilityRemedy(['returning'])}`,
       {
         meta: { capability: 'returning', action: method },
       },

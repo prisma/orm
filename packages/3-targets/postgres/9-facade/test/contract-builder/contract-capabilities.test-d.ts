@@ -88,3 +88,17 @@ test('a set with a wide type that turns a flag off leaves the flag in the type, 
   const contract = defineContract({ version: 18, capabilities: [off] });
   expectTypeOf(contract.capabilities.sql.returning).toEqualTypeOf<true>();
 });
+
+test('literal sets after a spread of unknown length reach the type', () => {
+  const shared: CapabilityMatrix[] = [];
+  const off = postgresContractCapabilities({
+    version: 18,
+    capabilities: [...shared, { sql: { returning: false } }],
+  });
+  const on = postgresContractCapabilities({
+    version: 18,
+    capabilities: [...shared, { sql: { interactiveTransactions: true } }],
+  });
+  expectTypeOf(off.sql).not.toHaveProperty('returning');
+  expectTypeOf(on.sql.interactiveTransactions).toEqualTypeOf<true>();
+});

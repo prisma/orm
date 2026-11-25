@@ -41,7 +41,7 @@ export function assertPreparableIncludes(
   const capabilities = oneQueryIncludeCapabilities.map((capability) => `sql.${capability}`);
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `prepared.${method}() with includes requires contract capabilities ${capabilities.join(', ')}: without them includes load with one query per relation, and a prepared read is one statement. ${missingCapabilityRemedy}`,
+    `prepared.${method}() with includes requires contract capabilities ${capabilities.join(', ')}: without them includes load with one query per relation, and a prepared read is one statement. ${missingCapabilityRemedy(capabilities)}`,
     { meta: { capabilities, method: `prepared.${method}` } },
   );
 }

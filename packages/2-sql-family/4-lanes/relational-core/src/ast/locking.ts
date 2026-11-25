@@ -54,9 +54,15 @@ export function missingCapability(
   return undefined;
 }
 
-/** What a refusal for a capability the contract does not list tells the user to change. It names no target. */
-export const missingCapabilityRemedy =
-  'If the database provides it, state a database version that does, or add it to the capabilities list, where the contract is written, and emit the contract again.';
+/**
+ * The sentences a refusal ends with when the contract does not list `capabilities`, each named by its key. They name no database: how a contract states its capabilities is up to the database package.
+ */
+export function missingCapabilityRemedy(capabilities: readonly string[]): string {
+  const quoted = capabilities.map((capability) => `"${capability}"`);
+  const named =
+    quoted.length === 1 ? `capability ${quoted[0]}` : `capabilities ${quoted.join(', ')}`;
+  return `The contract does not list ${named}. A contract lists the capabilities its database and connection provide; the database package's documentation says how to state them.`;
+}
 
 /** The wait-policy options of a locking method; each key exists only when its capability is reported. */
 export type LockWaitOptions<Capabilities> =

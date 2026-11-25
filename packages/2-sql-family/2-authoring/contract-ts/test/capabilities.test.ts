@@ -48,6 +48,23 @@ describe('resolveCapabilities with a list of unknown length', () => {
     }>();
   });
 
+  it('merges the literal sets after a spread of unknown length', () => {
+    const shared: CapabilityMatrix[] = [];
+    const off = resolveCapabilities([row, ...shared, { sql: { returning: false } }]);
+    const on = resolveCapabilities([row, ...shared, { sql: { interactiveTransactions: true } }]);
+
+    expect([off.sql, on.sql]).toEqual([
+      { lateral: true },
+      { returning: true, lateral: true, interactiveTransactions: true },
+    ]);
+    expectTypeOf(off.sql).toEqualTypeOf<{ readonly lateral: true }>();
+    expectTypeOf(on.sql).toEqualTypeOf<{
+      readonly returning: true;
+      readonly lateral: true;
+      readonly interactiveTransactions: true;
+    }>();
+  });
+
   it('keeps a flag in the type that a set with a wide type turns off at run time, a known limit', () => {
     const off: CapabilityMatrix = { sql: { returning: false } };
     const resolved = resolveCapabilities([row, off]);

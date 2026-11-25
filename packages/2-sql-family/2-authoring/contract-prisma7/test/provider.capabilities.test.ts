@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { prisma7Contract } from '../src/provider';
 import { postgresSourceContext } from './support';
 
-const scratchRoot = join(import.meta.dirname, '..', '.tmp-output');
+const scratchRoot = join(import.meta.dirname, '..', '.vitest', 'scratch');
 const scratchDirs: string[] = [];
 
 afterEach(() => {

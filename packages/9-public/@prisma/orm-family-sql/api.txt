@@ -735,7 +735,7 @@
 (not exported) type MergeExtensionIndexTypes<Packs extends Record<string, unknown>> = { readonly [Lit in AllIndexTypeLiterals<Packs>]: Extract<{ [K in keyof Packs]: Lit extends keyof ExtractIndexTypesFromPack<Packs[K]> ? ExtractIndexTypesFromPack<Packs[K]>[Lit] : never; }[keyof Packs], { readonly options: unknown; }>; }
 (not exported) type MergeExtensionPackCapabilities<Packs> = { readonly [Namespace in KeysOfEach<ExtensionCapabilityMatrices<Packs>>]: { readonly [Flag in KeysOfEach<NamespaceOfEach<ExtensionCapabilityMatrices<Packs>, Namespace>>]: FlagOfEach<NamespaceOfEach<ExtensionCapabilityMatrices<Packs>, Namespace>, Flag> extends true ? true : false; }; }
 (not exported) type MergeExtensionTypeNamespaces<Extensions> = MergeExtensionAuthoringNamespaces<Extensions, 'type'>
-(not exported) type MergeFrom<Merged, Sets> = Sets extends readonly [infer Head, ...infer Tail] ? MergeFrom<OverrideCapabilities<Merged, KnownCapabilities<Head>>, Tail> : Merged
+(not exported) type MergeFrom<Merged, Sets> = Sets extends readonly [infer Head, ...infer Tail] ? MergeFrom<OverrideCapabilities<Merged, KnownCapabilities<Head>>, Tail> : Sets extends readonly [...infer Rest, infer Last] ? OverrideCapabilities<MergeFrom<Merged, Rest>, KnownCapabilities<Last>> : Merged
 (not exported) type MergeScopes<A extends Scope, B extends Scope> = { topLevel: Expand<Omit<A['topLevel'], NamespaceColumnNames<B> | keyof B['topLevel']> & Omit<B['topLevel'], NamespaceColumnNames<A> | keyof A['topLevel']>>; namespaces: Expand<A['namespaces'] & B['namespaces']>; }
 (not exported) type MergedTable<Tables, ModelName> = { readonly [Name in MethodNames<Tables>]: { [Id in keyof Tables]: Name extends keyof Tables[Id] ? Id : never; }[keyof Tables] extends (infer Ids) ? true extends IsUnion<Ids> ? CollectionMethodNameClash<Name, ModelName, Ids> : SignatureFrom<Tables, Name> : never; }
 (not exported) type MethodNames<Tables> = { [Id in keyof Tables]: keyof Tables[Id]; }[keyof Tables]
@@ -4840,7 +4840,6 @@
 ./relational-core/ast: const aggregateFnNames: ReadonlySet<string>
 ./relational-core/ast: const lockOptionCapabilities: { readonly of: { readonly sql: { readonly lockOf: true; }; }; readonly nowait: { readonly sql: { readonly lockNowait: true; }; }; readonly skipLocked: { readonly sql: { readonly lockSkipLocked: true; }; }; }
 ./relational-core/ast: const lockStrengthCapabilities: { readonly forUpdate: { readonly sql: { readonly forUpdate: true; }; }; readonly forNoKeyUpdate: { readonly postgres: { readonly forNoKeyUpdate: true; }; }; readonly forShare: { readonly sql: { readonly forShare: true; }; }; readonly forKeyShare: { readonly postgres: { readonly forKeyShare: true; }; }; }
-./relational-core/ast: const missingCapabilityRemedy = "If the database provides it, state a database version that does, or add it to the capabilities list, where the contract is written, and emit the contract again."
 ./relational-core/ast: const queryAstKinds: ReadonlySet<string>
 ./relational-core/ast: const sqlCharColumn: (params?: LengthParams) => ColumnSpec<SqlCharCodec, LengthParams>
 ./relational-core/ast: const sqlCharDecode: (wire: string) => string
@@ -4886,6 +4885,7 @@
 ./relational-core/ast: function lockIncompatible(conflict: LockConflict, message: string): StructuredError
 ./relational-core/ast: function lockWaitPolicyOf(methodName: string, options: LockWaitRequest | undefined): LockWaitPolicy | undefined
 ./relational-core/ast: function missingCapability(capabilities: { readonly [group: string]: undefined | { readonly [flag: string]: unknown; }; }, requirement: CapabilityRequirement): string | undefined
+./relational-core/ast: function missingCapabilityRemedy(capabilities: readonly string[]): string
 ./relational-core/ast: function opaqueSql(text: string): OpaqueSql
 ./relational-core/ast: function refuseReservedResultColumn(column: string, lane: 'raw-query' | 'select'): void
 ./relational-core/ast: function renderOpaqueSql(sql: OpaqueSql): string
@@ -5909,7 +5909,6 @@
 ./relational-core: const aggregateFnNames: ReadonlySet<string>
 ./relational-core: const lockOptionCapabilities: { readonly of: { readonly sql: { readonly lockOf: true; }; }; readonly nowait: { readonly sql: { readonly lockNowait: true; }; }; readonly skipLocked: { readonly sql: { readonly lockSkipLocked: true; }; }; }
 ./relational-core: const lockStrengthCapabilities: { readonly forUpdate: { readonly sql: { readonly forUpdate: true; }; }; readonly forNoKeyUpdate: { readonly postgres: { readonly forNoKeyUpdate: true; }; }; readonly forShare: { readonly sql: { readonly forShare: true; }; }; readonly forKeyShare: { readonly postgres: { readonly forKeyShare: true; }; }; }
-./relational-core: const missingCapabilityRemedy = "If the database provides it, state a database version that does, or add it to the capabilities list, where the contract is written, and emit the contract again."
 ./relational-core: const queryAstKinds: ReadonlySet<string>
 ./relational-core: const sqlCharColumn: (params?: LengthParams) => ColumnSpec<SqlCharCodec, LengthParams>
 ./relational-core: const sqlCharDecode: (wire: string) => string
@@ -5961,6 +5960,7 @@
 ./relational-core: function lockIncompatible(conflict: LockConflict, message: string): StructuredError
 ./relational-core: function lockWaitPolicyOf(methodName: string, options: LockWaitRequest | undefined): LockWaitPolicy | undefined
 ./relational-core: function missingCapability(capabilities: { readonly [group: string]: undefined | { readonly [flag: string]: unknown; }; }, requirement: CapabilityRequirement): string | undefined
+./relational-core: function missingCapabilityRemedy(capabilities: readonly string[]): string
 ./relational-core: function opaqueSql(text: string): OpaqueSql
 ./relational-core: function param<T>(value: T, opts: { codecId: string; }): ParamRef
 ./relational-core: function planFromAst<Row = unknown>(ast: AnyQueryAst, contract: Contract<SqlStorage>, laneId?: string): SqlQueryPlan<Row>
