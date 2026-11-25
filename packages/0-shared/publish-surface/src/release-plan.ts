@@ -419,6 +419,11 @@ export function releaseOfRootVersion(version: string): RootRelease {
         `root version "${version}" is a release candidate of ${parsed.major}.${parsed.minor}; only the 8.0.0 release candidates are planned, and a release-candidate line for another release is not built`,
       );
     }
+    if (parsed.level.counter < 1) {
+      throw new ReleasePlanError(
+        `root version "${version}" is not a release candidate: the release-candidate counter starts at 1`,
+      );
+    }
     return {
       release,
       line: 'release-candidates',

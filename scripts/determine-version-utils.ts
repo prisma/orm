@@ -150,12 +150,12 @@ function counterLine(version: ParsedVersion): string {
 
 /**
  * Asserts that a base version is canonical: a clean pre-8 release
- * (`major.minor.patch`), a Prisma 8 release number (`8.0.1`, then
- * `X.Y.0`; see `releaseOfRootVersion`), or a version on the supported RC
- * line (`8.0.0-rc.N`, N ≥ 1). Used to fail-fast in the publish workflow if
- * root `package.json` was edited to something other than a release
- * shape — without this guard, a malformed root would compose nonsense
- * publish versions like `0.7.0-foo-dev.1`.
+ * (`major.minor.patch`), or a Prisma 8 root version as
+ * `releaseOfRootVersion` defines it (`8.0.0-rc.N` with N ≥ 1, `8.0.1`, then
+ * `X.Y.0`), with no development suffix. Used to fail-fast in the publish
+ * workflow if root `package.json` was edited to something other than a
+ * release shape; without this guard, a malformed root would compose
+ * nonsense publish versions like `0.7.0-foo-dev.1`.
  */
 export function assertCanonicalBase(base: string): void {
   let parsed: ParsedVersion | undefined;
@@ -164,30 +164,24 @@ export function assertCanonicalBase(base: string): void {
   } catch {
     parsed = undefined;
   }
-  const canonical =
-    parsed !== undefined &&
-    parsed.dev === undefined &&
-    (parsed.level === undefined ||
-      (parsed.level.name === 'rc' &&
-        parsed.level.counter >= 1 &&
-        parsed.major === 8 &&
-        parsed.minor === 0 &&
-        parsed.patch === 0));
-  if (!canonical) {
+  if (
+    parsed === undefined ||
+    parsed.dev !== undefined ||
+    (parsed.major < 8 && parsed.level !== undefined)
+  ) {
     throw new Error(
       `Base version "${base}" is not canonical. ` +
         'The root package.json `version` must be a clean release shape ("0.7.0") ' +
-        'or on the supported RC line ("8.0.0-rc.N", N >= 1); nothing else is permitted on `main`.',
+        'or a Prisma 8 root version ("8.0.0-rc.N" with N >= 1, "8.0.1", then "X.Y.0"); nothing else is permitted on `main`.',
     );
   }
-  if (parsed !== undefined && parsed.major >= 8 && parsed.level === undefined) {
-    try {
-      releaseOfRootVersion(base);
-    } catch (cause) {
-      throw new Error(
-        `Base version "${base}" is not canonical: ${cause instanceof Error ? cause.message : String(cause)}`,
-        { cause },
-      );
-    }
+  if (parsed.major < 8) return;
+  try {
+    releaseOfRootVersion(base);
+  } catch (cause) {
+    throw new Error(
+      `Base version "${base}" is not canonical: ${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause },
+    );
   }
 }

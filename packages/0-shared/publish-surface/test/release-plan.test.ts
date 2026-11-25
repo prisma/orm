@@ -653,6 +653,13 @@ describe('releaseOfRootVersion', () => {
     expect(releaseOfRootVersion(version)).toEqual(expected);
   });
 
+  it.each(['8.0.0-rc.0', '8.0.0-rc.0-dev.2'])(
+    'refuses %s, saying the release-candidate counter starts at 1',
+    (version) => {
+      expect(() => releaseOfRootVersion(version)).toThrow(/"8\.0\.0-rc\.0.*starts at 1/);
+    },
+  );
+
   it('refuses a release-candidate line of another release, saying only 8.0.0 has one', () => {
     expect(() => releaseOfRootVersion('9.0.0-rc.1')).toThrow(
       /9\.0\.0-rc\.1.*only the 8\.0\.0 release candidates/,

@@ -259,8 +259,8 @@ describe('assertCanonicalBase', () => {
     assert.throws(() => assertCanonicalBase('9.0.0-rc.1'), /not canonical/);
   });
 
-  it('rejects rc.0 — the counter starts at rc.1', () => {
-    assert.throws(() => assertCanonicalBase('8.0.0-rc.0'), /not canonical/);
+  it('rejects rc.0, saying the counter starts at 1', () => {
+    assert.throws(() => assertCanonicalBase('8.0.0-rc.0'), /not canonical.*starts at 1/);
   });
 
   it('rejects a missing component', () => {
