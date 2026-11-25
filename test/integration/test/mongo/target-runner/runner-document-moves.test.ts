@@ -353,4 +353,39 @@ describe('a plan that moves documents into a collection whose validator it then 
       `The rejected document has _id ObjectId("${String(inserted.insertedIds[1])}"): find it with db.getCollection("users").find({ _id: ObjectId("${String(inserted.insertedIds[1])}") }) in mongosh.`,
     );
   });
+
+  it("names the rejected document by the target document's _id when the copy merges on another field", async () => {
+    const from = contract(
+      'from',
+      {
+        User: { collection: 'users', fields: { user: 'user' } },
+        Member: { collection: 'members', fields: { user: 'user' } },
+      },
+      {},
+      'mongo/string@1',
+      { members: closedSchema(['user']) },
+    );
+    await db().collection('users').insertOne({ user: 'Linus', note: 'extra' });
+    await db().createCollection('members', {
+      validator: { $jsonSchema: closedSchema(['user']) },
+      validationLevel: 'strict',
+      validationAction: 'error',
+    });
+    await db().collection('members').createIndex({ user: 1 }, { unique: true });
+    const target = await db().collection('members').insertOne({ user: 'Linus' });
+    await initMarker(from);
+    const copy = dataTransform('merge User into members', {
+      run: () =>
+        rawAggregate('users', [
+          USERS,
+          { $project: { _id: 0 } },
+          { $merge: { into: 'members', on: 'user' } },
+        ]),
+    });
+    const result = await runOperations([copy], from, from, { policy });
+    if (result.ok) throw new Error('Expected the copy to be rejected');
+    expect(result.failure.why).toContain(
+      `MongoDB names the rejected document by the _id ObjectId("${String(target.insertedId)}") of the document in collection members that the $merge matched or would insert, which need not be the _id of a document in collection users.`,
+    );
+  });
 });

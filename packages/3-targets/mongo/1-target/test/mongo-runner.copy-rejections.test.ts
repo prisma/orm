@@ -245,6 +245,47 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
       );
     });
 
+    it.each([
+      ['matches on another field', { into: 'members', on: 'email' }],
+      [
+        'updates the matched document with a pipeline',
+        { into: 'members', whenMatched: [{ $set: { seen: true } }] },
+      ],
+    ])("a $merge that %s, since the _id is then the target document's", async (_name, merge) => {
+      const harness = makeHarness();
+      failWithId(harness);
+
+      const result = await execute(harness, [
+        dataTransform('move User to members', {
+          run: () => rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: merge }]),
+        }),
+      ]);
+
+      expect(failureFields(result.assertNotOk()).why).toContain(
+        'Document failed validation. MongoDB names the rejected document by the _id ObjectId("6650a1b2c3d4e5f6a7b8c9d0") of the document in collection members that the $merge matched or would insert, which need not be the _id of a document in collection users. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. No later operation of this migration updates the validator of collection members, so change the pipeline',
+      );
+    });
+
+    it.each([
+      ['leaves out on', { into: 'members' }],
+      ['matches on _id', { into: 'members', on: '_id' }],
+      ['matches on _id alone, as a list', { into: 'members', on: ['_id'] }],
+      ['replaces the matched document', { into: 'members', whenMatched: 'replace' }],
+    ])('keeps the lookup for a $merge that %s', async (_name, merge) => {
+      const harness = makeHarness();
+      failWithId(harness);
+
+      const result = await execute(harness, [
+        dataTransform('move User to members', {
+          run: () => rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: merge }]),
+        }),
+      ]);
+
+      expect(failureFields(result.assertNotOk()).why).toContain(
+        'find it with db.getCollection("users").find({ _id: ObjectId("6650a1b2c3d4e5f6a7b8c9d0") }) in mongosh.',
+      );
+    });
+
     it('keeps the lookup when the stages before the copy keep _id', async () => {
       const harness = makeHarness();
       failWithId(harness);
