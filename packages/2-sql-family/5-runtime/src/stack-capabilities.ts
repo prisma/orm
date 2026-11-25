@@ -6,7 +6,7 @@ import type { SqlExecutionStackWithDriver } from './sql-context';
 import type { RuntimeExecutionOptions } from './sql-runtime';
 
 /*
- * What the stack provides: the target declares the database's capabilities, which signing checks, and the adapter and the driver declare the rest. Extensions declare none (spec section 3). The run-time function and the types below apply this one rule.
+ * What the stack provides: the target declares the database's capabilities, which signing checks, and the adapter and the driver declare the rest. Extensions declare none. The run-time function and the types below apply this one rule.
  */
 
 type CapabilitySet = Readonly<Record<string, unknown>> | undefined;
