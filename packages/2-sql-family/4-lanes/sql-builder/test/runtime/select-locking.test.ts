@@ -78,7 +78,7 @@ const capabilityMissing = (method: string, capability: string) =>
   expect.objectContaining({
     name: 'StructuredError',
     code: 'ORM.CAPABILITY_MISSING',
-    message: `${method}() requires capability ${capability}`,
+    message: `${method}() requires capability ${capability}. If the database provides it, state a database version that does, or add it to the capabilities list, where the contract is written, and emit the contract again.`,
     meta: { method, capability },
   });
 

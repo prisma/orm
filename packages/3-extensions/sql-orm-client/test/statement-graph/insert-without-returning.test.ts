@@ -147,7 +147,7 @@ describe('the check of an insert', () => {
       expect.objectContaining({
         code: 'ORM.CAPABILITY_MISSING',
         message:
-          'createAll() on model "Counter" cannot return the rows it inserts: their key column "id" is generated, and without capability "returning" the database reports a generated value only for a one-row insert. Use createAndCount(), or create() for each row.',
+          'createAll() on model "Counter" cannot return the rows it inserts: their key column "id" is generated, and without capability "returning" the database reports a generated value only for a one-row insert. Use createAndCount(), or create() for each row. If the database provides it, state a database version that does, or add it to the capabilities list, where the contract is written, and emit the contract again.',
         meta: { capability: 'returning', action: 'createAll()' },
       }),
     );

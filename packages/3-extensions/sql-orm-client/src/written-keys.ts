@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
+import { missingCapabilityRemedy } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { isAutoIncrementColumn, resolveRowIdentityColumns } from './collection-contract';
 import { ormError } from './orm-errors';
@@ -30,9 +31,13 @@ export function generatedKeyColumn(options: InsertedRows): string | undefined {
     return undefined;
   }
   const refused = (problem: string) =>
-    ormError('ORM.CAPABILITY_MISSING', `${method} on model "${modelName}" ${problem}`, {
-      meta: { capability: 'returning', action: method },
-    });
+    ormError(
+      'ORM.CAPABILITY_MISSING',
+      `${method} on model "${modelName}" ${problem} ${missingCapabilityRemedy}`,
+      {
+        meta: { capability: 'returning', action: method },
+      },
+    );
   if (
     others.length > 0 ||
     !isAutoIncrementColumn(context.contract, namespaceId, tableName, column)

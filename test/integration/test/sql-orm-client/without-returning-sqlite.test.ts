@@ -211,7 +211,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
         expect.objectContaining({
           code: 'ORM.CAPABILITY_MISSING',
           message:
-            'createAll() on model "User" cannot return the rows it inserts: their key column "id" is generated, and without capability "returning" the database reports a generated value only for a one-row insert. Use createAndCount(), or create() for each row.',
+            'createAll() on model "User" cannot return the rows it inserts: their key column "id" is generated, and without capability "returning" the database reports a generated value only for a one-row insert. Use createAndCount(), or create() for each row. If the database provides it, state a database version that does, or add it to the capabilities list, where the contract is written, and emit the contract again.',
         }),
       );
       expect(statements).toEqual([]);
@@ -228,7 +228,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
       await expect(db.Token.create({ label: 'x' })).rejects.toMatchObject({
         code: 'ORM.CAPABILITY_MISSING',
         message:
-          'create() on model "Token" cannot find the row it inserts: key column "id" gets no value from the client and is not an auto-increment column, and the contract does not report capability "returning" to read the value the database chose. Supply the key, or give the column a client-side default.',
+          'create() on model "Token" cannot find the row it inserts: key column "id" gets no value from the client and is not an auto-increment column, and the contract does not report capability "returning" to read the value the database chose. Supply the key, or give the column a client-side default. If the database provides it, state a database version that does, or add it to the capabilities list, where the contract is written, and emit the contract again.',
       });
       expect({ statements, tokens: rowsOf(database, 'tokens') }).toEqual({
         statements: [],
@@ -433,7 +433,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
       ).rejects.toMatchObject({
         code: 'ORM.CAPABILITY_MISSING',
         message:
-          'upsert() on model "Account" requires contract capability "insertOnConflictTarget": without it the conflict clause applies to every unique key, and the create values can also collide on (handle), which would update a row other than the one conflictOn names.',
+          'upsert() on model "Account" requires contract capability "insertOnConflictTarget": without it the conflict clause applies to every unique key, and the create values can also collide on (handle), which would update a row other than the one conflictOn names. If the database provides it, state a database version that does, or add it to the capabilities list, where the contract is written, and emit the contract again.',
       });
       expect(statements).toEqual([]);
     });
@@ -450,7 +450,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
       ).rejects.toMatchObject({
         code: 'ORM.CAPABILITY_MISSING',
         message:
-          'upsert() on model "User" updates conflict column "email"; without capability "returning" the row is read back by the create\'s values for the conflict columns.',
+          'upsert() on model "User" updates conflict column "email"; without capability "returning" the row is read back by the create\'s values for the conflict columns. If the database provides it, state a database version that does, or add it to the capabilities list, where the contract is written, and emit the contract again.',
       });
       await expect(
         db.User.upsert({ create: ada, update: { name: 'x' }, conflictOn: { id: 1 } }),
@@ -465,7 +465,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
         expect.objectContaining({
           code: 'ORM.CAPABILITY_MISSING',
           message:
-            'createAll() requires contract capability "insertOnConflictTarget", which the contract does not list. Write the contract for a database and connection that provide it, and emit it again.',
+            'createAll() requires contract capability "insertOnConflictTarget", which the contract does not list. If the database provides it, state a database version that does, or add it to the capabilities list, where the contract is written, and emit the contract again.',
         }),
       );
       await expect(db.User.createAll([ada], { onConflict: 'skip' })).rejects.toThrow(

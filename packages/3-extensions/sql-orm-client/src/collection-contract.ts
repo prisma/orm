@@ -6,7 +6,11 @@ import type {
   CrossReference,
 } from '@internal/contract/types';
 import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
-import { type CapabilityRequirement, missingCapability } from '@internal/sql-relational-core/ast';
+import {
+  type CapabilityRequirement,
+  missingCapability,
+  missingCapabilityRemedy,
+} from '@internal/sql-relational-core/ast';
 import { isExpression } from '@internal/sql-relational-core/expression';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -942,9 +946,13 @@ export function assertReturningCapability(contract: Contract<SqlStorage>, action
     return;
   }
 
-  throw ormError('ORM.CAPABILITY_MISSING', `${action} requires contract capability "returning"`, {
-    meta: { capability: 'returning', action },
-  });
+  throw ormError(
+    'ORM.CAPABILITY_MISSING',
+    `${action} requires contract capability "returning". ${missingCapabilityRemedy}`,
+    {
+      meta: { capability: 'returning', action },
+    },
+  );
 }
 
 export function assertInsertConflictSkipCapability(
@@ -969,7 +977,7 @@ function requireCapability(
 
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${action} requires contract capability "${capability}", which the contract does not list. Write the contract for a database and connection that provide it, and emit it again.`,
+    `${action} requires contract capability "${capability}", which the contract does not list. ${missingCapabilityRemedy}`,
     { meta: { capability, action } },
   );
 }
@@ -998,7 +1006,7 @@ export function assertDistinctOnCapability(
 
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${methodName}() requires capability postgres.distinctOn`,
+    `${methodName}() requires capability postgres.distinctOn. ${missingCapabilityRemedy}`,
     { meta: { capability: 'postgres.distinctOn', method: methodName } },
   );
 }
@@ -1013,9 +1021,13 @@ export function assertLockCapability(
     return;
   }
 
-  throw ormError('ORM.CAPABILITY_MISSING', `${methodName}() requires capability ${capability}`, {
-    meta: { capability, method: methodName },
-  });
+  throw ormError(
+    'ORM.CAPABILITY_MISSING',
+    `${methodName}() requires capability ${capability}. ${missingCapabilityRemedy}`,
+    {
+      meta: { capability, method: methodName },
+    },
+  );
 }
 
 export function supportsDefaultInInsert(contract: Contract<SqlStorage>): boolean {

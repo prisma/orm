@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { missingCapabilityRemedy } from '@internal/sql-relational-core/ast';
 import { ormError } from './orm-errors';
 import type { CollectionState, IncludeExpr } from './types';
 
@@ -40,7 +41,7 @@ export function assertPreparableIncludes(
   const capabilities = oneQueryIncludeCapabilities.map((capability) => `sql.${capability}`);
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `prepared.${method}() with includes requires contract capabilities ${capabilities.join(', ')}: without them includes load with one query per relation, and a prepared read is one statement.`,
+    `prepared.${method}() with includes requires contract capabilities ${capabilities.join(', ')}: without them includes load with one query per relation, and a prepared read is one statement. ${missingCapabilityRemedy}`,
     { meta: { capabilities, method: `prepared.${method}` } },
   );
 }
