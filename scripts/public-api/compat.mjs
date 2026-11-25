@@ -291,7 +291,7 @@ export function generateTests({
 }) {
   const releaseRoot = realpathSync(releaseDir);
   const entryPoints = entryPointsOf(releaseRoot);
-  const { paths, checker } = readExports(releaseRoot, entryPoints);
+  const { paths, checker, program } = readExports(releaseRoot, entryPoints);
   const entries = [];
   const counts = { paths: 0, exports: 0, forwarded: 0, tests: 0 };
   const notCompared = [];
@@ -517,7 +517,17 @@ export function generateTests({
       `${record.path} ${record.export}: a break is recorded for an export the last release does not declare in this package. Remove the record.`,
     );
   }
-  return { entries, counts, notCompared, problems, removable, checker, nextId: id };
+  return {
+    entries,
+    counts,
+    notCompared,
+    problems,
+    removable,
+    checker,
+    program,
+    entryPoints,
+    nextId: id,
+  };
 }
 
 // One test file: the imports of `side` ('current' or 'twin') against the release's, and the
@@ -807,17 +817,11 @@ function compileTests({
 //
 // Each comparison is first TypeScript's own, on declarations rewritten as compat-declarations.mjs
 // describes; the pipeline is described in api-compat.mjs.
-// The exports of the package in `dir`, as `path\0name`, whose declarations reach, through the names
-// they use, a declaration of one of `targets`: `package:name` of a class or unique symbol. Only the
-// compiler's own library files are not followed.
-function exportsReaching(dir, targets) {
-  const root = realpathSync(dir);
-  const entryPoints = entryPointsOf(root);
-  const options = compilerOptions(root);
-  const program = ts.createProgram(
-    entryPoints.map(({ declarationFile }) => declarationFile),
-    options,
-  );
+// The exports of a package, as `path\0name`, whose declarations reach, through the names they
+// use, a declaration of one of `targets`: `package:name` of a class or unique symbol. The compiler's
+// own library files are not followed. One walk records which declarations each one names; the
+// declarations that reach a target are then found backwards from the targets.
+function exportsReaching(program, entryPoints, targets) {
   const checker = program.getTypeChecker();
   const isTarget = (declaration) => {
     const name = declaration.name;
@@ -825,37 +829,72 @@ function exportsReaching(dir, targets) {
     const owner = packageOf(declaration.getSourceFile().fileName)?.name;
     return targets.has(`${owner}:${name.text}`);
   };
-  const reaching = new Map();
-  const reaches = (symbol) => {
-    const seen = new Set();
-    const pending = [symbol];
-    while (pending.length > 0) {
-      let next = pending.pop();
-      if (next.flags & ts.SymbolFlags.Alias) next = checker.getAliasedSymbol(next);
-      for (const declaration of next.declarations ?? []) {
-        if (seen.has(declaration)) continue;
-        seen.add(declaration);
-        if (program.isSourceFileDefaultLibrary(declaration.getSourceFile())) continue;
-        if (isTarget(declaration)) return true;
-        const visit = (node) => {
-          if (ts.isIdentifier(node)) {
-            const found = checker.getSymbolAtLocation(node);
-            if (found) pending.push(found);
-          }
-          ts.forEachChild(node, visit);
-        };
-        visit(declaration);
-      }
-    }
-    return false;
+  const declarationsOf = (symbol) => {
+    const resolved =
+      symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+    return resolved.declarations ?? [];
   };
+  const namedBy = new Map();
+  const pending = [];
+  const exportsByKey = new Map();
   for (const { subpath, declarationFile } of entryPoints) {
     const module = checker.getSymbolAtLocation(program.getSourceFile(declarationFile));
     for (const exported of module ? checker.getExportsOfModule(module) : []) {
-      reaching.set(`${subpath}\0${exported.name}`, reaches(exported));
+      const declarations = declarationsOf(exported);
+      exportsByKey.set(`${subpath}\0${exported.name}`, declarations);
+      pending.push(...declarations);
     }
   }
-  return new Set([...reaching].filter(([, reached]) => reached).map(([key]) => key));
+  while (pending.length > 0) {
+    const declaration = pending.pop();
+    if (namedBy.has(declaration)) continue;
+    const named = new Set();
+    namedBy.set(declaration, named);
+    if (declaration.getSourceFile().hasNoDefaultLib) continue;
+    const visit = (node) => {
+      if (ts.isIdentifier(node)) {
+        const found = checker.getSymbolAtLocation(node);
+        for (const each of found ? declarationsOf(found) : []) {
+          named.add(each);
+          if (!namedBy.has(each)) pending.push(each);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(declaration);
+  }
+  const namers = new Map();
+  for (const [declaration, named] of namedBy) {
+    for (const each of named) {
+      if (!namers.has(each)) namers.set(each, []);
+      namers.get(each).push(declaration);
+    }
+  }
+  const reaching = new Set();
+  const backwards = [...namedBy.keys()].filter(isTarget);
+  while (backwards.length > 0) {
+    const declaration = backwards.pop();
+    if (reaching.has(declaration)) continue;
+    reaching.add(declaration);
+    backwards.push(...(namers.get(declaration) ?? []));
+  }
+  return new Set(
+    [...exportsByKey]
+      .filter(([, declarations]) => declarations.some((each) => reaching.has(each)))
+      .map(([key]) => key),
+  );
+}
+
+function currentProgram(dir) {
+  const root = realpathSync(dir);
+  const entryPoints = entryPointsOf(root);
+  return {
+    program: ts.createProgram(
+      entryPoints.map(({ declarationFile }) => declarationFile),
+      compilerOptions(root),
+    ),
+    entryPoints,
+  };
 }
 
 export function checkPackage({
@@ -1120,9 +1159,10 @@ export function checkPackage({
   ];
   if (ambiguous.length > 0) {
     const targets = new Set(ambiguous.map(({ key }) => key));
+    const current = currentProgram(currentDir);
     const reaching = new Set([
-      ...exportsReaching(releaseDir, targets),
-      ...exportsReaching(currentDir, targets),
+      ...exportsReaching(generated.program, generated.entryPoints, targets),
+      ...exportsReaching(current.program, current.entryPoints, targets),
     ]);
     const labels = ambiguous.map(({ label }) => label).join(', ');
     const settled = (list, entry, segment) =>

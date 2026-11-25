@@ -407,6 +407,7 @@ export function readExports(packageDir, entryPoints) {
     );
   }
   return {
+    program,
     checker,
     paths,
     isOwn,
