@@ -60,6 +60,12 @@ describe('the lines init writes, read from how the facade names its peers', () =
     ['of another major and minor', '1.2.3', '~8.1.0', '^1.2.3'],
     ['of a later major', '9.0.0', '~8.1.0', '^9.0.0'],
     ['of our release, below the version its peers are named at', '8.1.3', '~8.1.7', '^8.1.3'],
+    [
+      'on 0.0.z, where a caret on its peers’ version would not admit it',
+      '0.0.3',
+      '~0.0.2',
+      '^0.0.3',
+    ],
   ])(
     'writes a facade numbered apart from the Prisma releases, %s, on its own version',
     (_case, version, peer, facade) => {

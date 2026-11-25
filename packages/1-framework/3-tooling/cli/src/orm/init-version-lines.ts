@@ -31,9 +31,10 @@ export function exactVersionOf(spec: string): string | undefined {
  *   each tilde peer as the same version with a caret, and the facade with a caret on the version
  *   its tilde peers name (`~8.0.1` gives `^8.0.1`, `~8.1.0` gives `^8.1.0`), or on its own
  *   version when no peer has a tilde, or when that peer version is of another major and minor or
- *   above the facade's own, as for a facade numbered apart from our releases, so the caret always
- *   admits the facade's own version and an update moves every line to the next release together. One whose version has a pre-release part gets a
- *   tilde on every line: each peer at its declared range and the facade at a tilde on its
+ *   a caret on it does not admit the facade's own, as for a facade numbered apart from our
+ *   releases or one on `0.0.z`, so the caret always admits the facade's own version and an update
+ *   moves every line to the next release together. One whose version has a pre-release part gets
+ *   a tilde on every line: each peer at its declared range and the facade at a tilde on its
  *   version, since a caret on a pre-release never selects the next minor's.
  * - When the project already lists the facade, its line is the user's, and each peer gets
  *   the range the installed facade declares, so init never installs a platform package
@@ -59,7 +60,7 @@ export function versionLines(
   };
 }
 
-/** Whether `floor` is of `version`'s major and minor and not above it, so a caret on it admits `version`. */
+/** Whether `floor` is of `version`'s major and minor and a caret on it admits `version`. */
 function isFloorOf(floor: string, version: string): boolean {
   const [low, high] = [semverOf(floor), semverOf(version)];
   return (
@@ -67,7 +68,7 @@ function isFloorOf(floor: string, version: string): boolean {
     high !== undefined &&
     low.major === high.major &&
     low.minor === high.minor &&
-    compareSemver(low, high) <= 0
+    requirementAdmits(`^${floor}`, version) === true
   );
 }
 
