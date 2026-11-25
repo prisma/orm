@@ -25,11 +25,11 @@ import {
 } from '@internal/target-postgres/codec-descriptor';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
+import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { applicationDomainOf } from '@repo/test-utils';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql-family/9-family/test/test-sql-contract-serializer';
-import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
 import { createComposedPostgresAdapter } from './helpers/composed-adapter';
@@ -174,7 +174,7 @@ describe('renderLoweredSql cast policy', () => {
       baseContract,
       registry,
       dataTypes,
-      postgresAdapterCapabilities,
+      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."tag" = $1::foo');
@@ -188,7 +188,7 @@ describe('renderLoweredSql cast policy', () => {
       baseContract,
       postgresCodecDescriptorRegistry,
       dataTypes,
-      postgresAdapterCapabilities,
+      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."score" = $1');
@@ -207,7 +207,7 @@ describe('renderLoweredSql cast policy', () => {
       baseContract,
       postgresCodecDescriptorRegistry,
       dataTypes,
-      postgresAdapterCapabilities,
+      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."name" = $1');
@@ -244,7 +244,7 @@ describe('renderLoweredSql cast policy', () => {
         baseContract,
         postgresCodecDescriptorRegistry,
         dataTypes,
-        postgresAdapterCapabilities,
+        postgresServerVersions[18],
       ).sql;
 
     expect([render(list), render(projected)]).toEqual([
@@ -261,7 +261,7 @@ describe('renderLoweredSql cast policy', () => {
       'x',
     );
     expect(
-      renderLoweredSql(ast, baseContract, verbatimRegistry, dataTypes, postgresAdapterCapabilities)
+      renderLoweredSql(ast, baseContract, verbatimRegistry, dataTypes, postgresServerVersions[18])
         .sql,
     ).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."tag" = $1');
   });
@@ -286,7 +286,7 @@ describe('renderLoweredSql cast policy', () => {
         baseContract,
         postgresCodecDescriptorRegistry,
         dataTypes,
-        postgresAdapterCapabilities,
+        postgresServerVersions[18],
       ).sql,
     ).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."status" = $1::"aal_level"');
     expect(
@@ -295,7 +295,7 @@ describe('renderLoweredSql cast policy', () => {
         baseContract,
         postgresCodecDescriptorRegistry,
         dataTypes,
-        postgresAdapterCapabilities,
+        postgresServerVersions[18],
       ).sql,
     ).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."status" = $1::"auth"."aal_level"');
   });
@@ -315,7 +315,7 @@ describe('renderLoweredSql cast policy', () => {
       baseContract,
       postgresCodecDescriptorRegistry,
       dataTypes,
-      postgresAdapterCapabilities,
+      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."score" = $1');
@@ -339,7 +339,7 @@ describe('renderLoweredSql cast policy', () => {
       baseContract,
       postgresCodecDescriptorRegistry,
       dataTypes,
-      postgresAdapterCapabilities,
+      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toBe(
@@ -358,7 +358,7 @@ describe('renderLoweredSql cast policy', () => {
       baseContract,
       postgresCodecDescriptorRegistry,
       dataTypes,
-      postgresAdapterCapabilities,
+      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toBe('SELECT $1::int4 AS "value" FROM "user"');
@@ -382,7 +382,7 @@ describe('renderLoweredSql cast policy', () => {
       baseContract,
       postgresCodecDescriptorRegistry,
       dataTypes,
-      postgresAdapterCapabilities,
+      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toBe(
@@ -401,7 +401,7 @@ describe('renderLoweredSql cast policy', () => {
       baseContract,
       registry,
       dataTypes,
-      postgresAdapterCapabilities,
+      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toBe(
@@ -416,7 +416,7 @@ describe('renderLoweredSql cast policy', () => {
         baseContract,
         postgresCodecDescriptorRegistry,
         dataTypes,
-        postgresAdapterCapabilities,
+        postgresServerVersions[18],
       ).sql;
 
     it('casts an inserted money value through numeric', () => {
@@ -452,7 +452,7 @@ describe('renderLoweredSql cast policy', () => {
     const ast = selectWithParam('tag', 'app/test-foo@1', 'tagged');
 
     expect(() =>
-      renderLoweredSql(ast, baseContract, emptyRegistry, dataTypes, postgresAdapterCapabilities),
+      renderLoweredSql(ast, baseContract, emptyRegistry, dataTypes, postgresServerVersions[18]),
     ).toThrow(/codecId "app\/test-foo@1"/);
   });
 
@@ -467,7 +467,7 @@ describe('renderLoweredSql cast policy', () => {
       );
 
     expect(() =>
-      renderLoweredSql(ast, baseContract, emptyRegistry, dataTypes, postgresAdapterCapabilities),
+      renderLoweredSql(ast, baseContract, emptyRegistry, dataTypes, postgresServerVersions[18]),
     ).toThrow(/codecId "app\/never-used@1"/);
   });
 
@@ -475,7 +475,7 @@ describe('renderLoweredSql cast policy', () => {
     const ast = selectWithParam('id', undefined, 1);
 
     expect(() =>
-      renderLoweredSql(ast, baseContract, emptyRegistry, dataTypes, postgresAdapterCapabilities),
+      renderLoweredSql(ast, baseContract, emptyRegistry, dataTypes, postgresServerVersions[18]),
     ).toThrow(/PARAM_REF_MISSING_CODEC|reached lowering without/);
   });
 });

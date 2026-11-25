@@ -8,6 +8,8 @@ import { createPostgresDefaultFunctionRegistry } from '../core/migrations/contro
 
 const postgresAdapterDescriptor: SqlControlAdapterDescriptor<'postgres'> = {
   ...postgresAdapterDescriptorMeta,
+  // The control adapter migrates the database; the application's runtime adapter reaches a contract through its `capabilities` list.
+  capabilities: {},
   authoring: {
     valueObjectStorageType: 'Jsonb',
   },

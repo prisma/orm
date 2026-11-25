@@ -130,7 +130,6 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { adapterError } from './adapter-errors';
-import { postgresAdapterCapabilities } from './capabilities';
 import { encodeControlQueryParams } from './control-codecs';
 import {
   execute,
@@ -256,7 +255,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       ),
       this.codecRegistry,
       this.dataTypeLookup,
-      postgresAdapterCapabilities,
+      context.contract === undefined ? {} : context.contract.capabilities,
     );
   }
 
@@ -299,7 +298,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       contract,
       this.codecRegistry,
       this.dataTypeLookup,
-      postgresAdapterCapabilities,
+      contract.capabilities,
     );
     const codecRegistry = blindCast<
       ContractCodecRegistry,

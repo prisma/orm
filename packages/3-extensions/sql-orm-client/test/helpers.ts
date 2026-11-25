@@ -1,4 +1,3 @@
-import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import {
@@ -33,6 +32,7 @@ import {
   type SqlRuntimeExtensionDescriptor,
 } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
+import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { expect } from 'vitest';
 import { resolveIncludeRelation } from '../src/collection-contract';
 import {
@@ -312,9 +312,9 @@ export function buildTestContextFromContract<TContract extends FrameworkContract
 export const perRelationPostgresAdapter: typeof postgresAdapter = {
   ...postgresAdapter,
   capabilities: {
-    ...postgresAdapterCapabilities,
+    ...postgresServerVersions[18],
     sql: {
-      ...postgresAdapterCapabilities.sql,
+      ...postgresServerVersions[18].sql,
       outerReferencesInDerivedTables: false,
       jsonAggWithoutTruncation: false,
     },

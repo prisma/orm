@@ -1,6 +1,6 @@
-import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
+import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../../src/collection';
 import { defineContract, field, model, rel } from '../contract-builder';
@@ -34,9 +34,8 @@ const contract = defineContract({ models: { Log, User } });
 const withoutReturning: typeof postgresAdapter = {
   ...postgresAdapter,
   capabilities: {
-    ...postgresAdapterCapabilities,
-    postgres: { ...postgresAdapterCapabilities.postgres, returning: false },
-    sql: { ...postgresAdapterCapabilities.sql, returning: false },
+    ...postgresServerVersions[18],
+    sql: { ...postgresServerVersions[18].sql, returning: false },
   },
 };
 

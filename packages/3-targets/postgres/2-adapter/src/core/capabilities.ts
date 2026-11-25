@@ -1,31 +1,4 @@
-export const postgresAdapterCapabilities = Object.freeze({
-  postgres: {
-    orderBy: true,
-    limit: true,
-    lateral: true,
-    jsonAgg: true,
-    returning: true,
-    distinctOn: true,
-    forNoKeyUpdate: true,
-    forKeyShare: true,
-  },
-  sql: {
-    enums: true,
-    returning: true,
-    defaultInInsert: true,
-    lateral: true,
-    scalarList: true,
-    checkConstraint: true,
-    insertOnConflictSkip: true,
-    insertOnConflictWithoutTarget: true,
-    insertOnConflictTarget: true,
-    forUpdate: true,
-    forShare: true,
-    lockOf: true,
-    lockNowait: true,
-    lockSkipLocked: true,
-    jsonAgg: true,
-    outerReferencesInDerivedTables: true,
-    jsonAggWithoutTruncation: true,
-  },
-} as const);
+/**
+ * The facts this adapter itself knows, such as what it can write as a query. Every PostgreSQL flag today is a fact about the database, which the target declares by version, so the adapter declares none.
+ */
+export const postgresAdapterCapabilities = Object.freeze({} as const);

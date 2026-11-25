@@ -93,7 +93,7 @@ class PostgresAdapterImpl
       context.contract,
       this.codecRegistry,
       this.dataTypeLookup,
-      postgresAdapterCapabilities,
+      context.contract.capabilities,
     );
   }
 }

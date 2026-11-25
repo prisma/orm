@@ -1,15 +1,17 @@
-import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
-import postgresAdapter from '@internal/adapter-postgres/control';
 import { defineConfig as ormConfig } from '@internal/postgres/config';
+import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { definePrismaConfig } from '@prisma/cli-engine';
 
-const { insertOnConflictTarget: _target, ...sql } = postgresAdapterCapabilities.sql;
+const { insertOnConflictTarget: _target, ...sql } = postgresServerVersions[18].sql;
 
-const orm = ormConfig({ contract: './contract.prisma', output: 'generated' });
+const orm = ormConfig({
+  contract: { path: './contract.prisma', version: 18 },
+  output: 'generated',
+});
 
 export default definePrismaConfig({
   orm: {
     ...orm,
-    adapter: { ...postgresAdapter, capabilities: { ...postgresAdapterCapabilities, sql } },
+    target: { ...orm.target, capabilities: { ...postgresServerVersions[18], sql } },
   },
 });

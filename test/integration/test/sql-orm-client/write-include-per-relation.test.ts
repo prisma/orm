@@ -1,10 +1,10 @@
-import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
+import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { describe, expect, it } from 'vitest';
 import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
 import {
@@ -43,9 +43,8 @@ const contract = defineContract({ models: { Owner, Item } });
 type Returning = 'with returning' | 'without returning';
 
 const withoutReturning = {
-  ...postgresAdapterCapabilities,
-  postgres: { ...postgresAdapterCapabilities.postgres, returning: false },
-  sql: { ...postgresAdapterCapabilities.sql, returning: false },
+  ...postgresServerVersions[18],
+  sql: { ...postgresServerVersions[18].sql, returning: false },
 };
 
 function contextOf(

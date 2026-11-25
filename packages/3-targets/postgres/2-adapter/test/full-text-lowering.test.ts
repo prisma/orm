@@ -9,11 +9,11 @@ import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codec
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { websearchToTsquery } from '@internal/target-postgres/full-text';
 import postgresTargetDescriptor from '@internal/target-postgres/runtime';
+import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql-family/9-family/test/test-sql-contract-serializer';
 import { postgresRawCodecInferer } from '../src/core/adapter';
-import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
 
@@ -74,7 +74,7 @@ function lowerWhere(query: unknown) {
     contract,
     postgresCodecDescriptorRegistry,
     postgresDataTypeLookup,
-    postgresAdapterCapabilities,
+    postgresServerVersions[18],
   );
 }
 
@@ -121,7 +121,7 @@ describe('full-text lowering', () => {
         contract,
         postgresCodecDescriptorRegistry,
         postgresDataTypeLookup,
-        postgresAdapterCapabilities,
+        postgresServerVersions[18],
       ),
     ).toEqual({
       sql: `SELECT ts_rank((setweight(to_tsvector('german', coalesce("post"."title", '')), 'A') || setweight(to_tsvector('german', coalesce("post"."body", '')), 'B')), websearch_to_tsquery('english', $1)) AS rank FROM "post"`,

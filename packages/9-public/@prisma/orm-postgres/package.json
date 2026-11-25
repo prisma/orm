@@ -88,6 +88,7 @@
     "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./driver": "./dist/driver.mjs",
+    "./driver/capabilities": "./dist/driver__capabilities.mjs",
     "./driver/control": "./dist/driver__control.mjs",
     "./driver/runtime": "./dist/driver__runtime.mjs",
     "./family": "./dist/family.mjs",

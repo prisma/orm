@@ -63,6 +63,8 @@ export class PostgresControlDriver implements SqlControlDriverInstance<'postgres
 const postgresDriverDescriptor: ControlDriverDescriptor<'sql', 'postgres', PostgresControlDriver> =
   {
     ...postgresDriverDescriptorMeta,
+    // The control driver migrates the database; the application's runtime driver reaches a contract through its `capabilities` list.
+    capabilities: {},
     async create(
       url: string,
       options?: ControlDriverConnectOptions,

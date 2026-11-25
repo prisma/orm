@@ -326,7 +326,7 @@ function requireCapability(
   if (capability !== undefined) {
     throw adapterError(
       'RUNTIME.AST_UNSUPPORTED',
-      `Postgres adapter does not report capability ${capability}, which this locking clause needs`,
+      `The contract does not list capability ${capability}, which this locking clause needs`,
       { meta: { target: 'postgres', feature: 'locking-clause', capability } },
     );
   }

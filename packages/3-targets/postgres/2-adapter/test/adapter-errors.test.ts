@@ -18,12 +18,12 @@ import { col } from '@internal/sql-relational-core/contract-free';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { PostgresCreateTable } from '@internal/target-postgres/ddl';
+import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { PostgresSchema } from '@internal/target-postgres/types';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createPostgresAdapter, postgresRawCodecInferer } from '../src/core/adapter';
-import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { parsePgReloptions } from '../src/core/control-adapter';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
@@ -113,7 +113,7 @@ describe('adapter-postgres structured error codes', () => {
           contract,
           codecLookup,
           createPostgresBuiltinDataTypeLookup(),
-          postgresAdapterCapabilities,
+          postgresServerVersions[18],
         ),
       ),
     ).toBe('RUNTIME.PARAM_REF_MISSING_CODEC');
@@ -130,7 +130,7 @@ describe('adapter-postgres structured error codes', () => {
           contract,
           codecLookup,
           createPostgresBuiltinDataTypeLookup(),
-          postgresAdapterCapabilities,
+          postgresServerVersions[18],
         );
       } catch (e) {
         return e;
@@ -153,7 +153,7 @@ describe('adapter-postgres structured error codes', () => {
           contract,
           codecLookup,
           createPostgresBuiltinDataTypeLookup(),
-          postgresAdapterCapabilities,
+          postgresServerVersions[18],
         ),
       ),
     ).toBe('RUNTIME.AST_INVALID');
@@ -168,7 +168,7 @@ describe('adapter-postgres structured error codes', () => {
           contract,
           codecLookup,
           createPostgresBuiltinDataTypeLookup(),
-          postgresAdapterCapabilities,
+          postgresServerVersions[18],
         ),
       ),
     ).toBe('RUNTIME.AST_INVALID');
@@ -192,7 +192,7 @@ describe('adapter-postgres structured error codes', () => {
           contract,
           codecLookup,
           createPostgresBuiltinDataTypeLookup(),
-          postgresAdapterCapabilities,
+          postgresServerVersions[18],
         ),
       ),
     ).toBe('CONTRACT.PACK_CONTRIBUTION_INVALID');
