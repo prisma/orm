@@ -63,7 +63,9 @@ What is a break and what is not:
 - Adding an optional parameter or property: not a break.
 - A new member on an interface users implement: a break unless it is optional. A new member on a type users only receive: not a break.
 
-An entry listed as **undecided** is a comparison TypeScript gave up on ("type instantiation is excessively deep"). It is neither a pass nor a break; look at the change yourself.
+An entry listed as **undecided** is a comparison the check could not settle: TypeScript gave up on it ("type instantiation is excessively deep", or the compiler ran out of stack), or it could not relate two copies of a generic type. The report says at which step it stopped. It is neither a pass nor a break; if your change touches that export, look at it yourself.
+
+Some breaks are reported for changes the policy allows. The check treats any type an exported function accepts as one users may supply, so widening the return type of a method on an interface users only implement, for example, is reported. Record it with that reason.
 
 If the break is not intended, change the code. If it is, record it.
 
@@ -91,4 +93,4 @@ A record matches one error by app, file, line, code and message, so copy the mes
 
 ## What the checks do not see
 
-Swapping one branded type for another; changes inside generic functions or between overloads; breaks inside types TypeScript gives up on; result types the example apps do not exercise; runtime behaviour, error codes, command output and file formats. A reviewer is the only check for these.
+The decision record lists them in its section "What the checks do not see". In short: swapping one branded type for another, changes inside generic functions or between overloads, a property made `readonly`, breaks inside undecided comparisons, third-party type changes, result types the example apps do not exercise, and behaviour. A reviewer is the only check for these.
