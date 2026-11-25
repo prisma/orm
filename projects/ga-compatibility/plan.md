@@ -31,7 +31,7 @@ Each project is sized for one to four pull requests. Its design is written when 
 
 New work joins a project only when it serves that project's purpose. Work that serves the goal and fits no project becomes a new project.
 
-Projects 2 to 7 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are Later. Will confirmed this on 2026-11-24; it is updated as we go. Project 4 comes before project 3. There is no project 1: it was to document the whole policy on `main` ahead of the code, and each project now documents its own part.
+Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are Later. Will confirmed this on 2026-11-24; it is updated as we go. Project 4 comes before project 3. There is no project 1: it was to document the whole policy on `main` ahead of the code, and each project now documents its own part.
 
 "Task N" is the number a piece of work had before 2026-11-24. The reports under [research/](research/) use those numbers. The facts about the code were read on 2026-11-23 and are rechecked when a project starts.
 
@@ -198,6 +198,24 @@ Projects 2 to 7 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are Later. W
 **What it achieves.** A page in the Prisma 8 docs tells an application developer and an extension author what a release will never break, what may change and how they will be told, and how long Prisma 8 receives fixes.
 
 **How, where we know.** It is the spec rewritten for users, not a new design. It is written last, once the other projects are complete, so that it states what was built and includes what we learned on the way (task 23).
+
+### 13. Design the command-line tool's JSON output as a public format, and bring every command into line before `8.0.0`
+
+**Purpose.** A script or an agent that reads a command's `--json` output keeps working across every `8.x` release, and can tell what each field means.
+
+**What it achieves.** The policy covers the command-line tool's machine-readable output. Today nobody has designed it: each command's document is whatever was chosen when the command was written. After `8.0.0` a format cannot change, so the formats are designed and corrected before it.
+
+**How, where we know.**
+
+- Survey the `--json` output of every command.
+- Settle the principles in a decision record: what a document reports (the result, or the input given back), stable names, one meaning for each field, how an error is shaped, how a format is versioned, and which maturity level it has. The "JSON semantics" section of the CLI Style Guide is the starting point.
+- Bring each command into line.
+
+**The example that raised it.** `prisma orm init --json`, whose schema is in `packages/1-framework/3-tooling/cli/src/commands/init/output.ts` and is published as `@prisma/orm-toolchain/cli/init-output`. Its `package` field is one string, the database package, although `init` installs many packages, which it reports separately under `packagesInstalled`. Its `target` field held `'postgres'` or `'mongodb'` until prisma/orm#31093; since then it holds a short name for a database in Prisma's list and a package name for any other, so a reader cannot tell which kind of value it has. Nothing documented reads either field.
+
+**Already decided.** The input flag `--target` keeps its name. Project 6 changes no JSON format.
+
+**To decide when it starts.** Its design discussion has not been held.
 
 ## Moved out of this stream
 
