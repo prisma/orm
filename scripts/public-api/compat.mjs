@@ -27,6 +27,9 @@ export const STAMP = 'last-release';
 
 const EXCESSIVELY_DEEP = 2589;
 const UNUSED_EXPECT_ERROR = 2578;
+const SUSPECT_BATCH = 32;
+const OUT_OF_TIME =
+  'not decided: compared after a comparison too deep to finish, which may have let it pass, and the time for comparing it again ran out';
 
 const TYPE_FLAGS =
   ts.SymbolFlags.Interface | ts.SymbolFlags.TypeAlias | ts.SymbolFlags.Class | ts.SymbolFlags.Enum;
@@ -353,12 +356,14 @@ function programProblems(program, testFile, ownNames) {
 const lastMessageLine = (message) =>
   withoutRoot(ts.flattenDiagnosticMessageText(message, '\n').split('\n').at(-1).trim());
 
-function compileOnce({ testFile, entries, mustFail }) {
+function compileOnce({ testFile, entries, mustFail, oldProgram }) {
   const { lines, cases } = render(entries, { mustFail });
   const helpers = relative(dirname(testFile), HELPERS).split(sep).join('/').replace(/\.ts$/, '.js');
   lines[0] = lines[0].replace('HELPERS', helpers.startsWith('.') ? helpers : `./${helpers}`);
   writeFileSync(testFile, `${lines.join('\n')}\n`);
-  const program = ts.createProgram([testFile], compilerOptions(dirname(testFile)));
+  const options = compilerOptions(dirname(testFile));
+  // A program made from the last one reuses the files that did not change, but has a new checker.
+  const program = ts.createProgram({ rootNames: [testFile], options, oldProgram });
   const bySegment = new Map();
   const unusedRecords = new Set();
   const importFailures = [];
@@ -402,19 +407,33 @@ function compileOnce({ testFile, entries, mustFail }) {
 // for it that is assignable both ways, so every later test that reaches the same type passes. The
 // tests after the first TS2589 are therefore compiled again in a new program, without the ones
 // already decided, until a pass has no new TS2589.
-export function compileTests({ testFile, entries, ownNames, currentDir, mustFail = true }) {
+export function compileTests({
+  testFile,
+  entries,
+  ownNames,
+  currentDir,
+  mustFail = true,
+  budgetMs = 120_000,
+}) {
+  const started = performance.now();
   const imports = entries.filter(({ kind }) => kind === 'import');
-  let remaining = entries.filter(({ kind }) => kind === 'export');
+  let queue = entries.filter(({ kind }) => kind === 'export');
   const outcomes = new Map();
   const problems = new Set();
   const unusedRecords = new Set();
   let importFailures = [];
   let passes = 0;
-  while (remaining.length > 0 || passes === 0) {
-    const pass = compileOnce({ testFile, entries: [...imports, ...remaining], mustFail });
+  let oldProgram;
+  let size = queue.length;
+  while (queue.length > 0 || passes === 0) {
+    if (passes > 0 && performance.now() - started > budgetMs) break;
+    const batch = queue.slice(0, size);
+    const pass = compileOnce({ testFile, entries: [...imports, ...batch], mustFail, oldProgram });
+    oldProgram = pass.program;
     if (passes === 0) {
-      for (const problem of programProblems(pass.program, testFile, ownNames))
+      for (const problem of programProblems(pass.program, testFile, ownNames)) {
         problems.add(problem);
+      }
       importFailures = pass.importFailures;
       for (const entry of pass.unusedRecords) if (entry.kind === 'import') unusedRecords.add(entry);
     }
@@ -433,27 +452,30 @@ export function compileTests({ testFile, entries, ownNames, currentDir, mustFail
       );
       if (deep) cut = Math.min(cut, line);
     }
-    const next = [];
+    const suspects = [];
     for (const [line, testCase] of pass.cases) {
       if (testCase.kind !== 'export') continue;
       const { entry } = testCase;
-      if (line < cut) {
-        if (pass.unusedRecords.has(entry)) unusedRecords.add(entry);
-        for (const segment of entry.segments) {
-          if (pass.bySegment.has(segment.id))
-            outcomes.set(segment.id, pass.bySegment.get(segment.id));
-        }
-        continue;
-      }
-      const undecided = entry.segments.filter((segment) => !pass.bySegment.has(segment.id));
       for (const segment of entry.segments) {
         if (pass.bySegment.has(segment.id))
           outcomes.set(segment.id, pass.bySegment.get(segment.id));
       }
-      if (undecided.length > 0) next.push({ ...entry, segments: undecided });
+      if (line < cut) {
+        if (pass.unusedRecords.has(entry)) unusedRecords.add(entry);
+        continue;
+      }
+      const passed = entry.segments.filter((segment) => !pass.bySegment.has(segment.id));
+      if (passed.length > 0) suspects.push({ ...entry, segments: passed });
     }
-    if (cut === Number.POSITIVE_INFINITY) break;
-    remaining = next;
+    queue = [...suspects, ...queue.slice(size)];
+    // The tests after a TS2589 go again in small batches, so that the next one too deep poisons
+    // few others; a batch with none doubles the size of the next.
+    size = cut === Number.POSITIVE_INFINITY ? size * 2 : SUSPECT_BATCH;
+  }
+  for (const entry of queue) {
+    for (const segment of entry.segments) {
+      outcomes.set(segment.id, { codes: new Set([EXCESSIVELY_DEEP]), message: OUT_OF_TIME });
+    }
   }
   for (const entry of unusedRecords) {
     problems.add(
@@ -509,6 +531,7 @@ export function checkPackage({
   strict,
   ownNames,
   mustFail = true,
+  budgetMs,
 }) {
   const started = performance.now();
   const generated = generateTests({
@@ -525,6 +548,7 @@ export function checkPackage({
     ownNames: new Set(ownNames),
     currentDir,
     mustFail,
+    budgetMs,
   });
   const recorded = generated.entries
     .filter(({ record }) => record)

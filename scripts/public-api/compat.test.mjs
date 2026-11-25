@@ -102,6 +102,18 @@ describe('checkPackage on types too deep to compare', () => {
     ]);
   });
 
+  it('reports the tests it has no time to compare again as undecided', () => {
+    const { breaks, undecided } = check('json-widened', { release: 'json-release', budgetMs: 0 });
+    deepStrictEqual(breaks, []);
+    deepStrictEqual(names(undecided).sort(), [
+      '. JsonObject type',
+      '. JsonValue type',
+      '. Row type',
+      '. g value',
+    ]);
+    match(undecided.at(-1).message, /the time for comparing it again ran out/);
+  });
+
   it('reports a break that sits beside a comparison too deep to finish', () => {
     const { breaks } = check('row-changed', { release: 'row-release' });
     deepStrictEqual(names(breaks), ['. Row type']);

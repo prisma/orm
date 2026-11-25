@@ -28,6 +28,7 @@ export function fixtureCheck(work) {
       stamp = true,
       dependencies = [],
       mustFail,
+      budgetMs,
     } = {},
   ) => {
     const workDir = join(work, `${current}-${Math.random().toString(36).slice(2)}`);
@@ -55,6 +56,7 @@ export function fixtureCheck(work) {
       strict,
       ownNames: ['fixture-compat'],
       mustFail,
+      budgetMs,
     });
   };
 }
