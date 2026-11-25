@@ -24,8 +24,8 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Query features | 10 of 11 (91%) | `█████████░` | 1 | 0 |
 | Docs and the new user's first hour | 2 of 5 (40%) | `████░░░░░░` | 2 | 1 |
 | Work found along the way | 4 of 9 (44%) | `████░░░░░░` | 1 | 4 |
-| Compatibility policy | 0 of 6 (0%) | `░░░░░░░░░░` | 3 | 3 |
-| **All streams** | **34 of 52 (65%)** | `███████░░░` | **8** | **10** |
+| Compatibility policy | 0 of 7 (0%) | `░░░░░░░░░░` | 3 | 4 |
+| **All streams** | **34 of 53 (64%)** | `██████░░░░` | **8** | **11** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -143,7 +143,7 @@ Work found after the plan was made goes here, so the first five streams keep the
 
 ## Stream 7: Compatibility policy
 
-**GA readiness:** 0 of 6 Must projects done (0%). 3 in progress, 3 not started.
+**GA readiness:** 0 of 7 Must projects done (0%). 3 in progress, 4 not started.
 
 **Goal:** from `8.0.0`, an application built on Prisma 8 upgrades to any later `8.x` release with no changes to its code, its generated files or its database. Upgrading becomes routine, so users stay on the latest release and we maintain one release line for each major. It is always clear to a user what they can rely on. A project belongs in this stream when it removes a reason for a user to hesitate before upgrading.
 
@@ -165,6 +165,7 @@ Each project brings its code changes, its checks and its documentation together,
 | 10 | ⏳ | Make the changes an upgrade needs with a deterministic tool, not a guide | Later | Will | Not started | |
 | 11 | ⏳ | Follow each maker's lifetime for supported versions of Node.js, TypeScript and databases, and test them in CI | Later | Will | Not started | |
 | 12 | ⏳ | Publish the compatibility policy in the user docs | Aim | Will | Not started. Written last | |
+| 13 | ⏳ | Design the command-line tool's JSON output as a public format, and bring every command into line before `8.0.0` | Must | Will | Not started. Added 2026-11-25. Needs a design discussion | |
 
 ## Databases
 
