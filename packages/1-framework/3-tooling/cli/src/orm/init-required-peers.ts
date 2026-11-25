@@ -1,7 +1,12 @@
 import { readFileSync, realpathSync } from 'node:fs';
 import type { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { dirname } from 'pathe';
-import { exactVersionOf, requirementAdmits, versionLines } from './init-version-lines';
+import {
+  exactVersionOf,
+  lineStandsFor,
+  requirementAdmits,
+  versionLines,
+} from './init-version-lines';
 import { installedManifest } from './project-modules';
 import { type PublishedPackage, REGISTRY_LOOKUP_TIMEOUT_MILLIS } from './registry-keywords';
 
@@ -168,8 +173,7 @@ export function requiredPeersForSetup(ctx: {
     try {
       resolved = await resolveRequiredPeers({
         packageName,
-        ownsFacadeLine: false,
-        listsFacade: false,
+        facadeLine: 'report',
         installedElsewhere: ctx.installedElsewhere,
         declared: () => new Map(),
         installedVersion: () => undefined,
@@ -197,13 +201,17 @@ export function requiredPeersForSetup(ctx: {
  */
 export async function resolveRequiredPeers(ctx: {
   readonly packageName: string;
-  /** Whether init wrote the facade's line, so it may pin it to the installed version. */
-  readonly ownsFacadeLine: boolean;
   /**
-   * Whether the project listed the facade before init ran. Its line is then the user's,
-   * and each peer is written at the range the installed facade declares.
+   * What init may do with the facade's line in `package.json`:
+   *
+   * - `write`: init added the facade, so it writes the facade's line and may pin it to the
+   *   installed version.
+   * - `keep`: the project listed the facade before init ran, so its line is the user's, and each
+   *   peer is written at the range the installed facade declares.
+   * - `report`: init writes no facade line; it works out the lines an install of the facade would
+   *   write.
    */
-  readonly listsFacade: boolean;
+  readonly facadeLine: 'write' | 'keep' | 'report';
   /** Packages init installs another way, such as the CLI's engine, which the list leaves out. */
   readonly installedElsewhere: ReadonlySet<string>;
   readonly declared: () => ReadonlyMap<string, string>;
@@ -229,11 +237,11 @@ export async function resolveRequiredPeers(ctx: {
   const lines = versionLines(
     facade.version,
     [...facade.peers].filter(([name]) => isPrismaOrmPackage(name)).map(([, range]) => range),
-    { addsFacade: !ctx.listsFacade },
+    { addsFacade: ctx.facadeLine !== 'keep' },
   );
   const lineOf = (name: string, range: string) =>
     isPrismaOrmPackage(name) ? lines.ormPackage(range) : range;
-  const listedFacade = ctx.listsFacade ? ctx.declared().get(ctx.packageName) : undefined;
+  const listedFacade = ctx.facadeLine === 'keep' ? ctx.declared().get(ctx.packageName) : undefined;
   const facadeSpecifier = `${ctx.packageName}@${listedFacade ?? lines.facade}`;
   const wanted = new Map<string, { readonly range: string; readonly by: string }>();
   const outcomes = new Map<string, RequiredPeerOutcome>();
@@ -242,7 +250,7 @@ export async function resolveRequiredPeers(ctx: {
   let level: { readonly name: string; readonly manifest: ReadManifest | undefined }[] = [
     { name: ctx.packageName, manifest: facade },
   ];
-  let pinFacade = ctx.ownsFacadeLine && !ctx.listsFacade;
+  let pinFacade = ctx.facadeLine === 'write';
   const atAnotherVersion = new Map<
     string,
     { readonly installed: string; readonly range: string; readonly by: string }
@@ -304,7 +312,7 @@ export async function resolveRequiredPeers(ctx: {
       const line = lineOf(name, range);
       if (
         (!ours && exactVersionOf(range) === undefined) ||
-        lines.standsFor(listed, line, installed)
+        lineStandsFor(listed, line, installed)
       ) {
         outcomes.set(name, 'already-listed');
         continue;

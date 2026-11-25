@@ -103,8 +103,7 @@ describe("the required peers of this repository's facades", () => {
 
       const resolved = await resolveRequiredPeers({
         packageName,
-        ownsFacadeLine: false,
-        listsFacade: false,
+        facadeLine: 'report',
         installedElsewhere: new Set([ENGINE_PACKAGE]),
         declared: () => new Map(),
         installedVersion: manifests.installedVersion,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { requirementAdmits, versionLines } from '../../src/orm/init-version-lines';
+import { lineStandsFor, requirementAdmits, versionLines } from '../../src/orm/init-version-lines';
 
 describe('the lines init writes, read from how the facade names its peers', () => {
   it('keeps the versions as they are when every peer is an exact version', () => {
@@ -88,9 +88,7 @@ describe('whether a line the project lists stands for the line init writes', () 
     ['a caret with the version installed', '^8.0.0-rc.26', '8.0.0-rc.27', true],
     ['a caret with another version installed', '^8.0.0-rc.26', '8.0.0-rc.26', false],
   ])('on the release candidates, decides %s', (_case, line, installed, stands) => {
-    const lines = versionLines('8.0.0-rc.27', ['8.0.0-rc.27'], { addsFacade: true });
-
-    expect(lines.standsFor(line, '8.0.0-rc.27', installed)).toBe(stands);
+    expect(lineStandsFor(line, '8.0.0-rc.27', installed)).toBe(stands);
   });
 
   it.each([
@@ -99,9 +97,7 @@ describe('whether a line the project lists stands for the line init writes', () 
     ['another line with the same release installed', '8.1.3', '8.1.3', true],
     ['another line with an earlier release installed', '^8.0.0', '8.0.4', false],
   ])('on the levels line, decides %s', (_case, line, installed, stands) => {
-    const lines = versionLines('8.1.2', ['~8.1.0'], { addsFacade: true });
-
-    expect(lines.standsFor(line, '^8.1.0', installed)).toBe(stands);
+    expect(lineStandsFor(line, '^8.1.0', installed)).toBe(stands);
   });
 });
 

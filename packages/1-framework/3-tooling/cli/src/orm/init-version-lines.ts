@@ -6,8 +6,6 @@ export interface VersionLines {
   readonly facade: string;
   /** The line for a `@prisma/orm-*` package a manifest names at `range`. */
   readonly ormPackage: (range: string) => string;
-  /** Whether a line the project already lists stands for `written`, the line `init` writes. */
-  readonly standsFor: (line: string, written: string, installed: string | undefined) => boolean;
 }
 
 const EXACT_VERSION = /^[v=]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/;
@@ -46,10 +44,10 @@ export function versionLines(
   options: { readonly addsFacade: boolean },
 ): VersionLines {
   if (ormPeerRanges.every((range) => EXACT_VERSION.test(withoutWorkspaceProtocol(range)))) {
-    return { facade: facadeVersion, ormPackage: (range) => range, standsFor: lineStandsFor };
+    return { facade: facadeVersion, ormPackage: (range) => range };
   }
   if (!options.addsFacade || facadeVersion.includes('-')) {
-    return { facade: `~${facadeVersion}`, ormPackage: (range) => range, standsFor: lineStandsFor };
+    return { facade: `~${facadeVersion}`, ormPackage: (range) => range };
   }
   const peerVersion = ormPeerRanges
     .map((range) => RANGE.exec(withoutWorkspaceProtocol(range)))
@@ -57,7 +55,6 @@ export function versionLines(
   return {
     facade: `^${peerVersion ?? facadeVersion}`,
     ormPackage: (range) => (range.trim().startsWith('~') ? `^${range.trim().slice(1)}` : range),
-    standsFor: lineStandsFor,
   };
 }
 
@@ -139,7 +136,11 @@ function compareIdentifier(a: string, b: string): number {
  * `file:` or alias line) cannot be judged from its text, so the installed copy decides, and with
  * nothing installed it counts as standing.
  */
-function lineStandsFor(line: string, written: string, installed: string | undefined): boolean {
+export function lineStandsFor(
+  line: string,
+  written: string,
+  installed: string | undefined,
+): boolean {
   if (line.trim() === written) return true;
   if (exactVersionOf(line) !== undefined) return requirementAdmits(written, line) !== false;
   if (installed === undefined) return true;

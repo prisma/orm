@@ -223,8 +223,7 @@ describe('whether a package the project lists is at the version asked for', () =
   function outcomeFor(line: string, installed: string | undefined) {
     return resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsFacadeLine: false,
-      listsFacade: false,
+      facadeLine: 'report',
       installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', line]]),
       installedVersion: () => installed,
@@ -270,8 +269,7 @@ describe('whether a package the project lists is at the version asked for', () =
   it('counts a caret line init wrote for one release candidate once the next is installed and asked for', async () => {
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsFacadeLine: false,
-      listsFacade: false,
+      facadeLine: 'report',
       installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', '^8.0.0-rc.26']]),
       installedVersion: () => '8.0.0-rc.27',
@@ -323,8 +321,7 @@ describe('a package installed at a version other than the one asked for', () => 
     let frameworkVersion = '8.0.0';
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsFacadeLine: false,
-      listsFacade: false,
+      facadeLine: 'report',
       installedElsewhere: new Set(),
       declared: () => new Map(),
       installedVersion: () => undefined,
@@ -367,8 +364,7 @@ describe('the packages init installs in a round', () => {
     let frameworkPeers = new Map<string, string>();
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsFacadeLine: false,
-      listsFacade: false,
+      facadeLine: 'report',
       installedElsewhere: new Set(),
       declared: () => new Map(),
       installedVersion: () => undefined,
@@ -401,13 +397,12 @@ describe('the lines init writes for each line of releases', () => {
     targetVersion: string,
     peers: Record<string, string>,
     declared: Record<string, string> = {},
-    options: { readonly listsFacade: boolean } = { listsFacade: false },
+    facadeLine: 'write' | 'keep' = 'write',
   ) {
     const installs: (readonly string[])[] = [];
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-mysql',
-      ownsFacadeLine: !options.listsFacade,
-      listsFacade: options.listsFacade,
+      facadeLine,
       installedElsewhere: new Set(),
       declared: () => new Map(Object.entries(declared)),
       installedVersion: () => undefined,
@@ -484,7 +479,7 @@ describe('the lines init writes for each line of releases', () => {
       '8.1.2',
       { '@prisma/orm-framework': '~8.1.0' },
       { '@prisma/orm-mysql': '8.1.2' },
-      { listsFacade: true },
+      'keep',
     );
 
     expect({ resolved, installs }).toMatchObject({
@@ -541,8 +536,7 @@ describe('a required version written with a v prefix', () => {
   it('stands for the same version listed and installed without it', async () => {
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsFacadeLine: false,
-      listsFacade: false,
+      facadeLine: 'report',
       installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', VERSION]]),
       installedVersion: () => VERSION,
@@ -564,8 +558,7 @@ describe('a required peer that is not a Prisma ORM package, listed at another ex
   it('is left at that version with a warning that says to change the line', async () => {
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsFacadeLine: false,
-      listsFacade: false,
+      facadeLine: 'report',
       installedElsewhere: new Set(),
       declared: () => new Map([['left-pad', '1.2.0']]),
       installedVersion: () => '1.2.0',
