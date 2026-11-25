@@ -1163,6 +1163,7 @@
 ./contract-prisma7/provider: interface Prisma7ColumnType, readonly required property codecId: string
 ./contract-prisma7/provider: interface Prisma7ColumnType, readonly required property dataType: string
 ./contract-prisma7/provider: interface Prisma7ContractOptions
+./contract-prisma7/provider: interface Prisma7ContractOptions, readonly optional property capabilities?: CapabilityMatrix
 ./contract-prisma7/provider: interface Prisma7ContractOptions, readonly optional property defaultControlPolicy?: ControlPolicy
 ./contract-prisma7/provider: interface Prisma7ContractOptions, readonly optional property output?: string
 ./contract-prisma7/provider: interface Prisma7ContractOptions, readonly required property binding: Prisma7TargetBinding
@@ -1215,6 +1216,7 @@
 ./contract-psl/map-names: function pslModelMapName(modelName: string, tableName: string): string | undefined
 ./contract-psl/provider: function prismaContract(schemaPath: string, options: PrismaContractOptions): ContractConfig
 ./contract-psl/provider: interface PrismaContractOptions
+./contract-psl/provider: interface PrismaContractOptions, readonly optional property capabilities?: CapabilityMatrix
 ./contract-psl/provider: interface PrismaContractOptions, readonly optional property composedExtensionPackRefs?: readonly ExtensionPackRef<'sql', string>[]
 ./contract-psl/provider: interface PrismaContractOptions, readonly optional property defaultControlPolicy?: ControlPolicy
 ./contract-psl/provider: interface PrismaContractOptions, readonly optional property enumInferenceCodecs?: { readonly text: string; readonly int: string; }

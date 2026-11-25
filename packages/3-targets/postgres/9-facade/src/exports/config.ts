@@ -1,3 +1,3 @@
-export type { PostgresConfigOptions } from '../config/define-config';
+export type { PostgresConfigOptions, PostgresContractEntry } from '../config/define-config';
 export { defineConfig } from '../config/define-config';
-export { prisma7Schema } from '../config/prisma7-schema';
+export { type Prisma7SchemaOptions, prisma7Schema } from '../config/prisma7-schema';

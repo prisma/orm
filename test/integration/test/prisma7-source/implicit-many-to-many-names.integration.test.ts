@@ -37,7 +37,7 @@ async function interpret(schemaPath: string): Promise<Contract<SqlStorage>> {
     driver: postgresDriver,
     extensions: [],
   });
-  const loaded = await prisma7Schema(schemaPath).source.load({
+  const loaded = await prisma7Schema(schemaPath, { version: 18 }).source.load({
     composedExtensions: [],
     defaultNamespaceId: stack.target.defaultNamespaceId,
     composedExtensionContracts: stack.extensionContracts,

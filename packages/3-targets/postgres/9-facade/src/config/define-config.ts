@@ -27,6 +27,7 @@ import {
 import { postgresError } from '../errors';
 import { contractBuilderModule, contractTypesModule, controlComponents } from './components';
 import { moduleBase } from './module-base';
+import { databaseCapabilitiesOfPrisma7Source } from './prisma7-schema';
 
 /** A contract file and, for a Prisma schema, the database it is written for. */
 export interface PostgresContractEntry {
@@ -126,7 +127,7 @@ export function defineConfig(options: PostgresConfigOptions): PrismaConfig<'sql'
   const databaseCapabilities =
     typeof options.contract === 'string' || isContractEntry(options.contract)
       ? databaseCapabilitiesOf(contractEntryOf(options.contract))
-      : {};
+      : (databaseCapabilitiesOfPrisma7Source(options.contract.source) ?? {});
 
   return coreDefineConfig({
     ...controlComponents,

@@ -111,9 +111,9 @@ export default definePrismaConfig({
 
 `contract emit` then writes `prisma/contract.json` and `prisma/contract.d.ts`.
 
-#### `prisma7Schema(path)`: adopt a Prisma 7 schema during the transition
+#### `prisma7Schema(path, { version })`: adopt a Prisma 7 schema during the transition
 
-`prisma7Schema` reads a Prisma 7 `schema.prisma` as the contract source, so a project that still runs Prisma 7 can adopt Prisma 8 without a second schema file. It accepts one file or a directory of `.prisma` files (every file under it, nested directories included, as Prisma 7 reads a schema directory) and produces the same `ContractConfig` as a `.prisma` path does. `contract emit` writes `contract.json` and `contract.d.ts` into the directory that holds the schema file or the schema directory, whatever the file is named: `prisma7Schema('prisma/schema.prisma')` and `prisma7Schema('prisma/schema')` both write `prisma/contract.json` and `prisma/contract.d.ts`, never inside the schema directory. This differs from a Prisma 8 PSL source, which defaults to `<schema name>.json` beside the schema (`prisma/schema.prisma` writes `prisma/schema.json`). The `output` directory on `defineConfig` sets either explicitly, as for every other source: with `output: 'generated/prisma8'`, `contract emit` writes `generated/prisma8/contract.json` and `generated/prisma8/contract.d.ts`.
+`prisma7Schema` reads a Prisma 7 `schema.prisma` as the contract source, so a project that still runs Prisma 7 can adopt Prisma 8 without a second schema file. It accepts one file or a directory of `.prisma` files (every file under it, nested directories included, as Prisma 7 reads a schema directory) and produces the same `ContractConfig` as a `.prisma` path does. `contract emit` writes `contract.json` and `contract.d.ts` into the directory that holds the schema file or the schema directory, whatever the file is named: `prisma7Schema('prisma/schema.prisma')` and `prisma7Schema('prisma/schema')` both write `prisma/contract.json` and `prisma/contract.d.ts`, never inside the schema directory. The second argument states the PostgreSQL `version` the database runs, which is required, and the optional `capabilities` list, as the contract entry `{ path, version, capabilities }` does for a Prisma 8 schema. This differs from a Prisma 8 PSL source, which defaults to `<schema name>.json` beside the schema (`prisma/schema.prisma` writes `prisma/schema.json`). The `output` directory on `defineConfig` sets either explicitly, as for every other source: with `output: 'generated/prisma8'`, `contract emit` writes `generated/prisma8/contract.json` and `generated/prisma8/contract.d.ts`.
 
 `prisma contract format` treats this source as PSL: when `prisma7Schema` names one file, the command rewrites that file in place with the Prisma 8 formatter. To keep Prisma 7's own formatting, do not run `prisma contract format`; format the schema with Prisma 7's `prisma format` instead.
 
@@ -124,7 +124,7 @@ import { defineConfig as ormConfig, prisma7Schema } from '@prisma/orm-postgres/c
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: prisma7Schema('prisma/schema.prisma'),
+    contract: prisma7Schema('prisma/schema.prisma', { version: 18 }),
     db: { connection: process.env['DATABASE_URL']! },
   }),
 });
