@@ -140,9 +140,14 @@ function droppedText({ copies }: DocumentMove): string {
 
 function filterText(move: DocumentMove): string {
   const shared = `the other documents of collection "${move.from}", which can hold the same values in the fields they share, a discriminator value among them`;
+  const one = move.copies.length === 1 && move.copies[0]?.models.length === 1;
+  const none = one
+    ? 'If it stores none, no field tells its documents apart'
+    : 'If they store none, no field tells their documents apart';
+  const byId = `${none}: select them by their _id values instead.`;
   return move.copies.length === 1
-    ? `The filter must tell those documents apart from ${shared}. Filter by a field only ${movingText(move)} ${move.copies[0]?.models.length === 1 ? 'stores' : 'store'}.`
-    : `Each copy's filter must select only the documents of its own models, apart from those of the other models that move and from ${shared}. Filter each copy by a field only its models store.`;
+    ? `The filter must tell those documents apart from ${shared}. Filter by a field only ${movingText(move)} ${one ? 'stores' : 'store'}. ${byId}`
+    : `Each copy's filter must select only the documents of its own models, apart from those of the other models that move and from ${shared}. Filter each copy by a field only its models store. ${byId}`;
 }
 
 function moveText(move: DocumentMove, naming: boolean): string {
