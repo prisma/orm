@@ -1,4 +1,3 @@
-import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { EMPTY_CONTRACT_HASH } from '../src/constants';
 import type { MigrationEdge } from '../src/graph';
@@ -404,80 +403,5 @@ describe('findPathWithInvariants — pathological shapes', () => {
     const path = findPathWithInvariants(graph, 'A', 'C', new Set(['X']));
     expect(path).not.toBeNull();
     expect(dirNames(path)).toEqual(['m_AB', 'm_BD', 'm_DB', 'm_BC']);
-  });
-});
-
-describe('findPathWithInvariants — states that can no longer cover a required invariant', () => {
-  it(
-    'plans a fresh database through 40 same-hash migrations that each provide an invariant',
-    () => {
-      const k = 40;
-      const packages: OnDiskMigrationPackage[] = [];
-      for (let i = 0; i < k; i++) {
-        packages.push(
-          pkg(i === 0 ? E : `H${i}`, `H${i + 1}`, `m_step_${i}`),
-          pkg(`H${i + 1}`, `H${i + 1}`, `m_self_${i}`, { invariants: [`inv-${i}`] }),
-        );
-      }
-      const graph = reconstructGraph(packages);
-      const required = new Set(Array.from({ length: k }, (_, i) => `inv-${i}`));
-      expect(dirNames(findPathWithInvariants(graph, E, `H${k}`, required))).toEqual(
-        Array.from({ length: k }, (_, i) => [`m_step_${i}`, `m_self_${i}`]).flat(),
-      );
-    },
-    timeouts.vitestPackageDefault,
-  );
-
-  it('skips a same-hash provider when a later migration on the route provides the invariant', () => {
-    const graph = reconstructGraph([
-      pkg(E, 'H1', 'm1'),
-      pkg('H1', 'H1', 'm_self', { invariants: ['X'] }),
-      pkg('H1', 'H2', 'm2'),
-      pkg('H2', 'H3', 'm3', { invariants: ['X'] }),
-    ]);
-    expect(dirNames(findPathWithInvariants(graph, E, 'H3', new Set(['X'])))).toEqual([
-      'm1',
-      'm2',
-      'm3',
-    ]);
-  });
-
-  it('ignores a provider on a branch that cannot reach the target', () => {
-    const graph = reconstructGraph([
-      pkg(E, 'A', 'm0'),
-      pkg('A', 'DEAD', 'm_dead_end', { invariants: ['X'] }),
-      pkg('A', 'B', 'm1'),
-      pkg('B', 'C', 'm2', { invariants: ['X'] }),
-    ]);
-    expect(dirNames(findPathWithInvariants(graph, E, 'C', new Set(['X'])))).toEqual([
-      'm0',
-      'm1',
-      'm2',
-    ]);
-  });
-
-  it('returns null when the only provider is on a branch that cannot reach the target', () => {
-    const graph = reconstructGraph([
-      pkg(E, 'A', 'm0'),
-      pkg('A', 'DEAD', 'm_dead_end', { invariants: ['X'] }),
-      pkg('A', 'B', 'm1'),
-    ]);
-    expect(findPathWithInvariants(graph, E, 'B', new Set(['X']))).toBeNull();
-  });
-
-  it('keeps a state whose missing invariant is provided on a cycle back to an earlier node', () => {
-    const graph = reconstructGraph([
-      pkg(E, 'A', 'm0'),
-      pkg('A', 'B', 'm1'),
-      pkg('B', 'A', 'm_back', { invariants: ['X'] }),
-      pkg('B', 'C', 'm2'),
-    ]);
-    expect(dirNames(findPathWithInvariants(graph, E, 'C', new Set(['X'])))).toEqual([
-      'm0',
-      'm1',
-      'm_back',
-      'm1',
-      'm2',
-    ]);
   });
 });

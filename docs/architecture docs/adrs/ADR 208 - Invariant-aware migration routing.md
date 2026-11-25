@@ -140,24 +140,36 @@ Framework decisions about applicability and routing must never depend on the aud
 
 ## Performance
 
-`findPathWithInvariants` searches breadth-first over `(node, covered invariants)` states. The covered set is a `Set<string>` of invariant ids, and the dedup key is `JSON.stringify([node, [...covered].sort()])`.
+`findPathWithInvariants` searches breadth-first over states made of a node, the set of required invariants covered so far, and, when the state was reached by a same-hash migration, that migration's rank among the node's same-hash migrations in tie-break order (`createdAt → to → migrationHash`). The dedup key is `JSON.stringify([node, [...covered].sort(), sameHashRank])`, with `-1` as the rank when the state was not reached by a same-hash migration.
 
-Before the search it computes, for each required invariant, the nodes that can still reach a migration providing the invariant on a route to the target: the migration's `from` is reachable from the node and its `to` reaches the target. That is one reverse breadth-first search per required invariant, `O(k · (V + E))` for `k` required invariants. The search then never enqueues a state whose node does not reach the target, or whose node, for some invariant the state still lacks, cannot reach a migration providing the invariant on a route to the target. Such a state has no satisfying continuation, and every state that does have one is still discovered by the same parent in the same order, so the returned path, tie-breaks included, is the one the unpruned search returns. Checking a state costs `O(k)`.
+Two rules keep the search small without changing the path it returns.
 
-This matters most for a fresh database catching up to a ref that lists many invariants, which is the normal case for CI and every new environment, not an edge case. Each same-hash migration that provides a required invariant offers two continuations, taken and skipped. Without pruning both stay alive and the state count doubles per invariant. With pruning, skipping one leaves its invariant out of reach, and the skipped state is dropped at once. On a history of `k` schema migrations, each followed by a same-hash migration providing one invariant, measured on a developer laptop:
+First, at a node the search takes same-hash migrations only in ascending tie-break order, and only one that covers a still-needed invariant. Same-hash migrations at one node commute, and the unrestricted search already takes them in that order on every route it discovers: if it took a later one first, the state that took the earlier one first is ahead of it in the queue and reaches the combined state before it does. So the restriction only removes routes that the unrestricted search reaches second. Leaving the node resets the order.
 
-| k | Before pruning | After pruning |
-|---:|---:|---:|
-| 16 | 0.37 s, 310 MB | 6 ms, 112 MB |
-| 18 | 1.8 s, 594 MB | — |
-| 32 | did not finish | 7 ms, 110 MB |
-| 64 | — | 9 ms, 112 MB |
-| 1000 | — | 0.47 s, 241 MB |
-| 3000 | — | 4.0 s, 815 MB |
+Second, the search never enqueues a state that provably cannot reach the goal: its node does not reach the target, or for some invariant the state still lacks, it can no longer reach a migration providing the invariant on a route to the target. With the first rule, a same-hash migration the state has passed over is out of reach until the search leaves the node, so a state that passed over the only remaining provider of an invariant is dropped at once. To answer the question quickly, the function computes once, for each required invariant, the nodes that can still reach a migration providing it on a route to the target after leaving the node by a migration to another node, and the highest rank of a same-hash migration providing it at each node. That is one reverse breadth-first search per required invariant plus a pass over the edges, `O(k · (V + E))` for `k` required invariants. Checking a state costs `O(k)`.
 
-The reporter of the bug saw planning exceed 12 GB of memory on their own history with 32 such invariants. On this shape `V`, `E` and `k` grow together, so the cost after pruning grows with `k²`: milliseconds at the sizes real histories have, and seconds only in the thousands of invariants. In steady state `effectiveRequired` is usually empty or holds one new invariant, and routing costs a few breadth-first searches of the graph, about 1 ms on a 1000-migration chain.
+A state that is dropped has no satisfying continuation, and every state that has one is still discovered by the same parent in the same order, so the returned path, tie-breaks included, is the one the unrestricted search returns. This was also checked by comparing the old and new functions on several million small random graphs with cycles, runs of same-hash migrations, shared providers and dead ends, with no difference; a seeded version of that comparison is part of the test suite.
 
-The worst case is still exponential in `k`. When several alternative routes each provide a different subset of the required invariants, distinct covered sets at the same node can all still reach the goal, and pruning drops none of them; finding the shortest path that covers a set of labels is NP-hard in general. Measured before pruning, `branchy(spine=1000, density=0.05)` took about 80 ms at `k = 8` and 8.7 s at `k = 16`. A shape built so that pruning removes nothing (`k` optional branches off a 1000-node spine, each providing one invariant, plus a final migration providing all of them) took 9.0 s before pruning and 10.3 s after at `k = 14`; the per-state check makes it slightly slower. The algorithm has no refusal threshold. If real histories reach that shape with large `k`, a different search (heuristic A* or dominance pruning) would replace this one.
+This matters most for a fresh database catching up to a ref that lists many invariants, which is the normal case for CI and every new environment, not an edge case. Without these rules each same-hash migration that provides a required invariant doubles the number of states: on a chain of schema changes each followed by one backfill, and on one schema change followed by many backfills alike. Measured on a developer laptop:
+
+| Shape | k | Before | After |
+|---|---:|---:|---:|
+| `k` schema migrations, each followed by one same-hash migration providing an invariant | 16 | 0.37 s, 310 MB | 3 ms, 110 MB |
+| | 18 | 1.8 s, 594 MB | — |
+| | 32 | did not finish | 2 ms, 106 MB |
+| | 64 | — | 4 ms, 110 MB |
+| | 1000 | — | 0.44 s, 230 MB |
+| One schema migration, then `k` same-hash migrations on its contract, each providing an invariant | 16 | 1.1 s | 6 ms, 108 MB |
+| | 18 | 5.2 s, 490 MB | — |
+| | 32 | did not finish | 7 ms, 112 MB |
+| | 64 | — | 9 ms, 112 MB |
+| | 1000 | — | 2.0 s, 253 MB |
+| Schema migrations each followed by four same-hash migrations providing an invariant | 64 | did not finish | 8 ms, 110 MB |
+| | 1000 | — | 0.25 s, 192 MB |
+
+The reporter of the bug saw planning exceed 12 GB of memory on their own history with 32 such invariants. After the change, memory at the sizes real histories have is the Node process baseline. Cost still grows faster than the graph when `k` grows with it: with `k²` on the chain shape and with `k³` when many same-hash migrations share one contract, because each of a node's same-hash migrations is tried, and checked against every invariant, from each state at that node. That is seconds only at about a thousand invariants. In steady state `effectiveRequired` is usually empty or holds one new invariant, and routing costs a few breadth-first searches of the graph, about 1 ms on a 1000-migration chain.
+
+The worst case is still exponential in `k`. The rules drop a state only when an invariant it lacks has become unobtainable. When the invariants a state lacks can each still be obtained some other way, every combination stays alive, and finding the shortest path that covers a set of labels is NP-hard in general. That happens when alternative routes each provide a different subset of the required invariants, and when an invariant has a second provider the search can still reach: for example `k` same-hash migrations on one contract whose invariants a later migration on the route also provides, so each of them is optional. Measured before this change, `branchy(spine=1000, density=0.05)` took about 80 ms at `k = 8` and 8.7 s at `k = 16`. A shape built so that pruning removes nothing (`k` optional branches off a 1000-node spine, each providing one invariant, plus a final migration providing all of them) took 9.0 s before pruning and 10.3 s after at `k = 14`. The optional same-hash shape above, with the providing migration at the end of a route as long as the same-hash run, takes 1.9 s and 630 MB at `k = 16`, about as long as before. The algorithm has no refusal threshold. If real histories reach these shapes with large `k`, a different search (heuristic A* or dominance pruning) would replace this one.
 
 ## Alternatives considered
 

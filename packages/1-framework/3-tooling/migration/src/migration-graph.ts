@@ -128,14 +128,19 @@ export function findPath(
  * path leaves at least one required invariant uncovered). When `required` is
  * empty, delegates to `findPath` so the result is byte-identical for that case.
  *
- * Algorithm: BFS over `(node, coveredSubset)` states with state-level dedup.
- * The covered subset is a `Set<string>` of invariant ids; the state's dedup
- * key is the JSON encoding of `[node, sortedCoveredIds]`, which distinguishes
- * distinct `(node, covered)` tuples for any node name or invariant id.
+ * Algorithm: BFS over `(node, coveredSubset, sameHashRank)` states with state-level dedup.
+ * The covered subset is a `Set<string>` of invariant ids; `sameHashRank` is the tie-break rank,
+ * among the node's same-hash migrations, of the same-hash migration that led to the state, or -1.
+ * The dedup key is the JSON encoding of `[node, sortedCoveredIds, sameHashRank]`.
+ *
+ * At a node the search takes same-hash migrations only in ascending tie-break order, and only
+ * when they cover a still-needed invariant. The shortest path the unrestricted search finds
+ * already takes them in that order, so the restriction leaves the returned path unchanged.
  *
  * The search never enqueues a state that provably cannot reach the goal: its node does not reach
- * `toHash`, or for some invariant it still lacks, its node cannot reach a migration providing the
- * invariant on a route to the target. Dropping those states leaves the returned path unchanged.
+ * `toHash`, or for some invariant it still lacks, it can no longer reach a migration providing
+ * the invariant on a route to the target. Skipping a same-hash migration is permanent until the
+ * search leaves the node. Dropping those states also leaves the returned path unchanged.
  *
  * Neighbour ordering when `required ≠ ∅`: edges covering ≥1 still-needed
  * invariant come first, with `createdAt → to → migrationHash` as the
@@ -155,17 +160,23 @@ export function findPathWithInvariants(
   interface InvState {
     readonly node: string;
     readonly covered: ReadonlySet<string>;
+    readonly sameHashRank: number;
   }
-  const stateKey = (s: InvState): string => JSON.stringify([s.node, [...s.covered].sort()]);
+  const stateKey = (s: InvState): string =>
+    JSON.stringify([s.node, [...s.covered].sort(), s.sameHashRank]);
 
   const reachesTarget = collectNodesReaching(graph, [toHash]);
-  const reachesProvider = collectNodesReachingProvider(graph, required, reachesTarget);
+  const sameHashRank = rankSameHashMigrations(graph);
+  const reachability = collectProviderReachability(graph, required, reachesTarget, sameHashRank);
   const requiredIds = [...required];
+  const canStillReachProvider = (inv: string, s: InvState): boolean =>
+    reachability.afterLeavingNode.get(inv)?.has(s.node) === true ||
+    (reachability.lastSameHashProviderRank.get(inv)?.get(s.node) ?? -1) > s.sameHashRank;
   const cannotReachGoal = (s: InvState): boolean =>
     !reachesTarget.has(s.node) ||
-    requiredIds.some((inv) => !s.covered.has(inv) && !reachesProvider.get(inv)?.has(s.node));
+    requiredIds.some((inv) => !s.covered.has(inv) && !canStillReachProvider(inv, s));
 
-  const start: InvState = { node: fromHash, covered: new Set() };
+  const start: InvState = { node: fromHash, covered: new Set(), sameHashRank: -1 };
   if (cannotReachGoal(start)) return null;
 
   const neighbours = (s: InvState): Iterable<{ next: InvState; edge: MigrationEdge }> => {
@@ -182,17 +193,23 @@ export function findPathWithInvariants(
             useful = true;
           }
         }
-        return { edge, useful, nextCovered: next ?? s.covered };
+        const nextState: InvState = {
+          node: edge.to,
+          covered: next ?? s.covered,
+          sameHashRank: sameHashRank.get(edge) ?? -1,
+        };
+        return { edge, useful, nextState };
       })
-      .filter(({ edge, nextCovered }) => !cannotReachGoal({ node: edge.to, covered: nextCovered }))
+      .filter(
+        ({ edge, useful, nextState }) =>
+          (edge.from !== edge.to || (useful && nextState.sameHashRank > s.sameHashRank)) &&
+          !cannotReachGoal(nextState),
+      )
       .sort((a, b) => {
         if (a.useful !== b.useful) return a.useful ? -1 : 1;
         return compareTieBreak(a.edge, b.edge);
       })
-      .map(({ edge, nextCovered }) => ({
-        next: { node: edge.to, covered: nextCovered },
-        edge,
-      }));
+      .map(({ edge, nextState }) => ({ next: nextState, edge }));
   };
 
   // Path reconstruction is consumer-side, keyed on stateKey, same shape as
@@ -233,16 +250,35 @@ function collectNodesReaching(graph: MigrationGraph, seeds: Iterable<string>): S
 }
 
 /**
- * For each required invariant, the nodes that can still reach a migration providing the
- * invariant on a route to the target: the migration's `from` is reachable from the node and its
- * `to` reaches the target.
+ * Each same-hash migration's position among its node's same-hash migrations in tie-break order.
  */
-function collectNodesReachingProvider(
+function rankSameHashMigrations(graph: MigrationGraph): ReadonlyMap<MigrationEdge, number> {
+  const ranks = new Map<MigrationEdge, number>();
+  for (const [node, edges] of graph.forwardChain) {
+    const sameHash = sortedNeighbors(edges.filter((edge) => edge.to === node));
+    for (const [rank, edge] of sameHash.entries()) ranks.set(edge, rank);
+  }
+  return ranks;
+}
+
+interface ProviderReachability {
+  /**
+   * Per invariant, the nodes with a migration to another node from which a migration providing
+   * the invariant on a route to the target can be reached, or that is itself one.
+   */
+  readonly afterLeavingNode: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Per invariant and node, the highest rank of a same-hash migration there providing it. */
+  readonly lastSameHashProviderRank: ReadonlyMap<string, ReadonlyMap<string, number>>;
+}
+
+function collectProviderReachability(
   graph: MigrationGraph,
   required: ReadonlySet<string>,
   reachesTarget: ReadonlySet<string>,
-): ReadonlyMap<string, ReadonlySet<string>> {
+  sameHashRank: ReadonlyMap<MigrationEdge, number>,
+): ProviderReachability {
   const providerSources = new Map<string, string[]>();
+  const lastSameHashProviderRank = new Map<string, Map<string, number>>();
   for (const edges of graph.forwardChain.values()) {
     for (const edge of edges) {
       if (!reachesTarget.has(edge.to)) continue;
@@ -251,12 +287,29 @@ function collectNodesReachingProvider(
         const sources = providerSources.get(inv);
         if (sources) sources.push(edge.from);
         else providerSources.set(inv, [edge.from]);
+        const rank = sameHashRank.get(edge);
+        if (rank === undefined) continue;
+        const ranks = lastSameHashProviderRank.get(inv) ?? new Map<string, number>();
+        ranks.set(edge.from, Math.max(rank, ranks.get(edge.from) ?? -1));
+        lastSameHashProviderRank.set(inv, ranks);
       }
     }
   }
-  return new Map(
-    Array.from(providerSources, ([inv, sources]) => [inv, collectNodesReaching(graph, sources)]),
-  );
+
+  const afterLeavingNode = new Map<string, ReadonlySet<string>>();
+  for (const [inv, sources] of providerSources) {
+    const reachesProvider = collectNodesReaching(graph, sources);
+    const nodes = new Set<string>();
+    for (const edges of graph.forwardChain.values()) {
+      for (const edge of edges) {
+        if (edge.from === edge.to) continue;
+        const providesHere = edge.invariants.includes(inv) && reachesTarget.has(edge.to);
+        if (providesHere || reachesProvider.has(edge.to)) nodes.add(edge.from);
+      }
+    }
+    afterLeavingNode.set(inv, nodes);
+  }
+  return { afterLeavingNode, lastSameHashProviderRank };
 }
 
 export interface PathDecision {

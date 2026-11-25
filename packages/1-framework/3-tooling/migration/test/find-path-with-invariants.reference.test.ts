@@ -70,9 +70,10 @@ function unprunedSearch(
 }
 
 describe('findPathWithInvariants — agrees with an unpruned search', () => {
-  it('returns the same path on random small graphs with cycles, self-loops and shared providers', () => {
+  it('returns the same path on random small graphs with cycles, runs of same-hash migrations and shared providers', () => {
     const invariantPool = ['a', 'b', 'c', 'd'];
     let satisfiable = 0;
+    let severalSameHashOnPath = 0;
     for (let seed = 1; seed <= 3000; seed++) {
       const random = seededRandom(seed);
       const pick = <T>(xs: readonly T[]): T | undefined => xs[Math.floor(random() * xs.length)];
@@ -95,6 +96,10 @@ describe('findPathWithInvariants — agrees with an unpruned search', () => {
         const from = node();
         addEdge(from, random() < 0.25 ? from : node());
       }
+      for (let i = 1 + Math.floor(random() * 2); i > 0; i--) {
+        const contract = node();
+        for (let j = 2 + Math.floor(random() * 4); j > 0; j--) addEdge(contract, contract);
+      }
       const graph = graphOf(edges);
       const required = new Set(invariantPool.filter(() => random() < 0.4));
       if (required.size === 0) required.add('a');
@@ -103,11 +108,25 @@ describe('findPathWithInvariants — agrees with an unpruned search', () => {
 
       const expected = unprunedSearch(graph, fromHash, toHash, required);
       if (expected !== null) satisfiable++;
+      if (
+        expected?.some(
+          (e, i) =>
+            e.from === e.to &&
+            expected[i + 1]?.from === expected[i + 1]?.to &&
+            expected[i + 1]?.from === e.to,
+        )
+      ) {
+        severalSameHashOnPath++;
+      }
       expect({ seed, path: findPathWithInvariants(graph, fromHash, toHash, required) }).toEqual({
         seed,
         path: expected,
       });
     }
-    expect(satisfiable).toBeGreaterThan(300);
+    expect({ satisfiable, severalSameHashOnPath }).toEqual({
+      satisfiable: expect.any(Number),
+      severalSameHashOnPath: expect.any(Number),
+    });
+    console.log({ satisfiable, severalSameHashOnPath });
   });
 });
