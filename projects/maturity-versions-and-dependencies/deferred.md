@@ -18,15 +18,15 @@ Version numbers allow it at a new minor (`8.5.0-preview.0` sorts above `8.4.x`).
 
 ## The Supabase extension's version stamp in contracts
 
-The Supabase extension writes a version into each emitted contract. It follows the root version, which from `8.0.0` is the release number and not the package's own version. Making it the package's version would change every emitted `contract.json`, which belongs to the work on stored files, not here. Documented in `docs/oss/versioning.md`.
+The Supabase extension writes a version into each emitted contract. It follows the root version, which from release `8.0` is the release number (`8.0.1` at release `8.0`, `X.Y.0` after) and not the package's own version. Making it the package's version would change every emitted `contract.json`, which belongs to the work on stored files, not here. Documented in `docs/oss/versioning.md`.
 
 ## Polymorphism is marked "Experimental" in the scorecard files
 
-About twenty `scorecard*.md` files mark polymorphism as "Experimental". Under the maturity levels there is no such word: an API with a plain name inside a GA package is GA. So either polymorphism is GA with PostgreSQL at `8.0.0`, or its API gets a name that carries a lower level before then. That is a decision about one feature, for the operator, and belongs with the work that reduces the packages' exports. Raised when slice 2 was handed over.
+About twenty `scorecard*.md` files mark polymorphism as "Experimental". Under the maturity levels there is no such word: an API with a plain name inside a GA package is GA. So either polymorphism is GA with PostgreSQL at release `8.0`, or its API gets a name that carries a lower level before then. That is a decision about one feature, for the operator, and belongs with the work that reduces the packages' exports. Raised when slice 2 was handed over.
 
 ## What a package manager writes when `init` gives it a range
 
-From `8.0.0`, `init` passes a range for each package (`name@^8.1.0`, `name@~8.1.0-ea.0`). The install trial checked only a plain add. Whether each package manager keeps the range it is given in `package.json` is checked by hand before slice 2's pull request, and again at the first release with levels.
+From release `8.0`, `init` passes a range for each package (`name@^8.1.0`, `name@~8.1.0-ea.0`). The install trial checked only a plain add. Whether each package manager keeps the range it is given in `package.json` is checked by hand before slice 2's pull request, and again at the first release with levels.
 
 ## `prisma orm init` under Yarn Plug'n'Play
 

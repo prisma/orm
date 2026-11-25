@@ -154,7 +154,7 @@ Two costs follow for such a maintainer: a feature of theirs that needs no newer 
 
 - **A user learns what is kept compatible from their own project:** the versions in their `package.json` and the names in their code. A document may describe a level, but it does not decide one.
 - **There is no second word**, such as "experimental", "unstable" or "proof of concept", for what is not finished.
-- **Our packages do not share one version.** The `version` in this repository's root `package.json` is the release number with a zero patch, `8.0.1` at release `8.0`, and not every package's version.
+- **Our packages do not share one version.** The `version` in this repository's root `package.json` is the release number with a zero patch, such as `8.3.0`, except at release `8.0`, where it is `8.0.1`. It is not every package's version.
 - **Moving an API to GA changes its name**, and the old name stays until the next major version.
 - **A user of a facade below GA edits their version lines at each new release.**
 
