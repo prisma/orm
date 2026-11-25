@@ -1266,22 +1266,16 @@ type ContractBase = Omit<
       readonly distinctOn: true;
       readonly forKeyShare: true;
       readonly forNoKeyUpdate: true;
-      readonly jsonAgg: true;
-      readonly lateral: true;
-      readonly limit: true;
-      readonly orderBy: true;
-      readonly 'pgvector.cosine': true;
-      readonly returning: true;
     };
     readonly sql: {
       readonly checkConstraint: true;
       readonly defaultInInsert: true;
-      readonly enums: true;
       readonly forShare: true;
       readonly forUpdate: true;
       readonly insertOnConflictSkip: true;
       readonly insertOnConflictTarget: true;
       readonly insertOnConflictWithoutTarget: true;
+      readonly interactiveTransactions: true;
       readonly jsonAgg: true;
       readonly jsonAggWithoutTruncation: true;
       readonly lateral: true;
@@ -1302,7 +1296,6 @@ type ContractBase = Omit<
       readonly version: '0.0.1';
     };
     readonly pgvector: {
-      readonly capabilities: { readonly postgres: { readonly 'pgvector.cosine': true } };
       readonly familyId: 'sql';
       readonly id: 'pgvector';
       readonly kind: 'extension';
