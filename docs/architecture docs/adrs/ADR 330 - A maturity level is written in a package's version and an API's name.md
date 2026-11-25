@@ -140,7 +140,7 @@ These rules cover the lines for our packages that share the release number.
 
 ## Packages with their own version
 
-**A package of ours that another team owns has its own version and no level.** It still names our packages at the ranges an extension uses. `@prisma/orm-extension-paradedb` is such a package, numbered from `0.1.0`.
+**A package of ours that another team owns has its own version and no level.** It still names our packages at the ranges an extension uses. `@prisma/orm-extension-paradedb` is such a package, numbered from `0.18.0`, above the `0.16.0` and `0.17.0` it was published as before the release candidates, so that a range on `0.x` cannot pick one of those.
 
 **A package maintained outside this repository** is numbered by its maintainer. We recommend this convention: the major and minor are the first release of ours the package works with, and the patch number is the maintainer's own. The number then means "needs at least this release", not "must equal it": a package at `8.1.2` names our packages at `^8.1.0` and works in an application on `8.4`. A package that uses one of our APIs below GA names the package that has it at a range within one minor, because that API may change in the next. We recommend the same level suffixes to such maintainers; nothing enforces them.
 
