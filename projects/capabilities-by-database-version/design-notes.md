@@ -1,6 +1,6 @@
-# Capabilities by database version: preliminary design
+# Capabilities by database version: design notes
 
-Status: preliminary, 2026-11-18. Will Madden owns this work. It records a design discussion and is not yet a spec. No code has been written.
+Status: the design discussion as of 2026-11-25. Will Madden owns this work. [spec.md](spec.md) states what the project delivers and [plan.md](plan.md) its slices; this file holds the reasoning. No code has been written.
 
 ## The problem
 
@@ -144,9 +144,9 @@ This is a compromise. The idiomatic form is syntax in the Prisma schema language
 
 An earlier draft put the version in the name the user imports (`postgres18`), in the config and again in the client. The client no longer needs it. Hibernate 6 deprecated its versioned dialect classes in favour of a setting; see the [prior art](2026-11-25-capability-prior-art.md).
 
-### `orm init` writes the profile that matches the database
+### `orm init` writes the version that matches the database
 
-`orm init --probe-db` already reads the server version. When it has the version, it writes the import for that version. Otherwise it writes the recommended one. A new user on PostgreSQL 16 then does not begin with an error.
+`orm init --probe-db` already reads the server version. When it has the version, it writes that version. Otherwise it writes the newest one in the target's table. A new user on PostgreSQL 16 then does not begin with an error.
 
 ### Signing checks the database against the contract
 
@@ -166,9 +166,9 @@ Because `db verify` runs the check too, a database that loses a capability after
 
 The comparison is in capabilities, but a message such as "your database lacks `sql.jsonAgg`" helps nobody. The target owns the table of which version provides which capability, so it can state the cause in the user's terms:
 
-> Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 15.4. Either upgrade the database, or select the PostgreSQL 15 profile in your config, which turns off the features that need 17.
+> Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 15.4. Either upgrade the database, or state version 15 for your contract, which turns off the features that need 17.
 
-The advice always has two parts: change the profile, which changes the features available, or upgrade the database. When the cause is not the version, the target names the real cause, for example the `sql_mode` setting.
+The advice always has two parts: change the version the contract states, which changes the features available, or upgrade the database. When the cause is not the version, the target names the real cause, for example the `sql_mode` setting.
 
 ### The signature is the one check of the database
 
@@ -191,13 +191,16 @@ It is not purely additive.
 
 - Once the runtime obeys the contract's capability list, a contract whose list differs from what its stack supplied behaves differently.
 - If a profile's capability list differs from today's adapter list in any flag, the profile hash changes, and every signed database has to be signed again.
-- The names users import change.
+- The contract gains a required version, which every existing project must state.
+
+## Settled without further discussion
+
+- **Versions at GA.** PostgreSQL's table covers 15 to 18. "Recommended" is only what `orm init` writes when it cannot read the database: the newest.
+- **Minimum server version constants.** They become the first row of the target's table. A database older than that fails signing like any other missing capability.
+- **Other targets.** MySQL, MariaDB, SQLite and MongoDB follow the same design, checked against each target's code. They are at Early Access, so PostgreSQL comes first and is the only one GA waits for.
+- **Decision records.** The earlier records on the profile hash and on adapter capabilities are updated in place.
 
 ## Open
 
 - The syntax in the Prisma schema language for the version and the connection capabilities. It must be designed by the end of the project.
 - The form of the capabilities value, so that a driver's declared capabilities can be passed in directly.
-- Which versions get a profile for each target at GA, and which is recommended.
-- What the minimum server version constants become once profiles exist. A database older than the oldest profile fails the capability check, so the constants may no longer be needed.
-- MongoDB: the same design should apply, and has not been checked against the MongoDB family's code.
-- Whether [ADR 004](../../docs/architecture%20docs/adrs/ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md), [ADR 031](../../docs/architecture%20docs/adrs/ADR%20031%20-%20Adapter%20capability%20discovery%20&%20negotiation.md) and [ADR 065](../../docs/architecture%20docs/adrs/ADR%20065%20-%20Adapter%20capability%20schema%20&%20negotiation%20v1.md) need amending, or one new ADR replaces their capability sections.
