@@ -398,7 +398,7 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
   }
 }
 
-const TRANSACTION_CLOSE_SQL_RE = /^(?:COMMIT|ROLLBACK)(?:\s+(?:TRANSACTION|WORK))?$/i
+const TRANSACTION_CLOSE_SQL_RE = /^(?:COMMIT|ROLLBACK)(?:\s+(?:TRANSACTION|WORK))?(?:\s+AND\s+NO\s+CHAIN)?$/i
 
 /** Returns true for top-level transaction termination SQL statements (not savepoints). */
 function isTransactionCloseSql(sql: string): boolean {

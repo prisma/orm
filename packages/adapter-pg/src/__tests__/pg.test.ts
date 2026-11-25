@@ -402,9 +402,42 @@ describe('PgTransaction', () => {
       name: 'DriverAdapterError',
       cause: { kind: 'postgres', code: '3B001' },
     })
+    await expect(tx.executeRaw({ sql: 'ROLLBACK', args: [], argTypes: [] })).resolves.toBe(0)
     await tx.rollback()
 
     expect(releases).toEqual([undefined])
     expect(pool.idleCount).toBe(1)
+  })
+
+  it('should keep earlier query timeout taint across savepoint rollback and recognize AND NO CHAIN', async () => {
+    const { pool, adapter, releases } = await setup((text) => {
+      if (text === 'SELECT slow') {
+        return Promise.reject(new Error('Query read timeout'))
+      }
+      return undefined
+    })
+
+    // Savepoint rollback must not clear an earlier timeout taint.
+    const tx1 = await adapter.startTransaction()
+    await expect(tx1.executeRaw({ sql: 'SELECT slow', args: [], argTypes: [] })).rejects.toThrow('Query read timeout')
+    await expect(tx1.rollbackToSavepoint!('sp_1')).resolves.toBeUndefined()
+    await tx1.rollback()
+
+    expect(releases).toEqual([expect.any(Error)])
+    expect(pool.totalCount).toBe(0)
+
+    // ROLLBACK AND NO CHAIN ends the transaction and clears taint, whereas AND CHAIN starts a new one.
+    const tx2 = await adapter.startTransaction()
+    await expect(tx2.executeRaw({ sql: 'SELECT slow', args: [], argTypes: [] })).rejects.toThrow('Query read timeout')
+    await expect(tx2.executeRaw({ sql: 'ROLLBACK AND CHAIN', args: [], argTypes: [] })).resolves.toBe(0)
+    await tx2.rollback()
+    expect(pool.totalCount).toBe(0)
+
+    const tx3 = await adapter.startTransaction()
+    await expect(tx3.executeRaw({ sql: 'SELECT slow', args: [], argTypes: [] })).rejects.toThrow('Query read timeout')
+    await expect(tx3.executeRaw({ sql: 'ROLLBACK AND NO CHAIN', args: [], argTypes: [] })).resolves.toBe(0)
+    await tx3.rollback()
+    expect(pool.idleCount).toBe(1)
+    expect(pool.totalCount).toBe(1)
   })
 })
