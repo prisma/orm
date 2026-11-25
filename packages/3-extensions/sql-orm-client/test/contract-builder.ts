@@ -25,7 +25,7 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import postgresPack from '@internal/target-postgres/pack';
-import { postgresServerVersions } from '@internal/target-postgres/server-version';
+import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 
 // Postgres-bound `defineContract` for sql-orm-client tests. This mirrors
@@ -58,13 +58,11 @@ export const gen: ComposedAuthoringHelpers<
   undefined
 >['gen'] = composedHelpers.gen;
 
-// The target as PostgreSQL 18 provides it, as `@internal/postgres`'s `defineContract({ version: 18 })` binds it.
-const postgresTarget: Omit<typeof postgresPack, 'capabilities'> & {
-  readonly capabilities: (typeof postgresServerVersions)[18];
-} = { ...postgresPack, capabilities: postgresServerVersions[18] };
+// The capabilities PostgreSQL 18 provides, which `@internal/postgres`'s `defineContract({ version: 18 })` gives the contract build.
+const postgres18 = { capabilities: postgresCapabilitiesByVersion[18] } as const;
 
 type SqlFamily = typeof sqlFamilyPack;
-type PostgresPack = typeof postgresTarget;
+type PostgresPack = typeof postgresPack;
 
 type TypesConstraint = Record<string, StorageTypeInstance>;
 type ModelsConstraint = Record<string, ModelLike>;
@@ -80,6 +78,7 @@ type PostgresResult<
     SqlFamily,
     PostgresPack,
     {
+      readonly adapter: typeof postgres18;
       readonly createNamespace: typeof postgresCreateNamespace;
       readonly codecLookup: CodecLookupWithDescriptors;
       readonly dataTypeLookup: DataTypeLookup;
@@ -156,19 +155,20 @@ export function defineContract(
     readonly models?: ModelsConstraint;
     readonly enums?: EnumsConstraint;
   },
-): unknown {
+): PostgresResult<TypesConstraint, ModelsConstraint, undefined, EnumsConstraint> {
   const extensionPacks: readonly Pick<ComponentMetadata, 'types' | 'dataTypes'>[] = Object.values(
     definition.extensions ?? {},
   );
   const dataTypeLookup = assembleDataTypes([postgresPack, ...extensionPacks]).lookup;
   const bound = {
     ...definition,
+    adapter: postgres18,
     createNamespace: postgresCreateNamespace,
     codecLookup: assemblePostgresCodecRegistryWithBuiltins(extensionPacks, dataTypeLookup),
     dataTypeLookup,
   };
   if (factory !== undefined) {
-    return buildBoundContract(sqlFamilyPack, postgresTarget, bound, factory);
+    return buildBoundContract(sqlFamilyPack, postgresPack, bound, factory);
   }
-  return buildBoundContract(sqlFamilyPack, postgresTarget, bound);
+  return buildBoundContract(sqlFamilyPack, postgresPack, bound);
 }

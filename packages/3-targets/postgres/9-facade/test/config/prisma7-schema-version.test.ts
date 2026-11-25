@@ -1,11 +1,11 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { executeContractEmit } from '@internal/cli/control-api';
-import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
-import { prisma7Schema } from '../../src/config/prisma7-schema';
+import { prisma7Schema, prisma7SchemaFor } from '../../src/config/prisma7-schema';
+import { version16Capabilities, versionsWithALaterFeature } from '../support/version-table';
 
 const tempDirs: string[] = [];
 
@@ -22,14 +22,13 @@ describe('prisma7Schema', () => {
     );
   });
 
-  it('binds the config target for the version', () => {
-    const config = defineConfig({
-      contract: prisma7Schema('prisma/schema.prisma', { version: 17 }),
-    });
-    expect(config.target.capabilities).toEqual(postgresServerVersions[17]);
+  it('refuses a call with no options', () => {
+    expect(() =>
+      prisma7Schema('./prisma/schema.prisma', undefined as unknown as { version: 18 }),
+    ).toThrow('State the PostgreSQL version your database runs beside the Prisma 7 schema path');
   });
 
-  it('emits the version row and the capabilities list', async () => {
+  it("emits the row of the version it states and its capabilities list, which the config's target does not carry", async () => {
     const dir = await mkdtemp(join(tmpdir(), 'postgres-prisma7-version-'));
     tempDirs.push(dir);
     const schemaPath = join(dir, 'schema.prisma');
@@ -39,7 +38,7 @@ describe('prisma7Schema', () => {
       'utf-8',
     );
     const config = defineConfig({
-      contract: prisma7Schema(schemaPath, {
+      contract: prisma7SchemaFor(versionsWithALaterFeature)(schemaPath, {
         version: 16,
         capabilities: [{ sql: { interactiveTransactions: true } }],
       }),
@@ -48,9 +47,12 @@ describe('prisma7Schema', () => {
     await executeContractEmit({ config, cwd: dir, outputPath: dir });
     const contract = JSON.parse(await readFile(join(dir, 'contract.json'), 'utf-8'));
 
-    expect(contract.capabilities).toEqual({
-      ...postgresServerVersions[16],
-      sql: { ...postgresServerVersions[16].sql, interactiveTransactions: true },
+    expect({ target: config.target.capabilities, contract: contract.capabilities }).toEqual({
+      target: {},
+      contract: {
+        ...version16Capabilities,
+        sql: { ...version16Capabilities.sql, interactiveTransactions: true },
+      },
     });
   });
 });

@@ -1,4 +1,5 @@
 export type {
+  CapabilitySet,
   CheckNode,
   ComposedAuthoringHelpers,
   ContractDefinition,

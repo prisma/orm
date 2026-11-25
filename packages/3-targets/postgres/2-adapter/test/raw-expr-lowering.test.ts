@@ -10,7 +10,6 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
-import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql-family/9-family/test/test-sql-contract-serializer';
@@ -70,7 +69,6 @@ describe('RawExpr postgres lowering', () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
-      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toContain('now()');
@@ -90,7 +88,6 @@ describe('RawExpr postgres lowering', () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
-      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toContain('score > $1');
@@ -112,7 +109,6 @@ describe('RawExpr postgres lowering', () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
-      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toContain('id BETWEEN $1 AND $2');
@@ -135,7 +131,6 @@ describe('RawExpr postgres lowering', () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
-      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toContain('$1$2');
@@ -155,7 +150,6 @@ describe('RawExpr postgres lowering', () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
-      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toContain('LENGTH("user"."id") > 0');
@@ -174,7 +168,6 @@ describe('RawExpr postgres lowering', () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
-      postgresServerVersions[18],
     );
 
     expect(lowered.sql).toContain("status = 'active'");

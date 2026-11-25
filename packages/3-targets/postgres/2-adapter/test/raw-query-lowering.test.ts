@@ -17,7 +17,6 @@ import {
 import { buildOperation, createRawSql, param } from '@internal/sql-relational-core/expression';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
-import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql-family/9-family/test/test-sql-contract-serializer';
@@ -67,7 +66,6 @@ function lower(plan: { readonly ast: Parameters<typeof renderLoweredSql>[0] }) {
     contract,
     postgresCodecDescriptorRegistry,
     postgresDataTypeLookup,
-    postgresServerVersions[18],
   );
 }
 

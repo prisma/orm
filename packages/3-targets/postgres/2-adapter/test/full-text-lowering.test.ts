@@ -9,7 +9,6 @@ import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codec
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { websearchToTsquery } from '@internal/target-postgres/full-text';
 import postgresTargetDescriptor from '@internal/target-postgres/runtime';
-import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql-family/9-family/test/test-sql-contract-serializer';
@@ -74,7 +73,6 @@ function lowerWhere(query: unknown) {
     contract,
     postgresCodecDescriptorRegistry,
     postgresDataTypeLookup,
-    postgresServerVersions[18],
   );
 }
 
@@ -116,13 +114,7 @@ describe('full-text lowering', () => {
       .build();
 
     expect(
-      renderLoweredSql(
-        plan.ast,
-        contract,
-        postgresCodecDescriptorRegistry,
-        postgresDataTypeLookup,
-        postgresServerVersions[18],
-      ),
+      renderLoweredSql(plan.ast, contract, postgresCodecDescriptorRegistry, postgresDataTypeLookup),
     ).toEqual({
       sql: `SELECT ts_rank((setweight(to_tsvector('german', coalesce("post"."title", '')), 'A') || setweight(to_tsvector('german', coalesce("post"."body", '')), 'B')), websearch_to_tsquery('english', $1)) AS rank FROM "post"`,
       params: [{ kind: 'literal', value: 'zebra' }],

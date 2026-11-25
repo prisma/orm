@@ -251,13 +251,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     const contract = blindCast<PostgresContract, 'caller must supply a matching PostgresContract'>(
       context.contract,
     );
-    return renderLoweredSql(
-      ast,
-      contract,
-      this.codecRegistry,
-      this.dataTypeLookup,
-      contract.capabilities,
-    );
+    return renderLoweredSql(ast, contract, this.codecRegistry, this.dataTypeLookup);
   }
 
   async renderColumnDefault(column: DdlColumn, table: string): Promise<string> {
@@ -294,13 +288,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     const contract = blindCast<PostgresContract, 'Caller must supply matching contract'>(
       context?.contract,
     );
-    const lowered = renderLoweredSql(
-      ast,
-      contract,
-      this.codecRegistry,
-      this.dataTypeLookup,
-      contract.capabilities,
-    );
+    const lowered = renderLoweredSql(ast, contract, this.codecRegistry, this.dataTypeLookup);
     const codecRegistry = blindCast<
       ContractCodecRegistry,
       'framework CodecRegistry: its descriptors materialise SQL codecs; the framework Codec type erases to BaseCodec at this boundary'

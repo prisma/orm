@@ -32,7 +32,7 @@ import {
   type SqlRuntimeExtensionDescriptor,
 } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
-import { postgresServerVersions } from '@internal/target-postgres/server-version';
+import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { expect } from 'vitest';
 import { resolveIncludeRelation } from '../src/collection-contract';
 import {
@@ -312,9 +312,9 @@ export function buildTestContextFromContract<TContract extends FrameworkContract
 export const perRelationPostgresAdapter: typeof postgresAdapter = {
   ...postgresAdapter,
   capabilities: {
-    ...postgresServerVersions[18],
+    ...postgresCapabilitiesByVersion[18],
     sql: {
-      ...postgresServerVersions[18].sql,
+      ...postgresCapabilitiesByVersion[18].sql,
       outerReferencesInDerivedTables: false,
       jsonAggWithoutTruncation: false,
     },

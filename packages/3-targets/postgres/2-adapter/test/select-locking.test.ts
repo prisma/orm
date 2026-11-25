@@ -176,10 +176,9 @@ describe('Postgres adapter row locking', () => {
       expect(() =>
         renderLoweredSql(
           base.withLocking([clause]),
-          contract,
+          { ...contract, capabilities: withoutFlag(group, flag) },
           postgresCodecDescriptorRegistry,
           createPostgresBuiltinDataTypeLookup(),
-          withoutFlag(group, flag),
         ),
       ).toThrow(
         expect.objectContaining({

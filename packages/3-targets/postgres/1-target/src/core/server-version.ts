@@ -1,26 +1,10 @@
+import { blindCast } from '@internal/utils/casts';
 import { postgresError } from './errors';
 
-/** For each database version, the capabilities that version provides, keyed by the version a contract states. */
-export type ServerVersionTable = Readonly<
+/** For each PostgreSQL version, the capabilities that version provides. */
+export type CapabilitiesByVersion = Readonly<
   Record<number, Readonly<Record<string, Readonly<Record<string, boolean>>>>>
 >;
-
-/**
- * The capabilities `table` lists for `version`, refusing a version the table does not list with a message that names the supported ones.
- */
-export function resolveServerVersion<
-  const Table extends ServerVersionTable,
-  const Version extends keyof Table & number,
->(table: Table, version: Version, databaseName: string): Table[Version] {
-  if (typeof version === 'number' && Object.hasOwn(table, version)) {
-    return table[version];
-  }
-  throw postgresError(
-    'CONTRACT.ARGUMENT_INVALID',
-    `${databaseName} version ${JSON.stringify(version)} is not supported. State one of the supported versions: ${Object.keys(table).join(', ')}.`,
-    { meta: { version: String(version), supportedVersions: Object.keys(table) } },
-  );
-}
 
 const postgres15Capabilities = {
   postgres: {
@@ -48,25 +32,57 @@ const postgres15Capabilities = {
   },
 } as const;
 
-/** The PostgreSQL versions Prisma 8 supports, oldest first, each with the capabilities it provides. */
-export const postgresServerVersions = {
+/** The PostgreSQL versions Prisma 8 supports, oldest first. */
+const postgresVersions = [15, 16, 17, 18] as const;
+
+/** A PostgreSQL version a contract can state. */
+export type PostgresVersion = (typeof postgresVersions)[number];
+
+/** The capabilities each supported PostgreSQL version provides. */
+export const postgresCapabilitiesByVersion = {
   15: postgres15Capabilities,
   16: postgres15Capabilities,
   17: postgres15Capabilities,
   18: postgres15Capabilities,
-} as const satisfies ServerVersionTable;
+} as const satisfies Record<PostgresVersion, CapabilitiesByVersion[number]>;
 
-/** A PostgreSQL version a contract can state. */
-export type PostgresServerVersion = keyof typeof postgresServerVersions;
+/** The oldest PostgreSQL version Prisma 8 supports: the first row of the table. */
+export const POSTGRES_MIN_SERVER_VERSION = `${postgresVersions[0]}` as const;
 
-/** The capabilities PostgreSQL `version` provides. */
-export function postgresCapabilitiesForVersion<const Version extends PostgresServerVersion>(
-  version: Version,
-): (typeof postgresServerVersions)[Version] {
-  return resolveServerVersion(postgresServerVersions, version, 'PostgreSQL');
+function versionsOf(table: CapabilitiesByVersion): string {
+  return Object.keys(table).join(', ');
 }
 
-/** The oldest PostgreSQL server version Prisma 8 supports: the first row of the versions table. */
-export const POSTGRES_MIN_SERVER_VERSION = String(
-  Math.min(...Object.keys(postgresServerVersions).map(Number)),
-);
+function versionRefusal(version: unknown, table: CapabilitiesByVersion): string {
+  const supported = `The supported versions are ${versionsOf(table)}.`;
+  if (version === undefined || version === null) {
+    return `State the PostgreSQL version your database runs, for example version: 18. ${supported}`;
+  }
+  if (typeof version === 'string' && Object.hasOwn(table, version)) {
+    return `Write the PostgreSQL version as the number ${version}, not the string '${version}'.`;
+  }
+  if (typeof version !== 'number' || !Number.isFinite(version)) {
+    return `Write the PostgreSQL version as a number, for example version: 18. ${supported}`;
+  }
+  return `PostgreSQL ${version} is not supported. ${supported}`;
+}
+
+/**
+ * The capabilities `table` lists for PostgreSQL `version`, refusing a version the table does not list. The table defaults to the one Prisma 8 ships; tests pass their own.
+ */
+export function postgresCapabilitiesForVersion<
+  const Version extends keyof Table & number,
+  const Table extends CapabilitiesByVersion = typeof postgresCapabilitiesByVersion,
+>(
+  version: Version,
+  table: Table = blindCast<Table, 'Table defaults to the shipped table when none is passed'>(
+    postgresCapabilitiesByVersion,
+  ),
+): Table[Version] {
+  if (typeof version === 'number' && Object.hasOwn(table, version)) {
+    return table[version];
+  }
+  throw postgresError('CONTRACT.ARGUMENT_INVALID', versionRefusal(version, table), {
+    meta: { version: String(version), supportedVersions: Object.keys(table) },
+  });
+}

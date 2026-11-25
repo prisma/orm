@@ -29,6 +29,7 @@ import type {
   ReferentialAction,
 } from '@internal/sql-contract/types';
 import type { UnionToIntersection } from './authoring-type-utils';
+import type { EnabledCapabilities, OverrideCapabilities } from './capabilities';
 import type {
   AttributeStageIdFieldNames,
   FieldStateOf,
@@ -142,29 +143,6 @@ type Defaulted<T, Fallback> = [T] extends [never] ? Fallback : T;
 type DefinitionAdapter<Definition> = Definition extends { readonly adapter?: infer Adapter }
   ? Present<Adapter>
   : never;
-
-type EnabledCapabilityFlags<Flags> = {
-  readonly [Flag in keyof Flags as Flags[Flag] extends true ? Flag : never]: true;
-};
-
-type EnabledCapabilities<Capabilities> = {
-  readonly [Namespace in keyof Capabilities as keyof EnabledCapabilityFlags<
-    Capabilities[Namespace]
-  > extends never
-    ? never
-    : Namespace]: EnabledCapabilityFlags<Capabilities[Namespace]>;
-};
-
-// The flags of `Later` replace those of `Earlier` that it sets, namespace by namespace.
-type OverrideCapabilities<Earlier, Later> = {
-  readonly [Namespace in keyof Earlier | keyof Later]: Namespace extends keyof Later
-    ? Namespace extends keyof Earlier
-      ? Omit<Earlier[Namespace], keyof Later[Namespace]> & Later[Namespace]
-      : Later[Namespace]
-    : Namespace extends keyof Earlier
-      ? Earlier[Namespace]
-      : never;
-};
 
 // The enabled capabilities of the target, then its adapter, then the extensions, each replacing the flags it sets, as `prisma contract emit`, the build and the execution context merge them. A disabled capability is left out, as in an emitted contract.
 type DerivedCapabilities<Definition> = EnabledCapabilities<

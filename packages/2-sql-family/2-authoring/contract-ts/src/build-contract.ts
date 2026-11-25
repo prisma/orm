@@ -49,6 +49,7 @@ import {
 import { validateStorageSemantics } from '@internal/sql-contract/validators';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { enabledCapabilities } from './capabilities';
 import type { ContractDefinition } from './contract-definition';
 import { contractError } from './contract-errors';
 import { describeModel, type ModelDescription } from './describe-model';
@@ -150,24 +151,6 @@ function declaredTableKeys(definition: ContractDefinition): ReadonlySet<string> 
 /**
  * Builds the contract in two stages. First each model is converted on its own into the table it describes and its domain model, and each table node into the table it describes. Then the tables are merged, each is lowered, and the contract is assembled.
  */
-// A contract records enabled capabilities only, as its canonical form does: a disabled one is the same as an absent one.
-function enabledCapabilities(
-  matrix: Record<string, Record<string, boolean>>,
-): Record<string, Record<string, true>> {
-  const enabled: Record<string, Record<string, true>> = {};
-  for (const [namespace, flags] of Object.entries(matrix)) {
-    const enabledFlags = Object.fromEntries(
-      Object.entries(flags)
-        .filter(([, flag]) => flag)
-        .map(([name]) => [name, true] as const),
-    );
-    if (Object.keys(enabledFlags).length > 0) {
-      enabled[namespace] = enabledFlags;
-    }
-  }
-  return enabled;
-}
-
 /** The value objects of a definition as storage entities, all in the default namespace; `undefined` when it has none. */
 function valueObjectsFromDefinition(
   definition: ContractDefinition,

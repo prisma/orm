@@ -12,38 +12,33 @@ import {
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import postgresPackRef from '@internal/target-postgres/pack';
 import {
-  type PostgresServerVersion,
-  postgresServerVersions,
+  type CapabilitiesByVersion,
+  type PostgresVersion,
+  postgresCapabilitiesByVersion,
 } from '@internal/target-postgres/server-version';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 import {
-  type CapabilitySet,
-  capabilitiesForVersion,
-  defaultConnectionCapabilities,
-  mergeCapabilitySets,
-} from '../contract/database-version';
+  contractCapabilitiesFor,
+  type PostgresCapabilitiesInput,
+  supportedVersionsText,
+} from '../contract/contract-capabilities';
 import { postgresError } from '../errors';
 import { contractBuilderModule, contractTypesModule, controlComponents } from './components';
 import { moduleBase } from './module-base';
-import { databaseCapabilitiesOfPrisma7Source } from './prisma7-schema';
 
-/** A contract file and, for a Prisma schema, the database it is written for. */
-export interface PostgresContractEntry {
-  /** The contract file: a Prisma schema (`.prisma`, a glob or a directory) or a TypeScript contract (`.ts`). */
-  readonly path: string;
-  /** The PostgreSQL version the database runs. Required for a Prisma schema; a TypeScript contract states it in `defineContract`. */
-  readonly version?: PostgresServerVersion;
-  /**
-   * The capabilities the connection provides, one set per component, merged in order. Defaults to those of the adapter and the driver the client runs with; a list given here replaces the default.
-   */
-  readonly capabilities?: readonly CapabilitySet[];
-}
+/**
+ * A contract file and the database it is written for. A Prisma schema (`.prisma`, a glob or a directory) states the PostgreSQL `version` and the optional `capabilities` list here; a TypeScript contract (`.ts`) states them in `defineContract`.
+ */
+export type PostgresContractEntry<Version extends number = PostgresVersion> =
+  | { readonly path: `${string}.ts`; readonly version?: never; readonly capabilities?: never }
+  | ({ readonly path: string } & PostgresCapabilitiesInput<Version>);
 
-export interface PostgresConfigOptions {
-  /** The contract entry, a TypeScript contract path, or a ready `ContractConfig` such as `prisma7Schema(...)`. */
-  readonly contract: string | PostgresContractEntry | ContractConfig;
+export interface PostgresConfigOptions<Version extends number = PostgresVersion> {
+  /** The contract entry, a TypeScript contract path, or a ready `ContractConfig` such as `prisma7Schema(...)`. A ready `ContractConfig` writes the capabilities it was given and no others. */
+  readonly contract: `${string}.ts` | PostgresContractEntry<Version> | ContractConfig;
   readonly output?: string;
   readonly db?: {
     readonly connection?: string;
@@ -57,20 +52,21 @@ export interface PostgresConfigOptions {
 
 const postgresContractTarget = { target: postgresPackRef, contractBuilderModule };
 
-const SUPPORTED_VERSIONS = Object.keys(postgresServerVersions).join(', ');
-
-function isContractEntry(
-  contract: PostgresConfigOptions['contract'],
-): contract is PostgresContractEntry {
-  return typeof contract === 'object' && Object.hasOwn(contract, 'path');
+interface UntypedEntry {
+  readonly path: string;
+  readonly version?: unknown;
+  readonly capabilities?: unknown;
 }
 
-function contractEntryOf(contract: string | PostgresContractEntry): PostgresContractEntry {
-  return typeof contract === 'string' ? { path: contract } : contract;
+function isContractEntry(contract: object): contract is UntypedEntry {
+  return Object.hasOwn(contract, 'path');
 }
 
-/** The capabilities the version of a Prisma schema contract provides, or none for a TypeScript contract, which binds its own target. */
-function databaseCapabilitiesOf(entry: PostgresContractEntry): CapabilitySet {
+function contractConfigFromEntry(
+  table: CapabilitiesByVersion,
+  entry: UntypedEntry,
+  output: string,
+): ContractConfig {
   if (extname(entry.path) === '.ts') {
     if (entry.version !== undefined || entry.capabilities !== undefined) {
       throw postgresError(
@@ -79,63 +75,64 @@ function databaseCapabilitiesOf(entry: PostgresContractEntry): CapabilitySet {
         { meta: { contract: entry.path } },
       );
     }
-    return {};
+    return typescriptContractFromPath(entry.path, output, postgresContractTarget);
   }
-  if (entry.version === undefined) {
-    throw postgresError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `State the PostgreSQL version your database runs beside the contract path, for example contract: { path: '${entry.path}', version: 18 }. The supported versions are ${SUPPORTED_VERSIONS}.`,
-      { meta: { contract: entry.path } },
-    );
-  }
-  return capabilitiesForVersion(postgresServerVersions, entry.version);
+  const capabilities = contractCapabilitiesFor(
+    table,
+    blindCast<PostgresCapabilitiesInput<number>, 'checked by contractCapabilitiesFor'>(entry),
+    `State the PostgreSQL version your database runs beside the contract path, for example contract: { path: '${entry.path}', version: 18 }. ${supportedVersionsText}`,
+  );
+  return prismaContract(entry.path, {
+    output,
+    target: postgresPackRef,
+    createNamespace: postgresCreateNamespace,
+    enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
+    capabilities,
+  });
 }
 
-function contractConfigFromEntry(entry: PostgresContractEntry, output: string): ContractConfig {
-  return extname(entry.path) === '.ts'
-    ? typescriptContractFromPath(entry.path, output, postgresContractTarget)
-    : prismaContract(entry.path, {
-        output,
-        target: postgresPackRef,
-        createNamespace: postgresCreateNamespace,
-        enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
-        capabilities: mergeCapabilitySets(entry.capabilities ?? defaultConnectionCapabilities),
-      });
-}
-
-function resolveContractConfig(options: PostgresConfigOptions): ContractConfig {
+function resolveContractConfig(
+  table: CapabilitiesByVersion,
+  options: PostgresConfigOptions<number>,
+): ContractConfig {
   const explicitOutput =
     options.output !== undefined ? join(options.output, 'contract.json') : undefined;
-  if (typeof options.contract === 'string' || isContractEntry(options.contract)) {
-    const entry = contractEntryOf(options.contract);
-    return contractConfigFromEntry(entry, explicitOutput ?? defaultContractOutputPath(entry.path));
+  const contract = options.contract;
+  if (typeof contract === 'string' || isContractEntry(contract)) {
+    const entry: UntypedEntry = typeof contract === 'string' ? { path: contract } : contract;
+    return contractConfigFromEntry(
+      table,
+      entry,
+      explicitOutput ?? defaultContractOutputPath(entry.path),
+    );
   }
-  const firstInput = options.contract.source.inputs?.[0];
+  const firstInput = contract.source.inputs?.[0];
   const output =
     explicitOutput ??
-    options.contract.output ??
+    contract.output ??
     (firstInput !== undefined ? defaultContractOutputPath(firstInput) : undefined);
   return {
-    ...refuseOtherTargetOnLoad(options.contract, postgresContractTarget),
+    ...refuseOtherTargetOnLoad(contract, postgresContractTarget),
     ...ifDefined('output', output),
   };
 }
 
-export function defineConfig(options: PostgresConfigOptions): PrismaConfig<'sql', 'postgres'> {
-  const extensions = options.extensions ?? [];
-  const contractConfig = resolveContractConfig(options);
-  const databaseCapabilities =
-    typeof options.contract === 'string' || isContractEntry(options.contract)
-      ? databaseCapabilitiesOf(contractEntryOf(options.contract))
-      : (databaseCapabilitiesOfPrisma7Source(options.contract.source) ?? {});
-
-  return coreDefineConfig({
-    ...controlComponents,
-    target: { ...controlComponents.target, capabilities: databaseCapabilities },
-    extensions,
-    contract: { ...contractConfig, typesModule: contractTypesModule },
-    migrations: { ...options.migrations, module: `${moduleBase}/migration` },
-    ...ifDefined('db', options.db),
-    ...ifDefined('formatter', options.formatter),
-  });
+/** The PostgreSQL `defineConfig` for `table`. The facade exports it for the table Prisma 8 ships; tests pass a table whose rows differ. */
+export function defineConfigFor<const Table extends CapabilitiesByVersion>(table: Table) {
+  return function defineConfig(
+    options: PostgresConfigOptions<keyof Table & number>,
+  ): PrismaConfig<'sql', 'postgres'> {
+    const contractConfig = resolveContractConfig(table, options);
+    return coreDefineConfig({
+      ...controlComponents,
+      extensions: options.extensions ?? [],
+      contract: { ...contractConfig, typesModule: contractTypesModule },
+      migrations: { ...options.migrations, module: `${moduleBase}/migration` },
+      ...ifDefined('db', options.db),
+      ...ifDefined('formatter', options.formatter),
+    });
+  };
 }
+
+export const defineConfig: (options: PostgresConfigOptions) => PrismaConfig<'sql', 'postgres'> =
+  defineConfigFor(postgresCapabilitiesByVersion);

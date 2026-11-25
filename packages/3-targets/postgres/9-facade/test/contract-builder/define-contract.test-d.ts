@@ -6,8 +6,10 @@ type SoleNamespaceModels<
   T extends { domain: { namespaces: Record<string, { models: unknown }> } },
 > = T['domain']['namespaces'][keyof T['domain']['namespaces']]['models'];
 
-// @ts-expect-error — capabilities are contributed by components, not authoring input
-defineContract({ version: 18, capabilities: { postgres: { lateral: true } } });
+test('takes the capabilities as a list of sets, refusing a single set', () => {
+  // @ts-expect-error a single set is refused; the list is an array of sets
+  defineContract({ version: 18, capabilities: { sql: { lateral: true } } });
+});
 
 test('limits Date authoring to the JsDate types', () => {
   defineContract({ version: 18 }, ({ type: t }) => {

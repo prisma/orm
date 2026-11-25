@@ -26,7 +26,6 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
-import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { createContract, createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { renderLoweredSql } from '../src/core/sql-renderer';
@@ -89,7 +88,6 @@ describe('array lift evaluates its source once', { concurrent: false }, () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
-      postgresServerVersions[18],
     );
 
     await driver!.query(`DROP SEQUENCE IF EXISTS ${COUNTER}`);
@@ -134,7 +132,6 @@ describe('array lift binds its source once in the rendered SQL', () => {
       contract,
       postgresCodecDescriptorRegistry,
       postgresDataTypeLookup,
-      postgresServerVersions[18],
     );
 
     // The structural half of the same claim: the source text appears once, so a

@@ -196,7 +196,6 @@ export function renderLoweredSql(
   contract: PostgresContract,
   codecDescriptorRegistry: PostgresCodecDescriptorRegistry,
   dataTypeLookup: DataTypeLookup,
-  capabilities: CapabilityMatrix,
 ): { readonly sql: string; readonly params: readonly LoweredParam[] } {
   const orderedRefs = collectOrderedParamRefs(ast);
   const indexMap = new Map<AnyParamRef, number>();
@@ -209,7 +208,7 @@ export function renderLoweredSql(
   const pim: ParamIndexMap = {
     indexMap,
     types: { codecDescriptorRegistry, dataTypeLookup },
-    capabilities,
+    capabilities: contract.capabilities,
   };
 
   const node = ast;

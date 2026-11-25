@@ -1,10 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   POSTGRES_MIN_SERVER_VERSION,
-  type PostgresServerVersion,
+  type PostgresVersion,
+  postgresCapabilitiesByVersion,
   postgresCapabilitiesForVersion,
-  postgresServerVersions,
-  resolveServerVersion,
 } from '../src/exports/server-version';
 
 const everyVersionsCapabilities = {
@@ -29,9 +28,18 @@ const everyVersionsCapabilities = {
   },
 };
 
-describe('the PostgreSQL server versions table', () => {
+function refusalOf(version: unknown): unknown {
+  try {
+    postgresCapabilitiesForVersion(version as PostgresVersion);
+  } catch (error) {
+    return error;
+  }
+  throw new Error(`${String(version)} was not refused`);
+}
+
+describe('the capabilities by PostgreSQL version', () => {
   it('lists versions 15 to 18, each with the capabilities PostgreSQL 15 already has', () => {
-    expect(postgresServerVersions).toEqual({
+    expect(postgresCapabilitiesByVersion).toEqual({
       15: everyVersionsCapabilities,
       16: everyVersionsCapabilities,
       17: everyVersionsCapabilities,
@@ -39,36 +47,41 @@ describe('the PostgreSQL server versions table', () => {
     });
   });
 
-  it('takes the minimum server version from its first row', () => {
+  it('takes the minimum server version from its first row, typed as the literal', () => {
     expect(POSTGRES_MIN_SERVER_VERSION).toBe('15');
+    expectTypeOf(POSTGRES_MIN_SERVER_VERSION).toEqualTypeOf<'15'>();
   });
 
   it.each([15, 16, 17, 18] as const)('resolves version %i to its row', (version) => {
-    expect(postgresCapabilitiesForVersion(version)).toBe(postgresServerVersions[version]);
+    expect(postgresCapabilitiesForVersion(version)).toBe(postgresCapabilitiesByVersion[version]);
   });
 
-  it.each([14, 19, 17.1, '17', undefined])(
-    'refuses %j, naming the supported versions',
-    (version) => {
-      expect(() =>
-        postgresCapabilitiesForVersion(version as unknown as PostgresServerVersion),
-      ).toThrow(
-        expect.objectContaining({
-          code: 'CONTRACT.ARGUMENT_INVALID',
-          message: `PostgreSQL version ${JSON.stringify(version)} is not supported. State one of the supported versions: 15, 16, 17, 18.`,
-        }),
-      );
-    },
-  );
-});
-
-describe('resolveServerVersion', () => {
-  it('resolves a version against any table, naming the database in its refusal', () => {
+  it('resolves a version against the table it is given', () => {
     const table = { 3: { sql: { a: true } }, 5: { sql: { a: true, b: true } } } as const;
-
-    expect(resolveServerVersion(table, 5, 'Example')).toBe(table[5]);
-    expect(() => resolveServerVersion(table, 4 as 3, 'Example')).toThrow(
-      'Example version 4 is not supported. State one of the supported versions: 3, 5.',
+    expect(postgresCapabilitiesForVersion(5, table)).toBe(table[5]);
+    expect(() => postgresCapabilitiesForVersion(4 as 3, table)).toThrow(
+      'PostgreSQL 4 is not supported. The supported versions are 3, 5.',
     );
+  });
+
+  it.each([
+    [14, 'PostgreSQL 14 is not supported. The supported versions are 15, 16, 17, 18.'],
+    [19, 'PostgreSQL 19 is not supported. The supported versions are 15, 16, 17, 18.'],
+    [17.1, 'PostgreSQL 17.1 is not supported. The supported versions are 15, 16, 17, 18.'],
+    ['17', "Write the PostgreSQL version as the number 17, not the string '17'."],
+    [
+      Number.NaN,
+      'Write the PostgreSQL version as a number, for example version: 18. The supported versions are 15, 16, 17, 18.',
+    ],
+    [
+      undefined,
+      'State the PostgreSQL version your database runs, for example version: 18. The supported versions are 15, 16, 17, 18.',
+    ],
+    [
+      null,
+      'State the PostgreSQL version your database runs, for example version: 18. The supported versions are 15, 16, 17, 18.',
+    ],
+  ])('refuses %j with a message that says what to write', (version, message) => {
+    expect(refusalOf(version)).toMatchObject({ code: 'CONTRACT.ARGUMENT_INVALID', message });
   });
 });

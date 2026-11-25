@@ -6,7 +6,6 @@ import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
-import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
@@ -33,10 +32,9 @@ describe('defineConfig facade', () => {
     });
 
     expect(facadeConfig.family).toBe(manualConfig.family);
-    expect(facadeConfig.target).toEqual({
-      ...restateTypeDeclarations(postgres, '@internal/postgres/contract-types'),
-      capabilities: postgresServerVersions[18],
-    });
+    expect(facadeConfig.target).toEqual(
+      restateTypeDeclarations(postgres, '@internal/postgres/contract-types'),
+    );
     expect(facadeConfig.adapter).toEqual(
       restateTypeDeclarations(postgresAdapter, '@internal/postgres/contract-types'),
     );

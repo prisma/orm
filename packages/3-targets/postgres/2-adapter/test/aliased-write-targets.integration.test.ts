@@ -15,7 +15,6 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
-import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { createContract, createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { renderLoweredSql } from '../src/core/sql-renderer';
@@ -66,7 +65,6 @@ describe('write statements on an aliased target, run against Postgres', {
       contract,
       postgresCodecDescriptorRegistry,
       createDataTypeLookup(postgresDataTypes),
-      postgresServerVersions[18],
     );
     const values = params.map((param) => (param.kind === 'literal' ? param.value : null));
     return (await driver!.query(sql, values)).rows;

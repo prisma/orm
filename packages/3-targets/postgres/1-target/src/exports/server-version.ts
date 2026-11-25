@@ -1,8 +1,7 @@
 export {
+  type CapabilitiesByVersion,
   POSTGRES_MIN_SERVER_VERSION,
-  type PostgresServerVersion,
+  type PostgresVersion,
+  postgresCapabilitiesByVersion,
   postgresCapabilitiesForVersion,
-  postgresServerVersions,
-  resolveServerVersion,
-  type ServerVersionTable,
 } from '../core/server-version';

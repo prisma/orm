@@ -1,6 +1,6 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { postgresServerVersions } from '@internal/target-postgres/server-version';
+import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../../src/collection';
 import { deleteAllGraph } from '../../src/statement-graph/collection-graphs';
@@ -18,10 +18,10 @@ function adapterFor(strategy: Strategy, returning: Returning): typeof postgresAd
   return {
     ...postgresAdapter,
     capabilities: {
-      ...postgresServerVersions[18],
-      postgres: { ...postgresServerVersions[18].postgres, returning: returns },
+      ...postgresCapabilitiesByVersion[18],
+      postgres: { ...postgresCapabilitiesByVersion[18].postgres, returning: returns },
       sql: {
-        ...postgresServerVersions[18].sql,
+        ...postgresCapabilitiesByVersion[18].sql,
         returning: returns,
         outerReferencesInDerivedTables: strategy === 'join',
         jsonAggWithoutTruncation: strategy === 'join',

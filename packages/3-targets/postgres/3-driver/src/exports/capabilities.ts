@@ -1,1 +1,1 @@
-export { postgresDriverCapabilities } from '../core/descriptor-meta';
+export { postgresDriverCapabilities } from '../core/capabilities';

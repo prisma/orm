@@ -12,6 +12,7 @@ import type {
   SqlNamespaceInput,
 } from '@internal/sql-contract/types';
 import type {
+  CapabilitySet,
   ComposedAuthoringHelpers,
   ContractInput,
   EnumTypeHandle,
@@ -22,21 +23,17 @@ import { buildBoundContract } from '@internal/sql-contract-ts/contract-builder';
 import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import postgresPack from '@internal/target-postgres/pack';
 import {
-  type PostgresServerVersion,
-  postgresServerVersions,
+  type CapabilitiesByVersion,
+  postgresCapabilitiesByVersion,
 } from '@internal/target-postgres/server-version';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import { blindCast } from '@internal/utils/casts';
 import {
-  type CapabilitySet,
-  capabilitiesForVersion,
+  type ContractCapabilities,
+  contractCapabilitiesFor,
   type DefaultConnectionCapabilities,
-  defaultConnectionCapabilities,
-  type MergeCapabilitySets,
-  mergeCapabilitySets,
-  type PostgresTargetWith,
-  type PostgresVersionCapabilities,
-  postgresTargetWith,
-} from './database-version';
+  supportedVersionsText,
+} from './contract-capabilities';
 import type { ExtensionHandle } from './extension';
 import type { RlsEntityHandle } from './rls';
 
@@ -50,14 +47,14 @@ type EnumsConstraint = Record<string, EnumTypeHandle>;
 type ForeignKeyDefaultsConstraint = ContractInput['foreignKeyDefaults'];
 type NamespacesConstraint = readonly string[] | undefined;
 
-/** What the connection this contract runs over adds to it: the aggregate overloads of its adapter, and the capabilities of its `capabilities` list. */
-type PostgresConnection<Capabilities extends ConnectionCapabilitiesConstraint> =
-  typeof postgresAdapterContractContributions & {
-    readonly capabilities: MergeCapabilitySets<Capabilities>;
-  };
+/** What the contract build is given beside the target: the aggregate overloads of the adapter, and the capabilities the contract requires. */
+type PostgresContributions<Capabilities> = typeof postgresAdapterContractContributions & {
+  readonly capabilities: Capabilities;
+};
 
 type PostgresResult<
-  Version extends PostgresServerVersion,
+  Table extends CapabilitiesByVersion,
+  Version extends keyof Table & number,
   Capabilities extends ConnectionCapabilitiesConstraint,
   DatabaseTypes extends DatabaseTypesConstraint,
   Models extends ModelsConstraint,
@@ -68,14 +65,14 @@ type PostgresResult<
 > = ReturnType<
   typeof buildBoundContract<
     SqlFamily,
-    PostgresTargetWith<PostgresVersionCapabilities<Version>>,
+    PostgresPack,
     {
       readonly databaseTypes?: DatabaseTypes;
       readonly models?: Models;
       readonly extensions?: Extensions;
       readonly enums?: Enums;
       readonly namespaces?: Namespaces;
-      readonly adapter: PostgresConnection<Capabilities>;
+      readonly adapter: PostgresContributions<ContractCapabilities<Table, Version, Capabilities>>;
       readonly foreignKeyDefaults?: ForeignKeyDefaults;
       readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
       readonly codecLookup: CodecLookupWithDescriptors;
@@ -85,7 +82,8 @@ type PostgresResult<
 >;
 
 type PostgresBaseScaffold<
-  Version extends PostgresServerVersion,
+  Table extends CapabilitiesByVersion,
+  Version extends keyof Table & number,
   Capabilities extends ConnectionCapabilitiesConstraint,
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
   ForeignKeyDefaults extends ForeignKeyDefaultsConstraint = undefined,
@@ -107,7 +105,7 @@ type PostgresBaseScaffold<
   /** The PostgreSQL version the database runs. The contract requires the capabilities that version provides. */
   readonly version: Version;
   /**
-   * The capabilities the connection provides, one set per component, merged in order. Defaults to those of the adapter and the driver the client runs with; a list given here replaces the default.
+   * The capabilities the connection provides, one set per component, merged over the version's in order: a later set's flag replaces an earlier one's, and `false` turns a flag off. Defaults to those of the adapter and the driver the client runs with; a list given here replaces the default.
    */
   readonly capabilities?: Capabilities;
   /** Contract-wide defaults for foreign keys' `constraint` and `index`. */
@@ -129,7 +127,8 @@ type PostgresBaseScaffold<
 };
 
 type PostgresDefinition<
-  Version extends PostgresServerVersion,
+  Table extends CapabilitiesByVersion,
+  Version extends keyof Table & number,
   Capabilities extends ConnectionCapabilitiesConstraint,
   DatabaseTypes extends DatabaseTypesConstraint,
   Models extends ModelsConstraint,
@@ -137,7 +136,7 @@ type PostgresDefinition<
   Enums extends EnumsConstraint,
   Namespaces extends NamespacesConstraint,
   ForeignKeyDefaults extends ForeignKeyDefaultsConstraint,
-> = PostgresBaseScaffold<Version, Capabilities, Extensions, ForeignKeyDefaults> & {
+> = PostgresBaseScaffold<Table, Version, Capabilities, Extensions, ForeignKeyDefaults> & {
   readonly databaseTypes?: DatabaseTypes;
   readonly models?: Models;
   readonly enums?: Enums;
@@ -145,30 +144,47 @@ type PostgresDefinition<
 };
 
 type PostgresScaffold<
-  Version extends PostgresServerVersion,
+  Table extends CapabilitiesByVersion,
+  Version extends keyof Table & number,
   Capabilities extends ConnectionCapabilitiesConstraint,
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
   Enums extends EnumsConstraint,
   Namespaces extends NamespacesConstraint,
   ForeignKeyDefaults extends ForeignKeyDefaultsConstraint,
-> = PostgresBaseScaffold<Version, Capabilities, Extensions, ForeignKeyDefaults> & {
+> = PostgresBaseScaffold<Table, Version, Capabilities, Extensions, ForeignKeyDefaults> & {
   readonly databaseTypes?: never;
   readonly models?: never;
   readonly enums?: Enums;
   readonly namespaces?: Namespaces;
 };
 
-export function defineContract<
-  const Version extends PostgresServerVersion,
-  const Capabilities extends ConnectionCapabilitiesConstraint = DefaultConnectionCapabilities,
-  const DatabaseTypes extends DatabaseTypesConstraint = Record<never, never>,
-  const Models extends ModelsConstraint = Record<never, never>,
-  const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined,
-  const Enums extends EnumsConstraint = Record<never, never>,
-  const Namespaces extends NamespacesConstraint = undefined,
-  const ForeignKeyDefaults extends ForeignKeyDefaultsConstraint = undefined,
->(
-  definition: PostgresDefinition<
+/** The PostgreSQL `defineContract`, whose version selects a row of `Table`. */
+export interface PostgresDefineContract<Table extends CapabilitiesByVersion> {
+  <
+    const Version extends keyof Table & number,
+    const Capabilities extends ConnectionCapabilitiesConstraint = DefaultConnectionCapabilities,
+    const DatabaseTypes extends DatabaseTypesConstraint = Record<never, never>,
+    const Models extends ModelsConstraint = Record<never, never>,
+    const Extensions extends
+      | Record<string, ExtensionPackRef<'sql', string>>
+      | undefined = undefined,
+    const Enums extends EnumsConstraint = Record<never, never>,
+    const Namespaces extends NamespacesConstraint = undefined,
+    const ForeignKeyDefaults extends ForeignKeyDefaultsConstraint = undefined,
+  >(
+    definition: PostgresDefinition<
+      Table,
+      Version,
+      Capabilities,
+      DatabaseTypes,
+      Models,
+      Extensions,
+      Enums,
+      Namespaces,
+      ForeignKeyDefaults
+    >,
+  ): PostgresResult<
+    Table,
     Version,
     Capabilities,
     DatabaseTypes,
@@ -177,74 +193,50 @@ export function defineContract<
     Enums,
     Namespaces,
     ForeignKeyDefaults
-  >,
-): PostgresResult<
-  Version,
-  Capabilities,
-  DatabaseTypes,
-  Models,
-  Extensions,
-  Enums,
-  Namespaces,
-  ForeignKeyDefaults
->;
-
-export function defineContract<
-  const Version extends PostgresServerVersion,
-  const Capabilities extends ConnectionCapabilitiesConstraint = DefaultConnectionCapabilities,
-  const DatabaseTypes extends DatabaseTypesConstraint = Record<never, never>,
-  const Models extends ModelsConstraint = Record<never, never>,
-  const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined,
-  const ScaffoldEnums extends EnumsConstraint = Record<never, never>,
-  const FactoryEnums extends EnumsConstraint = Record<never, never>,
-  const Namespaces extends NamespacesConstraint = undefined,
-  const ForeignKeyDefaults extends ForeignKeyDefaultsConstraint = undefined,
->(
-  scaffold: PostgresScaffold<
+  >;
+  <
+    const Version extends keyof Table & number,
+    const Capabilities extends ConnectionCapabilitiesConstraint = DefaultConnectionCapabilities,
+    const DatabaseTypes extends DatabaseTypesConstraint = Record<never, never>,
+    const Models extends ModelsConstraint = Record<never, never>,
+    const Extensions extends
+      | Record<string, ExtensionPackRef<'sql', string>>
+      | undefined = undefined,
+    const ScaffoldEnums extends EnumsConstraint = Record<never, never>,
+    const FactoryEnums extends EnumsConstraint = Record<never, never>,
+    const Namespaces extends NamespacesConstraint = undefined,
+    const ForeignKeyDefaults extends ForeignKeyDefaultsConstraint = undefined,
+  >(
+    scaffold: PostgresScaffold<
+      Table,
+      Version,
+      Capabilities,
+      Extensions,
+      ScaffoldEnums,
+      Namespaces,
+      ForeignKeyDefaults
+    >,
+    factory: (helpers: ComposedAuthoringHelpers<SqlFamily, PostgresPack, Extensions>) => {
+      readonly databaseTypes?: DatabaseTypes;
+      readonly models?: Models;
+      readonly enums?: FactoryEnums;
+    },
+  ): PostgresResult<
+    Table,
     Version,
     Capabilities,
+    DatabaseTypes,
+    Models,
     Extensions,
-    ScaffoldEnums,
+    MergeEnums<ScaffoldEnums, FactoryEnums>,
     Namespaces,
     ForeignKeyDefaults
-  >,
-  factory: (helpers: ComposedAuthoringHelpers<SqlFamily, PostgresPack, Extensions>) => {
-    readonly databaseTypes?: DatabaseTypes;
-    readonly models?: Models;
-    readonly enums?: FactoryEnums;
-  },
-): PostgresResult<
-  Version,
-  Capabilities,
-  DatabaseTypes,
-  Models,
-  Extensions,
-  MergeEnums<ScaffoldEnums, FactoryEnums>,
-  Namespaces,
-  ForeignKeyDefaults
->;
+  >;
+}
 
-// Implementation — delegates to buildBoundContract which pre-binds family/target,
-// carrying zero casts and zero entity-kind logic at this layer: the generic
-// build lowers `entities` through the pack-registered entity-handle hook.
-export function defineContract(
-  definition: PostgresDefinition<
-    PostgresServerVersion,
-    ConnectionCapabilitiesConstraint,
-    DatabaseTypesConstraint,
-    ModelsConstraint,
-    undefined,
-    EnumsConstraint,
-    NamespacesConstraint,
-    ForeignKeyDefaultsConstraint
-  >,
-  factory?: (helpers: ComposedAuthoringHelpers<SqlFamily, PostgresPack, undefined>) => {
-    readonly databaseTypes?: DatabaseTypesConstraint;
-    readonly models?: ModelsConstraint;
-    readonly enums?: EnumsConstraint;
-  },
-): PostgresResult<
-  PostgresServerVersion,
+type AnyPostgresDefinition = PostgresDefinition<
+  CapabilitiesByVersion,
+  number,
   ConnectionCapabilitiesConstraint,
   DatabaseTypesConstraint,
   ModelsConstraint,
@@ -252,30 +244,53 @@ export function defineContract(
   EnumsConstraint,
   NamespacesConstraint,
   ForeignKeyDefaultsConstraint
-> {
-  const { version, capabilities, ...rest } = definition;
-  const target = postgresTargetWith(capabilitiesForVersion(postgresServerVersions, version));
-  const extensions: readonly ExtensionPackRef<'sql', string>[] = Object.values(
-    definition.extensions ?? {},
-  );
-  const dataTypeLookup =
-    definition.dataTypeLookup ??
-    assembleDataTypeSupport([sqlFamilyPack, postgresPack, ...extensions], () => undefined).support
-      .lookup;
-  const bound = {
-    ...rest,
-    adapter: {
-      ...postgresAdapterContractContributions,
-      capabilities: mergeCapabilitySets(capabilities ?? defaultConnectionCapabilities),
+>;
+
+/** The PostgreSQL `defineContract` for `table`. The facade exports it for the table Prisma 8 ships; tests pass a table whose rows differ. */
+export function defineContractFor<const Table extends CapabilitiesByVersion>(
+  table: Table,
+): PostgresDefineContract<Table> {
+  function defineContract(
+    definition: AnyPostgresDefinition,
+    factory?: (helpers: ComposedAuthoringHelpers<SqlFamily, PostgresPack, undefined>) => {
+      readonly databaseTypes?: DatabaseTypesConstraint;
+      readonly models?: ModelsConstraint;
+      readonly enums?: EnumsConstraint;
     },
-    createNamespace: postgresCreateNamespace,
-    codecLookup:
-      definition.codecLookup ??
-      assemblePostgresCodecRegistryWithBuiltins(extensions, dataTypeLookup),
-    dataTypeLookup,
-  };
-  if (factory !== undefined) {
-    return buildBoundContract(sqlFamilyPack, target, bound, factory);
+  ) {
+    const { version, capabilities, ...rest } = definition;
+    const required = contractCapabilitiesFor(
+      table,
+      capabilities === undefined ? { version } : { version, capabilities },
+      `State the PostgreSQL version your database runs in defineContract, for example defineContract({ version: 18, ... }). ${supportedVersionsText}`,
+    );
+    const extensions: readonly ExtensionPackRef<'sql', string>[] = Object.values(
+      definition.extensions ?? {},
+    );
+    const dataTypeLookup =
+      definition.dataTypeLookup ??
+      assembleDataTypeSupport([sqlFamilyPack, postgresPack, ...extensions], () => undefined).support
+        .lookup;
+    const bound = {
+      ...rest,
+      adapter: { ...postgresAdapterContractContributions, capabilities: required },
+      createNamespace: postgresCreateNamespace,
+      codecLookup:
+        definition.codecLookup ??
+        assemblePostgresCodecRegistryWithBuiltins(extensions, dataTypeLookup),
+      dataTypeLookup,
+    };
+    if (factory !== undefined) {
+      return buildBoundContract(sqlFamilyPack, postgresPack, bound, factory);
+    }
+    return buildBoundContract(sqlFamilyPack, postgresPack, bound);
   }
-  return buildBoundContract(sqlFamilyPack, target, bound);
+  return blindCast<
+    PostgresDefineContract<Table>,
+    'the implementation passes the capabilities its overloads name for Table to buildBoundContract; TypeScript cannot check overloads that name the outer type parameter against it'
+  >(defineContract);
 }
+
+/** Defines a PostgreSQL contract. `version` selects the capabilities the contract requires. */
+export const defineContract: PostgresDefineContract<typeof postgresCapabilitiesByVersion> =
+  defineContractFor(postgresCapabilitiesByVersion);

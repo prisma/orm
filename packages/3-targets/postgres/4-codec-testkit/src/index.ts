@@ -61,7 +61,6 @@ import {
   createPostgresBuiltinDataTypeLookup,
   postgresDataTypes,
 } from '@internal/target-postgres/data-types';
-import { postgresServerVersions } from '@internal/target-postgres/server-version';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 
@@ -297,7 +296,6 @@ export function buildProjectionSql(conformanceCase: PostgresCodecConformanceCase
     conformanceContract,
     postgresCodecDescriptorRegistry,
     postgresDataTypeLookup,
-    postgresServerVersions[18],
   ).sql;
 }
 

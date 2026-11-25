@@ -1,4 +1,13 @@
 export { type SqlExpression, sql } from '@internal/sql-contract/sql-expression';
+export {
+  type CapabilitySet,
+  type EnabledCapabilities,
+  enabledCapabilities,
+  type MergeCapabilitySets,
+  type OverrideCapabilities,
+  type ResolvedCapabilities,
+  resolveCapabilities,
+} from '../capabilities';
 export { createComposedAuthoringHelpers } from '../composed-authoring-helpers';
 export { composedExtensionPackRefs } from '../composed-extension-pack-refs';
 export type {
