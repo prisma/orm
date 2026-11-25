@@ -56,14 +56,21 @@ describe('the lines init writes, read from how the facade names its peers', () =
     expect(versionLines('8.0.1', ['workspace:~8.0.1'], { addsFacade: true }).facade).toBe('^8.0.1');
   });
 
-  it('writes a facade numbered apart from the Prisma releases on its own version', () => {
-    const lines = versionLines('1.2.3', ['~8.1.0'], { addsFacade: true });
+  it.each([
+    ['of another major and minor', '1.2.3', '~8.1.0', '^1.2.3'],
+    ['of a later major', '9.0.0', '~8.1.0', '^9.0.0'],
+    ['of our release, below the version its peers are named at', '8.1.3', '~8.1.7', '^8.1.3'],
+  ])(
+    'writes a facade numbered apart from the Prisma releases, %s, on its own version',
+    (_case, version, peer, facade) => {
+      const lines = versionLines(version, [peer], { addsFacade: true });
 
-    expect({ facade: lines.facade, peer: lines.ormPackage('~8.1.0') }).toEqual({
-      facade: '^1.2.3',
-      peer: '^8.1.0',
-    });
-  });
+      expect({ facade: lines.facade, peer: lines.ormPackage(peer) }).toEqual({
+        facade,
+        peer: `^${peer.slice(1)}`,
+      });
+    },
+  );
 
   it('writes the facade on its own version when no peer is named with a tilde', () => {
     expect(versionLines('8.0.1', ['^8.0.1'], { addsFacade: true }).facade).toBe('^8.0.1');

@@ -30,9 +30,9 @@ export function exactVersionOf(spec: string): string | undefined {
  * - When init adds the facade itself, a GA one (a plain version) gets a caret on every line:
  *   each tilde peer as the same version with a caret, and the facade with a caret on the version
  *   its tilde peers name (`~8.0.1` gives `^8.0.1`, `~8.1.0` gives `^8.1.0`), or on its own
- *   version when no peer has a tilde or its own major and minor are not theirs, as for a facade
- *   numbered apart from our releases, so an update moves every line to the next release
- *   together. One whose version has a pre-release part gets a
+ *   version when no peer has a tilde, or when that peer version is of another major and minor or
+ *   above the facade's own, as for a facade numbered apart from our releases, so the caret always
+ *   admits the facade's own version and an update moves every line to the next release together. One whose version has a pre-release part gets a
  *   tilde on every line: each peer at its declared range and the facade at a tilde on its
  *   version, since a caret on a pre-release never selects the next minor's.
  * - When the project already lists the facade, its line is the user's, and each peer gets
@@ -54,18 +54,20 @@ export function versionLines(
     .map((range) => RANGE.exec(withoutWorkspaceProtocol(range)))
     .find((range) => range?.[1] === '~' && !range[2]?.includes('-'))?.[2];
   return {
-    facade: `^${peerVersion !== undefined && sameRelease(peerVersion, facadeVersion) ? peerVersion : facadeVersion}`,
+    facade: `^${peerVersion !== undefined && isFloorOf(peerVersion, facadeVersion) ? peerVersion : facadeVersion}`,
     ormPackage: (range) => (range.trim().startsWith('~') ? `^${range.trim().slice(1)}` : range),
   };
 }
 
-function sameRelease(a: string, b: string): boolean {
-  const [left, right] = [semverOf(a), semverOf(b)];
+/** Whether `floor` is of `version`'s major and minor and not above it, so a caret on it admits `version`. */
+function isFloorOf(floor: string, version: string): boolean {
+  const [low, high] = [semverOf(floor), semverOf(version)];
   return (
-    left !== undefined &&
-    right !== undefined &&
-    left.major === right.major &&
-    left.minor === right.minor
+    low !== undefined &&
+    high !== undefined &&
+    low.major === high.major &&
+    low.minor === high.minor &&
+    compareSemver(low, high) <= 0
   );
 }
 
