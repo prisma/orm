@@ -321,6 +321,36 @@ export class PrismaPgAdapter extends PgQueryable<StdClient> implements SqlDriver
   }
 }
 
+/**
+ * Returns a copy of the pool config that connects to `database`.
+ *
+ * `pg` merges `connectionString` over the other fields, so the database named in the URL
+ * would win over `database`. The URL has to be rewritten too.
+ */
+export function withDatabase(config: pg.PoolConfig, database: string): pg.PoolConfig {
+  const { connectionString } = config
+  if (connectionString === undefined || connectionString === '') {
+    return { ...config, database }
+  }
+
+  if (connectionString.charAt(0) === '/') {
+    const host = connectionString.split(' ')[0]
+    return { ...config, host, database, connectionString: undefined }
+  }
+
+  try {
+    const url = new URL(connectionString)
+    if (url.protocol === 'socket:') {
+      url.searchParams.set('db', database)
+      return { ...config, connectionString: url.toString(), database }
+    }
+    url.pathname = `/${encodeURIComponent(database)}`
+    return { ...config, connectionString: url.toString(), database }
+  } catch {
+    throw new Error('Cannot create the shadow database connection: the connection string is not a valid URL')
+  }
+}
+
 export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFactory {
   readonly provider = 'postgres'
   readonly adapterName = packageName
@@ -371,10 +401,10 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
     const database = `prisma_migrate_shadow_db_${globalThis.crypto.randomUUID()}`
     await conn.executeScript(`CREATE DATABASE "${database}"`)
 
-    const client = new pg.Pool({ ...this.config, database })
+    const client = new pg.Pool(withDatabase(this.config, database))
     return new PrismaPgAdapter(client, undefined, async () => {
-      await conn.executeScript(`DROP DATABASE "${database}"`)
       await client.end()
+      await conn.executeScript(`DROP DATABASE "${database}"`)
     })
   }
 }

@@ -3,7 +3,7 @@ import type { SqlQuery } from '@prisma/driver-adapter-utils'
 import pg, { DatabaseError } from 'pg'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { PrismaPgAdapterFactory } from '../pg'
+import { PrismaPgAdapterFactory, withDatabase } from '../pg'
 
 describe('PrismaPgAdapterFactory', () => {
   it('should subscribe to pool error events', async () => {
@@ -278,5 +278,98 @@ describe('PgTransaction', () => {
 
     expect(releases).toEqual([expect.any(Error)])
     expect(pool.totalCount).toBe(0)
+  })
+})
+
+describe('withDatabase', () => {
+  const effectiveDatabase = (config: pg.PoolConfig) => new pg.Client(config).connectionParameters.database
+
+  it('replaces the database of a connection string', () => {
+    const config = withDatabase({ connectionString: 'postgresql://user:pass@host:5432/maindb' }, 'shadow_db')
+    expect(effectiveDatabase(config)).toBe('shadow_db')
+  })
+
+  it('keeps the other parts of the connection string', () => {
+    const config = withDatabase(
+      { connectionString: 'postgresql://user:p%40ss@host:6543/maindb?application_name=app&sslmode=disable' },
+      'shadow_db',
+    )
+    const params = new pg.Client(config).connectionParameters
+    expect(params.database).toBe('shadow_db')
+    expect(params.user).toBe('user')
+    expect(params.password).toBe('p@ss')
+    expect(params.host).toBe('host')
+    expect(params.port).toBe(6543)
+    expect(params.application_name).toBe('app')
+  })
+
+  it('works when the connection string has no database', () => {
+    const config = withDatabase({ connectionString: 'postgresql://user:pass@host' }, 'shadow_db')
+    expect(effectiveDatabase(config)).toBe('shadow_db')
+  })
+
+  it('sets the database when there is no connection string', () => {
+    const config = withDatabase({ user: 'user', host: 'host', database: 'maindb' }, 'shadow_db')
+    expect(effectiveDatabase(config)).toBe('shadow_db')
+  })
+
+  it('treats an empty connection string as absent', () => {
+    const config = withDatabase(
+      { connectionString: '', user: 'user', host: 'host', database: 'maindb', port: 5432 },
+      'shadow_db',
+    )
+    expect(effectiveDatabase(config)).toBe('shadow_db')
+  })
+
+  it('preserves the socket path when changing the database', () => {
+    const config = withDatabase({ connectionString: 'socket:/var/run/postgresql?db=maindb' }, 'shadow_db')
+    const params = new pg.Client(config).connectionParameters
+    expect(params.host).toBe('/var/run/postgresql')
+    expect(params.database).toBe('shadow_db')
+  })
+
+  it('accepts a unix-socket connection string', () => {
+    const config = withDatabase({ connectionString: '/var/run/postgresql maindb' }, 'shadow_db')
+    const params = new pg.Client(config).connectionParameters
+    expect(params.host).toBe('/var/run/postgresql')
+    expect(params.database).toBe('shadow_db')
+  })
+})
+
+describe('connectToShadowDb', () => {
+  it('ends the shadow pool before dropping the database', async () => {
+    const order: string[] = []
+    const config: pg.PoolConfig = { user: 'user', host: 'host', database: 'maindb', port: 5432 }
+    const factory = new PrismaPgAdapterFactory(config)
+
+    const mainAdapter = await factory.connect()
+    const originalExecuteScript = mainAdapter.executeScript.bind(mainAdapter)
+    mainAdapter.executeScript = async (script: string) => {
+      if (script.startsWith('CREATE DATABASE')) {
+        order.push('create')
+        return
+      }
+      if (script.startsWith('DROP DATABASE')) {
+        order.push('drop')
+        return
+      }
+      return originalExecuteScript(script)
+    }
+
+    vi.spyOn(factory, 'connect').mockResolvedValue(mainAdapter)
+
+    const endSpy = vi.spyOn(pg.Pool.prototype, 'end').mockImplementation(() => {
+      order.push('end')
+      return Promise.resolve()
+    })
+
+    try {
+      const shadow = await factory.connectToShadowDb()
+      await shadow.dispose()
+      expect(order).toEqual(['create', 'end', 'drop'])
+    } finally {
+      endSpy.mockRestore()
+      await mainAdapter.dispose()
+    }
   })
 })
