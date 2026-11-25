@@ -67,7 +67,10 @@ function fieldStagesOf({
   droppedStoredNames,
   variant,
 }: MovingModel): readonly Document[] {
-  const written = new Set(storedNameMoves.map(({ to }) => to));
+  const written = new Set([
+    ...storedNameMoves.map(({ to }) => to),
+    ...(variant === undefined ? [] : [variant.field]),
+  ]);
   const unset = [
     ...new Set([...storedNameMoves.map(({ from }) => from), ...droppedStoredNames]),
   ].filter((from) => !written.has(from));

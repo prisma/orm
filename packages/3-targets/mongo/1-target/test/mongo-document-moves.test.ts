@@ -281,6 +281,25 @@ describe('documentCopiesOf', () => {
     ]);
   });
 
+  it('keeps the discriminator it sets when a field moves away from the discriminator name', () => {
+    expect(
+      documentCopiesOf([
+        {
+          name: 'User',
+          storedNameMoves: [{ from: 'kind', to: 'oldKind' }],
+          droppedStoredNames: [],
+          variant: { field: 'kind', value: 'member' },
+        },
+      ]),
+    ).toEqual([
+      {
+        models: ['User'],
+        droppedStoredNames: [],
+        fieldStages: [{ $set: { oldKind: '$kind', kind: { $literal: 'member' } } }],
+      },
+    ]);
+  });
+
   it('drops the stored names the destination model does not store', () => {
     expect(
       documentCopiesOf([
