@@ -44,14 +44,14 @@ export interface EmittedContract {
 function configFor(target: TargetName, contractPath: string) {
   return target === 'sqlite'
     ? sqliteConfig({ contract: contractPath })
-    : postgresConfig({ contract: contractPath });
+    : postgresConfig({ contract: { path: contractPath, version: 18 } });
 }
 
 function controlClientFor(target: TargetName, connection?: string) {
   const options = connection === undefined ? {} : { connection };
   return target === 'sqlite'
     ? createSqliteControlClient(options)
-    : createPostgresControlClient(options);
+    : createPostgresControlClient({ ...options, version: 18 });
 }
 
 /** Emits PSL text in memory with the control client, as `prisma contract emit` does. */

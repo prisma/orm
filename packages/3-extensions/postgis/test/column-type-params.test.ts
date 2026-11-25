@@ -6,16 +6,19 @@ import { geometry } from '../src/exports/column-types';
 import postgis from '../src/exports/pack';
 
 function buildWithLocation(descriptor: ColumnTypeDescriptor) {
-  return defineContract({ extensions: { postgis } }, ({ field, model, gen, type }) => ({
-    models: {
-      Place: model('Place', {
-        fields: {
-          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-          location: field.column(descriptor),
-        },
-      }),
-    },
-  }));
+  return defineContract(
+    { version: 18, extensions: { postgis } },
+    ({ field, model, gen, type }) => ({
+      models: {
+        Place: model('Place', {
+          fields: {
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+            location: field.column(descriptor),
+          },
+        }),
+      },
+    }),
+  );
 }
 
 describe('geometry column type parameters', () => {

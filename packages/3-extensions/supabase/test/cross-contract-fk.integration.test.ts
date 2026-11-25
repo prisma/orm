@@ -70,6 +70,7 @@ function buildAppContract() {
   }));
 
   return defineContract({
+    version: 18,
     extensions: { supabase: supabasePack },
     models: { Profile },
   });

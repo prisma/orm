@@ -312,8 +312,8 @@ withTempDir(({ createTempDir }) => {
           "import { defineContract, extension, field, model, unbound } from '@internal/postgres/contract-builder';",
         )
         .replace(
-          'export const contract = defineContract({',
-          `export const contract = defineContract({\n  ${declaration}`,
+          'export const contract = defineContract({\n  version: 18,',
+          `export const contract = defineContract({\n  version: 18,\n  ${declaration}`,
         );
       writeFileSync(project.contractPath, source);
     }

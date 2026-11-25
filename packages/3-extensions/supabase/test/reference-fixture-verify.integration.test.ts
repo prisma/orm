@@ -57,10 +57,7 @@ function buildAppContract() {
     },
   }).sql({ table: 'item' });
 
-  return defineContract({
-    extensions: { supabase: supabasePack },
-    models: { Item },
-  });
+  return defineContract({ version: 18, extensions: { supabase: supabasePack }, models: { Item } });
 }
 
 describe('reference fixture round-trip verify', () => {

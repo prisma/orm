@@ -427,6 +427,7 @@ model Tag {
     ])('refuses %s when the TypeScript contract is built', (_name, value, codecId, message) => {
       const build = () =>
         defineContract({
+          version: 18,
           models: {
             Reading: model('Reading', {
               fields: { id: field.column(int4Column).id(), value: value() },

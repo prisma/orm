@@ -13,7 +13,7 @@ const databaseUrl = readRequiredEnv('DATABASE_URL');
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './src/prisma/contract.prisma',
+    contract: { path: './src/prisma/contract.prisma', version: 18 },
     db: {
       connection: databaseUrl,
     },

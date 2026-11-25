@@ -40,6 +40,7 @@ const Child = ChildBase.relations({
 });
 
 export const contract = defineContract({
+  version: 18,
   models: {
     Parent,
     Child,

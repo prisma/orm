@@ -19,6 +19,7 @@ import { bootstrapPostgresSignMarkerTables } from './postgres-bootstrap';
  */
 function createTestContract(): Contract<SqlStorage> {
   const contractObj = defineContract({
+    version: 18,
     models: {
       User: model('User', {
         fields: {

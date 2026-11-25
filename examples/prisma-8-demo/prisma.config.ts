@@ -6,7 +6,7 @@ import { engagementStatsControl } from './src/extensions/engagement-stats';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './src/prisma/contract.prisma',
+    contract: { path: './src/prisma/contract.prisma', version: 18 },
     // `engagementStatsControl` contributes the `stddev` aggregate operation, so
     // the emitted types carry it. Its runtime half is composed in `src/prisma/db.ts`.
     extensions: [pgvector, engagementStatsControl],

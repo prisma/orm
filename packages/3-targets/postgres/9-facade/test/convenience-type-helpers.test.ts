@@ -4,7 +4,7 @@ import { defineContract } from '../src/exports/contract-builder';
 describe('a convenience type helper', () => {
   it('refuses a precision its chosen type refuses, naming the argument of the convenience type', () => {
     expect(() =>
-      defineContract({}, ({ type, field, model, gen }) => ({
+      defineContract({ version: 18 }, ({ type, field, model, gen }) => ({
         models: {
           Order: model('Order', {
             fields: {

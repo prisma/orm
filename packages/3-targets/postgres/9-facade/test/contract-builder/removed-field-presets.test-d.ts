@@ -5,7 +5,7 @@ import { expectTypeOf, test } from 'vitest';
 import { defineContract, field as importedField } from '../../src/exports/contract-builder';
 
 test('the field presets and field.generated are not on the field the callback receives', () => {
-  defineContract({}, ({ field }) => {
+  defineContract({ version: 18 }, ({ field }) => {
     expectTypeOf(field).not.toHaveProperty('text');
     expectTypeOf(field).not.toHaveProperty('uuidString');
     expectTypeOf(field).not.toHaveProperty('id');
@@ -22,7 +22,7 @@ test('the field presets and field.generated are not on the field contract-builde
   expectTypeOf(importedField).not.toHaveProperty('generated');
 });
 
-const contract = defineContract({}, ({ field, model, type, gen }) => ({
+const contract = defineContract({ version: 18 }, ({ field, model, type, gen }) => ({
   models: {
     Event: model('Event', {
       fields: {

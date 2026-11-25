@@ -88,6 +88,7 @@ const Money = field.column({
 const Embedding = field.column({ codecId: 'pg/vector@1', typeParams: { length: 3 } } as const);
 
 export const contract = defineContract({
+  version: 18,
   extensions: { pgvector, postgis },
   models: {
     Scalar: model('Scalar', {

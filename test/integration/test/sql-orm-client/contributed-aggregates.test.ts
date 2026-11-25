@@ -96,7 +96,7 @@ const ReadingWithSamples = Reading.relations({
   samples: rel.hasMany(() => Sample, { by: 'readingId' }),
 }).sql({ table: 'contributed_readings' });
 
-const contract = defineContract({ models: { Reading: ReadingWithSamples, Sample } });
+const contract = defineContract({ version: 18, models: { Reading: ReadingWithSamples, Sample } });
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
     contract,

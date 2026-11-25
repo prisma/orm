@@ -28,7 +28,7 @@ const Owner = OwnerBase.relations({
   scores: rel.hasMany(() => Score, { by: 'ownerId' }),
 }).sql({ table: 'score_owners' });
 
-const contract = defineContract({ models: { Owner, Score } });
+const contract = defineContract({ version: 18, models: { Owner, Score } });
 
 function ownersOf(
   runtime: Parameters<Parameters<typeof withPushedContractRuntime>[1]>[0],

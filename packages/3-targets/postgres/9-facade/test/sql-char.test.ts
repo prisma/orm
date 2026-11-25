@@ -51,7 +51,7 @@ describe('sql.Char on Postgres', () => {
   });
 
   it('stores what Char stores, from the TypeScript builder', () => {
-    const throughSqlChar = defineContract({}, ({ field, model, type }) => {
+    const throughSqlChar = defineContract({ version: 18 }, ({ field, model, type }) => {
       const id = type.sql.Char(36);
       expectTypeOf(id.typeParams).toEqualTypeOf<{ readonly length: 36 }>();
       return {
@@ -60,7 +60,7 @@ describe('sql.Char on Postgres', () => {
         },
       };
     });
-    const throughChar = defineContract({}, ({ field, model, type }) => ({
+    const throughChar = defineContract({ version: 18 }, ({ field, model, type }) => ({
       models: {
         Token: model('Token', { fields: { id: field.column(type.Char(36)).id() } }).sql({
           table: 'Token',

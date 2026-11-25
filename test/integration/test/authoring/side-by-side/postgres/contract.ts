@@ -37,6 +37,7 @@ const User = UserBase.relations({
 }).sql({ table: 'users' });
 
 export const contract = defineContract({
+  version: 18,
   models: {
     User,
     Post,

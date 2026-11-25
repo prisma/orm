@@ -12,7 +12,7 @@ import {
 type PostgresHelpers = Parameters<NonNullable<Parameters<typeof defineContract>[1]>>[0];
 
 function storedDefault(build: (helpers: PostgresHelpers) => ScalarFieldBuilder): unknown {
-  const contract = defineContract({}, (helpers) => {
+  const contract = defineContract({ version: 18 }, (helpers) => {
     const { field, model, gen, type } = helpers;
     return {
       models: {
@@ -129,7 +129,7 @@ describe('postgres defineContract encodes literal defaults through the column co
       member('Long', 'abc'),
     );
     expect(() =>
-      defineContract({ enums: { Code } }, ({ field, model, gen, type }) => ({
+      defineContract({ version: 18, enums: { Code } }, ({ field, model, gen, type }) => ({
         models: {
           Event: model('Event', {
             fields: {
@@ -162,16 +162,19 @@ describe('postgres defineContract encodes literal defaults through the column co
       member('Low', 1n),
       member('High', 10n),
     );
-    const contract = defineContract({ enums: { Level } }, ({ field, model, gen, type }) => ({
-      models: {
-        Event: model('Event', {
-          fields: {
-            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-            level: field.namedType(Level).default(Level.members.Low),
-          },
-        }),
-      },
-    }));
+    const contract = defineContract(
+      { version: 18, enums: { Level } },
+      ({ field, model, gen, type }) => ({
+        models: {
+          Event: model('Event', {
+            fields: {
+              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+              level: field.namedType(Level).default(Level.members.Low),
+            },
+          }),
+        },
+      }),
+    );
     expect(
       contract.storage.namespaces['public']?.entries.table?.['Event']?.columns['level']?.default,
     ).toEqual({ kind: 'literal', value: '1' });
@@ -184,16 +187,22 @@ describe('postgres defineContract encodes literal defaults through the column co
       member('Low', 1n),
       member('High', 10n),
     );
-    const contract = defineContract({ enums: { Level } }, ({ field, model, gen, type }) => ({
-      models: {
-        Event: model('Event', {
-          fields: {
-            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-            levels: field.namedType(Level).many().default([Level.members.Low, Level.members.High]),
-          },
-        }),
-      },
-    }));
+    const contract = defineContract(
+      { version: 18, enums: { Level } },
+      ({ field, model, gen, type }) => ({
+        models: {
+          Event: model('Event', {
+            fields: {
+              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+              levels: field
+                .namedType(Level)
+                .many()
+                .default([Level.members.Low, Level.members.High]),
+            },
+          }),
+        },
+      }),
+    );
     expect(
       contract.storage.namespaces['public']?.entries.table?.['Event']?.columns['levels']?.default,
     ).toEqual({ kind: 'literal', value: ['1', '10'] });
@@ -212,6 +221,7 @@ describe('postgres defineContract encodes literal defaults through the column co
     });
     const contract = defineContract(
       {
+        version: 18,
         codecLookup: {
           ...builtinCodecs,
           descriptorFor: (id) => {

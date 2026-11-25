@@ -3,7 +3,7 @@ import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './contract.prisma',
+    contract: { path: './contract.prisma', version: 18 },
     db: {
       connection: 'postgresql://multi-branch:multi-branch@localhost:5432/multi-branch',
     },

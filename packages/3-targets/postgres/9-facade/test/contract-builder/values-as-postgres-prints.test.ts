@@ -16,7 +16,7 @@ type EnumHandle = ReturnType<typeof enumType>;
 
 function contractWithEnum(handle: EnumHandle) {
   return defineContract(
-    { enums: { [handle.enumName]: handle } },
+    { version: 18, enums: { [handle.enumName]: handle } },
     ({ field, model, gen, type }) => ({
       models: {
         Item: model('Item', {
@@ -31,7 +31,7 @@ function contractWithEnum(handle: EnumHandle) {
 }
 
 function storedDefaults(): Record<string, unknown> {
-  const contract = defineContract({}, ({ field, model, gen, type }) => ({
+  const contract = defineContract({ version: 18 }, ({ field, model, gen, type }) => ({
     models: {
       Item: model('Item', {
         fields: {

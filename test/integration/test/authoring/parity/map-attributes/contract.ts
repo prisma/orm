@@ -31,6 +31,7 @@ const Member = model('Member', {
   }));
 
 export const contract = defineContract({
+  version: 18,
   models: {
     Team,
     Member,

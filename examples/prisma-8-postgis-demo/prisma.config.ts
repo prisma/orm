@@ -10,7 +10,7 @@ if (!databaseUrl) {
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './src/prisma/contract.prisma',
+    contract: { path: './src/prisma/contract.prisma', version: 18 },
     extensions: [postgis],
     db: { connection: databaseUrl },
   }),

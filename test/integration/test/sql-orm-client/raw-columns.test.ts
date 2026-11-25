@@ -33,7 +33,7 @@ const Shelf = ShelfBase.relations({
   books: rel.hasMany(() => Book, { by: 'shelfId' }),
 }).sql({ table: 'raw_shelves' });
 
-const contract = defineContract({ models: { Shelf, Book } });
+const contract = defineContract({ version: 18, models: { Shelf, Book } });
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
     contract,

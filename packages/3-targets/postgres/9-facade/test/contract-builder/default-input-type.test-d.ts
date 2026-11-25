@@ -26,7 +26,7 @@ const BigLevel = enumType('BigLevel', { codecId: 'pg/int8@1' as const }, member(
 const handWritten = { codecId: 'app/custom@1' } as const;
 
 test('.default() takes the input type of the field codec', () => {
-  defineContract({ enums: { Level, BigLevel } }, ({ field, model, gen, type }) => {
+  defineContract({ version: 18, enums: { Level, BigLevel } }, ({ field, model, gen, type }) => {
     const Counter = field.column({
       kind: 'codec-instance',
       codecId: 'pg/int8@1',

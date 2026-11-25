@@ -62,6 +62,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
     const Role = nativeEnum('Role', 'user', 'admin');
 
     const contract = defineContract({
+      version: 18,
       models: {
         Account: model('Account', {
           fields: {
@@ -99,6 +100,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
     const AalLevel = nativeEnum('AalLevel', 'aal1', 'aal2', 'aal3').map('aal_level');
 
     const contract = defineContract({
+      version: 18,
       models: {
         Session: model('Session', {
           fields: {
@@ -139,6 +141,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
     const AalLevel = nativeEnum('AalLevel', 'aal1', 'aal2', 'aal3').map('aal_level');
 
     const contract = defineContract({
+      version: 18,
       namespaces: ['auth'],
       models: {
         Session: model('Session', {
@@ -208,6 +211,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
 
     expect(() =>
       defineContract({
+        version: 18,
         models: {
           Task: model('Task', {
             fields: {
@@ -236,6 +240,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
 
     expect(() =>
       defineContract({
+        version: 18,
         enums: { Role: RoleEnum },
         models: {
           Account: model('Account', {
@@ -256,6 +261,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
     const Status = nativeEnum('Status', 'a', 'b');
 
     const contract = defineContract({
+      version: 18,
       models: {
         Task: model('Task', {
           fields: {
@@ -289,6 +295,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
     const AalLevel = nativeEnum('AalLevel', 'aal1', 'aal2', 'aal3').map('aal_level');
 
     const contract = defineContract({
+      version: 18,
       models: {
         Session: model('Session', {
           fields: {

@@ -205,7 +205,7 @@ export function createContractFile(testDir: string): string {
     `import { int4Column, textColumn } from '@repo/test-utils/column-descriptors';
 import { defineContract, field, model } from '@internal/postgres/contract-builder';
 
-const contractObj = defineContract({
+const contractObj = defineContract({ version: 18,
   models: {
     User: model('User', {
       fields: {

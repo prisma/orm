@@ -59,6 +59,7 @@ const Float8Level = enumType(
 
 const contract = defineContract(
   {
+    version: 18,
     enums: {
       TextLevel,
       Int4Level,

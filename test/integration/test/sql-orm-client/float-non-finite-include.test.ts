@@ -30,7 +30,7 @@ const Series = model('Series', {
   relations: { points: rel.hasMany(() => PointBase, { by: 'seriesId' }) },
 }).sql({ table: 'float_series' });
 
-const contract = defineContract({ models: { Series, Point: PointBase } });
+const contract = defineContract({ version: 18, models: { Series, Point: PointBase } });
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
     contract,

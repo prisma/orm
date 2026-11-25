@@ -116,7 +116,7 @@ function thrownMessage(build: () => unknown): string | undefined {
 
 describe('type-constructor value arguments give the same contract from PSL and TypeScript', () => {
   it('on Postgres: sql.Varchar and Raw through TypeScript helpers that read value arguments, and Varchar and Numeric, which TypeScript writes with fixed column helpers', () => {
-    const tsContract = definePostgresContract({}, ({ field, model, type }) => ({
+    const tsContract = definePostgresContract({ version: 18 }, ({ field, model, type }) => ({
       models: {
         Account: model('Account', {
           fields: {
@@ -147,7 +147,7 @@ describe('type-constructor value arguments give the same contract from PSL and T
 
   it('on Postgres with extensions: pgvector.Vector and postgis.Geometry, through TypeScript helpers that read value arguments', () => {
     const tsContract = definePostgresContract(
-      { extensions: { pgvector: pgvectorPack, postgis: postgisPack } },
+      { version: 18, extensions: { pgvector: pgvectorPack, postgis: postgisPack } },
       ({ field, model, type }) => ({
         models: {
           Place: model('Place', {
@@ -210,7 +210,7 @@ describe('a value its argument’s data type cannot hold is refused with the sam
       ? []
       : interpreted.failure.diagnostics.map(({ message }) => message);
     const tsMessage = thrownMessage(() =>
-      definePostgresContract({}, ({ field, model, type }) => ({
+      definePostgresContract({ version: 18 }, ({ field, model, type }) => ({
         models: {
           Account: model('Account', {
             fields: {

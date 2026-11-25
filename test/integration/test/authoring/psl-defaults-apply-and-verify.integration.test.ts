@@ -233,6 +233,7 @@ describe('a TypeScript numeric or inet default in a spelling Postgres prints dif
     'applies, then verifies strictly against the database with no issue and plans no change',
     async () => {
       const contract = defineContract({
+        version: 18,
         models: {
           Reading: model('Reading', {
             fields: {
@@ -389,6 +390,7 @@ model Flag {
     'in TypeScript, bare sql/char@1, pg/char@1 and pg/bit@1 columns apply, verify strictly and plan no change',
     async () => {
       const contract = defineContract({
+        version: 18,
         models: {
           Flag: model('Flag', {
             fields: {
@@ -416,6 +418,7 @@ model Flag {
     'in TypeScript, the family column helpers, whose native types are PostgreSQL aliases such as char and varchar, apply, verify strictly and plan no change',
     async () => {
       const contract = defineContract({
+        version: 18,
         models: {
           AliasRow: model('AliasRow', {
             fields: {

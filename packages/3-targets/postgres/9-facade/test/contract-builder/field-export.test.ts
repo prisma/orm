@@ -11,17 +11,20 @@ describe('the field exported by contract-builder', () => {
   });
 
   it('builds the same contract as the field of the callback', () => {
-    const fromCallback = defineContract({}, ({ field: callbackField, model, type: t }) => ({
-      models: {
-        Post: model('Post', {
-          fields: {
-            id: callbackField.column(t.Char(36)).id(),
-            title: callbackField.column(t.String()),
-          },
-        }),
-      },
-    }));
-    const fromImport = defineContract({}, ({ model }) => ({
+    const fromCallback = defineContract(
+      { version: 18 },
+      ({ field: callbackField, model, type: t }) => ({
+        models: {
+          Post: model('Post', {
+            fields: {
+              id: callbackField.column(t.Char(36)).id(),
+              title: callbackField.column(t.String()),
+            },
+          }),
+        },
+      }),
+    );
+    const fromImport = defineContract({ version: 18 }, ({ model }) => ({
       models: {
         Post: model('Post', {
           fields: {

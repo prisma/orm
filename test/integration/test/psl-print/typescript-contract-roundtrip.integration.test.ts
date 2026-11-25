@@ -49,7 +49,7 @@ const Session = model('Session', {
   indexes: [constraints.index([cols.accountId])],
 }));
 
-const checksAndRelations = defineContract({ models: { Account, Session } });
+const checksAndRelations = defineContract({ version: 18, models: { Account, Session } });
 
 const Author = model('Author', {
   fields: { id: field.column(int4Column).default(autoincrement()).id() },
@@ -63,7 +63,7 @@ const Article = model('Article', {
   },
 }).sql({ table: 'article' });
 
-const oneSidedRelation = defineContract({ models: { Author, Article } });
+const oneSidedRelation = defineContract({ version: 18, models: { Author, Article } });
 
 const cases: ReadonlyArray<{ readonly name: string; readonly contract: Contract<SqlStorage> }> = [
   {

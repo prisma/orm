@@ -49,9 +49,7 @@ const Post = model('Post', {
 
 // -- Single-model contract --------------------------------------------------
 
-const singleModelContract = defineContract({
-  models: { User },
-});
+const singleModelContract = defineContract({ version: 18, models: { User } });
 
 test('table name literals survive in storage.tables (single model)', () => {
   expectTypeOf<
@@ -120,6 +118,7 @@ test('ResultType inference produces literal field keys', () => {
 // -- Multi-model contract preserves all literals ----------------------------
 
 const multiModelContract = defineContract({
+  version: 18,
   models: {
     User,
     Post,

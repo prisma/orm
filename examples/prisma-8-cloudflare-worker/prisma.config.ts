@@ -6,7 +6,7 @@ loadLocalEnv(EXAMPLE_ROOT);
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './src/prisma/contract.prisma',
+    contract: { path: './src/prisma/contract.prisma', version: 18 },
     db: {
       // biome-ignore lint/style/noNonNullAssertion: loaded from .env
       connection: process.env['DATABASE_URL']!,

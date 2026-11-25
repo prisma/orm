@@ -9,17 +9,20 @@ const pgInt = { codecId: 'pg/int4@1' } as const;
 const Ratio = enumType('Ratio', pgNumeric, member('Half', '0.5'), member('Whole', '1.50'));
 const Level = enumType('Level', pgInt, member('Low', 1), member('High', 10));
 
-const contract = defineContract({ enums: { Ratio, Level } }, ({ field, model, gen, type }) => ({
-  models: {
-    Reading: model('Reading', {
-      fields: {
-        id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-        ratio: field.namedType(Ratio),
-        level: field.namedType(Level),
-      },
-    }),
-  },
-}));
+const contract = defineContract(
+  { version: 18, enums: { Ratio, Level } },
+  ({ field, model, gen, type }) => ({
+    models: {
+      Reading: model('Reading', {
+        fields: {
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+          ratio: field.namedType(Ratio),
+          level: field.namedType(Level),
+        },
+      }),
+    },
+  }),
+);
 
 type ReadingRow = DefaultModelRow<typeof contract, 'Reading'>;
 type ReadingCreate = CreateInput<typeof contract, 'Reading'>;

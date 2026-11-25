@@ -40,7 +40,7 @@ const profileSchema = type({
 });
 
 export const contract = defineContract(
-  { codecLookup: postgresCodecLookup, dataTypeLookup: postgresDataTypeLookup },
+  { version: 18, codecLookup: postgresCodecLookup, dataTypeLookup: postgresDataTypeLookup },
   ({ field, model, rel, gen, type }) => {
     const UserBase = model('User', {
       fields: {

@@ -11,6 +11,7 @@ import {
 import { defineContract, field, model } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract({
+  version: 18,
   models: {
     Moment: model('Moment', {
       fields: {

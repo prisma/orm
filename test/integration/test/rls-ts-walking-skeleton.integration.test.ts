@@ -100,6 +100,7 @@ function buildTsContract(input: {
 }): Contract<SqlStorage> {
   const profile = makeProfile();
   return defineContract({
+    version: 18,
     models: { profile },
     entities: [
       rlsEnabled(profile),

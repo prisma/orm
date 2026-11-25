@@ -18,7 +18,11 @@ function extensionsIn(contract: { storage: { namespaces: Record<string, unknown>
 
 describe('extension() in the Postgres contract builder', () => {
   it('files an extension under the default namespace', () => {
-    const contract = defineContract({ models: { User }, entities: [extension('pg_trgm')] });
+    const contract = defineContract({
+      version: 18,
+      models: { User },
+      entities: [extension('pg_trgm')],
+    });
     expect(extensionsIn(contract, 'public')).toEqual({
       pg_trgm: new PostgresExtension({ name: 'pg_trgm' }),
     });
@@ -26,6 +30,7 @@ describe('extension() in the Postgres contract builder', () => {
 
   it('files an extension under the namespace it names', () => {
     const contract = defineContract({
+      version: 18,
       namespaces: ['extensions'],
       models: { User },
       entities: [extension('postgis', { namespace: 'extensions' })],
@@ -37,7 +42,11 @@ describe('extension() in the Postgres contract builder', () => {
   });
 
   it('builds the same contract JSON a PSL extension block does', () => {
-    const contract = defineContract({ models: { User }, entities: [extension('pg_trgm')] });
+    const contract = defineContract({
+      version: 18,
+      models: { User },
+      entities: [extension('pg_trgm')],
+    });
     const json = JSON.parse(
       JSON.stringify(new PostgresContractSerializer().serializeContract(contract)),
     );
@@ -59,6 +68,7 @@ describe('extension() in the Postgres contract builder', () => {
 
   it('files an extension declared with unbound under the unbound namespace', () => {
     const contract = defineContract({
+      version: 18,
       models: { User },
       entities: [extension('vector', { namespace: unbound })],
     });
@@ -70,6 +80,7 @@ describe('extension() in the Postgres contract builder', () => {
 
   it('writes an unbound extension under __unbound__ in contract JSON', () => {
     const contract = defineContract({
+      version: 18,
       models: { User },
       entities: [extension('vector', { namespace: unbound })],
     });
@@ -91,6 +102,7 @@ describe('extension() in the Postgres contract builder', () => {
   it('refuses one extension declared in two namespaces', () => {
     expect(() =>
       defineContract({
+        version: 18,
         namespaces: ['extensions'],
         models: { User },
         entities: [extension('postgis'), extension('postgis', { namespace: 'extensions' })],
@@ -103,6 +115,7 @@ describe('extension() in the Postgres contract builder', () => {
   it('writes the unbound namespace as unbound when one extension is declared in two namespaces', () => {
     expect(() =>
       defineContract({
+        version: 18,
         models: { User },
         entities: [extension('vector'), extension('vector', { namespace: unbound })],
       }),
@@ -113,7 +126,11 @@ describe('extension() in the Postgres contract builder', () => {
 
   it('refuses one extension declared twice in one namespace', () => {
     expect(() =>
-      defineContract({ models: { User }, entities: [extension('vector'), extension('vector')] }),
+      defineContract({
+        version: 18,
+        models: { User },
+        entities: [extension('vector'), extension('vector')],
+      }),
     ).toThrow('defineContract: extension "vector" is declared more than once.');
   });
 

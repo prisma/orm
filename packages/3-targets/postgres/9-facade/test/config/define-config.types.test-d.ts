@@ -4,7 +4,7 @@ import { defineConfig } from '../../src/config/define-config';
 import { prisma7Schema } from '../../src/config/prisma7-schema';
 
 it('accepts a contract path and a ContractConfig', () => {
-  expectTypeOf(defineConfig({ contract: 'x.prisma' })).toEqualTypeOf<
+  expectTypeOf(defineConfig({ contract: { path: 'x.prisma', version: 18 } })).toEqualTypeOf<
     PrismaConfig<'sql', 'postgres'>
   >();
   expectTypeOf(defineConfig({ contract: prisma7Schema('x.prisma') })).toEqualTypeOf<

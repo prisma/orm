@@ -169,6 +169,7 @@ const User = UserBase.relations({
 }));
 
 export const contract = defineContract({
+  version: 18,
   extensions: { pgvector },
   models: {
     User,

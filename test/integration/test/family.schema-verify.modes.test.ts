@@ -35,6 +35,7 @@ describe('family instance schemaVerify - modes', () => {
       'returns ok=false in strict mode with a not-expected issue for the extra column',
       async () => {
         const contract = defineContract({
+          version: 18,
           models: {
             User: model('User', {
               fields: {
@@ -61,6 +62,7 @@ describe('family instance schemaVerify - modes', () => {
       'returns ok=true in permissive mode with extra column',
       async () => {
         const contract = defineContract({
+          version: 18,
           models: {
             User: model('User', {
               fields: {

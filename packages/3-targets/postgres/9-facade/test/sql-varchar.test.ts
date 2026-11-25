@@ -74,7 +74,7 @@ describe('sql.Varchar on Postgres', () => {
   });
 
   it('gives the type and contract the deprecated sql.String gives, from the TypeScript builder', () => {
-    const throughString = defineContract({}, ({ field, model, type }) => {
+    const throughString = defineContract({ version: 18 }, ({ field, model, type }) => {
       expectTypeOf(type.sql.String(50)).toEqualTypeOf(type.sql.Varchar(50));
       return {
         models: {
@@ -84,7 +84,7 @@ describe('sql.Varchar on Postgres', () => {
         },
       };
     });
-    const throughVarchar = defineContract({}, ({ field, model, type }) => ({
+    const throughVarchar = defineContract({ version: 18 }, ({ field, model, type }) => ({
       models: {
         Label: model('Label', {
           fields: { id: field.column(type.Int4()).id(), name: field.column(type.sql.Varchar(50)) },

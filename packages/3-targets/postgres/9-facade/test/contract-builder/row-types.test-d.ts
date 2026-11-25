@@ -6,22 +6,25 @@ import postgres from '../../src/exports/runtime';
 
 const Level = enumType('Level', { codecId: 'pg/int8@1' }, member('Low', 1n), member('High', 10n));
 
-const contract = defineContract({ enums: { Level } }, ({ field, model, type, gen }) => ({
-  models: {
-    Reading: model('Reading', {
-      fields: {
-        id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-        label: field.column(type.sql.Varchar(50)),
-        note: field.column(type.sql.Varchar(50)).optional(),
-        level: field.namedType(Level),
-        area: field.column(type.Raw(sql`circle`)),
-        search: field.column(type.Raw(sql`tsvector`)).optional(),
-        nets: field.column(type.Raw(sql`cidr`)).many(),
-        codes: field.column(rawColumn(sql`character varying(3)`)).many(),
-      },
-    }).sql({ table: 'readings' }),
-  },
-}));
+const contract = defineContract(
+  { version: 18, enums: { Level } },
+  ({ field, model, type, gen }) => ({
+    models: {
+      Reading: model('Reading', {
+        fields: {
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+          label: field.column(type.sql.Varchar(50)),
+          note: field.column(type.sql.Varchar(50)).optional(),
+          level: field.namedType(Level),
+          area: field.column(type.Raw(sql`circle`)),
+          search: field.column(type.Raw(sql`tsvector`)).optional(),
+          nets: field.column(type.Raw(sql`cidr`)).many(),
+          codes: field.column(rawColumn(sql`character varying(3)`)).many(),
+        },
+      }).sql({ table: 'readings' }),
+    },
+  }),
+);
 
 test('the client returns rows of a TypeScript contract with the codec output types', async () => {
   const client = postgres({ contract, url: 'postgres://localhost/db' });

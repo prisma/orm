@@ -58,7 +58,7 @@ const codecLookup = assemblePostgresCodecRegistryWithBuiltins(
   dataTypeLookup,
 );
 
-export const contract = defineContract({ codecLookup, dataTypeLookup }, () => ({
+export const contract = defineContract({ version: 18, codecLookup, dataTypeLookup }, () => ({
   databaseTypes: {
     [PGVECTOR_NATIVE_TYPE]: {
       kind: 'codec-instance',

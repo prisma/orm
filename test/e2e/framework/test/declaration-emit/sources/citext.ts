@@ -3,7 +3,7 @@ import { citext } from '@prisma/orm-postgres-contrib/citext/column-types';
 import citextPack from '@prisma/orm-postgres-contrib/citext/pack';
 
 export const contract = defineContract(
-  { extensions: { citext: citextPack } },
+  { version: 18, extensions: { citext: citextPack } },
   ({ field, model, type }) => ({
     models: {
       User: model('User', {

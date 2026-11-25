@@ -8,6 +8,7 @@ import { defineContract, field, model } from '@internal/postgres/contract-builde
  * `nullableTighteningCallStrategy`.
  */
 export const contract = defineContract({
+  version: 18,
   models: {
     User: model('User', {
       fields: {

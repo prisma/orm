@@ -242,6 +242,7 @@ describe('referential actions integration', () => {
           }));
 
           const contract = defineContract({
+            version: 18,
             foreignKeyDefaults: { constraint: true, index: true },
             models: { User, Post },
           });
@@ -340,6 +341,7 @@ describe('referential actions integration', () => {
           }));
 
           const contract = defineContract({
+            version: 18,
             foreignKeyDefaults: { constraint: true, index: true },
             models: { User, Post },
           });
@@ -412,6 +414,7 @@ describe('referential actions integration', () => {
           }));
 
           const contract = defineContract({
+            version: 18,
             foreignKeyDefaults: { constraint: true, index: true },
             models: { User, Post },
           });
@@ -509,6 +512,7 @@ describe('referential actions integration', () => {
           }));
 
           const contract = defineContract({
+            version: 18,
             foreignKeyDefaults: { constraint: true, index: true },
             models: { User, Post },
           });
@@ -592,6 +596,7 @@ describe('referential actions integration', () => {
         }));
 
         const contract = defineContract({
+          version: 18,
           foreignKeyDefaults: { constraint: true, index: true },
           models: { User, Post },
         });

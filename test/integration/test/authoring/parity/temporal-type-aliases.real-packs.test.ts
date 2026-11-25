@@ -117,7 +117,7 @@ describe('the temporal type aliases with real packs', () => {
   });
 
   it('give the TypeScript builder on Postgres what DateTime with the matching generators gives it', () => {
-    const throughAliases = defineContract({}, ({ type, field, model }) => ({
+    const throughAliases = defineContract({ version: 18 }, ({ type, field, model }) => ({
       models: {
         Event: model('Event', {
           fields: {
@@ -128,7 +128,7 @@ describe('the temporal type aliases with real packs', () => {
         }).sql({ table: 'Event' }),
       },
     }));
-    const throughGenerators = defineContract({}, ({ type, field, model, gen }) => ({
+    const throughGenerators = defineContract({ version: 18 }, ({ type, field, model, gen }) => ({
       models: {
         Event: model('Event', {
           fields: {

@@ -83,6 +83,7 @@ const Post = model('Post', {
 }));
 
 export const contract = defineContract({
+  version: 18,
   models: { Post },
   entities: [
     rlsEnabled(Post),

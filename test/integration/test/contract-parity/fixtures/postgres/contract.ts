@@ -196,6 +196,7 @@ const Profile = model('Profile', {
 });
 
 export const contract = defineContract({
+  version: 18,
   extensions: { 'arktype-json': arktypeJsonPack },
   namespaces: ['auth'],
   enums: { Plan, Ratio },

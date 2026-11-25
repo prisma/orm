@@ -28,6 +28,7 @@ const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: fa
  */
 function createTestContract(): Contract<SqlStorage> {
   return defineContract({
+    version: 18,
     models: {
       User: model('User', {
         fields: {

@@ -44,7 +44,7 @@ const Member = model('Member', {
   })
   .sql({ table: 'composite_members' });
 
-const contract = defineContract({ models: { Member, Course, Enrollment } });
+const contract = defineContract({ version: 18, models: { Member, Course, Enrollment } });
 const context = createExecutionContext({
   contract,
   stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),

@@ -32,6 +32,7 @@ const AuditLog = model('AuditLog', {
 }).sql({ table: 'audit_log' });
 
 export const contract = defineContract({
+  version: 18,
   models: { Profile, AuditLog },
   entities: [
     rlsEnabled(Profile),

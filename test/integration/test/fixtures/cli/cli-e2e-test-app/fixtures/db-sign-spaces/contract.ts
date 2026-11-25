@@ -2,6 +2,7 @@ import { int4Column, textColumn } from '@internal/adapter-postgres/column-types'
 import { defineContract, field, model } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract({
+  version: 18,
   models: {
     User: model('User', {
       fields: {

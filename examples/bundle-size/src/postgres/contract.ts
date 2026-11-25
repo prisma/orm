@@ -7,7 +7,7 @@ import { defineContract } from '@prisma/orm-postgres/contract-builder';
  * directly into the runtime — so the example does not require a build
  * step to generate `contract.json` / `contract.d.ts`.
  */
-export const contract = defineContract({}, ({ field, model, gen, type }) => ({
+export const contract = defineContract({ version: 18 }, ({ field, model, gen, type }) => ({
   models: {
     Note: model('Note', {
       fields: {

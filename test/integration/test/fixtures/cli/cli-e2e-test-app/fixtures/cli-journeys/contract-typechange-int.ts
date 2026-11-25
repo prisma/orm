@@ -10,6 +10,7 @@ import { defineContract, field, model } from '@internal/postgres/contract-builde
  * `using` is a placeholder the user fills with the conversion.
  */
 export const contract = defineContract({
+  version: 18,
   models: {
     User: model('User', {
       fields: {

@@ -7,7 +7,7 @@ type Helpers = Parameters<NonNullable<Parameters<typeof defineContract>[1]>>[0];
 function shapeColumn(
   build: (field: Helpers['field'], type: Helpers['type']) => ScalarFieldBuilder,
 ) {
-  const contract = defineContract({}, ({ field, model, type, gen }) => ({
+  const contract = defineContract({ version: 18 }, ({ field, model, type, gen }) => ({
     models: {
       Shape: model('Shape', {
         fields: {

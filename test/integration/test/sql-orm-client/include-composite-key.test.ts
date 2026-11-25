@@ -41,7 +41,7 @@ const Customer = CustomerBase.relations({
   orders: rel.hasMany(() => Order, { by: ['tenantId', 'customerId'] }),
 }).sql({ table: 'composite_customers' });
 
-const contract = defineContract({ models: { Customer, Order } });
+const contract = defineContract({ version: 18, models: { Customer, Order } });
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
     contract,

@@ -5,7 +5,7 @@ import { packageCopiedConfig } from '../package-copied-config';
 export default definePrismaConfig({
   orm: packageCopiedConfig(
     ormConfig({
-      contract: './contract.prisma',
+      contract: { path: './contract.prisma', version: 18 },
       output: 'generated',
     }),
   ),

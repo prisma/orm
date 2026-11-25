@@ -37,7 +37,7 @@ const Article = model('Article', {
   foreignKeys: [constraints.foreignKey(cols.authorId, Author.refs.id)],
 }));
 
-const contract = defineContract({ models: { Author, Article } });
+const contract = defineContract({ version: 18, models: { Author, Article } });
 const db = postgres({ contract, url: 'postgres://localhost/db' });
 
 test('a where callback offers exactly the declared index names and the foreign key backing index', () => {
@@ -108,7 +108,10 @@ const Covered = model('Covered', {
   foreignKeys: [constraints.foreignKey(cols.writerId, Writer.refs.id)],
 }));
 
-const namingContract = defineContract({ models: { Writer, LongNames, Partials, Covered } });
+const namingContract = defineContract({
+  version: 18,
+  models: { Writer, LongNames, Partials, Covered },
+});
 const naming = postgres({ contract: namingContract, url: 'postgres://localhost/db' });
 
 test('a backing index name longer than 54 bytes is cut as the build cuts it', () => {

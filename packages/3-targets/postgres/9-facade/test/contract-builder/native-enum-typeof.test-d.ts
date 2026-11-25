@@ -37,6 +37,7 @@ expectTypeOf(columnDescriptor.entityRef.entity.members).toEqualTypeOf<
 >();
 
 const contract = defineContract({
+  version: 18,
   models: {
     Session: model('Session', {
       fields: {

@@ -31,7 +31,7 @@ const Owner = OwnerBase.relations({
   tags: rel.hasMany(() => Tag, { by: 'ownerId' }),
 }).sql({ table: 'char_owners' });
 
-const contract = defineContract({ models: { Owner, Tag } });
+const contract = defineContract({ version: 18, models: { Owner, Tag } });
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
     contract,

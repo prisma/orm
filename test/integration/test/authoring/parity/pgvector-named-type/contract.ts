@@ -8,6 +8,7 @@ const Embedding1536 = field.column({
 } as const);
 
 export const contract = defineContract({
+  version: 18,
   extensions: { pgvector },
   models: {
     Document: model('Document', {

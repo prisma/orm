@@ -30,10 +30,7 @@ function buildAppContract() {
     },
   }).sql({ table: 'item' });
 
-  return defineContract({
-    extensions: { supabase: supabasePack },
-    models: { Item },
-  });
+  return defineContract({ version: 18, extensions: { supabase: supabasePack }, models: { Item } });
 }
 
 describe('service_role reads auth.refresh_tokens via the .supabase secondary root', () => {

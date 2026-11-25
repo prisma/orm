@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
 
 function buildWithColumn(descriptor: ColumnTypeDescriptor) {
-  return defineContract({}, ({ field, model, gen, type }) => ({
+  return defineContract({ version: 18 }, ({ field, model, gen, type }) => ({
     models: {
       Item: model('Item', {
         fields: {

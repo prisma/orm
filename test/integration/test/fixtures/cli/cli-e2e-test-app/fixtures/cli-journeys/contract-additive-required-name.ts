@@ -9,6 +9,7 @@ import { defineContract, field, model } from '@internal/postgres/contract-builde
  * gets a `placeholder()`-stubbed `migration.ts` to fill in.
  */
 export const contract = defineContract({
+  version: 18,
   models: {
     User: model('User', {
       fields: {

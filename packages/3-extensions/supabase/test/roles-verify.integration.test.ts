@@ -39,10 +39,7 @@ function buildAppContract() {
     },
   }).sql({ table: 'item' });
 
-  return defineContract({
-    extensions: { supabase: supabasePack },
-    models: { Item },
-  });
+  return defineContract({ version: 18, extensions: { supabase: supabasePack }, models: { Item } });
 }
 
 describe('roles enter db verify — declared in the pack contract, checked against the live database', () => {

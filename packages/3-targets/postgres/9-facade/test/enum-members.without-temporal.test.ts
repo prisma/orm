@@ -13,17 +13,20 @@ const InstantLevel = enumType(
 
 const contractJson: unknown = JSON.parse(
   JSON.stringify(
-    defineContract({ enums: { TextLevel, InstantLevel } }, ({ field, model, gen, type }) => ({
-      models: {
-        Reading: model('Reading', {
-          fields: {
-            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-            text: field.namedType(TextLevel),
-            instant: field.namedType(InstantLevel),
-          },
-        }),
-      },
-    })),
+    defineContract(
+      { version: 18, enums: { TextLevel, InstantLevel } },
+      ({ field, model, gen, type }) => ({
+        models: {
+          Reading: model('Reading', {
+            fields: {
+              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+              text: field.namedType(TextLevel),
+              instant: field.namedType(InstantLevel),
+            },
+          }),
+        },
+      }),
+    ),
   ),
 );
 

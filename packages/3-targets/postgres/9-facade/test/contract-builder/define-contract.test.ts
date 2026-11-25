@@ -14,13 +14,13 @@ const textColumn = {
 
 describe('postgres defineContract wrap', () => {
   it('pre-binds family and target (no factory form)', () => {
-    const result = defineContract({});
+    const result = defineContract({ version: 18 });
     expect(result.target).toBe('postgres');
     expect(result.targetFamily).toBe('sql');
   });
 
   it('pre-binds family and target (factory form)', () => {
-    const result = defineContract({}, ({ field: f, model: m, gen, type }) => ({
+    const result = defineContract({ version: 18 }, ({ field: f, model: m, gen, type }) => ({
       models: {
         Foo: m('Foo', { fields: { id: f.column(type.Char(36)).id().onCreate(gen.uuid()) } }),
       },
@@ -31,7 +31,7 @@ describe('postgres defineContract wrap', () => {
   });
 
   it('declares Date columns through the composed type helpers', () => {
-    const result = defineContract({}, ({ field: f, model: m, type, gen }) => ({
+    const result = defineContract({ version: 18 }, ({ field: f, model: m, type, gen }) => ({
       models: {
         Event: m('Event', {
           fields: {
@@ -76,7 +76,7 @@ describe('postgres defineContract wrap', () => {
   });
 
   it('types Date columns through the codec map, with no type of their own', () => {
-    const contract = defineContract({}, ({ field: f, model: m, type }) => ({
+    const contract = defineContract({ version: 18 }, ({ field: f, model: m, type }) => ({
       models: {
         Event: m('Event', {
           fields: {
@@ -104,12 +104,13 @@ describe('postgres defineContract wrap', () => {
   });
 
   it('accepts extensions: undefined', () => {
-    const result = defineContract({ extensions: undefined });
+    const result = defineContract({ version: 18, extensions: undefined });
     expect(result.target).toBe('postgres');
   });
 
   it('produces a model when defined inline', () => {
     const result = defineContract({
+      version: 18,
       models: {
         Bar: model('Bar', { fields: { id: field.column(textColumn).id() } }),
       },

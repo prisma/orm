@@ -86,6 +86,7 @@ const ShadowUser = model('ShadowUser', {
   .sql({ table: 'users' });
 
 export const contract = defineContract({
+  version: 18,
   namespaces: ['shadow'],
   models: {
     User: PublicUser,

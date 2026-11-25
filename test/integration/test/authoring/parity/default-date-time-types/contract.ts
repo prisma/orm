@@ -8,7 +8,7 @@ import {
 import { defineContract } from '@internal/postgres/contract-builder';
 import { Temporal } from 'temporal-polyfill';
 
-export const contract = defineContract({}, ({ field, model, type }) => ({
+export const contract = defineContract({ version: 18 }, ({ field, model, type }) => ({
   models: {
     T: model('T', {
       fields: {

@@ -125,6 +125,7 @@ const Branch = model('Branch', {
 }).sql({ table: 'codec_branches' });
 
 const contract = defineContract({
+  version: 18,
   codecLookup: createPostgresCodecRegistryWithBuiltins([includedTextDescriptor]),
   models: { Project, Branch },
 });

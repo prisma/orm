@@ -22,9 +22,7 @@ const Priority = enumType(
 const UserEnum = enumType('user_type', pgText, member('admin', 'admin'), member('user', 'user'));
 
 export const contract = defineContract(
-  {
-    extensions: { pgvector },
-  },
+  { version: 18, extensions: { pgvector } },
   ({ field, model, type, gen }) => {
     const Embedding1536 = field.column(type.pgvector.Vector(1536));
 

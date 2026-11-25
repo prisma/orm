@@ -31,16 +31,19 @@ const pgInt = { codecId: 'pg/int4@1' } as const;
 
 const Level = enumType('Level', pgInt, member('Low', 1), member('High', 10));
 
-const contract = defineContract({ enums: { Level } }, ({ field, model, gen, type }) => ({
-  models: {
-    Event: model('Event', {
-      fields: {
-        id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-        level: field.namedType(Level),
-      },
-    }),
-  },
-}));
+const contract = defineContract(
+  { version: 18, enums: { Level } },
+  ({ field, model, gen, type }) => ({
+    models: {
+      Event: model('Event', {
+        fields: {
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+          level: field.namedType(Level),
+        },
+      }),
+    },
+  }),
+);
 
 type EventRow = DefaultModelRow<typeof contract, 'Event'>;
 type EventCreate = CreateInput<typeof contract, 'Event'>;

@@ -125,6 +125,7 @@ describe('a generator call in a TypeScript contract on a Postgres column with a 
   function build(value: ReturnType<typeof field.column>) {
     return () =>
       defineContract({
+        version: 18,
         models: {
           Row: model('Row', { fields: { id: field.column(varcharColumn(36)).id(), value } }),
         },
