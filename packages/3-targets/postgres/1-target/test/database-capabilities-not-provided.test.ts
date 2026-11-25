@@ -118,7 +118,31 @@ describe('the message for what a PostgreSQL database lacks', () => {
         table,
       ),
     ).toBe(
-      'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 16.4. Either upgrade the database, or state version 16 for your contract, which turns off the features that need 17. If its capabilities list turns one of them on (sql.mergeReturning), remove it there. It also requires postgres.elsewhere, which no PostgreSQL version Prisma supports provides: remove it from its capabilities list.',
+      'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 16.4. Either upgrade the database, or state version 16 for your contract, which turns off the features that need 17. If its capabilities list turns one of them on (sql.mergeReturning), remove it there. Your contract also requires postgres.elsewhere, which no PostgreSQL version Prisma supports provides: remove it from its capabilities list.',
+    );
+  });
+
+  it('says to remove them from the list when the list may turn on several flags a later version provides', () => {
+    const tableWithTwoLaterFlags = {
+      15: { sql: { returning: true } },
+      16: { sql: { returning: true } },
+      17: { sql: { returning: true, mergeReturning: true, jsonTable: true } },
+    } as const;
+
+    expect(
+      postgresDatabaseCapabilitiesNotProvidedMessage(
+        {
+          kind: 'capabilities-missing',
+          serverVersionNumber: 160004,
+          missing: [
+            { namespace: 'sql', flag: 'mergeReturning' },
+            { namespace: 'sql', flag: 'jsonTable' },
+          ],
+        },
+        tableWithTwoLaterFlags,
+      ),
+    ).toBe(
+      'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 16.4. Either upgrade the database, or state version 16 for your contract, which turns off the features that need 17. If its capabilities list turns any of them on (sql.mergeReturning and sql.jsonTable), remove them there.',
     );
   });
 
@@ -162,9 +186,9 @@ describe('the message for what a PostgreSQL database lacks', () => {
     );
   });
 
-  it('says the version could not be read', () => {
+  it('says the version could not be read, and what to check', () => {
     expect(postgresDatabaseCapabilitiesNotProvidedMessage({ kind: 'version-unread' }, table)).toBe(
-      "Prisma could not read this database's PostgreSQL version, so it cannot check that the database provides what your contract requires.",
+      "Prisma could not read this database's PostgreSQL version, so it cannot check that the database provides what your contract requires. Check that the connection reaches a PostgreSQL server, and that SHOW server_version_num returns its version there.",
     );
   });
 });

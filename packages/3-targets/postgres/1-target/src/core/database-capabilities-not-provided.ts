@@ -120,7 +120,7 @@ export function postgresDatabaseCapabilitiesNotProvidedMessage(
   table: CapabilitiesByVersion,
 ): string {
   if (notProvided.kind === 'version-unread') {
-    return "Prisma could not read this database's PostgreSQL version, so it cannot check that the database provides what your contract requires.";
+    return "Prisma could not read this database's PostgreSQL version, so it cannot check that the database provides what your contract requires. Check that the connection reaches a PostgreSQL server, and that SHOW server_version_num returns its version there.";
   }
   const runs = `This database runs PostgreSQL ${versionText(notProvided.serverVersionNumber)}.`;
   const versions = versionsOf(table);
@@ -138,10 +138,10 @@ export function postgresDatabaseCapabilitiesNotProvidedMessage(
     return `Your contract requires ${keysOf(inNoVersion)}, ${noVersionProvides}. ${runs} Remove ${inNoVersion.length === 1 ? 'it' : 'them'} from your contract's capabilities list.`;
   }
   const required = Math.max(...inSomeVersion.map((flag) => firstVersionWith(flag) ?? 0));
-  const versioned = `Your contract requires PostgreSQL ${required} or later. ${runs} Either upgrade the database, or state version ${stated} for your contract, which turns off the features that need ${required}. If its capabilities list turns one of them on (${keysOf(inSomeVersion)}), remove it there.`;
+  const versioned = `Your contract requires PostgreSQL ${required} or later. ${runs} Either upgrade the database, or state version ${stated} for your contract, which turns off the features that need ${required}. If its capabilities list turns ${inSomeVersion.length === 1 ? 'one' : 'any'} of them on (${keysOf(inSomeVersion)}), remove ${inSomeVersion.length === 1 ? 'it' : 'them'} there.`;
   return inNoVersion.length === 0
     ? versioned
-    : `${versioned} It also requires ${keysOf(inNoVersion)}, ${noVersionProvides}: remove ${inNoVersion.length === 1 ? 'it' : 'them'} from its capabilities list.`;
+    : `${versioned} Your contract also requires ${keysOf(inNoVersion)}, ${noVersionProvides}: remove ${inNoVersion.length === 1 ? 'it' : 'them'} from its capabilities list.`;
 }
 
 /** What a PostgreSQL server at `serverVersionNumber` does not provide of `capabilities`, said in versions by PostgreSQL's table, or `undefined` when it provides them all. */

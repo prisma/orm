@@ -83,7 +83,7 @@ describe('PostgreSQL verification checks the database provides what the contract
       ok: false,
       code: VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
       summary:
-        "Prisma could not read this database's PostgreSQL version, so it cannot check that the database provides what your contract requires.",
+        "Prisma could not read this database's PostgreSQL version, so it cannot check that the database provides what your contract requires. Check that the connection reaches a PostgreSQL server, and that SHOW server_version_num returns its version there.",
     });
   });
 });
