@@ -13,6 +13,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
@@ -346,7 +347,19 @@ model ${user} {
     expect((await selfEmitMigration(journey.ctx, ['--dir', dir])).exitCode, 'T6.04').toBe(0);
 
     const stopped = await runMigrate(journey.ctx);
-    expect(stopped.exitCode, 'T6.05: the validator change stops on the stray document').not.toBe(0);
+    expect({
+      exitCode: stopped.exitCode,
+      output: stripVTControlCharacters(`${stopped.stdout}${stopped.stderr}`),
+      users: await documents(journey.db, 'users'),
+      members: await documents(journey.db, 'members'),
+    }).toEqual({
+      exitCode: 2,
+      output: expect.stringContaining(
+        '[MIGRATION.PRECHECK_FAILED] Operation validator.users.update stopped: 1 document in collection users does not fit the new validator',
+      ),
+      users: [{ admin: 'Root', mail: 'root@example.com' }, { stray: true }],
+      members: [{ user: 'Ada', email: 'ada@example.com' }],
+    });
     await journey.db.collection('users').deleteMany({ stray: true });
     const finished = await runMigrate(journey.ctx);
     expect(finished.exitCode, `T6.06: ${finished.stdout}${finished.stderr}`).toBe(0);
