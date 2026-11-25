@@ -36,6 +36,22 @@ describe('the lines init writes, read from how the facade names its peers', () =
     }).toEqual({ facade: '^8.1.0', tilde: '^8.1.0', caret: '^8.1.0' });
   });
 
+  it.each([
+    ['the first version of release 8.0', '8.0.1', ['~8.0.1'], '^8.0.1'],
+    ['a fix within release 8.0', '8.0.2', ['~8.0.1'], '^8.0.1'],
+    ['a fix within release 8.1', '8.1.2', ['~8.1.0'], '^8.1.0'],
+  ])(
+    'writes the facade on the version its peers are named at, for %s',
+    (_case, version, peers, facade) => {
+      const lines = versionLines(version, peers, { addsFacade: true });
+
+      expect({ facade: lines.facade, peer: lines.ormPackage(peers[0] ?? '') }).toEqual({
+        facade,
+        peer: facade,
+      });
+    },
+  );
+
   it('writes each peer at the range the facade declares when the project already lists it', () => {
     const lines = versionLines('8.1.2', ['~8.1.0'], { addsFacade: false });
 

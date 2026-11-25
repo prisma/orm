@@ -29,7 +29,8 @@ export function exactVersionOf(spec: string): string | undefined {
  * `workspace:` specifier on an exact version counts as one. One that names them with ranges:
  *
  * - When init adds the facade itself, a GA one (a plain version) gets a caret on every line:
- *   `^X.Y.0` on the facade and a tilde peer as the same version with a caret, so an update
+ *   each tilde peer as the same version with a caret, and the facade with a caret on the version
+ *   its tilde peers name (`~8.0.1` gives `^8.0.1`, `~8.1.0` gives `^8.1.0`), so an update
  *   moves every line to the next release together. One whose version has a pre-release part gets a
  *   tilde on every line: each peer at its declared range and the facade at a tilde on its
  *   version, since a caret on a pre-release never selects the next minor's.
@@ -49,8 +50,11 @@ export function versionLines(
     return { facade: `~${facadeVersion}`, ormPackage: (range) => range, standsFor: lineStandsFor };
   }
   const [major, minor] = facadeVersion.split('.');
+  const peerVersion = ormPeerRanges
+    .map((range) => RANGE.exec(range.trim()))
+    .find((range) => range?.[1] === '~' && !range[2]?.includes('-'))?.[2];
   return {
-    facade: `^${major}.${minor}.0`,
+    facade: `^${peerVersion ?? `${major}.${minor}.0`}`,
     ormPackage: (range) => (range.trim().startsWith('~') ? `^${range.trim().slice(1)}` : range),
     standsFor: lineStandsFor,
   };
