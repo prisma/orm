@@ -328,4 +328,129 @@ describe('MongoMigrationPlanner, a field rename statement in a shared collection
       dataLoss: [],
     });
   });
+
+  it('does not take the statement call as renaming the field of a model that leaves the collection, and asks about that field', () => {
+    const leaving = contract(
+      'to',
+      {
+        Admin: { collection: 'admins', fields: ['_id', 'name'], storedAs: { name: 'n' } },
+        User: { collection: 'people', fields: ['_id', 'n'] },
+      },
+      { people: { control: 'managed' }, admins: { control: 'managed' } },
+    );
+    expect(
+      planned(
+        plan({
+          from,
+          to: leaving,
+          schema: [schemaCollection('people')],
+          statements: [renameField('User', 'name', 'User', 'n')],
+        }),
+      ),
+    ).toEqual({
+      labels: [
+        'Create collection admins',
+        'Rename field name to n in collection people',
+        'Remove field name from collection people',
+      ],
+      classes: ['additive', 'widening', 'destructive'],
+      applied: [[1]],
+      dataLoss: [
+        {
+          operationIndex: 2,
+          subject: { kind: 'field', namespaceId: NS, model: 'Admin', field: 'name' },
+          loss: 'drop',
+          label: 'Remove field name from collection people',
+        },
+      ],
+    });
+  });
+
+  it("does not take a variant's statement call, which renames only that variant's documents, as renaming the other variant's field", () => {
+    const nullable = { codecId: 'mongo/string@1', nullable: true };
+    const typed = (fields: Readonly<Record<string, string>>) =>
+      Object.fromEntries(Object.keys(fields).map((field) => [field, nullable]));
+    const tasks = (
+      seed: string,
+      control: 'external' | 'managed',
+      bug: Readonly<Record<string, string>>,
+      epic: Readonly<Record<string, string>>,
+    ) =>
+      contract(
+        seed,
+        {
+          Task: {
+            collection: 'tasks',
+            fields: ['_id', 'type'],
+            discriminator: 'type',
+            variants: { Bug: 'bug', Epic: 'epic' },
+          },
+          Bug: { fields: Object.keys(bug), storedAs: bug, types: typed(bug), base: 'Task' },
+          Epic: { fields: Object.keys(epic), storedAs: epic, types: typed(epic), base: 'Task' },
+        },
+        { tasks: { control } },
+      );
+    expect(
+      planned(
+        plan({
+          from: tasks('from', 'external', { a: 'x' }, { c: 'x' }),
+          to: tasks('to', 'managed', { a: 'y' }, { d: 'y' }),
+          schema: [schemaCollection('tasks')],
+          statements: [renameField('Epic', 'c', 'Epic', 'd')],
+        }),
+      ),
+    ).toEqual({
+      labels: [
+        'Rename field x to y in collection tasks in documents whose type is "epic"',
+        'Remove field x from collection tasks in documents whose type is "bug"',
+      ],
+      classes: ['widening', 'destructive'],
+      applied: [[0]],
+      dataLoss: [
+        {
+          operationIndex: 1,
+          subject: { kind: 'field', namespaceId: NS, model: 'Bug', field: 'a' },
+          loss: 'drop',
+          label: 'Remove field x from collection tasks in documents whose type is "bug"',
+        },
+      ],
+    });
+  });
+
+  it('does not take the statement call in one collection as renaming the same stored name in another collection', () => {
+    const both = (seed: string, control: 'external' | 'managed', user: string, item: string) =>
+      contract(
+        seed,
+        {
+          User: { collection: 'people', fields: ['_id', user] },
+          Item: { collection: 'items', fields: ['_id', 'name'], storedAs: { name: item } },
+        },
+        { people: { control }, items: { control } },
+      );
+    expect(
+      planned(
+        plan({
+          from: both('from', 'external', 'name', 'name'),
+          to: both('to', 'managed', 'n', 'n'),
+          schema: [schemaCollection('people'), schemaCollection('items')],
+          statements: [renameField('User', 'name', 'User', 'n')],
+        }),
+      ),
+    ).toEqual({
+      labels: [
+        'Rename field name to n in collection people',
+        'Remove field name from collection items',
+      ],
+      classes: ['widening', 'destructive'],
+      applied: [[0]],
+      dataLoss: [
+        {
+          operationIndex: 1,
+          subject: { kind: 'field', namespaceId: NS, model: 'Item', field: 'name' },
+          loss: 'drop',
+          label: 'Remove field name from collection items',
+        },
+      ],
+    });
+  });
 });
