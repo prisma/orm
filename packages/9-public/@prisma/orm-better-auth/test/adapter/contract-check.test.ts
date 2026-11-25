@@ -128,7 +128,7 @@ describe.each(targets)('createSchema on %s', (target) => {
     });
   });
 
-  it('throws the message with its code when the contract is incomplete, and writes nothing', async () => {
+  it('throws the message with its code when it cannot find the contract source, and writes nothing', async () => {
     const options = { plugins: [twoFactor()] };
     const client = await databases.open(
       target,
@@ -137,7 +137,9 @@ describe.each(targets)('createSchema on %s', (target) => {
     const before = await readdir(process.cwd());
     const adapter = prismaAdapter(client)(options);
     await expect(adapter.createSchema?.(options)).rejects.toThrow(
-      mismatch(contractMessage(compare(client.contract, options))),
+      mismatch(
+        `${contractMessage(compare(client.contract, options))}\n\n\`auth generate\` did not change your contract, because it found no prisma.config.ts in the working directory. Pass your contract file with \`--output\`.`,
+      ),
     );
     expect(await readdir(process.cwd())).toEqual(before);
     expect(before).not.toContain('prisma');
