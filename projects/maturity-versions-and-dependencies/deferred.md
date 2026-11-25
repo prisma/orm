@@ -44,9 +44,8 @@ Proposed as a project of its own. See [plan.md](plan.md), "Proposed split".
 
 `pkg.pr.new` publishes a preview of each package for a pull request. It rewrites ordinary dependencies to the preview's own addresses and leaves peer dependencies alone. A preview of `@prisma/orm-postgres` therefore installs the released platform packages unless the user installs their previews too. Documented in `docs/oss/versioning.md`. It stops mattering for most cases when the packages name each other with ranges (slice 2).
 
-## For slice 3, when `8.0.0` is cut
+## For slice 3, when release `8.0` is cut as `8.0.1`
 
-- Set `lastReleaseCandidate` in `packages/0-shared/publish-surface/src/levels.ts` to the counter of the last release candidate. The plan needs it to move a package up to Release Candidate within `8.0` without colliding with a published version, and refuses that move while it is unset.
 - The ParadeDB extension keeps its published version until it gets a fix, but its manifest's ranges on our packages follow each release. So between fixes its source manifest is ahead of what is published. Harmless; say so in the release procedure.
 
 ## A project that already lists its facade with a caret

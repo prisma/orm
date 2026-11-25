@@ -15,7 +15,7 @@ Slices 1 to 4 are in the order of what cannot be changed after `8.0.0`; slices 5
 | --- | --- | --- | --- | --- |
 | 1, [TML-3935](https://linear.app/prisma-company/issue/TML-3935) | The application lists the platform packages, and our packages name each other as peers | prisma/orm, with small changes in prisma/prisma-cli, prisma/composer and prisma/web | nothing | the last release candidate |
 | 2, [TML-3936](https://linear.app/prisma-company/issue/TML-3936) | Each package declares its level, and its version, ranges and tag follow from it | prisma/orm | 1 | the last release candidate |
-| 3, [TML-3937](https://linear.app/prisma-company/issue/TML-3937) | Releasing `8.0.0`, one package alone, and an older major | prisma/orm | 2 | `8.0.0` |
+| 3, [TML-3937](https://linear.app/prisma-company/issue/TML-3937) | Releasing release `8.0` as `8.0.1`, one package alone, and an older major | prisma/orm | 2 | `8.0.1` |
 | 4, [TML-3938](https://linear.app/prisma-company/issue/TML-3938) | The public docs: what an application installs, the levels, and each package's level | prisma/web | 1 for the install instructions, 2 for the levels | the install instructions with the release that ships slice 1; the levels with `8.0.0` |
 | 5 | Every release's notes have a "How to upgrade" section | prisma/orm | nothing | the next release candidate after slice 1 |
 | 6, [TML-3956](https://linear.app/prisma-company/issue/TML-3956) | Apps that create-prisma generates list the platform packages | prisma/create-prisma | the first release of prisma/orm that contains slice 1 | create-prisma's move to that release |
@@ -94,18 +94,18 @@ Agreed with the operator on 2026-11-25, through the stream. From the next releas
   - The capability docs say a capability has the level of the package that publishes it.
 - **Five corrections that are true today** ride along: the capability stability scheme that was never built comes out of the Ecosystem subsystem doc and `docs/reference/capabilities.md`; the note on ADR 017; "early-access install" in `docs/oss/versioning.md`; the pin bullet that names an unpublished package; "prototype" in the decision record index and `AGENTS.md`.
 
-### 3. Releasing `8.0.0`, one package alone, and an older major
+### 3. Releasing release `8.0` as `8.0.1`, one package alone, and an older major
 
-**After this slice:** a maintainer can cut `8.0.0`, release a fix to one package, and release a fix to an older major, each with one command and a dry run that shows what will be published.
+**After this slice:** a maintainer can cut release `8.0`, published as `8.0.1`, release a fix to one package, and release a fix to an older major, each with one command and a dry run that shows what will be published.
 
-- **Cutting `8.0.0`** and any later minor or major, from the release skill.
-- **Packages that move down from `rc`** (the design's section 2.1): at `8.0.0` each is published at its level, and every earlier release candidate of it is marked deprecated on the registry with a message that says where the package went. The trial showed that Yarn and Bun do not print that message, so the release notes and the upgrade instructions say it too.
+- **Cutting `8.0.1`** and any later minor or major, from the release skill. The repository's version, the git tag and the GitHub release are `8.0.1`; no package is published as `8.0.0`.
+- **Packages that move down from `rc`** (the design's section 2.1): at `8.0.1` each is published at its level, and every earlier release candidate of it is marked deprecated on the registry with a message that says where the package went. The trial showed that Yarn and Bun do not print that message, so the release notes and the upgrade instructions say it too.
 - **A fix to one package:** its patch number or counter rises, it alone is published, and the release notes say which package.
 - **A release of an older major always names its own tag,** so it cannot take `latest` back.
-- **Upgrade skills.** From `8.0.0`, the `prisma-8` skill says an upgrade within Prisma 8 needs no change, keeps the per-release instructions for the release candidates only, and says how a user of a package below GA moves to the next minor, including what their lines should read after their package manager has rewritten them. `check-upgrade-coverage.mjs` stops requiring a guide for every release after `8.0.0`.
-- **The procedure for releasing `8.0.0`** in `docs/oss/versioning.md`, with the list of docs to rewrite on that day, the removal of the ParadeDB extension from the repository, and the levels at `8.0.0`, where no package is Preview. A package promoted to Preview later needs, in its reference documentation, the list of what it does not yet support, which the level's definition requires. A draft exists on the branch `docs/compatibility-policy-records`.
+- **Upgrade skills.** From `8.0.0`, the `prisma-8` skill says an upgrade within Prisma 8 needs no change, keeps the per-release instructions for the release candidates only, and says how a user of a package below GA moves to the next minor, including what their lines should read after their package manager has rewritten them. `check-upgrade-coverage.mjs` stops requiring a guide for every release after `8.0.1`.
+- **The procedure for releasing `8.0.1`** in `docs/oss/versioning.md`, with the list of docs to rewrite on that day, the removal of the ParadeDB extension from the repository, and the levels at `8.0.0`, where no package is Preview. A package promoted to Preview later needs, in its reference documentation, the list of what it does not yet support, which the level's definition requires. A draft exists on the branch `docs/compatibility-policy-records`.
 - **How long a major receives fixes:** fixes go to the latest minor; the previous major receives critical and security fixes for 12 months after a new major. Recorded in a decision record, from the draft on the same branch, and stated in `SECURITY.md` and `docs/oss/versioning.md`. Prisma 7 keeps the 18 months already promised for it; the 12 months apply from Prisma 8 on.
-- **The check.** Dry runs, in CI, of: `8.0.0`; a fix to one GA package; a fix to one package below GA; a release on an older major.
+- **The check.** Dry runs, in CI, of: `8.0.1`; a fix to one GA package; a fix to one package below GA; a release on an older major.
 
 ### 4. The public docs
 
@@ -156,7 +156,7 @@ The design left these to the project. Each is recorded in the pull request of th
 | How an application on a facade below GA writes its lines | A tilde on every line | The trial: the only form that stayed consistent under every package manager |
 | Who writes the ranges in a new application | `prisma orm init`, explicitly | The trial: pnpm writes an exact version for a pre-release, and Yarn installs no peers |
 | Ranges before `8.0.0` | Exact, as today | A release candidate may break, so a range between release candidates would promise something false |
-| The first version of a package below GA at release `8.0` | `8.0.1-<level>.0`, decided by the operator on 2026-11-25; every later release starts at patch 0 | The third trial: `8.0.0-ea.0` sorts below the old `8.0.0-rc.N`, and a range on it installed an old release candidate under Bun always, Yarn unless deprecated, and npm and pnpm once `latest` moved on |
+| The first version of every package at release `8.0` | Patch 1 at every level: `8.0.1`, `8.0.1-rc.0`, `8.0.1-preview.0`, `8.0.1-ea.0`, with the repository, git tag and GitHub release at `8.0.1`. Decided by the operator on 2026-11-25; every later release starts at patch 0 | The third trial: `8.0.0-ea.0` sorts below the old `8.0.0-rc.N`, and a range on it installed an old release candidate under Bun always, Yarn unless deprecated, and npm and pnpm once `latest` moved on. Patch 1 for every level, not only below Release Candidate, is one rule for the release in place of three |
 | Which package carries a database's level | Both the facade and the target package, at the same level | A GA package depends only on GA packages, so a facade cannot be above its target |
 | The framework's level | GA, with the PostgreSQL facade | It is what the PostgreSQL facade depends on |
 | Which release a failing test blocks | While our packages are released together, a failing test of a GA, Release Candidate or Preview package blocks the release of all of them. Early Access is the one level at which we may release with a failing test; CI does not have to allow it | A level is the least we do. Today every test blocks, which meets every level |

@@ -124,7 +124,7 @@ No adapter code changes. Every target's published package changes its `package.j
 
 - A new application made with `prisma orm init`, on each of npm, pnpm, Yarn and Bun, lists the platform packages, installs with no peer warning, and runs a query.
 - An application on release `N` with an extension built for release `N-1` installs with one copy of each platform package. Shown with real packed packages at two versions, in CI.
-- A dry run of the publish workflow for `8.0.0` prints, for each published package, the version, the ranges and the tag this spec gives it, and prints which earlier release candidates it would mark as deprecated, with the message.
+- A dry run of the publish workflow for release `8.0`, published as `8.0.1`, prints, for each published package, the version, the ranges and the tag this spec gives it, and prints which earlier release candidates it would mark as deprecated, with the message.
 - A dry run for a fix to one GA package publishes that package alone. A dry run for a release on an older major shows that major's own tag and not `latest`.
 - The build fails when a GA package is made to name a package below GA. Shown by a test.
 - Every page of the Prisma 8 docs site that tells a user what to install lists the platform packages beside the package for the database, and its install lines work under npm, pnpm, Yarn and Bun.

@@ -98,16 +98,16 @@ That is why a fix below GA raises the counter: `8.3.1-preview.0` would sort abov
 
 Before levels existed, every package was published as `8.0.0-rc.N`. A version below GA with patch number 0 would sort below those: `8.0.0-ea.0` comes before `8.0.0-rc.26`, because `ea` sorts before `rc`. A user's `~8.0.0-ea.0` would then select the old release candidate. In a trial, Bun always installed it, Yarn did unless the release candidates were marked deprecated, and npm and pnpm did once `latest` pointed at a later minor.
 
-So release `8.0` starts its packages above the release candidates:
+So release `8.0` starts every package at patch 1, above the release candidates:
 
 | Level | First version at release `8.0` | At a later release |
 | --- | --- | --- |
-| GA | `8.0.0` | `8.3.0` |
-| Release Candidate | the next `8.0.0-rc.N` | `8.3.0-rc.0` |
+| GA | `8.0.1` | `8.3.0` |
+| Release Candidate | `8.0.1-rc.0` | `8.3.0-rc.0` |
 | Preview | `8.0.1-preview.0` | `8.3.0-preview.0` |
 | Early Access | `8.0.1-ea.0` | `8.3.0-ea.0` |
 
-A fix to a package below GA at release `8.0` raises the counter, as at any release: `8.0.1-ea.0` to `8.0.1-ea.1`. A package that started at patch 1 keeps it when it moves up within release `8.0`: `8.0.1-ea.1` to `8.0.1-rc.0`, then to `8.0.1`, because `8.0.0-rc.27` and `8.0.0` would sort below the version it left.
+No package is published as `8.0.0`. The repository's version, the git tag and the GitHub release for the release are `8.0.1` as well, so the number announced is the number installed. Within release `8.0` a package is numbered as at any release: a fix raises a GA package's patch (`8.0.1` to `8.0.2`) and the counter of one below GA (`8.0.1-ea.0` to `8.0.1-ea.1`), and a package that moves up keeps patch 1 (`8.0.1-ea.1` to `8.0.1-rc.0`, then to `8.0.1`). The next release is `8.1.0`.
 
 ## Ranges between our packages
 
@@ -127,7 +127,7 @@ An extension accepts later releases of a GA package because an extension built o
 - A GA release is published under the `latest` tag.
 - A release below GA is published under `latest` if the package has never had a GA release in any major version, so that a plain install works and the version shows the level. Otherwise it is published under a tag named after its level: `ea`, `preview` or `rc`.
 
-A version published before `8.0.0` says nothing about a package's level. The `8.0.0-rc.N` versions were published before the levels existed, and the `0.x` versions are Semantic Versioning's initial development; neither counts as a GA release.
+A version published before release `8.0` says nothing about a package's level. The `8.0.0-rc.N` versions were published before the levels existed, and the `0.x` versions are Semantic Versioning's initial development; neither counts as a GA release.
 
 ## What an application writes
 
@@ -170,4 +170,5 @@ The public issue [Priorities & Operating Contexts](https://github.com/prisma/orm
 - **A support table in the docs as the place a user learns what is kept compatible.** It is one more thing to keep up to date, and the user does not see it in their project. The version and the name are in front of them.
 - **Feature flags for functionality that is not ready.** A flag is set somewhere in a config; a package below GA and an API whose name carries its level are visible in the user's own code.
 - **Release `8.0` numbered like every other release, `8.0.0-ea.0`, with the old release candidates marked deprecated.** Deprecation stops Yarn choosing an old release candidate, but not pnpm or Bun, and only npm and pnpm print the message.
+- **Patch 1 at release `8.0` only for packages below Release Candidate,** with GA packages at `8.0.0` and a package at Release Candidate continuing the old counter at `8.0.0-rc.N`. It keeps the number `8.0.0`, but needs three rules for one release, the last release candidate's counter as an input, and a special case for a package that moves up within the release.
 - **Each package numbered on its own, with no shared release number.** A user could not tell from two versions whether two packages belong together. AWS CDK numbers its experimental packages by the first release of the main library they work with, and the SQL Server adapter for Rails takes Rails's major and minor, for the same reason.
