@@ -129,6 +129,7 @@ The glossary's existing **control policy** (managed, tolerated, external, observ
 - `prisma postgres connection delete` rejects `--project`, which `create` and `list` accept.
 - Every ref writer (`writeRef` in `packages/1-framework/3-tooling/migration/src/refs.ts`) drops top-level keys the ref format does not define and reformats the file, so a person's own keys in a ref file are lost on the next `ref set`, `db migrate` advance or `ref policy set`. Its temporary file name uses only the time, so two processes writing the same ref in one millisecond collide.
 - `@prisma/cli-engine` types a repeatable flag (`flag.repeated`) as `string[]` but passes `undefined` when the flag is not given. `migration ref policy set --change` is the first ORM command to use one and handles both; the engine should pass `[]` or type the value as optional.
+- `migration status --to <ref>` advises running `db migrate --to <ref>` even when the ref's or the database's data protection policy would refuse that deploy (found in manual QA of the ref policy commands, 2026-11-26).
 - `migration ref policy` reads "stricter" from the order of the level lists in `framework-components/src/control/database-policies.ts`. The framework does not say that order means anything. If the framework ever needs the order itself, it should state it, and the CLI should use that.
 
 ## Alternatives considered
