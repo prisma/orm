@@ -3,6 +3,9 @@ import type { PackageOperations } from '@prisma/cli-engine';
 import type { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
 
+/** The engine `prisma.config.ts` imports `definePrismaConfig` from; init installs it as a development dependency. */
+export const ENGINE_PACKAGE = '@prisma/cli-engine';
+
 /**
  * The engine dependency spec a fresh scaffold installs. The scaffolded
  * `prisma.config.ts` imports `definePrismaConfig` from `@prisma/cli-engine`, and the
@@ -21,9 +24,9 @@ export function engineDevDependencySpec(cwd: string): string {
       for (const field of ['dependencies', 'peerDependencies'] as const) {
         const block = Reflect.get(manifest, field);
         if (typeof block === 'object' && block !== null) {
-          const engine = Reflect.get(block, '@prisma/cli-engine');
+          const engine = Reflect.get(block, ENGINE_PACKAGE);
           if (typeof engine === 'string' && engine.length > 0) {
-            return `@prisma/cli-engine@${engine}`;
+            return `${ENGINE_PACKAGE}@${engine}`;
           }
         }
       }
@@ -31,7 +34,7 @@ export function engineDevDependencySpec(cwd: string): string {
   } catch {
     // The fallback below covers an unreadable or unparseable manifest.
   }
-  return '@prisma/cli-engine@latest';
+  return `${ENGINE_PACKAGE}@latest`;
 }
 
 /**

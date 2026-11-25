@@ -7,12 +7,15 @@ import { join, relative } from 'pathe';
 import { buildCatalogWarnings } from '../commands/init/catalog-warnings';
 import {
   formatAddArgs,
+  formatInstallCommand,
   formatRemoveCommand,
   type PackageManager,
 } from '../commands/init/detect-package-manager';
 import {
   errorInitContributionUnavailable,
   errorInitInvalidManifest,
+  errorInitRequiredPeersAtAnotherVersion,
+  errorInitRequiredPeersNotInstalled,
   errorInitTargetPackageNotInstalled,
   errorInitTargetPackageNotVerified,
   type InstallReason,
@@ -26,7 +29,15 @@ import {
   type TargetPackage,
 } from '../commands/init/target-packages';
 import { chooseAction } from '../utils/next-actions';
-import { installProjectDependencies } from './init-packages';
+import { ENGINE_PACKAGE, installProjectDependencies } from './init-packages';
+import {
+  exactVersionOf,
+  installedManifests,
+  type RequiredPeer,
+  type RequiredPeers,
+  requiredPeerSpecifier,
+  resolveRequiredPeers,
+} from './init-required-peers';
 import { normalizeError } from './normalize-error';
 import { keywordsOf } from './package-manifest';
 import { type ImportFromProject, installedManifest } from './project-modules';
@@ -95,9 +106,10 @@ export function installCommand(
   return [packageManager, ...formatAddArgs(packageManager, [...packages])].join(' ');
 }
 
-/** The target package and the contribution it exports, with what installing it changed. */
+/** The facade and the contribution it exports, with what installing it changed. */
 export interface PreparedTargetPackage {
   readonly contribution: InitContribution;
+  readonly requiredPeers: RequiredPeers;
   /** Every package the step installed or found in place, so the install phase skips them. */
   readonly installed: readonly string[];
   /** The installed packages the project did not declare before; `undefined` when there are none. */
@@ -105,11 +117,17 @@ export interface PreparedTargetPackage {
   readonly warnings: readonly string[];
 }
 
-/** Installs the target package with `dotenv` and the drivers the list names, then loads its init contribution. */
+/**
+ * Packages init installs another way, left out of the facade's required peers: the engine,
+ * which the CLI installs as a development dependency at the version `prisma` names.
+ */
+const INSTALLED_ELSEWHERE: ReadonlySet<string> = new Set([ENGINE_PACKAGE]);
+
+/** Installs the facade with `dotenv` and the drivers the list names, then loads its init contribution. */
 export type PrepareTargetPackage = (target: TargetPackage) => Promise<PreparedTargetPackage>;
 
 /**
- * The target package was installed, then could not be used. The caller adds the instruction to
+ * The facade was installed, then could not be used. The caller adds the instruction to
  * undo the install, because only it knows why it installed the package.
  */
 export class TargetPackageRefusedAfterInstall extends Error {
@@ -122,7 +140,7 @@ export class TargetPackageRefusedAfterInstall extends Error {
   }
 }
 
-/** The install of the target package failed; nothing else has happened yet. */
+/** The install of the facade failed; nothing else has happened yet. */
 export class TargetPackageInstallFailed extends Error {
   constructor(readonly failure: CliStructuredError) {
     super(failure.message);
@@ -131,7 +149,7 @@ export class TargetPackageInstallFailed extends Error {
 }
 
 /**
- * Installs the target package with `dotenv`, the package every init installs, and the driver
+ * Installs the facade with `dotenv`, the package every init installs, and the driver
  * packages its list entry names, leaving out those the project already declares, then loads the
  * package's init contribution from the project. A package in no list must first list the Prisma 8
  * keyword. Under `--skip-install` the package must already be installed. Each refusal happens
@@ -155,7 +173,7 @@ export function createTargetPackagePreparation(ctx: {
     const manifestPath = installedManifest(ctx.cwd, packageName);
     // Asking again for a package the project declares rewrites its declared range, which a
     // refusal later would leave behind; the later install puts those in place instead. The
-    // target package is left out only when it is also on disk, since init loads it now.
+    // facade is left out only when it is also on disk, since init loads it now.
     const targetInPlace = manifestPath !== undefined && declaredBefore.has(packageName);
     const installsTarget = ctx.install && !targetInPlace;
     if (target.listed === undefined) {
@@ -183,20 +201,127 @@ export function createTargetPackagePreparation(ctx: {
       if (ctx.packageManager === 'pnpm') {
         warnings.push(...buildCatalogWarnings(ctx.cwd, deps));
       }
-      // A target package already in place counts as installed, so the later install leaves it
+      // A facade already in place counts as installed, so the later install leaves it
       // alone too and the project keeps the version it has.
       installed = installsTarget ? deps : [packageName, ...deps];
       ranCommand = deps.length === 0 ? undefined : installCommand(ctx.packageManager, deps);
+    }
+
+    const manifests = installedManifests(ctx.cwd, packageName);
+    const requiredPeers = await resolveRequiredPeers({
+      packageName,
+      read: manifests.read,
+      installedVersion: manifests.installedVersion,
+      ownsFacadeLine: installsTarget,
+      installedElsewhere: INSTALLED_ELSEWHERE,
+      declared: () => declaredPackages(ctx.cwd),
+      install: ctx.install
+        ? (specifiers) =>
+            installProjectDependencies({
+              packages: ctx.packages,
+              cwd: ctx.cwd,
+              deps: specifiers,
+              devDeps: [],
+            })
+        : undefined,
+    });
+    if (requiredPeers instanceof CliStructuredError) {
+      const addedBeforeFailure = manifestChanges(
+        ctx.packageManager,
+        declaredBefore,
+        declaredPackages(ctx.cwd),
+      );
+      throw addedBeforeFailure === undefined
+        ? new TargetPackageInstallFailed(requiredPeers)
+        : new TargetPackageRefusedAfterInstall(requiredPeers, addedBeforeFailure);
+    }
+    warnings.push(...requiredPeers.warnings);
+    if (ctx.install) {
+      installed = [
+        ...new Set([
+          ...installed,
+          requiredPeers.facade,
+          ...requiredPeers.packages.flatMap((peer) => [peer.name, requiredPeerSpecifier(peer)]),
+        ]),
+      ];
       added = manifestChanges(ctx.packageManager, declaredBefore, declaredPackages(ctx.cwd));
     }
 
+    const missing = requiredPeers.packages.filter(
+      (peer) => manifests.installedVersion(peer.name) === undefined,
+    );
+    if (!ctx.install && missing.length > 0) {
+      const declared = declaredPackages(ctx.cwd);
+      const toAdd = missing.filter((peer) => !declared.has(peer.name));
+      throw errorInitRequiredPeersNotInstalled({
+        packageName,
+        missing: missing.map((peer) => peer.name),
+        installCommand:
+          toAdd.length === 0
+            ? undefined
+            : installCommand(ctx.packageManager, toAdd.map(requiredPeerSpecifier)),
+        listedMissing: missing.filter((peer) => declared.has(peer.name)).map((peer) => peer.name),
+        restoreCommand: formatInstallCommand(ctx.packageManager),
+      });
+    }
+    if (!ctx.install) {
+      refuseRequiredPeersAtAnotherVersion(ctx, packageName, requiredPeers.packages, (name) =>
+        manifests.installedVersion(name),
+      );
+    }
+
     try {
-      const contribution = await loadContribution(ctx, target, ranCommand);
-      return { contribution, installed, added, warnings };
+      const contribution = await loadContribution(ctx, target, ranCommand, missing);
+      return {
+        contribution,
+        requiredPeers,
+        installed,
+        added,
+        warnings,
+      };
     } catch (error) {
       throw added === undefined ? error : new TargetPackageRefusedAfterInstall(error, added);
     }
   };
+}
+
+/**
+ * Under `--skip-install`, a required peer installed at a version other than the exact one required
+ * cannot be corrected, and its own peers stay unknown, so init stops before it writes anything.
+ */
+function refuseRequiredPeersAtAnotherVersion(
+  ctx: { readonly cwd: string; readonly packageManager: PackageManager },
+  packageName: string,
+  peers: readonly RequiredPeer[],
+  installedVersion: (name: string) => string | undefined,
+): void {
+  const declared = declaredPackages(ctx.cwd);
+  const wrong = peers.flatMap((peer) => {
+    const found = installedVersion(peer.name);
+    const required = exactVersionOf(peer.version);
+    return found === undefined || required === undefined || exactVersionOf(found) === required
+      ? []
+      : [{ peer, found, required }];
+  });
+  if (wrong.length === 0) return;
+  const toAdd = wrong.filter(({ peer }) => peer.outcome === 'to-install').map(({ peer }) => peer);
+  throw errorInitRequiredPeersAtAnotherVersion({
+    packageName,
+    packages: wrong.map(({ peer, found, required }) => ({
+      name: peer.name,
+      found,
+      required,
+      listed: peer.outcome === 'left-at-another-version' ? declared.get(peer.name) : undefined,
+    })),
+    installCommand:
+      toAdd.length === 0
+        ? undefined
+        : installCommand(ctx.packageManager, toAdd.map(requiredPeerSpecifier)),
+    listedAtRequired: wrong
+      .filter(({ peer }) => peer.outcome === 'already-listed')
+      .map(({ peer }) => peer.name),
+    restoreCommand: formatInstallCommand(ctx.packageManager),
+  });
 }
 
 /**
@@ -294,6 +419,8 @@ async function loadContribution(
   target: TargetPackage,
   /** The install command init ran and that exited successfully; `undefined` under `--skip-install`. */
   ranCommand: string | undefined,
+  /** Required peers of the facade that are not installed, which a failed load names. */
+  missing: readonly RequiredPeer[],
 ): Promise<InitContribution> {
   const { packageName } = target;
   const unlisted = target.listed === undefined;
@@ -308,6 +435,7 @@ async function loadContribution(
         ]),
         ranCommand,
         unlisted,
+        packageManager: ctx.packageManager,
       });
     case 'not-exported':
       throw errorInitContributionUnavailable({
@@ -315,6 +443,8 @@ async function loadContribution(
         reason: 'no-entrypoint',
         detail: undefined,
         unlisted,
+        missingPeers: [],
+        missingPeersCommand: undefined,
       });
     case 'unloadable':
       throw errorInitContributionUnavailable({
@@ -322,6 +452,11 @@ async function loadContribution(
         reason: 'unloadable',
         detail: causeMessage(entrypoint.cause),
         unlisted,
+        missingPeers: missing.map((peer) => peer.name),
+        missingPeersCommand:
+          missing.length === 0
+            ? undefined
+            : installCommand(ctx.packageManager, missing.map(requiredPeerSpecifier)),
       });
     case 'loaded':
       break;
@@ -333,6 +468,8 @@ async function loadContribution(
       reason: 'invalid-shape',
       detail: contributionProblems(contribution),
       unlisted,
+      missingPeers: [],
+      missingPeersCommand: undefined,
     });
   }
   return contribution;

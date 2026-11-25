@@ -1,6 +1,6 @@
 # Prisma 8 Demo (MariaDB)
 
-A minimal demo showing how to use `@prisma/orm-mariadb`, the one package a MariaDB application installs. It has the same PSL contract as the MySQL example, with four models, a relation, an enum, the convenience date and time types and the scalar convenience types, and two committed migrations written by `prisma migration plan` against MariaDB 10.11.
+A minimal demo showing how to use `@prisma/orm-mariadb`, the package a MariaDB application installs for its database, beside the platform packages it names as peer dependencies. It has the same PSL contract as the MySQL example, with four models, a relation, an enum, the convenience date and time types and the scalar convenience types, and two committed migrations written by `prisma migration plan` against MariaDB 10.11.
 
 MariaDB support is early, and this example grows with it. Today it shows the control plane, reads and writes: the contract emits, the committed migration applies to an empty MariaDB database, `db verify` and `db sign` pass, planning again from the unchanged contract writes nothing, the ORM writes the seed rows, and the ORM and the SQL builder read them, includes among them. The reads and writes are the MySQL example's, run with `mariadb()`.
 

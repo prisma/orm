@@ -99,9 +99,9 @@ export function packShellAtVersion(shellDir: string, outDir: string, version: st
 
 export interface InstallOptions {
   /**
-   * Which packed shells the scratch project *declares*, so a test can
-   * install one package the way an application would and let the rest
-   * arrive transitively. Defaults to all of them.
+   * Which packed shells the scratch project *declares*, the way an
+   * application lists its packages. Every sibling a declared shell names as
+   * a peer must be declared too. Defaults to all of them.
    */
   readonly direct?: readonly string[];
   /** Extra `.npmrc` lines, e.g. `strict-peer-dependencies=true`. */
@@ -207,6 +207,22 @@ export function installShells(
 ): void {
   const result = tryInstallShells(scratchDir, shells, options);
   if (!result.ok) throw new ShellTestError(`pnpm install failed:\n${result.output}`);
+  const fromRegistry = registryCopiesOfShells(scratchDir);
+  if (fromRegistry.length > 0) {
+    throw new ShellTestError(
+      `pnpm installed published copies of ${fromRegistry.join(', ')} instead of the packed tarballs: pnpm resolves a peer through the registry, not through overrides, so list each of them in \`direct\``,
+    );
+  }
+}
+
+/** The `@prisma/orm-*` packages pnpm fetched from the registry rather than from a tarball. */
+function registryCopiesOfShells(scratchDir: string): string[] {
+  const names = new Set<string>();
+  for (const entry of readdirSync(join(scratchDir, 'node_modules', '.pnpm'))) {
+    const match = /^@prisma\+(orm-[^@]+)@(?!file\+)/.exec(entry);
+    if (match !== null) names.add(`@prisma/${match[1]}`);
+  }
+  return [...names];
 }
 
 /**
