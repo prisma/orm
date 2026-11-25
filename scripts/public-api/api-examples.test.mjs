@@ -1,4 +1,4 @@
-import { deepStrictEqual, match, rejects, strictEqual } from 'node:assert/strict';
+import { deepStrictEqual, match, strictEqual } from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import {
   existsSync,
@@ -16,13 +16,12 @@ import {
   applyRecords,
   checkExamples,
   failsRun,
-  findReleaseWithRetries,
   main,
   parseErrors,
   RECORDS_FILE,
   RUN_FOLDER,
 } from './api-examples.mjs';
-import { LastReleaseError, lastRelease } from './last-release.mjs';
+import { LastReleaseError, lastRelease } from './release.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '..', '..');
@@ -164,10 +163,7 @@ before(() => {
 const findRelease =
   (version = '1.0.0') =>
   () =>
-    lastRelease({
-      root: checkout,
-      packument: async () => ({ 'dist-tags': { latest: version } }),
-    });
+    lastRelease({ root: checkout, base: 'HEAD', versionAt: () => version });
 const releaseAs = (version) => async () => ({ ...(await findRelease()()), version });
 
 async function withLib(text, run) {
@@ -498,43 +494,6 @@ describe('applyRecords', () => {
   });
 });
 
-describe('findReleaseWithRetries', () => {
-  it('retries a failed lookup and returns the release once it is found', async () => {
-    const waits = [];
-    let calls = 0;
-    const release = await findReleaseWithRetries(
-      async () => {
-        calls++;
-        if (calls < 3) throw new LastReleaseError('the repository has no tag v1.0.0');
-        return { version: '1.0.0', tag: 'v1.0.0' };
-      },
-      async (ms) => waits.push(ms),
-    );
-    deepStrictEqual(release, { version: '1.0.0', tag: 'v1.0.0' });
-    strictEqual(waits.length, 2);
-  });
-
-  it('fails with one message saying why after the last attempt', async () => {
-    const waits = [];
-    await rejects(
-      findReleaseWithRetries(
-        async () => {
-          throw new TypeError('fetch failed', { cause: { code: 'ENOTFOUND' } });
-        },
-        async (ms) => waits.push(ms),
-      ),
-      (error) => {
-        strictEqual(
-          error.message,
-          `the last release could not be found after ${waits.length + 1} attempts over ${waits.reduce((a, b) => a + b, 0) / 1000} s: the registry could not be reached (ENOTFOUND)`,
-        );
-        return true;
-      },
-    );
-    strictEqual(waits.reduce((a, b) => a + b, 0) >= 45_000, true);
-  });
-});
-
 describe('main', () => {
   it('reports errors grouped by app and file, and exits with 1 when they fail', async () => {
     let out = '';
@@ -550,7 +509,7 @@ describe('main', () => {
       }),
     );
     strictEqual(code, 1);
-    match(out, /^api:examples: last release 1\.0\.0 \(tag v1\.0\.0\); an error fails/);
+    match(out, /^api:compat:examples: last release 1\.0\.0 \(tag v1\.0\.0\); an error fails/);
     match(out, /\napp: 1 error in 1 file \(0 recorded\); [\d.]+ s — FAILS\n/);
     match(out, /\n {2}src\/index\.ts: 1\n {4}src\/index\.ts\(5,14\): TS2322 /);
     const markdown = readFileSync(summary, 'utf8');
@@ -568,15 +527,14 @@ describe('main', () => {
       stderr: { write: (text) => (err += text) },
       findRelease: async () => {
         throw new LastReleaseError(
-          '@prisma/orm-postgres@1.0.0 is the last release, but the repository has no tag v1.0.0',
+          'origin has no release tag at or below 1.0.0, the version at HEAD',
         );
       },
-      sleep: async () => {},
     });
     strictEqual(code, 1);
-    match(
+    strictEqual(
       err,
-      /^api:examples: the last release could not be found after \d+ attempts over [\d.]+ s: .*no tag v1\.0\.0\n$/,
+      'api:compat:examples: origin has no release tag at or below 1.0.0, the version at HEAD\n',
     );
   });
 });

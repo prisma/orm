@@ -154,10 +154,17 @@ jobs:
     # Depends on build only for its caches, as Lint does.
     needs: [build, changes]
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Fetch the base branch this PR targets
+        # The last release is read from the root package.json version on the base branch.
+        if: needs.changes.outputs.inert != 'true'
+        env:
+          BASE: ${{ github.base_ref || 'main' }}
+        run: git fetch --no-tags --depth=1 origin "$BASE:refs/remotes/origin/$BASE"
       - uses: ./.github/actions/setup
       - name: Install dependencies
         if: needs.changes.outputs.inert != 'true'
@@ -172,7 +179,7 @@ jobs:
       - name: Type check the last release's example apps against this build
         # Runs when the step above found breaks too, so both reports are in the summary.
         if: ${{ !cancelled() && needs.changes.outputs.inert != 'true' }}
-        run: pnpm api:examples
+        run: pnpm api:compat:examples
 
   fixtures:
     name: Fixtures

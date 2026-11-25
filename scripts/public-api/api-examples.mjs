@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Usage: node scripts/public-api/api-examples.mjs [--ga] [--only <app>,…]
+// Usage: node scripts/public-api/api-examples.mjs [--ga] [--only <app>,…], run as
+// `pnpm api:compat:examples`.
 //
 // Type-checks each app under examples/ as it was at the last release's git tag, type tests
 // included, against the current build: a user who upgrades keeps their code and their committed
@@ -39,16 +40,20 @@ import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { type } from 'arktype';
-import { isPrerelease } from './compat.mjs';
 import { compareCodeUnits } from './flatten.mjs';
-import { LastReleaseError, lastRelease } from './last-release.mjs';
+import {
+  compareVersions,
+  fetchReleaseTag,
+  isPrerelease,
+  LastReleaseError,
+  lastRelease,
+} from './release.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 export const RECORDS_FILE = join('examples', 'last-release-errors.json');
 export const RUN_FOLDER = '.api-examples';
 const TYPECHECK_TIMEOUT_MS = 10 * 60 * 1000;
-export const RETRY_WAITS_MS = [5_000, 15_000, 30_000];
 
 const VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
 
@@ -83,34 +88,6 @@ export function readRecords(root) {
   return records;
 }
 
-function comparePrerelease(a, b) {
-  const left = a.split('.');
-  const right = b.split('.');
-  for (let index = 0; index < Math.max(left.length, right.length); index++) {
-    if (left[index] === undefined) return -1;
-    if (right[index] === undefined) return 1;
-    const numeric = /^\d+$/.test(left[index]) && /^\d+$/.test(right[index]);
-    const order = numeric
-      ? Number(left[index]) - Number(right[index])
-      : compareCodeUnits(left[index], right[index]);
-    if (order !== 0) return order;
-  }
-  return 0;
-}
-
-export function compareVersions(a, b) {
-  const [, ...left] = a.match(VERSION);
-  const [, ...right] = b.match(VERSION);
-  for (let index = 0; index < 3; index++) {
-    const order = Number(left[index]) - Number(right[index]);
-    if (order !== 0) return order;
-  }
-  if (left[3] === undefined || right[3] === undefined) {
-    return (left[3] === undefined ? 1 : 0) - (right[3] === undefined ? 1 : 0);
-  }
-  return comparePrerelease(left[3], right[3]);
-}
-
 const git = (root, args, options = {}) =>
   execFileSync('git', args, {
     cwd: root,
@@ -120,61 +97,6 @@ const git = (root, args, options = {}) =>
   });
 
 const tagRef = (tag) => `refs/tags/${tag}`;
-
-function hasTag(root, tag) {
-  try {
-    git(root, ['rev-parse', '--verify', '--quiet', `${tagRef(tag)}^{commit}`]);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// Only a shallow clone, such as CI's checkout, is fetched with depth 1: in a full clone a depth
-// would cut its history short.
-export function fetchTag(root, tag) {
-  if (hasTag(root, tag)) return;
-  const shallow = git(root, ['rev-parse', '--is-shallow-repository'], { encoding: 'utf8' }).trim();
-  try {
-    git(root, [
-      'fetch',
-      '--no-tags',
-      ...(shallow === 'true' ? ['--depth=1'] : []),
-      'origin',
-      `${tagRef(tag)}:${tagRef(tag)}`,
-    ]);
-  } catch (error) {
-    throw new ExamplesError(
-      `the tag ${tag} could not be fetched from origin: ${String(error.stderr ?? error.message).trim()}`,
-    );
-  }
-}
-
-const sleepFor = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
-
-const whyNotFound = (error) =>
-  error instanceof LastReleaseError
-    ? error.message
-    : `the registry could not be reached (${error.cause?.code ?? error.message})`;
-
-// The registry's `latest` is published before the release's tag is pushed, so for a short while
-// during a release the tag is missing. A few retries over about a minute ride that out.
-export async function findReleaseWithRetries(find, sleep = sleepFor) {
-  let waited = 0;
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await find();
-    } catch (error) {
-      if (attempt === RETRY_WAITS_MS.length) {
-        throw new ExamplesError(
-          `the last release could not be found after ${attempt + 1} attempts over ${waited / 1000} s: ${whyNotFound(error)}`,
-        );
-      }
-      await sleep(RETRY_WAITS_MS[attempt]);
-      waited += RETRY_WAITS_MS[attempt];
-    }
-  }
-}
 
 export function appsAtTag(root, tag) {
   const files = git(root, ['ls-tree', '-r', '--name-only', tagRef(tag), '--', 'examples'], {
@@ -445,7 +367,7 @@ const appSummary = (result) =>
   `${count(result.errors.length, 'error')} in ${count(byFile(result.errors).length, 'file')} (${recordedCount(result)} recorded)`;
 
 export function reportText(report) {
-  const lines = [`api:examples: ${headline(report)}`];
+  const lines = [`api:compat:examples: ${headline(report)}`];
   for (const result of report.results) {
     if (result.skipped) continue;
     const time = result.ms === undefined ? '' : `; ${(result.ms / 1000).toFixed(1)} s`;
@@ -531,12 +453,11 @@ export async function checkExamples({
   only,
   env = process.env,
   findRelease = () => lastRelease({ root }),
-  sleep,
   timeoutMs = TYPECHECK_TIMEOUT_MS,
 }) {
-  const { version, tag } = await findReleaseWithRetries(findRelease, sleep);
+  const { version, tag } = await findRelease();
   const strict = ga || !isPrerelease(version);
-  fetchTag(root, tag);
+  fetchReleaseTag(tag, root);
   const atTag = appsAtTag(root, tag);
   const current = currentApps(root);
   const known = new Set([...atTag, ...current]);
@@ -585,7 +506,6 @@ export async function main({
   stdout = process.stdout,
   stderr = process.stderr,
   findRelease,
-  sleep,
 }) {
   const { values } = parseArgs({
     args,
@@ -601,11 +521,10 @@ export async function main({
       only: values.only?.split(','),
       env,
       findRelease,
-      sleep,
     });
   } catch (error) {
-    if (!(error instanceof ExamplesError)) throw error;
-    stderr.write(`api:examples: ${error.message}\n`);
+    if (!(error instanceof ExamplesError) && !(error instanceof LastReleaseError)) throw error;
+    stderr.write(`api:compat:examples: ${error.message}\n`);
     return 1;
   } finally {
     process.off('SIGINT', stopOnSignal);
