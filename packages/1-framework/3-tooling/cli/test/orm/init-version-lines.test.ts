@@ -52,6 +52,14 @@ describe('the lines init writes, read from how the facade names its peers', () =
     },
   );
 
+  it('reads a workspace specifier on a tilde peer as that peer', () => {
+    expect(versionLines('8.0.1', ['workspace:~8.0.1'], { addsFacade: true }).facade).toBe('^8.0.1');
+  });
+
+  it('writes the facade on its own version when no peer is named with a tilde', () => {
+    expect(versionLines('8.0.1', ['^8.0.1'], { addsFacade: true }).facade).toBe('^8.0.1');
+  });
+
   it('writes each peer at the range the facade declares when the project already lists it', () => {
     const lines = versionLines('8.1.2', ['~8.1.0'], { addsFacade: false });
 

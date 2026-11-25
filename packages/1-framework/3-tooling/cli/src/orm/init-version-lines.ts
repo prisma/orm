@@ -26,12 +26,14 @@ export function exactVersionOf(spec: string): string | undefined {
 /**
  * A facade that names its `@prisma/orm-*` peers at exact versions, as on the `8.0.0`
  * release candidates and in a development build, gets those versions; inside this repository a
- * `workspace:` specifier on an exact version counts as one. One that names them with ranges:
+ * `workspace:` specifier counts as the version or range it carries. One that names them with
+ * ranges:
  *
  * - When init adds the facade itself, a GA one (a plain version) gets a caret on every line:
  *   each tilde peer as the same version with a caret, and the facade with a caret on the version
- *   its tilde peers name (`~8.0.1` gives `^8.0.1`, `~8.1.0` gives `^8.1.0`), so an update
- *   moves every line to the next release together. One whose version has a pre-release part gets a
+ *   its tilde peers name (`~8.0.1` gives `^8.0.1`, `~8.1.0` gives `^8.1.0`), or on its own
+ *   version when no peer has a tilde, so an update moves every line to the next release
+ *   together. One whose version has a pre-release part gets a
  *   tilde on every line: each peer at its declared range and the facade at a tilde on its
  *   version, since a caret on a pre-release never selects the next minor's.
  * - When the project already lists the facade, its line is the user's, and each peer gets
@@ -43,21 +45,24 @@ export function versionLines(
   ormPeerRanges: readonly string[],
   options: { readonly addsFacade: boolean },
 ): VersionLines {
-  if (ormPeerRanges.every((range) => EXACT_VERSION.test(range.trim().replace(/^workspace:/, '')))) {
+  if (ormPeerRanges.every((range) => EXACT_VERSION.test(withoutWorkspaceProtocol(range)))) {
     return { facade: facadeVersion, ormPackage: (range) => range, standsFor: lineStandsFor };
   }
   if (!options.addsFacade || facadeVersion.includes('-')) {
     return { facade: `~${facadeVersion}`, ormPackage: (range) => range, standsFor: lineStandsFor };
   }
-  const [major, minor] = facadeVersion.split('.');
   const peerVersion = ormPeerRanges
-    .map((range) => RANGE.exec(range.trim()))
+    .map((range) => RANGE.exec(withoutWorkspaceProtocol(range)))
     .find((range) => range?.[1] === '~' && !range[2]?.includes('-'))?.[2];
   return {
-    facade: `^${peerVersion ?? `${major}.${minor}.0`}`,
+    facade: `^${peerVersion ?? facadeVersion}`,
     ormPackage: (range) => (range.trim().startsWith('~') ? `^${range.trim().slice(1)}` : range),
     standsFor: lineStandsFor,
   };
+}
+
+function withoutWorkspaceProtocol(range: string): string {
+  return range.trim().replace(/^workspace:/, '');
 }
 
 /**
