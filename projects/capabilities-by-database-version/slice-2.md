@@ -35,4 +35,3 @@ Write each test before the code it covers.
 - Do not change anything under `packages/1-framework`. If the work needs it, stop and report.
 - Do not run whole test suites. Run the test files your change touches, plus `pnpm typecheck` and lint for the packages you change. CI runs the rest.
 - Follow the repository's `CLAUDE.md`, `AGENTS.md` and `.agents/rules/`. Commit as you go, with sign-offs as the repository requires. Do not push.
-</content>

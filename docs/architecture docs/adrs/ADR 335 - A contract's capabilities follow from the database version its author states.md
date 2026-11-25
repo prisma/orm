@@ -104,4 +104,3 @@ The client does not read the database's capabilities at connect time. A database
 - **A version-resolved target descriptor whose `capabilities` are the version's row, merged in by the framework at emit.** It was built first. It was a second mechanism beside the one a TypeScript contract needs, and the two disagreed: a flag turned off in the list came back on, and a client built without the facade's config emitted a contract with no flags and no error.
 - **Reading the database's capabilities when the client connects.** The signature is the one check of the database. A second check costs a query at every start, which matters on serverless platforms.
 - **Removing `transaction()` from the type of a client whose contract lacks the capability.** Helpers that wrap a client with a contract type they do not know yet stopped compiling.
-</content>

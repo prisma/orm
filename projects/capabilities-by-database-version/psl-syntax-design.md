@@ -77,4 +77,3 @@ They keep working until the next major version, as the compatibility policy requ
 - The block's name. `database` says what the version is the version of. `requires` would say what the block is for, and leaves room for requirements that are not about the database.
 - Whether `contract infer` writes the block from the database it reads.
 - How the printer orders the block relative to `types { }`.
-</content>

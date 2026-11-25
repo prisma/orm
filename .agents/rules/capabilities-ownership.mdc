@@ -17,4 +17,3 @@ alwaysApply: false
 
 - Wording that implies the contract defines capabilities, or that the client reads them from the database at connect time
 - Treating `sql.*` as a separate “SQL family” capability set rather than keys shared across targets
-</content>
