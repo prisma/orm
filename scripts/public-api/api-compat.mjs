@@ -290,7 +290,9 @@ export function reportText({ version, results, notReleased }) {
       ? `${result.name}: ${counts.exports} exports on ${counts.paths} paths; ${counts.tests} comparisons, and ${counts.forwarded} forwarded names checked only for existence (they are compared in the package that declares them); breaks ${result.breaks.length}, undecided ${result.undecided.length}, not compared ${result.notCompared.length}, recorded ${result.recorded.length}; ${(result.ms / 1000).toFixed(1)} s, ${result.maxRssMb} MB`
       : result.removed
         ? `${result.name}: removed from the repository`
-        : `${result.name}: not checked`;
+        : result.recordsFile
+          ? `${result.name}: records of removed packages`
+          : `${result.name}: not checked`;
     lines.push(`\n${head}${failsRun(result) ? ' — FAILS' : ''}`);
     for (const each of result.breaks ?? []) {
       lines.push(`  break${each.failsRun ? '' : ' (reported only)'}  ${describeFailure(each)}`);
@@ -472,6 +474,7 @@ export async function main({
   if (removed.problems.length > 0 || removed.removable.length > 0) {
     results.push({
       name: REMOVED_RECORDS_FILE,
+      recordsFile: true,
       problems: removed.problems,
       removable: removed.removable.map((record) => ({
         path: '*',

@@ -8,6 +8,7 @@ import {
   main,
   PackageSelectionError,
   planPackages,
+  REMOVED_RECORDS_FILE,
   RecordsError,
   readRecords,
   removedPackageResults,
@@ -146,6 +147,24 @@ describe('the report', () => {
         'Not checked, no release 8.0.0: @prisma/orm-new',
         '',
       ].join('\n'),
+    );
+  });
+
+  it('gives a problem with the removed-package records a heading of its own', () => {
+    const text = reportText({
+      version: '8.0.0',
+      results: [
+        {
+          name: REMOVED_RECORDS_FILE,
+          recordsFile: true,
+          problems: ['@prisma/orm-x: the package is still in the repository'],
+        },
+      ],
+      notReleased: [],
+    });
+    match(
+      text,
+      /\npackages\/9-public\/removed-packages\.json: records of removed packages — FAILS\n {2}problem {2}@prisma\/orm-x/,
     );
   });
 
