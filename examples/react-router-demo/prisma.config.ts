@@ -15,7 +15,10 @@ if (contractSource !== 'psl' && contractSource !== 'ts') {
 // (`prisma contract emit`, CI typegen) work in fresh checkouts.
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: contractSource === 'ts' ? './src/prisma/contract.ts' : './src/prisma/contract.prisma',
+    contract:
+      contractSource === 'ts'
+        ? './src/prisma/contract.ts'
+        : { path: './src/prisma/contract.prisma', version: 18 },
     ...(process.env['DATABASE_URL'] !== undefined && {
       db: { connection: process.env['DATABASE_URL'] },
     }),

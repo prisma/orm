@@ -13,6 +13,7 @@ import {
   createControlStack,
   type PslSourceSettings,
 } from '@internal/framework-components/control';
+import { postgresContractCapabilities } from '@internal/postgres/config';
 import { printPsl } from '@internal/psl-printer';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -100,6 +101,7 @@ export async function readPsl(
     const path = join(directory, 'contract.prisma');
     writeFileSync(path, text);
     const result = await prismaContract(path, {
+      capabilities: postgresContractCapabilities({ version: 18 }),
       target: postgresPackRef,
       createNamespace: postgresCreateNamespace,
       enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },

@@ -13,6 +13,7 @@ import { createControlStack } from '@internal/framework-components/control';
 import type { MongoContract } from '@internal/mongo-contract';
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
+import { postgresContractCapabilities } from '@internal/postgres/config';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
@@ -166,6 +167,7 @@ describe('side-by-side contract examples', () => {
 
       const fixture = await loadFixture(fixtureCase);
       const provider = prismaContract(fixtureCase.contractPslPath, {
+        capabilities: postgresContractCapabilities({ version: 18 }),
         target: postgresPackRef,
         createNamespace: postgresCreateNamespace,
       });

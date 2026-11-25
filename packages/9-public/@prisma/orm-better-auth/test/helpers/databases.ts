@@ -51,7 +51,7 @@ function controlClientFor(target: TargetName, connection?: string) {
   const options = connection === undefined ? {} : { connection };
   return target === 'sqlite'
     ? createSqliteControlClient(options)
-    : createPostgresControlClient({ ...options, version: 18 });
+    : createPostgresControlClient(options);
 }
 
 /** Emits PSL text in memory with the control client, as `prisma contract emit` does. */

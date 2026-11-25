@@ -6,6 +6,7 @@ import type { Contract } from '@internal/contract/types';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
+import { postgresContractCapabilities } from '@internal/postgres/config';
 import {
   defineContract,
   enumType,
@@ -185,6 +186,7 @@ function emitPsl(testDir: string, source: string) {
   return createClient().emit({
     contractConfig: {
       source: prismaContract(schemaPath, {
+        capabilities: postgresContractCapabilities({ version: 18 }),
         target: postgresPackRef,
         createNamespace: postgresCreateNamespace,
       }).source,

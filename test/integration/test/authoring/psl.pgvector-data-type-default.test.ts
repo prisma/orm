@@ -7,6 +7,7 @@ import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import { materialiseMigrationPackage } from '@internal/migration-tools/io';
 import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
+import { postgresContractCapabilities } from '@internal/postgres/config';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
@@ -92,6 +93,7 @@ model Document {
         process.chdir(testDir);
 
         const pslResult = await prismaContract('./schema.prisma', {
+          capabilities: postgresContractCapabilities({ version: 18 }),
           target: postgresPackRef,
           createNamespace: postgresCreateNamespace,
         }).source.load({

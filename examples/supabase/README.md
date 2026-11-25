@@ -13,15 +13,11 @@ The canonical runnable Prisma 8 + Supabase app, and the walking skeleton the [`e
 
 ## The stack
 
-[`prisma.config.ts`](prisma.config.ts) wires the SQL family + Postgres target and composes the Supabase pack:
+[`prisma.config.ts`](prisma.config.ts) states the contract and the PostgreSQL version it is written for, and composes the Supabase pack:
 
 ```ts
+contract: { path: './src/contract.prisma', version: 18 },
 extensions: [supabasePack],
-contract: prismaContract('./src/contract.prisma', {
-  output: 'src/contract.json',
-  target: postgresPackRef,
-  createNamespace: postgresCreateNamespace,
-}),
 ```
 
 The contract is a single `Profile` model in `public` with a cross-contract FK into `auth.users` and three RLS policies (own-read, public-read, own-update-with-check). The queries live in [`src/profile-queries.ts`](src/profile-queries.ts) (app tables via a `RoleBoundDb`) and [`src/session-queries.ts`](src/session-queries.ts) (the `auth.sessions` admin read via `SupabaseInternalDb`, typed by its native `aal_level` enum).

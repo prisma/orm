@@ -4,7 +4,7 @@ import { Collection } from '@internal/sql-orm-client';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
-import { postgresServerVersions } from '@internal/target-postgres/server-version';
+import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { describe, expect, it } from 'vitest';
 import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
 import {
@@ -43,9 +43,9 @@ const contract = defineContract({ version: 18, models: { Owner, Item } });
 type Returning = 'with returning' | 'without returning';
 
 const withoutReturning = {
-  ...postgresServerVersions[18],
-  postgres: { ...postgresServerVersions[18].postgres, returning: false },
-  sql: { ...postgresServerVersions[18].sql, returning: false },
+  ...postgresCapabilitiesByVersion[18],
+  postgres: { ...postgresCapabilitiesByVersion[18].postgres, returning: false },
+  sql: { ...postgresCapabilitiesByVersion[18].sql, returning: false },
 };
 
 function contextOf(

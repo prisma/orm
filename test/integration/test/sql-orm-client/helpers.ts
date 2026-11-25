@@ -5,7 +5,7 @@ import {
 } from '@internal/contract/types';
 import pgvectorRuntime from '@internal/extension-pgvector/runtime';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
-import { postgresServerVersions } from '@internal/target-postgres/server-version';
+import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 
 const POSTGRES_DEFAULT_NAMESPACE_ID = 'public' as const;
 
@@ -128,7 +128,7 @@ const strategyCapabilities: Record<IncludeStrategy, Record<string, boolean>> = {
 /** The Postgres adapter reporting `reported`, and under `'query'` that the database cannot run the one-query include. */
 export function postgresAdapterFor(
   strategy: IncludeStrategy,
-  reported: CapabilityMatrix = postgresServerVersions[18],
+  reported: CapabilityMatrix = postgresCapabilitiesByVersion[18],
 ): typeof postgresAdapter {
   return {
     ...postgresAdapter,

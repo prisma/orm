@@ -13,6 +13,7 @@ import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import { materialiseMigrationPackage } from '@internal/migration-tools/io';
 import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
+import { postgresContractCapabilities } from '@internal/postgres/config';
 import postgresFacade from '@internal/postgres/runtime';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -84,6 +85,7 @@ describe('a citext column applied with db init', () => {
     writeFileSync(schemaPath, `// use prisma-8\n\n${schemaText}`, 'utf-8');
     process.chdir(testDir);
     const contractConfig = prismaContract('./schema.prisma', {
+      capabilities: postgresContractCapabilities({ version: 18 }),
       target: postgresPackRef,
       createNamespace: postgresCreateNamespace,
     });

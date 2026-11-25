@@ -4,6 +4,7 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import { enrichContract } from '@internal/cli/control-api';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
+import { postgresContractCapabilities } from '@internal/postgres/config';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
@@ -20,6 +21,7 @@ async function load(schema: string) {
   const schemaPath = join(mkdtempSync(join(tmpdir(), 'psl-types-blocks-')), 'schema.prisma');
   writeFileSync(schemaPath, schema, 'utf-8');
   const result = await prismaContract(schemaPath, {
+    capabilities: postgresContractCapabilities({ version: 18 }),
     target: postgresPackRef,
     createNamespace: postgresCreateNamespace,
   }).source.load({
