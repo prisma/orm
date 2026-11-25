@@ -3,15 +3,14 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { packageLevels } from '../packages/0-shared/publish-surface/src/levels.ts';
-import { isNumberedOnItsOwn } from '../packages/0-shared/publish-surface/src/release-plan.ts';
+import { packageNumbering } from '../packages/0-shared/publish-surface/src/levels.ts';
+import { hasOwnVersion } from '../packages/0-shared/publish-surface/src/release-plan.ts';
 
 const PUBLISHED_DIR = 'packages/9-public/@prisma';
 
 /** The sentence a published package's README opens its level note with, for its declared level. */
 function levelSentence(level) {
-  if (isNumberedOnItsOwn(level))
-    return '**Maturity level: none; this package has its own version.**';
+  if (hasOwnVersion(level)) return '**Maturity level: none; this package has its own version.**';
   const words = {
     ga: 'Generally Available',
     rc: 'Release Candidate',
@@ -29,7 +28,7 @@ function levelSentenceErrors() {
     const manifestPath = join(PUBLISHED_DIR, dir, 'package.json');
     if (!existsSync(manifestPath)) continue;
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-    const level = packageLevels.get(manifest.name);
+    const level = packageNumbering.get(manifest.name);
     if (manifest.private === true || level === undefined) continue;
     const readmePath = join(PUBLISHED_DIR, dir, 'README.md');
     const readme = existsSync(readmePath) ? readFileSync(readmePath, 'utf8') : '';

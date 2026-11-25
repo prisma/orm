@@ -1,7 +1,7 @@
 @prisma/orm-better-auth                 ga           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-toolchain <root>
 @prisma/orm-extension-arktype-json      ga           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-target-postgres <root>
 @prisma/orm-extension-middleware-cache  ga           <root>  latest  @prisma/orm-framework <root>
-@prisma/orm-extension-paradedb          own-version  <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-toolchain <root>
+@prisma/orm-extension-paradedb          own version  <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-toolchain <root>
 @prisma/orm-extension-pgvector          ga           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-target-postgres <root>, @prisma/orm-toolchain <root>
 @prisma/orm-extension-postgis           ga           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-target-postgres <root>, @prisma/orm-toolchain <root>
 @prisma/orm-extension-supabase          ea           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-postgres <root>, @prisma/orm-target-postgres <root>, @prisma/orm-toolchain <root>

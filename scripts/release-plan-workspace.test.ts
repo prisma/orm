@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { alreadyPublishedOwnNumbered, releaseTagsFor } from './publish-packages-utils.mjs';
+import { ownVersionsAlreadyPublished, releaseTagsFor } from './publish-packages-utils.mjs';
 import {
   planWorkspace,
   planWorkspaceThrough,
@@ -181,7 +181,7 @@ describe('a dry run of set-version and the publish planning on a copy of the man
           Object.fromEntries(Object.entries(plan).map(([name, planned]) => [name, planned.tag])),
           version,
         );
-        const skipped = alreadyPublishedOwnNumbered({
+        const skipped = ownVersionsAlreadyPublished({
           rootVersion: version,
           packages: Object.entries(written).map(([name, { version: v }]) => ({ name, version: v })),
           publishedVersions: (name: string) => [published[name]?.version ?? ''],

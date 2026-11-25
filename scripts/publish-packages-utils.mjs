@@ -5,10 +5,10 @@
  */
 
 import {
-  isNumberedOnItsOwn,
+  hasOwnVersion,
   parseVersion,
 } from '../packages/0-shared/publish-surface/src/release-plan.ts';
-import { levelOf, planWorkspace, releaseOfRootVersion } from './release-plan-workspace.ts';
+import { numberingOf, planWorkspace, releaseOfRootVersion } from './release-plan-workspace.ts';
 
 /**
  * npm's error wording when republishing a version number that already
@@ -109,7 +109,7 @@ export function releaseTagsFor({ rootDir, rootVersion, names, publishedVersions 
   const { line } = releaseOfRootVersion(rootVersion);
   const everGa = new Set(
     line === 'levels'
-      ? names.filter((name) => levelOf(name) !== 'ga' && wasEverGa(publishedVersions(name)))
+      ? names.filter((name) => numberingOf(name) !== 'ga' && wasEverGa(publishedVersions(name)))
       : [],
   );
   const plan = planWorkspace(rootDir, rootVersion, everGa);
@@ -117,16 +117,16 @@ export function releaseTagsFor({ rootDir, rootVersion, names, publishedVersions 
 }
 
 /**
- * The packages numbered on their own whose version is already on the
+ * The packages with their own version whose version is already on the
  * registry. Such a package keeps its version until it gets a fix, so at most
  * releases there is nothing new of it to publish; it is skipped and reported,
  * not published and refused. On the release candidates every version is new,
  * and nothing is read from the registry.
  */
-export function alreadyPublishedOwnNumbered({ rootVersion, packages, publishedVersions }) {
+export function ownVersionsAlreadyPublished({ rootVersion, packages, publishedVersions }) {
   if (releaseOfRootVersion(rootVersion).line === 'release-candidates') return [];
   return packages
-    .filter(({ name }) => isNumberedOnItsOwn(levelOf(name)))
+    .filter(({ name }) => hasOwnVersion(numberingOf(name)))
     .filter(({ name, version }) => publishedVersions(name).includes(version))
     .map(({ name }) => name);
 }

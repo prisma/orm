@@ -4,8 +4,8 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
-  alreadyPublishedOwnNumbered,
   classifyPublishResult,
+  ownVersionsAlreadyPublished,
   publishTagFor,
   releaseTagsFor,
   wasEverGa,
@@ -144,15 +144,15 @@ describe('releaseTagsFor', () => {
   });
 });
 
-describe('alreadyPublishedOwnNumbered', () => {
+describe('ownVersionsAlreadyPublished', () => {
   const packages = [
     { name: '@prisma/orm-extension-paradedb', version: '0.1.0' },
     { name: '@prisma/orm-postgres', version: '8.1.0' },
   ];
 
-  it('skips a package numbered on its own whose version is on the registry', () => {
+  it('skips a package with its own version when that version is on the registry', () => {
     assert.deepEqual(
-      alreadyPublishedOwnNumbered({
+      ownVersionsAlreadyPublished({
         rootVersion: '8.1.0',
         packages,
         publishedVersions: () => ['0.1.0', '8.1.0'],
@@ -163,7 +163,7 @@ describe('alreadyPublishedOwnNumbered', () => {
 
   it('publishes it when its version is new', () => {
     assert.deepEqual(
-      alreadyPublishedOwnNumbered({
+      ownVersionsAlreadyPublished({
         rootVersion: '8.1.0',
         packages: [{ name: '@prisma/orm-extension-paradedb', version: '0.1.1' }],
         publishedVersions: () => ['0.1.0'],
@@ -174,7 +174,7 @@ describe('alreadyPublishedOwnNumbered', () => {
 
   it('reads nothing on the release candidates', () => {
     assert.deepEqual(
-      alreadyPublishedOwnNumbered({
+      ownVersionsAlreadyPublished({
         rootVersion: '8.0.0-rc.26',
         packages,
         publishedVersions: () => {

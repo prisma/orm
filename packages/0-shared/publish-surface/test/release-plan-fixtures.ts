@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { packageKinds, packageLevels } from '../src/levels';
+import { packageKinds, packageNumbering } from '../src/levels';
 import type { ReleasePlan } from '../src/release-plan';
 import { publicShells } from '../src/shells';
 
@@ -29,13 +29,13 @@ export function realGraph() {
   );
   const kinds = packageKinds(publicShells);
   return {
-    levels: packageLevels,
+    numbering: packageNumbering,
     kinds,
     uses,
     currentAll: (version: string): Record<string, string> =>
       Object.fromEntries(manifests.map((manifest) => [manifest.name, version])),
     gaPackages: (): ReadonlySet<string> =>
-      new Set([...packageLevels].filter(([, level]) => level === 'ga').map(([name]) => name)),
+      new Set([...packageNumbering].filter(([, level]) => level === 'ga').map(([name]) => name)),
   };
 }
 

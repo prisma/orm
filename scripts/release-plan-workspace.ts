@@ -1,14 +1,14 @@
 // The release plan for this workspace: the plan from
 // `packages/0-shared/publish-surface/src/release-plan.ts`, fed with the published packages'
-// manifests, their declared levels and kinds. The scripts load the publish-surface sources directly,
+// manifests, their declared levels or own versions, and kinds. The scripts load the publish-surface sources directly,
 // because they run before the workspace is built.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { packageKinds, packageLevels } from '../packages/0-shared/publish-surface/src/levels.ts';
+import { packageKinds, packageNumbering } from '../packages/0-shared/publish-surface/src/levels.ts';
 import {
-  type DeclaredLevel,
-  isNumberedOnItsOwn,
+  hasOwnVersion,
+  type Numbering,
   type PublishedManifest,
   planInputFor,
   planRelease,
@@ -59,7 +59,7 @@ export function planWorkspaceThrough(
   const target = releaseOfRootVersion(rootVersion);
   let manifests: PublishedManifest[] = [...readPublishedManifests(rootDir).values()];
   const first = releaseOfRootVersion(
-    manifests.find((manifest) => !isNumberedOnItsOwn(packageLevels.get(manifest.name)))?.version ??
+    manifests.find((manifest) => !hasOwnVersion(packageNumbering.get(manifest.name)))?.version ??
       rootVersion,
   );
   const steps: string[] = [];
@@ -93,15 +93,15 @@ function planFrom(
     planInputFor({
       rootVersion,
       manifests,
-      levels: packageLevels,
+      numbering: packageNumbering,
       kinds: packageKinds(publicShells),
       everGa,
     }),
   );
 }
 
-export function levelOf(name: string): DeclaredLevel | undefined {
-  return packageLevels.get(name);
+export function numberingOf(name: string): Numbering | undefined {
+  return packageNumbering.get(name);
 }
 
 /**
@@ -116,13 +116,13 @@ export function formatPlanTable(
   const rows = Object.entries(plan)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([name, planned]) => {
-      const level = packageLevels.get(name);
+      const level = packageNumbering.get(name);
       const ranges = Object.entries(planned.ranges)
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
         .map(([named, range]) => `${named} ${range}`);
       return [
         name,
-        level === undefined ? '?' : isNumberedOnItsOwn(level) ? 'own-version' : level,
+        level === undefined ? '?' : hasOwnVersion(level) ? 'own version' : level,
         planned.version,
         planned.tag,
         previous[name] === planned.version

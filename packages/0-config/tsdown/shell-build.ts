@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { packageKinds, packageLevels } from '@internal/publish-surface/levels';
+import { packageKinds, packageNumbering } from '@internal/publish-surface/levels';
 import { platformEntrypointOf } from '@internal/publish-surface/platform-entrypoints';
 import {
   type PublishedManifest,
@@ -501,7 +501,7 @@ function plannedRanges(
       planInputFor({
         rootVersion,
         manifests,
-        levels: packageLevels,
+        numbering: packageNumbering,
         kinds: packageKinds(publicShells),
         everGa: new Set(),
       }),

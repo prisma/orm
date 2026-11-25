@@ -1,14 +1,14 @@
 // Scripts load this file from source, before the workspace is built, so it may import only types.
-import type { DeclaredLevel, PackageKind } from './release-plan';
+import type { Numbering, PackageKind } from './release-plan';
 
 /**
- * The maturity level of every package this repository publishes, as decided for release `8.0`. A
- * package's version, tag and the ranges others write on it follow from its level; see
- * `planRelease`. `{ firstVersion }` marks a package numbered outside the release number, with no
- * level: this is the one home of its version at the first release with levels; after that its
- * version is in its manifest.
+ * How every package this repository publishes is numbered, as decided for release `8.0`: its
+ * maturity level, or `{ firstVersion }` for a package that has its own version and no level. A
+ * package's version, tag and the ranges others write on it follow from this; see `planRelease`.
+ * This is the one home of an own version at the first release with levels; after that it is in the
+ * package's manifest.
  */
-export const packageLevels: ReadonlyMap<string, DeclaredLevel> = new Map<string, DeclaredLevel>([
+export const packageNumbering: ReadonlyMap<string, Numbering> = new Map<string, Numbering>([
   ['@prisma/orm-postgres', 'ga'],
   ['@prisma/orm-framework', 'ga'],
   ['@prisma/orm-toolchain', 'ga'],

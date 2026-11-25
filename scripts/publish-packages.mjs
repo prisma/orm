@@ -46,8 +46,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  alreadyPublishedOwnNumbered,
   classifyPublishResult,
+  ownVersionsAlreadyPublished,
   publishTagFor,
   releaseTagsFor,
 } from './publish-packages-utils.mjs';
@@ -89,7 +89,7 @@ const listed = JSON.parse(listJson)
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const rootVersion = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8')).version;
 const skipped = new Set(
-  alreadyPublishedOwnNumbered({ rootVersion, packages: listed, publishedVersions }),
+  ownVersionsAlreadyPublished({ rootVersion, packages: listed, publishedVersions }),
 );
 for (const name of skipped) console.log(`  ${name}: skipped, already published at this version`);
 const packages = listed.filter(({ name }) => !skipped.has(name));

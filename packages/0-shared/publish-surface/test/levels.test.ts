@@ -2,8 +2,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { packageKinds, packageLevels } from '../src/levels';
-import { type DeclaredLevel, levelViolations } from '../src/release-plan';
+import { packageKinds, packageNumbering } from '../src/levels';
+import { levelViolations, type Numbering } from '../src/release-plan';
 import { publicShells } from '../src/shells';
 
 const publishedRoot = join(
@@ -34,13 +34,15 @@ const uses: Record<string, readonly string[]> = Object.fromEntries(
   ]),
 );
 
-describe('the declared level of each published package', () => {
+describe('the declared level or own version of each published package', () => {
   it('names every published package once, and nothing else', () => {
-    expect([...packageLevels.keys()].sort()).toEqual(published.map((m) => m.name).sort());
+    expect([...packageNumbering.keys()].sort()).toEqual(published.map((m) => m.name).sort());
   });
 
-  it('holds the levels decided for 8.0.0', () => {
-    expect(Object.fromEntries([...packageLevels].sort(([a], [b]) => a.localeCompare(b)))).toEqual({
+  it('holds the levels decided for release 8.0', () => {
+    expect(
+      Object.fromEntries([...packageNumbering].sort(([a], [b]) => a.localeCompare(b))),
+    ).toEqual({
       '@prisma/orm-better-auth': 'ga',
       '@prisma/orm-extension-arktype-json': 'ga',
       '@prisma/orm-extension-middleware-cache': 'ga',
@@ -84,7 +86,7 @@ describe('the declared level of each published package', () => {
   });
 
   it('lets no package name one of ours at a lower level than its own', () => {
-    expect(levelViolations(packageLevels, uses)).toEqual([]);
+    expect(levelViolations(packageNumbering, uses)).toEqual([]);
   });
 });
 
@@ -94,31 +96,31 @@ describe('levelViolations', () => {
       'a GA package naming a Preview one',
       { a: 'ga', b: 'preview' },
       { a: ['b'] },
-      [{ user: 'a', userLevel: 'ga', named: 'b', namedLevel: 'preview' }],
+      [{ user: 'a', userNumbering: 'ga', named: 'b', namedNumbering: 'preview' }],
     ],
     [
       'MariaDB above MySQL',
       { mariadb: 'rc', mysql: 'ea' },
       { mariadb: ['mysql'] },
-      [{ user: 'mariadb', userLevel: 'rc', named: 'mysql', namedLevel: 'ea' }],
+      [{ user: 'mariadb', userNumbering: 'rc', named: 'mysql', namedNumbering: 'ea' }],
     ],
     ['a Preview package naming a GA one', { a: 'preview', b: 'ga' }, { a: ['b'] }, []],
     ['two packages at one level', { a: 'ea', b: 'ea' }, { a: ['b'] }, []],
     [
-      'an own-version package naming any level',
+      'a package with its own version naming any level',
       { a: { firstVersion: '0.1.0' }, b: 'ea' },
       { a: ['b'] },
       [],
     ],
     [
-      'a package naming an own-version one',
+      'a package naming one with its own version',
       { a: 'ga', b: { firstVersion: '0.1.0' } },
       { a: ['b'] },
-      [{ user: 'a', userLevel: 'ga', named: 'b', namedLevel: { firstVersion: '0.1.0' } }],
+      [{ user: 'a', userNumbering: 'ga', named: 'b', namedNumbering: { firstVersion: '0.1.0' } }],
     ],
-  ])('%s', (_case, levels, graph, violations) => {
+  ])('%s', (_case, numbering, graph, violations) => {
     expect(
-      levelViolations(new Map(Object.entries(levels as Record<string, DeclaredLevel>)), graph),
+      levelViolations(new Map(Object.entries(numbering as Record<string, Numbering>)), graph),
     ).toEqual(violations);
   });
 });

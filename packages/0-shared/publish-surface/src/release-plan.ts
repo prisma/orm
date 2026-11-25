@@ -11,18 +11,19 @@ export class ReleasePlanError extends Error {}
 export type Level = 'ga' | 'rc' | 'preview' | 'ea';
 
 /**
- * A package numbered outside the release number, with no level. `firstVersion` is its version at the
- * first release with levels; after that it keeps its version, and a fix to it raises its patch.
+ * A package that has its own version, outside the release number, and no level. `firstVersion` is
+ * its version at the first release with levels; after that it keeps its version, and a fix to it
+ * raises its patch.
  */
-export interface NumberedOnItsOwn {
+export interface OwnVersion {
   readonly firstVersion: string;
 }
 
-/** A package's level, or the first version of a package numbered outside the release number. */
-export type DeclaredLevel = Level | NumberedOnItsOwn;
+/** How a package is numbered: by the release number at a level, or with its own version. */
+export type Numbering = Level | OwnVersion;
 
-export function isNumberedOnItsOwn(level: DeclaredLevel | undefined): level is NumberedOnItsOwn {
-  return typeof level === 'object';
+export function hasOwnVersion(numbering: Numbering | undefined): numbering is OwnVersion {
+  return typeof numbering === 'object';
 }
 
 export type PackageKind = 'facade' | 'platform' | 'extension' | 'library-integration';
@@ -46,7 +47,7 @@ export interface ReleasePlanInput {
   readonly rcCounter: number | undefined;
   /** Each published package's current version. */
   readonly current: Readonly<Record<string, string>>;
-  readonly levels: ReadonlyMap<string, DeclaredLevel>;
+  readonly numbering: ReadonlyMap<string, Numbering>;
   readonly kinds: Readonly<Record<string, PackageKind>>;
   /** The packages of ours each package names as a peer dependency. */
   readonly uses: Readonly<Record<string, readonly string[]>>;
@@ -103,29 +104,29 @@ export function formatVersion(version: ParsedVersion): string {
 
 export interface LevelViolation {
   readonly user: string;
-  readonly userLevel: DeclaredLevel;
+  readonly userNumbering: Numbering;
   readonly named: string;
-  readonly namedLevel: DeclaredLevel;
+  readonly namedNumbering: Numbering;
 }
 
 /**
- * Every pair where a package names one of ours at a lower level than its own, or names an
- * own-version package. An own-version package may name any level.
+ * Every pair where a package names one of ours at a lower level than its own, or names a package
+ * with its own version. A package with its own version may name any level.
  */
 export function levelViolations(
-  levels: ReadonlyMap<string, DeclaredLevel>,
+  numbering: ReadonlyMap<string, Numbering>,
   uses: Readonly<Record<string, readonly string[]>>,
 ): LevelViolation[] {
   const violations: LevelViolation[] = [];
   for (const [user, named] of Object.entries(uses)) {
-    const userLevel = levels.get(user);
+    const userNumbering = numbering.get(user);
     for (const name of named) {
-      const namedLevel = levels.get(name);
-      if (userLevel === undefined || namedLevel === undefined) continue;
+      const namedNumbering = numbering.get(name);
+      if (userNumbering === undefined || namedNumbering === undefined) continue;
       const refused =
-        isNumberedOnItsOwn(namedLevel) ||
-        (!isNumberedOnItsOwn(userLevel) && LEVEL_ORDER[namedLevel] < LEVEL_ORDER[userLevel]);
-      if (refused) violations.push({ user, userLevel, named: name, namedLevel });
+        hasOwnVersion(namedNumbering) ||
+        (!hasOwnVersion(userNumbering) && LEVEL_ORDER[namedNumbering] < LEVEL_ORDER[userNumbering]);
+      if (refused) violations.push({ user, userNumbering, named: name, namedNumbering });
     }
   }
   return violations;
@@ -164,13 +165,14 @@ function checkInput(input: ReleasePlanInput, names: readonly string[]): void {
     throw new ReleasePlanError(`dev ${input.dev} is not a development build counter`);
   }
   for (const name of names) {
-    if (!input.levels.has(name)) throw new ReleasePlanError(`${name} has no declared level`);
+    if (!input.numbering.has(name))
+      throw new ReleasePlanError(`${name} has no declared level or own version`);
     if (input.kinds[name] === undefined) throw new ReleasePlanError(`${name} has no declared kind`);
     parseCurrent(input, name);
   }
-  for (const name of input.levels.keys()) {
+  for (const name of input.numbering.keys()) {
     if (!names.includes(name))
-      throw new ReleasePlanError(`${name} has a level but no current version`);
+      throw new ReleasePlanError(`${name} has a declared numbering but no current version`);
   }
   for (const [user, named] of Object.entries(input.uses)) {
     for (const name of [user, ...named]) {
@@ -182,13 +184,13 @@ function checkInput(input: ReleasePlanInput, names: readonly string[]): void {
     if (!names.includes(name))
       throw new ReleasePlanError(`bump names ${name}, which is not one of ours`);
   }
-  const violations = levelViolations(input.levels, input.uses);
+  const violations = levelViolations(input.numbering, input.uses);
   if (violations.length > 0) {
     throw new ReleasePlanError(
       violations
         .map(
           (v) =>
-            `${v.user} (${levelName(v.userLevel)}) names ${v.named} (${levelName(v.namedLevel)}): a package may name only packages at its own level or a higher one, and none numbered on its own`,
+            `${v.user} (${describeNumbering(v.userNumbering)}) names ${v.named} (${describeNumbering(v.namedNumbering)}): a package may name only packages at its own level or a higher one, and none with its own version`,
         )
         .join('\n'),
     );
@@ -230,12 +232,12 @@ function candidateVersions(
 }
 
 /**
- * The first release with levels follows the release candidates, when every package not numbered
- * on its own still holds one `X.Y.0-rc.N` of the release's minor.
+ * The first release with levels follows the release candidates, when every package without its own
+ * version still holds one `X.Y.0-rc.N` of the release's minor.
  */
 function isFirstReleaseWithLevels(input: ReleasePlanInput, names: readonly string[]): boolean {
-  const lockstep = names.filter((name) => !isNumberedOnItsOwn(input.levels.get(name)));
-  const versions = new Set(lockstep.map((name) => input.current[name]));
+  const leveled = names.filter((name) => !hasOwnVersion(input.numbering.get(name)));
+  const versions = new Set(leveled.map((name) => input.current[name]));
   if (versions.size !== 1) return false;
   const [only] = [...versions];
   const parsed = only === undefined ? undefined : parseVersion(only);
@@ -253,10 +255,10 @@ function levelVersions(input: ReleasePlanInput, names: readonly string[]): Recor
   const first = isFirstReleaseWithLevels(input, names);
   const versions: Record<string, string> = {};
   for (const name of names) {
-    const level = input.levels.get(name);
+    const level = input.numbering.get(name);
     const text = input.current[name] ?? '';
     const current = parseCurrent(input, name);
-    if (isNumberedOnItsOwn(level)) {
+    if (hasOwnVersion(level)) {
       versions[name] =
         current.level?.name === 'rc'
           ? parseVersionOf(name, level.firstVersion)
@@ -350,13 +352,13 @@ function compareVersions(a: ParsedVersion, b: ParsedVersion): number {
 }
 
 function levelRange(input: ReleasePlanInput, user: string, named: string): string {
-  const level = input.levels.get(named);
-  if (level === undefined || isNumberedOnItsOwn(level)) {
-    throw new ReleasePlanError(`${user} names ${named}, which is numbered on its own`);
+  const level = input.numbering.get(named);
+  if (level === undefined || hasOwnVersion(level)) {
+    throw new ReleasePlanError(`${user} names ${named}, which has its own version`);
   }
   const kind = input.kinds[user];
   const widens =
-    isNumberedOnItsOwn(input.levels.get(user)) ||
+    hasOwnVersion(input.numbering.get(user)) ||
     kind === 'extension' ||
     kind === 'library-integration';
   const operator = widens && level === 'ga' ? '^' : '~';
@@ -365,15 +367,15 @@ function levelRange(input: ReleasePlanInput, user: string, named: string): strin
 
 function tagOf(input: ReleasePlanInput, name: string): string {
   if (input.dev !== undefined) return 'dev';
-  const level = input.levels.get(name);
-  if (input.line === 'release-candidates' || level === 'ga' || isNumberedOnItsOwn(level)) {
+  const level = input.numbering.get(name);
+  if (input.line === 'release-candidates' || level === 'ga' || hasOwnVersion(level)) {
     return 'latest';
   }
   return input.everGa.has(name) && level !== undefined ? level : 'latest';
 }
 
-function levelName(level: DeclaredLevel): string {
-  return isNumberedOnItsOwn(level) ? `numbered on its own from ${level.firstVersion}` : level;
+function describeNumbering(numbering: Numbering): string {
+  return hasOwnVersion(numbering) ? `its own version from ${numbering.firstVersion}` : numbering;
 }
 
 /** A declared own version, checked to be one this repository publishes. */
@@ -459,7 +461,7 @@ const OUR_SCOPE = '@prisma/orm-';
 export function planInputFor(options: {
   readonly rootVersion: string;
   readonly manifests: readonly PublishedManifest[];
-  readonly levels: ReadonlyMap<string, DeclaredLevel>;
+  readonly numbering: ReadonlyMap<string, Numbering>;
   readonly kinds: Readonly<Record<string, PackageKind>>;
   readonly everGa: ReadonlySet<string>;
 }): ReleasePlanInput {
@@ -474,7 +476,7 @@ export function planInputFor(options: {
         Object.keys(m.peerDependencies ?? {}).filter((peer) => peer.startsWith(OUR_SCOPE)),
       ]),
     ),
-    levels: options.levels,
+    numbering: options.numbering,
     kinds: options.kinds,
     everGa: options.everGa,
     bump: [],

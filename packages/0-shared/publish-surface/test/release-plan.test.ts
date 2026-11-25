@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  type DeclaredLevel,
   firstVersionOfMinor,
   formatVersion,
+  type Numbering,
   type PackageKind,
   parseVersion,
   planInputFor,
@@ -16,21 +16,21 @@ import {
  * A small graph with every shape the plan distinguishes: platform packages, a GA facade and a GA
  * extension on them, a Preview facade, an Early Access facade on its own Early Access target, a
  * second Early Access facade built on the first, a Preview extension naming the GA facade, and a
- * package numbered on its own.
+ * package with its own version.
  */
-const graph: Record<string, { level: DeclaredLevel; kind: PackageKind; uses: string[] }> = {
-  framework: { level: 'ga', kind: 'platform', uses: [] },
-  family: { level: 'ga', kind: 'platform', uses: ['framework'] },
-  target: { level: 'ga', kind: 'platform', uses: ['family', 'framework'] },
-  postgres: { level: 'ga', kind: 'facade', uses: ['family', 'framework', 'target'] },
-  pgvector: { level: 'ga', kind: 'extension', uses: ['framework', 'target'] },
-  mongo: { level: 'preview', kind: 'facade', uses: ['framework'] },
-  'target-mysql': { level: 'ea', kind: 'platform', uses: ['framework'] },
-  mysql: { level: 'ea', kind: 'facade', uses: ['framework', 'target-mysql'] },
-  mariadb: { level: 'ea', kind: 'facade', uses: ['mysql', 'target-mysql'] },
-  supabase: { level: 'preview', kind: 'extension', uses: ['postgres'] },
-  'better-auth': { level: 'preview', kind: 'library-integration', uses: ['framework'] },
-  paradedb: { level: { firstVersion: '0.1.0' }, kind: 'extension', uses: ['framework'] },
+const graph: Record<string, { numbering: Numbering; kind: PackageKind; uses: string[] }> = {
+  framework: { numbering: 'ga', kind: 'platform', uses: [] },
+  family: { numbering: 'ga', kind: 'platform', uses: ['framework'] },
+  target: { numbering: 'ga', kind: 'platform', uses: ['family', 'framework'] },
+  postgres: { numbering: 'ga', kind: 'facade', uses: ['family', 'framework', 'target'] },
+  pgvector: { numbering: 'ga', kind: 'extension', uses: ['framework', 'target'] },
+  mongo: { numbering: 'preview', kind: 'facade', uses: ['framework'] },
+  'target-mysql': { numbering: 'ea', kind: 'platform', uses: ['framework'] },
+  mysql: { numbering: 'ea', kind: 'facade', uses: ['framework', 'target-mysql'] },
+  mariadb: { numbering: 'ea', kind: 'facade', uses: ['mysql', 'target-mysql'] },
+  supabase: { numbering: 'preview', kind: 'extension', uses: ['postgres'] },
+  'better-auth': { numbering: 'preview', kind: 'library-integration', uses: ['framework'] },
+  paradedb: { numbering: { firstVersion: '0.1.0' }, kind: 'extension', uses: ['framework'] },
 };
 
 const AT_8_1 = {
@@ -55,7 +55,7 @@ const AT_8_0: Record<string, string> = Object.fromEntries(
 const GA = new Set(['framework', 'family', 'target', 'postgres', 'pgvector']);
 
 function input(
-  overrides: Partial<ReleasePlanInput> & { levelChanges?: Record<string, DeclaredLevel> },
+  overrides: Partial<ReleasePlanInput> & { levelChanges?: Record<string, Numbering> },
 ): ReleasePlanInput {
   const { levelChanges = {}, ...rest } = overrides;
   return {
@@ -63,8 +63,8 @@ function input(
     line: 'levels',
     rcCounter: undefined,
     current: AT_8_1,
-    levels: new Map(
-      Object.entries(graph).map(([name, entry]) => [name, levelChanges[name] ?? entry.level]),
+    numbering: new Map(
+      Object.entries(graph).map(([name, entry]) => [name, levelChanges[name] ?? entry.numbering]),
     ),
     kinds: Object.fromEntries(Object.entries(graph).map(([name, entry]) => [name, entry.kind])),
     uses: Object.fromEntries(Object.entries(graph).map(([name, entry]) => [name, entry.uses])),
@@ -183,7 +183,7 @@ describe('planRelease', () => {
     ],
     ['a library integration: a caret', 'better-auth', 'framework ^8.1.0'],
     [
-      'a package numbered on its own: a caret, its version untouched',
+      'a package with its own version: a caret, its version untouched',
       'paradedb',
       '0.1.0 latest framework ^8.1.0',
     ],
@@ -191,7 +191,7 @@ describe('planRelease', () => {
     expect(line(planRelease(input({})), name)).toContain(expected);
   });
 
-  it('gives what is published today on the 8.0.0 release candidates, own-version package included', () => {
+  it('gives what is published today on the 8.0.0 release candidates, the package with its own version included', () => {
     const plan = planRelease(
       input({
         release: { major: 8, minor: 0 },
@@ -284,7 +284,7 @@ describe('planRelease', () => {
         'mongo: "8.1.0-preview.0-dev.3"',
       ],
       [
-        'a package that names an own-version one',
+        'a package that names one with its own version',
         input({ uses: { ...input({}).uses, framework: ['paradedb'] } }),
         'paradedb',
       ],
@@ -422,7 +422,7 @@ describe('planRelease', () => {
     ['rc', '8.1.0-rc.0 latest framework ~8.1.0'],
     ['ga', '8.1.0 latest framework ~8.1.0'],
   ])('lets a level go up to %s within a minor', (level, expected) => {
-    const plan = planRelease(input({ levelChanges: { mongo: level as DeclaredLevel } }));
+    const plan = planRelease(input({ levelChanges: { mongo: level as Numbering } }));
 
     expect(line(plan, 'mongo')).toBe(expected);
   });
@@ -437,7 +437,7 @@ describe('planRelease', () => {
     );
   });
 
-  describe('a package numbered on its own', () => {
+  describe('a package with its own version', () => {
     it('keeps its version at a later release', () => {
       expect(line(planRelease(input({ release: { major: 8, minor: 2 } })), 'paradedb')).toBe(
         '0.1.0 latest framework ^8.2.0',
@@ -680,7 +680,7 @@ describe('rootVersionOfRelease', () => {
 
 describe('planInputFor', () => {
   it('reads current versions and who names whom from the published manifests', () => {
-    const levels = new Map<string, DeclaredLevel>([
+    const numbering = new Map<string, Numbering>([
       ['@prisma/orm-framework', 'ga'],
       ['@prisma/orm-postgres', 'ga'],
     ]);
@@ -700,7 +700,7 @@ describe('planInputFor', () => {
             peerDependencies: { '@prisma/orm-framework': 'workspace:~8.1.0', pg: '^8.22.0' },
           },
         ],
-        levels,
+        numbering,
         kinds,
         everGa: new Set(),
       }),
@@ -711,7 +711,7 @@ describe('planInputFor', () => {
       dev: undefined,
       current: { '@prisma/orm-framework': '8.1.0', '@prisma/orm-postgres': '8.1.0' },
       uses: { '@prisma/orm-framework': [], '@prisma/orm-postgres': ['@prisma/orm-framework'] },
-      levels,
+      numbering,
       kinds,
       everGa: new Set(),
       bump: [],
