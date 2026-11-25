@@ -30,3 +30,21 @@ Planted changes to a result type in a copy of `orm-family-sql`'s declarations: e
 1. **The apps' type tests assert exact types.** A new optional property on a row failed 15 checks, and an input that used to be rejected and is now accepted fails `@ts-expect-error` lines. Both are additions the compatibility policy allows, so these failures are recorded with a reason, as the generated tests' are.
 2. **Old contracts.** At `rc.20`, the app's committed contracts gave 1,491 errors against today's build; with the main contract re-emitted, 123. The compatibility policy says a contract and its generated types are read by every later release with no re-emit, so the check compiles the contracts as committed.
 3. Two apps need a step before typecheck (`prisma7-adoption`, `react-router-demo`). An app that did not exist at the tag is skipped.
+
+## A comparison that decides the large packages (2026-11-26)
+
+Brief: [../slices/break-detection/dispatches/06-trial-comparison.md](../slices/break-detection/dispatches/06-trial-comparison.md). Code and logs (gitignored): `wip/compare-trial/`.
+
+**Why it was needed.** The structural helpers above map every member recursively. Once a "type instantiation is excessively deep" error stopped hiding later tests (TypeScript caches the failure, and every later test reaching that type passed unchecked), 7,758 of 9,108 comparisons over all packages ended undecided within a two-minute budget per package.
+
+**Verdict: compare natively, on declarations rewritten in memory, with fallbacks.** Over all 21 packages: 9,991 tests, 79 undecided, every known break found, no break in a control run comparing each package with a copy of itself, all 16 fixtures unchanged. 405 s one package at a time.
+
+1. A compiler host rewrites our packages' declarations on both sides as it reads them: methods become function-typed properties (overloads a literal with one call signature each), so parameters compare contravariantly; private, protected and `#private` members are dropped; each `unique symbol` constant becomes a string literal, so keys made from it still compare across the two copies. In third-party declarations only private and protected members are dropped: rewriting their methods would make arrays invariant.
+2. TypeScript compares the rewritten exports natively, which handles recursion with its own caching. Classes also get a constructor-parameters test, because constructor parameters stay bivariant.
+3. A native failure is confirmed against a second copy of the release. If the same test fails there too, TypeScript cannot relate two copies of that type (deferred generic types), and it falls back: first to comparing with generic signatures instantiated at their constraints, then to the structural helpers, then to undecided.
+
+Native comparison without the rewrite gave 643 false breaks in `orm-framework` and 1,130 in `orm-family-sql` (`#private` members), and missed a narrowed method parameter. Generating one test per member was not needed once methods are rewritten. A structural cut at "named types from our packages" cannot be written at type level.
+
+Breaks planted in a copy of `orm-family-sql` were found: a deep method parameter narrowed (10 breaks), a member removed (1), a required field added to the framework's `ExecutionPlan` (18). One false break remained, in `orm-toolchain`, from two physical copies of `vite` on the two sides; fixed by resolving both sides to one copy.
+
+**Not seen.** The 79 undecided: generic APIs TypeScript cannot relate across two copies, and 9 stack overflows in the Mongo query builder. TypeScript's own recursion limit, where it assumes deeply nested types are related.
