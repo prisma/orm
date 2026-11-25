@@ -133,7 +133,7 @@ function actualSchema(options: {
     },
     roles: [],
     existingSchemas: ['public'],
-    pgVersion: 'unknown',
+    serverVersionNumber: 180000,
   });
 }
 

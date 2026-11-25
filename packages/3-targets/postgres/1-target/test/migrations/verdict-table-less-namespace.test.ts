@@ -119,7 +119,7 @@ function rootOf(
     namespaces,
     roles: [],
     existingSchemas: Object.keys(namespaces),
-    pgVersion: 'unknown',
+    serverVersionNumber: 180000,
   });
 }
 

@@ -93,7 +93,7 @@ async function planAddingNotNullEmailToPopulatedUserTable() {
     },
     roles: [],
     existingSchemas: [],
-    pgVersion: '',
+    serverVersionNumber: undefined,
   });
   const result = planner.plan({
     contract,

@@ -83,7 +83,7 @@ async function infer(input: {
     },
     roles: [],
     existingSchemas: ['public'],
-    pgVersion: '',
+    serverVersionNumber: undefined,
   });
   return printPsl(await inferFromFixtureTree(tree, inferBuildContext), {
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,

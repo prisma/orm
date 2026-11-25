@@ -79,7 +79,7 @@ function liveDatabase(
         }),
     ),
     existingSchemas: ['public', 'extensions'],
-    pgVersion: 'unknown',
+    serverVersionNumber: 180000,
   });
 }
 

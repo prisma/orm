@@ -119,7 +119,7 @@ function actualTree(entries: readonly { typeName: string; values: readonly strin
     },
     roles: [],
     existingSchemas: ['public'],
-    pgVersion: 'unknown',
+    serverVersionNumber: 180000,
   });
 }
 

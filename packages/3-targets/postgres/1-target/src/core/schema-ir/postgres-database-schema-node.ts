@@ -11,7 +11,7 @@ export interface PostgresDatabaseSchemaNodeInput {
   readonly roles: readonly PostgresRoleSchemaNode[];
   readonly extensions: readonly PostgresExtensionSchemaNode[] | undefined;
   readonly existingSchemas: readonly string[];
-  readonly pgVersion: string;
+  readonly serverVersionNumber: number | undefined;
 }
 
 /**
@@ -32,7 +32,8 @@ export class PostgresDatabaseSchemaNode extends SqlSchemaIRNode implements Diffa
   readonly roles: readonly PostgresRoleSchemaNode[];
   readonly extensions: readonly PostgresExtensionSchemaNode[];
   readonly existingSchemas: readonly string[];
-  readonly pgVersion: string;
+  /** The server's `server_version_num`, such as `150004` for PostgreSQL 15.4: `undefined` for a tree derived from a contract, or when the database did not report one. */
+  readonly serverVersionNumber: number | undefined;
 
   constructor(input: PostgresDatabaseSchemaNodeInput) {
     super();
@@ -40,7 +41,7 @@ export class PostgresDatabaseSchemaNode extends SqlSchemaIRNode implements Diffa
     this.roles = Object.freeze([...input.roles]);
     this.extensions = Object.freeze([...(input.extensions ?? [])]);
     this.existingSchemas = Object.freeze([...input.existingSchemas]);
-    this.pgVersion = input.pgVersion;
+    this.serverVersionNumber = input.serverVersionNumber;
     freezeNode(this);
   }
 

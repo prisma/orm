@@ -105,7 +105,7 @@ function actualTree(installed: Readonly<Record<string, string>>) {
         }),
     ),
     existingSchemas: ['public', 'extensions'],
-    pgVersion: 'unknown',
+    serverVersionNumber: 180000,
   });
 }
 

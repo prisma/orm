@@ -71,7 +71,7 @@ async function pslWithPolicies(
     },
     roles: [],
     existingSchemas: ['public'],
-    pgVersion: '',
+    serverVersionNumber: undefined,
   });
   return printPsl(await inferFromFixtureTree(tree, inferBuildContext), {
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
@@ -221,7 +221,7 @@ async function pslFromTables(
     },
     roles: [],
     existingSchemas: ['public'],
-    pgVersion: '',
+    serverVersionNumber: undefined,
   });
   return printPsl(await inferFromFixtureTree(tree, inferBuildContext), {
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,

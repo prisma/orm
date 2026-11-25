@@ -36,8 +36,8 @@ function driverWithTables(
         rows = tables.flatMap((name) => columns.map((columnName) => column(name, columnName)));
       } else if (sql.includes('current_schema()')) {
         rows = [{ current_schema: schemaName }];
-      } else if (sql.includes('version()')) {
-        rows = [{ version: 'PostgreSQL 16.1' }];
+      } else if (sql.includes('server_version_num')) {
+        rows = [{ server_version_num: 160001 }];
       }
       return { rows: rows as unknown as Row[] };
     },
