@@ -19,7 +19,11 @@
     "lint:fix": "biome check --write ."
   },
   "dependencies": {
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "@react-router/node": "^8.5.1",
     "@react-router/serve": "^8.5.1",
     "dotenv": "^17.4.2",

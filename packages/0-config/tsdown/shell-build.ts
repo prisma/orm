@@ -206,7 +206,7 @@ export async function defineShellConfig(shellName: ShellName): Promise<UserConfi
     }
   }
 
-  validateShellManifest(shellName, shell, shellDir, internals, lookup);
+  checkShellManifest(shellName, shell, readJson(join(shellDir, 'package.json')), lookup);
 
   return defineConfig({
     entry,
@@ -435,37 +435,46 @@ function readAllInternalPackages(repoRoot: string): Map<string, InternalPackage>
 }
 
 /**
- * The shell's manifest is hand-maintained; verify it declares exactly the
- * runtime dependencies the bundle needs: the union of the internals'
- * third-party dependencies plus one exact-pinned dependency per referenced
- * sibling shell.
+ * Throws `ShellConfigError` unless `manifest`, the hand-maintained `package.json` of `shellName`, declares exactly the dependencies its bundle needs, reading the internal packages under `repoRoot`.
  */
-function validateShellManifest(
+export function validateShellManifest(
+  shellName: ShellName,
+  manifest: Record<string, unknown>,
+  repoRoot: string,
+): void {
+  const shell = publicShells.get(shellName);
+  if (shell === undefined) throw new ShellConfigError(`unknown shell ${shellName}`);
+  checkShellManifest(shellName, shell, manifest, readAllInternalPackages(repoRoot));
+}
+
+/**
+ * The bundled internals' third-party dependencies and peers, plus one exact peer per sibling shell the shell reaches. A sibling is never a dependency: the application lists every sibling, so one copy of each is shared by everything that uses it, and a version skew fails the install instead of resolving to a second copy.
+ */
+function checkShellManifest(
   shellName: ShellName,
   shell: ShellDefinition,
-  shellDir: string,
-  internals: readonly InternalPackage[],
+  manifest: Record<string, unknown>,
   lookup: Map<string, InternalPackage>,
 ): void {
-  const manifest = readJson(join(shellDir, 'package.json'));
   const version = stringField(manifest, 'version', shellName);
+  const internals = [...lookup.values()].filter((pkg) => pkg.shell === shellName);
 
   const expectedDeps = new Map<string, string>();
   const expectedPeers = new Map<string, string>();
-  const siblingShell = (pkg: InternalPackage, dep: string): ShellName => {
+  const siblings = new Set<ShellName>();
+  const reachSibling = (pkg: InternalPackage, dep: string): void => {
     const target = lookup.get(dep);
     if (target === undefined) {
       throw new ShellConfigError(
         `${pkg.name} depends on ${dep}, which has no public shell mapping`,
       );
     }
-    return target.shell;
+    if (target.shell !== shellName) siblings.add(target.shell);
   };
   for (const pkg of internals) {
     for (const [dep, range] of Object.entries(pkg.dependencies)) {
       if (dep.startsWith('@internal/')) {
-        const target = siblingShell(pkg, dep);
-        if (target !== shellName) expectedDeps.set(target, `workspace:${version}`);
+        reachSibling(pkg, dep);
         continue;
       }
       const existing = expectedDeps.get(dep);
@@ -485,11 +494,8 @@ function validateShellManifest(
     }
     for (const [dep, range] of Object.entries(pkg.peerDependencies)) {
       if (handWrittenPeers.has(dep)) continue;
-      // An extension's peer on an internal adapter package becomes a peer on
-      // the published target shell that carries it (ADR 242).
       if (dep.startsWith('@internal/')) {
-        const target = siblingShell(pkg, dep);
-        if (target !== shellName) expectedPeers.set(target, `workspace:${version}`);
+        reachSibling(pkg, dep);
         continue;
       }
       if (!expectedPeers.has(dep)) expectedPeers.set(dep, range);
@@ -497,26 +503,27 @@ function validateShellManifest(
   }
   for (const mapping of shell.reexports ?? []) {
     const source = lookup.get(mapping.package);
-    if (source !== undefined && source.shell !== shellName) {
-      expectedDeps.set(source.shell, `workspace:${version}`);
-    }
+    if (source !== undefined && source.shell !== shellName) siblings.add(source.shell);
   }
-  // A shell that declares a peer shell must not also depend on it: the
-  // point of the peer is that the installer supplies the one copy everyone
-  // shares, and a dependency alongside it would let a version skew resolve
-  // to a second copy instead of failing the install.
-  for (const peerShell of shell.peerShells ?? []) {
-    expectedPeers.set(peerShell, `workspace:${version}`);
-    expectedDeps.delete(peerShell);
-  }
-  // Peers picked up from the internal manifests are weaker evidence — some
-  // internal packages declare an optional peer on a package they also
-  // depend on — so there a real dependency still wins.
+  // Some internal packages declare an optional peer on a third-party package
+  // they also depend on; there the dependency wins.
   for (const dep of expectedDeps.keys()) expectedPeers.delete(dep);
+  for (const sibling of siblings) expectedPeers.set(sibling, `workspace:${version}`);
 
   const errors: string[] = [];
   const actualDeps = stringRecordField(manifest, 'dependencies');
+  const actualOptionalDeps = stringRecordField(manifest, 'optionalDependencies');
   const actualPeers = stringRecordField(manifest, 'peerDependencies');
+  for (const [field, actual] of [
+    ['dependencies', actualDeps],
+    ['optionalDependencies', actualOptionalDeps],
+  ] as const) {
+    for (const dep of Object.keys(actual)) {
+      if (isShellName(dep)) {
+        errors.push(`${field}["${dep}"] names a sibling package; move it to peerDependencies`);
+      }
+    }
+  }
   for (const [dep, range] of expectedDeps) {
     if (actualDeps[dep] !== range) {
       errors.push(
@@ -525,7 +532,7 @@ function validateShellManifest(
     }
   }
   for (const dep of Object.keys(actualDeps)) {
-    if (!expectedDeps.has(dep))
+    if (!expectedDeps.has(dep) && !isShellName(dep))
       errors.push(`dependencies["${dep}"] is not needed by any bundled internal package`);
   }
   for (const [dep, range] of expectedPeers) {
@@ -540,11 +547,33 @@ function validateShellManifest(
     if (!expectedPeers.has(dep))
       errors.push(`peerDependencies["${dep}"] is not needed by any bundled internal package`);
   }
+  const actualDevDeps = stringRecordField(manifest, 'devDependencies');
+  const peersMeta = recordField(manifest, 'peerDependenciesMeta');
+  for (const sibling of siblings) {
+    const range = `workspace:${version}`;
+    if (actualDevDeps[sibling] !== range) {
+      errors.push(
+        `devDependencies["${sibling}"] should be "${range}", got ${JSON.stringify(actualDevDeps[sibling])}`,
+      );
+    }
+    const meta = peersMeta[sibling];
+    if (isRecord(meta) && meta['optional'] === true) {
+      errors.push(
+        `peerDependenciesMeta["${sibling}"] marks a sibling package optional; an application must list it`,
+      );
+    }
+  }
   if (errors.length > 0) {
     throw new ShellConfigError(
       `${shellName} package.json is out of sync with its internal packages:\n  ${errors.join('\n  ')}`,
     );
   }
+}
+
+const shellNames: ReadonlySet<string> = new Set(publicShells.keys());
+
+function isShellName(name: string): boolean {
+  return shellNames.has(name);
 }
 
 function findRepoRoot(from: string): string {

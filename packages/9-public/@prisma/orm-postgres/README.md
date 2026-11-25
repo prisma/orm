@@ -1,9 +1,10 @@
 # @prisma/orm-postgres
 
-The one package a PostgreSQL application installs. It wires the framework, the SQL family, and the Postgres target into a single lazy client, and brings the rest of the stack along as exact-pinned dependencies:
+The package a PostgreSQL application installs for its database. It wires the framework, the SQL family, and the Postgres target into a single lazy client. It names the platform packages it is built on as peer dependencies, each at this package's own exact version, so the application lists them beside it, every `@prisma/orm-*` line naming the same version. `prisma orm init` writes that list, in the form the project's package manager writes a version it is given. To install them by hand, give every `@prisma/orm-*` package the same version, the release you want:
 
 ```sh
-pnpm add @prisma/orm-postgres pg
+pnpm add @prisma/orm-postgres@<version> @prisma/orm-framework@<version> @prisma/orm-family-sql@<version> @prisma/orm-target-postgres@<version> @prisma/orm-toolchain@<version>
+pnpm add pg
 pnpm add -D @types/pg
 ```
 
@@ -14,6 +15,10 @@ pnpm add -D @types/pg
 ├── @prisma/orm-target-postgres target descriptor + adapter + driver
 └── @prisma/orm-toolchain       ORM command family for the `prisma` CLI, emitter, config loader
 ```
+
+The application lists the platform packages because it must hold exactly one copy of each: the platform packages recognise a data-type value by which copy made it. A data-type value made by a second copy is refused with an error that does not name the cause, and TypeScript reports errors where the two copies' types meet. A package manager never gives a package its own copy of a peer dependency; it uses the one the application lists, and it reports a version that does not match. When the packages that disagree are ones the application lists itself, npm refuses the install, and pnpm, Yarn and Bun install and print a peer dependency warning. A successful install does not prove the versions match, so read the peer warnings it prints. Application code still imports only from `@prisma/orm-postgres` and from the extensions, never from a platform package. The decision record explains this in full: [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md).
+
+In a repository with several applications on different Prisma versions, npm workspaces and Bun with its hoisted linker can give one application two copies of a platform package without a warning. Keep the applications on one Prisma version, or use pnpm, Yarn, or Bun with its isolated linker.
 
 `pg` and `@types/pg` are peer dependencies: the driver is the application's, so a `pg.Pool` the application creates and the `pg` types Prisma 8 declares come from one copy. Prisma 8 supports `pg` 8.22.0 and later within major version 8.
 
@@ -33,7 +38,7 @@ pnpm add -D @types/pg
 | `/migration`, `/control` | migration planning and the control client |
 | `/init` | the init contribution `prisma orm init` writes a project from |
 
-A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so an application never has to depend on a package it did not install:
+A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. This package also forwards the namespaces of the packages it is built from, so application code imports from this package alone, even though the application lists those packages too:
 
 | Namespace | Forwards |
 | --- | --- |
@@ -43,7 +48,7 @@ A generated `contract.d.ts` imports every framework, family and target type it n
 | `/target/*` | `@prisma/orm-target-postgres/target` |
 | `/adapter`, `/adapter/*` | `@prisma/orm-target-postgres/adapter` |
 
-These forward; they do not copy. `@prisma/orm-postgres/contract/types` and `@prisma/orm-framework/contract/types` are the same module, so shared registries and `instanceof` checks hold across the boundary.
+These forward; they do not copy. `@prisma/orm-postgres/contract/types` and `@prisma/orm-framework/contract/types` are the same module, so a value made through either is recognised by both, and `instanceof` checks hold across the boundary.
 
 ## The CLI
 
@@ -51,7 +56,7 @@ This package ships no bin. The ORM commands run inside the unified `prisma` CLI,
 
 ## Decomposing
 
-An application that outgrows the default wiring installs the four platform packages directly and recomposes them — for example replacing `@prisma/orm-target-postgres/adapter` with a pooled adapter of its own while keeping the target and driver. Because everything is pinned to one lockstep version, the decomposed install reproduces exactly what the facade would have provided, minus the replaced part.
+Every application lists the four platform packages, so an application that outgrows the default wiring already has them. It imports from them directly and recomposes them — for example replacing `@prisma/orm-target-postgres/adapter` with a pooled adapter of its own while keeping the target and driver — and drops this package. Because every package is at one exact version, the decomposed application gets exactly what this package would have provided, minus the replaced part.
 
 ## Responsibilities
 

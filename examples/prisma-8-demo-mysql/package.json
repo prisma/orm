@@ -17,7 +17,11 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-mysql": "workspace:8.0.0-rc.25"
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-mysql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-mysql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25"
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.10.4",
