@@ -5,11 +5,7 @@
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  lastReleaseCandidate,
-  packageKinds,
-  packageLevels,
-} from '../packages/0-shared/publish-surface/src/levels.ts';
+import { packageKinds, packageLevels } from '../packages/0-shared/publish-surface/src/levels.ts';
 import {
   type DeclaredLevel,
   isNumberedOnItsOwn,
@@ -18,6 +14,7 @@ import {
   planRelease,
   type ReleasePlan,
   releaseOfRootVersion,
+  rootVersionOfRelease,
 } from '../packages/0-shared/publish-surface/src/release-plan.ts';
 import { publicShells } from '../packages/0-shared/publish-surface/src/shells.ts';
 
@@ -50,7 +47,7 @@ export function planWorkspace(
 
 /**
  * The plan for a later release, reached from the workspace's manifests one release at a time: from
- * the `8.0.0` release candidates through `8.0.0` and each minor after it, so a package's version at
+ * the `8.0.0` release candidates through `8.0.1` and each minor after it, so a package's version at
  * the asked release follows from the one it had at the release before, as it will when the releases
  * are cut. For printing what a release will hold; `planWorkspace` plans the root version itself.
  */
@@ -68,7 +65,7 @@ export function planWorkspaceThrough(
   const steps: string[] = [];
   if (first.line === 'release-candidates' && target.line === 'levels') {
     for (let minor = 0; minor < target.release.minor; minor++) {
-      steps.push(`${target.release.major}.${minor}.0`);
+      steps.push(rootVersionOfRelease({ major: target.release.major, minor }));
     }
   }
   for (const step of steps) {
@@ -99,7 +96,6 @@ function planFrom(
       levels: packageLevels,
       kinds: packageKinds(publicShells),
       everGa,
-      lastReleaseCandidate,
     }),
   );
 }

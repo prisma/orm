@@ -1,22 +1,22 @@
-@prisma/orm-better-auth                 ga           8.0.0       latest  @prisma/orm-family-sql ^8.0.0, @prisma/orm-framework ^8.0.0, @prisma/orm-toolchain ^8.0.0
-@prisma/orm-extension-arktype-json      ga           8.0.0       latest  @prisma/orm-family-sql ^8.0.0, @prisma/orm-framework ^8.0.0, @prisma/orm-target-postgres ^8.0.0
-@prisma/orm-extension-middleware-cache  ga           8.0.0       latest  @prisma/orm-framework ^8.0.0
-@prisma/orm-extension-paradedb          own-version  0.1.0       latest  @prisma/orm-family-sql ^8.0.0, @prisma/orm-framework ^8.0.0, @prisma/orm-toolchain ^8.0.0
-@prisma/orm-extension-pgvector          ga           8.0.0       latest  @prisma/orm-family-sql ^8.0.0, @prisma/orm-framework ^8.0.0, @prisma/orm-target-postgres ^8.0.0, @prisma/orm-toolchain ^8.0.0
-@prisma/orm-extension-postgis           ga           8.0.0       latest  @prisma/orm-family-sql ^8.0.0, @prisma/orm-framework ^8.0.0, @prisma/orm-target-postgres ^8.0.0, @prisma/orm-toolchain ^8.0.0
-@prisma/orm-extension-supabase          ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ^8.0.0, @prisma/orm-framework ^8.0.0, @prisma/orm-postgres ^8.0.0, @prisma/orm-target-postgres ^8.0.0, @prisma/orm-toolchain ^8.0.0
-@prisma/orm-family-mongo                ea           8.0.1-ea.0  latest  @prisma/orm-framework ~8.0.0, @prisma/orm-toolchain ~8.0.0
-@prisma/orm-family-sql                  ga           8.0.0       latest  @prisma/orm-framework ~8.0.0, @prisma/orm-toolchain ~8.0.0
-@prisma/orm-framework                   ga           8.0.0       latest  -
-@prisma/orm-mariadb                     ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ~8.0.0, @prisma/orm-framework ~8.0.0, @prisma/orm-mysql ~8.0.1-ea.0, @prisma/orm-target-mariadb ~8.0.1-ea.0, @prisma/orm-target-mysql ~8.0.1-ea.0, @prisma/orm-toolchain ~8.0.0
-@prisma/orm-mongo                       ea           8.0.1-ea.0  latest  @prisma/orm-family-mongo ~8.0.1-ea.0, @prisma/orm-framework ~8.0.0, @prisma/orm-target-mongo ~8.0.1-ea.0, @prisma/orm-toolchain ~8.0.0
-@prisma/orm-mysql                       ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ~8.0.0, @prisma/orm-framework ~8.0.0, @prisma/orm-target-mysql ~8.0.1-ea.0, @prisma/orm-toolchain ~8.0.0
-@prisma/orm-postgres                    ga           8.0.0       latest  @prisma/orm-family-sql ~8.0.0, @prisma/orm-framework ~8.0.0, @prisma/orm-target-postgres ~8.0.0, @prisma/orm-toolchain ~8.0.0
-@prisma/orm-postgres-contrib            ga           8.0.0       latest  @prisma/orm-family-sql ^8.0.0, @prisma/orm-framework ^8.0.0, @prisma/orm-target-postgres ^8.0.0, @prisma/orm-toolchain ^8.0.0
-@prisma/orm-sqlite                      ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ~8.0.0, @prisma/orm-framework ~8.0.0, @prisma/orm-target-sqlite ~8.0.1-ea.0, @prisma/orm-toolchain ~8.0.0
-@prisma/orm-target-mariadb              ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ~8.0.0, @prisma/orm-framework ~8.0.0, @prisma/orm-target-mysql ~8.0.1-ea.0
-@prisma/orm-target-mongo                ea           8.0.1-ea.0  latest  @prisma/orm-family-mongo ~8.0.1-ea.0, @prisma/orm-framework ~8.0.0, @prisma/orm-toolchain ~8.0.0
-@prisma/orm-target-mysql                ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ~8.0.0, @prisma/orm-framework ~8.0.0, @prisma/orm-toolchain ~8.0.0
-@prisma/orm-target-postgres             ga           8.0.0       latest  @prisma/orm-family-sql ~8.0.0, @prisma/orm-framework ~8.0.0, @prisma/orm-toolchain ~8.0.0
-@prisma/orm-target-sqlite               ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ~8.0.0, @prisma/orm-framework ~8.0.0, @prisma/orm-toolchain ~8.0.0
-@prisma/orm-toolchain                   ga           8.0.0       latest  @prisma/orm-framework ~8.0.0
+@prisma/orm-better-auth                 ga           8.0.1       latest  @prisma/orm-family-sql ^8.0.1, @prisma/orm-framework ^8.0.1, @prisma/orm-toolchain ^8.0.1
+@prisma/orm-extension-arktype-json      ga           8.0.1       latest  @prisma/orm-family-sql ^8.0.1, @prisma/orm-framework ^8.0.1, @prisma/orm-target-postgres ^8.0.1
+@prisma/orm-extension-middleware-cache  ga           8.0.1       latest  @prisma/orm-framework ^8.0.1
+@prisma/orm-extension-paradedb          own-version  0.1.0       latest  @prisma/orm-family-sql ^8.0.1, @prisma/orm-framework ^8.0.1, @prisma/orm-toolchain ^8.0.1
+@prisma/orm-extension-pgvector          ga           8.0.1       latest  @prisma/orm-family-sql ^8.0.1, @prisma/orm-framework ^8.0.1, @prisma/orm-target-postgres ^8.0.1, @prisma/orm-toolchain ^8.0.1
+@prisma/orm-extension-postgis           ga           8.0.1       latest  @prisma/orm-family-sql ^8.0.1, @prisma/orm-framework ^8.0.1, @prisma/orm-target-postgres ^8.0.1, @prisma/orm-toolchain ^8.0.1
+@prisma/orm-extension-supabase          ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ^8.0.1, @prisma/orm-framework ^8.0.1, @prisma/orm-postgres ^8.0.1, @prisma/orm-target-postgres ^8.0.1, @prisma/orm-toolchain ^8.0.1
+@prisma/orm-family-mongo                ea           8.0.1-ea.0  latest  @prisma/orm-framework ~8.0.1, @prisma/orm-toolchain ~8.0.1
+@prisma/orm-family-sql                  ga           8.0.1       latest  @prisma/orm-framework ~8.0.1, @prisma/orm-toolchain ~8.0.1
+@prisma/orm-framework                   ga           8.0.1       latest  -
+@prisma/orm-mariadb                     ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ~8.0.1, @prisma/orm-framework ~8.0.1, @prisma/orm-mysql ~8.0.1-ea.0, @prisma/orm-target-mariadb ~8.0.1-ea.0, @prisma/orm-target-mysql ~8.0.1-ea.0, @prisma/orm-toolchain ~8.0.1
+@prisma/orm-mongo                       ea           8.0.1-ea.0  latest  @prisma/orm-family-mongo ~8.0.1-ea.0, @prisma/orm-framework ~8.0.1, @prisma/orm-target-mongo ~8.0.1-ea.0, @prisma/orm-toolchain ~8.0.1
+@prisma/orm-mysql                       ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ~8.0.1, @prisma/orm-framework ~8.0.1, @prisma/orm-target-mysql ~8.0.1-ea.0, @prisma/orm-toolchain ~8.0.1
+@prisma/orm-postgres                    ga           8.0.1       latest  @prisma/orm-family-sql ~8.0.1, @prisma/orm-framework ~8.0.1, @prisma/orm-target-postgres ~8.0.1, @prisma/orm-toolchain ~8.0.1
+@prisma/orm-postgres-contrib            ga           8.0.1       latest  @prisma/orm-family-sql ^8.0.1, @prisma/orm-framework ^8.0.1, @prisma/orm-target-postgres ^8.0.1, @prisma/orm-toolchain ^8.0.1
+@prisma/orm-sqlite                      ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ~8.0.1, @prisma/orm-framework ~8.0.1, @prisma/orm-target-sqlite ~8.0.1-ea.0, @prisma/orm-toolchain ~8.0.1
+@prisma/orm-target-mariadb              ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ~8.0.1, @prisma/orm-framework ~8.0.1, @prisma/orm-target-mysql ~8.0.1-ea.0
+@prisma/orm-target-mongo                ea           8.0.1-ea.0  latest  @prisma/orm-family-mongo ~8.0.1-ea.0, @prisma/orm-framework ~8.0.1, @prisma/orm-toolchain ~8.0.1
+@prisma/orm-target-mysql                ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ~8.0.1, @prisma/orm-framework ~8.0.1, @prisma/orm-toolchain ~8.0.1
+@prisma/orm-target-postgres             ga           8.0.1       latest  @prisma/orm-family-sql ~8.0.1, @prisma/orm-framework ~8.0.1, @prisma/orm-toolchain ~8.0.1
+@prisma/orm-target-sqlite               ea           8.0.1-ea.0  latest  @prisma/orm-family-sql ~8.0.1, @prisma/orm-framework ~8.0.1, @prisma/orm-toolchain ~8.0.1
+@prisma/orm-toolchain                   ga           8.0.1       latest  @prisma/orm-framework ~8.0.1

@@ -6,29 +6,29 @@ import { planTable, realGraph } from './release-plan-fixtures';
  * What each of the published packages is released as, one line per package: its name without
  * `@prisma/orm-`, its version, its tag, and the range it writes on each package of ours it names.
  */
-const AT_8_0_0 = `
-    better-auth                 8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, toolchain ^8.0.0
-    extension-arktype-json      8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, target-postgres ^8.0.0
-    extension-middleware-cache  8.0.0            latest  framework ^8.0.0
-    extension-paradedb          0.1.0            latest  family-sql ^8.0.0, framework ^8.0.0, toolchain ^8.0.0
-    extension-pgvector          8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
-    extension-postgis           8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
-    extension-supabase          8.0.1-ea.0       latest  family-sql ^8.0.0, framework ^8.0.0, postgres ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
-    family-mongo                8.0.1-ea.0       latest  framework ~8.0.0, toolchain ~8.0.0
-    family-sql                  8.0.0            latest  framework ~8.0.0, toolchain ~8.0.0
-    framework                   8.0.0            latest  -
-    mariadb                     8.0.1-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, mysql ~8.0.1-ea.0, target-mariadb ~8.0.1-ea.0, target-mysql ~8.0.1-ea.0, toolchain ~8.0.0
-    mongo                       8.0.1-ea.0       latest  family-mongo ~8.0.1-ea.0, framework ~8.0.0, target-mongo ~8.0.1-ea.0, toolchain ~8.0.0
-    mysql                       8.0.1-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, target-mysql ~8.0.1-ea.0, toolchain ~8.0.0
-    postgres                    8.0.0            latest  family-sql ~8.0.0, framework ~8.0.0, target-postgres ~8.0.0, toolchain ~8.0.0
-    postgres-contrib            8.0.0            latest  family-sql ^8.0.0, framework ^8.0.0, target-postgres ^8.0.0, toolchain ^8.0.0
-    sqlite                      8.0.1-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, target-sqlite ~8.0.1-ea.0, toolchain ~8.0.0
-    target-mariadb              8.0.1-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, target-mysql ~8.0.1-ea.0
-    target-mongo                8.0.1-ea.0       latest  family-mongo ~8.0.1-ea.0, framework ~8.0.0, toolchain ~8.0.0
-    target-mysql                8.0.1-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, toolchain ~8.0.0
-    target-postgres             8.0.0            latest  family-sql ~8.0.0, framework ~8.0.0, toolchain ~8.0.0
-    target-sqlite               8.0.1-ea.0       latest  family-sql ~8.0.0, framework ~8.0.0, toolchain ~8.0.0
-    toolchain                   8.0.0            latest  framework ~8.0.0
+const AT_8_0_1 = `
+    better-auth                 8.0.1            latest  family-sql ^8.0.1, framework ^8.0.1, toolchain ^8.0.1
+    extension-arktype-json      8.0.1            latest  family-sql ^8.0.1, framework ^8.0.1, target-postgres ^8.0.1
+    extension-middleware-cache  8.0.1            latest  framework ^8.0.1
+    extension-paradedb          0.1.0            latest  family-sql ^8.0.1, framework ^8.0.1, toolchain ^8.0.1
+    extension-pgvector          8.0.1            latest  family-sql ^8.0.1, framework ^8.0.1, target-postgres ^8.0.1, toolchain ^8.0.1
+    extension-postgis           8.0.1            latest  family-sql ^8.0.1, framework ^8.0.1, target-postgres ^8.0.1, toolchain ^8.0.1
+    extension-supabase          8.0.1-ea.0       latest  family-sql ^8.0.1, framework ^8.0.1, postgres ^8.0.1, target-postgres ^8.0.1, toolchain ^8.0.1
+    family-mongo                8.0.1-ea.0       latest  framework ~8.0.1, toolchain ~8.0.1
+    family-sql                  8.0.1            latest  framework ~8.0.1, toolchain ~8.0.1
+    framework                   8.0.1            latest  -
+    mariadb                     8.0.1-ea.0       latest  family-sql ~8.0.1, framework ~8.0.1, mysql ~8.0.1-ea.0, target-mariadb ~8.0.1-ea.0, target-mysql ~8.0.1-ea.0, toolchain ~8.0.1
+    mongo                       8.0.1-ea.0       latest  family-mongo ~8.0.1-ea.0, framework ~8.0.1, target-mongo ~8.0.1-ea.0, toolchain ~8.0.1
+    mysql                       8.0.1-ea.0       latest  family-sql ~8.0.1, framework ~8.0.1, target-mysql ~8.0.1-ea.0, toolchain ~8.0.1
+    postgres                    8.0.1            latest  family-sql ~8.0.1, framework ~8.0.1, target-postgres ~8.0.1, toolchain ~8.0.1
+    postgres-contrib            8.0.1            latest  family-sql ^8.0.1, framework ^8.0.1, target-postgres ^8.0.1, toolchain ^8.0.1
+    sqlite                      8.0.1-ea.0       latest  family-sql ~8.0.1, framework ~8.0.1, target-sqlite ~8.0.1-ea.0, toolchain ~8.0.1
+    target-mariadb              8.0.1-ea.0       latest  family-sql ~8.0.1, framework ~8.0.1, target-mysql ~8.0.1-ea.0
+    target-mongo                8.0.1-ea.0       latest  family-mongo ~8.0.1-ea.0, framework ~8.0.1, toolchain ~8.0.1
+    target-mysql                8.0.1-ea.0       latest  family-sql ~8.0.1, framework ~8.0.1, toolchain ~8.0.1
+    target-postgres             8.0.1            latest  family-sql ~8.0.1, framework ~8.0.1, toolchain ~8.0.1
+    target-sqlite               8.0.1-ea.0       latest  family-sql ~8.0.1, framework ~8.0.1, toolchain ~8.0.1
+    toolchain                   8.0.1            latest  framework ~8.0.1
 `;
 
 const AT_8_1_0 = `
@@ -68,7 +68,6 @@ describe('the plan for the published packages', () => {
       everGa: new Set(),
       bump: [],
       dev: undefined,
-      lastReleaseCandidate: undefined,
     });
 
     for (const [name, planned] of Object.entries(plan)) {
@@ -83,7 +82,7 @@ describe('the plan for the published packages', () => {
     expect(Object.keys(plan)).toHaveLength(22);
   });
 
-  it('moves every package to its level’s first version of 8.0 at 8.0.0', () => {
+  it('moves every package to its level’s first version of 8.0 at 8.0.1', () => {
     const graph = realGraph();
     const plan = planRelease({
       ...graph,
@@ -94,10 +93,9 @@ describe('the plan for the published packages', () => {
       everGa: new Set(),
       bump: [],
       dev: undefined,
-      lastReleaseCandidate: undefined,
     });
 
-    expect(planTable(plan)).toEqual(planTable.parse(AT_8_0_0));
+    expect(planTable(plan)).toEqual(planTable.parse(AT_8_0_1));
   });
 
   it('publishes 8.1.0', () => {
@@ -107,11 +105,10 @@ describe('the plan for the published packages', () => {
       release: { major: 8, minor: 1 },
       line: 'levels',
       rcCounter: undefined,
-      current: planTable.versions(AT_8_0_0),
+      current: planTable.versions(AT_8_0_1),
       everGa: graph.gaPackages(),
       bump: [],
       dev: undefined,
-      lastReleaseCandidate: undefined,
     });
 
     expect(planTable(plan)).toEqual(planTable.parse(AT_8_1_0));

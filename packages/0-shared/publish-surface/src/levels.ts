@@ -2,7 +2,7 @@
 import type { DeclaredLevel, PackageKind } from './release-plan';
 
 /**
- * The maturity level of every package this repository publishes, as decided for `8.0.0`. A
+ * The maturity level of every package this repository publishes, as decided for release `8.0`. A
  * package's version, tag and the ranges others write on it follow from its level; see
  * `planRelease`. `{ firstVersion }` marks a package numbered outside the release number, with no
  * level: this is the one home of its version at the first release with levels; after that its
@@ -32,12 +32,6 @@ export const packageLevels: ReadonlyMap<string, DeclaredLevel> = new Map<string,
   ['@prisma/orm-target-sqlite', 'ea'],
   ['@prisma/orm-extension-paradedb', { firstVersion: '0.1.0' }],
 ]);
-
-/**
- * The `N` of the last `8.0.0-rc.N`, once `8.0.0` has been released; until then the plan reads it
- * from the manifests, which all hold it. Within release `8.0`, a package at `rc` continues above it.
- */
-export const lastReleaseCandidate: number | undefined = undefined;
 
 /**
  * The kind of every published package: the shell map's `kind` for each shell, and a library

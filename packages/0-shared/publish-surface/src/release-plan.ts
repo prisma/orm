@@ -56,11 +56,6 @@ export interface ReleasePlanInput {
   readonly bump: readonly string[];
   /** The development build counter, for a `-dev.N` build. */
   readonly dev: number | undefined;
-  /**
-   * The `N` of the last `8.0.0-rc.N`, above which a package at `rc` continues within release `8.0`;
-   * `undefined` while it is not known.
-   */
-  readonly lastReleaseCandidate: number | undefined;
 }
 
 export interface PlannedPackage {
@@ -136,13 +131,9 @@ export function levelViolations(
   return violations;
 }
 
-export function planRelease(given: ReleasePlanInput): ReleasePlan {
-  const names = Object.keys(given.current);
-  checkInput(given, names);
-  const input: ReleasePlanInput = {
-    ...given,
-    lastReleaseCandidate: given.lastReleaseCandidate ?? lockstepReleaseCandidate(given, names),
-  };
+export function planRelease(input: ReleasePlanInput): ReleasePlan {
+  const names = Object.keys(input.current);
+  checkInput(input, names);
   const versions =
     input.line === 'release-candidates'
       ? candidateVersions(input, names)
@@ -155,7 +146,7 @@ export function planRelease(given: ReleasePlanInput): ReleasePlan {
       ranges[named] =
         input.line === 'release-candidates' || input.dev !== undefined
           ? withDev(versions[named] ?? '', input.dev)
-          : levelRange(input, name, named, versions[named] ?? '');
+          : levelRange(input, name, named);
     }
     plan[name] = { version, tag: tagOf(input, name), ranges };
   }
@@ -243,26 +234,18 @@ function candidateVersions(
  * on its own still holds one `X.Y.0-rc.N` of the release's minor.
  */
 function isFirstReleaseWithLevels(input: ReleasePlanInput, names: readonly string[]): boolean {
-  return lockstepReleaseCandidate(input, names) !== undefined;
-}
-
-/** The `N` of the one `X.Y.0-rc.N` of the release's minor every package not numbered on its own holds. */
-function lockstepReleaseCandidate(
-  input: ReleasePlanInput,
-  names: readonly string[],
-): number | undefined {
   const lockstep = names.filter((name) => !isNumberedOnItsOwn(input.levels.get(name)));
   const versions = new Set(lockstep.map((name) => input.current[name]));
-  if (versions.size !== 1) return undefined;
+  if (versions.size !== 1) return false;
   const [only] = [...versions];
   const parsed = only === undefined ? undefined : parseVersion(only);
-  return parsed !== undefined &&
+  return (
+    parsed !== undefined &&
     parsed.level?.name === 'rc' &&
     parsed.major === input.release.major &&
     parsed.minor === input.release.minor &&
     parsed.patch === 0
-    ? parsed.level.counter
-    : undefined;
+  );
 }
 
 function levelVersions(input: ReleasePlanInput, names: readonly string[]): Record<string, string> {
@@ -284,7 +267,7 @@ function levelVersions(input: ReleasePlanInput, names: readonly string[]): Recor
     }
     if (level === undefined) throw new ReleasePlanError(`${name} has no declared level`);
     versions[name] = first
-      ? firstVersionOfMinor({ major, minor }, level, input.lastReleaseCandidate, current)
+      ? firstVersionOfMinor({ major, minor }, level)
       : nextVersion(name, text, current, level, input);
   }
   return versions;
@@ -310,8 +293,7 @@ function nextVersion(
       `${name}: its level is ${level} but it is GA at "${text}"; whether a GA package may go below GA again is not decided, so the release scripts do not do it`,
     );
   }
-  const first = (): string =>
-    firstVersionOfMinor({ major, minor }, level, input.lastReleaseCandidate, current);
+  const first = (): string => firstVersionOfMinor({ major, minor }, level);
   if (order > 0) return first();
   if (LEVEL_ORDER[level] < LEVEL_ORDER[currentLevel]) {
     throw new ReleasePlanError(
@@ -337,51 +319,25 @@ function nextVersion(
 
 /**
  * The first version of a minor for a package at `level`: `X.Y.0` for GA and `X.Y.0-<level>.0` below
- * it. Every version a minor starts at and every range on one comes from here, and so does the one
- * place to change how release `8.0` is numbered.
- *
- * Release `8.0` follows the release candidates `8.0.0-rc.N`, and no range on a package below GA may
- * admit one of those. A package at `rc` continues their counter above the last one. A package at
- * `preview` or `ea` starts at `8.0.1-<level>.0`, since `8.0.0-ea.0` sorts below `8.0.0-rc.1`, and
- * keeps that patch when it moves up within `8.0`: to `8.0.1-rc.0`, then `8.0.1`. `version` is the
- * package's version within the release, which tells whether it started there.
+ * it, except at release `8.0`, where every package starts at patch 1, `8.0.1` or
+ * `8.0.1-<level>.0`, so that none sorts below the release candidates `8.0.0-rc.N` published before
+ * it. Every version a minor starts at and every range on one comes from here.
  */
 export function firstVersionOfMinor(
   release: { readonly major: number; readonly minor: number },
   level: Level,
-  lastReleaseCandidate: number | undefined,
-  version: ParsedVersion | undefined,
 ): string {
-  const { major, minor } = release;
-  if (major === 8 && minor === 0) {
-    if (level === 'preview' || level === 'ea' || startedAt801(version)) {
-      return level === 'ga' ? '8.0.1' : `8.0.1-${level}.0`;
-    }
-    if (level === 'rc') {
-      if (lastReleaseCandidate === undefined) {
-        throw new ReleasePlanError(
-          'a package at rc in release 8.0 continues above the last 8.0.0 release candidate, whose number is not known here',
-        );
-      }
-      return `8.0.0-rc.${lastReleaseCandidate + 1}`;
-    }
-  }
-  if (level === 'ga') return `${major}.${minor}.0`;
-  return `${major}.${minor}.0-${level}.0`;
+  const root = rootVersionOfRelease(release);
+  return level === 'ga' ? root : `${root}-${level}.0`;
 }
 
-/**
- * A pre-release `8.0.1-<level>.N` is a package that started release `8.0` below Release Candidate.
- * A GA `8.0.1` may as well be a fix to `8.0.0`, so it does not count; a range `~8.0.0` admits it.
- */
-function startedAt801(version: ParsedVersion | undefined): boolean {
-  return (
-    version !== undefined &&
-    version.major === 8 &&
-    version.minor === 0 &&
-    version.patch === 1 &&
-    version.level !== undefined
-  );
+/** The root version of a release on the levels line: `8.0.1` for release `8.0`, `X.Y.0` for any other. */
+export function rootVersionOfRelease(release: {
+  readonly major: number;
+  readonly minor: number;
+}): string {
+  const patch = release.major === 8 && release.minor === 0 ? 1 : 0;
+  return `${release.major}.${release.minor}.${patch}`;
 }
 
 function compareVersions(a: ParsedVersion, b: ParsedVersion): number {
@@ -393,12 +349,7 @@ function compareVersions(a: ParsedVersion, b: ParsedVersion): number {
   return LEVEL_ORDER[a.level.name] - LEVEL_ORDER[b.level.name] || a.level.counter - b.level.counter;
 }
 
-function levelRange(
-  input: ReleasePlanInput,
-  user: string,
-  named: string,
-  namedVersion: string,
-): string {
+function levelRange(input: ReleasePlanInput, user: string, named: string): string {
   const level = input.levels.get(named);
   if (level === undefined || isNumberedOnItsOwn(level)) {
     throw new ReleasePlanError(`${user} names ${named}, which is numbered on its own`);
@@ -409,13 +360,7 @@ function levelRange(
     kind === 'extension' ||
     kind === 'library-integration';
   const operator = widens && level === 'ga' ? '^' : '~';
-  const first = firstVersionOfMinor(
-    input.release,
-    level,
-    input.lastReleaseCandidate,
-    parseVersion(namedVersion),
-  );
-  return `${operator}${first}`;
+  return `${operator}${firstVersionOfMinor(input.release, level)}`;
 }
 
 function tagOf(input: ReleasePlanInput, name: string): string {
@@ -459,9 +404,9 @@ export interface RootRelease {
 }
 
 /**
- * The release a root version stands for. The root version is `X.Y.0-rc.N` on the release-candidate
- * line and the release number `X.Y.0` on the levels line, either followed by `-dev.N` for a
- * development build. Packages may carry other levels and patches; the root never does.
+ * The release a root version stands for. The root version is `8.0.0-rc.N` on the release-candidate
+ * line and `rootVersionOfRelease` on the levels line, either followed by `-dev.N` for a development
+ * build. Packages may carry other levels and patches; the root never does.
  */
 export function releaseOfRootVersion(version: string): RootRelease {
   const parsed = parseVersion(version);
@@ -479,11 +424,22 @@ export function releaseOfRootVersion(version: string): RootRelease {
       dev: parsed.dev,
     };
   }
-  if (parsed.patch === 0 && parsed.level === undefined) {
-    return { release, line: 'levels', rcCounter: undefined, dev: parsed.dev };
+  if (parsed.level === undefined) {
+    const root = rootVersionOfRelease(release);
+    if (formatVersion({ ...parsed, dev: undefined }) === root) {
+      return { release, line: 'levels', rcCounter: undefined, dev: parsed.dev };
+    }
+    if (parsed.major === 8 && parsed.minor === 0 && parsed.patch === 0) {
+      throw new ReleasePlanError(
+        `root version "${version}" is not a release: release 8.0 is cut as 8.0.1, because every package was published as 8.0.0-rc.N before it and no version of release 8.0 may sort below those`,
+      );
+    }
+    throw new ReleasePlanError(
+      `root version "${version}" is not the release number of ${release.major}.${release.minor}, which is ${root}`,
+    );
   }
   throw new ReleasePlanError(
-    `root version "${version}" is neither a release candidate X.Y.0-rc.N nor a release number X.Y.0`,
+    `root version "${version}" is neither a release candidate 8.0.0-rc.N nor a release number such as 8.1.0`,
   );
 }
 
@@ -506,7 +462,6 @@ export function planInputFor(options: {
   readonly levels: ReadonlyMap<string, DeclaredLevel>;
   readonly kinds: Readonly<Record<string, PackageKind>>;
   readonly everGa: ReadonlySet<string>;
-  readonly lastReleaseCandidate: number | undefined;
 }): ReleasePlanInput {
   return {
     ...releaseOfRootVersion(options.rootVersion),
@@ -522,7 +477,6 @@ export function planInputFor(options: {
     levels: options.levels,
     kinds: options.kinds,
     everGa: options.everGa,
-    lastReleaseCandidate: options.lastReleaseCandidate,
     bump: [],
   };
 }

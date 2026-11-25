@@ -50,7 +50,7 @@ describe('print-release-plan', () => {
     );
   });
 
-  for (const version of ['8.0.0', '8.1.0']) {
+  for (const version of ['8.0.1', '8.1.0']) {
     it(`prints the committed expectation for ${version}`, () => {
       assert.deepEqual(rows(printed(version)), rows(expectation(`${version}.txt`)));
     });
@@ -152,10 +152,10 @@ describe('a dry run of set-version and the publish planning on a copy of the man
     }
   });
 
-  it('writes and tags what the printed plans for 8.0.0 and then 8.1.0 say, and skips what is already published', () => {
+  it('writes and tags what the printed plans for 8.0.1 and then 8.1.0 say, and skips what is already published', () => {
     const dir = scratchWorkspace();
     try {
-      for (const version of ['8.0.0', '8.1.0']) {
+      for (const version of ['8.0.1', '8.1.0']) {
         const published = packed(dir);
         setVersion(dir, version);
         const { plan } = planWorkspaceThrough(rootDir, version);
