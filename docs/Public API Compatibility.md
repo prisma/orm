@@ -86,10 +86,10 @@ A break in a generally available export is an exception to the compatibility pol
 An error there is a change a user's code would see. The apps' type tests assert exact types, so an addition the policy allows, such as a new optional property on a result row, also fails them. Record such an error, or a deliberate break, in `examples/last-release-errors.json`:
 
 ```json
-[{ "app": "prisma-8-demo", "file": "test/rows.test-d.ts", "line": 12, "code": "TS2344", "message": "<TypeScript's message, as the job reports it>", "release": "8.1.0", "reason": "Rows gain the optional createdBy field" }]
+[{ "app": "prisma-8-demo", "file": "test/rows.test-d.ts", "line": 12, "code": "TS2344", "message": "<TypeScript's message, as the job reports it>", "kind": "allowed", "lastRelease": "8.1.0", "reason": "Rows gain the optional createdBy field" }]
 ```
 
-A record matches one error by app, file, line, code and message, so copy the message from the job's report. A record that matches no error, or more than one, fails.
+A record matches one error by app, file, line, code and message, so copy the message from the job's report. `kind` is `allowed` for an error that an addition the policy allows causes in an exact type assertion, and `break` for a deliberate break, which the release notes must name. A record that matches no error, or more than one, fails.
 
 ## What the checks do not see
 
