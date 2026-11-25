@@ -21,12 +21,12 @@ const graph: Record<string, { level: DeclaredLevel; kind: PackageKind; uses: str
   framework: { level: 'ga', kind: 'platform', uses: [] },
   family: { level: 'ga', kind: 'platform', uses: ['framework'] },
   target: { level: 'ga', kind: 'platform', uses: ['family', 'framework'] },
-  postgres: { level: 'ga', kind: 'target-package', uses: ['family', 'framework', 'target'] },
+  postgres: { level: 'ga', kind: 'facade', uses: ['family', 'framework', 'target'] },
   pgvector: { level: 'ga', kind: 'extension', uses: ['framework', 'target'] },
-  mongo: { level: 'preview', kind: 'target-package', uses: ['framework'] },
+  mongo: { level: 'preview', kind: 'facade', uses: ['framework'] },
   'target-mysql': { level: 'ea', kind: 'platform', uses: ['framework'] },
-  mysql: { level: 'ea', kind: 'target-package', uses: ['framework', 'target-mysql'] },
-  mariadb: { level: 'ea', kind: 'target-package', uses: ['mysql', 'target-mysql'] },
+  mysql: { level: 'ea', kind: 'facade', uses: ['framework', 'target-mysql'] },
+  mariadb: { level: 'ea', kind: 'facade', uses: ['mysql', 'target-mysql'] },
   supabase: { level: 'preview', kind: 'extension', uses: ['postgres'] },
   'better-auth': { level: 'preview', kind: 'library-integration', uses: ['framework'] },
   paradedb: { level: { firstVersion: '0.1.0' }, kind: 'extension', uses: ['framework'] },
@@ -597,7 +597,7 @@ describe('planInputFor', () => {
     ]);
     const kinds = {
       '@prisma/orm-framework': 'platform',
-      '@prisma/orm-postgres': 'target-package',
+      '@prisma/orm-postgres': 'facade',
     } as const;
 
     expect(

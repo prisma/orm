@@ -234,7 +234,7 @@ export async function resolveRequiredPeers(ctx: {
   const lineOf = (name: string, range: string) =>
     isPrismaOrmPackage(name) ? lines.ormPackage(range) : range;
   const listedFacade = ctx.listsFacade ? ctx.declared().get(ctx.packageName) : undefined;
-  const facadeSpecifier = `${ctx.packageName}@${listedFacade ?? lines.target}`;
+  const facadeSpecifier = `${ctx.packageName}@${listedFacade ?? lines.facade}`;
   const wanted = new Map<string, { readonly range: string; readonly by: string }>();
   const outcomes = new Map<string, RequiredPeerOutcome>();
   const warnings: string[] = [];
@@ -283,7 +283,7 @@ export async function resolveRequiredPeers(ctx: {
 
     const declared = ctx.declared();
     const toInstall: string[] = [];
-    if (pinFacade && declared.get(ctx.packageName) !== lines.target) {
+    if (pinFacade && declared.get(ctx.packageName) !== lines.facade) {
       toInstall.push(facadeSpecifier);
     }
     pinFacade = false;

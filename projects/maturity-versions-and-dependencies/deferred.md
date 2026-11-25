@@ -49,6 +49,6 @@ Proposed as a project of its own. See [plan.md](plan.md), "Proposed split".
 - Set `lastReleaseCandidate` in `packages/0-shared/publish-surface/src/levels.ts` to the counter of the last release candidate. The plan needs it to move a package up to Release Candidate within `8.0` without colliding with a published version, and refuses that move while it is unset.
 - The ParadeDB extension keeps its published version until it gets a fix, but its manifest's ranges on our packages follow each release. So between fixes its source manifest is ahead of what is published. Harmless; say so in the release procedure.
 
-## A project that already lists its target package with a caret
+## A project that already lists its facade with a caret
 
-When a project already lists a GA target package, `init` leaves that line and writes each platform package at the tilde range the target package declares. If the user's line is a caret, the lines are then not written the same way, and an update moves the target package and not the others; the package manager reports the mismatch. `init` does not rewrite a line the user wrote. The docs say to write all the lines the same way.
+When a project already lists a GA facade, `init` leaves that line and writes each platform package at the tilde range the facade declares. If the user's line is a caret, the lines are then not written the same way, and an update moves the facade and not the others; the package manager reports the mismatch. `init` does not rewrite a line the user wrote. The docs say to write all the lines the same way.

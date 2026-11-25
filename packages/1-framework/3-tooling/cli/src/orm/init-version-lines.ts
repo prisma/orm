@@ -1,9 +1,9 @@
 /**
- * The `package.json` lines `init` writes for a target package and the `@prisma/orm-*` packages it
- * names, read from how the installed target package names those packages as peers.
+ * The `package.json` lines `init` writes for a facade and the `@prisma/orm-*` packages it
+ * names, read from how the installed facade names those packages as peers.
  */
 export interface VersionLines {
-  readonly target: string;
+  readonly facade: string;
   /** The line for a `@prisma/orm-*` package a manifest names at `range`. */
   readonly ormPackage: (range: string) => string;
   /** Whether a line the project already lists stands for `written`, the line `init` writes. */
@@ -24,33 +24,33 @@ export function exactVersionOf(spec: string): string | undefined {
 }
 
 /**
- * A target package that names its `@prisma/orm-*` peers at exact versions, as on the `8.0.0`
+ * A facade that names its `@prisma/orm-*` peers at exact versions, as on the `8.0.0`
  * release candidates and in a development build, gets those versions; inside this repository a
  * `workspace:` specifier on an exact version counts as one. One that names them with ranges:
  *
- * - When init adds the target package itself, a GA one (a plain version) gets a caret on every line:
- *   `^X.Y.0` on the target package and a tilde peer as the same version with a caret, so an update
+ * - When init adds the facade itself, a GA one (a plain version) gets a caret on every line:
+ *   `^X.Y.0` on the facade and a tilde peer as the same version with a caret, so an update
  *   moves every line to the next release together. One whose version has a pre-release part gets a
- *   tilde on every line: each peer at its declared range and the target package at a tilde on its
+ *   tilde on every line: each peer at its declared range and the facade at a tilde on its
  *   version, since a caret on a pre-release never selects the next minor's.
- * - When the project already lists the target package, its line is the user's, and each peer gets
- *   the range the installed target package declares, so init never installs a platform package
- *   that target package does not accept.
+ * - When the project already lists the facade, its line is the user's, and each peer gets
+ *   the range the installed facade declares, so init never installs a platform package
+ *   that facade does not accept.
  */
 export function versionLines(
-  targetVersion: string,
+  facadeVersion: string,
   ormPeerRanges: readonly string[],
   options: { readonly addsFacade: boolean },
 ): VersionLines {
   if (ormPeerRanges.every((range) => EXACT_VERSION.test(range.trim().replace(/^workspace:/, '')))) {
-    return { target: targetVersion, ormPackage: (range) => range, standsFor: lineStandsFor };
+    return { facade: facadeVersion, ormPackage: (range) => range, standsFor: lineStandsFor };
   }
-  if (!options.addsFacade || targetVersion.includes('-')) {
-    return { target: `~${targetVersion}`, ormPackage: (range) => range, standsFor: lineStandsFor };
+  if (!options.addsFacade || facadeVersion.includes('-')) {
+    return { facade: `~${facadeVersion}`, ormPackage: (range) => range, standsFor: lineStandsFor };
   }
-  const [major, minor] = targetVersion.split('.');
+  const [major, minor] = facadeVersion.split('.');
   return {
-    target: `^${major}.${minor}.0`,
+    facade: `^${major}.${minor}.0`,
     ormPackage: (range) => (range.trim().startsWith('~') ? `^${range.trim().slice(1)}` : range),
     standsFor: lineStandsFor,
   };

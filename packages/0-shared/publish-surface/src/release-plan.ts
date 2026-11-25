@@ -25,7 +25,7 @@ export function isNumberedOnItsOwn(level: DeclaredLevel | undefined): level is N
   return typeof level === 'object';
 }
 
-export type PackageKind = 'target-package' | 'platform' | 'extension' | 'library-integration';
+export type PackageKind = 'facade' | 'platform' | 'extension' | 'library-integration';
 
 export interface ParsedVersion {
   readonly major: number;

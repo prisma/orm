@@ -490,7 +490,7 @@ describe('init --skip-install with a required peer installed at another version'
   );
 });
 
-describe('init --skip-install on a target package that names its peers with ranges', () => {
+describe('init --skip-install on a facade that names its peers with ranges', () => {
   function manifestAt(name: string, version: string, peerDependencies: Record<string, string>) {
     writeProjectFile(
       `node_modules/${name}/package.json`,

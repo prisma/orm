@@ -431,7 +431,7 @@ describe('the lines init writes for each line of releases', () => {
       }),
     ).toEqual({
       resolved: {
-        target: '@prisma/orm-mysql@8.0.0-rc.27',
+        facade: '@prisma/orm-mysql@8.0.0-rc.27',
         packages: [
           { name: '@prisma/orm-framework', version: '8.0.0-rc.27', outcome: 'installed' },
           { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
@@ -459,7 +459,7 @@ describe('the lines init writes for each line of releases', () => {
     ]);
   });
 
-  it('writes a caret on every line when it adds a GA target package', async () => {
+  it('writes a caret on every line when it adds a GA facade', async () => {
     const { resolved, installs } = await resolveFor('8.1.2', {
       '@prisma/orm-framework': '~8.1.0',
       'temporal-polyfill': '^1.0.8',
@@ -467,7 +467,7 @@ describe('the lines init writes for each line of releases', () => {
 
     expect({ resolved, installs }).toMatchObject({
       resolved: {
-        target: '@prisma/orm-mysql@^8.1.0',
+        facade: '@prisma/orm-mysql@^8.1.0',
         packages: [
           { name: '@prisma/orm-framework', version: '^8.1.0', outcome: 'installed' },
           { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
@@ -479,7 +479,7 @@ describe('the lines init writes for each line of releases', () => {
     });
   });
 
-  it('leaves the target line the project lists and writes each peer at the range the target package declares', async () => {
+  it('leaves the facade line the project lists and writes each peer at the range the facade declares', async () => {
     const { resolved, installs } = await resolveFor(
       '8.1.2',
       { '@prisma/orm-framework': '~8.1.0' },
@@ -489,14 +489,14 @@ describe('the lines init writes for each line of releases', () => {
 
     expect({ resolved, installs }).toMatchObject({
       resolved: {
-        target: '@prisma/orm-mysql@8.1.2',
+        facade: '@prisma/orm-mysql@8.1.2',
         packages: [{ name: '@prisma/orm-framework', version: '~8.1.0', outcome: 'installed' }],
       },
       installs: [['@prisma/orm-framework@~8.1.0']],
     });
   });
 
-  it('writes a tilde on every line for a target package at a pre-release', async () => {
+  it('writes a tilde on every line for a facade at a pre-release', async () => {
     const { resolved, installs } = await resolveFor('8.1.0-ea.1', {
       '@prisma/orm-framework': '~8.1.0',
       '@prisma/orm-target-mysql': '~8.1.0-ea.0',
@@ -504,7 +504,7 @@ describe('the lines init writes for each line of releases', () => {
 
     expect({ resolved, installs }).toMatchObject({
       resolved: {
-        target: '@prisma/orm-mysql@~8.1.0-ea.1',
+        facade: '@prisma/orm-mysql@~8.1.0-ea.1',
         packages: [
           { name: '@prisma/orm-framework', version: '~8.1.0', outcome: 'installed' },
           { name: '@prisma/orm-target-mysql', version: '~8.1.0-ea.0', outcome: 'installed' },
@@ -520,7 +520,7 @@ describe('the lines init writes for each line of releases', () => {
     });
   });
 
-  it('counts the line init would write as listed, and leaves the target line that already reads it', async () => {
+  it('counts the line init would write as listed, and leaves the facade line that already reads it', async () => {
     const { resolved, installs } = await resolveFor(
       '8.1.2',
       { '@prisma/orm-framework': '~8.1.0' },

@@ -70,8 +70,8 @@ Each package's level is declared in [`packages/0-shared/publish-surface/src/leve
 
 | From | To | Range |
 | --- | --- | --- |
-| A target package or a platform package | A GA package | Same minor, any patch: `~8.3.0` |
-| A target package or a platform package | A package below GA | The same, from that package's first version of the minor: `~8.3.0-ea.0` |
+| A database package, such as `@prisma/orm-postgres`, or a platform package | A GA package | Same minor, any patch: `~8.3.0` |
+| A database package or a platform package | A package below GA | The same, from that package's first version of the minor: `~8.3.0-ea.0` |
 | An extension or a library integration | A GA package | That release or any later one in the major version: `^8.3.0` |
 | An extension or a library integration | A package below GA | Within the minor, from that package's first version of it: `~8.3.0-ea.0` |
 
@@ -85,10 +85,10 @@ The packages of one release are tested together, so among themselves they accept
 
 ## What an application writes
 
-- On a GA target package: a caret on every `@prisma/orm-*` line, `^8.3.0`. An update moves all of them to the next release together.
-- On a target package below GA: a tilde on every line, `~8.3.0-ea.0` on the packages below GA and `~8.3.0` on the GA ones, and the target package at a tilde on its own version, such as `~8.3.0-ea.1`. A caret on a pre-release never selects the next minor's pre-release, so at each new minor the user edits the lines; see [below](#a-new-minor-below-ga).
+- On a GA database package: a caret on every `@prisma/orm-*` line, `^8.3.0`. An update moves all of them to the next release together.
+- On a database package below GA: a tilde on every line, `~8.3.0-ea.0` on the packages below GA and `~8.3.0` on the GA ones, and the database package at a tilde on its own version, such as `~8.3.0-ea.1`. A caret on a pre-release never selects the next minor's pre-release, so at each new minor the user edits the lines; see [below](#a-new-minor-below-ga).
 
-`prisma orm init` writes the lines this way when it adds the target package itself. When the project already lists the target package, `init` leaves that line as the user wrote it and writes each platform package at the range the installed target package declares for it, so that it never installs a platform package the user's target package does not accept.
+`prisma orm init` writes the lines this way when it adds the database package itself. When the project already lists the database package, `init` leaves that line as the user wrote it and writes each platform package at the range the installed database package declares for it, so that it never installs a platform package the user's database package does not accept.
 
 On the release candidates `init` writes the exact `8.0.0-rc.N` on every line.
 
@@ -96,7 +96,7 @@ Under pnpm a line on a package below GA is exact: pnpm writes `8.1.0-ea.0` even 
 
 ### A new minor below GA
 
-At each new minor, an application on a target package below GA edits every `@prisma/orm-*` line by hand to the new minor, `~X.Y.0-<level>.0` for the packages below GA and `~X.Y.0` for the GA ones, then runs its package manager's install. For SQLite going from `8.1` to `8.2`:
+At each new minor, an application on a database package below GA edits every `@prisma/orm-*` line by hand to the new minor, `~X.Y.0-<level>.0` for the packages below GA and `~X.Y.0` for the GA ones, then runs its package manager's install. For SQLite going from `8.1` to `8.2`:
 
 ```jsonc
 // before
@@ -113,7 +113,7 @@ At each new minor, an application on a target package below GA edits every `@pri
 "@prisma/orm-toolchain": "~8.2.0"
 ```
 
-A package manager's command that updates to the latest version is not a substitute: npm and Yarn rewrite every tilde line as a caret, and the next ordinary update then moves the GA lines to the following minor without the target package, which does not accept it.
+A package manager's command that updates to the latest version is not a substitute: npm and Yarn rewrite every tilde line as a caret, and the next ordinary update then moves the GA lines to the following minor without the database package, which does not accept it.
 
 ## Printing the release plan
 
@@ -130,7 +130,7 @@ The published packages follow the release plan. Everything else follows the root
 
 Published code that reports a version reads it from its private `@internal/*` package, which follows the root version, so it reports the release number, not its published package's own version:
 
-- **The target packages' `contractFromJson` key** (`<targetId>@<version>`) only marks a contract value as checked by that function, within one process, and is compared with nothing else.
+- **The database packages' `contractFromJson` key** (`<targetId>@<version>`) only marks a contract value as checked by that function, within one process, and is compared with nothing else.
 - **The MongoDB driver's `driverInfo`** is sent to the MongoDB server when it connects, for the server's logs, and is compared with nothing.
 - **The Supabase extension's version in `contract.json`** is written into every contract that uses it. It is the release number from `8.0.0` too, not the extension's own version; changing it would change emitted contracts, which is decided outside this work.
 

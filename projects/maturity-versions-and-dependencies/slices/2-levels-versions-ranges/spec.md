@@ -35,7 +35,7 @@ While the root version is an `8.0.0-rc.N`, the same function gives what is publi
    - **A development build** (`-dev.N`): every package's planned version followed by `-dev.N`, every range exact, tag `dev`.
 4. **The scripts use the plan.** `scripts/set-version.ts` writes each package's version and each `workspace:` specifier from the plan (`workspace:~8.1.0`, `workspace:^8.1.0`, `workspace:8.0.0-rc.26`), which pnpm publishes as written. `validateShellManifest` and `scripts/check-publish-deps.mjs` require the specifier the plan gives. `scripts/publish-packages.mjs` publishes each package under its own tag. Private workspace packages, examples and apps keep following the root version.
 5. **Everything that parses a version understands the four suffixes**: `determine-version` and its dev-build counter, `check-upgrade-coverage`, `check-release-notes`, the release-tag patterns, the `--prerelease` flag of the GitHub Release.
-6. **`prisma orm init` writes a range that suits the level.** It decides from the installed target package's manifest, and knows no level words. When the manifest names its `@prisma/orm-*` peers at exact versions (the release candidates of `8.0.0`, and development builds), `init` writes what it writes today. When it names them with ranges: a caret on every `@prisma/orm-*` line if the target package's version is a plain version, and a tilde on every line if it has a suffix, each peer at the range the manifest declares for it.
+6. **`prisma orm init` writes a range that suits the level.** It decides from the installed facade's manifest, and knows no level words. When the manifest names its `@prisma/orm-*` peers at exact versions (the release candidates of `8.0.0`, and development builds), `init` writes what it writes today. When it names them with ranges: a caret on every `@prisma/orm-*` line if the facade's version is a plain version, and a tilde on every line if it has a suffix, each peer at the range the manifest declares for it.
 7. **Docs and the decision record** (see the project plan, slice 2): the record on maturity levels; `docs/oss/versioning.md`; the glossary; every maturity label; the extension-author docs; the five corrections.
 
 ## Checks
@@ -43,7 +43,7 @@ While the root version is an `8.0.0-rc.N`, the same function gives what is publi
 - Unit tests of the plan for: `8.0.0-rc.26` (today's output), `8.0.0` (the first release with levels, including the packages that move down from `rc`), `8.1.0`, a fix to one GA package within `8.1`, a fix to one package below GA, a package that becomes GA at `8.2` after being Preview at `8.1`, and a development build of each.
 - A test that runs the scripts in dry-run mode against the real workspace and compares the printed table (package, version, tag, each range) with a committed expectation for `8.0.0-rc.26`, `8.0.0` and `8.1.0`.
 - A test that the plan for the current root version equals what is in the committed manifests, so the scripts and the manifests cannot drift.
-- `init` tests for a GA, a Preview and a release-candidate-line target package.
+- `init` tests for a GA, a Preview and a release-candidate-line facade.
 
 ## Out of scope
 
