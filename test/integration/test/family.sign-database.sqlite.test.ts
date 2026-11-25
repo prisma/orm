@@ -21,26 +21,30 @@ const familyInstance = sql.create(
 );
 
 const firstContract = familyInstance.deserializeContract(
-  defineContract({
-    models: {
-      User: model('User', { fields: { id: field.column(integerNumberColumn).id() } }).sql({
-        table: 'user',
-      }),
-    },
-  }),
+  sqliteTarget.contractSerializer.serializeContract(
+    defineContract({
+      models: {
+        User: model('User', { fields: { id: field.column(integerNumberColumn).id() } }).sql({
+          table: 'user',
+        }),
+      },
+    }),
+  ),
 );
 
 const secondContract = familyInstance.deserializeContract(
-  defineContract({
-    models: {
-      User: model('User', {
-        fields: {
-          id: field.column(integerNumberColumn).id(),
-          email: field.column(textColumn),
-        },
-      }).sql({ table: 'user' }),
-    },
-  }),
+  sqliteTarget.contractSerializer.serializeContract(
+    defineContract({
+      models: {
+        User: model('User', {
+          fields: {
+            id: field.column(integerNumberColumn).id(),
+            email: field.column(textColumn),
+          },
+        }).sql({ table: 'user' }),
+      },
+    }),
+  ),
 );
 
 describe('family instance signSpaces on SQLite', () => {

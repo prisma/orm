@@ -25,10 +25,11 @@ import type { Contract } from './fixtures/generated/contract';
 
 export { timeouts };
 
+const serializer = new PostgresContractSerializer();
 const sqlContract = blindCast<
   Contract,
   "PostgresContractSerializer.deserializeContract returns the framework's Contract supertype; the test fixture's narrowed Contract type isn't expressible at the deserializer boundary"
->(new PostgresContractSerializer().deserializeContract(contract));
+>(serializer.deserializeContract(serializer.serializeContract(contract)));
 
 export function setupIntegrationTest() {
   let runtime: Runtime;

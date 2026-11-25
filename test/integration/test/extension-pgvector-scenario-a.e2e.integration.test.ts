@@ -46,10 +46,10 @@ const APP_FIELD = 'embedding';
 const VECTOR_LENGTH = 3;
 
 function buildAppContract(): Contract<SqlStorage> {
-  return familyInstance.deserializeContract(buildAppContractPojo()) as Contract<SqlStorage>;
+  return familyInstance.deserializeContract(buildAppContractDocument()) as Contract<SqlStorage>;
 }
 
-function buildAppContractPojo(): Contract<SqlStorage> {
+function buildAppContractDocument() {
   const embeddingColumn = {
     codecId: VECTOR_CODEC_ID,
     dataType: 'pgvector/vector',
@@ -59,6 +59,7 @@ function buildAppContractPojo(): Contract<SqlStorage> {
   };
 
   return {
+    formatVersion: 1,
     target: 'postgres',
     targetFamily: 'sql',
     profileHash: APP_PROFILE_HASH,
