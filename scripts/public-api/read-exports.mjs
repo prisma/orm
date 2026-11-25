@@ -321,8 +321,11 @@ function readPath(checker, program, file, packageDir) {
       continue;
     }
     info.starForwards.push(specifier);
-    for (const exported of checker.getExportsOfModule(module))
+    // A name a regular star forwards stays a value, whatever type-only star also forwards it.
+    for (const exported of checker.getExportsOfModule(module)) {
+      if (statement.isTypeOnly && starNames.get(exported.name)?.typeOnly === false) continue;
       starNames.set(exported.name, { exported, typeOnly: statement.isTypeOnly });
+    }
   }
 
   const module = checker.getSymbolAtLocation(file);

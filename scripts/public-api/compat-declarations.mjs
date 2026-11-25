@@ -24,7 +24,7 @@ const isPrivate = (member) =>
 const isProtected = (member) =>
   !ts.isConstructorDeclaration(member) && hasModifier(member, ts.SyntaxKind.ProtectedKeyword);
 
-const nameText = (name) =>
+export const nameText = (name) =>
   ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : name.getText();
 
 const isUniqueSymbol = (type) =>

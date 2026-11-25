@@ -115,6 +115,11 @@ describe('checkPackage, with the release treated as GA', () => {
     match(result.undecided[0].message, /private class fixture-compat:Token/);
   });
 
+  it('subclasses an abstract class with a protected member keyed by a well-known symbol', () => {
+    const result = check('abstract-protected-symbol', { release: 'abstract-protected-symbol' });
+    deepStrictEqual([brokenExports(result), result.notCompared], [[], []]);
+  });
+
   it('fails when the release imports a file of its own that is missing', () => {
     const { problems } = check('relative-release', { release: 'relative-missing' });
     strictEqual(problems.length, 1);
@@ -273,6 +278,17 @@ describe('checkPackage on names a path forwards from another package', () => {
     deepStrictEqual([brokenExports(result), result.problems], [[], []]);
   });
 
+  it('keeps a class forwarded by both a star and a type-only star a value, and fails when only the type-only star is left', () => {
+    const result = check('star-type-only', {
+      release: 'star-both-release',
+      dependencies: forwardDependency,
+    });
+    deepStrictEqual(
+      brokenExports(result).filter((each) => each.name === 'Klass'),
+      [{ path: '.', name: 'Klass', test: 'exists', failsRun: true }],
+    );
+  });
+
   it('fails when a forwarded class becomes a forwarded function', () => {
     const result = check('forward-class-function', {
       release: 'forward-class-release',
@@ -356,7 +372,13 @@ describe('checkPackage on types too deep to compare', () => {
   });
 
   it('checks the imports even when the first comparison overflows the stack', () => {
-    const { problems } = check('overflow-unresolved', { release: 'overflow-unresolved' });
+    const { problems, undecided } = check('overflow-unresolved', {
+      release: 'overflow-unresolved',
+    });
+    deepStrictEqual(
+      undecided.map(({ name, message }) => ({ name, message })),
+      [{ name: 'Above', message: 'not decided: TypeScript ran out of stack comparing it' }],
+    );
     deepStrictEqual(problems.length, 1);
     match(problems[0], /not-installed-anywhere/);
   });

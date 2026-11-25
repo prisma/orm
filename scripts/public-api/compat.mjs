@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { createCompareHost } from './compat-declarations.mjs';
+import { createCompareHost, nameText } from './compat-declarations.mjs';
 import { COMPILER_OPTIONS } from './compiler-options.mjs';
 import { apiFingerprint } from './fingerprint.mjs';
 import { entryPointsOf } from './read-api.mjs';
@@ -81,8 +81,9 @@ function abstractMembers(checker, symbol, ownNames) {
     if (!(flags & ts.ModifierFlags.Abstract) || flags & ts.ModifierFlags.Private) continue;
     const isProtected = (flags & ts.ModifierFlags.Protected) !== 0;
     const own = ownNames.has(packageOf(declaration.getSourceFile().fileName)?.name);
-    const symbolKey = property.escapedName.startsWith('__@');
-    const key = isProtected ? `protected ${property.name}` : property.name;
+    // The comparison host moves a protected member, computed ones included, to a string key.
+    const symbolKey = !isProtected && property.escapedName.startsWith('__@');
+    const key = isProtected ? `protected ${nameText(declaration.name)}` : property.name;
     members.push({
       key: symbolKey ? undefined : key,
       written: symbolKey ? wellKnownSymbolKey(declaration) : JSON.stringify(key),
