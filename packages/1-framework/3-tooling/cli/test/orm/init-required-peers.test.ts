@@ -59,8 +59,8 @@ afterEach(() => {
   rmSync(projectDir, { recursive: true, force: true });
 });
 
-async function harness(targetPackage: string) {
-  const contribution = await fixtureContribution(targetPackage);
+async function harness(facade: string) {
+  const contribution = await fixtureContribution(facade);
   const loadInit: ImportFromProject = async () => ({
     kind: 'loaded',
     module: { default: contribution },
@@ -150,7 +150,7 @@ function runtimeInstalls(): (readonly string[])[] {
 const POSTGRES = ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', '--json'];
 const MONGO = ['orm', 'init', '--target', 'mongodb', '--authoring', 'psl', '--json'];
 
-describe('init lists the packages the target package names as peers', () => {
+describe('init lists the packages the facade names as peers', () => {
   it(
     'installs the PostgreSQL platform packages at the version of the installed package',
     async () => {
@@ -353,7 +353,7 @@ describe('init lists the packages the target package names as peers', () => {
   );
 
   it(
-    'installs only what it installs today for a target package that names no Prisma ORM peer',
+    'installs only what it installs today for a facade that names no Prisma ORM peer',
     async () => {
       installed('@prisma/orm-postgres', { pg: '^8.22.0' });
 

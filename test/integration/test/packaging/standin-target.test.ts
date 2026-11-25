@@ -316,7 +316,7 @@ function importProblems(app: Application): string[] {
   );
 }
 
-describe('a target package under a name the CLI has never heard of', () => {
+describe('a facade under a name the CLI has never heard of', () => {
   let scratch: string;
   let app: Application;
   let appWithExtension: Application;
@@ -343,7 +343,7 @@ describe('a target package under a name the CLI has never heard of', () => {
     rmSync(scratch, { recursive: true, force: true });
   });
 
-  it('is installed from its own tarball and is the only target package the application declares', () => {
+  it('is installed from its own tarball and is the only facade the application declares', () => {
     expect([...app.directDependencies].sort()).toEqual(
       [
         STANDIN,

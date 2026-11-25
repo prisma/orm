@@ -106,7 +106,7 @@ export function installCommand(
   return [packageManager, ...formatAddArgs(packageManager, [...packages])].join(' ');
 }
 
-/** The target package and the contribution it exports, with what installing it changed. */
+/** The facade and the contribution it exports, with what installing it changed. */
 export interface PreparedTargetPackage {
   readonly contribution: InitContribution;
   readonly requiredPeers: RequiredPeers;
@@ -118,16 +118,16 @@ export interface PreparedTargetPackage {
 }
 
 /**
- * Packages init installs another way, left out of the target package's required peers: the engine,
+ * Packages init installs another way, left out of the facade's required peers: the engine,
  * which the CLI installs as a development dependency at the version `prisma` names.
  */
 const INSTALLED_ELSEWHERE: ReadonlySet<string> = new Set([ENGINE_PACKAGE]);
 
-/** Installs the target package with `dotenv` and the drivers the list names, then loads its init contribution. */
+/** Installs the facade with `dotenv` and the drivers the list names, then loads its init contribution. */
 export type PrepareTargetPackage = (target: TargetPackage) => Promise<PreparedTargetPackage>;
 
 /**
- * The target package was installed, then could not be used. The caller adds the instruction to
+ * The facade was installed, then could not be used. The caller adds the instruction to
  * undo the install, because only it knows why it installed the package.
  */
 export class TargetPackageRefusedAfterInstall extends Error {
@@ -140,7 +140,7 @@ export class TargetPackageRefusedAfterInstall extends Error {
   }
 }
 
-/** The install of the target package failed; nothing else has happened yet. */
+/** The install of the facade failed; nothing else has happened yet. */
 export class TargetPackageInstallFailed extends Error {
   constructor(readonly failure: CliStructuredError) {
     super(failure.message);
@@ -149,7 +149,7 @@ export class TargetPackageInstallFailed extends Error {
 }
 
 /**
- * Installs the target package with `dotenv`, the package every init installs, and the driver
+ * Installs the facade with `dotenv`, the package every init installs, and the driver
  * packages its list entry names, leaving out those the project already declares, then loads the
  * package's init contribution from the project. A package in no list must first list the Prisma 8
  * keyword. Under `--skip-install` the package must already be installed. Each refusal happens
@@ -173,7 +173,7 @@ export function createTargetPackagePreparation(ctx: {
     const manifestPath = installedManifest(ctx.cwd, packageName);
     // Asking again for a package the project declares rewrites its declared range, which a
     // refusal later would leave behind; the later install puts those in place instead. The
-    // target package is left out only when it is also on disk, since init loads it now.
+    // facade is left out only when it is also on disk, since init loads it now.
     const targetInPlace = manifestPath !== undefined && declaredBefore.has(packageName);
     const installsTarget = ctx.install && !targetInPlace;
     if (target.listed === undefined) {
@@ -201,7 +201,7 @@ export function createTargetPackagePreparation(ctx: {
       if (ctx.packageManager === 'pnpm') {
         warnings.push(...buildCatalogWarnings(ctx.cwd, deps));
       }
-      // A target package already in place counts as installed, so the later install leaves it
+      // A facade already in place counts as installed, so the later install leaves it
       // alone too and the project keeps the version it has.
       installed = installsTarget ? deps : [packageName, ...deps];
       ranCommand = deps.length === 0 ? undefined : installCommand(ctx.packageManager, deps);
@@ -212,8 +212,8 @@ export function createTargetPackagePreparation(ctx: {
       packageName,
       read: manifests.read,
       installedVersion: manifests.installedVersion,
-      ownsTarget: installsTarget,
-      listsTarget: declaredBefore.has(packageName),
+      ownsFacadeLine: installsTarget,
+      listsFacade: declaredBefore.has(packageName),
       installedElsewhere: INSTALLED_ELSEWHERE,
       declared: () => declaredPackages(ctx.cwd),
       install: ctx.install
@@ -241,7 +241,7 @@ export function createTargetPackagePreparation(ctx: {
       installed = [
         ...new Set([
           ...installed,
-          requiredPeers.target,
+          requiredPeers.facade,
           ...requiredPeers.packages.flatMap((peer) => [peer.name, requiredPeerSpecifier(peer)]),
         ]),
       ];
@@ -422,7 +422,7 @@ async function loadContribution(
   target: TargetPackage,
   /** The install command init ran and that exited successfully; `undefined` under `--skip-install`. */
   ranCommand: string | undefined,
-  /** Required peers of the target package that are not installed, which a failed load names. */
+  /** Required peers of the facade that are not installed, which a failed load names. */
   missing: readonly RequiredPeer[],
 ): Promise<InitContribution> {
   const { packageName } = target;

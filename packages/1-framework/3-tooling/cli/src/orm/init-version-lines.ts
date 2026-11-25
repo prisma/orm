@@ -40,12 +40,12 @@ export function exactVersionOf(spec: string): string | undefined {
 export function versionLines(
   targetVersion: string,
   ormPeerRanges: readonly string[],
-  options: { readonly addsTarget: boolean },
+  options: { readonly addsFacade: boolean },
 ): VersionLines {
   if (ormPeerRanges.every((range) => EXACT_VERSION.test(range.trim().replace(/^workspace:/, '')))) {
     return { target: targetVersion, ormPackage: (range) => range, standsFor: lineStandsFor };
   }
-  if (!options.addsTarget || targetVersion.includes('-')) {
+  if (!options.addsFacade || targetVersion.includes('-')) {
     return { target: `~${targetVersion}`, ormPackage: (range) => range, standsFor: lineStandsFor };
   }
   const [major, minor] = targetVersion.split('.');

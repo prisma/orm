@@ -5,8 +5,6 @@
 **Related:** [ADR 212 — Contract spaces](ADR%20212%20-%20Contract%20spaces.md), [ADR 226 — Cross-contract foreign-key references](ADR%20226%20-%20Cross-contract%20foreign-key%20references.md), [ADR 242 — Public npm surface](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md), [ADR 308 — Community packages are named `prisma-orm-<name>`](ADR%20308%20-%20Community%20packages%20are%20named%20prisma-orm-name.md)
 
 
-> **Amended by [ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) (2026-11).** The sentence under "Rule 1" that the database package always installs the framework and family packages describes the earlier arrangement. The application lists them, and the database package names them as peers, as the integration does.
-
 ## At a glance
 
 A package that connects an outside library to Prisma 8 builds only on the packages Prisma publishes, and the tables the library needs are models in the application's own contract. This section shows both with one library, Better Auth.
@@ -130,7 +128,7 @@ A library integration is written against that published set only, the same set a
 
 ### How the integration depends on Prisma's packages
 
-The integration declares `@prisma/orm-framework` and `@prisma/orm-family-sql` as peer dependencies, at the exact version of the application's database package. The database package always installs both, so the application ends up with one copy of each, shared by its client and the integration.
+The integration declares `@prisma/orm-framework` and `@prisma/orm-family-sql` as peer dependencies. The application declares both, and its facade names them as peers too ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)), so the application has one copy of each, shared by its client and the integration.
 
 One copy matters, because the integration builds query filters with functions from `@prisma/orm-family-sql` and hands them to the client. Because they are peers, the package manager reports a version mismatch at install time. If they were regular dependencies, it would silently install a second copy of those functions beside the client's.
 

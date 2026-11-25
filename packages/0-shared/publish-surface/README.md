@@ -13,7 +13,7 @@ The canonical map from internal workspace packages to the published `@prisma/orm
 
 The shell build (`@repo/tsdown/shell-build`) and the publish checks read this table, and nothing copies it.
 
-Nothing that emits or scaffolds a file reads it. A generated `contract.d.ts` imports from the module the config names in `contract.typesModule`, and a written `migration.ts` from `migrations.module`; a target package's `defineConfig` sets both. `prisma orm init` names the target package it installs.
+Nothing that emits or scaffolds a file reads it. A generated `contract.d.ts` imports from the module the config names in `contract.typesModule`, and a written `migration.ts` from `migrations.module`; a facade's `defineConfig` sets both. `prisma orm init` names the facade it installs.
 
 ## Loaded from source by the release scripts
 

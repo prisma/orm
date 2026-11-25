@@ -133,7 +133,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         // accepted are matched in the handler, where a rejection can name
         // every allowed value.
         target: flag.string({
-          brief: `Database target: ${TARGET_SHORT_NAMES.join(' or ')}, or the name of a target package`,
+          brief: `Database: ${TARGET_SHORT_NAMES.join(' or ')}, or the name of the package to use for it`,
           placeholder: TARGET_FLAG_PLACEHOLDER,
         }),
         authoring: flag.string({
@@ -153,10 +153,10 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         strictProbe: flag.boolean({ brief: 'Treat a failed --probe-db as fatal' }),
         skipInstall: flag.boolean({
           brief:
-            'Skip dependency installation and contract emission; the target package must already be installed',
+            'Skip dependency installation and contract emission; the package for the database must already be installed',
         }),
         keepPreviousFacade: flag.boolean({
-          brief: 'Keep the previous target package in package.json when switching targets',
+          brief: 'Keep the previous database package in package.json when switching databases',
         }),
         fromPrisma7Schema: flag.string({
           brief: 'Use an existing Prisma 7 schema.prisma as the contract source',
@@ -273,7 +273,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         (name) => !inputs.requiredPeers.packages.some((peer) => peer.name === name),
       );
       const deps = [
-        inputs.requiredPeers.target,
+        inputs.requiredPeers.facade,
         ...ormPeers.map(requiredPeerSpecifier),
         'dotenv',
         ...drivers,

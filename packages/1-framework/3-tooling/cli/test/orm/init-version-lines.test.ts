@@ -3,7 +3,7 @@ import { requirementAdmits, versionLines } from '../../src/orm/init-version-line
 
 describe('the lines init writes, read from how the target package names its peers', () => {
   it('keeps the versions as they are when every peer is an exact version', () => {
-    const lines = versionLines('8.0.0-rc.27', ['8.0.0-rc.27', '8.0.0-rc.27'], { addsTarget: true });
+    const lines = versionLines('8.0.0-rc.27', ['8.0.0-rc.27', '8.0.0-rc.27'], { addsFacade: true });
 
     expect({ target: lines.target, peer: lines.ormPackage('8.0.0-rc.27') }).toEqual({
       target: '8.0.0-rc.27',
@@ -12,7 +12,7 @@ describe('the lines init writes, read from how the target package names its peer
   });
 
   it('keeps the versions as they are for a development build', () => {
-    const lines = versionLines('8.1.0-dev.4', ['8.1.0-dev.4'], { addsTarget: true });
+    const lines = versionLines('8.1.0-dev.4', ['8.1.0-dev.4'], { addsFacade: true });
 
     expect({ target: lines.target, peer: lines.ormPackage('8.1.0-dev.4') }).toEqual({
       target: '8.1.0-dev.4',
@@ -22,12 +22,12 @@ describe('the lines init writes, read from how the target package names its peer
 
   it('reads a workspace specifier on an exact version as exact', () => {
     expect(
-      versionLines('8.0.0-rc.25', ['workspace:8.0.0-rc.25'], { addsTarget: true }).target,
+      versionLines('8.0.0-rc.25', ['workspace:8.0.0-rc.25'], { addsFacade: true }).target,
     ).toBe('8.0.0-rc.25');
   });
 
   it('writes a caret on every line when it adds a GA target package', () => {
-    const lines = versionLines('8.1.2', ['~8.1.0'], { addsTarget: true });
+    const lines = versionLines('8.1.2', ['~8.1.0'], { addsFacade: true });
 
     expect({
       target: lines.target,
@@ -37,13 +37,13 @@ describe('the lines init writes, read from how the target package names its peer
   });
 
   it('writes each peer at the range the target package declares when the project already lists it', () => {
-    const lines = versionLines('8.1.2', ['~8.1.0'], { addsTarget: false });
+    const lines = versionLines('8.1.2', ['~8.1.0'], { addsFacade: false });
 
     expect(lines.ormPackage('~8.1.0')).toBe('~8.1.0');
   });
 
   it('writes a tilde on every line for a target package at a pre-release', () => {
-    const lines = versionLines('8.1.0-ea.1', ['~8.1.0', '~8.1.0-ea.0'], { addsTarget: true });
+    const lines = versionLines('8.1.0-ea.1', ['~8.1.0', '~8.1.0-ea.0'], { addsFacade: true });
 
     expect({
       target: lines.target,
@@ -53,7 +53,7 @@ describe('the lines init writes, read from how the target package names its peer
   });
 
   it('reads a manifest that mixes exact versions and ranges as ranges', () => {
-    expect(versionLines('8.1.2', ['8.1.2', '~8.1.0'], { addsTarget: true }).target).toBe('^8.1.0');
+    expect(versionLines('8.1.2', ['8.1.2', '~8.1.0'], { addsFacade: true }).target).toBe('^8.1.0');
   });
 });
 
@@ -64,7 +64,7 @@ describe('whether a line the project lists stands for the line init writes', () 
     ['a caret with the version installed', '^8.0.0-rc.26', '8.0.0-rc.27', true],
     ['a caret with another version installed', '^8.0.0-rc.26', '8.0.0-rc.26', false],
   ])('on the release candidates, decides %s', (_case, line, installed, stands) => {
-    const lines = versionLines('8.0.0-rc.27', ['8.0.0-rc.27'], { addsTarget: true });
+    const lines = versionLines('8.0.0-rc.27', ['8.0.0-rc.27'], { addsFacade: true });
 
     expect(lines.standsFor(line, '8.0.0-rc.27', installed)).toBe(stands);
   });
@@ -75,7 +75,7 @@ describe('whether a line the project lists stands for the line init writes', () 
     ['another line with the same release installed', '8.1.3', '8.1.3', true],
     ['another line with an earlier release installed', '^8.0.0', '8.0.4', false],
   ])('on the levels line, decides %s', (_case, line, installed, stands) => {
-    const lines = versionLines('8.1.2', ['~8.1.0'], { addsTarget: true });
+    const lines = versionLines('8.1.2', ['~8.1.0'], { addsFacade: true });
 
     expect(lines.standsFor(line, '^8.1.0', installed)).toBe(stands);
   });

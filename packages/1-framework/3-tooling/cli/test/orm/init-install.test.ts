@@ -400,7 +400,7 @@ describe('init installs', () => {
     }
 
     it(
-      'installs the target package for the check first, then @prisma/client@7, @prisma/prisma7, and prisma@latest',
+      'installs the facade for the check first, then @prisma/client@7, @prisma/prisma7, and prisma@latest',
       async () => {
         writePrisma7Project({
           name: 'app',

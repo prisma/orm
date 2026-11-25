@@ -40,7 +40,7 @@ async function readPublished(name: string, spec: string) {
       };
 }
 
-// Outside the CLI's fixture app, whose own installed target packages would be found first.
+// Outside the CLI's fixture app, whose own installed facades would be found first.
 let projectDir: string;
 
 beforeEach(() => {
@@ -72,12 +72,12 @@ function forSetup(
 }
 
 describe('the list the printed Prisma 6 setup names', () => {
-  it('reads the published manifests of a target package that is not installed, each level at once', async () => {
+  it('reads the published manifests of a facade that is not installed, each level at once', async () => {
     const list = await forSetup()('@prisma/orm-mongo');
 
     expect({ list, asked, mostInFlight }).toEqual({
       list: {
-        target: `@prisma/orm-mongo@${VERSION}`,
+        facade: `@prisma/orm-mongo@${VERSION}`,
         packages: [
           { name: '@prisma/orm-family-mongo', version: VERSION, outcome: 'to-install' },
           { name: '@prisma/orm-framework', version: VERSION, outcome: 'to-install' },
@@ -122,20 +122,20 @@ describe('the list the printed Prisma 6 setup names', () => {
 
     const list = await forSetup()('@prisma/orm-mongo');
 
-    expect({ target: list.target, packages: list.packages.map((p) => p.name), asked }).toEqual({
-      target: `@prisma/orm-mongo@${VERSION}`,
+    expect({ facade: list.facade, packages: list.packages.map((p) => p.name), asked }).toEqual({
+      facade: `@prisma/orm-mongo@${VERSION}`,
       packages: ['@prisma/orm-framework'],
       asked: [],
     });
   });
 
-  it('names the target package alone, and says it could not read it, when the registry cannot be read', async () => {
+  it('names the facade alone, and says it could not read it, when the registry cannot be read', async () => {
     const list = await forSetup(async () => {
       throw new Error('ENOTFOUND registry.npmjs.org');
     })('@prisma/orm-mongo');
 
     expect(list).toEqual({
-      target: '@prisma/orm-mongo',
+      facade: '@prisma/orm-mongo',
       packages: [],
       unread: ['@prisma/orm-mongo'],
       warnings: [],
@@ -194,7 +194,7 @@ describe('the shared time limit and cancelling of the registry reads', () => {
     await vi.advanceTimersByTimeAsync(REGISTRY_LOOKUP_TIMEOUT_MILLIS);
 
     await expect(list).resolves.toMatchObject({
-      target: `@prisma/orm-mongo@${VERSION}`,
+      facade: `@prisma/orm-mongo@${VERSION}`,
       unread: ['@prisma/orm-framework', '@prisma/orm-family-mongo'],
     });
   });
@@ -223,8 +223,8 @@ describe('whether a package the project lists is at the version asked for', () =
   function outcomeFor(line: string, installed: string | undefined) {
     return resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsTarget: false,
-      listsTarget: false,
+      ownsFacadeLine: false,
+      listsFacade: false,
       installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', line]]),
       installedVersion: () => installed,
@@ -270,8 +270,8 @@ describe('whether a package the project lists is at the version asked for', () =
   it('counts a caret line init wrote for one release candidate once the next is installed and asked for', async () => {
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsTarget: false,
-      listsTarget: false,
+      ownsFacadeLine: false,
+      listsFacade: false,
       installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', '^8.0.0-rc.26']]),
       installedVersion: () => '8.0.0-rc.27',
@@ -323,8 +323,8 @@ describe('a package installed at a version other than the one asked for', () => 
     let frameworkVersion = '8.0.0';
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsTarget: false,
-      listsTarget: false,
+      ownsFacadeLine: false,
+      listsFacade: false,
       installedElsewhere: new Set(),
       declared: () => new Map(),
       installedVersion: () => undefined,
@@ -348,7 +348,7 @@ describe('a package installed at a version other than the one asked for', () => 
 
     expect({ resolved, installs }).toEqual({
       resolved: {
-        target: `@prisma/orm-postgres@${VERSION}`,
+        facade: `@prisma/orm-postgres@${VERSION}`,
         packages: [
           { name: '@prisma/orm-framework', version: VERSION, outcome: 'installed' },
           { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
@@ -367,8 +367,8 @@ describe('the packages init installs in a round', () => {
     let frameworkPeers = new Map<string, string>();
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsTarget: false,
-      listsTarget: false,
+      ownsFacadeLine: false,
+      listsFacade: false,
       installedElsewhere: new Set(),
       declared: () => new Map(),
       installedVersion: () => undefined,
@@ -401,13 +401,13 @@ describe('the lines init writes for each line of releases', () => {
     targetVersion: string,
     peers: Record<string, string>,
     declared: Record<string, string> = {},
-    options: { readonly listsTarget: boolean } = { listsTarget: false },
+    options: { readonly listsFacade: boolean } = { listsFacade: false },
   ) {
     const installs: (readonly string[])[] = [];
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-mysql',
-      ownsTarget: !options.listsTarget,
-      listsTarget: options.listsTarget,
+      ownsFacadeLine: !options.listsFacade,
+      listsFacade: options.listsFacade,
       installedElsewhere: new Set(),
       declared: () => new Map(Object.entries(declared)),
       installedVersion: () => undefined,
@@ -484,7 +484,7 @@ describe('the lines init writes for each line of releases', () => {
       '8.1.2',
       { '@prisma/orm-framework': '~8.1.0' },
       { '@prisma/orm-mysql': '8.1.2' },
-      { listsTarget: true },
+      { listsFacade: true },
     );
 
     expect({ resolved, installs }).toMatchObject({
@@ -541,8 +541,8 @@ describe('a required version written with a v prefix', () => {
   it('stands for the same version listed and installed without it', async () => {
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsTarget: false,
-      listsTarget: false,
+      ownsFacadeLine: false,
+      listsFacade: false,
       installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', VERSION]]),
       installedVersion: () => VERSION,
@@ -564,8 +564,8 @@ describe('a required peer that is not a Prisma ORM package, listed at another ex
   it('is left at that version with a warning that says to change the line', async () => {
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsTarget: false,
-      listsTarget: false,
+      ownsFacadeLine: false,
+      listsFacade: false,
       installedElsewhere: new Set(),
       declared: () => new Map([['left-pad', '1.2.0']]),
       installedVersion: () => '1.2.0',

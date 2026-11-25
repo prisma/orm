@@ -94,12 +94,12 @@ export function errorInitInvalidTarget(options: {
       ? {
           summary: 'Invalid value for --target',
           why: `\`--target ${options.value}\` is not one of the short names (${SHORT_NAME_LIST}), and init does not take it as a package name: ${problems}.`,
-          fix: `Pass a short name (${SHORT_NAME_FLAGS}) or the full name of a target package (\`--target ${PACKAGE_NAME_PLACEHOLDER}\`).`,
+          fix: `Pass a short name (${SHORT_NAME_FLAGS}) or the full name of the package for your database (\`--target ${PACKAGE_NAME_PLACEHOLDER}\`).`,
         }
       : {
-          summary: 'Invalid target package name',
-          why: `\`${options.value}\`, typed as the name of the target package, is not taken as a package name: ${problems}. Nothing was changed.`,
-          fix: `Run \`prisma orm init\` again and type the target package's name as it is published, or pass it as \`--target ${PACKAGE_NAME_PLACEHOLDER}\`.`,
+          summary: 'Invalid package name',
+          why: `\`${options.value}\`, typed as the name of the package for your database, is not taken as a package name: ${problems}. Nothing was changed.`,
+          fix: `Run \`prisma orm init\` again and type the package's name as it is published, or pass it as \`--target ${PACKAGE_NAME_PLACEHOLDER}\`.`,
         };
   return new CliStructuredError('CLI.INIT_INVALID_FLAG_VALUE', wording.summary, {
     why: wording.why,
@@ -116,14 +116,14 @@ export function errorInitInvalidTarget(options: {
 }
 
 /**
- * Said first when a value in no list turns out not to be a usable target package, so the user
+ * Said first when a value in no list turns out not to be a usable facade, so the user
  * sees why init looked for a package of that name.
  */
 function takenAsPackageName(packageName: string): string {
   return `\`${packageName}\` is not one of the short names (${SHORT_NAME_LIST}), so init took it as a package name.`;
 }
 
-const LISTED_INSTEAD = `To use a target package from the list instead, pass its short name (${SHORT_NAME_FLAGS}); for any other, pass its full package name.`;
+const LISTED_INSTEAD = `To use a database package from the list instead, pass its short name (${SHORT_NAME_FLAGS}); for any other, pass its full package name.`;
 
 /**
  * `--authoring` and `--schema-path` disagree on file extension (e.g. PSL
@@ -490,7 +490,7 @@ export function errorInitPrisma7ConfigUnreadable(options: {
 }
 
 /**
- * The project does not have the target package: `--skip-install` forbade installing it, or init's
+ * The project does not have the facade: `--skip-install` forbade installing it, or init's
  * install command succeeded and the package still cannot be found from the project. Init takes
  * every file it writes from that package, so it stops before writing any scaffold file.
  */
@@ -560,7 +560,7 @@ function takenAsPackageNameMeta(unlisted: boolean): { readonly takenAsPackageNam
 }
 
 /**
- * A package in no list does not list the keyword init requires of a target package, or init could
+ * A package in no list does not list the keyword init requires of a facade, or init could
  * not read its keywords. Init checks before installing or loading it, so nothing was changed.
  * `registry` is set when the keywords were to come from the registry rather than the installed
  * package.
@@ -584,7 +584,8 @@ export function errorInitTargetPackageNotVerified(
 ): CliStructuredError {
   const { packageName, installCommand } = options;
   const keyword = `\`${PRISMA_ORM_PACKAGE_KEYWORD}\``;
-  const required = 'init requires that keyword of a target package before it installs or uses one';
+  const required =
+    'init requires that keyword of a database package before it installs or uses one';
   const runAgain = 'run `prisma orm init` again';
   const maintainer = `If you maintain ${packageName}, add ${keyword} to the keywords in its package.json and publish a new version.`;
   const wording = (() => {
@@ -611,7 +612,7 @@ export function errorInitTargetPackageNotVerified(
         const from = options.registry === undefined ? '' : ` from ${options.registry}`;
         return {
           summary: `Could not read the keywords of ${packageName}`,
-          why: `init requires the keyword ${keyword} of a target package before it installs or uses one, and it could not read the keywords of ${packageName}${from}: ${options.cause}. Nothing was changed.`,
+          why: `init requires the keyword ${keyword} of a database package before it installs or uses one, and it could not read the keywords of ${packageName}${from}: ${options.cause}. Nothing was changed.`,
           fix:
             options.registry === undefined
               ? `Check the package name. If it is right, reinstall ${packageName} with \`${installCommand}\` and ${runAgain}.`
@@ -634,7 +635,7 @@ export function errorInitTargetPackageNotVerified(
 }
 
 /**
- * The target package has no `init` entrypoint, its init module cannot be loaded, or its default
+ * The facade has no `init` entrypoint, its init module cannot be loaded, or its default
  * export is not an init contribution. The package is installed and no scaffold file was written.
  */
 export function errorInitContributionUnavailable(options: {
@@ -684,7 +685,7 @@ export function errorInitContributionUnavailable(options: {
 }
 
 /**
- * Under `--skip-install`, the target package is installed but some of its required peers are not,
+ * Under `--skip-install`, the facade is installed but some of its required peers are not,
  * as a package manager that installs no peer dependencies leaves them. Init stops before loading
  * the package's `init` entrypoint, which would fail to resolve them. Nothing was changed. Maps to
  * exit code `2 = PRECONDITION`.
@@ -793,7 +794,7 @@ export function errorInitRequiredPeersAtAnotherVersion(options: {
   );
 }
 
-/** `--authoring` names a way to write the contract the target package does not offer. */
+/** `--authoring` names a way to write the contract the facade does not offer. */
 export function errorInitAuthoringUnsupported(options: {
   readonly packageName: string;
   readonly authoring: string;
@@ -860,7 +861,7 @@ export function packagesAddedAction(added: PackagesAdded, reason: InstallReason)
 }
 
 /**
- * The target package init loads to read the Prisma 7 schema cannot be loaded
+ * The facade init loads to read the Prisma 7 schema cannot be loaded
  * from the project, it has no Prisma 7 contract source while
  * `--from-prisma7-schema` asked for one, or it is in no list, and only a
  * listed package can keep a Prisma 7 schema.
@@ -902,8 +903,8 @@ export function errorInitPrisma7SourceUnavailable(
         : options.reason === 'unlisted'
           ? {
               summary: `${packageName} cannot keep a Prisma 7 schema`,
-              why: `${packageName} is not one of the target packages in Prisma's list (${SHORT_NAME_LIST}), and only a package in that list can keep ${schemaPath} as the contract source. Nothing was changed.`,
-              fix: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${packageName}. To keep ${schemaPath}, name a target package from the list instead.`,
+              why: `${packageName} is not one of the database packages in Prisma's list (${SHORT_NAME_LIST}), and only a package in that list can keep ${schemaPath} as the contract source. Nothing was changed.`,
+              fix: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${packageName}. To keep ${schemaPath}, name a database package from the list instead.`,
             }
           : {
               summary: 'No Prisma 7 contract source for this database',
@@ -926,7 +927,7 @@ export function errorInitPrisma7SourceUnavailable(
 }
 
 /**
- * The target package's Prisma 7 contract source refused the schema. Nothing but the check's install
+ * The facade's Prisma 7 contract source refused the schema. Nothing but the check's install
  * happened.
  */
 export function errorInitPrisma7SchemaRefused(options: {

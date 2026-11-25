@@ -89,7 +89,7 @@ export const ALL_CELLS: readonly CellId[] = [
   { target: 'sqlite', authoring: 'psl' },
 ];
 
-/** The one target package a project scaffolded for the target depends on. */
+/** The one facade a project scaffolded for the target depends on. */
 export const FACADE_FOR_TARGET: Readonly<Record<Target, string>> = {
   postgres: '@prisma/orm-postgres',
   mongo: '@prisma/orm-mongo',
@@ -488,9 +488,7 @@ function rewritePackageJsonForTarballs(dir: string, cell: CellId, tarballs: Pack
 
   // The application lists every package the facade names as a peer, as
   // `init` does: pnpm resolves an unlisted peer through the registry, not
-  // through the tarball overrides, and the generated `migration.ts` imports
-  // the target package directly, which the isolated linker only exposes
-  // when it is listed.
+  // through the tarball overrides.
   const platformEntries = Object.fromEntries(
     platformPackagesOf(facade)
       .filter((name) => devDependencies[name] === undefined)

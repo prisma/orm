@@ -11,7 +11,7 @@ import type { ImportFromProject } from './project-modules';
 
 export type Prisma7QuickReference = NonNullable<InitContribution['prisma7QuickReference']>;
 
-/** `readable`: the target package read the schema. `no-source`: it has no Prisma 7 contract source. */
+/** `readable`: the facade read the schema. `no-source`: it has no Prisma 7 contract source. */
 export type Prisma7SourceCheck =
   | { readonly outcome: 'readable'; readonly quickReference: Prisma7QuickReference }
   | { readonly outcome: 'no-source' };
@@ -23,7 +23,7 @@ export type CheckPrisma7Source = (request: {
 }) => Promise<Prisma7SourceCheck>;
 
 /**
- * Finds out whether the installed target package can read the Prisma 7 schema before init changes
+ * Finds out whether the installed facade can read the Prisma 7 schema before init changes
  * the project: loads the package's config module as the project resolves it and runs its
  * `prisma7Schema` source without writing. The CLI carries no target code, so the installed
  * package is the only one that can answer. A `prisma7Schema` export is the only sign that a
