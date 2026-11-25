@@ -1,11 +1,11 @@
 # @prisma/orm-mariadb
 
-The package a MariaDB application installs for its database. It wires the framework, the SQL family and the MariaDB target together. It names the MySQL package and the platform packages it is built on as peer dependencies: until release 8.0 at this package's own exact version, and from release 8.0 at a range within this package's release, such as `~8.1.0`. The application lists them beside it, and `prisma orm init` writes that list. To install them by hand, give every `@prisma/orm-*` package the same `8.0.0-rc.N` until release 8.0, and from release 8.0 the lines [the versioning page](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#what-an-application-writes) gives for the release you want:
+The package a MariaDB application installs for its database. It wires the framework, the SQL family and the MariaDB target together. It names the MySQL package and the platform packages it is built on as peer dependencies: until release 8.0 at this package's own exact version, and from release 8.0 at a range within this package's release, such as `~8.1.0`. The application lists them beside it, and `prisma orm init` writes that list. To install them by hand, give every `@prisma/orm-*` package the same `8.0.0-rc.N` until release 8.0, and from release 8.0 the lines [the versioning page](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#what-an-application-writes) gives. For release 8.0 they are the following; for a later release `X.Y`, write `X.Y.0` in place of `8.0.1`:
 
 > **Maturity level: Early Access.** It is released so that people can try it, and it may change in any release. Until release 8.0 every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`; from release 8.0 the version shows the level. At each new minor, edit every `@prisma/orm-*` line to the new minor by hand and run the install; a package manager's command that updates to the latest version is not a substitute ([why](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#a-new-minor-below-ga)). See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
 
 ```sh
-pnpm add @prisma/orm-mariadb@<version> @prisma/orm-framework@<version> @prisma/orm-family-sql@<version> @prisma/orm-target-mariadb@<version> @prisma/orm-target-mysql@<version> @prisma/orm-mysql@<version> @prisma/orm-toolchain@<version>
+pnpm add "@prisma/orm-mariadb@~8.0.1-ea.0" "@prisma/orm-framework@~8.0.1" "@prisma/orm-family-sql@~8.0.1" "@prisma/orm-target-mariadb@~8.0.1-ea.0" "@prisma/orm-target-mysql@~8.0.1-ea.0" "@prisma/orm-mysql@~8.0.1-ea.0" "@prisma/orm-toolchain@~8.0.1"
 ```
 
 ```
