@@ -1,8 +1,4 @@
-import type { ContractWithDomain } from '@internal/contract/types';
-import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
-import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoSchemaCollection } from '@internal/mongo-schema-ir';
-import { hasCollection } from './mongo-model-coordinates';
 
 export function collectionHasOptions(collection: MongoSchemaCollection): boolean {
   return !!(collection.options || collection.validator);
@@ -16,17 +12,5 @@ export function writesCollectionCreate(collection: MongoSchemaCollection | undef
   return (
     collection !== undefined &&
     (collectionHasOptions(collection) || collection.indexes.length === 0)
-  );
-}
-
-/** Whether a plan from `fromContract` to `contract` creates collection `name` with `createCollection`. */
-export function planCreatesCollection(
-  fromContract: ContractWithDomain,
-  contract: MongoContract,
-  name: string,
-): boolean {
-  return (
-    !hasCollection(fromContract, name) &&
-    writesCollectionCreate(contractToMongoSchemaIR(contract).collection(name))
   );
 }
