@@ -1,6 +1,6 @@
 import { deepStrictEqual, rejects, strictEqual } from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { isReleased, LastReleaseError, lastRelease } from './last-release.mjs';
+import { fetchPackument, isReleased, LastReleaseError, lastRelease } from './last-release.mjs';
 
 const packuments = {
   '@prisma/orm-postgres': {
@@ -52,5 +52,31 @@ describe('isReleased', () => {
       ),
       [true, false, false],
     );
+  });
+});
+
+describe('fetchPackument', () => {
+  it('retries a failed request', async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls++;
+      if (calls < 3) throw new TypeError('fetch failed');
+      return new Response(JSON.stringify({ versions: {} }), { status: 200 });
+    };
+    deepStrictEqual(await fetchPackument('@prisma/orm-a', { fetchImpl, retryDelayMs: 0 }), {
+      versions: {},
+    });
+    strictEqual(calls, 3);
+  });
+
+  it('ends in one message naming what failed when every attempt fails', async () => {
+    const fetchImpl = async () => {
+      throw new TypeError('fetch failed', { cause: new Error('getaddrinfo ENOTFOUND') });
+    };
+    await rejects(fetchPackument('@prisma/orm-a', { fetchImpl, retryDelayMs: 0 }), {
+      name: 'Error',
+      message:
+        'could not read @prisma/orm-a from the registry after 3 attempts: fetch failed (getaddrinfo ENOTFOUND)',
+    });
   });
 });

@@ -16,8 +16,10 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { stampVersion } from './compat.mjs';
+
+export class InstallError extends Error {}
 
 const DEPENDENCY_FIELDS = ['dependencies', 'peerDependencies', 'optionalDependencies'];
 
@@ -114,7 +116,7 @@ export function installRelease({ dir, packages, version, overrides, ownNames }) 
   );
   writeFileSync(
     join(dir, 'pnpm-workspace.yaml'),
-    `${JSON.stringify({ packages: [], overrides }, null, 2)}\n`,
+    `${JSON.stringify({ packages: [], fetchRetries: 5, overrides }, null, 2)}\n`,
   );
   execFileSync(
     'pnpm',
@@ -131,9 +133,13 @@ export function installRelease({ dir, packages, version, overrides, ownNames }) 
     if (!entry.startsWith('@prisma+') || !existsSync(scope)) continue;
     for (const name of readdirSync(scope)) {
       const packageDir = join(scope, name);
-      if (ownNames.has(`@prisma/${name}`) && !lstatSync(packageDir).isSymbolicLink()) {
-        stampVersion(packageDir);
+      if (!ownNames.has(`@prisma/${name}`) || lstatSync(packageDir).isSymbolicLink()) continue;
+      if (!realpathSync(packageDir).startsWith(`${realpathSync(dir)}${sep}`)) {
+        throw new InstallError(
+          `${packageDir} is outside ${dir}, so its version is not stamped: pnpm may be using a global virtual store`,
+        );
       }
+      stampVersion(packageDir);
     }
   }
 
