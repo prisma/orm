@@ -258,8 +258,9 @@ describe('referential actions integration', () => {
               }),
             );
 
-            const validatedContract = new PostgresContractSerializer().deserializeContract(
-              contract,
+            const serializer = new PostgresContractSerializer();
+            const validatedContract = serializer.deserializeContract(
+              serializer.serializeContract(contract),
             ) as Contract<SqlStorage>;
             const schema = await familyInstance.introspect({
               driver,
@@ -356,8 +357,9 @@ describe('referential actions integration', () => {
               }),
             );
 
-            const validatedContract = new PostgresContractSerializer().deserializeContract(
-              contract,
+            const serializer = new PostgresContractSerializer();
+            const validatedContract = serializer.deserializeContract(
+              serializer.serializeContract(contract),
             ) as Contract<SqlStorage>;
             const schema = await familyInstance.introspect({
               driver,
@@ -428,8 +430,9 @@ describe('referential actions integration', () => {
               }),
             );
 
-            const validatedContract = new PostgresContractSerializer().deserializeContract(
-              contract,
+            const serializer = new PostgresContractSerializer();
+            const validatedContract = serializer.deserializeContract(
+              serializer.serializeContract(contract),
             ) as Contract<SqlStorage>;
             const schema = await familyInstance.introspect({
               driver,
@@ -525,8 +528,9 @@ describe('referential actions integration', () => {
               }),
             );
 
-            const validatedContract = new PostgresContractSerializer().deserializeContract(
-              contract,
+            const serializer = new PostgresContractSerializer();
+            const validatedContract = serializer.deserializeContract(
+              serializer.serializeContract(contract),
             ) as Contract<SqlStorage>;
             const schema = await familyInstance.introspect({
               driver,
@@ -596,8 +600,9 @@ describe('referential actions integration', () => {
           models: { User, Post },
         });
 
-        const validatedContract = new PostgresContractSerializer().deserializeContract(
-          contract,
+        const serializer = new PostgresContractSerializer();
+        const validatedContract = serializer.deserializeContract(
+          serializer.serializeContract(contract),
         ) as Contract<SqlStorage>;
         const controlStack = createControlStack({
           family: sql,

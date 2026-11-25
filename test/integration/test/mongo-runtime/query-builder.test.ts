@@ -81,6 +81,7 @@ const scalarField = <TCodecId extends string>(codecId: TCodecId) => ({
 });
 
 const contractJson = {
+  formatVersion: 1,
   target: 'mongo',
   targetFamily: 'mongo',
   roots: { orders: crossRef('Order'), users: crossRef('User') },

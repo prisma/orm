@@ -51,11 +51,14 @@ function postContract(naming: { readonly name: string } | { readonly map: string
 }
 
 /** The CREATE INDEX the migration planner's op factory renders for the contract's index. */
-async function createIndexStatements(contract: unknown): Promise<readonly string[]> {
+async function createIndexStatements(
+  contract: ReturnType<typeof postContract>,
+): Promise<readonly string[]> {
+  const serializer = new PostgresContractSerializer();
   const validated = blindCast<
     Parameters<typeof contractToPostgresDatabaseSchemaNode>[0],
     'the contract was built for the Postgres target; the serializer returns the framework supertype'
-  >(new PostgresContractSerializer().deserializeContract(contract));
+  >(serializer.deserializeContract(serializer.serializeContract(contract)));
   const root = contractToPostgresDatabaseSchemaNode(validated, {
     annotationNamespace: 'pg',
     ...postgresTypeLookups,
@@ -79,7 +82,7 @@ async function createIndexStatements(contract: unknown): Promise<readonly string
 
 async function createPostTableWithIndex(
   connectionString: string,
-  contract: unknown,
+  contract: ReturnType<typeof postContract>,
   options: { readonly withIndex: boolean } = { withIndex: true },
 ) {
   const statements = options.withIndex ? await createIndexStatements(contract) : [];

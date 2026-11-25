@@ -220,7 +220,9 @@ export async function emitMongo(contract: Contract): Promise<string> {
     mongoTargetDescriptor.contractSerializer.serializeContract(value as MongoTargetContract);
   const normalized = mongoFamilyDescriptor
     .create(mongoStack)
-    .deserializeContract(enrichContract(contract, [mongoTargetDescriptor, mongoAdapter]));
+    .deserializeContract(
+      serializeContract(enrichContract(contract, [mongoTargetDescriptor, mongoAdapter])),
+    );
   const emitted = await emit(normalized, mongoStack, mongoFamilyDescriptor.emission, {
     serializeContract,
     ...mongoContractCanonicalizationHooks,
