@@ -2993,8 +2993,6 @@
 ./family/control: interface SchemaTables, required method tablesNamed(namespaceId: string, table: string): readonly string[]
 ./family/control: interface SingleOperationCall
 ./family/control: interface SingleOperationCall, readonly required property operationClass: MigrationOperationClass
-./family/control: interface SqlCapabilityShortfall extends SchemaDiffIssue
-./family/control: interface SqlCapabilityShortfall, readonly required property explanation: MismatchExplanation
 ./family/control: interface SqlControlAdapterDescriptor, readonly optional property queryOperations?: () => SqlOperationDescriptors
 ./family/control: interface SqlControlAdapterDescriptor<TTargetId extends string> extends ControlAdapterDescriptor<'sql', TTargetId, SqlControlAdapter<TTargetId>>
 ./family/control: interface SqlControlExtensionDescriptor, readonly optional property contractSpace?: ContractSpace<Contract<SqlStorage>>
@@ -3016,6 +3014,7 @@
 ./family/control: interface SqlControlFamilyInstance, required method verifySchema(options: { readonly contract: unknown; readonly schema: SqlSchemaIRNode; readonly strict: boolean; readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>; }): VerifyDatabaseSchemaResult
 ./family/control: interface SqlControlFamilyInstance, required method writeLedgerEntry(options: { readonly driver: SqlControlDriverInstance<string>; readonly space: string; readonly entry: { readonly edgeId: string; readonly from: string; readonly to: string; readonly migrationName: string; readonly migrationHash: string; readonly operations: readonly unknown[]; readonly destinationContractJson?: unknown; }; }): Promise<void>
 ./family/control: interface SqlControlTargetDescriptor, readonly optional property buildPslContract?: (contract: TContract, context: SqlPslBuildContext) => PslDocumentAst
+./family/control: interface SqlControlTargetDescriptor, readonly optional property databaseCapabilitiesNotProvided?: SqlDatabaseCapabilitiesNotProvidedFn
 ./family/control: interface SqlControlTargetDescriptor, readonly optional property inferPslContract?: (schema: SqlSchemaIRNode, context: SqlPslBuildContext, describedContracts?: readonly SqlDescribedContractSpace[]) => Promise<PslDocumentAst>
 ./family/control: interface SqlControlTargetDescriptor, readonly optional property queryOperations?: () => SqlOperationDescriptors
 ./family/control: interface SqlControlTargetDescriptor, readonly required property accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]
@@ -3128,7 +3127,6 @@
 ./family/control: interface SqlSchemaDiffInput, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>
 ./family/control: interface SqlSchemaDiffInput, readonly required property schema: SqlSchemaIRNode
 ./family/control: interface SqlSchemaDiffResult
-./family/control: interface SqlSchemaDiffResult, readonly required property capabilityShortfall: SqlCapabilityShortfall | undefined
 ./family/control: interface SqlSchemaDiffResult, readonly required property issues: readonly SchemaDiffIssue[]
 ./family/control: interface SqlSchemaDiffResult, readonly required property namespacePairs: ReadonlyArray<{ readonly actual: SqlSchemaIRNode | undefined; }>
 ./family/control: interface SqlSchemaDiffResult, readonly required property resolveControlPolicy: (issue: SchemaDiffIssue) => ControlPolicy | undefined
@@ -3255,6 +3253,7 @@
 ./family/control: type ReportedBody = Uint8Array | number | string
 ./family/control: type ReportedLiteralDefault = { readonly kind: 'list'; readonly elements: readonly (ReportedBody | null)[]; } | { readonly kind: 'value'; readonly body: ReportedBody; }
 ./family/control: type SameName = (left: string, right: string) => boolean
+./family/control: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => string | undefined
 ./family/control: type SqlDefaultFunctionName = 'autoincrement' | 'now'
 ./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
 ./family/control: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
@@ -3291,6 +3290,7 @@
 ./family/diff: interface StorageTypeVerdictInput, readonly required property namespacePairs: ReadonlyArray<{ readonly actual: SqlSchemaIRNode | undefined; }>
 ./family/diff: interface VerifySqlSchemaByDiffInput
 ./family/diff: interface VerifySqlSchemaByDiffInput, readonly required property contract: Contract<SqlStorage>
+./family/diff: interface VerifySqlSchemaByDiffInput, readonly required property databaseCapabilitiesNotProvided: SqlDatabaseCapabilitiesNotProvidedFn | undefined
 ./family/diff: interface VerifySqlSchemaByDiffInput, readonly required property diffSchema: SqlSchemaDiffFn
 ./family/diff: interface VerifySqlSchemaByDiffInput, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>
 ./family/diff: interface VerifySqlSchemaByDiffInput, readonly required property granularityOf: (nodeKind: string) => DiffSubjectGranularity
@@ -3763,8 +3763,6 @@
 ./family: interface SchemaTables, required method tablesNamed(namespaceId: string, table: string): readonly string[]
 ./family: interface SingleOperationCall
 ./family: interface SingleOperationCall, readonly required property operationClass: MigrationOperationClass
-./family: interface SqlCapabilityShortfall extends SchemaDiffIssue
-./family: interface SqlCapabilityShortfall, readonly required property explanation: MismatchExplanation
 ./family: interface SqlControlAdapter, optional method holdMarkerLock?<T>(driver: SqlControlDriverInstance<TTarget>, work: () => Promise<T>): Promise<T>
 ./family: interface SqlControlAdapter, readonly required property markerLocation: string
 ./family: interface SqlControlAdapter, required method bootstrapControlTableQueries(): readonly DdlNode[]
@@ -3799,6 +3797,7 @@
 ./family: interface SqlControlFamilyInstance, required method verifySchema(options: { readonly contract: unknown; readonly schema: SqlSchemaIRNode; readonly strict: boolean; readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>; }): VerifyDatabaseSchemaResult
 ./family: interface SqlControlFamilyInstance, required method writeLedgerEntry(options: { readonly driver: SqlControlDriverInstance<string>; readonly space: string; readonly entry: { readonly edgeId: string; readonly from: string; readonly to: string; readonly migrationName: string; readonly migrationHash: string; readonly operations: readonly unknown[]; readonly destinationContractJson?: unknown; }; }): Promise<void>
 ./family: interface SqlControlTargetDescriptor, readonly optional property buildPslContract?: (contract: TContract, context: SqlPslBuildContext) => PslDocumentAst
+./family: interface SqlControlTargetDescriptor, readonly optional property databaseCapabilitiesNotProvided?: SqlDatabaseCapabilitiesNotProvidedFn
 ./family: interface SqlControlTargetDescriptor, readonly optional property inferPslContract?: (schema: SqlSchemaIRNode, context: SqlPslBuildContext, describedContracts?: readonly SqlDescribedContractSpace[]) => Promise<PslDocumentAst>
 ./family: interface SqlControlTargetDescriptor, readonly optional property queryOperations?: () => SqlOperationDescriptors
 ./family: interface SqlControlTargetDescriptor, readonly required property accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]
@@ -3920,7 +3919,6 @@
 ./family: interface SqlSchemaDiffInput, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>
 ./family: interface SqlSchemaDiffInput, readonly required property schema: SqlSchemaIRNode
 ./family: interface SqlSchemaDiffResult
-./family: interface SqlSchemaDiffResult, readonly required property capabilityShortfall: SqlCapabilityShortfall | undefined
 ./family: interface SqlSchemaDiffResult, readonly required property issues: readonly SchemaDiffIssue[]
 ./family: interface SqlSchemaDiffResult, readonly required property namespacePairs: ReadonlyArray<{ readonly actual: SqlSchemaIRNode | undefined; }>
 ./family: interface SqlSchemaDiffResult, readonly required property resolveControlPolicy: (issue: SchemaDiffIssue) => ControlPolicy | undefined
@@ -4043,6 +4041,7 @@
 ./family: interface VariantRowRewrite, readonly required property to: string | undefined
 ./family: interface VerifySqlSchemaByDiffInput
 ./family: interface VerifySqlSchemaByDiffInput, readonly required property contract: Contract<SqlStorage>
+./family: interface VerifySqlSchemaByDiffInput, readonly required property databaseCapabilitiesNotProvided: SqlDatabaseCapabilitiesNotProvidedFn | undefined
 ./family: interface VerifySqlSchemaByDiffInput, readonly required property diffSchema: SqlSchemaDiffFn
 ./family: interface VerifySqlSchemaByDiffInput, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>
 ./family: interface VerifySqlSchemaByDiffInput, readonly required property granularityOf: (nodeKind: string) => DiffSubjectGranularity
@@ -4075,6 +4074,7 @@
 ./family: type ReportedBody = Uint8Array | number | string
 ./family: type ReportedLiteralDefault = { readonly kind: 'list'; readonly elements: readonly (ReportedBody | null)[]; } | { readonly kind: 'value'; readonly body: ReportedBody; }
 ./family: type SameName = (left: string, right: string) => boolean
+./family: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => string | undefined
 ./family: type SqlDefaultFunctionName = 'autoincrement' | 'now'
 ./family: type SqlEntityHydrationFactory = (entry: unknown) => unknown
 ./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
