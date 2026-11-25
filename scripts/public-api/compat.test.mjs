@@ -82,13 +82,70 @@ describe('checkPackage, with the release treated as GA', () => {
     ]);
   });
 
-  it('passes a generic signature TypeScript cannot relate between two copies, without calling it a break', () => {
+  it('reports a generic signature TypeScript cannot relate between two copies as undecided, not as a break', () => {
     const result = check('generic', { release: 'generic' });
     deepStrictEqual(brokenExports(result), []);
-    deepStrictEqual(result.undecided, []);
     deepStrictEqual(result.problems, []);
-    deepStrictEqual(result.fallbacks, [
-      { path: '.', name: 'required', test: 'value', passedIn: 'erase' },
+    deepStrictEqual(
+      result.undecided.map(({ name, test, stage }) => ({ name, test, stage })),
+      [{ name: 'required', test: 'value', stage: 'structural' }],
+    );
+  });
+
+  it('does not pass a change in a generic signature TypeScript cannot relate between two copies', () => {
+    const result = check('generic-changed', { release: 'generic' });
+    deepStrictEqual(brokenExports(result), []);
+    deepStrictEqual(names(result.undecided), ['. required value']);
+    deepStrictEqual(result.fallbacks, []);
+  });
+
+  it('fails when a generic function returns a wider type, which only the comparison with the twin can tell', () => {
+    const result = check('pick-widened', { release: 'pick-release' });
+    deepStrictEqual(brokenExports(result), [
+      { path: '.', name: 'pick', test: 'value', failsRun: true },
+    ]);
+    deepStrictEqual(result.undecided, []);
+  });
+
+  it('compares a type member by member when TypeScript cannot relate it whole between two copies', () => {
+    const result = check('members-changed', { release: 'members-release' });
+    deepStrictEqual(brokenExports(result), [
+      { path: '.', name: 'Shape', test: 'type', failsRun: true },
+    ]);
+    match(result.breaks[0].message, /^pick: /);
+  });
+
+  it('reports a type with a member TypeScript cannot relate between two copies as undecided at the structural stage', () => {
+    const result = check('members-release', { release: 'members-release' });
+    deepStrictEqual(brokenExports(result), []);
+    deepStrictEqual(
+      result.undecided.map(({ name, test, stage }) => ({ name, test, stage })),
+      [{ name: 'Shape', test: 'type', stage: 'structural' }],
+    );
+    match(result.undecided[0].message, /^not decided for required: /);
+  });
+
+  it('fails when a protected method parameter is narrowed', () => {
+    deepStrictEqual(brokenExports(check('protected-narrowed', { release: 'protected-release' })), [
+      { path: '.', name: 'Store', test: 'type', failsRun: true },
+      { path: '.', name: 'Store', test: 'value', failsRun: true },
+    ]);
+  });
+
+  it('fails when an abstract method a subclass implements takes a wider parameter', () => {
+    deepStrictEqual(brokenExports(check('abstract-widened', { release: 'protected-release' })), [
+      { path: '.', name: 'Store', test: 'abstract', failsRun: true },
+    ]);
+  });
+
+  it('passes a unique symbol that moved to another declaration file', () => {
+    deepStrictEqual(brokenExports(check('symbol-moved', { release: 'symbol-moved-release' })), []);
+  });
+
+  it('fails when a parameter takes another class whose members are all private', () => {
+    deepStrictEqual(brokenExports(check('opaque-release', { release: 'opaque-release' })), []);
+    deepStrictEqual(brokenExports(check('opaque-swapped', { release: 'opaque-release' })), [
+      { path: '.', name: 'open', test: 'value', failsRun: true },
     ]);
   });
 
@@ -133,16 +190,19 @@ describe('checkPackage on types too deep to compare', () => {
     ]);
   });
 
-  it('reports the tests it has no time to compare again as undecided', () => {
+  it('reports a failure it has no time to confirm as a break, and says so', () => {
     const { breaks, undecided } = check('json-widened', { release: 'json-release', budgetMs: 0 });
-    deepStrictEqual(breaks, []);
-    deepStrictEqual(names(undecided).sort(), [
+    deepStrictEqual(undecided, []);
+    deepStrictEqual(names(breaks).sort(), [
       '. JsonObject type',
       '. JsonValue type',
       '. Row type',
       '. g value',
     ]);
-    match(undecided.at(-1).message, /the time for comparing it again ran out/);
+    match(
+      breaks.at(-1).message,
+      /not confirmed against the copy of the last release: the time ran out/,
+    );
   });
 
   it('reports a comparison too deep to finish as undecided, and compares the rest again', () => {
@@ -155,6 +215,21 @@ describe('checkPackage on types too deep to compare', () => {
     const { undecided } = check('deep', { release: 'deep', budgetMs: 0 });
     deepStrictEqual(names(undecided), ['. Big type', '. Holder type']);
     match(undecided.at(-1).message, /the time for comparing it again ran out/);
+  });
+
+  it('reports a comparison that overflows the stack as undecided, and decides the rest', () => {
+    const { breaks, undecided } = check('overflow', { release: 'overflow' });
+    deepStrictEqual(breaks, []);
+    deepStrictEqual(
+      undecided.map(({ name, test, message }) => ({ name, test, message })),
+      [
+        {
+          name: 'Tall',
+          test: 'type',
+          message: 'not decided: TypeScript ran out of stack comparing it',
+        },
+      ],
+    );
   });
 
   it('reports a break that sits beside a comparison too deep to finish', () => {

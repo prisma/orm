@@ -12,6 +12,7 @@ describe('checkPackage with recorded breaks', () => {
   const record = {
     path: '.',
     export: 'format',
+    test: 'value',
     release: '1.0.0',
     reason: 'format accepts only strings now',
   };
@@ -21,14 +22,14 @@ describe('checkPackage with recorded breaks', () => {
     deepStrictEqual(brokenExports(result), []);
     deepStrictEqual(result.problems, []);
     deepStrictEqual(result.recorded, [
-      { path: '.', name: 'format', reason: 'format accepts only strings now' },
+      { path: '.', name: 'format', test: 'value', reason: 'format accepts only strings now' },
     ]);
   });
 
   it('fails once the recorded break is undone', () => {
     const { problems } = check('unchanged', { records: [record] });
     deepStrictEqual(problems, [
-      '. format: the recorded break is no longer a break. Remove the record.',
+      '. format (value): the recorded break is no longer a break. Remove the record.',
     ]);
   });
 
@@ -36,7 +37,9 @@ describe('checkPackage with recorded breaks', () => {
     const result = check('narrowed-parameter', { records: [{ ...record, release: '1.0.0-rc.3' }] });
     deepStrictEqual(result.problems, []);
     deepStrictEqual(names(result.breaks), ['. format value']);
-    deepStrictEqual(result.removable, [{ path: '.', export: 'format', release: '1.0.0-rc.3' }]);
+    deepStrictEqual(result.removable, [
+      { path: '.', export: 'format', test: 'value', release: '1.0.0-rc.3' },
+    ]);
   });
 
   it('fails on a record for a later release than the last', () => {
@@ -56,10 +59,45 @@ describe('checkPackage with recorded breaks', () => {
   });
 });
 
+describe('checkPackage with a recorded break of one test', () => {
+  it('still reports the breaks of the export’s other tests', () => {
+    const result = check('record-changed', {
+      release: 'record-release',
+      records: [
+        {
+          path: '.',
+          export: 'Client',
+          test: 'constructor',
+          release: '1.0.0',
+          reason: 'the constructor takes strings only',
+        },
+      ],
+    });
+    deepStrictEqual(brokenExports(result), [
+      { path: '.', name: 'Client', test: 'type', failsRun: true },
+      { path: '.', name: 'Client', test: 'value', failsRun: true },
+    ]);
+    deepStrictEqual(result.problems, []);
+  });
+
+  it('fails on a record for a test the export does not have', () => {
+    const { problems } = check('narrowed-parameter', {
+      records: [
+        { path: '.', export: 'format', test: 'type', release: '1.0.0', reason: 'narrowed' },
+      ],
+    });
+    deepStrictEqual(problems, [
+      '. format: a break is recorded for its type test, which this export does not have. Remove the record or correct its test.',
+      '. format (type): the recorded break is no longer a break. Remove the record.',
+    ]);
+  });
+});
+
 describe('checkPackage on import paths', () => {
   const pathRecord = {
     path: './sub',
     export: '*',
+    test: 'path',
     release: '1.0.0',
     reason: 'the sub path is gone',
   };
@@ -75,7 +113,7 @@ describe('checkPackage on import paths', () => {
     deepStrictEqual(brokenExports(result), []);
     deepStrictEqual(result.problems, []);
     deepStrictEqual(result.recorded, [
-      { path: './sub', name: '*', reason: 'the sub path is gone' },
+      { path: './sub', name: '*', test: 'path', reason: 'the sub path is gone' },
     ]);
   });
 
@@ -85,7 +123,7 @@ describe('checkPackage on import paths', () => {
       records: [pathRecord],
     });
     deepStrictEqual(problems, [
-      './sub *: the recorded break is no longer a break. Remove the record.',
+      './sub * (path): the recorded break is no longer a break. Remove the record.',
     ]);
   });
 

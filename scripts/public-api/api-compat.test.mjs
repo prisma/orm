@@ -25,7 +25,13 @@ function packageWithRecords(text) {
   return dir;
 }
 
-const record = { path: '.', export: 'Db', release: '8.0.0', reason: 'Db takes a scope now' };
+const record = {
+  path: '.',
+  export: 'Db',
+  test: 'type',
+  release: '8.0.0',
+  reason: 'Db takes a scope now',
+};
 
 describe('readRecords', () => {
   it('is empty without a records file', () => {
@@ -36,9 +42,15 @@ describe('readRecords', () => {
     deepStrictEqual(readRecords(packageWithRecords(JSON.stringify([record])), work), [record]);
   });
 
-  it('rejects a record without a reason, or with a reason on two lines', () => {
+  it('rejects a record without a reason or a test, with a reason on two lines, or with an unknown test', () => {
     const { reason: _, ...withoutReason } = record;
-    for (const records of [[withoutReason], [{ ...record, reason: 'one\ntwo' }]]) {
+    const { test: __, ...withoutTest } = record;
+    for (const records of [
+      [withoutReason],
+      [withoutTest],
+      [{ ...record, reason: 'one\ntwo' }],
+      [{ ...record, test: 'member' }],
+    ]) {
       throws(() => readRecords(packageWithRecords(JSON.stringify(records)), work), RecordsError);
     }
   });
@@ -90,8 +102,11 @@ describe('the report', () => {
     results: [
       result({
         breaks: [strictBreak],
-        undecided: [{ ...strictBreak, name: 'JsonObject', message: 'excessively deep' }],
-        recorded: [{ path: './x', name: 'Old', reason: 'gone on purpose' }],
+        undecided: [
+          { ...strictBreak, name: 'JsonObject', stage: 'native', message: 'excessively deep' },
+        ],
+        fallbacks: [{ path: '.', name: 'Shape', test: 'type', decidedBy: 'members' }],
+        recorded: [{ path: './x', name: 'Old', test: 'path', reason: 'gone on purpose' }],
         notCompared: [
           {
             path: '.',
@@ -100,7 +115,7 @@ describe('the report', () => {
             reason: 'the last release has it as never or any',
           },
         ],
-        removable: [{ path: '.', export: 'Gone', release: '7.9.0' }],
+        removable: [{ path: '.', export: 'Gone', test: 'value', release: '7.9.0' }],
       }),
     ],
     notReleased: ['@prisma/orm-new'],
@@ -114,10 +129,11 @@ describe('the report', () => {
         '',
         '@prisma/orm-a: 10 exports on 2 paths; 8 comparisons, and 3 forwarded names checked only for existence (they are compared in the package that declares them); breaks 1, undecided 1, not compared 1, recorded 1; 1.5 s, 900 MB — FAILS',
         "  break  . Db (type): Property 'scope' is missing",
-        '  undecided  . JsonObject (type): excessively deep',
+        '  undecided (native)  . JsonObject (type): excessively deep',
+        '  decided member by member  . Shape (type)',
         '  not compared  . Only (type): the last release has it as never or any',
-        '  recorded  ./x Old: gone on purpose',
-        '  removable record  . Gone: for release 7.9.0, earlier than the last',
+        '  recorded  ./x Old (path): gone on purpose',
+        '  removable record  . Gone (value): for release 7.9.0, earlier than the last',
         '',
         'Not checked, no release 8.0.0: @prisma/orm-new',
         '',
@@ -132,9 +148,14 @@ describe('the report', () => {
       markdown,
       /- not compared: `\.` `Only` \(type\): the last release has it as never or any/,
     );
-    match(markdown, /- removable record: `\.` `Gone`: for release 7\.9\.0, earlier than the last/);
+    match(
+      markdown,
+      /- removable record: `\.` `Gone` \(value\): for release 7\.9\.0, earlier than the last/,
+    );
+    match(markdown, /- undecided \(native\): `\.` `JsonObject` \(type\): excessively deep/);
+    match(markdown, /- decided member by member: `\.` `Shape` \(type\)/);
     match(markdown, /- break: `\.` `Db` \(type\): Property 'scope' is missing/);
-    match(markdown, /- recorded: `\.\/x` `Old`: gone on purpose/);
+    match(markdown, /- recorded: `\.\/x` `Old` \(path\): gone on purpose/);
   });
 });
 
