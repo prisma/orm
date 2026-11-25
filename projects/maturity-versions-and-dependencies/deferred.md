@@ -51,3 +51,7 @@ Proposed as a project of its own. See [plan.md](plan.md), "Proposed split".
 ## A project that already lists its facade with a caret
 
 When a project already lists a GA facade, `init` leaves that line and writes each platform package at the tilde range the facade declares. If the user's line is a caret, the lines are then not written the same way, and an update moves the facade and not the others; the package manager reports the mismatch. `init` does not rewrite a line the user wrote. The docs say to write all the lines the same way.
+
+## The development-build counter reads one package's `dev` tag
+
+`scripts/determine-version.ts` takes the next `-dev.N` counter from `@prisma/orm-toolchain`'s `dev` dist-tag alone. If a development publish fails part-way, some packages can hold `X-dev.10` while the toolchain's tag still says `X-dev.9`. The next push then computes `dev.10` again, and the publish script treats a version already on the registry as a successful no-op, so those packages do not get the new commit's code until the counter passes them. The run that failed part-way exits with an error, and only the `dev` channel is affected. This was so before levels, when every package shared one version. The fix is to take the counter above the highest development build any package has on the current counter line, which reads every package's versions from the registry; it belongs with the publish workflow's later steps, the next slice.

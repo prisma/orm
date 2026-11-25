@@ -18,13 +18,13 @@ export const auth = betterAuth({
 
 ## Install
 
-Install the adapter at the release your Prisma 8 database package is on, together with Better Auth 1.7.22 or a later 1.7 release:
+Install the adapter of the release your Prisma 8 packages are on, together with Better Auth 1.7.22 or a later 1.7 release. Until release 8.0 that is the same `8.0.0-rc.N` as your database package. From release 8.0 the adapter is Generally Available, so its version is the plain release number even when your database package is below GA: at release 8.3, `^8.3.0` beside `@prisma/orm-sqlite@~8.3.0-ea.0`, and at release 8.0, `^8.0.1`.
 
 ```sh
-pnpm add @prisma/orm-better-auth@<version of @prisma/orm-postgres or @prisma/orm-sqlite> better-auth@~1.7.22
+pnpm add @prisma/orm-better-auth@<release, such as ^8.3.0> better-auth@~1.7.22
 ```
 
-The adapter uses the Prisma packages your database package already installs. If the versions differ, your package manager warns you, or refuses to install when it checks peer dependencies strictly. Keep them the same, or the adapter loads a second copy of Prisma's code.
+The adapter uses the Prisma packages your database package already installs: `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`. If the adapter needs a later release of them than you have, your package manager warns you, or refuses to install when it checks peer dependencies strictly. Do not install it from a later release than those packages, or the adapter loads a second copy of Prisma's code.
 
 Better Auth must load one copy of `@better-auth/core`, the one `better-auth` itself uses. Better Auth keeps the contract check described below in that package, so a second copy never sees it.
 
