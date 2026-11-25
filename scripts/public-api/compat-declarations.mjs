@@ -32,15 +32,21 @@ const isUniqueSymbol = (type) =>
   ts.isTypeOperatorNode(type) &&
   type.operator === ts.SyntaxKind.UniqueKeyword;
 
+// Members in order, with the overloads of each method gathered where its first one stands, even
+// when other members separate them.
 function methodGroups(members, isMethod) {
   const key = (member) =>
     `${nameText(member.name)}\0${hasModifier(member, ts.SyntaxKind.StaticKeyword)}`;
   const groups = [];
+  const byKey = new Map();
   for (const member of members) {
-    const last = groups.at(-1);
-    if (isMethod(member) && last?.overloads && key(last.overloads[0]) === key(member)) {
-      last.overloads.push(member);
-    } else groups.push(isMethod(member) ? { overloads: [member] } : { member });
+    if (!isMethod(member)) groups.push({ member });
+    else if (byKey.has(key(member))) byKey.get(key(member)).overloads.push(member);
+    else {
+      const group = { overloads: [member] };
+      byKey.set(key(member), group);
+      groups.push(group);
+    }
   }
   return groups;
 }
@@ -227,7 +233,8 @@ function declarationFiles(dir) {
 }
 
 // The unique symbols a package declares, as the files that declare each name: `Class.name` for a
-// class's static ones.
+// class's static ones; and, under `class Name`, the files that declare a class with private
+// members, whose marker is named after the class.
 function uniqueSymbolsOf(packageRoot) {
   const found = new Map();
   for (const file of declarationFiles(packageRoot)) {
@@ -237,8 +244,11 @@ function uniqueSymbolsOf(packageRoot) {
       ts.ScriptTarget.Latest,
       true,
     );
-    const add = (name) => found.set(name, [...(found.get(name) ?? []), file]);
+    const add = (name) => found.set(name, [...new Set([...(found.get(name) ?? []), file])]);
     const visit = (node) => {
+      if (ts.isClassDeclaration(node) && node.name && node.members.some(isPrivate)) {
+        add(`class ${node.name.text}`);
+      }
       if (ts.isVariableDeclaration(node) && isUniqueSymbol(node.type)) add(node.name.getText());
       else if (ts.isPropertyDeclaration(node) && isUniqueSymbol(node.type)) {
         const owner = ts.isClassDeclaration(node.parent) ? node.parent.name?.text : undefined;
@@ -269,8 +279,18 @@ export function createCompareHost(options, { packageOf, isOwn }) {
   // Two unique symbols with one name in one package cannot be told apart by anything an edit to
   // the package does not change, so both get the one name; they are listed in `mergedSymbols`.
   host.mergedSymbols = new Set();
+  // The same holds for two classes with private members and one name: they get one marker, and
+  // are listed in `mergedClasses`.
+  host.mergedClasses = new Set();
   const symbolNameIn = ({ name, root }) => {
-    if (!symbolsByRoot.has(root)) symbolsByRoot.set(root, uniqueSymbolsOf(root));
+    if (!symbolsByRoot.has(root)) {
+      symbolsByRoot.set(root, uniqueSymbolsOf(root));
+      for (const [key, files] of symbolsByRoot.get(root)) {
+        if (key.startsWith('class ') && files.length > 1) {
+          host.mergedClasses.add(`${name}:${key.slice('class '.length)}`);
+        }
+      }
+    }
     return (symbol) => {
       if ((symbolsByRoot.get(root).get(symbol) ?? []).length > 1) {
         host.mergedSymbols.add(`${name}:${symbol}`);

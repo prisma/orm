@@ -40,8 +40,49 @@ describe('checkPackage, with the release treated as GA', () => {
     ]);
   });
 
-  it('passes when an optional parameter is added', () => {
-    deepStrictEqual(brokenExports(check('optional-parameter-added')), []);
+  it('passes when an optional parameter is added, having compared it', () => {
+    const result = check('optional-parameter-added');
+    deepStrictEqual(
+      [brokenExports(result), result.problems, result.undecided, result.notCompared],
+      [[], [], [], []],
+    );
+  });
+
+  it('keeps overloads together that another member separates', () => {
+    deepStrictEqual(
+      brokenExports(check('overloads-release', { release: 'overloads-release' })),
+      [],
+    );
+    deepStrictEqual(brokenExports(check('overloads-narrowed', { release: 'overloads-release' })), [
+      { path: '.', name: 'Reader', test: 'type', failsRun: true },
+    ]);
+  });
+
+  it('lists two private classes with one name, which nothing stable tells apart, as not compared', () => {
+    const result = check('tokens-swapped', { release: 'tokens-release' });
+    deepStrictEqual(
+      names(result.notCompared).filter((each) => each.includes('Token')),
+      ['* private class fixture-compat:Token private class'],
+    );
+  });
+
+  it('fails when an abstract class gains an abstract member a subclass must implement', () => {
+    deepStrictEqual(
+      brokenExports(check('abstract-added', { release: 'protected-release' })).filter(
+        (each) => each.test === 'abstract',
+      ),
+      [{ path: '.', name: 'Store', test: 'abstract', failsRun: true }],
+    );
+    deepStrictEqual(
+      brokenExports(check('protected-release', { release: 'protected-release' })),
+      [],
+    );
+  });
+
+  it('fails when the release imports a file of its own that is missing', () => {
+    const { problems } = check('relative-release', { release: 'relative-missing' });
+    strictEqual(problems.length, 1);
+    match(problems[0], /\.\/shape\.mjs/);
   });
 
   it('fails when an interface an exported function accepts gets a new required member', () => {
@@ -184,6 +225,24 @@ describe('checkPackage on names a path forwards from another package', () => {
     strictEqual(result.counts.forwarded, 2);
   });
 
+  it('uses a name forwarded with export type * only as a type', () => {
+    const result = check('star-type-only', {
+      release: 'star-type-only',
+      dependencies: forwardDependency,
+    });
+    deepStrictEqual([brokenExports(result), result.problems], [[], []]);
+  });
+
+  it('fails when a forwarded class becomes a forwarded function', () => {
+    const result = check('forward-class-function', {
+      release: 'forward-class-release',
+      dependencies: [...forwardDependency, { folder: 'fwd-other', name: 'fixture-fwd-other' }],
+    });
+    deepStrictEqual(brokenExports(result), [
+      { path: '.', name: 'Klass', test: 'exists', failsRun: true },
+    ]);
+  });
+
   it('fails when a forwarded value is made type-only', () => {
     const result = check('forward-type-only', {
       release: 'forward-release',
@@ -254,6 +313,12 @@ describe('checkPackage on types too deep to compare', () => {
     const { undecided } = check('deep', { release: 'deep', budgetMs: 0 });
     deepStrictEqual(names(undecided), ['. Big type', '. Holder type']);
     match(undecided.at(-1).message, /the time for comparing it again ran out/);
+  });
+
+  it('checks the imports even when the first comparison overflows the stack', () => {
+    const { problems } = check('overflow-unresolved', { release: 'overflow-unresolved' });
+    deepStrictEqual(problems.length, 1);
+    match(problems[0], /not-installed-anywhere/);
   });
 
   it('reports a comparison that overflows the stack as undecided, and decides the rest', () => {

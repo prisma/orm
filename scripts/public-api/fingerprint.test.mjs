@@ -218,8 +218,9 @@ describe('apiFingerprint, on string and template literals', () => {
         changes(
           '.: const use: { readonly doc: "a `storage` b"; readonly t: Opts; readonly d2: "c `x` d" }',
         ),
+        changes('.: type use = `@scope/pkg.${Opts}`'),
       ],
-      [true, true, true, true, true],
+      [true, true, true, true, true, true],
     );
   });
 

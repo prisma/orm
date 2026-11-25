@@ -67,25 +67,34 @@ const isRestricted = (modifier) =>
   modifier.kind === ts.SyntaxKind.PrivateKeyword ||
   modifier.kind === ts.SyntaxKind.ProtectedKeyword;
 
-// The abstract members of a class, which a subclass implements, under their rewritten keys.
-const abstractKeys = (symbol) =>
-  (symbol.declarations ?? [])
-    .flatMap((declaration) => declaration.members ?? [])
-    .filter(
-      (member) =>
-        member.name !== undefined &&
-        !ts.isPrivateIdentifier(member.name) &&
-        !ts.isComputedPropertyName(member.name) &&
-        member.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AbstractKeyword) &&
-        !member.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.PrivateKeyword),
-    )
-    .map((member) => {
-      const name = member.name.text;
-      return member.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.ProtectedKeyword)
-        ? `protected ${name}`
-        : name;
-    })
-    .filter((key, index, all) => all.indexOf(key) === index);
+// The abstract members of a class, its inherited ones included, which a subclass implements:
+// each under its rewritten key, and whether it is a method of another package, which keeps its
+// method form there.
+function abstractMembers(checker, symbol, ownNames) {
+  const instance = checker.getDeclaredTypeOfSymbol(symbol);
+  const members = [];
+  for (const property of checker.getPropertiesOfType(instance)) {
+    const declaration = property.valueDeclaration ?? property.declarations?.[0];
+    if (declaration === undefined) continue;
+    const flags = ts.getCombinedModifierFlags(declaration);
+    if (!(flags & ts.ModifierFlags.Abstract) || flags & ts.ModifierFlags.Private) continue;
+    if (property.escapedName.startsWith('__@')) continue;
+    const isProtected = (flags & ts.ModifierFlags.Protected) !== 0;
+    const own = ownNames.has(packageOf(declaration.getSourceFile().fileName)?.name);
+    members.push({
+      key: isProtected ? `protected ${property.name}` : property.name,
+      method: !own && ts.isMethodDeclaration(declaration),
+    });
+  }
+  return members;
+}
+
+const isAbstractClass = (symbol) =>
+  (symbol.declarations ?? []).some(
+    (declaration) =>
+      ts.isClassDeclaration(declaration) &&
+      declaration.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AbstractKeyword),
+  );
 
 // A class users can construct: one whose constructor is neither private nor protected.
 const isConstructible = (symbol) =>
@@ -317,9 +326,9 @@ export function generateTests({
       if (isForwarded(info, name)) {
         counts.forwarded++;
         const kinds = info.forwardKinds.get(name);
-        if (kinds?.value) {
-          segments.push({ ...valueUse(name), test: 'exists' });
-        } else if (kinds?.type) {
+        // A class is both a type and a value: each must still be forwarded.
+        if (kinds?.value) segments.push({ ...valueUse(name), test: 'exists' });
+        if (kinds?.type) {
           segments.push({
             id: id++,
             test: 'exists',
@@ -383,7 +392,36 @@ export function generateTests({
             },
           });
         }
-        const abstract = symbol && symbol.flags & ts.SymbolFlags.Class ? abstractKeys(symbol) : [];
+        const members =
+          symbol && symbol.flags & ts.SymbolFlags.Class
+            ? abstractMembers(checker, symbol, ownNames)
+            : [];
+        const abstract = members.map(({ key }) => key);
+        // A subclass written against the release, implementing what the release's class leaves
+        // abstract, must still compile: it fails when the current class adds an abstract member.
+        if (
+          symbol &&
+          symbol.flags & ts.SymbolFlags.Class &&
+          isAbstractClass(symbol) &&
+          isConstructible(symbol)
+        ) {
+          const body = members
+            .map(({ key, method }) =>
+              method
+                ? `${JSON.stringify(key)}(...args: any[]): any { return args; }`
+                : `declare ${JSON.stringify(key)}: any;`,
+            )
+            .join(' ');
+          const probe = id++;
+          segments.push({
+            id: probe,
+            test: 'abstract',
+            use: true,
+            texts: {
+              native: `class Subclass${probe} extends ${values}.${name}${typeArguments(symbol)} { ${body} }`,
+            },
+          });
+        }
         if (abstract.length > 0) {
           const args = typeArguments(symbol);
           const member = (side, key) => `${side}.${name}${args}[${JSON.stringify(key)}]`;
@@ -499,8 +537,6 @@ function installedFrom(dir, name) {
   }
 }
 
-const isBare = (specifier) => !specifier.startsWith('.') && !specifier.startsWith('/');
-
 // Problems with the program itself: two copies of one of our packages read as one, so that nothing
 // is compared, and imports in our packages that do not resolve, whose types compare as `any` and
 // always pass. Third-party declarations are the same on both sides, so their optional imports
@@ -527,9 +563,7 @@ function programProblems(program, testFile, ownNames, names) {
   const unresolved = new Set();
   const testPath = program.getSourceFile(testFile)?.path;
   program.forEachResolvedModule((resolution, name, _mode, filePath) => {
-    if (resolution.resolvedModule || ambient.has(name) || !isBare(name) || filePath === testPath) {
-      return;
-    }
+    if (resolution.resolvedModule || ambient.has(name) || filePath === testPath) return;
     const importer = program.getSourceFileByPath(filePath)?.fileName ?? filePath;
     if (!ownNames.has(packageNameOf(importer))) return;
     unresolved.add(`${name} (imported by ${withoutRoot(importer)})`);
@@ -630,6 +664,7 @@ function compileTests({
   let passes = 0;
   let oldProgram;
   let size = queue.length;
+  let importsChecked = false;
   const undecided = (entry, message) => {
     for (const segment of entry.segments) {
       outcomes.set(segment.id, { codes: new Set([EXCESSIVELY_DEEP]), message });
@@ -669,11 +704,14 @@ function compileTests({
       continue;
     }
     oldProgram = pass.program;
-    if (passes === 0) {
+    // The first program that compiles is the one the imports are checked in, even when the
+    // comparisons before it overflowed.
+    if (!importsChecked) {
       for (const problem of programProblems(pass.program, testFile, ownNames, names)) {
         problems.add(problem);
       }
       importFailures = pass.importFailures;
+      importsChecked = true;
     }
     passes++;
     for (const problem of pass.other) problems.add(problem);
@@ -691,7 +729,8 @@ function compileTests({
       });
       if (deep) cut = Math.min(cut, line);
     }
-    const suspects = [];
+    // An entry can take several lines; it is a suspect once, when any of them is after the cut.
+    const lastLine = new Map();
     for (const [line, testCase] of pass.cases) {
       if (testCase.kind !== 'export') continue;
       const { entry } = testCase;
@@ -699,6 +738,10 @@ function compileTests({
         if (pass.bySegment.has(segment.id))
           outcomes.set(segment.id, pass.bySegment.get(segment.id));
       }
+      lastLine.set(entry, Math.max(lastLine.get(entry) ?? 0, line));
+    }
+    const suspects = [];
+    for (const [entry, line] of lastLine) {
       if (line < cut) continue;
       const passed = entry.segments.filter((segment) => !pass.bySegment.has(segment.id));
       if (passed.length > 0) suspects.push({ ...entry, segments: passed });
@@ -709,7 +752,17 @@ function compileTests({
     if (cut !== Number.POSITIVE_INFINITY) size = Math.min(size, SUSPECT_BATCH);
     else size *= 2;
   }
-  for (const entry of queue) undecided(entry, OUT_OF_TIME);
+  for (const entry of queue) {
+    undecided(
+      { ...entry, segments: entry.segments.filter((segment) => !outcomes.has(segment.id)) },
+      OUT_OF_TIME,
+    );
+  }
+  if (!importsChecked) {
+    problems.add(
+      'no program compiled, so the imports of the generated tests could not be checked.',
+    );
+  }
   return { outcomes, problems, importFailures, passes };
 }
 
@@ -927,6 +980,7 @@ export function checkPackage({
   if (split.length > 0) {
     if (outOfTime()) {
       for (const each of split) notDecided(each.entry, each.segment, 'member', STRUCTURAL_LATE);
+      split.length = 0;
     } else {
       const perMember = split.flatMap((each) =>
         each.members.map((member) => ({ entry: each.entry, segment: member, parent: each })),
@@ -1042,6 +1096,15 @@ export function checkPackage({
           }
         : {}),
     }));
+  for (const className of host.mergedClasses) {
+    notCompared.push({
+      path: '*',
+      name: `private class ${className}`,
+      test: 'private class',
+      reason:
+        'the package declares two classes with private members and this name, which nothing stable tells apart, so both have one marker and one can stand in for the other',
+    });
+  }
   for (const symbol of host.mergedSymbols) {
     notCompared.push({
       path: '*',

@@ -21,7 +21,7 @@ const DECLARED =
 const FORWARD = /^(?:export (?:type )?(\S+)(?: = \S+)?|everything) from \S+$/;
 const AUGMENTED_MODULE = /^augments \S+ /;
 // A type of another package, which api.txt writes as `@scope/name/path.Type`.
-const OTHER_PACKAGE = /@[\w.-]+\/[\w./-]+\.[A-Za-z_$][\w$]*/g;
+const OTHER_PACKAGE = /@[\w.-]+\/[\w./-]+\.(?!\$\{)[A-Za-z_$][\w$]*/g;
 const MEMBER =
   /^((?:abstract )?class [\w$]+|interface [\w$]+|enum [\w$]+|namespace [\w$]+), (?:(?:abstract|static|protected|private|public|readonly) )*(?:(?:required|optional) (?:property|method) (?:[\w$]+|'[^']*'|"[^"]*")|(?:index|call|construct) signature|constructor)/;
 

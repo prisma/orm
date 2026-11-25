@@ -51,15 +51,16 @@ export const VALUE_FLAGS =
   ts.SymbolFlags.ValueModule;
 
 // Whether a forwarded name is a type, and whether users can use it as a value: a value that is not
-// exported type-only on the way. A value exported type-only can still be named in `typeof`.
-function kindsOf(checker, exported) {
+// exported type-only on the way, by its own export or by an `export type *` that forwards it. A
+// value exported type-only can still be named in `typeof`.
+function kindsOf(checker, exported, forwardedTypeOnly = false) {
   const target =
     exported.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exported) : exported;
   const isValue = (target.flags & VALUE_FLAGS) !== 0;
   return {
     type: (target.flags & TYPE_FLAGS) !== 0,
-    value: isValue && !isTypeOnlyExport(checker, exported),
-    typeOnlyValue: isValue && isTypeOnlyExport(checker, exported),
+    value: isValue && !forwardedTypeOnly && !isTypeOnlyExport(checker, exported),
+    typeOnlyValue: isValue && (forwardedTypeOnly || isTypeOnlyExport(checker, exported)),
     target,
   };
 }
@@ -321,7 +322,7 @@ function readPath(checker, program, file, packageDir) {
     }
     info.starForwards.push(specifier);
     for (const exported of checker.getExportsOfModule(module))
-      starNames.set(exported.name, exported);
+      starNames.set(exported.name, { exported, typeOnly: statement.isTypeOnly });
   }
 
   const module = checker.getSymbolAtLocation(file);
@@ -332,8 +333,9 @@ function readPath(checker, program, file, packageDir) {
     if (here === undefined) {
       if (starNames.has(name)) {
         info.starCovered.add(name);
-        info.forwardedFrom.set(name, declaringPackage(checker, starNames.get(name)));
-        info.forwardKinds.set(name, kindsOf(checker, starNames.get(name)));
+        const star = starNames.get(name);
+        info.forwardedFrom.set(name, declaringPackage(checker, star.exported));
+        info.forwardKinds.set(name, kindsOf(checker, star.exported, star.typeOnly));
       } else info.problems.push(`cannot tell where the export ${name} comes from`);
       continue;
     }
