@@ -133,6 +133,7 @@ The design left these to the project. Each is recorded in the pull request of th
 | How an application on a facade below GA writes its lines | A tilde on every line | The trial: the only form that stayed consistent under every package manager |
 | Who writes the ranges in a new application | `prisma orm init`, explicitly | The trial: pnpm writes an exact version for a pre-release, and Yarn installs no peers |
 | Ranges before `8.0.0` | Exact, as today | A release candidate may break, so a range between release candidates would promise something false |
+| The first version of a package below GA at release `8.0` | `8.0.1-<level>.0`, decided by the operator on 2026-11-25; every later release starts at patch 0 | The third trial: `8.0.0-ea.0` sorts below the old `8.0.0-rc.N`, and a range on it installed an old release candidate under Bun always, Yarn unless deprecated, and npm and pnpm once `latest` moved on |
 | Which package carries a database's level | Both the facade and the target package, at the same level | A GA package depends only on GA packages, so a facade cannot be above its target |
 | The framework's level | GA, with the PostgreSQL facade | It is what the PostgreSQL facade depends on |
 | Which release a failing test blocks | While our packages are released together, a failing test of a GA, Release Candidate or Preview package blocks the release of all of them. Early Access is the one level at which we may release with a failing test; CI does not have to allow it | A level is the least we do. Today every test blocks, which meets every level |

@@ -94,6 +94,21 @@ The suffix is what Semantic Versioning calls a pre-release, and package managers
 
 That is why a fix below GA raises the counter: `8.3.1-preview.0` would sort above `8.3.0-preview.1`, but a user's `~8.3.0-preview.0` would not select it.
 
+### Release `8.0`
+
+Before levels existed, every package was published as `8.0.0-rc.N`. A version below GA with patch number 0 would sort below those: `8.0.0-ea.0` comes before `8.0.0-rc.26`, because `ea` sorts before `rc`. A user's `~8.0.0-ea.0` would then select the old release candidate. In a trial, Bun always installed it, Yarn did unless the release candidates were marked deprecated, and npm and pnpm did once `latest` pointed at a later minor.
+
+So release `8.0` starts its packages above the release candidates:
+
+| Level | First version at release `8.0` | At a later release |
+| --- | --- | --- |
+| GA | `8.0.0` | `8.3.0` |
+| Release Candidate | the next `8.0.0-rc.N` | `8.3.0-rc.0` |
+| Preview | `8.0.1-preview.0` | `8.3.0-preview.0` |
+| Early Access | `8.0.1-ea.0` | `8.3.0-ea.0` |
+
+A fix to a package below GA at release `8.0` raises the counter, as at any release: `8.0.1-ea.0` to `8.0.1-ea.1`.
+
 ## Ranges between our packages
 
 The ranges in our own packages' manifests are computed by the release scripts from the release number and the levels, and the build refuses a manifest that disagrees. They are never written by hand.
@@ -154,4 +169,5 @@ The public issue [Priorities & Operating Contexts](https://github.com/prisma/orm
 - **A level on an entrypoint, written in the import path,** such as `@prisma/orm-toolchain/preview/config-loader`. An entrypoint's exports already get their level from the package's version and their own names. A third place to write a level is a third thing to learn, and every import would change when the entrypoint reached GA.
 - **A support table in the docs as the place a user learns what is kept compatible.** It is one more thing to keep up to date, and the user does not see it in their project. The version and the name are in front of them.
 - **Feature flags for functionality that is not ready.** A flag is set somewhere in a config; a package below GA and an API whose name carries its level are visible in the user's own code.
+- **Release `8.0` numbered like every other release, `8.0.0-ea.0`, with the old release candidates marked deprecated.** Deprecation stops Yarn choosing an old release candidate, but not pnpm or Bun, and only npm and pnpm print the message.
 - **Each package numbered on its own, with no shared release number.** A user could not tell from two versions whether two packages belong together. AWS CDK numbers its experimental packages by the first release of the main library they work with, and the SQL Server adapter for Rails takes Rails's major and minor, for the same reason.
