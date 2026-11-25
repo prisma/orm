@@ -360,7 +360,7 @@ function createTargetExistsRefusal(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: collection ${name} already exists without the options this migration creates it with`,
     {
-      why: `${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} Otherwise give it the options the createCollection call of this migration's migration.ts sets, its validator among them, and run the command again: the creation is then skipped.`,
+      why: `${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} Otherwise give it the options the createCollection call of this migration's migration.ts sets, ${create.validator === undefined ? 'and no validator, since that call sets none' : 'its validator among them'}, and run the command again: the creation is then skipped.`,
       meta: { operationId: op.id },
     },
   );
