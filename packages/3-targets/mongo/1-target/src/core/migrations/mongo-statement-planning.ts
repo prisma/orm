@@ -872,13 +872,15 @@ function sharedRouteOf(input: {
     const leftOut = leftOutPlan();
     const what = joinedList(
       groups.map((group) => {
-        const staying = staysIn(group);
         if (group.shared.kind === 'merged') {
           const to = group.changes[0]?.to ?? '';
           const moving = modelsText(movingModelsOf(group));
-          return staying.length === 0
+          const storedElsewhere = staysIn(group).filter(
+            (model) => documentCollectionOf(fromContract, model) !== to,
+          );
+          return storedElsewhere.length === 0
             ? `the documents of ${moving} into collection "${to}"`
-            : `the documents of ${moving}, and those of ${modelsText(staying)} that collection "${to}" does not already hold, into collection "${to}"`;
+            : `the documents of ${moving}, and those of ${modelsText(storedElsewhere)} that collection "${to}" does not already hold, into collection "${to}"`;
         }
         return joinedList(
           group.changes.map(
@@ -973,22 +975,26 @@ function sharedCollectionRefusal(
   if (change === undefined || shared === undefined || sharedRoute === undefined) return undefined;
   const { from, to } = change;
   const others = modelsText(shared.objects);
-  const routeText =
+  const whyOf = (reason: string) =>
     sharedRoute.printer === statement
-      ? `\n\n${sharedRoute.text()}`
-      : ` Leave out ${sharedRoute.statementsText} to plan the change without moving them: the refusal of ${renameFlag(sharedRoute.printer, fromContract, contract)} says what that plan does, and how to keep the documents.`;
+      ? `${reason}\n\n${sharedRoute.text()}`
+      : `Leave out ${sharedRoute.statementsText} to plan the change without moving them: the refusal of ${renameFlag(sharedRoute.printer, fromContract, contract)} says why, what that plan does, and how to keep the documents.`;
   switch (shared.kind) {
     case 'split':
       return refusedOutcome(
         statement,
         `${label}: collection "${from}" also stores ${others}`,
-        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write.${routeText}`,
+        whyOf(
+          `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write.`,
+        ),
       );
     case 'merged':
       return refusedOutcome(
         statement,
         `${label}: collection "${to}" also stores ${others}, whose documents are not in collection "${from}"`,
-        `A collection rename moves the documents of one collection, and collection "${to}" would also store the documents of ${others}. Moving the documents of two collections into one is a data migration, which a plan does not write.${routeText}`,
+        whyOf(
+          `A collection rename moves the documents of one collection, and collection "${to}" would also store the documents of ${others}. Moving the documents of two collections into one is a data migration, which a plan does not write.`,
+        ),
       );
   }
 }

@@ -56,12 +56,16 @@ describe('MongoMigrationPlanner, a route over refused groups of different kinds'
       clerk: why.includes('The plan then asks about the data of model "Clerk", which it drops.'),
       userAsked: why.includes('asks about the data of model "User"'),
       handWritten: why.includes('write this change as a hand-written migration instead'),
+      clerkRewritten: why.includes('the documents of model "Clerk" into collection "guests"'),
+      visitorRewritten: why.includes('those of model "Visitor"'),
       followedDrops: dropsOf(plan({ from, to, schema })),
     }).toEqual({
       user: true,
       clerk: true,
       userAsked: false,
       handWritten: true,
+      clerkRewritten: true,
+      visitorRewritten: false,
       followedDrops: ['Drop collection staff'],
     });
   });

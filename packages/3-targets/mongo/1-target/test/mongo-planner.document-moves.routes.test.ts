@@ -111,10 +111,12 @@ describe('MongoMigrationPlanner, the move route reads the plan the route tells t
       const conflicts = refusal(plan({ from, to, schema, statements }));
       expect({
         moves: conflicts.map(({ why }) => moveCount(why ?? '')),
-        pointer: conflicts[1]?.why?.endsWith(
-          'Leave out --rename A:A2 and --rename B:B2 to plan the change without moving them: the refusal of --rename A:A2 says what that plan does, and how to keep the documents.',
-        ),
-      }).toEqual({ moves: [2, 0], pointer: true });
+        pointer: conflicts[1]?.why,
+      }).toEqual({
+        moves: [2, 0],
+        pointer:
+          'Leave out --rename A:A2 and --rename B:B2 to plan the change without moving them: the refusal of --rename A:A2 says why, what that plan does, and how to keep the documents.',
+      });
     });
   });
 
@@ -343,15 +345,14 @@ describe('MongoMigrationPlanner, one route for every statement the shared-collec
           'A collection rename moves every document of the collection, and the documents of model "Admin" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write.\n\nLeave out --rename User:Member and --rename Clerk:Teller to plan the change without moving them.',
         ),
         sources: [why.includes('rawAggregate("users", ['), why.includes('rawAggregate("staff", [')],
-        pointer: conflicts[1]?.why?.endsWith(
-          'Leave out --rename User:Member and --rename Clerk:Teller to plan the change without moving them: the refusal of --rename User:Member says what that plan does, and how to keep the documents.',
-        ),
+        pointer: conflicts[1]?.why,
         followed: plan({ from, to, schema }).kind,
       }).toEqual({
         moves: [2, 0],
         leaveOut: true,
         sources: [true, true],
-        pointer: true,
+        pointer:
+          'Leave out --rename User:Member and --rename Clerk:Teller to plan the change without moving them: the refusal of --rename User:Member says why, what that plan does, and how to keep the documents.',
         followed: 'success',
       });
     });

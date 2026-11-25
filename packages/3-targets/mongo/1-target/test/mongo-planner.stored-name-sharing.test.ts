@@ -214,7 +214,7 @@ describe('MongoMigrationPlanner, a collection that variants share with their bas
           kind: 'statementRefused',
           summary:
             'Cannot rename model "Bug" to "Defect": collection "tasks" also stores models "Task" and "Epic", whose documents are not in collection "bugs"',
-          why: `A collection rename moves the documents of one collection, and collection "tasks" would also store the documents of models "Task" and "Epic". Moving the documents of two collections into one is a data migration, which a plan does not write.${LEAVE_OUT_SHARED('--rename Bug:Defect', 'model "Bug"')}With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "Bug", and those of models "Task" and "Epic" that collection "tasks" does not already hold, into collection "tasks" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
+          why: `A collection rename moves the documents of one collection, and collection "tasks" would also store the documents of models "Task" and "Epic". Moving the documents of two collections into one is a data migration, which a plan does not write.${LEAVE_OUT_SHARED('--rename Bug:Defect', 'model "Bug"')}With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "Bug" into collection "tasks" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
           refusedStatement: statement,
         },
       ],
