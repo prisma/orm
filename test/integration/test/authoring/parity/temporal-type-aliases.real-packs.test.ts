@@ -15,6 +15,7 @@ import sqliteControl from '@internal/target-sqlite/control';
 import sqlitePack from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { describe, expect, it } from 'vitest';
+import { postgresPslContext } from '../../utils/postgres-psl-context';
 
 const postgresStack = createControlStack({
   family: sqlFamilyControl,
@@ -31,7 +32,7 @@ const sqliteStack = createControlStack({
 function interpretPostgres(schema: string) {
   const bound = bindPslSchema(schema, {
     sourceId: 'temporal-type-aliases.prisma',
-    context: contractSourceContextFromControlStack(postgresStack),
+    context: postgresPslContext(postgresStack),
   });
   return withSeedDiagnostics(
     interpretPslDocumentToSqlContract({

@@ -28,6 +28,7 @@ import sqliteControl, { sqliteScalarTypeConstructors } from '@internal/target-sq
 import sqlitePack from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { describe, expect, it } from 'vitest';
+import { postgresPslContext } from '../../utils/postgres-psl-context';
 
 const int4Column = {
   codecId: 'pg/int4@1',
@@ -103,7 +104,7 @@ function typeHelperOf(type: unknown, name: string): TypeHelper {
 function interpretWithRealPacks(schema: string) {
   const bound = bindPslSchema(schema, {
     sourceId: 'real-packs-parity.prisma',
-    context: contractSourceContextFromControlStack(stack),
+    context: postgresPslContext(stack),
   });
   return withSeedDiagnostics(
     interpretPslDocumentToSqlContract({

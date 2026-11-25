@@ -29,7 +29,7 @@ import {
   sql,
 } from '@internal/postgres/contract-builder';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
-import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import postgresControl from '@internal/target-postgres/control';
@@ -37,6 +37,7 @@ import postgresPack from '@internal/target-postgres/pack';
 import type { PostgresSchema } from '@internal/target-postgres/types';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
+import { postgresPslContext } from '../../utils/postgres-psl-context';
 
 const stack = createControlStack({
   family: sqlFamilyControl,
@@ -48,7 +49,7 @@ const stack = createControlStack({
 function interpretWithRealPacks(schema: string) {
   const bound = bindPslSchema(schema, {
     sourceId: 'rls-parity.prisma',
-    context: contractSourceContextFromControlStack(stack),
+    context: postgresPslContext(stack),
   });
   return withSeedDiagnostics(
     interpretPslDocumentToSqlContract({

@@ -11,6 +11,7 @@ import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
+import { postgresContractCapabilities } from '../src/exports/config';
 
 const stack = createControlStack({
   family: sql,
@@ -41,7 +42,9 @@ const REPRESENTATIVE_SCHEMA = `model sample {
 function emit() {
   const bound = bindPslSchema(REPRESENTATIVE_SCHEMA, {
     sourceId: 'scalar-type-parity.test.psl',
-    context: contractSourceContextFromControlStack(stack),
+    context: contractSourceContextFromControlStack(stack, {
+      capabilities: postgresContractCapabilities({ version: 18 }),
+    }),
   });
   return withSeedDiagnostics(
     interpretPslDocumentToSqlContract({

@@ -12,7 +12,6 @@ import { defineContract as defineMongoContract } from '@internal/mongo/contract-
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
 import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
 import { mongoContextInput } from '@internal/mongo-contract-psl/test';
-import { postgresContractCapabilities } from '@internal/postgres/config';
 import { defineContract as definePostgresContract } from '@internal/postgres/contract-builder';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
@@ -28,6 +27,7 @@ import sqliteControl from '@internal/target-sqlite/control';
 import sqlitePack from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { emit } from '../../../utils/emit';
+import { postgresPslContext } from '../../utils/postgres-psl-context';
 import type {
   MongoHelpers,
   MongoRow,
@@ -88,9 +88,7 @@ export function mongoSchema(rows: readonly MongoRow[], form: Form): string {
 export function interpretPostgres(schema: string): Interpreted {
   const bound = bindPslSchema(schema, {
     sourceId: 'preset-replacements.postgres.prisma',
-    context: contractSourceContextFromControlStack(postgresStack, {
-      capabilities: postgresContractCapabilities({ version: 18 }),
-    }),
+    context: postgresPslContext(postgresStack),
   });
   return withSeedDiagnostics(
     interpretPslDocumentToSqlContract({

@@ -9,6 +9,7 @@ import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { postgresContractCapabilities } from '../src/exports/config';
 import { defineContract } from '../src/exports/contract-builder';
 
 const stack = createControlStack({ family: sql, target: postgres, adapter: postgresAdapter });
@@ -16,7 +17,9 @@ const stack = createControlStack({ family: sql, target: postgres, adapter: postg
 function interpret(schema: string) {
   const bound = bindPslSchema(schema, {
     sourceId: 'sql-char.psl',
-    context: contractSourceContextFromControlStack(stack),
+    context: contractSourceContextFromControlStack(stack, {
+      capabilities: postgresContractCapabilities({ version: 18 }),
+    }),
   });
   const result = withSeedDiagnostics(
     interpretPslDocumentToSqlContract({
