@@ -273,4 +273,56 @@ describe('a plan that moves documents into a collection whose validator it then 
       members: [{ user: 'linus', fullName: 'Linus' }, { guest: 'Grace' }],
     });
   });
+
+  it('drops in the copy the field the moving model no longer stores, so the closed validator of the target accepts the moved documents', async () => {
+    const from = contract(
+      'from',
+      {
+        Admin: { collection: 'users', fields: { admin: 'admin' } },
+        User: { collection: 'users', fields: { user: 'user', extra: 'extra' } },
+        Guest: { collection: 'members', fields: { guest: 'guest' } },
+      },
+      {},
+      'mongo/string@1',
+      { members: GUEST_ONLY },
+    );
+    const to = contract(
+      'to',
+      {
+        Admin: { collection: 'users', fields: { admin: 'admin' } },
+        Member: { collection: 'members', fields: { user: 'user' } },
+        Guest: { collection: 'members', fields: { guest: 'guest' } },
+      },
+      {},
+      'mongo/string@1',
+      { members: GUEST_OR_MEMBER },
+    );
+    await db()
+      .collection('users')
+      .insertMany([{ admin: 'Ada' }, { user: 'Linus', extra: 'x' }]);
+    await db().createCollection('members', {
+      validator: { $jsonSchema: GUEST_ONLY },
+      validationLevel: 'strict',
+      validationAction: 'error',
+    });
+    await db().collection('members').insertOne({ guest: 'Grace' });
+    await initMarker(from);
+    const copy = dataTransform('move User to members', {
+      run: () =>
+        rawAggregate('users', [USERS, { $unset: ['extra'] }, { $merge: { into: 'members' } }], {
+          bypassDocumentValidation: true,
+        }),
+    });
+    const operations = [
+      copy,
+      deleteDocuments({ collection: 'users', filter: { user: { $exists: true } } }),
+      ...(await plannedOperations(from, to)),
+    ];
+    const result = await runOperations(operations, from, to, { policy });
+    expect({ ok: result.ok, ...(await bothCollections()) }).toEqual({
+      ok: true,
+      users: [{ admin: 'Ada' }],
+      members: [{ user: 'Linus' }, { guest: 'Grace' }],
+    });
+  });
 });

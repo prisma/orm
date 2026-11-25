@@ -7,10 +7,12 @@ import type {
 import {
   describeMigrationStatement,
   type FieldCoordinate,
+  fieldStatementText,
   type MigrationPlannerConflict,
   type MigrationSubject,
   type ModelCoordinate,
   modelDisplayName,
+  modelStatementText,
   type ResolvedFieldRenameStatement,
   type ResolvedMigrationStatement,
   type ResolvedModelRenameStatement,
@@ -40,7 +42,7 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
 import { renameInSchema } from './mongo-collection-plan';
 import { collectionControlPolicy, managedOnBothSides } from './mongo-control-policy';
-import { type DocumentMove, documentCopiesOf, documentMoveOrder } from './mongo-document-moves';
+import { documentMoveOf, type MovingModel } from './mongo-document-moves';
 import {
   documentCollectionOf,
   isRootModel,
@@ -50,8 +52,8 @@ import {
 import {
   capitalized,
   documentMoveSteps,
-  fieldDisplayName,
   handWrittenRoute,
+  joinedList,
   modelNamesText,
   modelsText,
 } from './mongo-plan-text';
@@ -580,23 +582,27 @@ function leaveOutShared(moving: string): string {
   return `Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. A question about ${moving} offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change and deletes the data.`;
 }
 
-/** What the leave-out route says when the plan without the statement is refused as well, so its own refusal says what to change first. */
-const LEFT_OUT_PLAN_REFUSED =
-  'Planned without this statement, the change is refused for another reason as well, which that refusal names.';
+/** What the leave-out route says when the plan without the statements it names is refused as well, so its own refusal says what to change first. */
+function leftOutPlanRefused(count: number): string {
+  return `Planned without ${count === 1 ? 'it' : 'them'}, the change is refused for another reason as well, which that refusal names.`;
+}
 
-/** The leave-out route for root models whose documents no discriminator tells apart from those of the models that stay: without the statement they are removed, and nothing is asked. */
+/** The leave-out route for root models whose documents no discriminator tells apart from those of the models that stay: without the statements they are removed, and nothing is asked. */
 function leaveOutRemoved(
-  moving: string,
+  statements: string,
+  moving: readonly ModelCoordinate[],
   others: readonly ModelCoordinate[],
-  renamedTo: string,
+  renamedTo: readonly ModelCoordinate[],
   readers: readonly ModelCoordinate[],
   from: string,
 ): string {
+  const one = moving.length === 1;
+  const oneTo = renamedTo.length === 1;
   const start =
     readers.length === 0
-      ? `${renamedTo} starts with no documents`
-      : `${renamedTo} reads the documents of ${modelsText(readers)} already stored in its collection, since no discriminator tells them apart`;
-  return `Leave out this statement to plan the change without moving them: ${moving} is then removed and nothing is asked, since nothing is deleted: its documents stay in collection "${from}", where ${modelsText(others)} still read${others.length === 1 ? 's' : ''} them, and ${start}. If the new validator of collection "${from}" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there.`;
+      ? `${capitalized(modelsText(renamedTo))} ${oneTo ? 'starts' : 'start'} with no documents.`
+      : `${capitalized(modelsText(renamedTo))} ${oneTo ? 'reads' : 'read'} the documents of ${modelsText(readers)} already stored in ${oneTo ? 'its' : 'their'} collection, since no discriminator tells them apart.`;
+  return `Leave out ${statements} to plan the change without moving them. ${capitalized(modelsText(moving))} ${one ? 'is' : 'are'} then removed and nothing is asked, since nothing is deleted. ${one ? 'Its' : 'Their'} documents stay in collection "${from}", where ${modelsText(others)} still read${others.length === 1 ? 's' : ''} them. ${start} If the new validator of collection "${from}" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there.`;
 }
 
 /** The refusal of a model rename statement whose collection holds other models that do not move with it, or whose new collection holds models from elsewhere. */
@@ -629,20 +635,35 @@ function sharedCollectionRefusal(
     );
   const moveSteps = handWrittenRoute(`the documents of ${moving} into collection "${to}"`);
   const leaveOutRoute = (): string => {
+    const modelStatements = change.renames.flatMap((renamed) =>
+      renamed.statement === undefined ? [] : [renamed.statement],
+    );
     const fieldStatements = input.statements.filter(
       (each): each is ResolvedFieldRenameStatement =>
         each.entity === 'field' &&
         change.renames.some((renamed) => sameModel(renamed.from, each.from)),
     );
-    const leftOut = input.planWithout([statement, ...fieldStatements]);
+    const leftOutStatements = [...modelStatements, ...fieldStatements];
+    const statementsText = joinedList(
+      leftOutStatements.map(
+        (each) =>
+          `--rename ${
+            each.entity === 'field'
+              ? `${fieldStatementText(fromContract, each.from)}:${fieldStatementText(contract, each.to)}`
+              : `${modelStatementText(fromContract, each.from)}:${modelStatementText(contract, each.to)}`
+          }`,
+      ),
+    );
+    const leftOut = input.planWithout(leftOutStatements);
     const removed = leaveOutRemoved(
-      moving,
+      statementsText,
+      change.renames.map((renamed) => renamed.from),
       shared.objects,
-      modelsText(change.renames.map((renamed) => renamed.to)),
+      change.renames.map((renamed) => renamed.to),
       readersIn(to),
       leftOut?.renamedCollections.get(from) ?? from,
     );
-    if (leftOut === undefined) return `${removed} ${LEFT_OUT_PLAN_REFUSED}`;
+    if (leftOut === undefined) return `${removed} ${leftOutPlanRefused(leftOutStatements.length)}`;
     const match: ModelMatchInput = {
       statements: input.statements,
       models,
@@ -655,28 +676,20 @@ function sharedCollectionRefusal(
       contract,
       collectionAfterRenames: (name) => name,
     };
-    const move: DocumentMove = {
-      to,
-      order: documentMoveOrder({
+    const move = documentMoveOf(
+      {
         schema: leftOut.schema,
         fromContract,
         contract,
         from,
         to,
         collectionRenames: leftOut.collectionRenames,
-      }),
-      copies: documentCopiesOf(
-        change.renames.map((renamed) => ({
-          name: modelDisplayName(renamed.from),
-          storedNameMoves: movedStoredNames(match, [renamed.from]),
-          variant: selectedVariantOf(contract.domain, renamed.to),
-        })),
+      },
+      change.renames.map((renamed) =>
+        movingModelOf(match, modelDisplayName(renamed.from), renamed.from, renamed.to),
       ),
-    };
-    const without = fieldStatements.map(
-      (each) => ` and without --rename ${fieldDisplayName(each.from)}:${fieldDisplayName(each.to)}`,
     );
-    return `${removed} With migration plan, keep the documents by moving them in the migration that plan writes: ${documentMoveSteps(move, `plan the change without this statement${without.join('')}`)}`;
+    return `${removed} With migration plan, keep the documents by moving them in the migration that plan writes. ${documentMoveSteps(move, `Plan the change without ${statementsText}.`)}`;
   };
   switch (shared.kind) {
     case 'split':
@@ -956,7 +969,11 @@ function planFieldRename(
   });
   const others = [...staying, ...arriving];
   if (others.length > 0) {
-    const sharedWhy = `${sharedCollectionWhy(collection, others, 'renaming the field would rename it in the documents')} To change it, ${changed === undefined ? SEPARATE_THE_MODELS : `move the models to separate collections, or keep the stored name ${JSON.stringify(fromStored)} in the contract`}.`;
+    const earlier =
+      staying.length === 0
+        ? ` Or rename the field in an earlier migration, before ${modelNamesText(arriving)} ${arriving.length === 1 ? 'is' : 'are'} added to collection ${JSON.stringify(collection)}.`
+        : '';
+    const sharedWhy = `${sharedCollectionWhy(collection, others, 'renaming the field would rename it in the documents')} To change it, ${changed === undefined ? SEPARATE_THE_MODELS : `move the models to separate collections, or keep the stored name ${JSON.stringify(fromStored)} in the contract`}.${earlier}`;
     return refuse(
       `${modelNamesText(others)} ${others.length === 1 ? 'stores' : 'store'} field ${JSON.stringify(fromStored)} in the same collection, ${JSON.stringify(collection)}`,
       changed === undefined ? sharedWhy : `${changed}. ${sharedWhy}`,
@@ -1277,6 +1294,35 @@ export function movedStoredNames(
     (move, index) =>
       moves.findIndex((other) => other.from === move.from && other.to === move.to) === index,
   );
+}
+
+/**
+ * A model whose documents a document move copies from `origin` to `destination`: the stored names
+ * that change on the way, those the destination does not store, and its variant there. With no
+ * destination model, the copy changes only the stored names.
+ */
+export function movingModelOf(
+  input: ModelMatchInput,
+  name: string,
+  origin: ModelCoordinate,
+  destination: ModelCoordinate | undefined,
+): MovingModel {
+  const storedNameMoves = movedStoredNames(input, [origin]);
+  if (destination === undefined) {
+    return { name, storedNameMoves, droppedStoredNames: [], variant: undefined };
+  }
+  const accounted = new Set([
+    ...storedNameMoves.flatMap(({ from, to }) => [from, to]),
+    ...storedFieldsOf(input.contract, destination),
+  ]);
+  return {
+    name,
+    storedNameMoves,
+    droppedStoredNames: [...storedFieldsOf(input.fromContract, origin)].filter(
+      (stored) => !accounted.has(stored),
+    ),
+    variant: selectedVariantOf(input.contract.domain, destination),
+  };
 }
 
 /** The stored names of the documents of the origin model at `origin`, without those a rename of one of its own fields moves to another stored name. */

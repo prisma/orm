@@ -52,28 +52,42 @@ export function handWrittenRoute(what: string): string {
   return `With migration plan, write this change as a hand-written migration instead: ${handWrittenMigrationSteps(what)}`;
 }
 
+/** A value as JavaScript source: keys unquoted where they can be, strings in double quotes. */
+export function javaScriptText(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(javaScriptText).join(', ')}]`;
+  if (typeof value === 'object' && value !== null) {
+    const entries = Object.entries(value).map(
+      ([key, each]) =>
+        `${/^[A-Za-z_$][\w$]*$/.test(key) ? key : JSON.stringify(key)}: ${javaScriptText(each)}`,
+    );
+    return entries.length === 0 ? '{}' : `{ ${entries.join(', ')} }`;
+  }
+  return JSON.stringify(value);
+}
+
 function movingText({ copies }: DocumentMove): string {
   return modelNamesText(copies.flatMap((copy) => copy.models));
 }
 
-function placementOf({ to, order }: DocumentMove): string {
-  const before = `before any other operation on collection "${order.source}"`;
+function placementOf({ from, to, order }: DocumentMove): string {
+  const before = `before any other operation on collection "${from}"`;
   switch (order.after?.kind) {
     case 'createCollection':
-      return `in the operations of the migration.ts it writes, right after the creation of collection "${to}" and ${before}`;
+      return `In the operations of the migration.ts it writes, right after the creation of collection "${to}" and ${before}, add a dataTransform.`;
     case 'renameCollection':
-      return `in the operations of the migration.ts it writes, right after the ${joinedList(order.after.renames.map((rename) => `rename of collection "${rename.from}" to "${rename.to}"`))} and ${before}`;
+      return `In the operations of the migration.ts it writes, right after the ${joinedList(order.after.renames.map((rename) => `rename of collection "${rename.from}" to "${rename.to}"`))} and ${before}, add a dataTransform.`;
     case undefined:
-      return `at the start of the operations of the migration.ts it writes, ${before}`;
+      return `At the start of the operations of the migration.ts it writes, ${before}, add a dataTransform.`;
   }
 }
 
-function bypassText({ to, order }: DocumentMove): string {
+function bypassText({ to, order, copies }: DocumentMove): string {
+  const skips = `${copies.length === 1 ? 'The copy skips' : 'The copies skip'} document validation because collection "${to}" still has its old validator`;
   switch (order.validatorChange) {
     case 'replaced':
-      return ` The copy skips document validation because collection "${to}" still has its old validator; the later validator update on "${to}" checks the moved documents. If that check stops the apply, the moved documents are in collection "${to}": fix them there and run db migrate again.`;
+      return ` ${skips}. The later validator update on "${to}" checks the moved documents. If that check stops the apply, the moved documents are in collection "${to}": fix them there and run db migrate again.`;
     case 'removed':
-      return ` The copy skips document validation because collection "${to}" still has its old validator, which the plan then removes.`;
+      return ` ${skips}, which the plan then removes.`;
     case undefined:
       return '';
   }
@@ -82,37 +96,46 @@ function bypassText({ to, order }: DocumentMove): string {
 function copyCall(move: DocumentMove, copy: DocumentCopy, selects: string): string {
   const pipeline = [
     `{ $match: <a filter that selects only ${selects}> }`,
-    ...copy.fieldStages.map((stage) => JSON.stringify(stage)),
+    ...copy.fieldStages.map(javaScriptText),
     `{ $merge: { into: ${JSON.stringify(move.to)} } }`,
   ].join(', ');
   const bypass = move.order.bypassDocumentValidation ? ', { bypassDocumentValidation: true }' : '';
-  return `rawAggregate(${JSON.stringify(move.order.source)}, [${pipeline}]${bypass})`;
+  return `rawAggregate(${JSON.stringify(move.from)}, [${pipeline}]${bypass})`;
 }
 
-function operationsText(move: DocumentMove): string {
-  const { to, copies } = move;
-  const from = move.order.source;
+function copiesText(move: DocumentMove): string {
+  const { from, to, copies } = move;
   const [only] = copies;
-  const copiesText =
-    copies.length === 1 && only !== undefined
-      ? `copies the documents of ${movingText(move)} into collection "${to}", such as ${copyCall(move, only, 'those documents')}, and a deleteDocuments({ collection: ${JSON.stringify(from)}, filter: <the same filter> })`
-      : `copies the documents of ${movingText(move)} into collection "${to}", one copy for each group of models whose documents change alike on the way, such as ${joinedList(copies.map((copy) => `${copyCall(move, copy, `the documents of ${modelNamesText(copy.models)}`)} for ${modelNamesText(copy.models)}`))}, and a deleteDocuments({ collection: ${JSON.stringify(from)}, filter: <a filter that selects the documents of all of them> })`;
-  return `add a dataTransform whose run ${copiesText}; then run that migration.ts to emit its ops.json, and apply it with db migrate.`;
+  return copies.length === 1 && only !== undefined
+    ? `Its run copies the documents of ${movingText(move)} into collection "${to}", such as ${copyCall(move, only, 'those documents')}. Then it deletes them with deleteDocuments({ collection: ${JSON.stringify(from)}, filter: <the same filter> }).`
+    : `Its run copies the documents of ${movingText(move)} into collection "${to}", with one copy for each group of models whose documents change alike on the way: ${joinedList(copies.map((copy) => `${copyCall(move, copy, `the documents of ${modelNamesText(copy.models)}`)} for ${modelNamesText(copy.models)}`))}. Then it deletes them with deleteDocuments({ collection: ${JSON.stringify(from)}, filter: <a filter that selects the documents of all of them> }).`;
+}
+
+function droppedText({ copies }: DocumentMove): string {
+  return copies
+    .filter((copy) => copy.droppedStoredNames.length > 0)
+    .map((copy) => {
+      const one = copy.droppedStoredNames.length === 1;
+      return ` ${copies.length === 1 ? 'The copy' : `The copy of ${modelNamesText(copy.models)}`} drops field${one ? '' : 's'} ${quotedList(copy.droppedStoredNames)} from the documents, and ${one ? 'its' : 'their'} values: the model they become does not store ${one ? 'it' : 'them'}.`;
+    })
+    .join('');
 }
 
 function filterText(move: DocumentMove): string {
-  const moving = movingText(move);
-  return `This works only when a filter can tell those documents apart from the other documents of collection "${move.order.source}", which can hold the same values in the fields they share, such as a discriminator value: filter by a field only ${moving} stores. If the apply stops, fix what stopped it and run db migrate again.`;
+  const shared = `the other documents of collection "${move.from}", which can hold the same values in the fields they share, a discriminator value among them`;
+  return move.copies.length === 1
+    ? `The filter must tell those documents apart from ${shared}. Filter by a field only ${movingText(move)} ${move.copies[0]?.models.length === 1 ? 'stores' : 'store'}.`
+    : `Each copy's filter must select only the documents of its own models, apart from those of the other models that move and from ${shared}. Filter each copy by a field only its models store.`;
 }
 
 /**
- * The steps that add a document move to the migration.ts a plan writes, after `plan`, the step that
- * plans it, when one is given: the operations, where they go (see `documentMoveOrder`), the filter
- * they need, and what to do if the apply stops. The target's rewrites come after the move: those of
- * another model that would reach the moved documents are refused, and those of a moving model reach
- * them, as they should.
+ * The steps that add a document move to the migration.ts a plan writes, after `plan`, the sentence
+ * that says how to plan it, when one is given: the operations, where they go (see
+ * `documentMoveOrder`), the filter they need, and what to do if the apply stops. The target's
+ * rewrites come after the move: those of another model that would reach the moved documents are
+ * refused, and those of a moving model reach them, as they should.
  */
 export function documentMoveSteps(move: DocumentMove, plan?: string): string {
-  const steps = `${placementOf(move)}, ${operationsText(move)}${bypassText(move)} ${filterText(move)}`;
-  return plan === undefined ? steps : `${plan}, and ${steps}`;
+  const steps = `${placementOf(move)} ${copiesText(move)}${droppedText(move)} Run that migration.ts to emit its ops.json, and apply it with db migrate.${bypassText(move)} ${filterText(move)} If the apply stops, fix what stopped it and run db migrate again.`;
+  return plan === undefined ? steps : `${plan} ${steps}`;
 }

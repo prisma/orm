@@ -415,10 +415,12 @@ function comparableIndexes(
 export function collectionPlanSchemasOf(
   origin: MongoSchemaIR,
   contract: MongoContract,
-  fromDatabase: boolean,
 ): CollectionPlanSchemas {
   const writtenDestination = contractToMongoSchemaIR(contract);
-  return { ...comparableIndexes(origin, writtenDestination, fromDatabase), writtenDestination };
+  return {
+    ...comparableIndexes(origin, writtenDestination, origin.fromDatabase),
+    writtenDestination,
+  };
 }
 
 /**

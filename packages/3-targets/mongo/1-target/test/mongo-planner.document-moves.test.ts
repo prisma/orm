@@ -46,7 +46,7 @@ describe('MongoMigrationPlanner, the route that moves documents out of a collect
         'Update validator on members (added: user)',
       ],
       why: expect.stringContaining(
-        'plan the change without this statement, and at the start of the operations of the migration.ts it writes, before any other operation on collection "users", add a dataTransform whose run copies the documents of model "User" into collection "members", such as rawAggregate("users", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "members" } }], { bypassDocumentValidation: true }), and a deleteDocuments({ collection: "users", filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. The copy skips document validation because collection "members" still has its old validator; the later validator update on "members" checks the moved documents. If that check stops the apply, the moved documents are in collection "members": fix them there and run db migrate again. This works only when',
+        'Plan the change without --rename User:Member. At the start of the operations of the migration.ts it writes, before any other operation on collection "users", add a dataTransform. Its run copies the documents of model "User" into collection "members", such as rawAggregate("users", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "members" } }], { bypassDocumentValidation: true }). Then it deletes them with deleteDocuments({ collection: "users", filter: <the same filter> }). Run that migration.ts to emit its ops.json, and apply it with db migrate. The copy skips document validation because collection "members" still has its old validator. The later validator update on "members" checks the moved documents. If that check stops the apply, the moved documents are in collection "members": fix them there and run db migrate again. The filter must',
       ),
     });
   });
@@ -78,7 +78,7 @@ describe('MongoMigrationPlanner, the route that moves documents out of a collect
           'Update validator on members (added: user)',
         ],
         why: expect.stringContaining(
-          'plan the change without this statement, and in the operations of the migration.ts it writes, right after the rename of collection "guests" to "members" and before any other operation on collection "users", add a dataTransform whose run copies the documents of model "User" into collection "members", such as rawAggregate("users", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "members" } }], { bypassDocumentValidation: true }),',
+          'Plan the change without --rename User:Member. In the operations of the migration.ts it writes, right after the rename of collection "guests" to "members" and before any other operation on collection "users", add a dataTransform. Its run copies the documents of model "User" into collection "members", such as rawAggregate("users", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "members" } }], { bypassDocumentValidation: true }).',
         ),
       });
     });
@@ -103,7 +103,7 @@ describe('MongoMigrationPlanner, the route that moves documents out of a collect
           'Update validator on members (added: name, user; removed: guest)',
         ],
         why: expect.stringContaining(
-          'With migration plan, keep the documents by moving them in the migration that plan writes: plan the change without this statement, and in the operations of the migration.ts it writes, right after the rename of collection "guests" to "members" and before any other operation on collection "users", add a dataTransform',
+          'With migration plan, keep the documents by moving them in the migration that plan writes. Plan the change without --rename User:Member. In the operations of the migration.ts it writes, right after the rename of collection "guests" to "members" and before any other operation on collection "users", add a dataTransform.',
         ),
       });
     });
@@ -133,11 +133,11 @@ describe('MongoMigrationPlanner, the route that moves documents out of a collect
         }),
       ),
     ).toContain(
-      'rawAggregate("users", [{ $match: <a filter that selects only those documents> }, {"$set":{"fullName":"$name"}}, {"$unset":["name"]}, { $merge: { into: "members" } }])',
+      'rawAggregate("users", [{ $match: <a filter that selects only those documents> }, { $set: { fullName: "$name" } }, { $unset: ["name"] }, { $merge: { into: "members" } }])',
     );
   });
 
-  it('writes a stated field rename of the moving model in the copy', () => {
+  it('writes a stated field rename of the moving model in the copy, and names that statement among those to leave out', () => {
     const from = contract(
       'from',
       { Admin: ADMIN, User: { collection: 'users', fields: ['_id', 'user', 'name'] } },
@@ -148,20 +148,98 @@ describe('MongoMigrationPlanner, the route that moves documents out of a collect
       { Admin: ADMIN, Member: { collection: 'members', fields: ['_id', 'user', 'fullName'] } },
       { users: {}, members: {} },
     );
-    expect(
-      whyOf(
-        plan({
-          from,
-          to,
-          schema: [schemaCollection('users')],
-          statements: [
-            renameModel('User', 'Member'),
-            renameField('User', 'name', 'Member', 'fullName'),
-          ],
-        }),
+    const why = whyOf(
+      plan({
+        from,
+        to,
+        schema: [schemaCollection('users')],
+        statements: [
+          renameModel('User', 'Member'),
+          renameField('User', 'name', 'Member', 'fullName'),
+        ],
+      }),
+    );
+    expect({
+      leaveOut: why.startsWith(
+        'A collection rename moves every document of the collection, and the documents of model "Admin" do not move to collection "members". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out --rename User:Member and --rename User.name:Member.fullName to plan the change without moving them.',
       ),
-    ).toContain(
-      'rawAggregate("users", [{ $match: <a filter that selects only those documents> }, {"$set":{"fullName":"$name"}}, {"$unset":["name"]}, { $merge: { into: "members" } }])',
+      plan: why.includes(
+        'Plan the change without --rename User:Member and --rename User.name:Member.fullName.',
+      ),
+      copy: why.includes(
+        'rawAggregate("users", [{ $match: <a filter that selects only those documents> }, { $set: { fullName: "$name" } }, { $unset: ["name"] }, { $merge: { into: "members" } }])',
+      ),
+    }).toEqual({ leaveOut: true, plan: true, copy: true });
+  });
+
+  it('drops in the copy the fields the destination model does not store, and says so', () => {
+    const from = contract(
+      'from',
+      {
+        Admin: ADMIN,
+        User: { collection: 'users', fields: ['_id', 'user', 'extra'] },
+        Guest: { collection: 'members', fields: ['_id', 'guest'] },
+      },
+      { users: {}, members: GUEST_ONLY },
+    );
+    const to = contract(
+      'to',
+      {
+        Admin: ADMIN,
+        Member: { collection: 'members', fields: ['_id', 'user'] },
+        Guest: { collection: 'members', fields: ['_id', 'guest'] },
+      },
+      { users: {}, members: GUEST_OR_MEMBER },
+    );
+    const why = whyOf(
+      plan({
+        from,
+        to,
+        schema: [schemaCollection('users'), schemaCollection('members', GUEST_ONLY)],
+        statements: [renameModel('User', 'Member')],
+      }),
+    );
+    expect({
+      copy: why.includes(
+        'rawAggregate("users", [{ $match: <a filter that selects only those documents> }, { $unset: ["extra"] }, { $merge: { into: "members" } }], { bypassDocumentValidation: true })',
+      ),
+      drops: why.includes(
+        'The copy drops field "extra" from the documents, and its values: the model they become does not store it.',
+      ),
+    }).toEqual({ copy: true, drops: true });
+  });
+
+  it('leaves out every statement of a change that moves several models, and gives each its own copy', () => {
+    const from = contract(
+      'from',
+      {
+        Admin: ADMIN,
+        A: { collection: 'users', fields: ['_id', 'a'] },
+        B: { collection: 'users', fields: ['_id', 'b'] },
+        Guest: { collection: 'members', fields: ['_id', 'guest'] },
+      },
+      { users: {}, members: {} },
+    );
+    const to = contract(
+      'to',
+      {
+        Admin: ADMIN,
+        A2: { collection: 'members', fields: ['_id', 'a'], storedAs: { a: 'x' } },
+        B2: { collection: 'members', fields: ['_id', 'b'], storedAs: { b: 'x' } },
+        Guest: { collection: 'members', fields: ['_id', 'guest'] },
+      },
+      { users: {}, members: {} },
+    );
+    const why = whyOf(
+      plan({
+        from,
+        to,
+        schema: [schemaCollection('users'), schemaCollection('members')],
+        statements: [renameModel('A', 'A2'), renameModel('B', 'B2')],
+      }),
+    );
+    expect(why).toContain(
+      'Leave out --rename A:A2 and --rename B:B2 to plan the change without moving them. Models "A" and "B" are then removed and nothing is asked, since nothing is deleted. Their documents stay in collection "users", where model "Admin" still reads them. Models "A2" and "B2" read the documents of model "Guest" already stored in their collection, since no discriminator tells them apart. If the new validator of collection "users" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there. With migration plan, keep the documents by moving them in the migration that plan writes. Plan the change without --rename A:A2 and --rename B:B2. At the start of the operations of the migration.ts it writes, before any other operation on collection "users", add a dataTransform. Its run copies the documents of models "A" and "B" into collection "members", with one copy for each group of models whose documents change alike on the way: rawAggregate("users", [{ $match: <a filter that selects only the documents of model "A"> }, { $set: { x: "$a" } }, { $unset: ["a"] }, { $merge: { into: "members" } }]) for model "A" and rawAggregate("users", [{ $match: <a filter that selects only the documents of model "B"> }, { $set: { x: "$b" } }, { $unset: ["b"] }, { $merge: { into: "members" } }]) for model "B". Then it deletes them with deleteDocuments({ collection: "users", filter: <a filter that selects the documents of all of them> }). Run that migration.ts to emit its ops.json, and apply it with db migrate. Each copy\'s filter must select only the documents of its own models, apart from those of the other models that move and from the other documents of collection "users", which can hold the same values in the fields they share, a discriminator value among them. Filter each copy by a field only its models store. If the apply stops, fix what stopped it and run db migrate again.',
     );
   });
 
@@ -202,7 +280,7 @@ describe('MongoMigrationPlanner, the route that moves documents out of a collect
     );
     expect({
       copy: why.includes(
-        'rawAggregate("users", [{ $match: <a filter that selects only those documents> }, {"$set":{"kind":{"$literal":"member"}}}, { $merge: { into: "people" } }])',
+        'rawAggregate("users", [{ $match: <a filter that selects only those documents> }, { $set: { kind: { $literal: "member" } } }, { $merge: { into: "people" } }])',
       ),
       readsPerson: why.includes('reads the documents of model "Person"'),
     }).toEqual({ copy: true, readsPerson: false });
@@ -241,7 +319,7 @@ describe('MongoMigrationPlanner, the route that moves documents out of a collect
     );
     expect({
       refusedToo: why.endsWith(
-        'Planned without this statement, the change is refused for another reason as well, which that refusal names.',
+        'Planned without it, the change is refused for another reason as well, which that refusal names.',
       ),
       move: why.includes('rawAggregate'),
     }).toEqual({ refusedToo: true, move: false });
@@ -264,7 +342,7 @@ describe('MongoMigrationPlanner, the route that moves documents out of a collect
     }).toEqual({
       leftOut: ['Rename collection users to admins', 'Create collection members'],
       why: expect.stringContaining(
-        'right after the creation of collection "members" and before any other operation on collection "admins", add a dataTransform whose run copies the documents of model "User" into collection "members", such as rawAggregate("admins", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "members" } }]), and a deleteDocuments({ collection: "admins", filter: <the same filter> });',
+        'right after the creation of collection "members" and before any other operation on collection "admins", add a dataTransform. Its run copies the documents of model "User" into collection "members", such as rawAggregate("admins", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "members" } }]). Then it deletes them with deleteDocuments({ collection: "admins", filter: <the same filter> }).',
       ),
     });
   });
@@ -308,7 +386,7 @@ describe('MongoMigrationPlanner, the route that moves a root model out before a 
         }),
       ),
     ).toContain(
-      'at the start of the operations of the migration.ts it writes, before any other operation on collection "tasks", add a dataTransform whose run copies the documents of model "Admin" into collection "people", such as rawAggregate("tasks", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "people" } }], { bypassDocumentValidation: true }), and a deleteDocuments({ collection: "tasks", filter: <the same filter> }); then run that migration.ts to emit its ops.json, and apply it with db migrate. The copy skips document validation because collection "people" still has its old validator; the later validator update on "people" checks the moved documents.',
+      'At the start of the operations of the migration.ts it writes, before any other operation on collection "tasks", add a dataTransform. Its run copies the documents of model "Admin" into collection "people", such as rawAggregate("tasks", [{ $match: <a filter that selects only those documents> }, { $merge: { into: "people" } }], { bypassDocumentValidation: true }). Then it deletes them with deleteDocuments({ collection: "tasks", filter: <the same filter> }). Run that migration.ts to emit its ops.json, and apply it with db migrate. The copy skips document validation because collection "people" still has its old validator. The later validator update on "people" checks the moved documents.',
     );
   });
 
@@ -349,7 +427,7 @@ describe('MongoMigrationPlanner, the route that moves a root model out before a 
         { tasks: {}, people: {} },
       );
       expect(whyOf(plan({ from, to, schema: [schemaCollection('tasks')] }))).toContain(
-        'add a dataTransform whose run copies the documents of models "Admin" and "Staff" into collection "people", one copy for each group of models whose documents change alike on the way, such as rawAggregate("tasks", [{ $match: <a filter that selects only the documents of model "Admin"> }, {"$set":{"name":"$n"}}, {"$unset":["n"]}, { $merge: { into: "people" } }]) for model "Admin" and rawAggregate("tasks", [{ $match: <a filter that selects only the documents of model "Staff"> }, { $merge: { into: "people" } }]) for model "Staff", and a deleteDocuments({ collection: "tasks", filter: <a filter that selects the documents of all of them> });',
+        'add a dataTransform. Its run copies the documents of models "Admin" and "Staff" into collection "people", with one copy for each group of models whose documents change alike on the way: rawAggregate("tasks", [{ $match: <a filter that selects only the documents of model "Admin"> }, { $set: { name: "$n" } }, { $unset: ["n"] }, { $merge: { into: "people" } }]) for model "Admin" and rawAggregate("tasks", [{ $match: <a filter that selects only the documents of model "Staff"> }, { $merge: { into: "people" } }]) for model "Staff". Then it deletes them with deleteDocuments({ collection: "tasks", filter: <a filter that selects the documents of all of them> }).',
       );
     });
 
@@ -374,7 +452,7 @@ describe('MongoMigrationPlanner, the route that moves a root model out before a 
         { tasks: {}, people: {} },
       );
       expect(whyOf(plan({ from, to, schema: [schemaCollection('tasks')] }))).toContain(
-        'such as rawAggregate("tasks", [{ $match: <a filter that selects only the documents of model "Admin"> }, {"$set":{"x":"$a"}}, {"$unset":["a"]}, { $merge: { into: "people" } }]) for model "Admin" and rawAggregate("tasks", [{ $match: <a filter that selects only the documents of model "Staff"> }, {"$set":{"x":"$b"}}, {"$unset":["b"]}, { $merge: { into: "people" } }]) for model "Staff",',
+        ': rawAggregate("tasks", [{ $match: <a filter that selects only the documents of model "Admin"> }, { $set: { x: "$a" } }, { $unset: ["a"] }, { $merge: { into: "people" } }]) for model "Admin" and rawAggregate("tasks", [{ $match: <a filter that selects only the documents of model "Staff"> }, { $set: { x: "$b" } }, { $unset: ["b"] }, { $merge: { into: "people" } }]) for model "Staff".',
       );
     });
   });

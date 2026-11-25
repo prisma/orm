@@ -6,6 +6,8 @@ import { collectionPlanOf, collectionPlanSchemasOf } from './mongo-collection-pl
 
 /** A move of one or more models' documents to another collection, which a plan cannot write because no filter of its own selects them. */
 export interface DocumentMove {
+  /** The source collection, by its name when the move runs, once the plan has renamed it. */
+  readonly from: string;
   readonly to: string;
   readonly order: DocumentMoveOrder;
   readonly copies: readonly DocumentCopy[];
@@ -14,6 +16,8 @@ export interface DocumentMove {
 /** One copy of a document move: the models whose documents it writes alike, and how. */
 export interface DocumentCopy {
   readonly models: readonly string[];
+  /** The stored names it drops, which the destination models do not store. */
+  readonly droppedStoredNames: readonly string[];
   /** The `$set` and `$unset` stages that give the copied documents their stored names and discriminator value in the destination. */
   readonly fieldStages: readonly Document[];
 }
@@ -23,6 +27,8 @@ export interface MovingModel {
   readonly name: string;
   /** The stored names of its documents that change, from the origin's to the destination's. */
   readonly storedNameMoves: readonly { readonly from: string; readonly to: string }[];
+  /** The stored names of its documents that the destination model does not store, so the copy drops them. */
+  readonly droppedStoredNames: readonly string[];
   /** The variant it is in the target, whose discriminator value its documents must hold there. */
   readonly variant: SelectedVariant | undefined;
 }
@@ -37,8 +43,6 @@ export type DocumentMoveAfter =
 
 /** Where a document move goes in the plan it is added to, and whether its copy skips validation. */
 export interface DocumentMoveOrder {
-  /** The name of the source collection when the move runs, once the plan has renamed it. */
-  readonly source: string;
   /** `undefined` when nothing in the plan has to come first, so the move goes at the start. */
   readonly after: DocumentMoveAfter | undefined;
   /** Whether the copy skips validation: the target has a validator when it runs, and the plan replaces or removes it later. */
@@ -58,9 +62,15 @@ export interface DocumentMoveOrderInput {
   readonly collectionRenames: readonly { readonly from: string; readonly to: string }[];
 }
 
-function fieldStagesOf({ storedNameMoves, variant }: MovingModel): readonly Document[] {
+function fieldStagesOf({
+  storedNameMoves,
+  droppedStoredNames,
+  variant,
+}: MovingModel): readonly Document[] {
   const written = new Set(storedNameMoves.map(({ to }) => to));
-  const unset = storedNameMoves.map(({ from }) => from).filter((from) => !written.has(from));
+  const unset = [
+    ...new Set([...storedNameMoves.map(({ from }) => from), ...droppedStoredNames]),
+  ].filter((from) => !written.has(from));
   const set = [
     ...storedNameMoves.map(({ from, to }) => [to, `$${from}`] as const),
     ...(variant === undefined ? [] : [[variant.field, { $literal: variant.value }] as const]),
@@ -73,13 +83,21 @@ function fieldStagesOf({ storedNameMoves, variant }: MovingModel): readonly Docu
 
 /** The copies that write the documents of `models`: one for each set of models whose documents are written alike. */
 export function documentCopiesOf(models: readonly MovingModel[]): readonly DocumentCopy[] {
-  const copies = new Map<string, { models: string[]; fieldStages: readonly Document[] }>();
+  const copies = new Map<
+    string,
+    { models: string[]; droppedStoredNames: readonly string[]; fieldStages: readonly Document[] }
+  >();
   for (const model of models) {
     const fieldStages = fieldStagesOf(model);
     const key = JSON.stringify(fieldStages);
     const copy = copies.get(key);
-    if (copy === undefined) copies.set(key, { models: [model.name], fieldStages });
-    else copy.models.push(model.name);
+    if (copy === undefined) {
+      copies.set(key, {
+        models: [model.name],
+        droppedStoredNames: model.droppedStoredNames,
+        fieldStages,
+      });
+    } else copy.models.push(model.name);
   }
   return [...copies.values()];
 }
@@ -94,7 +112,7 @@ export function documentCopiesOf(models: readonly MovingModel[]): readonly Docum
  */
 export function documentMoveOrder(input: DocumentMoveOrderInput): DocumentMoveOrder {
   const { from, to } = input;
-  const schemas = collectionPlanSchemasOf(input.schema, input.contract, input.schema.fromDatabase);
+  const schemas = collectionPlanSchemasOf(input.schema, input.contract);
   const plan = collectionPlanOf(to, schemas, {
     contract: input.contract,
     fromContract: input.fromContract,
@@ -118,9 +136,21 @@ export function documentMoveOrder(input: DocumentMoveOrderInput): DocumentMoveOr
         ? 'removed'
         : 'replaced';
   return {
-    source: input.collectionRenames.find((rename) => rename.from === from)?.to ?? from,
     after,
     bypassDocumentValidation: validatorChange !== undefined,
     validatorChange,
+  };
+}
+
+/** The move of `models`' documents from `input.from` to `input.to`, in the plan `input` describes. */
+export function documentMoveOf(
+  input: DocumentMoveOrderInput,
+  models: readonly MovingModel[],
+): DocumentMove {
+  return {
+    from: input.collectionRenames.find((rename) => rename.from === input.from)?.to ?? input.from,
+    to: input.to,
+    order: documentMoveOrder(input),
+    copies: documentCopiesOf(models),
   };
 }

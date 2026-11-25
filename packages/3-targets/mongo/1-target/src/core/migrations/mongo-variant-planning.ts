@@ -24,12 +24,7 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { collectionControlPolicy } from './mongo-control-policy';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
-import {
-  type DocumentMove,
-  documentCopiesOf,
-  documentMoveOrder,
-  type MovingModel,
-} from './mongo-document-moves';
+import { type DocumentMove, documentMoveOf, type MovingModel } from './mongo-document-moves';
 import { documentCollectionOf, modelCoordinates, sameModel } from './mongo-model-coordinates';
 import { capitalized, documentMoveSteps, joinedList, modelNamesText } from './mongo-plan-text';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
@@ -43,7 +38,7 @@ import {
   destinationModelOf,
   type ModelMatchInput,
   modelAt,
-  movedStoredNames,
+  movingModelOf,
   sharesCollectionInDestination,
 } from './mongo-statement-planning';
 import { type FieldRename, type ModelRename, renameRefused } from './mongo-storage-renames';
@@ -316,10 +311,12 @@ function variantRoute(
   );
   const steps = moves.map((move) => {
     const text = documentMoveSteps(move);
-    return moves.length === 1 ? text : `For ${modelNamesText(namesOf(move))}, ${text}`;
+    return moves.length === 1
+      ? text
+      : `For ${modelNamesText(namesOf(move))}, ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
   });
-  const assumes = `This assumes that first plan makes every change to ${moves.length === 1 ? `collection ${quoted(moves[0]?.to ?? '')}` : 'those collections'} that this plan makes.`;
-  const firstMove = `First move ${destinations}, keep ${variantText(change.model)} as it is, and plan that with migration plan${moves.length === 1 ? `: ${steps.join(' ')}` : `. ${steps.join(' ')}`} ${assumes} Under db update, apply that change, then move the documents out of collection ${quoted(change.collection)} by hand.`;
+  const sameTarget = `Write that first contract as this one with ${variantText(change.model)} kept: these steps expect its plan to change ${moves.length === 1 ? `collection ${quoted(moves[0]?.to ?? '')}` : 'those collections'} as this plan does.`;
+  const firstMove = `First move ${destinations}, keep ${variantText(change.model)} as it is, and plan that with migration plan. ${steps.join(' ')} ${sameTarget} Under db update, apply that change, then move the documents out of collection ${quoted(change.collection)} by hand.`;
   if (staying.length === 0) {
     return `A model that moves out of collection ${quoted(change.collection)} leaves its documents in it, so make the change in two plans. ${firstMove} Then make the change to ${variantText(change.model)} and plan again. Or ${keep}.`;
   }
@@ -375,33 +372,23 @@ function sharedCollectionRefusal(
   const staying = others.filter((name) => !moving.includes(name));
   const movingModel = (name: string): MovingModel => {
     const origin = { namespaceId: change.model.namespaceId, model: name };
-    const destination = destinationModelOf(origin, matchInput);
-    return {
-      name,
-      storedNameMoves: movedStoredNames(matchInput, [origin]),
-      variant:
-        destination === undefined
-          ? undefined
-          : selectedVariantOf(input.contract.domain, destination),
-    };
+    return movingModelOf(matchInput, name, origin, destinationModelOf(origin, matchInput));
   };
   const moves = [...new Set(moving.map(destinationOf))]
     .filter((to): to is string => to !== undefined)
-    .map((to): DocumentMove => {
-      const names = moving.filter((name) => destinationOf(name) === to);
-      return {
-        to,
-        order: documentMoveOrder({
+    .map((to) =>
+      documentMoveOf(
+        {
           schema: input.schema,
           fromContract,
           contract: input.contract,
           from: originCollection,
           to,
           collectionRenames: input.collectionRenames,
-        }),
-        copies: documentCopiesOf(names.map(movingModel)),
-      };
-    });
+        },
+        moving.filter((name) => destinationOf(name) === to).map(movingModel),
+      ),
+    );
   const effect =
     change.to === undefined
       ? 'deleting the documents with that value would delete the documents'

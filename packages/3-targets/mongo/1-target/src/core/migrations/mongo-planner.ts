@@ -171,11 +171,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       MongoSchemaIR,
       'framework planner passes the inspected Mongo schema IR selected for the mongo target'
     >(options.schema);
-    const schemas = collectionPlanSchemasOf(
-      options.statementCalls?.schema ?? schema,
-      contract,
-      schema.fromDatabase,
-    );
+    const schemas = collectionPlanSchemasOf(options.statementCalls?.schema ?? schema, contract);
 
     const collCreates: OpFactoryCall[] = [];
     const drops: OpFactoryCall[] = [];

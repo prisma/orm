@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type DocumentMoveOrderInput,
   documentCopiesOf,
+  documentMoveOf,
   documentMoveOrder,
 } from '../src/core/migrations/mongo-document-moves';
 import { type CollectionSpec, contract, schemaCollection } from './mongo-statement-fixtures';
@@ -59,7 +60,6 @@ describe('documentMoveOrder', () => {
   describe('the operation the move comes after', () => {
     it('is the creation of a new target the plan creates', () => {
       expect(documentMoveOrder(moveInput({ destination: WIDER }))).toEqual({
-        source: 'users',
         after: { kind: 'createCollection' },
         bypassDocumentValidation: false,
         validatorChange: undefined,
@@ -151,15 +151,26 @@ describe('documentMoveOrder', () => {
       });
     });
   });
+});
+
+describe('documentMoveOf', () => {
+  it('reads the source under its origin name when the plan does not rename it', () => {
+    expect(documentMoveOf(moveInput({ origin: {}, destination: {} }), [])).toMatchObject({
+      from: 'users',
+      to: 'members',
+    });
+  });
 
   it('reads the source under the name the plan renames it to, right after that rename', () => {
     expect(
-      documentMoveOrder(
+      documentMoveOf(
         moveInput({ origin: {}, destination: {}, renames: [{ from: 'users', to: 'people' }] }),
+        [],
       ),
     ).toMatchObject({
-      source: 'people',
-      after: { kind: 'renameCollection', renames: [{ from: 'users', to: 'people' }] },
+      from: 'people',
+      to: 'members',
+      order: { after: { kind: 'renameCollection', renames: [{ from: 'users', to: 'people' }] } },
     });
   });
 });
@@ -175,12 +186,14 @@ describe('documentCopiesOf', () => {
             { from: 'a', to: 'b' },
             { from: 'b', to: 'a' },
           ],
+          droppedStoredNames: [],
           variant: undefined,
         },
       ]),
     ).toEqual([
       {
         models: ['User'],
+        droppedStoredNames: [],
         fieldStages: [{ $set: { fullName: '$name', b: '$a', a: '$b' } }, { $unset: ['name'] }],
       },
     ]);
@@ -189,33 +202,60 @@ describe('documentCopiesOf', () => {
   it('copies models whose documents change alike together', () => {
     expect(
       documentCopiesOf([
-        { name: 'Admin', storedNameMoves: [], variant: undefined },
-        { name: 'Staff', storedNameMoves: [], variant: undefined },
+        { name: 'Admin', storedNameMoves: [], droppedStoredNames: [], variant: undefined },
+        { name: 'Staff', storedNameMoves: [], droppedStoredNames: [], variant: undefined },
       ]),
-    ).toEqual([{ models: ['Admin', 'Staff'], fieldStages: [] }]);
+    ).toEqual([{ models: ['Admin', 'Staff'], droppedStoredNames: [], fieldStages: [] }]);
   });
 
   it('gives each model its own copy when one renames a field the other keeps', () => {
     expect(
       documentCopiesOf([
-        { name: 'Admin', storedNameMoves: [{ from: 'n', to: 'name' }], variant: undefined },
-        { name: 'Staff', storedNameMoves: [], variant: undefined },
+        {
+          name: 'Admin',
+          storedNameMoves: [{ from: 'n', to: 'name' }],
+          droppedStoredNames: [],
+          variant: undefined,
+        },
+        { name: 'Staff', storedNameMoves: [], droppedStoredNames: [], variant: undefined },
       ]),
     ).toEqual([
-      { models: ['Admin'], fieldStages: [{ $set: { name: '$n' } }, { $unset: ['n'] }] },
-      { models: ['Staff'], fieldStages: [] },
+      {
+        models: ['Admin'],
+        droppedStoredNames: [],
+        fieldStages: [{ $set: { name: '$n' } }, { $unset: ['n'] }],
+      },
+      { models: ['Staff'], droppedStoredNames: [], fieldStages: [] },
     ]);
   });
 
   it('gives each model its own copy when their fields move to the same stored name', () => {
     expect(
       documentCopiesOf([
-        { name: 'Admin', storedNameMoves: [{ from: 'a', to: 'x' }], variant: undefined },
-        { name: 'Staff', storedNameMoves: [{ from: 'b', to: 'x' }], variant: undefined },
+        {
+          name: 'Admin',
+          storedNameMoves: [{ from: 'a', to: 'x' }],
+          droppedStoredNames: [],
+          variant: undefined,
+        },
+        {
+          name: 'Staff',
+          storedNameMoves: [{ from: 'b', to: 'x' }],
+          droppedStoredNames: [],
+          variant: undefined,
+        },
       ]),
     ).toEqual([
-      { models: ['Admin'], fieldStages: [{ $set: { x: '$a' } }, { $unset: ['a'] }] },
-      { models: ['Staff'], fieldStages: [{ $set: { x: '$b' } }, { $unset: ['b'] }] },
+      {
+        models: ['Admin'],
+        droppedStoredNames: [],
+        fieldStages: [{ $set: { x: '$a' } }, { $unset: ['a'] }],
+      },
+      {
+        models: ['Staff'],
+        droppedStoredNames: [],
+        fieldStages: [{ $set: { x: '$b' } }, { $unset: ['b'] }],
+      },
     ]);
   });
 
@@ -225,17 +265,50 @@ describe('documentCopiesOf', () => {
         {
           name: 'User',
           storedNameMoves: [{ from: 'name', to: 'fullName' }],
+          droppedStoredNames: [],
           variant: { field: 'kind', value: 'member' },
         },
       ]),
     ).toEqual([
       {
         models: ['User'],
+        droppedStoredNames: [],
         fieldStages: [
           { $set: { fullName: '$name', kind: { $literal: 'member' } } },
           { $unset: ['name'] },
         ],
       },
+    ]);
+  });
+
+  it('drops the stored names the destination model does not store', () => {
+    expect(
+      documentCopiesOf([
+        {
+          name: 'User',
+          storedNameMoves: [{ from: 'name', to: 'fullName' }],
+          droppedStoredNames: ['extra'],
+          variant: undefined,
+        },
+      ]),
+    ).toEqual([
+      {
+        models: ['User'],
+        droppedStoredNames: ['extra'],
+        fieldStages: [{ $set: { fullName: '$name' } }, { $unset: ['name', 'extra'] }],
+      },
+    ]);
+  });
+
+  it('gives a model that drops a field its own copy', () => {
+    expect(
+      documentCopiesOf([
+        { name: 'Admin', storedNameMoves: [], droppedStoredNames: ['extra'], variant: undefined },
+        { name: 'Staff', storedNameMoves: [], droppedStoredNames: [], variant: undefined },
+      ]),
+    ).toEqual([
+      { models: ['Admin'], droppedStoredNames: ['extra'], fieldStages: [{ $unset: ['extra'] }] },
+      { models: ['Staff'], droppedStoredNames: [], fieldStages: [] },
     ]);
   });
 });

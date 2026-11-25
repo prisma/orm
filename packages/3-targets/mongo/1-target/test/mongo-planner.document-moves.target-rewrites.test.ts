@@ -92,6 +92,23 @@ describe('MongoMigrationPlanner, rewrites in the target of a document move', () 
       ]);
     });
 
+    it('a field rename, whose refusal names the order that works: the rename first, then the move', () => {
+      const scenario = moveScenario(
+        { fields: ['_id', 'name'] },
+        {
+          from: { fields: ['_id', 'guest', 'name'] },
+          to: { fields: ['_id', 'guest', 'name'], storedAs: { name: 'fullName' } },
+        },
+      );
+      expect(
+        refusal(plan({ ...scenario, schema: SCHEMA })).map(({ why }) =>
+          why?.endsWith(
+            'Or rename the field in an earlier migration, before model "Member" is added to collection "members".',
+          ),
+        ),
+      ).toEqual([true]);
+    });
+
     it('a cast', () => {
       const scenario = moveScenario(
         { fields: ['_id', 'user', 'age'], types: { age: INT } },
@@ -205,7 +222,7 @@ describe('MongoMigrationPlanner, rewrites in the target of a document move', () 
     }).toEqual({
       leftOut: ['Rename field guest to visitor in collection members'],
       why: expect.stringContaining(
-        'With migration plan, keep the documents by moving them in the migration that plan writes: plan the change without this statement, and at the start of the operations of the migration.ts it writes, before any other operation on collection "users", add a dataTransform',
+        'With migration plan, keep the documents by moving them in the migration that plan writes. Plan the change without --rename User:Member. At the start of the operations of the migration.ts it writes, before any other operation on collection "users", add a dataTransform.',
       ),
     });
   });
