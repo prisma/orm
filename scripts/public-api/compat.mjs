@@ -68,8 +68,8 @@ const isRestricted = (modifier) =>
   modifier.kind === ts.SyntaxKind.ProtectedKeyword;
 
 // The abstract members of a class, its inherited ones included, which a subclass implements:
-// each under its rewritten key, and whether it is a method of another package, which keeps its
-// method form there.
+// each under its rewritten key, and in the form a subclass must give it: a getter stays a getter,
+// and a method of another package keeps its method form there.
 function abstractMembers(checker, symbol, ownNames) {
   const instance = checker.getDeclaredTypeOfSymbol(symbol);
   const members = [];
@@ -83,7 +83,11 @@ function abstractMembers(checker, symbol, ownNames) {
     const own = ownNames.has(packageOf(declaration.getSourceFile().fileName)?.name);
     members.push({
       key: isProtected ? `protected ${property.name}` : property.name,
-      method: !own && ts.isMethodDeclaration(declaration),
+      form: ts.isGetAccessorDeclaration(declaration)
+        ? 'getter'
+        : !own && ts.isMethodDeclaration(declaration)
+          ? 'method'
+          : 'property',
     });
   }
   return members;
@@ -402,15 +406,19 @@ export function generateTests({
         if (
           symbol &&
           symbol.flags & ts.SymbolFlags.Class &&
+          !typeOnly.get(name) &&
           isAbstractClass(symbol) &&
           isConstructible(symbol)
         ) {
+          // Members are typed never, which fits whatever type the release gives them, even a type
+          // parameter filled with never.
+          const implementation = {
+            getter: (key) => `get ${key}(): never { throw 0; }`,
+            method: (key) => `${key}(..._: any[]): never { throw 0; }`,
+            property: (key) => `declare ${key}: never;`,
+          };
           const body = members
-            .map(({ key, method }) =>
-              method
-                ? `${JSON.stringify(key)}(...args: any[]): any { return args; }`
-                : `declare ${JSON.stringify(key)}: any;`,
-            )
+            .map(({ key, form }) => implementation[form](JSON.stringify(key)))
             .join(' ');
           const probe = id++;
           segments.push({

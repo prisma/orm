@@ -79,6 +79,12 @@ describe('checkPackage, with the release treated as GA', () => {
     );
   });
 
+  it('subclasses an unchanged abstract class whatever its members and type parameters are', () => {
+    const result = check('abstract-generic', { release: 'abstract-generic' });
+    deepStrictEqual(brokenExports(result), []);
+    deepStrictEqual(result.problems, []);
+  });
+
   it('fails when the release imports a file of its own that is missing', () => {
     const { problems } = check('relative-release', { release: 'relative-missing' });
     strictEqual(problems.length, 1);
