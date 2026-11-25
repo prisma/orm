@@ -24,7 +24,7 @@ import {
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import type { Result } from '@internal/utils/result';
+import { notOk, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
 import { collectionPlanOf, collectionPlanSchemasOf } from './mongo-collection-plan';
 import {
@@ -286,12 +286,13 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
   }
 
   /**
-   * The renames of the plan. A refusal whose route tells the user to plan without some statements
-   * reads that plan: this planner's whole plan of the same contracts without them, whose renames it
-   * gets when that plan is made, and nothing when it is refused.
+   * The renames of the plan. The refusals whose route tells the user to plan without some statements
+   * read that plan: this planner's whole plan of the same contracts without them, made once. That
+   * plan builds no route of its own, so there is one level of re-planning.
    */
   #statementPlanOf(
     options: MongoPlanOptions,
+    nested = false,
   ): Result<StatementPlan, readonly MigrationPlannerConflict[]> {
     return planStatements({
       statements: renamesOf(options.statements),
@@ -299,16 +300,17 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       contract: mongoContractOf(options.contract),
       schema: mongoSchemaOf(options.schema),
       planWithout: (leftOut) => {
+        if (nested) return undefined;
         const without = {
           ...options,
           statements: options.statements.filter(
             (statement) => !leftOut.some((each) => each === statement),
           ),
         };
-        const statementPlan = this.#statementPlanOf(without);
-        return statementPlan.ok && this.#planFrom(without, statementPlan.value).kind === 'success'
-          ? statementPlan.value
-          : undefined;
+        const statementPlan = this.#statementPlanOf(without, true);
+        if (!statementPlan.ok) return statementPlan;
+        const planned = this.#planFrom(without, statementPlan.value);
+        return planned.kind === 'success' ? statementPlan : notOk(planned.conflicts);
       },
     });
   }

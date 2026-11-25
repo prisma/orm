@@ -26,7 +26,7 @@ import { collectionControlPolicy } from './mongo-control-policy';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
 import { type DocumentMove, documentMoveOf, type MovingModel } from './mongo-document-moves';
 import { documentCollectionOf, modelCoordinates, sameModel } from './mongo-model-coordinates';
-import { capitalized, documentMoveSteps, joinedList, modelNamesText } from './mongo-plan-text';
+import { capitalized, documentMovesText, joinedList, modelNamesText } from './mongo-plan-text';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
 import {
   SEPARATE_THE_MODELS,
@@ -309,11 +309,10 @@ function variantRoute(
   const destinations = joinedList(
     moves.map((move) => `${modelNamesText(namesOf(move))} to collection ${quoted(move.to)}`),
   );
-  const steps = moves.map((move) => documentMoveSteps(move, { naming: moves.length > 1 }));
-  const sameTarget = `Write that first contract as this one with ${variantText(change.model)} kept: these steps expect its plan to change ${moves.length === 1 ? `collection ${quoted(moves[0]?.to ?? '')}` : 'those collections'} as this plan does.`;
-  const firstMove = `First move ${destinations}, keep ${variantText(change.model)} as it is, and plan that with migration plan. ${steps.join(' ')} ${sameTarget} Under db update, apply that change, then move the documents out of collection ${quoted(change.collection)} by hand.`;
+  const sameTarget = `Write that first contract as this one with ${variantText(change.model)} kept, so its plan changes ${moves.length === 1 ? `collection ${quoted(moves[0]?.to ?? '')}` : 'those collections'} as this plan does, which the steps below expect.`;
+  const firstMove = `First move ${destinations}, keep ${variantText(change.model)} as it is, and plan that with migration plan. ${sameTarget}\n\n${documentMovesText(moves)}\n\nUnder db update, apply that change, then move the documents out of collection ${quoted(change.collection)} by hand.`;
   if (staying.length === 0) {
-    return `A model that moves out of collection ${quoted(change.collection)} leaves its documents in it, so make the change in two plans. ${firstMove} Then make the change to ${variantText(change.model)} and plan again. Or ${keep}.`;
+    return `A model that moves out of collection ${quoted(change.collection)} leaves its documents in it, so make the change in two plans. ${firstMove}\n\nThen make the change to ${variantText(change.model)} and plan again. Or ${keep}.`;
   }
   const stayAdvice = `To change only the documents of ${variantText(change.model)}, ${change.statement === undefined ? `move the models to separate collections, or ${keep}` : SEPARATE_THE_MODELS}.`;
   return moving.length === 0

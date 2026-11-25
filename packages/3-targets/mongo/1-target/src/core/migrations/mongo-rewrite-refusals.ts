@@ -24,11 +24,8 @@ export function sharedCollectionWhy(
   return `Collection ${JSON.stringify(collection)} stores several models and no discriminator tells their documents apart, so ${change} of ${quotedList(others)} too.`;
 }
 
-/**
- * How a model that blocks a rewrite came to share its documents in the destination: it is new to
- * the collection, or it was there and starts storing the field.
- */
-export type Arrival = 'collection' | 'field';
+/** How a model that blocks a rewrite came to share its documents in the destination. */
+export type Arrival = 'joinsCollection' | 'startsStoringField';
 
 /** The arrival of destination model `model` in `collection` with a field stored as `storedName`; `undefined` when the origin already stores it there with that field. */
 export type ArrivalOf = (
@@ -52,13 +49,14 @@ export function earlierMigrationText(
   if (
     arrivals.length === 0 ||
     arrivals.some(
-      ({ arrival }) => arrival === undefined || (reaches === 'selected' && arrival === 'field'),
+      ({ arrival }) =>
+        arrival === undefined || (reaches === 'selected' && arrival === 'startsStoringField'),
     )
   ) {
     return '';
   }
   const before = arrivals.map(({ name, arrival }) =>
-    arrival === 'collection'
+    arrival === 'joinsCollection'
       ? `model ${JSON.stringify(name)} is added to collection ${JSON.stringify(collection)}`
       : `model ${JSON.stringify(name)} stores field ${JSON.stringify(field)}`,
   );

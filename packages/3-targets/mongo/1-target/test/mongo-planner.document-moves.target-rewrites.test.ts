@@ -83,22 +83,30 @@ function leftOutSummaries(
   statements: readonly ResolvedMigrationStatement[] = [],
 ): readonly string[] {
   const leftOut = refusal(plan({ ...scenario, schema: SCHEMA, statements }));
-  const [stated] = refusal(
+  const statedRefusals = refusal(
     plan({
       ...scenario,
       schema: SCHEMA,
       statements: [renameModel('User', 'Member'), ...statements],
     }),
   );
+  const [stated] = statedRefusals;
   expect({
     earlier: leftOut.map(({ why }) => why?.endsWith(EARLIER)),
     route: {
-      fallback: stated?.why?.endsWith(
-        'Planned without it, the change is refused for another reason as well, which that refusal names.',
+      fallback: stated?.why?.includes(
+        'Planned without it, the change is refused for another reason as well: "',
       ),
       moves: stated?.why?.includes('rawAggregate('),
     },
-  }).toEqual({ earlier: leftOut.map(() => true), route: { fallback: true, moves: false } });
+    listed: leftOut.map(({ summary, why }) =>
+      statedRefusals.some((each) => each.summary === summary && each.why === why),
+    ),
+  }).toEqual({
+    earlier: leftOut.map(() => true),
+    route: { fallback: true, moves: false },
+    listed: leftOut.map(() => true),
+  });
   return leftOut.map(({ summary }) => summary);
 }
 
@@ -230,7 +238,7 @@ describe('MongoMigrationPlanner, rewrites in the target of a document move', () 
     }).toEqual({
       leftOut: ['Rename field guest to visitor in collection members'],
       why: expect.stringContaining(
-        'With migration plan, keep the documents by moving them in the migration that plan writes. Plan the change without --rename User:Member. At the start of the operations of the migration.ts it writes, before any other operation on collection "users", add a dataTransform.',
+        'With migration plan, keep the documents by moving them in the migration that plan writes. Plan the change without --rename User:Member.\n\nAt the start of the operations of the migration.ts it writes, before the plan\'s own operations on collection "users", add a dataTransform.',
       ),
     });
   });

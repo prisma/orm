@@ -59,7 +59,7 @@ function movingText({ copies }: DocumentMove): string {
 
 /** Where the move's dataTransform goes, as a clause that starts in lower case so it can follow "For model …,". */
 function placementClause({ from, to, order }: DocumentMove): string {
-  const before = `before any other operation on collection "${from}"`;
+  const before = `before the plan's own operations on collection "${from}"`;
   switch (order.after?.kind) {
     case 'createCollection':
       return `in the operations of the migration.ts it writes, right after the creation of collection "${to}" and ${before}, add a dataTransform.`;
@@ -74,7 +74,7 @@ function bypassText({ to, order, copies }: DocumentMove): string {
   const skips = `${copies.length === 1 ? 'The copy skips' : 'The copies skip'} document validation because collection "${to}" still has its old validator`;
   switch (order.validatorChange) {
     case 'replaced':
-      return ` ${skips}. The later validator update on "${to}" checks the moved documents. If that check stops the apply, the moved documents are in collection "${to}": fix them there and run db migrate again.`;
+      return ` ${skips}; the later validator update on "${to}" checks the moved documents.`;
     case 'removed':
       return ` ${skips}, which the plan then removes.`;
     case undefined:
@@ -82,23 +82,49 @@ function bypassText({ to, order, copies }: DocumentMove): string {
   }
 }
 
+/**
+ * `jsonToTsSource`'s text on one line. Its line breaks are layout only, since it escapes those
+ * inside strings, so joining them keeps the value and gives the layout it uses for a short value.
+ */
+function oneLine(source: string): string {
+  return source
+    .replace(/([{[])\n\s*/g, (_, open: string) => (open === '{' ? '{ ' : '['))
+    .replace(/,\n\s*([}\]])/g, (_, close: string) => (close === '}' ? ' }' : ']'))
+    .replace(/,\n\s*/g, ', ');
+}
+
+const CODE_INDENT = '  ';
+
+/** A `rawAggregate` call of the move as it goes in `migration.ts`, one stage to a line. */
 function copyCall(move: DocumentMove, copy: DocumentCopy, selects: string): string {
-  const pipeline = [
+  const stages = [
     `{ $match: <a filter that selects only ${selects}> }`,
-    ...[...copy.fieldStages, { $merge: { into: move.to } }].map(jsonToTsSource),
-  ].join(', ');
+    ...[...copy.fieldStages, { $merge: { into: move.to } }].map((stage) =>
+      oneLine(jsonToTsSource(stage)),
+    ),
+  ];
   const bypass = move.order.bypassDocumentValidation
     ? `, ${jsonToTsSource({ bypassDocumentValidation: true })}`
     : '';
-  return `rawAggregate(${jsonToTsSource(move.from)}, [${pipeline}]${bypass})`;
+  return [
+    `${CODE_INDENT}rawAggregate(${jsonToTsSource(move.from)}, [`,
+    ...stages.map((stage) => `${CODE_INDENT}${CODE_INDENT}${stage},`),
+    `${CODE_INDENT}]${bypass})`,
+  ].join('\n');
 }
 
 function copiesText(move: DocumentMove): string {
   const { from, to, copies } = move;
   const [only] = copies;
-  return copies.length === 1 && only !== undefined
-    ? `Its run copies the documents of ${movingText(move)} into collection "${to}", such as ${copyCall(move, only, 'those documents')}. Then it deletes them with deleteDocuments({ collection: ${jsonToTsSource(from)}, filter: <the same filter> }).`
-    : `Its run copies the documents of ${movingText(move)} into collection "${to}", with one copy for each group of models whose documents change alike on the way: ${joinedList(copies.map((copy) => `${copyCall(move, copy, `the documents of ${modelNamesText(copy.models)}`)} for ${modelNamesText(copy.models)}`))}. Then it deletes them with deleteDocuments({ collection: ${jsonToTsSource(from)}, filter: <a filter that selects the documents of all of them> }).`;
+  const calls =
+    copies.length === 1 && only !== undefined
+      ? `Its run copies the documents of ${movingText(move)} into collection "${to}":\n\n${copyCall(move, only, 'those documents')}`
+      : `Its run copies the documents of ${movingText(move)} into collection "${to}", with one copy for each group of models whose documents change alike on the way:\n\n${copies.map((copy) => copyCall(move, copy, `the documents of ${modelNamesText(copy.models)}`)).join('\n')}`;
+  const filter =
+    copies.length === 1
+      ? '<the same filter>'
+      : '<a filter that selects the documents of all of them>';
+  return `${calls}\n\nThen it deletes them from collection "${from}":\n\n${CODE_INDENT}deleteDocuments({ collection: ${jsonToTsSource(from)}, filter: ${filter} })`;
 }
 
 function droppedText({ copies }: DocumentMove): string {
@@ -106,7 +132,7 @@ function droppedText({ copies }: DocumentMove): string {
     .filter((copy) => copy.droppedStoredNames.length > 0)
     .map((copy) => {
       const one = copy.droppedStoredNames.length === 1;
-      return ` ${copies.length === 1 ? 'The copy' : `The copy of ${modelNamesText(copy.models)}`} drops field${one ? '' : 's'} ${quotedList(copy.droppedStoredNames)} from the documents, and ${one ? 'its' : 'their'} values: the model they become does not store ${one ? 'it' : 'them'}.`;
+      return ` ${copies.length === 1 ? 'Its' : `The copy of ${modelNamesText(copy.models)}: its`} $unset stage deletes field${one ? '' : 's'} ${quotedList(copy.droppedStoredNames)} and ${one ? 'its' : 'their'} values from the moved documents, since the model they become does not store ${one ? 'it' : 'them'}.`;
     })
     .join('');
 }
@@ -118,19 +144,41 @@ function filterText(move: DocumentMove): string {
     : `Each copy's filter must select only the documents of its own models, apart from those of the other models that move and from ${shared}. Filter each copy by a field only its models store.`;
 }
 
-/**
- * The steps that add a document move to the migration.ts a plan writes: the operations, where they
- * go (see `documentMoveOrder`), the filter they need, and what to do if the apply stops. With
- * `naming`, they start with the models that move, for a route that gives several moves. The
- * target's rewrites come after the move: those of another model that would reach the moved
- * documents are refused, and those of a moving model reach them, as they should.
- */
-export function documentMoveSteps(
-  move: DocumentMove,
-  options: { readonly naming: boolean },
-): string {
-  const placement = options.naming
+function moveText(move: DocumentMove, naming: boolean): string {
+  const placement = naming
     ? `For ${movingText(move)}, ${placementClause(move)}`
     : capitalized(placementClause(move));
-  return `${placement} ${copiesText(move)}${droppedText(move)} Run that migration.ts to emit its ops.json, and apply it with db migrate.${bypassText(move)} ${filterText(move)} If the apply stops, fix what stopped it and run db migrate again.`;
+  return `${placement} ${copiesText(move)}\n\n${filterText(move)}${droppedText(move)}${bypassText(move)}`;
+}
+
+function applyText(count: number): string {
+  return count === 1
+    ? 'Run that migration.ts to emit its ops.json, and apply it with db migrate.'
+    : `${count === 2 ? 'Both' : `All ${count}`} dataTransforms go in that one migration.ts. Run it to emit its ops.json, and apply it once with db migrate.`;
+}
+
+function stopText(moves: readonly DocumentMove[]): string {
+  const checked = moves.filter((move) => move.order.validatorChange === 'replaced');
+  return `If the apply stops, fix what stopped it and run db migrate again.${checked
+    .map(
+      ({ to }) =>
+        ` If the validator update on "${to}" stops it, the moved documents are in collection "${to}": fix them there.`,
+    )
+    .join('')}`;
+}
+
+/**
+ * The steps that add document moves to the migration.ts a plan writes, in short paragraphs: for
+ * each move, where its dataTransform goes (see `documentMoveOrder`) with its copies and delete, and
+ * the filter they need; then how to apply them, together, and what to do if the apply stops. With
+ * several moves, each starts with the models that move. The target's rewrites come after the move:
+ * those of another model that would reach the moved documents are refused, and those of a moving
+ * model reach them, as they should.
+ */
+export function documentMovesText(moves: readonly DocumentMove[]): string {
+  return [
+    ...moves.map((move) => moveText(move, moves.length > 1)),
+    applyText(moves.length),
+    stopText(moves),
+  ].join('\n\n');
 }

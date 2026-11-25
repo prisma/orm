@@ -51,7 +51,7 @@ import {
 } from './mongo-model-coordinates';
 import {
   capitalized,
-  documentMoveSteps,
+  documentMovesText,
   fieldDisplayName,
   handWrittenRoute,
   joinedList,
@@ -218,17 +218,27 @@ interface PlanningInput {
   readonly contract: MongoContract;
   /** The schema the plan starts from. */
   readonly schema: MongoSchemaIR;
-  readonly planWithout: PlanWithout;
+  /** The route of the statements the shared-collection rule refuses, when it refuses any. */
+  readonly sharedRoute: SharedRoute | undefined;
   /** The model rename statement on the origin model `model` that the shared-collection rule refuses, if there is one. */
   readonly sharedCollectionRefusalOf: (
     model: ModelCoordinate,
   ) => ResolvedModelRenameStatement | undefined;
+  /** Why the shared-collection rule would refuse a model rename from `from` to `to` given with the plan's statements, if it would. */
+  readonly sharedIfRenamed: (
+    from: ModelCoordinate,
+    to: ModelCoordinate,
+  ) => SharedCollection | undefined;
 }
 
-/** The renames of the whole plan of the same contracts without `statements`, when that plan is made; `undefined` when it is refused. */
+/**
+ * The whole plan of the same contracts without `statements`: its renames when it is made, its
+ * refusals when it is refused, and `undefined` when it is not planned, as in a plan that is itself
+ * planned without statements, whose refusal text nobody reads.
+ */
 export type PlanWithout = (
   statements: readonly ResolvedRenameStatement[],
-) => StatementPlan | undefined;
+) => Result<StatementPlan, readonly MigrationPlannerConflict[]> | undefined;
 
 /**
  * Plans the renames of a plan against the schema it starts from: those its statements ask for,
@@ -249,12 +259,20 @@ export function planStatements(input: {
   const fromContract = input.fromContract ?? input.contract;
   const models = modelRenamesOf(input.statements, input.fromContract, input.contract);
   const collections = new CollectionRenames(models, fromContract, input.contract);
+  const sharedRoute = sharedRouteOf({
+    statements: input.statements,
+    fromContract,
+    contract: input.contract,
+    models,
+    collections,
+    planWithout: input.planWithout,
+  });
   const planning: PlanningInput = {
     statements: input.statements,
     fromContract,
     contract: input.contract,
     schema: input.schema,
-    planWithout: input.planWithout,
+    sharedRoute,
     sharedCollectionRefusalOf: (model) => {
       const rename = models.find(
         (each) => each.statement !== undefined && sameModel(each.from, model),
@@ -263,6 +281,18 @@ export function planStatements(input: {
       return change === undefined || collections.sharedCollection(change) === undefined
         ? undefined
         : rename?.statement;
+    },
+    sharedIfRenamed: (from, to) => {
+      const statement: ResolvedModelRenameStatement = { kind: 'rename', entity: 'model', from, to };
+      const withIt = modelRenamesOf(
+        [...input.statements, statement],
+        input.fromContract,
+        input.contract,
+      );
+      const renamed = withIt.find((each) => each.statement === statement);
+      const renames = new CollectionRenames(withIt, fromContract, input.contract);
+      const change = renamed === undefined ? undefined : renames.changeOf(renamed);
+      return change === undefined ? undefined : renames.sharedCollection(change);
     },
   };
   let schema = input.schema;
@@ -400,18 +430,23 @@ export function planStatements(input: {
         );
   if (fieldConflict !== undefined) return notOk([fieldConflict]);
 
-  return conflicts.length > 0
-    ? notOk(conflicts)
-    : ok({
-        schema,
-        collectionRenames,
-        fieldRenameCalls,
-        fieldRenames,
-        callOfStatement,
-        models,
-        collections,
-        renamedCollections,
-      });
+  if (conflicts.length > 0) {
+    const leftOut = sharedRoute?.leftOutRefusals() ?? [];
+    return notOk([
+      ...conflicts,
+      ...leftOut.filter((each) => !conflicts.some((other) => other.summary === each.summary)),
+    ]);
+  }
+  return ok({
+    schema,
+    collectionRenames,
+    fieldRenameCalls,
+    fieldRenames,
+    callOfStatement,
+    models,
+    collections,
+    renamedCollections,
+  });
 }
 
 function fieldChangeOf(rename: FieldRename, { call }: FieldRenameCall): FieldChange {
@@ -593,14 +628,66 @@ function planCollectionChange(change: CollectionChange, schema: MongoSchemaIR): 
   );
 }
 
-/** The leave-out route of models whose documents the plan without the statements drops with their collection, which it asks about. */
-function leaveOutShared(statements: string, moving: string): string {
-  return `Leave out ${statements} to plan the change without moving them: the plan then asks about the data it drops. A question about ${moving} offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change and deletes the data.`;
+/** The stated changes the shared-collection rule refuses that split one collection, or merge into one. */
+interface RefusedGroup {
+  readonly shared: SharedCollection;
+  readonly changes: readonly CollectionChange[];
 }
 
-/** What the leave-out route says when the plan without the statements it names is refused as well, so its own refusal says what to change first. */
-function leftOutPlanRefused(count: number): string {
-  return `Planned without ${count === 1 ? 'it' : 'them'}, the change is refused for another reason as well, which that refusal names.`;
+/**
+ * The route of every statement the shared-collection rule refuses in a plan. Every one of them must
+ * be left out before any plan is made, so the route reads the plan without all of them, with their
+ * field statements, and is printed once, under the first of them; the refusals of the others name
+ * it by that statement.
+ */
+interface SharedRoute {
+  /** The first model rename statement the rule refuses, whose refusal prints the route. */
+  readonly printer: ResolvedModelRenameStatement;
+  /** The statements to leave out, as the CLI takes them. */
+  readonly statementsText: string;
+  readonly text: () => string;
+  /** The refusals of the plan without the statements, once the text has read that plan and found it refused. */
+  readonly leftOutRefusals: () => readonly MigrationPlannerConflict[];
+}
+
+function renameFlag(
+  statement: ResolvedModelRenameStatement | ResolvedFieldRenameStatement,
+  fromContract: ContractWithDomain,
+  contract: ContractWithDomain,
+): string {
+  return `--rename ${
+    statement.entity === 'field'
+      ? `${modelStatementText(contract, statement.to)}.${statement.from.field}:${fieldStatementText(contract, statement.to)}`
+      : `${modelStatementText(fromContract, statement.from)}:${modelStatementText(contract, statement.to)}`
+  }`;
+}
+
+function refusedGroupsOf(collections: CollectionRenames): readonly RefusedGroup[] {
+  const groups: { shared: SharedCollection; changes: CollectionChange[] }[] = [];
+  for (const change of collections.changes) {
+    if (!change.renames.some((rename) => rename.statement !== undefined)) continue;
+    const shared = collections.sharedCollection(change);
+    if (shared === undefined) continue;
+    const group = groups.find(
+      (each) =>
+        each.shared.kind === shared.kind &&
+        each.changes.some((other) =>
+          shared.kind === 'split' ? other.from === change.from : other.to === change.to,
+        ),
+    );
+    if (group === undefined) groups.push({ shared, changes: [change] });
+    else group.changes.push(change);
+  }
+  return groups;
+}
+
+function movingModelsOf(group: RefusedGroup): readonly ModelCoordinate[] {
+  return group.changes.flatMap((change) => change.renames.map((rename) => rename.from));
+}
+
+function staysIn(group: RefusedGroup): readonly ModelCoordinate[] {
+  const moving = movingModelsOf(group);
+  return group.shared.objects.filter((model) => !moving.some((each) => sameModel(each, model)));
 }
 
 /** The models of one collection the moving models become, and the documents already there they read. */
@@ -616,121 +703,134 @@ function destinationStartText({ renamedTo, readers }: MoveDestination): string {
     : `${capitalized(modelsText(renamedTo))} ${one ? 'reads' : 'read'} the documents of ${modelsText(readers)} already stored in ${one ? 'its' : 'their'} collection, since no discriminator tells them apart.`;
 }
 
-/** The leave-out route for root models whose documents no discriminator tells apart from those of the models that stay: without the statements they are removed, and nothing is asked. */
-function leaveOutRemoved(
-  statements: string,
+/** What the plan without the statements does to models whose documents no discriminator tells apart from those of the models that stay: they are removed, and nothing is asked. */
+function removedText(
   moving: readonly ModelCoordinate[],
   staying: readonly ModelCoordinate[],
   destinations: readonly MoveDestination[],
   from: string,
 ): string {
   const one = moving.length === 1;
-  return `Leave out ${statements} to plan the change without moving them. ${capitalized(modelsText(moving))} ${one ? 'is' : 'are'} then removed and nothing is asked, since nothing is deleted. ${one ? 'Its' : 'Their'} documents stay in collection "${from}", where ${modelsText(staying)} still read${staying.length === 1 ? 's' : ''} them. ${destinations.map(destinationStartText).join(' ')} If the new validator of collection "${from}" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there.`;
+  return `${capitalized(modelsText(moving))} ${one ? 'is' : 'are'} then removed and nothing is asked, since nothing is deleted. ${one ? 'Its' : 'Their'} documents stay in collection "${from}", where ${modelsText(staying)} still read${staying.length === 1 ? 's' : ''} them. ${destinations.map(destinationStartText).join(' ')} If the new validator of collection "${from}" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there.`;
 }
 
-/**
- * The stated changes the shared-collection rule refuses together with `change`, `change` among
- * them: those that split the same collection, or merge into the same one. Their statements are
- * left out together, since the plan without one of them is refused by the others.
- */
-function changesRefusedWith(
-  change: CollectionChange,
-  shared: SharedCollection,
-  collections: CollectionRenames,
-): readonly CollectionChange[] {
-  return collections.changes.filter(
-    (other) =>
-      other.renames.some((rename) => rename.statement !== undefined) &&
-      collections.sharedCollection(other)?.kind === shared.kind &&
-      (shared.kind === 'split' ? other.from === change.from : other.to === change.to),
-  );
+/** What the plan without the statements does to models whose documents it drops with their collection: it asks about them. */
+function askedText(moving: readonly ModelCoordinate[], kept: boolean): string {
+  const answer = kept
+    ? 'Answered with the --delete it also offers, it plans the change; under db update that deletes the data.'
+    : 'Answer it with --delete, which it also offers: that plans the change and deletes the data.';
+  return `The plan then asks about the data of ${modelsText(moving)}, which it drops. Its question offers this same rename again, which is refused again for the same reason. ${answer}`;
 }
 
-function renameFlag(
-  statement: ResolvedModelRenameStatement | ResolvedFieldRenameStatement,
-  fromContract: ContractWithDomain,
-  contract: ContractWithDomain,
+/** What the route says when the plan without the statements is refused as well, so its own refusals say what to change first. */
+function leftOutPlanRefused(
+  count: number,
+  refusals: readonly MigrationPlannerConflict[] | undefined,
 ): string {
-  return `--rename ${
-    statement.entity === 'field'
-      ? `${fieldStatementText(fromContract, statement.from)}:${fieldStatementText(contract, statement.to)}`
-      : `${modelStatementText(fromContract, statement.from)}:${modelStatementText(contract, statement.to)}`
-  }`;
+  const planned = `Planned without ${count === 1 ? 'it' : 'them'}, the change is refused for another reason as well`;
+  if (refusals === undefined || refusals.length === 0) return `${planned}.`;
+  const one = refusals.length === 1;
+  return `${planned}: ${joinedList(refusals.map(({ summary }) => `"${summary}"`))}. ${one ? 'That refusal is' : 'Those refusals are'} listed here too, with what to change first.`;
 }
 
-/**
- * The refusal of a model rename statement whose collection holds other models that do not move with
- * it, or whose new collection holds models from elsewhere. The statements the rule refuses together
- * share one route, which the first of them prints; the others name it.
- */
-function sharedCollectionRefusal(
-  statement: ResolvedModelRenameStatement,
-  label: string,
-  collections: CollectionRenames,
-  models: readonly ModelRename[],
-  input: PlanningInput,
-): StatementOutcome | undefined {
-  const { fromContract, contract } = input;
-  const rename = models.find((model) => model.statement === statement);
-  const change = rename === undefined ? undefined : collections.changeOf(rename);
-  const shared = change === undefined ? undefined : collections.sharedCollection(change);
-  if (change === undefined || shared === undefined) return undefined;
-  const { from, to } = change;
-  const others = modelsText(shared.objects);
-  const group = changesRefusedWith(change, shared, collections);
-  const renames = group.flatMap((each) => each.renames);
+function sharedRouteOf(input: {
+  readonly statements: readonly ResolvedRenameStatement[];
+  readonly fromContract: Contract;
+  readonly contract: MongoContract;
+  readonly models: readonly ModelRename[];
+  readonly collections: CollectionRenames;
+  readonly planWithout: PlanWithout;
+}): SharedRoute | undefined {
+  const { statements, fromContract, contract, models } = input;
+  const groups = refusedGroupsOf(input.collections);
+  const renames = groups.flatMap((group) => group.changes.flatMap((change) => change.renames));
   const movingModels = renames.map((renamed) => renamed.from);
-  const moving = modelsText(movingModels);
-  const modelStatements = input.statements.filter(
+  const modelStatements = statements.filter(
     (each): each is ResolvedModelRenameStatement =>
       each.entity === 'model' && renames.some((renamed) => renamed.statement === each),
   );
-  const fieldStatements = input.statements.filter(
+  const [printer] = modelStatements;
+  if (printer === undefined) return undefined;
+  const fieldStatements = statements.filter(
     (each): each is ResolvedFieldRenameStatement =>
       each.entity === 'field' && movingModels.some((model) => sameModel(model, each.from)),
   );
   const leftOutStatements = [...modelStatements, ...fieldStatements];
-  const flag = (each: ResolvedModelRenameStatement | ResolvedFieldRenameStatement) =>
-    renameFlag(each, fromContract, contract);
-  const statementsText = joinedList(leftOutStatements.map(flag));
-  const otherModels = shared.objects.filter(
-    (model) => !movingModels.some((each) => sameModel(each, model)),
+  const statementsText = joinedList(
+    leftOutStatements.map((each) => renameFlag(each, fromContract, contract)),
   );
-  const becomesVariant = renames.some(
-    (renamed) => selectedVariantOf(contract.domain, renamed.to) !== undefined,
-  );
-  const readersIn = (collection: string) =>
+  const leavesBehind = (group: RefusedGroup) =>
+    group.shared.kind === 'split' &&
+    group.changes.every((change) =>
+      change.renames.every((renamed) => isRootModel(fromContract, renamed.from)),
+    );
+  const becomesVariant = (group: RefusedGroup) =>
+    group.changes.some((change) =>
+      change.renames.some(
+        (renamed) => selectedVariantOf(contract.domain, renamed.to) !== undefined,
+      ),
+    );
+  const readersIn = (collection: string, group: RefusedGroup) =>
     modelCoordinates(contract).filter(
       (model) =>
-        !becomesVariant &&
+        !becomesVariant(group) &&
         documentCollectionOf(contract, model) === collection &&
         isRootModel(contract, model) &&
         !renames.some((renamed) => sameModel(renamed.to, model)),
     );
-  const movedInto = joinedList(
-    group.map(
-      (each) =>
-        `the documents of ${modelsText(each.renames.map((renamed) => renamed.from))} into collection "${each.to}"`,
-    ),
-  );
-  const leaveBehindRoute = (): string => {
+  const opening = `Leave out ${statementsText} to plan the change without moving them.`;
+  let leftOutRefusals: readonly MigrationPlannerConflict[] = [];
+
+  const handWritten = (): string => {
+    const consequences = groups.map((group) => askedText(movingModelsOf(group), false));
+    const what = joinedList(
+      groups.map((group) => {
+        const staying = staysIn(group);
+        if (group.shared.kind === 'merged') {
+          const to = group.changes[0]?.to ?? '';
+          const moving = modelsText(movingModelsOf(group));
+          return staying.length === 0
+            ? `the documents of ${moving} into collection "${to}"`
+            : `the documents of ${moving}, and those of ${modelsText(staying)} that collection "${to}" does not already hold, into collection "${to}"`;
+        }
+        return joinedList(
+          group.changes.map(
+            (change) =>
+              `the documents of ${modelsText(change.renames.map((renamed) => renamed.from))} into collection "${change.to}"`,
+          ),
+        );
+      }),
+    );
+    return `${opening} ${consequences.join(' ')}\n\n${handWrittenRoute(what)}`;
+  };
+
+  const leaveBehind = (): string => {
     const leftOut = input.planWithout(leftOutStatements);
-    const removed =
-      otherModels.length === 0
-        ? leaveOutShared(statementsText, moving)
-        : leaveOutRemoved(
-            statementsText,
-            movingModels,
-            otherModels,
-            group.map((each) => ({
-              renamedTo: each.renames.map((renamed) => renamed.to),
-              readers: readersIn(each.to),
+    const plan = leftOut?.ok ? leftOut.value : undefined;
+    const asked = groups.filter((group) => staysIn(group).length === 0);
+    const consequences = groups.map((group) => {
+      const staying = staysIn(group);
+      const moving = movingModelsOf(group);
+      const from = group.changes[0]?.from ?? '';
+      return staying.length === 0
+        ? askedText(moving, plan !== undefined)
+        : removedText(
+            moving,
+            staying,
+            group.changes.map((change) => ({
+              renamedTo: change.renames.map((renamed) => renamed.to),
+              readers: readersIn(change.to, group),
             })),
-            leftOut?.renamedCollections.get(from) ?? from,
+            plan?.renamedCollections.get(from) ?? from,
           );
-    if (leftOut === undefined) return `${removed} ${leftOutPlanRefused(leftOutStatements.length)}`;
+    });
+    const said = `${opening} ${consequences.join(' ')}`;
+    if (plan === undefined) {
+      leftOutRefusals = leftOut?.ok === false ? leftOut.failure : [];
+      return `${said}\n\n${leftOutPlanRefused(leftOutStatements.length, leftOut?.ok === false ? leftOut.failure : undefined)}`;
+    }
     const match: ModelMatchInput = {
-      statements: input.statements,
+      statements,
       models,
       fieldRenames: fieldStatements.map((each) => ({
         from: each.from,
@@ -741,55 +841,84 @@ function sharedCollectionRefusal(
       contract,
       collectionAfterRenames: (name) => name,
     };
-    const moves = group.map((each) =>
-      documentMoveOf(
-        {
-          schema: leftOut.schema,
-          fromContract,
-          contract,
-          originFrom: from,
-          to: each.to,
-          collectionRenames: leftOut.collectionRenames,
-        },
-        each.renames.map((renamed) =>
-          movingModelOf(match, modelDisplayName(renamed.from), renamed.from, renamed.to),
+    const moves = groups.flatMap((group) =>
+      group.changes.map((change) =>
+        documentMoveOf(
+          {
+            schema: plan.schema,
+            fromContract,
+            contract,
+            originFrom: change.from,
+            to: change.to,
+            collectionRenames: plan.collectionRenames,
+          },
+          change.renames.map((renamed) =>
+            movingModelOf(match, modelDisplayName(renamed.from), renamed.from, renamed.to),
+          ),
         ),
       ),
     );
-    const steps = moves.map((move) => documentMoveSteps(move, { naming: moves.length > 1 }));
-    return `${removed} With migration plan, keep the documents by moving them in the migration that plan writes. Plan the change without ${statementsText}. ${steps.join(' ')}`;
+    const askedModels = asked.flatMap(movingModelsOf);
+    const dropped = joinedList(
+      asked.map(
+        (group) =>
+          `"${plan.renamedCollections.get(group.changes[0]?.from ?? '') ?? group.changes[0]?.from}"`,
+      ),
+    );
+    const answer =
+      askedModels.length === 0
+        ? ''
+        : `, and answer its question about ${modelsText(askedModels)} with the --delete it offers: the copies below run before the plan drops collection${asked.length === 1 ? '' : 's'} ${dropped}, so they keep the documents, and the drop removes only the emptied collection${asked.length === 1 ? '' : 's'}`;
+    return `${said}\n\nWith migration plan, keep the documents by moving them in the migration that plan writes. Plan the change without ${statementsText}${answer}.\n\n${documentMovesText(moves)}`;
   };
-  const route = (): string => {
-    switch (shared.kind) {
-      case 'split':
-        return renames.every((renamed) => isRootModel(fromContract, renamed.from))
-          ? leaveBehindRoute()
-          : `${leaveOutShared(statementsText, moving)} ${handWrittenRoute(movedInto)}`;
-      case 'merged':
-        return `${leaveOutShared(statementsText, moving)} ${handWrittenRoute(
-          otherModels.length === 0
-            ? `the documents of ${moving} into collection "${to}"`
-            : `the documents of ${moving}, and those of ${modelsText(otherModels)} that collection "${to}" does not already hold, into collection "${to}"`,
-        )}`;
-    }
+
+  let built: string | undefined;
+  return {
+    printer,
+    statementsText,
+    text: () => {
+      built ??= groups.every(leavesBehind) ? leaveBehind() : handWritten();
+      return built;
+    },
+    leftOutRefusals: () => leftOutRefusals,
   };
-  const [printer] = modelStatements;
+}
+
+/**
+ * The refusal of a model rename statement whose collection holds other models that do not move with
+ * it, or whose new collection holds models from elsewhere. Every statement the rule refuses shares
+ * one route, which the first of them prints; the others name it.
+ */
+function sharedCollectionRefusal(
+  statement: ResolvedModelRenameStatement,
+  label: string,
+  collections: CollectionRenames,
+  models: readonly ModelRename[],
+  input: PlanningInput,
+): StatementOutcome | undefined {
+  const { fromContract, contract, sharedRoute } = input;
+  const rename = models.find((model) => model.statement === statement);
+  const change = rename === undefined ? undefined : collections.changeOf(rename);
+  const shared = change === undefined ? undefined : collections.sharedCollection(change);
+  if (change === undefined || shared === undefined || sharedRoute === undefined) return undefined;
+  const { from, to } = change;
+  const others = modelsText(shared.objects);
   const routeText =
-    printer === undefined || printer === statement
-      ? route()
-      : `Leave out ${statementsText} to plan the change without moving them: the refusal of ${flag(printer)} says what that plan does, and how to keep the documents.`;
+    sharedRoute.printer === statement
+      ? `\n\n${sharedRoute.text()}`
+      : ` Leave out ${sharedRoute.statementsText} to plan the change without moving them: the refusal of ${renameFlag(sharedRoute.printer, fromContract, contract)} says what that plan does, and how to keep the documents.`;
   switch (shared.kind) {
     case 'split':
       return refusedOutcome(
         statement,
         `${label}: collection "${from}" also stores ${others}`,
-        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${routeText}`,
+        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write.${routeText}`,
       );
     case 'merged':
       return refusedOutcome(
         statement,
         `${label}: collection "${to}" also stores ${others}, whose documents are not in collection "${from}"`,
-        `A collection rename moves the documents of one collection, and collection "${to}" would also store the documents of ${others}. Moving the documents of two collections into one is a data migration, which a plan does not write. ${routeText}`,
+        `A collection rename moves the documents of one collection, and collection "${to}" would also store the documents of ${others}. Moving the documents of two collections into one is a data migration, which a plan does not write.${routeText}`,
       );
   }
 }
@@ -901,12 +1030,24 @@ function unrenamedCollectionWhy(
   collection: string,
   input: PlanningInput,
 ): string {
+  const flag = (each: ResolvedModelRenameStatement) =>
+    renameFlag(each, input.fromContract, input.contract);
   const refused = input.sharedCollectionRefusalOf(statement.from);
-  if (refused !== undefined) {
-    return `The documents of model "${modelDisplayName(statement.from)}", which hold field "${fieldDisplayName(statement.from)}", stay in collection "${collection}": the plan does not rename that collection, since ${renameFlag(refused, input.fromContract, input.contract)} is refused. That refusal names the statements to leave out, this one among them, and how to keep the documents.`;
+  const printer = input.sharedRoute?.printer;
+  if (refused !== undefined && printer !== undefined) {
+    return `The documents of model "${modelDisplayName(statement.from)}", which hold field "${fieldDisplayName(statement.from)}", stay in collection "${collection}": the plan does not rename that collection, since ${flag(refused)} is refused. ${printer === refused ? 'That refusal' : `The refusal of ${flag(printer)}`} names the statements to leave out, this one among them, and how to keep the documents.`;
   }
   if (!sameModel(statement.from, statement.to)) {
-    return `Add --rename ${modelDisplayName(statement.from)}:${modelDisplayName(statement.to)} before this statement, so the collection is renamed with its documents.`;
+    const modelStatement = flag({
+      kind: 'rename',
+      entity: 'model',
+      from: statement.from,
+      to: statement.to,
+    });
+    const shared = input.sharedIfRenamed(statement.from, statement.to);
+    return shared === undefined
+      ? `Add ${modelStatement} before this statement, so the collection is renamed with its documents.`
+      : `${modelStatement} would be refused as well: collection "${shared.kind === 'split' ? collection : (collectionOfModel(input.contract.domain, statement.to) ?? collection)}" also stores ${modelsText(shared.objects)}. Leave out this statement too. To see how to keep the documents of model "${modelDisplayName(statement.from)}", give ${modelStatement} with this statement: its refusal names the route.`;
   }
   return `The plan renames a collection only when every model stored in it moves to the same new collection, its control policy is "managed" in both contracts, and the schema being planned from has the old collection and not the new one, so the field would be renamed in a collection the destination does not store the model in. ${LEAVE_OUT}`;
 }
@@ -1271,9 +1412,11 @@ export function arrivalOf(match: ModelMatchInput): ArrivalOf {
       originCollection === undefined ||
       match.collectionAfterRenames(originCollection) !== collection
     ) {
-      return 'collection';
+      return 'joinsCollection';
     }
-    return storedFieldsOf(match.fromContract, origin).has(storedName) ? undefined : 'field';
+    return storedFieldsOf(match.fromContract, origin).has(storedName)
+      ? undefined
+      : 'startsStoringField';
   };
 }
 
