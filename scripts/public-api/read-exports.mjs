@@ -40,9 +40,10 @@ function isTypeOnly(declaration) {
   return false;
 }
 
-const TYPE_FLAGS =
+// The symbols that are types, and those users can use as values.
+export const TYPE_FLAGS =
   ts.SymbolFlags.Interface | ts.SymbolFlags.TypeAlias | ts.SymbolFlags.Class | ts.SymbolFlags.Enum;
-const VALUE_FLAGS =
+export const VALUE_FLAGS =
   ts.SymbolFlags.Variable |
   ts.SymbolFlags.Function |
   ts.SymbolFlags.Class |

@@ -8,12 +8,11 @@ import { builtinModules } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { ApiItemKind, ApiPackage } from '@microsoft/api-extractor-model';
 import ts from 'typescript';
-import { compareCodeUnits, normalizeTypes, renderNode, TypeTextError } from './normalize-type.mjs';
+import { compareCodeUnits } from './api-lines.mjs';
+import { normalizeTypes, renderNode, TypeTextError } from './normalize-type.mjs';
 import { readExports } from './read-exports.mjs';
 
 export class ApiListError extends Error {}
-
-export { compareCodeUnits };
 
 const WHITESPACE = new Set([ts.SyntaxKind.WhitespaceTrivia, ts.SyntaxKind.NewLineTrivia]);
 const LITERALS = new Set([
