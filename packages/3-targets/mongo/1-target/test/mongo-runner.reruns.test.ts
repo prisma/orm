@@ -78,6 +78,23 @@ describe('MongoMigrationRunner, a stop after a copy, which has no check', () => 
     );
   });
 
+  it('says that every operation runs again when postchecks are off', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([]);
+    harness.driver.queueResponse([{ _id: 1 }]);
+    harness.driver.queueResponse([{ _id: 2 }]);
+
+    const result = await execute(
+      harness,
+      [copy, renameField('posts', 'title', 'headline', { filter: { type: 'bug' } })],
+      { prechecks: true, postchecks: false, idempotencyChecks: true },
+    );
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      'Once the documents are fixed, run the command again. With postchecks or idempotency checks turned off, a run skips no operation, so each operation that already ran runs again.',
+    );
+  });
+
   it('says that an operation with no check runs again when it is a create from an ops.json written before creates had one', async () => {
     const harness = makeHarness();
     harness.inspectionExecutor.collections = [{ name: 'events' }, { name: 'occasions' }];
