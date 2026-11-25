@@ -46,7 +46,11 @@ describe('print-release-plan', () => {
   it('prints the committed expectation for the root version', () => {
     assert.deepEqual(
       rows(printed()),
-      rows(expectation('root.txt').replaceAll('<root>', rootVersion)),
+      rows(
+        releaseOfRootVersion(rootVersion).line === 'release-candidates'
+          ? expectation('root.txt').replaceAll('<root>', rootVersion)
+          : expectation(`${rootVersion}.txt`),
+      ),
     );
   });
 
@@ -147,6 +151,19 @@ describe('a dry run of set-version and the publish planning on a copy of the man
         readFileSync(join(dir, rel, 'package.json'), 'utf-8'),
       );
       assert.deepEqual(after, before);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('plans 8.0.1 and 8.1.0 from a tree stamped at 8.0.1 as it does from the release candidates, and marks what is not republished', () => {
+    const dir = scratchWorkspace();
+    try {
+      setVersion(dir, '8.0.1');
+      const fromStamped = planWorkspaceThrough(dir, '8.1.0');
+      assert.deepEqual(fromStamped, planWorkspaceThrough(rootDir, '8.1.0'));
+      assert.equal(fromStamped.previous['@prisma/orm-extension-paradedb'], '0.18.0');
+      assert.deepEqual(planWorkspaceThrough(dir, '8.0.1'), planWorkspaceThrough(rootDir, '8.0.1'));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

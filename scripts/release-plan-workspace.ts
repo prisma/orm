@@ -50,6 +50,8 @@ export function planWorkspace(
  * the `8.0.0` release candidates through `8.0.1` and each minor after it, so a package's version at
  * the asked release follows from the one it had at the release before, as it will when the releases
  * are cut. For printing what a release will hold; `planWorkspace` plans the root version itself.
+ * `previous` holds each package's version at the release before the asked one, or nothing when the
+ * asked release is the workspace's own.
  */
 export function planWorkspaceThrough(
   rootDir: string,
@@ -75,12 +77,16 @@ export function planWorkspaceThrough(
       version: plan[manifest.name]?.version ?? manifest.version,
     }));
   }
+  const advances =
+    steps.length > 0 ||
+    (first.line === 'levels' &&
+      (target.release.major - first.release.major || target.release.minor - first.release.minor) >
+        0);
   return {
     plan: planFrom(manifests, rootVersion, everGa),
-    previous:
-      steps.length === 0
-        ? {}
-        : Object.fromEntries(manifests.map((manifest) => [manifest.name, manifest.version])),
+    previous: advances
+      ? Object.fromEntries(manifests.map((manifest) => [manifest.name, manifest.version]))
+      : {},
   };
 }
 
