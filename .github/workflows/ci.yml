@@ -154,7 +154,7 @@ jobs:
   api-compat:
     name: API compatibility
     # Depends on build only for its caches, as Lint does.
-    needs: build
+    needs: [build, changes]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -162,10 +162,13 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - name: Install dependencies
+        if: needs.changes.outputs.inert != 'true'
         run: pnpm install --frozen-lockfile
       - name: Build packages (restored from Turbo cache)
+        if: needs.changes.outputs.inert != 'true'
         run: pnpm build
       - name: Find breaks since the last release
+        if: needs.changes.outputs.inert != 'true'
         # Each package's comparison takes up to about 3 GB; three at once fit the runner.
         run: pnpm api:compat --jobs 3
 
