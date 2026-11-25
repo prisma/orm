@@ -34,14 +34,18 @@ Until now every package has carried the suffix `rc`, whatever its real state. Fr
 
 | Level at `8.0.0` | Packages |
 | --- | --- |
-| GA | The PostgreSQL facade and everything it depends on, and pgvector and the other PostgreSQL extensions we maintain, except the two below |
-| Preview | MongoDB. The Supabase extension: we expect to change it, and need real use and feedback first, which is not the priority before GA |
-| Early Access | MySQL, MariaDB and SQLite |
+| GA | The PostgreSQL facade and everything it depends on, pgvector and the other PostgreSQL extensions we maintain except the two below, the cache middleware, and the Better Auth integration |
+| Preview | None |
+| Early Access | MySQL, MariaDB, SQLite and MongoDB. The Supabase extension: we expect to change it, and need real use and feedback first, which is not the priority before GA |
 | Outside the scale | The ParadeDB extension. It is deleted from this repository before GA, and the ParadeDB team takes it into a repository of their own, where section 1.2 applies to it. While it is still here it is numbered `0.x` |
 
-### 2.1 Packages that move down from `rc`
+### 2.1 Release `8.0` is published as `8.0.1`
 
-MySQL is published today as `8.0.0-rc.25`, and `8.0.0-ea.0` sorts below it. So the move is made once, at `8.0.0`: each such package is published at its real level, its earlier release candidates are marked as deprecated on the registry with a message that says where the package went, and the upgrade instructions say so. A deprecated version stays installable and prints its message at install.
+Every package starts release `8.0` at patch 1: `8.0.1` for a GA package, `8.0.1-ea.0` for one at Early Access. No package is published as `8.0.0`, and the repository's version, the git tag and the GitHub release are `8.0.1` too. The reason: `8.0.0-ea.0` sorts below the release candidates already published, so a range written at release `8.0` could select an old release candidate. Starting at patch 1 puts every package above them. The decision record that project 6 writes on maturity levels gives the details. Where this plan and the policy say `8.0.0`, they mean release `8.0`.
+
+### 2.2 Packages that move down from `rc`
+
+MySQL is published today as `8.0.0-rc.25`. The move is made once, at release `8.0`: each such package is published at its real level, starting at `8.0.1-ea.0` (section 2.1), its earlier release candidates are marked as deprecated on the registry with a message that says where the package went, and the upgrade instructions say so. A deprecated version stays installable and prints its message at install.
 
 ## 3. How the packages depend on each other
 
