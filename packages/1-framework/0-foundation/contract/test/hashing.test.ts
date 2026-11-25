@@ -327,27 +327,6 @@ describe('assertContractHashes', () => {
     ).not.toThrow();
   });
 
-  it('hashes the capabilities the family hashes, when the family names them', () => {
-    expect(() =>
-      assertContractHashes({
-        contracts: [
-          {
-            name: 'users',
-            contract: savedContract,
-            ...hashes,
-            profileHash: sha256OfJsonText({
-              capabilities: {},
-              target: 'postgres',
-              targetFamily: 'sql',
-            }),
-          },
-        ],
-        ...SQL_HOOKS,
-        profileHashCapabilities: () => ({}),
-      }),
-    ).not.toThrow();
-  });
-
   it('names the contract and the hash that differs', () => {
     expect(() =>
       assertContractHashes({

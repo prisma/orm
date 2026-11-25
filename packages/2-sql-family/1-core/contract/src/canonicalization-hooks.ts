@@ -67,8 +67,3 @@ export const sqlContractCanonicalizationHooks: {
   shouldPreserveEmpty,
   sortStorage,
 };
-
-/**
- * The capabilities a SQL contract's profile hash covers: none, whatever the contract's `capabilities` say, so every SQL contract of one target has the same profile hash.
- */
-export const sqlProfileHashCapabilities = (): Record<string, Record<string, boolean>> => ({});

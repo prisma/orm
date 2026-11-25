@@ -1,4 +1,1 @@
-export {
-  sqlContractCanonicalizationHooks,
-  sqlProfileHashCapabilities,
-} from '../canonicalization-hooks';
+export { sqlContractCanonicalizationHooks } from '../canonicalization-hooks';

@@ -122,23 +122,14 @@ export interface ExpectedContractHashes {
   readonly executionHash?: string;
 }
 
-/** The capabilities a family computes a contract's profile hash from. */
-export type ProfileHashCapabilities = (
-  contract: HashedContractSections,
-) => Record<string, Record<string, boolean>>;
-
 export interface AssertContractHashesOptions {
   readonly contracts: readonly ExpectedContractHashes[];
   readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
   readonly sortStorage?: StorageSort;
-  /**
-   * The capabilities the family computes the profile hash from. Defaults to the contract's `capabilities`.
-   */
-  readonly profileHashCapabilities?: ProfileHashCapabilities;
 }
 
 /**
- * Throws when the hash rules give any saved contract a storage, profile or execution hash other than the one expected, naming each contract and hash that differs. Families and targets call it from their tests, with their own canonicalization hooks and profile-hash capabilities, to hold their hashes fixed within a major.
+ * Throws when the hash rules give any saved contract a storage, profile or execution hash other than the one expected, naming each contract and hash that differs. Families and targets call it from their tests, with their own canonicalization hooks, to hold their hashes fixed within a major.
  */
 export function assertContractHashes(options: AssertContractHashesOptions): void {
   const failing = options.contracts
@@ -188,7 +179,7 @@ function contractHashDifferences(
     computeProfileHash({
       target: contract.target,
       targetFamily: contract.targetFamily,
-      capabilities: options.profileHashCapabilities?.(contract) ?? contract.capabilities,
+      capabilities: contract.capabilities,
     }),
     expected.profileHash,
   );

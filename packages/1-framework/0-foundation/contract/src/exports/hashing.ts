@@ -15,5 +15,4 @@ export {
   computeStorageHash,
   type ExpectedContractHashes,
   type HashedContractSections,
-  type ProfileHashCapabilities,
 } from '../hashing';

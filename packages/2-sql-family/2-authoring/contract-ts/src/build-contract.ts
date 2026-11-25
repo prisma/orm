@@ -28,10 +28,7 @@ import type {
 } from '@internal/framework-components/codec';
 import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import {
-  sqlContractCanonicalizationHooks,
-  sqlProfileHashCapabilities,
-} from '@internal/sql-contract/canonicalization-hooks';
+import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import {
   type CheckExpressionRenderer,
   discriminatorValueSet,
@@ -565,7 +562,7 @@ export function buildSqlContractFromDefinition(
   const profileHash = computeProfileHash({
     target,
     targetFamily,
-    capabilities: sqlProfileHashCapabilities(),
+    capabilities,
   });
 
   const executionWithHash = buildExecutionSection({

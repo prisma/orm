@@ -1,10 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { assertContractHashes } from '@internal/contract/hashing';
 import { describe, expect, it } from 'vitest';
-import {
-  sqlContractCanonicalizationHooks,
-  sqlProfileHashCapabilities,
-} from '../src/canonicalization-hooks';
+import { sqlContractCanonicalizationHooks } from '../src/canonicalization-hooks';
 
 const savedContract = (name: string) =>
   JSON.parse(readFileSync(new URL(`fixtures/hash-rules/${name}.json`, import.meta.url), 'utf8'));
@@ -25,17 +22,16 @@ describe('SQL contract hashes', () => {
             name: 'mysql',
             contract: savedContract('mysql'),
             storageHash: '73a74ebec7b2307f44dddf78f7d8932c27656351f9769f15254ecbfd91112607',
-            profileHash: 'a76864aec3e51292e5212754c5fa96988ddc2ce190204c23855cf9c5e5c5f5fa',
+            profileHash: 'bbed4a8a3ca809c6b70154a0eccd13351c38e39386cf820a33c7fbca88a16c42',
           },
           {
             name: 'sqlite',
             contract: savedContract('sqlite'),
             storageHash: 'ef001a917572669b81f16c13aac6f54c3c173afc38511f1fb9a57315c5ee075e',
-            profileHash: '595b5c7dd6da0c70556bef798d80d453ba856772e83382b1b62238623cbd8790',
+            profileHash: '0f0eba589e341f164b3bab67df828ca46ed7d829e29febd6c6082c7efc2a259d',
           },
         ],
         ...sqlContractCanonicalizationHooks,
-        profileHashCapabilities: sqlProfileHashCapabilities,
       }),
     ).not.toThrow();
   });
