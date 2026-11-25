@@ -39,8 +39,8 @@ function tasks(
 
 const liveTasks = [schemaCollection('tasks')];
 
-const LEAVE_OUT_SHARED = (moving: string) =>
-  `Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. A question about ${moving} offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change and deletes the data.`;
+const LEAVE_OUT_SHARED = (statements: string, moving: string) =>
+  `Leave out ${statements} to plan the change without moving them: the plan then asks about the data it drops. A question about ${moving} offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change and deletes the data.`;
 
 describe('MongoMigrationPlanner, a collection that variants share with their base', () => {
   it('renames the collection once when the base changes @@map and the variants follow', () => {
@@ -192,7 +192,7 @@ describe('MongoMigrationPlanner, a collection that variants share with their bas
           kind: 'statementRefused',
           summary:
             'Cannot rename model "Bug" to "Defect": collection "tasks" also stores models "Task" and "Epic"',
-          why: `A collection rename moves every document of the collection, and the documents of models "Task" and "Epic" do not move to collection "defects". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${LEAVE_OUT_SHARED('model "Bug"')} With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "Bug" into collection "defects" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
+          why: `A collection rename moves every document of the collection, and the documents of models "Task" and "Epic" do not move to collection "defects". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${LEAVE_OUT_SHARED('--rename Bug:Defect', 'model "Bug"')} With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "Bug" into collection "defects" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
           refusedStatement: statement,
         },
       ],
@@ -214,7 +214,7 @@ describe('MongoMigrationPlanner, a collection that variants share with their bas
           kind: 'statementRefused',
           summary:
             'Cannot rename model "Bug" to "Defect": collection "tasks" also stores models "Task" and "Epic", whose documents are not in collection "bugs"',
-          why: `A collection rename moves the documents of one collection, and collection "tasks" would also store the documents of models "Task" and "Epic". Moving the documents of two collections into one is a data migration, which a plan does not write. ${LEAVE_OUT_SHARED('model "Bug"')} With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "Bug", and those of models "Task" and "Epic" that collection "tasks" does not already hold, into collection "tasks" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
+          why: `A collection rename moves the documents of one collection, and collection "tasks" would also store the documents of models "Task" and "Epic". Moving the documents of two collections into one is a data migration, which a plan does not write. ${LEAVE_OUT_SHARED('--rename Bug:Defect', 'model "Bug"')} With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "Bug", and those of models "Task" and "Epic" that collection "tasks" does not already hold, into collection "tasks" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
           refusedStatement: statement,
         },
       ],

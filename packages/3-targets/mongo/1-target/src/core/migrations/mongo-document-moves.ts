@@ -56,8 +56,8 @@ export interface DocumentMoveOrderInput {
   readonly fromContract: Contract | null;
   /** The destination of the plan the move is added to. */
   readonly contract: MongoContract;
-  /** The source collection, by its name in the origin. */
-  readonly from: string;
+  /** The source collection, by its name in the origin; the move's `from` is its name once the plan's renames are made. */
+  readonly originFrom: string;
   readonly to: string;
   readonly collectionRenames: readonly { readonly from: string; readonly to: string }[];
 }
@@ -111,7 +111,7 @@ export function documentCopiesOf(models: readonly MovingModel[]): readonly Docum
  * the validator update checks the moved documents.
  */
 export function documentMoveOrder(input: DocumentMoveOrderInput): DocumentMoveOrder {
-  const { from, to } = input;
+  const { originFrom, to } = input;
   const schemas = collectionPlanSchemasOf(input.schema, input.contract);
   const plan = collectionPlanOf(to, schemas, {
     contract: input.contract,
@@ -119,7 +119,7 @@ export function documentMoveOrder(input: DocumentMoveOrderInput): DocumentMoveOr
   });
   const diff = plan.kind === 'planned' ? plan.diff : undefined;
   const renames = input.collectionRenames.filter(
-    (rename) => rename.to === to || rename.from === from,
+    (rename) => rename.to === to || rename.from === originFrom,
   );
   const after: DocumentMoveAfter | undefined =
     diff !== undefined && diff.collCreates.length > 0
@@ -142,13 +142,15 @@ export function documentMoveOrder(input: DocumentMoveOrderInput): DocumentMoveOr
   };
 }
 
-/** The move of `models`' documents from `input.from` to `input.to`, in the plan `input` describes. */
+/** The move of `models`' documents from `input.originFrom` to `input.to`, in the plan `input` describes. */
 export function documentMoveOf(
   input: DocumentMoveOrderInput,
   models: readonly MovingModel[],
 ): DocumentMove {
   return {
-    from: input.collectionRenames.find((rename) => rename.from === input.from)?.to ?? input.from,
+    from:
+      input.collectionRenames.find((rename) => rename.from === input.originFrom)?.to ??
+      input.originFrom,
     to: input.to,
     order: documentMoveOrder(input),
     copies: documentCopiesOf(models),

@@ -309,12 +309,7 @@ function variantRoute(
   const destinations = joinedList(
     moves.map((move) => `${modelNamesText(namesOf(move))} to collection ${quoted(move.to)}`),
   );
-  const steps = moves.map((move) => {
-    const text = documentMoveSteps(move);
-    return moves.length === 1
-      ? text
-      : `For ${modelNamesText(namesOf(move))}, ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
-  });
+  const steps = moves.map((move) => documentMoveSteps(move, { naming: moves.length > 1 }));
   const sameTarget = `Write that first contract as this one with ${variantText(change.model)} kept: these steps expect its plan to change ${moves.length === 1 ? `collection ${quoted(moves[0]?.to ?? '')}` : 'those collections'} as this plan does.`;
   const firstMove = `First move ${destinations}, keep ${variantText(change.model)} as it is, and plan that with migration plan. ${steps.join(' ')} ${sameTarget} Under db update, apply that change, then move the documents out of collection ${quoted(change.collection)} by hand.`;
   if (staying.length === 0) {
@@ -382,7 +377,7 @@ function sharedCollectionRefusal(
           schema: input.schema,
           fromContract,
           contract: input.contract,
-          from: originCollection,
+          originFrom: originCollection,
           to,
           collectionRenames: input.collectionRenames,
         },

@@ -69,15 +69,16 @@ function movingText({ copies }: DocumentMove): string {
   return modelNamesText(copies.flatMap((copy) => copy.models));
 }
 
-function placementOf({ from, to, order }: DocumentMove): string {
+/** Where the move's dataTransform goes, as a clause that starts in lower case so it can follow "For model …,". */
+function placementClause({ from, to, order }: DocumentMove): string {
   const before = `before any other operation on collection "${from}"`;
   switch (order.after?.kind) {
     case 'createCollection':
-      return `In the operations of the migration.ts it writes, right after the creation of collection "${to}" and ${before}, add a dataTransform.`;
+      return `in the operations of the migration.ts it writes, right after the creation of collection "${to}" and ${before}, add a dataTransform.`;
     case 'renameCollection':
-      return `In the operations of the migration.ts it writes, right after the ${joinedList(order.after.renames.map((rename) => `rename of collection "${rename.from}" to "${rename.to}"`))} and ${before}, add a dataTransform.`;
+      return `in the operations of the migration.ts it writes, right after the ${joinedList(order.after.renames.map((rename) => `rename of collection "${rename.from}" to "${rename.to}"`))} and ${before}, add a dataTransform.`;
     case undefined:
-      return `At the start of the operations of the migration.ts it writes, ${before}, add a dataTransform.`;
+      return `at the start of the operations of the migration.ts it writes, ${before}, add a dataTransform.`;
   }
 }
 
@@ -129,13 +130,18 @@ function filterText(move: DocumentMove): string {
 }
 
 /**
- * The steps that add a document move to the migration.ts a plan writes, after `plan`, the sentence
- * that says how to plan it, when one is given: the operations, where they go (see
- * `documentMoveOrder`), the filter they need, and what to do if the apply stops. The target's
- * rewrites come after the move: those of another model that would reach the moved documents are
- * refused, and those of a moving model reach them, as they should.
+ * The steps that add a document move to the migration.ts a plan writes: the operations, where they
+ * go (see `documentMoveOrder`), the filter they need, and what to do if the apply stops. With
+ * `naming`, they start with the models that move, for a route that gives several moves. The
+ * target's rewrites come after the move: those of another model that would reach the moved
+ * documents are refused, and those of a moving model reach them, as they should.
  */
-export function documentMoveSteps(move: DocumentMove, plan?: string): string {
-  const steps = `${placementOf(move)} ${copiesText(move)}${droppedText(move)} Run that migration.ts to emit its ops.json, and apply it with db migrate.${bypassText(move)} ${filterText(move)} If the apply stops, fix what stopped it and run db migrate again.`;
-  return plan === undefined ? steps : `${plan} ${steps}`;
+export function documentMoveSteps(
+  move: DocumentMove,
+  options: { readonly naming: boolean },
+): string {
+  const placement = options.naming
+    ? `For ${movingText(move)}, ${placementClause(move)}`
+    : capitalized(placementClause(move));
+  return `${placement} ${copiesText(move)}${droppedText(move)} Run that migration.ts to emit its ops.json, and apply it with db migrate.${bypassText(move)} ${filterText(move)} If the apply stops, fix what stopped it and run db migrate again.`;
 }

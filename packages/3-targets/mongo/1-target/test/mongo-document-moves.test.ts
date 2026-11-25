@@ -47,7 +47,7 @@ function moveInput(options: {
       },
       { users: {}, members: options.destination ?? {} },
     ),
-    from: 'users',
+    originFrom: 'users',
     to: 'members',
     collectionRenames: options.renames ?? [],
   };

@@ -24,6 +24,7 @@ import {
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import type { Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
 import { collectionPlanOf, collectionPlanSchemasOf } from './mongo-collection-plan';
 import {
@@ -51,6 +52,7 @@ import {
   planStatements,
   planValidatorFieldRemovals,
   type StatementCalls,
+  type StatementPlan,
 } from './mongo-statement-planning';
 import type { CollectionRenames } from './mongo-storage-renames';
 import { planStoredKeyFills } from './mongo-stored-key-fills';
@@ -152,6 +154,47 @@ function modelStoredInDestination(
     : undefined;
 }
 
+export interface MongoPlanOptions {
+  readonly contract: unknown;
+  readonly schema: unknown;
+  readonly policy: MigrationOperationPolicy;
+  /** The contract the planner reads as the starting state, or `null` when it has none. */
+  readonly fromContract: Contract | null;
+  /** The origin the produced plan asserts: its `describe().from` and `origin`. */
+  readonly origin: PlanOrigin | null;
+  /** The `--rename` statements, resolved. */
+  readonly statements: readonly ResolvedMigrationStatement[];
+  readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'mongo', 'mongo'>>;
+  /**
+   * POSIX-relative path from the migration package dir to
+   * `migrations/snapshots`, e.g. `'../../snapshots'`. Threaded straight
+   * into the produced plan's `renderTypeScript()` metadata.
+   */
+  readonly snapshotsImportPath: string;
+}
+
+function mongoContractOf(contract: unknown): MongoContract {
+  return blindCast<
+    MongoContract,
+    'framework planner passes the Mongo contract selected for the mongo target'
+  >(contract);
+}
+
+function mongoSchemaOf(schema: unknown): MongoSchemaIR {
+  return blindCast<
+    MongoSchemaIR,
+    'framework planner passes the inspected Mongo schema IR selected for the mongo target'
+  >(schema);
+}
+
+function renamesOf(
+  statements: readonly ResolvedMigrationStatement[],
+): readonly ResolvedRenameStatement[] {
+  return statements.filter(
+    (statement): statement is ResolvedRenameStatement => statement.kind === 'rename',
+  );
+}
+
 export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'> {
   planCalls(options: {
     readonly contract: unknown;
@@ -163,14 +206,8 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     /** What the statements and removed fields plan; its `schema` is diffed in place of `schema`. */
     readonly statementCalls?: StatementCalls;
   }): PlanCallsResult {
-    const contract = blindCast<
-      MongoContract,
-      'framework planner passes the Mongo contract selected for the mongo target'
-    >(options.contract);
-    const schema = blindCast<
-      MongoSchemaIR,
-      'framework planner passes the inspected Mongo schema IR selected for the mongo target'
-    >(options.schema);
+    const contract = mongoContractOf(options.contract);
+    const schema = mongoSchemaOf(options.schema);
     const schemas = collectionPlanSchemasOf(options.statementCalls?.schema ?? schema, contract);
 
     const collCreates: OpFactoryCall[] = [];
@@ -241,43 +278,44 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     return { kind: 'success', calls: allCalls, warnings };
   }
 
-  plan(options: {
-    readonly contract: unknown;
-    readonly schema: unknown;
-    readonly policy: MigrationOperationPolicy;
-    /** The contract the planner reads as the starting state, or `null` when it has none. */
-    readonly fromContract: Contract | null;
-    /** The origin the produced plan asserts: its `describe().from` and `origin`. */
-    readonly origin: PlanOrigin | null;
-    /** The `--rename` statements, resolved. */
-    readonly statements: readonly ResolvedMigrationStatement[];
-    readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'mongo', 'mongo'>>;
-    /**
-     * POSIX-relative path from the migration package dir to
-     * `migrations/snapshots`, e.g. `'../../snapshots'`. Threaded straight
-     * into the produced plan's `renderTypeScript()` metadata.
-     */
-    readonly snapshotsImportPath: string;
-  }): MigrationPlannerResult {
-    const contract = blindCast<
-      MongoContract,
-      'framework planner passes the Mongo contract selected for the mongo target'
-    >(options.contract);
-    const originIR = blindCast<
-      MongoSchemaIR,
-      'framework planner passes the inspected Mongo schema IR selected for the mongo target'
-    >(options.schema);
-    const fromContract = options.fromContract;
-    const renames = options.statements.filter(
-      (statement): statement is ResolvedRenameStatement => statement.kind === 'rename',
-    );
-    const statementPlan = planStatements({
-      statements: renames,
-      fromContract,
-      contract,
-      schema: originIR,
-    });
+  plan(options: MongoPlanOptions): MigrationPlannerResult {
+    const statementPlan = this.#statementPlanOf(options);
     if (!statementPlan.ok) return { kind: 'failure', conflicts: statementPlan.failure };
+    return this.#planFrom(options, statementPlan.value);
+  }
+
+  /**
+   * The renames of the plan. A refusal whose route tells the user to plan without some statements
+   * reads that plan: this planner's whole plan of the same contracts without them, whose renames it
+   * gets when that plan is made, and nothing when it is refused.
+   */
+  #statementPlanOf(
+    options: MongoPlanOptions,
+  ): Result<StatementPlan, readonly MigrationPlannerConflict[]> {
+    return planStatements({
+      statements: renamesOf(options.statements),
+      fromContract: options.fromContract,
+      contract: mongoContractOf(options.contract),
+      schema: mongoSchemaOf(options.schema),
+      planWithout: (leftOut) => {
+        const without = {
+          ...options,
+          statements: options.statements.filter(
+            (statement) => !leftOut.some((each) => each === statement),
+          ),
+        };
+        const statementPlan = this.#statementPlanOf(without);
+        return statementPlan.ok && this.#planFrom(without, statementPlan.value).kind === 'success'
+          ? statementPlan.value
+          : undefined;
+      },
+    });
+  }
+
+  #planFrom(options: MongoPlanOptions, statementPlan: StatementPlan): MigrationPlannerResult {
+    const contract = mongoContractOf(options.contract);
+    const fromContract = options.fromContract;
+    const renames = renamesOf(options.statements);
     const {
       schema,
       collectionRenames,
@@ -287,7 +325,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       models,
       collections,
       renamedCollections,
-    } = statementPlan.value;
+    } = statementPlan;
     const destinationIR = contractToMongoSchemaIR(contract);
     const storedKeys = planStoredKeyRewrites({
       statements: renames,
