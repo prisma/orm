@@ -73,10 +73,10 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 - Remove every export we do not intend to cover. The 21 published packages have 1,036 export paths; `@prisma/orm-postgres` has 164, including general helpers such as `./utils/array-equal` (task 3).
 - Rename every published import path that contains `internal`: 15 paths in 7 packages, such as the facade's `./internal/options`. Each export in them gets a proper entrypoint, a name that carries its level, or is removed. Exported names such as `InternalError` are renamed too (task 8).
 - Fix the Supabase extension. It depends on the facade `@prisma/orm-postgres` and imports four of its `internal` entrypoints, where every other extension package depends only on platform packages (task 7).
-- Resolve where `definePrismaConfig` comes from. Every application imports it from `@prisma/cli-engine`, a `0.x` package the policy does not list (task 18).
+- Applications keep importing `definePrismaConfig` from `@prisma/cli-engine`, and the policy's list names that package. It gets a GA release with the same compatibility promise as our GA packages, at least for `definePrismaConfig` and the config types, and keeps its own version number, since Composer and the `prisma` tool use it too. Importing from `prisma/config` was rejected: `prisma` is built from the ORM's toolchain, so every example, test and `orm init` template in this repository would depend on a package built from this repository. Having each facade export it again was rejected: the config file also holds Composer's settings, so a project without the ORM would need another source. This may be improved later (task 18).
 - Keep or replace each entrypoint that Composer, the `prisma` tool and the control plane import, and change their imports. What each imports is in [analysis.md](analysis.md) (task 22).
 
-**To decide when it starts.** Two decisions are Will's: what the Supabase extension's relationship to the PostgreSQL facade should be, and whether the facade or `prisma` provides `definePrismaConfig` or the policy's list names `@prisma/cli-engine`. This project may prove to be two once its pull requests are counted.
+**To decide when it starts.** One decision is Will's: what the Supabase extension's relationship to the PostgreSQL facade should be. This project may prove to be two once its pull requests are counted.
 
 ### 4. Catch breaking changes and accidental new exports in CI, by comparing each package's API with the last release
 
