@@ -1,0 +1,3 @@
+# Read by ripgrep, fd and other search tools, not by git.
+# Generated API lists: `pnpm api:update` writes them. Search them with `rg -u`.
+packages/9-public/@prisma/*/api.txt

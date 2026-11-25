@@ -82,4 +82,7 @@ jobs:
         # Pin matches root devDependency pkg-pr-new; see https://github.com/stackblitz-labs/pkg.pr.new/tags
         # --compact requires repository field in the *published* npm manifest;
         # add it back after the next npm publish includes the repository field.
+        # Peer dependencies keep their released versions (pkg-pr-new has no option that
+        # points them at the previews), so a preview is installed together with the
+        # previews of the packages it names as peers; see docs/oss/versioning.md.
         run: pnpm exec pkg-pr-new publish --pnpm --comment=update ${{ steps.packages.outputs.list }}

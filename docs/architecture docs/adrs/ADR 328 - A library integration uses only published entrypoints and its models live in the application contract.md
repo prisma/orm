@@ -78,7 +78,7 @@ A library integration is written against that published set only, the same set a
 
 ### How the integration depends on Prisma's packages
 
-The integration declares the Prisma packages it uses as peer dependencies, at the exact version of the application's database package. The database package always installs them, so the application ends up with one copy of each, shared by its client and the integration. The application still names only its database package and the integration: the peers are met by what the database package brings in, at that package's version.
+The integration declares the Prisma packages it uses as peer dependencies; the Better Auth adapter, for example, names `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`. The application declares them, and its facade (the package for its database, such as `@prisma/orm-postgres`) names them as peers too ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)), so the application has one copy of each, shared by its client and the integration.
 
 One copy matters, because an integration builds values with functions from the family package, such as query filters from `@prisma/orm-family-sql`, and hands them to the client. Because they are peers, the package manager reports a version mismatch at install time. If they were regular dependencies, it would silently install a second copy of those functions beside the client's.
 

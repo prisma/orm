@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,13 +46,8 @@ describe('an extension pack installed next to the facade it extends', () => {
 
   beforeAll(() => {
     scratch = mkdtempSync(join(tmpdir(), 'orm-extension-pgvector-'));
-    // The target shell is declared alongside the facade because pnpm
-    // resolves a peer range through the registry rather than through
-    // `pnpm.overrides`, so a harness built on `file:` tarballs cannot
-    // satisfy a peer that only arrives transitively. It is the same single
-    // copy either way — which is what the identity assertion below checks.
     installShells(scratch, pack(scratch, [extension, facade, ...platform]), {
-      direct: [extension, facade, targetShell],
+      direct: [extension, facade, ...platform],
     });
     installedDir = join(scratch, 'node_modules', '@prisma', 'orm-extension-pgvector');
   });
@@ -128,6 +123,34 @@ describe('an extension pack installed next to the facade it extends', () => {
     expect(runInScratch(scratch, script)).toContain('peer ok');
   });
 
+  it('shares one copy of each platform package between the application, the facade and the extension', () => {
+    const script = `
+      import { strict as assert } from 'node:assert';
+      import { createRequire } from 'node:module';
+      const from = {
+        application: createRequire(import.meta.url),
+        facade: createRequire(import.meta.resolve('${facade}/package.json')),
+        extension: createRequire(import.meta.resolve('${extension}/package.json')),
+      };
+      for (const shell of ${JSON.stringify(platform)}) {
+        const [first, ...rest] = Object.entries(from).map(([who, require]) => [who, require.resolve(shell + '/package.json')]);
+        for (const [who, resolved] of rest) assert.equal(resolved, first[1], shell + ' from ' + who);
+      }
+      console.log('one copy ok');
+    `;
+    expect(runInScratch(scratch, script)).toContain('one copy ok');
+    const installedFolders = readdirSync(join(scratch, 'node_modules', '.pnpm'));
+    expect(
+      Object.fromEntries(
+        platform.map((shell) => [
+          shell,
+          installedFolders.filter((folder) => folder.startsWith(`${shell.replace('/', '+')}@`))
+            .length,
+        ]),
+      ),
+    ).toEqual(Object.fromEntries(platform.map((shell) => [shell, 1])));
+  });
+
   it('bundles only its own extension code', () => {
     const sources = bundledSources(installedDir);
     expect(sources.length).toBeGreaterThan(0);
@@ -147,7 +170,7 @@ describe('an extension pack installed next to the facade it extends', () => {
 
 // What the peer buys: an application that upgrades the facade without
 // upgrading the extension would, under a hard dependency, quietly end up
-// with two copies of the target shell and two codec registries. As a peer
+// with two copies of the target shell, neither recognising values the other made. As a peer
 // under strict resolution the same combination cannot install at all.
 describe('an extension pack next to a target shell of a different version', () => {
   let scratch: string;
@@ -165,17 +188,17 @@ describe('an extension pack next to a target shell of a different version', () =
     if (targetDir === undefined) throw new Error(`unknown shell ${targetShell}`);
     // Everything the extension needs is packed except the target, which is
     // present one patch ahead — so the only thing that can fail is the peer.
+    const matching: ShellName[] = [
+      '@prisma/orm-framework',
+      '@prisma/orm-family-sql',
+      '@prisma/orm-toolchain',
+    ];
     const packed = [
-      ...pack(scratch, [
-        extension,
-        '@prisma/orm-framework',
-        '@prisma/orm-family-sql',
-        '@prisma/orm-toolchain',
-      ]),
+      ...pack(scratch, [extension, ...matching]),
       packShellAtVersion(join(repoRoot, targetDir), scratch, skewedVersion),
     ];
     const result = tryInstallShells(scratch, packed, {
-      direct: [extension, targetShell],
+      direct: [extension, ...matching, targetShell],
       npmrc: ['strict-peer-dependencies=true', 'auto-install-peers=false'],
     });
     const workspaceYaml = readFileSync(join(scratch, 'pnpm-workspace.yaml'), 'utf8');
@@ -193,6 +216,42 @@ describe('an extension pack next to a target shell of a different version', () =
     // report and as `Installed: <v>` in the verbose one; assert the parts
     // common to both.
     expect(result.output).toContain(`unmet peer ${targetShell}`);
+    expect(result.output).toContain(skewedVersion);
+  });
+});
+
+// What the platform packages being peers buys: an application whose platform
+// packages are not all at one version gets an install error under strict
+// peers, instead of a second copy of the one that differs.
+describe('an application whose family package is one version ahead of the rest', () => {
+  let scratch: string;
+
+  beforeAll(() => {
+    scratch = mkdtempSync(join(tmpdir(), 'orm-platform-skew-'));
+  });
+
+  afterAll(() => {
+    rmSync(scratch, { recursive: true, force: true });
+  });
+
+  it('fails to install and names the mismatch', () => {
+    const family: ShellName = '@prisma/orm-family-sql';
+    const familyDir = publicShells.get(family)?.dir;
+    if (familyDir === undefined) throw new Error(`unknown shell ${family}`);
+    const application: ShellName[] = [extension, facade, ...platform];
+    const packed = [
+      ...pack(
+        scratch,
+        application.filter((name) => name !== family),
+      ),
+      packShellAtVersion(join(repoRoot, familyDir), scratch, skewedVersion),
+    ];
+    const result = tryInstallShells(scratch, packed, {
+      direct: application,
+      npmrc: ['strict-peer-dependencies=true', 'auto-install-peers=false'],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain(`unmet peer ${family}`);
     expect(result.output).toContain(skewedVersion);
   });
 });

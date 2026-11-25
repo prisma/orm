@@ -74,15 +74,13 @@ function pack(scratch: string, names: readonly ShellName[]): PackedShell[] {
 // The install the adapter's README gives: the adapter at the database
 // package's version, and Better Auth with its `auth` program from the
 // registry, both at the lowest version the adapter's peer range admits, so
-// they share one copy and the oldest supported release is the one tested. The adapter's
-// three Prisma peers are declared too, because pnpm resolves a peer through
-// the registry rather than through the tarball overrides, and these exact
-// versions are not on the registry until they are released. From the
-// registry the peers and the database package's dependencies are the same
-// packages; the one-copy assertion below checks that here. The toolchain's
-// own peer, the CLI engine, is installed too, as any application with a
+// they share one copy and the oldest supported release is the one tested. The
+// facade's platform shells are declared too, as an application
+// lists them; the adapter's three Prisma peers are among them, and the one-copy
+// assertion below checks it shares them with the facade. The toolchain's own
+// peer, the CLI engine, is installed too, as any application with a
 // prisma.config.ts has it.
-describe('the Better Auth adapter installed next to the SQLite database package', () => {
+describe('the Better Auth adapter installed next to the SQLite facade', () => {
   let scratch: string;
 
   beforeAll(() => {
@@ -91,7 +89,7 @@ describe('the Better Auth adapter installed next to the SQLite database package'
       scratch,
       [packShell(adapterDir, scratch), ...pack(scratch, [facade, ...platform])],
       {
-        direct: [adapter, facade, familySql, '@prisma/orm-framework', toolchain],
+        direct: [adapter, facade, ...platform],
         registryDependencies: {
           'better-auth': betterAuthFloor,
           auth: betterAuthFloor,
