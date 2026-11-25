@@ -2,9 +2,11 @@
 (not exported) interface PrismaClientLike
 (not exported) interface PrismaClientLike, readonly required property contract: SqlContract
 (not exported) interface PrismaClientLike, readonly required property orm: object
-(not exported) interface PrismaClientLike, required method transaction<R>(fn: (tx: { readonly orm: object; }) => PromiseLike<R>): Promise<R>
+(not exported) interface TransactionalPrismaClientLike extends PrismaClientLike
+(not exported) interface TransactionalPrismaClientLike, required method transaction<R>(fn: (tx: { readonly orm: object; }) => PromiseLike<R>): Promise<R>
+(not exported) type PrismaClientLikeFor<Options extends PrismaAdapterOptions> = 'transaction' extends keyof Options ? true extends Options['transaction' & keyof Options] ? TransactionalPrismaClientLike : PrismaClientLike : PrismaClientLike
 (not exported) type SqlContract = Contract<SqlStorage>
-.: function prismaAdapter(db: PrismaClientLike, adapterOptions?: PrismaAdapterOptions): (betterAuthOptions: BetterAuthOptions) => DBAdapter<BetterAuthOptions>
+.: function prismaAdapter<const Options extends PrismaAdapterOptions = Record<never, never>>(db: PrismaClientLikeFor<Options>, adapterOptions?: Options): (betterAuthOptions: BetterAuthOptions) => DBAdapter<BetterAuthOptions>
 .: interface PrismaAdapterOptions
 .: interface PrismaAdapterOptions, readonly optional property debugLogs?: DBAdapterDebugLogOption | undefined
 .: interface PrismaAdapterOptions, readonly optional property namespace?: string | undefined
