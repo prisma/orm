@@ -13,10 +13,7 @@ import {
   contractSpaceFromJson,
 } from '@internal/migration-tools/spaces';
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
-import {
-  sqlContractCanonicalizationHooks,
-  sqlProfileHashCapabilities,
-} from '@internal/sql-contract/canonicalization-hooks';
+import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -59,7 +56,7 @@ const projects: readonly Project[] = [
 ];
 
 const HOOKS = {
-  sql: { ...sqlContractCanonicalizationHooks, profileHashCapabilities: sqlProfileHashCapabilities },
+  sql: sqlContractCanonicalizationHooks,
   mongo: mongoContractCanonicalizationHooks,
 } as const;
 

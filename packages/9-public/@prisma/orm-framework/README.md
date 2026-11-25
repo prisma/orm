@@ -22,14 +22,11 @@ Each subpath namespace consolidates one internal framework module; a bare namesp
 
 ## Holding contract hashes fixed
 
-Prisma records a contract's storage, profile and execution hashes in files and databases, and the rules that compute them do not change within a major version. A family or target built outside this repository can check that its own contracts keep their hashes: save a few emitted `contract.json` files, write down their hashes, and call `assertContractHashes` from a test with the family's canonicalization hooks. If the family computes the profile hash from other capabilities than the contract's `capabilities`, pass them as `profileHashCapabilities`, a function from the saved contract to the capabilities hashed. The SQL family hashes none, so a SQL target passes the SQL family's hooks and `sqlProfileHashCapabilities`, as below; without it, the check computes a profile hash other than the one Prisma writes. It throws a `CONTRACT.HASH_MISMATCH` error naming each contract and hash that differs; the hashes the files store are ignored.
+Prisma records a contract's storage, profile and execution hashes in files and databases, and the rules that compute them do not change within a major version. A family or target built outside this repository can check that its own contracts keep their hashes: save a few emitted `contract.json` files, write down their hashes, and call `assertContractHashes` from a test with the family's canonicalization hooks. The storage hash covers the contract's `storage`, the profile hash its `capabilities` and the execution hash its `execution`, each with its `target` and `targetFamily`. A SQL target passes the SQL family's hooks, as below. It throws a `CONTRACT.HASH_MISMATCH` error naming each contract and hash that differs; the hashes the files store are ignored.
 
 ```ts
 import { readFileSync } from 'node:fs';
-import {
-  sqlContractCanonicalizationHooks,
-  sqlProfileHashCapabilities,
-} from '@prisma/orm-family-sql/contract/canonicalization-hooks';
+import { sqlContractCanonicalizationHooks } from '@prisma/orm-family-sql/contract/canonicalization-hooks';
 import { assertContractHashes } from '@prisma/orm-framework/contract/hashing';
 
 const contract = JSON.parse(readFileSync(new URL('fixtures/users.json', import.meta.url), 'utf8'));
@@ -37,11 +34,10 @@ const contract = JSON.parse(readFileSync(new URL('fixtures/users.json', import.m
 assertContractHashes({
   contracts: [{ name: 'users', contract, storageHash: '…', profileHash: '…', executionHash: '…' }],
   ...sqlContractCanonicalizationHooks,
-  profileHashCapabilities: sqlProfileHashCapabilities,
 });
 ```
 
-A family outside the SQL family passes its own canonicalization hooks the same way, and leaves out `profileHashCapabilities` when its profile hash covers the contract's `capabilities`.
+A family outside the SQL family passes its own canonicalization hooks the same way.
 
 ## Responsibilities
 

@@ -65,7 +65,11 @@ describe('an application and an extension with hashes under the old rules', () =
     expect(run.stdout).toContain(
       'Profile hashes (old -> new):\n' +
         '  251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3 -> 8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69\n' +
-        '  3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2 -> ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632\n',
+        '  3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2 -> 05fee026a2eb255ad9dc9df83725541c32dedb96fec1dea5ea51715c03c45ff2\n' +
+        '  3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2 -> 21234604124379cdee70a9b006a21486652efd31ec8b2c663587040a15560146\n' +
+        '  3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2 -> 3f81ceb53f2b89ed6df558a576771fb51a26b9946d33791105aa145152db5fcd\n' +
+        '  3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2 -> 833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174\n' +
+        '  3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2 -> b2e32ae1b00ceab2d871e7322fe8ec98c7e62edca4aef951a827b094cc78dad2\n',
     );
   });
 
@@ -367,11 +371,17 @@ describe("an application's copy of an extension's migrations, which has no snaps
 describe("an application whose snapshot store already holds the extension's contract at its new hash, written by `prisma contract emit`", () => {
   const OLD = 'e4ab7d4329212a72d8e440fd7bf95a03e5c861e1d304dce1025b0fcaa1910d15';
   const NEW = 'd2c19e6a88b5b89e23e8ce4863844d40813bcf7712509e631d7cd29d405af27b';
+  const PROFILE = '833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174';
+  const PROFILE_WITHOUT_NEWER_CAPABILITIES =
+    '21234604124379cdee70a9b006a21486652efd31ec8b2c663587040a15560146';
   const withoutNewerCapabilities = (text: string) =>
     text
       .replace('"insertOnConflictTarget":true,', '')
       .replace('"jsonAgg":true,"jsonAggWithoutTruncation":true,', '')
-      .replace('"outerReferencesInDerivedTables":true,', '');
+      .replace('"outerReferencesInDerivedTables":true,', '')
+      .replace(PROFILE, PROFILE_WITHOUT_NEWER_CAPABILITIES);
+  const withProfileWithoutNewerCapabilities = (text: string) =>
+    text.replace(PROFILE, PROFILE_WITHOUT_NEWER_CAPABILITIES);
 
   function emittedProject(): string {
     const root = copyFixture('before', 'postgres-app');
@@ -381,6 +391,11 @@ describe("an application whose snapshot store already holds the extension's cont
         copyInto(root, 'after', `extension/migrations/${entry}`, `migrations/pgvector/${entry}`);
     copyInto(root, 'after', `extension/migrations/snapshots/${NEW}`, `migrations/snapshots/${NEW}`);
     editFile(root, `migrations/snapshots/${NEW}/contract.json`, withoutNewerCapabilities);
+    editFile(
+      root,
+      `migrations/snapshots/${NEW}/contract.d.ts`,
+      withProfileWithoutNewerCapabilities,
+    );
     copyInto(
       root,
       'before',

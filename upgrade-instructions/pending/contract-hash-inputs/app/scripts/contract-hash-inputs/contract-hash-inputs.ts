@@ -275,8 +275,8 @@ function withoutNamespaceKinds(storage: JsonRecord): JsonRecord {
   return { ...storage, namespaces: stripped };
 }
 
-/** The capabilities a family's profile hash covers: none for SQL, the contract's own for MongoDB. */
-function profileCapabilities(contract: ContractSections): JsonRecord {
+/** The capabilities the old rule's profile hash covered: none for SQL, the contract's own for MongoDB. */
+function oldProfileCapabilities(contract: ContractSections): JsonRecord {
   return contract.family === 'sql' ? {} : contract.capabilities;
 }
 
@@ -316,7 +316,7 @@ function oldHash(contract: ContractSections, section: JsonRecord, hooks: Hooks):
   return sha256(JSON.stringify(ordered, null, 2));
 }
 
-/** The hash rule from this release: the target, the family and the section. */
+/** The hash rule from this release: the target, the family and the section. The profile hash covers the contract's own capabilities in every family. */
 function newHash(contract: ContractSections, section: JsonRecord, hooks: Hooks): string {
   const input = { targetFamily: contract.family, target: contract.target, ...section };
   return sha256(JSON.stringify(canonicalSections(input, hooks), null, 2));
@@ -325,13 +325,14 @@ function newHash(contract: ContractSections, section: JsonRecord, hooks: Hooks):
 function contractHashes(
   contract: ContractSections,
   rule: (contract: ContractSections, section: JsonRecord, hooks: Hooks) => string,
+  profileCapabilities: JsonRecord,
 ): HashSet {
   const storage = rule(
     contract,
     { storage: withoutNamespaceKinds(contract.storage) },
     storageHooks(contract.family),
   );
-  const profile = rule(contract, { capabilities: profileCapabilities(contract) }, {});
+  const profile = rule(contract, { capabilities: profileCapabilities }, {});
   if (contract.execution === undefined) return { storage, profile };
   return { storage, profile, execution: rule(contract, { execution: contract.execution }, {}) };
 }
@@ -638,15 +639,22 @@ interface ContractPlan {
 }
 
 class HashMap {
-  readonly byKind: Record<HashKind, Map<string, string>> = {
+  readonly byKind: Record<Exclude<HashKind, 'profile'>, Map<string, string>> = {
     storage: new Map(),
-    profile: new Map(),
     execution: new Map(),
   };
+  /**
+   * Each old profile hash and a new one it became. The old SQL profile hash covered no capabilities, so contracts of one target with different capabilities share an old value and get different new ones. No file but the contract and its `contract.d.ts` stores a profile hash, so it is replaced contract by contract and only reported here.
+   */
+  readonly profiles = new Set<string>();
   readonly all = new Map<string, string>();
   readonly newValues = new Set<string>();
 
   add(kind: HashKind, from: string, to: string, conflicts: string[]): void {
+    if (kind === 'profile') {
+      if (from !== to) this.profiles.add(`${from} -> ${to}`);
+      return;
+    }
     const known = this.all.get(from);
     if (known !== undefined && known !== to) {
       conflicts.push(`the hash ${from} maps to both ${known} and ${to}`);
@@ -713,8 +721,8 @@ function planContract(
     checks.stops.push(`${shown}: ${sections}`);
     return undefined;
   }
-  const oldHashes = contractHashes(sections, oldHash);
-  const newHashes = contractHashes(sections, newHash);
+  const oldHashes = contractHashes(sections, oldHash, oldProfileCapabilities(sections));
+  const newHashes = contractHashes(sections, newHash, sections.capabilities);
   const stored = storedHashes(file.value);
   const snapshotHash = snapshotDirectoryHash(file.path);
   const kept = keptStorageHash(
@@ -1234,12 +1242,15 @@ function report(
       lines.push(...plan.renames.map(([from, to]) => `  ${shown(from)} -> ${basename(to)}`));
     }
     for (const kind of ['storage', 'profile', 'execution'] as const) {
-      const changed = [...hashes.byKind[kind]].sort(([a], [b]) => compareCodeUnits(a, b));
+      const changed =
+        kind === 'profile'
+          ? [...hashes.profiles]
+          : [...hashes.byKind[kind]].map(([from, to]) => `${from} -> ${to}`);
       if (changed.length === 0) continue;
       lines.push(
         `${KIND_LABEL[kind][0]?.toUpperCase()}${KIND_LABEL[kind].slice(1)}es (old -> new):`,
       );
-      lines.push(...changed.map(([from, to]) => `  ${from} -> ${to}`));
+      lines.push(...changed.sort(compareCodeUnits).map((pair) => `  ${pair}`));
     }
   }
   if (plan.kept.length > 0)
