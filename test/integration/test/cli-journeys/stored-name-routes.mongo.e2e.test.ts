@@ -8,6 +8,7 @@
  * - T5: `--rename` of a model that shares its collection with another root model: the route that plans without the statement and moves the documents in that plan's `migration.ts`, followed to the end (`migration plan`).
  * - T6: the same route with a field `@map` change of the model that stays: the move goes right after the create, so the rename does not reach the moved documents; and a stop at the validator change is finished by removing the stray document and running the migration again, with no edit (`migration plan`).
  * - T7: a variant delete beside a model that moves out: the two plans the route gives, with the documents of the model that moves read back, including one that holds the variant's discriminator value (`migration plan`).
+ * - T8: the same route under `db update`: the documents are moved by hand first, then the change is applied, then the variant is deleted.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -62,6 +63,44 @@ model ${model} {
 `,
   )
   .join('')}`;
+
+/** Model `Admin` in collection `admins`, and `Task` with variants `Feat` and, when `bug`, `Bug` in collection `tasks`. */
+const tasks = (admins: string, bug: boolean) => `// use prisma-8
+
+model Admin {
+  id    ObjectId @id @map("_id")
+  admin String
+  type  String
+
+  @@map("${admins}")
+}
+
+model Task {
+  id   ObjectId @id @map("_id")
+  type String
+
+  @@discriminator(type)
+  @@map("tasks")
+}
+${
+  bug
+    ? `
+model Bug {
+  id  ObjectId @id @map("_id")
+  sev String
+
+  @@base(Task, "bug")
+}
+`
+    : ''
+}
+model Feat {
+  id   ObjectId @id @map("_id")
+  area String
+
+  @@base(Task, "feat")
+}
+`;
 
 /** Where the call that creates `collection` ends in a `migration.ts`, after its trailing comma. */
 function createCallRange(text: string, collection: string): { start: number; end: number } {
@@ -327,42 +366,6 @@ model ${user} {
 
   it("T7: a variant delete beside a model that moves out is refused, and following the two plans moves that model's documents, even those holding the variant's value, before the delete", async () => {
     const journey = project('t7_plan');
-    const tasks = (admins: string, bug: boolean) => `// use prisma-8
-
-model Admin {
-  id    ObjectId @id @map("_id")
-  admin String
-  type  String
-
-  @@map("${admins}")
-}
-
-model Task {
-  id   ObjectId @id @map("_id")
-  type String
-
-  @@discriminator(type)
-  @@map("tasks")
-}
-${
-  bug
-    ? `
-model Bug {
-  id  ObjectId @id @map("_id")
-  sev String
-
-  @@base(Task, "bug")
-}
-`
-    : ''
-}
-model Feat {
-  id   ObjectId @id @map("_id")
-  area String
-
-  @@base(Task, "feat")
-}
-`;
     await begin(journey, 'migration plan', tasks('tasks', true), 'T7.01');
     await journey.db.collection('tasks').insertMany([
       { type: 'bug', sev: 'high' },
@@ -376,7 +379,7 @@ model Feat {
         kind: 'unsupportedOperation',
         summary:
           'Cannot delete the documents of variant "Bug": the documents of model "Admin" in collection "tasks" can hold type "bug"',
-        why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so deleting the documents with that value would delete the documents of "Admin" too. A model that moves out of collection "tasks" leaves its documents in it, so make the change in two plans. First move model "Admin" to collection "admins", keep variant "Bug" as it is, and plan that with migration plan. Write that first contract as this one with variant "Bug" kept, so its plan changes collection "admins" as this plan does, which the steps below expect.\n\nIn the operations of the migration.ts it writes, right after the creation of collection "admins" and before the plan\'s own operations on collection "tasks", add a dataTransform. Its run copies the documents of model "Admin" into collection "admins":\n\n  rawAggregate("tasks", [\n    { $match: <a filter that selects only those documents> },\n    { $merge: { into: "admins" } },\n  ])\n\nAfter it, add the operation that deletes the documents of model "Admin" from collection "tasks":\n\n  deleteDocuments({ collection: "tasks", filter: <the same filter> })\n\nThe filter must tell those documents apart from the other documents of collection "tasks", which can hold the same values in the fields they share, a discriminator value among them. Filter by a field only model "Admin" stores.\n\nRun that migration.ts to emit its ops.json, and apply it with db migrate.\n\nIf the apply stops, fix what stopped it and run db migrate again.\n\nUnder db update, apply that change, then move the documents out of collection "tasks" by hand.\n\nThen make the change to variant "Bug" and plan again. Or keep variant "Bug" in the contract.',
+        why: 'Collection "tasks" stores several models and no discriminator tells their documents apart, so deleting the documents with that value would delete the documents of "Admin" too. A model that moves out of collection "tasks" leaves its documents in it, so make the change in two plans. First move model "Admin" to collection "admins", keep variant "Bug" as it is, and plan that with migration plan. Write that first contract as this one with variant "Bug" kept, so its plan changes collection "admins" as this plan does, which the steps below expect.\n\nIn the operations of the migration.ts it writes, right after the creation of collection "admins" and before the plan\'s own operations on collection "tasks", add a dataTransform. Its run copies the documents of model "Admin" into collection "admins":\n\n  rawAggregate("tasks", [\n    { $match: <a filter that selects only those documents> },\n    { $merge: { into: "admins" } },\n  ])\n\nAfter it, add the operation that deletes the documents of model "Admin" from collection "tasks":\n\n  deleteDocuments({ collection: "tasks", filter: <the same filter> })\n\nThe filter must tell those documents apart from the other documents of collection "tasks", which can hold the same values in the fields they share, a discriminator value among them. Filter by a field only model "Admin" stores.\n\nRun that migration.ts to emit its ops.json, and apply it with db migrate.\n\nIf the apply stops, fix what stopped it and run db migrate again.\n\nUnder db update, first move the documents of model "Admin" out of collection "tasks" by hand, then apply that change. Applied before the move, the change can stop at the new validator of collection "tasks", which need not accept those documents.\n\nThen make the change to variant "Bug" and plan again. Or keep variant "Bug" in the contract.',
       },
     ]);
 
@@ -410,5 +413,44 @@ model Feat {
       admins: [{ type: 'bug', admin: 'Root' }],
     });
     await expectSettled(journey, 'T7.10');
+  });
+
+  it('T8: under db update, the documents of the model that moves out are moved by hand first, then the change is applied, then the variant is deleted', async () => {
+    const journey = project('t8_update');
+    await begin(journey, 'db update', tasks('tasks', true), 'T8.01');
+    await journey.db.collection('tasks').insertMany([
+      { type: 'bug', sev: 'high' },
+      { type: 'feat', area: 'ui' },
+      { type: 'bug', admin: 'Root' },
+    ]);
+    await useSchema(journey, tasks('admins', false), 'T8.02');
+    const error = await refused(journey, 'db update', ['--delete', 'Bug'], 'T8.03');
+    expect(error.meta?.['conflicts']).toMatchObject([
+      {
+        why: expect.stringContaining(
+          'Under db update, first move the documents of model "Admin" out of collection "tasks" by hand, then apply that change.',
+        ),
+      },
+    ]);
+
+    const filter = { admin: { $exists: true } };
+    await journey.db
+      .collection('tasks')
+      .aggregate([{ $match: filter }, { $merge: { into: 'admins' } }])
+      .toArray();
+    await journey.db.collection('tasks').deleteMany(filter);
+    await useSchema(journey, tasks('admins', true), 'T8.04');
+    await apply(journey, 'db update', [], 'T8.05');
+
+    await useSchema(journey, tasks('admins', false), 'T8.06');
+    await apply(journey, 'db update', ['--delete', 'Bug'], 'T8.07');
+    expect({
+      tasks: await documents(journey.db, 'tasks'),
+      admins: await documents(journey.db, 'admins'),
+    }).toEqual({
+      tasks: [{ type: 'feat', area: 'ui' }],
+      admins: [{ type: 'bug', admin: 'Root' }],
+    });
+    await expectSettled(journey, 'T8.08');
   });
 });
