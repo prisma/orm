@@ -69,7 +69,8 @@ const isRestricted = (modifier) =>
 
 // The abstract members of a class, its inherited ones included, which a subclass implements:
 // each under its rewritten key, and in the form a subclass must give it: a getter stays a getter,
-// and a method of another package keeps its method form there.
+// and a method of another package keeps its method form there. A member keyed by a symbol has no
+// key to compare by; the subclass can write it only when the symbol is a well-known one.
 function abstractMembers(checker, symbol, ownNames) {
   const instance = checker.getDeclaredTypeOfSymbol(symbol);
   const members = [];
@@ -78,11 +79,13 @@ function abstractMembers(checker, symbol, ownNames) {
     if (declaration === undefined) continue;
     const flags = ts.getCombinedModifierFlags(declaration);
     if (!(flags & ts.ModifierFlags.Abstract) || flags & ts.ModifierFlags.Private) continue;
-    if (property.escapedName.startsWith('__@')) continue;
     const isProtected = (flags & ts.ModifierFlags.Protected) !== 0;
     const own = ownNames.has(packageOf(declaration.getSourceFile().fileName)?.name);
+    const symbolKey = property.escapedName.startsWith('__@');
+    const key = isProtected ? `protected ${property.name}` : property.name;
     members.push({
-      key: isProtected ? `protected ${property.name}` : property.name,
+      key: symbolKey ? undefined : key,
+      written: symbolKey ? wellKnownSymbolKey(declaration) : JSON.stringify(key),
       form: ts.isGetAccessorDeclaration(declaration)
         ? 'getter'
         : !own && ts.isMethodDeclaration(declaration)
@@ -93,6 +96,17 @@ function abstractMembers(checker, symbol, ownNames) {
   return members;
 }
 
+function wellKnownSymbolKey(declaration) {
+  const name = declaration.name;
+  if (!name || !ts.isComputedPropertyName(name)) return undefined;
+  const expression = name.expression;
+  return ts.isPropertyAccessExpression(expression) &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === 'Symbol'
+    ? `[Symbol.${expression.name.text}]`
+    : undefined;
+}
+
 const isAbstractClass = (symbol) =>
   (symbol.declarations ?? []).some(
     (declaration) =>
@@ -100,13 +114,17 @@ const isAbstractClass = (symbol) =>
       declaration.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AbstractKeyword),
   );
 
-// A class users can construct: one whose constructor is neither private nor protected.
-const isConstructible = (symbol) =>
-  !(symbol.declarations ?? []).some((declaration) =>
+const hasConstructorWith = (symbol, isModifier) =>
+  (symbol.declarations ?? []).some((declaration) =>
     (declaration.members ?? []).some(
-      (member) => ts.isConstructorDeclaration(member) && member.modifiers?.some(isRestricted),
+      (member) => ts.isConstructorDeclaration(member) && member.modifiers?.some(isModifier),
     ),
   );
+// A class users can construct: one whose constructor is neither private nor protected.
+const isConstructible = (symbol) => !hasConstructorWith(symbol, isRestricted);
+// A class users can extend: one whose constructor is not private.
+const isExtensible = (symbol) =>
+  !hasConstructorWith(symbol, (modifier) => modifier.kind === ts.SyntaxKind.PrivateKeyword);
 
 // The comparisons of one export or member: TypeScript's own assignability, and the structural
 // mapping it falls back to.
@@ -400,7 +418,7 @@ export function generateTests({
           symbol && symbol.flags & ts.SymbolFlags.Class
             ? abstractMembers(checker, symbol, ownNames)
             : [];
-        const abstract = members.map(({ key }) => key);
+        const abstract = members.map(({ key }) => key).filter((key) => key !== undefined);
         // A subclass written against the release, implementing what the release's class leaves
         // abstract, must still compile: it fails when the current class adds an abstract member.
         if (
@@ -408,7 +426,7 @@ export function generateTests({
           symbol.flags & ts.SymbolFlags.Class &&
           !typeOnly.get(name) &&
           isAbstractClass(symbol) &&
-          isConstructible(symbol)
+          isExtensible(symbol)
         ) {
           // Members are typed never, which fits whatever type the release gives them, even a type
           // parameter filled with never.
@@ -417,18 +435,26 @@ export function generateTests({
             method: (key) => `${key}(..._: any[]): never { throw 0; }`,
             property: (key) => `declare ${key}: never;`,
           };
-          const body = members
-            .map(({ key, form }) => implementation[form](JSON.stringify(key)))
-            .join(' ');
+          const unwritable = members.filter(({ written }) => written === undefined);
+          const body = members.map(({ written, form }) => implementation[form](written)).join(' ');
           const probe = id++;
-          segments.push({
-            id: probe,
-            test: 'abstract',
-            use: true,
-            texts: {
-              native: `class Subclass${probe} extends ${values}.${name}${typeArguments(symbol)} { ${body} }`,
-            },
-          });
+          if (unwritable.length > 0) {
+            notCompared.push({
+              path: subpath,
+              name,
+              test: 'abstract',
+              reason:
+                'an abstract member is keyed by a symbol that is not a well-known one, so a subclass written here cannot implement it',
+            });
+          } else
+            segments.push({
+              id: probe,
+              test: 'abstract',
+              use: true,
+              texts: {
+                native: `class Subclass${probe} extends ${values}.${name}${typeArguments(symbol)} { ${body} }`,
+              },
+            });
         }
         if (abstract.length > 0) {
           const args = typeArguments(symbol);

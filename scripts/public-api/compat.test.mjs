@@ -85,6 +85,26 @@ describe('checkPackage, with the release treated as GA', () => {
     deepStrictEqual(result.problems, []);
   });
 
+  it('subclasses an abstract class keyed by a well-known symbol, and lists one keyed by its own symbol as not compared', () => {
+    const result = check('abstract-symbols', { release: 'abstract-symbols' });
+    deepStrictEqual(brokenExports(result), []);
+    deepStrictEqual(
+      result.notCompared.map(({ name, test }) => ({ name, test })),
+      [{ name: 'OwnSymbol', test: 'abstract' }],
+    );
+  });
+
+  it('fails when an abstract class with a protected constructor gains an abstract member', () => {
+    deepStrictEqual(
+      brokenExports(check('abstract-protected-added', { release: 'abstract-protected-release' })),
+      [{ path: '.', name: 'Command', test: 'abstract', failsRun: true }],
+    );
+    deepStrictEqual(
+      brokenExports(check('abstract-protected-release', { release: 'abstract-protected-release' })),
+      [],
+    );
+  });
+
   it('fails when the release imports a file of its own that is missing', () => {
     const { problems } = check('relative-release', { release: 'relative-missing' });
     strictEqual(problems.length, 1);
