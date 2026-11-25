@@ -20,6 +20,7 @@ import {
   parseErrors,
   RECORDS_FILE,
   RUN_FOLDER,
+  reportMarkdown,
 } from './api-examples.mjs';
 import { LastReleaseError, lastRelease } from './release.mjs';
 
@@ -504,7 +505,7 @@ describe('applyRecords', () => {
   it('fails a record for a later release than the last', () => {
     const { problems, removable } = apply([error()], [record({ lastRelease: '1.0.1' })]);
     deepStrictEqual(problems, [
-      'the record for a src/a.ts:3 TS2322 is for the last release 1.0.1, which is later than the last release, 1.0.0.',
+      'the record for a src/a.ts:3 TS2322: the record is for the last release 1.0.1, which is later than the last release, 1.0.0.',
     ]);
     deepStrictEqual(removable, []);
   });
@@ -595,6 +596,81 @@ describe('main', () => {
       err,
       'api:compat:examples: origin has no release tag at or below 1.0.0, the version at HEAD\n',
     );
+  });
+});
+
+describe('the message of an error', () => {
+  it('is read without import("…") qualifiers, so a rebuild with new chunk names keeps its record', () => {
+    const [error] = parseErrors(
+      "src/a.ts(3,7): error TS2741: Property 'poolSize' is missing in type 'import(\"/repo/packages/x/dist/chunk-Cc33Dd44\").Options' but required in type 'Options'.",
+    );
+    strictEqual(
+      error.message,
+      "Property 'poolSize' is missing in type 'Options' but required in type 'Options'.",
+    );
+  });
+
+  it('matches a record that holds it with its qualifiers', () => {
+    const message = "Type 'import(\"/a/chunk-Ee55Ff66\").Row' is not assignable to type 'Row'.";
+    const { problems } = applyRecords({
+      results: [
+        {
+          app: 'a',
+          errors: [
+            {
+              file: 'src/a.ts',
+              line: 3,
+              code: 'TS2322',
+              message: "Type 'Row' is not assignable to type 'Row'.",
+            },
+          ],
+        },
+      ],
+      records: [
+        {
+          app: 'a',
+          file: 'src/a.ts',
+          line: 3,
+          code: 'TS2322',
+          message,
+          kind: 'allowed',
+          lastRelease: '1.0.0',
+          reason: 'r',
+        },
+      ],
+      version: '1.0.0',
+      strict: true,
+    });
+    deepStrictEqual(problems, []);
+  });
+});
+
+describe('the job summary', () => {
+  it('keeps text such as <string> in a message, so that one copied from it matches', () => {
+    const markdown = reportMarkdown({
+      version: '1.0.0',
+      tag: 'v1.0.0',
+      strict: true,
+      results: [
+        {
+          app: 'a',
+          errors: [
+            {
+              file: 'src/a.ts',
+              line: 1,
+              column: 1,
+              code: 'TS2322',
+              message: 'Type Set<string> & X',
+            },
+          ],
+          problems: [],
+        },
+      ],
+      recorded: [],
+      removable: [],
+      problems: [],
+    });
+    match(markdown, /Type Set&lt;string> &amp; X/);
   });
 });
 

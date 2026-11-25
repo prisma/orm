@@ -2,48 +2,85 @@ import { deepStrictEqual, match, strictEqual } from 'node:assert/strict';
 import { linkSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { brokenExports, fixtureCheck, names, workFolder } from './compat-fixture.mjs';
+import { brokenExports, fixtureCheck, fixtures, names, workFolder } from './compat-fixture.mjs';
 import { stampVersion } from './compat-install.mjs';
+import { apiFingerprint } from './records.mjs';
 
 const work = workFolder('api-compat-records-tests');
 const check = fixtureCheck(work);
 
-const messageOf = (current, options, name) =>
-  check(current, options).breaks.find((each) => each.name === name).message;
+const fingerprint = (fixture, path, name) =>
+  apiFingerprint(readFileSync(join(fixtures, fixture, 'api.txt'), 'utf8'), path, name);
+
+const recordFor = (fixture, fields) => ({
+  path: '.',
+  kind: 'break',
+  lastRelease: '1.0.0',
+  reason: 'on purpose',
+  ...fields,
+  api: fingerprint(fixture, fields.path ?? '.', fields.export),
+});
 
 describe('checkPackage with recorded breaks', () => {
-  const record = {
-    path: '.',
+  const record = recordFor('narrowed-parameter', {
     export: 'format',
     test: 'value',
-    lastRelease: '1.0.0',
-    message: messageOf('narrowed-parameter', {}, 'format'),
     reason: 'format accepts only strings now',
-  };
+  });
 
-  it('passes a recorded break and lists it', () => {
+  it('passes a recorded break and lists it with its kind', () => {
     const result = check('narrowed-parameter', { records: [record] });
     deepStrictEqual(brokenExports(result), []);
     deepStrictEqual(result.problems, []);
     deepStrictEqual(result.recorded, [
-      { path: '.', name: 'format', test: 'value', reason: 'format accepts only strings now' },
+      {
+        path: '.',
+        name: 'format',
+        test: 'value',
+        kind: 'break',
+        reason: 'format accepts only strings now',
+      },
     ]);
+  });
+
+  it('lists an allowed change as one', () => {
+    const result = check('narrowed-parameter', { records: [{ ...record, kind: 'allowed' }] });
+    deepStrictEqual(
+      result.recorded.map(({ kind }) => kind),
+      ['allowed'],
+    );
+  });
+
+  it('prints for an unrecorded break the record that covers it', () => {
+    const [unrecorded] = check('narrowed-parameter').breaks;
+    deepStrictEqual(unrecorded.record, {
+      path: '.',
+      export: 'format',
+      test: 'value',
+      kind: 'break',
+      lastRelease: '1.0.0',
+      api: fingerprint('narrowed-parameter', '.', 'format'),
+      reason: '…',
+    });
+    const pasted = check('narrowed-parameter', {
+      records: [{ ...unrecorded.record, reason: 'format accepts only strings now' }],
+    });
+    deepStrictEqual(brokenExports(pasted), []);
+    deepStrictEqual(pasted.problems, []);
   });
 
   it('fails once the recorded break is undone', () => {
     const { problems } = check('unchanged', { records: [record] });
     deepStrictEqual(problems, [
-      '. format (value): the record matches no break. Remove it, or correct its message.',
+      '. format (value): the recorded break is no longer a break. Remove the record.',
     ]);
   });
 
-  it('does not cover a break of the same test with another message', () => {
-    const result = check('narrowed-parameter', {
-      records: [{ ...record, message: 'Type something else.' }],
-    });
+  it('judges a recorded export again once its lines in api.txt change', () => {
+    const result = check('narrowed-parameter-again', { records: [record] });
     deepStrictEqual(names(result.breaks), ['. format value']);
     deepStrictEqual(result.problems, [
-      '. format (value): the record matches no break. Remove it, or correct its message.',
+      '. format (value): the export has changed in api.txt since the record was written, so its break is judged again. If it is still intended, replace the record with the one printed for the break.',
     ]);
   });
 
@@ -74,21 +111,9 @@ describe('checkPackage with recorded breaks', () => {
 
 describe('checkPackage with a recorded break of one test', () => {
   it('still reports the breaks of the export’s other tests', () => {
-    const options = { release: 'record-release' };
     const result = check('record-changed', {
-      ...options,
-      records: [
-        {
-          path: '.',
-          export: 'Client',
-          test: 'constructor',
-          lastRelease: '1.0.0',
-          message: check('record-changed', options).breaks.find(
-            (each) => each.test === 'constructor',
-          ).message,
-          reason: 'the constructor takes strings only',
-        },
-      ],
+      release: 'record-release',
+      records: [recordFor('record-changed', { export: 'Client', test: 'constructor' })],
     });
     deepStrictEqual(brokenExports(result), [
       { path: '.', name: 'Client', test: 'type', failsRun: true },
@@ -97,39 +122,20 @@ describe('checkPackage with a recorded break of one test', () => {
     deepStrictEqual(result.problems, []);
   });
 
-  it('still reports a later break of the same test, whose message differs', () => {
-    const message = messageOf('narrowed-method-parameter', {}, 'CacheStore');
-    const result = check('narrowed-method-parameter-other', {
-      records: [
-        {
-          path: '.',
-          export: 'CacheStore',
-          test: 'type',
-          lastRelease: '1.0.0',
-          message,
-          reason: 'narrowed',
-        },
-      ],
-    });
+  it('still reports a later break of the same test, however TypeScript words it', () => {
+    const record = recordFor('narrowed-method-parameter', { export: 'CacheStore', test: 'type' });
+    deepStrictEqual(brokenExports(check('narrowed-method-parameter', { records: [record] })), []);
+    const result = check('narrowed-method-parameter-other', { records: [record] });
     deepStrictEqual(names(result.breaks), ['. CacheStore type']);
   });
 
   it('fails on a record for a test the export does not have', () => {
     const { problems } = check('narrowed-parameter', {
-      records: [
-        {
-          path: '.',
-          export: 'format',
-          test: 'type',
-          lastRelease: '1.0.0',
-          message: 'x',
-          reason: 'narrowed',
-        },
-      ],
+      records: [recordFor('narrowed-parameter', { export: 'format', test: 'type' })],
     });
     deepStrictEqual(problems, [
       '. format: a break is recorded for its type test, which this export does not have. Remove the record or correct its test.',
-      '. format (type): the record matches no break. Remove it, or correct its message.',
+      '. format (type): the recorded break is no longer a break. Remove the record.',
     ]);
   });
 });
@@ -139,8 +145,9 @@ describe('checkPackage on import paths', () => {
     path: './sub',
     export: '*',
     test: 'path',
+    kind: 'break',
     lastRelease: '1.0.0',
-    message: messageOf('paths-removed', { release: 'paths-release' }, '*'),
+    api: fingerprint('paths-removed', './sub', '*'),
     reason: 'the sub path is gone',
   };
 
@@ -155,7 +162,7 @@ describe('checkPackage on import paths', () => {
     deepStrictEqual(brokenExports(result), []);
     deepStrictEqual(result.problems, []);
     deepStrictEqual(result.recorded, [
-      { path: './sub', name: '*', test: 'path', reason: 'the sub path is gone' },
+      { path: './sub', name: '*', test: 'path', kind: 'break', reason: 'the sub path is gone' },
     ]);
   });
 
@@ -165,7 +172,7 @@ describe('checkPackage on import paths', () => {
       records: [pathRecord],
     });
     deepStrictEqual(problems, [
-      './sub * (path): the record matches no break. Remove it, or correct its message.',
+      './sub * (path): the recorded break is no longer a break. Remove the record.',
     ]);
   });
 

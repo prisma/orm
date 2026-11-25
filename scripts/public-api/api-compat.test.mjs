@@ -8,7 +8,6 @@ import {
   main,
   PackageSelectionError,
   planPackages,
-  REMOVED_RECORDS_FILE,
   RecordsError,
   readRecords,
   removedPackageResults,
@@ -16,6 +15,7 @@ import {
   reportText,
   selectPackages,
 } from './api-compat.mjs';
+import { REMOVED_FILE } from './records.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const work = join(here, '..', '..', 'wip', `api-compat-main-tests-${process.pid}`);
@@ -32,8 +32,9 @@ const record = {
   path: '.',
   export: 'Db',
   test: 'type',
+  kind: 'break',
   lastRelease: '8.0.0',
-  message: "Property 'scope' is missing",
+  api: '0123456789abcdef',
   reason: 'Db takes a scope now',
 };
 
@@ -46,22 +47,11 @@ describe('readRecords', () => {
     deepStrictEqual(readRecords(packageWithRecords(JSON.stringify([record])), work), [record]);
   });
 
-  it('rejects a record without a reason, a test or a message, with a reason on two lines, an unknown test, a last release that is not a version, or the old release field', () => {
-    const { reason: _, ...withoutReason } = record;
-    const { test: __, ...withoutTest } = record;
-    const { message: ___, ...withoutMessage } = record;
-    const { lastRelease, ...rest } = record;
-    for (const records of [
-      [withoutReason],
-      [withoutTest],
-      [withoutMessage],
-      [{ ...record, reason: 'one\ntwo' }],
-      [{ ...record, test: 'member' }],
-      [{ ...record, lastRelease: 'eight' }],
-      [{ ...rest, release: lastRelease }],
-    ]) {
-      throws(() => readRecords(packageWithRecords(JSON.stringify(records)), work), RecordsError);
-    }
+  it('rejects a record records.mjs does not accept', () => {
+    throws(
+      () => readRecords(packageWithRecords(JSON.stringify([{ ...record, kind: 'maybe' }])), work),
+      RecordsError,
+    );
   });
 
   it('rejects a file that is not JSON', () => {
@@ -110,12 +100,21 @@ describe('the report', () => {
     version: '8.0.0',
     results: [
       result({
-        breaks: [strictBreak],
+        breaks: [{ ...strictBreak, record: { path: '.', export: 'Db', test: 'type' } }],
         undecided: [
           { ...strictBreak, name: 'JsonObject', stage: 'native', message: 'excessively deep' },
         ],
         decidedByMembers: [{ path: '.', name: 'Shape', test: 'type' }],
-        recorded: [{ path: './x', name: 'Old', test: 'path', reason: 'gone on purpose' }],
+        recorded: [
+          { path: './x', name: '*', test: 'path', kind: 'break', reason: 'gone on purpose' },
+          {
+            path: '.',
+            name: 'Row',
+            test: 'type',
+            kind: 'allowed',
+            reason: 'a new optional member',
+          },
+        ],
         notCompared: [
           {
             path: '.',
@@ -136,13 +135,15 @@ describe('the report', () => {
       [
         'api:compat: last release 8.0.0; breaks fail unless recorded',
         '',
-        '@prisma/orm-a: 10 exports on 2 paths; 8 comparisons, and 3 forwarded names checked only for existence (they are compared in the package that declares them); breaks 1, undecided 1, not compared 1, recorded 1; 1.5 s, 900 MB — FAILS',
-        "  break  . Db (type): Property 'scope' is missing",
-        '  undecided (native)  . JsonObject (type): excessively deep',
-        '  decided member by member  . Shape (type)',
-        '  not compared  . Only (type): the last release has it as never or any',
-        '  recorded  ./x Old (path): gone on purpose',
-        '  removable record  . Gone (value): for the last release 7.9.0, earlier than this one',
+        '@prisma/orm-a: 10 exports on 2 paths; 8 comparisons, and 3 forwarded names checked only for existence (they are compared in the package that declares them); breaks 1, undecided 1, not compared 1, recorded 2; 1.5 s, 900 MB — FAILS',
+        "  break  @prisma/orm-a: Db (type): Property 'scope' is missing",
+        '    to record it: {"path":".","export":"Db","test":"type"}',
+        '  undecided (native)  @prisma/orm-a: JsonObject (type): excessively deep',
+        '  decided member by member  @prisma/orm-a: Shape (type)',
+        '  not compared  @prisma/orm-a: Only (type): the last release has it as never or any',
+        '  recorded break  @prisma/orm-a/x: * (path): gone on purpose',
+        '  recorded allowed change  @prisma/orm-a: Row (type): a new optional member',
+        '  removable record  @prisma/orm-a: Gone (value): for the last release 7.9.0, earlier than this one',
         '',
         'Not checked, no release 8.0.0: @prisma/orm-new',
         '',
@@ -155,7 +156,7 @@ describe('the report', () => {
       version: '8.0.0',
       results: [
         {
-          name: REMOVED_RECORDS_FILE,
+          name: REMOVED_FILE,
           recordsFile: true,
           problems: ['@prisma/orm-x: the package is still in the repository'],
         },
@@ -170,19 +171,36 @@ describe('the report', () => {
 
   it('writes the same as a table and lists for the job summary', () => {
     const markdown = reportMarkdown(report);
-    match(markdown, /\| @prisma\/orm-a \| 8 \| 3 \| 1 \| 1 \| 1 \| 1 \| 0 \|/);
+    match(markdown, /\| @prisma\/orm-a \| 8 \| 3 \| 1 \| 1 \| 1 \| 1 \| 1 \| 0 \|/);
     match(
       markdown,
-      /- not compared: `\.` `Only` \(type\): the last release has it as never or any/,
+      /- not compared: @prisma\/orm-a: Only \(type\): the last release has it as never or any/,
     );
     match(
       markdown,
-      /- removable record: \. Gone \(value\): for the last release 7\.9\.0, earlier than this one/,
+      /- removable record: @prisma\/orm-a: Gone \(value\): for the last release 7\.9\.0, earlier than this one/,
     );
-    match(markdown, /- undecided \(native\): `\.` `JsonObject` \(type\): excessively deep/);
-    match(markdown, /- decided member by member: `\.` `Shape` \(type\)/);
-    match(markdown, /- break: `\.` `Db` \(type\): Property 'scope' is missing/);
-    match(markdown, /- recorded: `\.\/x` `Old` \(path\): gone on purpose/);
+    match(
+      markdown,
+      /- undecided \(native\): @prisma\/orm-a: JsonObject \(type\): excessively deep/,
+    );
+    match(markdown, /- decided member by member: @prisma\/orm-a: Shape \(type\)/);
+    match(markdown, /- break: @prisma\/orm-a: Db \(type\): Property 'scope' is missing/);
+    match(markdown, /- recorded break: @prisma\/orm-a\/x: \* \(path\): gone on purpose/);
+    match(
+      markdown,
+      /- recorded allowed change: @prisma\/orm-a: Row \(type\): a new optional member/,
+    );
+    match(markdown, /```json\n\{"path":"\.","export":"Db","test":"type"\}\n```/);
+  });
+
+  it('keeps text such as <string> in the job summary', () => {
+    const markdown = reportMarkdown({
+      version: '8.0.0',
+      results: [result({ breaks: [{ ...strictBreak, message: 'Type A<string> & B' }] })],
+      notReleased: [],
+    });
+    match(markdown, /Type A&lt;string> &amp; B/);
   });
 });
 
@@ -294,7 +312,7 @@ describe('main', () => {
     ms: 1,
     maxRssMb: 1,
   });
-  const run = (args, version) => {
+  const run = (args, version, more = {}) => {
     let out = '';
     let err = '';
     const strictness = [];
@@ -310,6 +328,7 @@ describe('main', () => {
       released: async () => true,
       install: () => {},
       check: async (jobs) => jobs.map((job) => (strictness.push(job.strict), breakIn(job))),
+      ...more,
     }).then((code) => ({ code, out, err, strictness }));
   };
 
@@ -317,9 +336,15 @@ describe('main', () => {
     const reported = await run([], '8.0.0-rc.25');
     deepStrictEqual([reported.code, reported.strictness], [0, [false]]);
     match(reported.out, /a pre-release, so breaks are reported and do not fail/);
-    match(reported.out, /break \(reported only\) {2}\. x \(value\): removed/);
+    match(reported.out, /break \(reported only\) {2}@prisma\/orm-framework: x \(value\): removed/);
     const forced = await run(['--ga'], '8.0.0-rc.25');
     deepStrictEqual([forced.code, forced.strictness], [1, [true]]);
+  });
+
+  it('leaves the removed-package records alone under --only, which cannot tell what was removed', async () => {
+    const gone = { package: '@prisma/orm-gone', lastRelease: '8.0.0-rc.25', reason: 'merged' };
+    const { out } = await run([], '8.0.0-rc.25', { removedRecords: () => [gone] });
+    strictEqual(out.includes('removed-packages.json'), false);
   });
 
   it('fails a break against a GA release', async () => {

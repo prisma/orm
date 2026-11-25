@@ -3,13 +3,13 @@
 //
 // Finds the breaks in each published package since the last release (release.mjs says which that
 // is). The last release is installed beside the current build, with a second copy of it, its twin
-// (compat-install.mjs), and
-// for each export a package declares itself on one of its import paths a generated test asks
-// whether the current build's type is assignable to the release's, for the export's type, for its
-// value and for a class's constructor parameters (compat.mjs). A value is also used through a value
-// import, which fails when the current build exports it type-only. Names a path forwards from
-// another package are checked there, and here only for existence. The members a package adds with
-// `declare module` to an interface of another of our packages are compared too.
+// (compat-install.mjs), and for each export a package declares itself on one of its import paths
+// a generated test asks whether the current build's type is assignable to the release's, for the
+// export's type, for its value and for a class's constructor parameters (compat.mjs). A value is
+// also used through a value import, which fails when the current build exports it type-only. Names
+// a path forwards from another package are checked there, and here only for existence. The members
+// a package adds with `declare module` to an interface of another of our packages are compared
+// too.
 //
 // One direction is enough: a new required member on a type users implement fails through the
 // exported function that accepts it, and a new member on a type users only receive passes.
@@ -25,29 +25,20 @@
 //
 // TypeScript cannot relate some generic types between two copies of their declaration, so a
 // failure is a break when the same test passes between the release and its twin, and also when
-// there was no time left to try. When it fails there too, the export is compared member by member
-// with the same rule. What still cannot be compared goes to the structural mapping of
+// there was no time left to try. When it fails there too, it goes to the structural mapping of
 // compat-structural.ts, whose failure is a break and whose pass is not a verdict, since it
-// instantiates generic signatures with their constraints. What is not decided is reported as
-// undecided, with the stage it ended at: native (too deep, or a stack overflow), member, or
-// structural.
+// instantiates generic signatures with their constraints. What that does not decide is compared
+// member by member, each member with the twin rule and then the structural mapping. What is not
+// decided is reported as undecided, with the stage it ended at: native (too deep, or a stack
+// overflow), member, or structural.
 //
-// A deliberate break is recorded in api-breaks.json beside the package's api.txt, as
-// [{ "path": ".", "export": "Db", "test": "type", "lastRelease": "8.0.0", "message": "…",
-//    "reason": "…" }], where the test is type, value, constructor, abstract, augments, exists, or path
-// for a removed import path (export "*"), the message is the break's as the report prints it, and
-// the last release is the one the break is measured against. A record covers exactly one break, so
-// that another break of the same export is still seen; one that matches no break, where that test
-// is decided, fails the run, as does one that matches several. A record for a later last release
-// fails the run; one for an earlier one is skipped and listed as removable.
-//
-// A released package that the repository no longer has is a break of the test `package`. It is
-// recorded in packages/9-public/removed-packages.json, as [{ "package": "@prisma/orm-x",
-// "lastRelease": "8.0.0", "reason": "…" }].
+// An accepted break is recorded in api-breaks.json beside the package's api.txt, and a released
+// package the repository no longer has in packages/9-public/removed-packages.json; records.mjs
+// describes both. The report prints each unrecorded break's record, ready to paste.
 //
 // A break fails the run when the last release has no pre-release part (`--ga` treats it as if it
 // had none) and the export's name does not start with preview_ or ea_. Otherwise it is reported.
-// Needs `pnpm build` and network access to the registry.
+// Needs `pnpm build` and network access to origin and to the registry.
 
 import { fork } from 'node:child_process';
 import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -55,9 +46,8 @@ import { availableParallelism } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { type } from 'arktype';
 import { publishedPackageDirs } from './api.mjs';
-import { RECORDS_FILE } from './compat.mjs';
+import { compareCodeUnits } from './api-lines.mjs';
 import {
   aliasOf,
   installRelease,
@@ -65,13 +55,18 @@ import {
   supplyChainSettings,
   thirdPartyVersions,
 } from './compat-install.mjs';
-import { compareCodeUnits } from './flatten.mjs';
 import {
-  compareVersions,
+  BREAKS_FILE,
+  byLastRelease,
+  exportLabel,
+  REMOVED_FILE,
+  RecordsError,
+  readRecords as readRecordFile,
+} from './records.mjs';
+import {
   fetchReleaseTag,
   isPrerelease,
   isReleased,
-  isVersion,
   LastReleaseError,
   lastRelease,
   packagesAtTag,
@@ -79,78 +74,28 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const INSTALL_FOLDER = '.api-compat';
-export const REMOVED_RECORDS_FILE = join('packages', '9-public', 'removed-packages.json');
-
-const version = type('string').narrow(
-  (text, context) => isVersion(text) || context.mustBe('a version'),
-);
-const reason = type(/^[^\r\n]+$/);
-
-const Records = type({
-  '+': 'reject',
-  path: 'string > 0',
-  export: 'string > 0',
-  test: "'type' | 'value' | 'constructor' | 'abstract' | 'augments' | 'exists' | 'path'",
-  lastRelease: version,
-  message: 'string > 0',
-  reason,
-}).array();
-
-const RemovedRecords = type({
-  '+': 'reject',
-  package: 'string > 0',
-  lastRelease: version,
-  reason,
-}).array();
-
-export class RecordsError extends Error {}
-
-function readRecordFile(file, root, schema, shape) {
-  if (!existsSync(file)) return [];
-  let parsed;
-  try {
-    parsed = JSON.parse(readFileSync(file, 'utf8'));
-  } catch (error) {
-    throw new RecordsError(`${relative(root, file)}: ${error.message}`);
-  }
-  const records = schema(parsed);
-  if (records instanceof type.errors) {
-    throw new RecordsError(`${relative(root, file)}: ${records.summary}. ${shape}`);
-  }
-  return records;
-}
+export { RecordsError };
 
 export const readRecords = (packageDir, root) =>
   readRecordFile(
-    join(packageDir, RECORDS_FILE),
-    root,
-    Records,
-    'Each record is { "path", "export", "test", "lastRelease", "message", "reason" }, where the test is type, value, constructor, abstract, augments, exists or path, the last release is the version the break is measured against, the message is the break’s as the report prints it, and the reason is on one line.',
+    join(packageDir, BREAKS_FILE),
+    'breaks',
+    relative(root, join(packageDir, BREAKS_FILE)),
   );
 
 export const readRemovedRecords = (root) =>
-  readRecordFile(
-    join(root, REMOVED_RECORDS_FILE),
-    root,
-    RemovedRecords,
-    'Each record is { "package", "lastRelease", "reason" }, with the last release a version and the reason on one line.',
-  );
+  readRecordFile(join(root, REMOVED_FILE), 'removed', REMOVED_FILE);
 
 // A released package the repository no longer has is a break, which a record in
 // removed-packages.json covers.
 export function removedPackageResults({ removed, version, strict, records }) {
   const results = [];
-  const problems = [];
-  const removable = [];
+  const sorted = byLastRelease(records, version, (record) => record.package);
+  const problems = [...sorted.problems];
+  const removable = sorted.removable;
   const covering = new Map();
-  for (const record of records) {
-    const order = compareVersions(record.lastRelease, version);
-    if (order < 0) removable.push(record);
-    else if (order > 0) {
-      problems.push(
-        `${record.package}: the record is for the last release ${record.lastRelease}, which is later than the last release, ${version}.`,
-      );
-    } else if (!removed.includes(record.package)) {
+  for (const record of sorted.current) {
+    if (!removed.includes(record.package)) {
       problems.push(
         `${record.package}: the record is for a package the repository still has, or that was not released. Remove it.`,
       );
@@ -168,7 +113,7 @@ export function removedPackageResults({ removed, version, strict, records }) {
       name,
       removed: true,
       breaks: record ? [] : [{ ...failure, failsRun: strict }],
-      recorded: record ? [{ ...failure, reason: record.reason }] : [],
+      recorded: record ? [{ ...failure, kind: 'break', reason: record.reason }] : [],
       undecided: [],
       notCompared: [],
       removable: [],
@@ -278,7 +223,16 @@ async function runAll(jobs, workers) {
 export const failsRun = (result) =>
   (result.problems?.length ?? 0) > 0 || (result.breaks ?? []).some((each) => each.failsRun);
 
-const describeFailure = ({ path, name, test, message }) => `${path} ${name} (${test}): ${message}`;
+const labelOf = (packageName, { path, name }) =>
+  path === '*' ? packageName : exportLabel(packageName, path, name);
+const describeFailure = (packageName, each, message = each.message) =>
+  `${labelOf(packageName, each)} (${each.test}): ${message}`;
+const RECORDED = [
+  { kind: 'break', text: 'recorded break' },
+  { kind: 'allowed', text: 'recorded allowed change' },
+];
+const recordedOfKind = (result, kind) =>
+  (result.recorded ?? []).filter((each) => each.kind === kind);
 
 export function reportText({ version, results, notReleased }) {
   const lines = [
@@ -295,22 +249,27 @@ export function reportText({ version, results, notReleased }) {
           : `${result.name}: not checked`;
     lines.push(`\n${head}${failsRun(result) ? ' — FAILS' : ''}`);
     for (const each of result.breaks ?? []) {
-      lines.push(`  break${each.failsRun ? '' : ' (reported only)'}  ${describeFailure(each)}`);
+      lines.push(
+        `  break${each.failsRun ? '' : ' (reported only)'}  ${describeFailure(result.name, each)}`,
+      );
+      if (each.record) lines.push(`    to record it: ${JSON.stringify(each.record)}`);
     }
     for (const each of result.undecided ?? []) {
-      lines.push(`  undecided (${each.stage})  ${describeFailure(each)}`);
+      lines.push(`  undecided (${each.stage})  ${describeFailure(result.name, each)}`);
     }
     for (const each of result.decidedByMembers ?? []) {
-      lines.push(`  decided member by member  ${each.path} ${each.name} (${each.test})`);
+      lines.push(`  decided member by member  ${labelOf(result.name, each)} (${each.test})`);
     }
     for (const each of result.notCompared ?? []) {
-      lines.push(`  not compared  ${describeFailure({ ...each, message: each.reason })}`);
+      lines.push(`  not compared  ${describeFailure(result.name, each, each.reason)}`);
     }
-    for (const each of result.recorded ?? []) {
-      lines.push(`  recorded  ${each.path} ${each.name} (${each.test}): ${each.reason}`);
+    for (const { kind, text } of RECORDED) {
+      for (const each of recordedOfKind(result, kind)) {
+        lines.push(`  ${text}  ${describeFailure(result.name, each, each.reason)}`);
+      }
     }
     for (const each of result.removable ?? []) {
-      lines.push(`  removable record  ${removableText(each)}`);
+      lines.push(`  removable record  ${removableText(result.name, each)}`);
     }
     for (const problem of result.problems ?? []) lines.push(`  problem  ${problem}`);
   }
@@ -320,10 +279,17 @@ export function reportText({ version, results, notReleased }) {
   return `${lines.join('\n')}\n`;
 }
 
-const removableText = (each) =>
-  `${each.path} ${each.export} (${each.test}): for the last release ${each.lastRelease}, earlier than this one`;
+const removableText = (packageName, each) =>
+  `${labelOf(packageName, { path: each.path ?? '*', name: each.export })} (${each.test ?? 'package'}): for the last release ${each.lastRelease}, earlier than this one`;
 
-const cell = (text) => String(text).replaceAll('|', '\\|').replaceAll('\n', ' ');
+// Markdown table cells and list items; `<` and `&` are escaped, so that text such as `<string>`
+// reaches the reader as written.
+const cell = (text) =>
+  String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('|', '\\|')
+    .replaceAll('\n', ' ');
 
 export function reportMarkdown({ version, results, notReleased }) {
   const lines = [
@@ -333,11 +299,11 @@ export function reportMarkdown({ version, results, notReleased }) {
       ? 'The last release is a pre-release, so breaks are reported and do not fail the job.'
       : 'A break fails the job unless it is recorded in the package’s `api-breaks.json`.',
     '',
-    '| Package | Comparisons | Forwarded names | Breaks | Undecided | Not compared | Recorded | Problems |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| Package | Comparisons | Forwarded names | Breaks | Undecided | Not compared | Recorded breaks | Recorded allowed | Problems |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
     ...results.map(
       (result) =>
-        `| ${result.name} | ${result.counts?.tests ?? '–'} | ${result.counts?.forwarded ?? '–'} | ${result.breaks?.length ?? '–'} | ${result.undecided?.length ?? '–'} | ${result.notCompared?.length ?? '–'} | ${result.recorded?.length ?? '–'} | ${result.problems.length} |`,
+        `| ${result.name} | ${result.counts?.tests ?? '–'} | ${result.counts?.forwarded ?? '–'} | ${result.breaks?.length ?? '–'} | ${result.undecided?.length ?? '–'} | ${result.notCompared?.length ?? '–'} | ${recordedOfKind(result, 'break').length} | ${recordedOfKind(result, 'allowed').length} | ${result.problems.length} |`,
     ),
     '',
   ];
@@ -345,26 +311,39 @@ export function reportMarkdown({ version, results, notReleased }) {
     const items = [
       ...(result.breaks ?? []).map(
         (each) =>
-          `- break${each.failsRun ? '' : ' (reported only)'}: \`${each.path}\` \`${each.name}\` (${each.test}): ${cell(each.message)}`,
+          `- break${each.failsRun ? '' : ' (reported only)'}: ${cell(describeFailure(result.name, each))}`,
       ),
       ...(result.undecided ?? []).map(
-        (each) =>
-          `- undecided (${each.stage}): \`${each.path}\` \`${each.name}\` (${each.test}): ${cell(each.message)}`,
+        (each) => `- undecided (${each.stage}): ${cell(describeFailure(result.name, each))}`,
       ),
       ...(result.decidedByMembers ?? []).map(
-        (each) => `- decided member by member: \`${each.path}\` \`${each.name}\` (${each.test})`,
+        (each) =>
+          `- decided member by member: ${cell(`${labelOf(result.name, each)} (${each.test})`)}`,
       ),
       ...(result.notCompared ?? []).map(
-        (each) =>
-          `- not compared: \`${each.path}\` \`${each.name}\` (${each.test}): ${cell(each.reason)}`,
+        (each) => `- not compared: ${cell(describeFailure(result.name, each, each.reason))}`,
       ),
-      ...(result.recorded ?? []).map(
-        (each) =>
-          `- recorded: \`${each.path}\` \`${each.name}\` (${each.test}): ${cell(each.reason)}`,
+      ...RECORDED.flatMap(({ kind, text }) =>
+        recordedOfKind(result, kind).map(
+          (each) => `- ${text}: ${cell(describeFailure(result.name, each, each.reason))}`,
+        ),
       ),
-      ...(result.removable ?? []).map((each) => `- removable record: ${cell(removableText(each))}`),
+      ...(result.removable ?? []).map(
+        (each) => `- removable record: ${cell(removableText(result.name, each))}`,
+      ),
       ...result.problems.map((problem) => `- problem: ${cell(problem)}`),
     ];
+    const toRecord = (result.breaks ?? []).filter((each) => each.record);
+    if (toRecord.length > 0) {
+      items.push(
+        '',
+        `To record these breaks, add to \`${result.name.replace('@prisma/', 'packages/9-public/@prisma/')}/api-breaks.json\`, with the kind and the reason:`,
+        '',
+        '```json',
+        ...toRecord.map((each) => JSON.stringify(each.record)),
+        '```',
+      );
+    }
     if (items.length > 0) lines.push(`### ${result.name}`, '', ...items, '');
   }
   if (notReleased.length > 0) {
@@ -381,6 +360,7 @@ const steps = {
   released: isReleased,
   install: installRelease,
   check: runAll,
+  removedRecords: (root) => readRemovedRecords(root),
 };
 
 export async function main({
@@ -398,6 +378,7 @@ export async function main({
     released: isPublished,
     install,
     check,
+    removedRecords: readRemoved,
   } = {
     ...steps,
     ...replaced,
@@ -459,21 +440,22 @@ export async function main({
   const results = [...plan.problems];
   let removedRecords;
   try {
-    removedRecords = readRemovedRecords(root);
+    removedRecords = readRemoved(root);
   } catch (error) {
     if (!(error instanceof RecordsError)) throw error;
     return fail(error.message);
   }
+  // Under --only, the packages removed are not known, so their records are not judged.
   const removed = removedPackageResults({
     removed: plan.removed,
     version,
     strict,
-    records: removedRecords,
+    records: values.only === undefined ? removedRecords : [],
   });
   results.push(...removed.results);
   if (removed.problems.length > 0 || removed.removable.length > 0) {
     results.push({
-      name: REMOVED_RECORDS_FILE,
+      name: REMOVED_FILE,
       recordsFile: true,
       problems: removed.problems,
       removable: removed.removable.map((record) => ({

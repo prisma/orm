@@ -3,10 +3,9 @@
 // two copies of a package the way a user of it relies on, and it reads each third-party package
 // from one physical copy.
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import ts from 'typescript';
-import { entryPointsOf } from './read-api.mjs';
 
 const f = ts.factory;
 
@@ -252,37 +251,6 @@ function uniqueSymbolsOf(packageRoot) {
   return found;
 }
 
-const declarationOf = (file, specifier) =>
-  resolve(dirname(file), specifier)
-    .replace(/\.mjs$/, '.d.mts')
-    .replace(/\.cjs$/, '.d.cts')
-    .replace(/\.js$/, '.d.ts');
-
-// For each declaration file of a package, the import paths that reach it, which depend on what the
-// package exports and not on how a bundler split its declarations into files.
-function reachingPaths(packageRoot) {
-  const reaching = new Map();
-  let entryPoints = [];
-  try {
-    entryPoints = entryPointsOf(packageRoot);
-  } catch {}
-  for (const { subpath, declarationFile } of entryPoints) {
-    const queue = [declarationFile];
-    const seen = new Set();
-    while (queue.length > 0) {
-      const file = queue.pop();
-      if (seen.has(file) || !existsSync(file)) continue;
-      seen.add(file);
-      reaching.set(file, [...(reaching.get(file) ?? []), subpath]);
-      for (const { fileName } of ts.preProcessFile(readFileSync(file, 'utf8'), true, true)
-        .importedFiles) {
-        if (fileName.startsWith('.')) queue.push(declarationOf(file, fileName));
-      }
-    }
-  }
-  return reaching;
-}
-
 const packageRootOf = (fileName, name) => {
   const marker = `/node_modules/${name}/`;
   const at = fileName.lastIndexOf(marker);
@@ -298,24 +266,16 @@ export function createCompareHost(options, { packageOf, isOwn }) {
   const readSourceFile = host.getSourceFile.bind(host);
   const files = new Map();
   const symbolsByRoot = new Map();
-  const pathsByRoot = new Map();
-  // Two unique symbols with one name in one package are told apart by the import paths that reach
-  // the files declaring them. When those are the same, nothing stable tells them apart, and both
-  // get one name; they are listed in `mergedSymbols`.
+  // Two unique symbols with one name in one package cannot be told apart by anything an edit to
+  // the package does not change, so both get the one name; they are listed in `mergedSymbols`.
   host.mergedSymbols = new Set();
-  const symbolNameIn = (fileName, { name, root }) => {
+  const symbolNameIn = ({ name, root }) => {
     if (!symbolsByRoot.has(root)) symbolsByRoot.set(root, uniqueSymbolsOf(root));
     return (symbol) => {
-      const files = symbolsByRoot.get(root).get(symbol) ?? [];
-      if (files.length < 2) return `unique symbol ${name}:${symbol}`;
-      if (!pathsByRoot.has(root)) pathsByRoot.set(root, reachingPaths(root));
-      const key = (file) => (pathsByRoot.get(root).get(file) ?? []).join(' ');
-      const mine = key(fileName);
-      if (files.filter((file) => key(file) === mine).length > 1) {
+      if ((symbolsByRoot.get(root).get(symbol) ?? []).length > 1) {
         host.mergedSymbols.add(`${name}:${symbol}`);
-        return `unique symbol ${name}:${symbol}`;
       }
-      return `unique symbol ${name}:${symbol} reached from ${mine}`;
+      return `unique symbol ${name}:${symbol}`;
     };
   };
   host.getSourceFile = (fileName, languageVersion, onError, shouldCreate) => {
@@ -335,7 +295,7 @@ export function createCompareHost(options, { packageOf, isOwn }) {
             : rewriteDeclarations(fileName, text, {
                 own,
                 packageName: owner.name,
-                symbolName: own ? symbolNameIn(fileName, owner) : undefined,
+                symbolName: own ? symbolNameIn(owner) : undefined,
               });
         file = ts.createSourceFile(fileName, rewritten, languageVersion);
       }

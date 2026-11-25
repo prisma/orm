@@ -10,14 +10,13 @@ import ts from 'typescript';
 import { createCompareHost } from './compat-declarations.mjs';
 import { COMPILER_OPTIONS } from './compiler-options.mjs';
 import { entryPointsOf } from './read-api.mjs';
-import { packageOf, readExports } from './read-exports.mjs';
-import { compareVersions, isExemptExport } from './release.mjs';
+import { packageOf, readExports, TYPE_FLAGS, VALUE_FLAGS } from './read-exports.mjs';
+import { apiFingerprint, byLastRelease, normaliseMessage } from './records.mjs';
+import { isExemptExport } from './release.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const HELPERS = join(here, 'compat-structural.ts');
 const ROOT = realpathSync(resolve(here, '..', '..'));
-
-export const RECORDS_FILE = 'api-breaks.json';
 
 const EXCESSIVELY_DEEP = 2589;
 const EXCESSIVE_STACK_DEPTH = 2321;
@@ -34,15 +33,6 @@ const STRUCTURAL_DEEP = `not decided: ${UNRELATABLE}, and the structural compari
 const STRUCTURAL_LATE = `not decided: ${UNRELATABLE}, and the time for the structural comparison ran out`;
 const PARTIAL =
   'not decided: its members pass one by one, but its call, construct or index signatures, or its symbol keys, could not be compared that way';
-
-const TYPE_FLAGS =
-  ts.SymbolFlags.Interface | ts.SymbolFlags.TypeAlias | ts.SymbolFlags.Class | ts.SymbolFlags.Enum;
-const VALUE_FLAGS =
-  ts.SymbolFlags.Variable |
-  ts.SymbolFlags.Function |
-  ts.SymbolFlags.Class |
-  ts.SymbolFlags.Enum |
-  ts.SymbolFlags.ValueModule;
 
 const withoutRoot = (text) => text.replaceAll(`${ROOT}${sep}`, '');
 
@@ -189,7 +179,7 @@ function augmentationTests({
       const key = `${augmentation.file.fileName}\0${augmentation.head}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const name = `${augmentation.module} ${augmentation.name}`;
+      const name = augmentation.head;
       if (!ownNames.has(augmentation.module.replace(/^(@[^/]+\/[^/]+|[^@/][^/]*).*$/, '$1'))) {
         notCompared.push({
           path: subpath,
@@ -271,17 +261,14 @@ export function generateTests({
   const counts = { paths: 0, exports: 0, forwarded: 0, tests: 0 };
   const notCompared = [];
   const problems = [];
-  const removable = [];
-  const pending = new Set();
-  for (const record of records) {
-    const order = compareVersions(record.lastRelease, version);
-    if (order < 0) removable.push(record);
-    else if (order > 0) {
-      problems.push(
-        `${record.path} ${record.export} (${record.test}): the record is for the last release ${record.lastRelease}, which is later than the last release, ${version}.`,
-      );
-    } else pending.add(record);
-  }
+  const sorted = byLastRelease(
+    records,
+    version,
+    (record) => `${record.path} ${record.export} (${record.test})`,
+  );
+  const removable = sorted.removable;
+  problems.push(...sorted.problems);
+  const pending = new Set(sorted.current);
   const take = (path, name) => {
     const taken = [...pending].filter((record) => record.path === path && record.export === name);
     for (const record of taken) pending.delete(record);
@@ -806,7 +793,15 @@ export function checkPackage({
       problems.add(
         `${entry.path}: the current build cannot be imported (TS${code} ${message}). Run \`pnpm build\`.`,
       );
-    } else breaks.push({ path: entry.path, name: '*', test: 'path', code, message });
+    } else {
+      breaks.push({
+        path: entry.path,
+        name: '*',
+        test: 'path',
+        code,
+        message: normaliseMessage(message),
+      });
+    }
   }
 
   const testOf = (entry, segment) => ({ path: entry.path, name: entry.name, test: segment.test });
@@ -814,10 +809,15 @@ export function checkPackage({
     breaks.push({
       ...testOf(entry, segment),
       code: [...outcome.codes][0],
-      message: `${segment.member === undefined ? '' : `${segment.member}: `}${outcome.message}${note}`,
+      message: `${segment.member === undefined ? '' : `${segment.member}: `}${normaliseMessage(outcome.message)}${note}`,
     });
   const notDecided = (entry, segment, stage, message) =>
-    undecided.push({ ...testOf(entry, segment), stage, code: EXCESSIVELY_DEEP, message });
+    undecided.push({
+      ...testOf(entry, segment),
+      stage,
+      code: EXCESSIVELY_DEEP,
+      message: normaliseMessage(message),
+    });
 
   let failed = [];
   for (const entry of exported) {
@@ -969,33 +969,66 @@ export function checkPackage({
     else decidedByMembers.push(testOf(each.entry, each.segment));
   }
 
-  // A record stands for exactly one break: of one test of one export, with the message the report
-  // prints for it. One that matches no break, where that test is decided, must be removed.
+  // A record covers the breaks of one test of one export while the export's lines in api.txt are
+  // the ones it was recorded with. A record whose test no longer breaks, where that test is
+  // decided, must be removed.
+  const apiText = existsSync(join(currentDir, 'api.txt'))
+    ? readFileSync(join(currentDir, 'api.txt'), 'utf8')
+    : undefined;
+  const fingerprints = new Map();
+  const fingerprintOf = (path, exported) => {
+    const key = `${path}\0${exported}`;
+    if (!fingerprints.has(key)) fingerprints.set(key, apiFingerprint(apiText, path, exported));
+    return fingerprints.get(key);
+  };
   const sameTest = (record) => (each) =>
     each.path === record.path && each.name === record.export && each.test === record.test;
-  const matches = (record) => (each) => sameTest(record)(each) && each.message === record.message;
   const applied = generated.entries.flatMap((entry) => entry.records);
   const recordedBreaks = new Set();
+  const recorded = [];
   for (const record of applied) {
-    const found = breaks.filter(matches(record));
+    const found = breaks.filter(sameTest(record));
     const label = `${record.path} ${record.export} (${record.test})`;
-    if (found.length === 1) recordedBreaks.add(found[0]);
-    else if (found.length > 1) {
+    if (found.length === 0) {
+      if (!undecided.some(sameTest(record))) {
+        problems.add(`${label}: the recorded break is no longer a break. Remove the record.`);
+      }
+    } else if (record.api !== fingerprintOf(record.path, record.export)) {
       problems.add(
-        `${label}: the record matches ${found.length} breaks; it must match exactly one.`,
+        `${label}: the export has changed in api.txt since the record was written, so its break is judged again. If it is still intended, replace the record with the one printed for the break.`,
       );
-    } else if (!undecided.some(sameTest(record))) {
-      problems.add(`${label}: the record matches no break. Remove it, or correct its message.`);
+    } else {
+      for (const each of found) recordedBreaks.add(each);
+      recorded.push({
+        path: record.path,
+        name: record.export,
+        test: record.test,
+        kind: record.kind,
+        reason: record.reason,
+      });
     }
   }
-  const unrecorded = breaks.filter((each) => !recordedBreaks.has(each));
+  const unrecorded = breaks
+    .filter((each) => !recordedBreaks.has(each))
+    .map((each) => ({
+      ...each,
+      record: {
+        path: each.path,
+        export: each.name,
+        test: each.test,
+        kind: 'break',
+        lastRelease: version,
+        api: fingerprintOf(each.path, each.name),
+        reason: '…',
+      },
+    }));
   for (const symbol of host.mergedSymbols) {
     notCompared.push({
       path: '*',
-      name: symbol,
+      name: `unique symbol ${symbol}`,
       test: 'unique symbol',
       reason:
-        'the package declares two unique symbols with this name, in files that the same import paths reach, so nothing stable tells them apart and they are compared as one',
+        'the package declares two unique symbols with this name, which nothing stable tells apart, so both have one name and the keys made from them are compared as one key',
     });
   }
   const allNotCompared = [...generated.notCompared, ...notCompared];
@@ -1007,12 +1040,7 @@ export function checkPackage({
     breaks: unrecorded.map((each) => ({ ...each, failsRun: strict && !isExemptExport(each.name) })),
     undecided,
     notCompared: allNotCompared,
-    recorded: applied.map((record) => ({
-      path: record.path,
-      name: record.export,
-      test: record.test,
-      reason: record.reason,
-    })),
+    recorded,
     removable: generated.removable,
     problems: [...problems],
     decidedByMembers,

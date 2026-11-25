@@ -13,21 +13,14 @@
 //
 // The apps' type tests assert exact types, so a change the compatibility policy allows can fail
 // them. Such an error, or one a deliberate break causes, is recorded in
-// examples/last-release-errors.json as
-// [{ "app": "prisma-8-demo", "file": "test/rows.test-d.ts", "line": 12, "code": "TS2344",
-//    "message": "Type '…' does not satisfy the constraint '…'.", "kind": "allowed",
-//    "lastRelease": "8.0.0", "reason": "…" }]. The kind is `allowed` for an addition the policy
-// allows that an exact type assertion rejects, and `break` for a deliberate break, which the
-// release notes must name; the report lists the two apart. The last release is the version the
-// error is measured against. The tag's files never change, so the record stays valid for as long
-// as that release is the last one, until the current build changes the type again. Each record
-// must match exactly one error (line 0 for an error with no location). A record for an earlier
-// last release is skipped and listed as removable; one for a later one, or one that matches no
-// error, fails.
+// examples/last-release-errors.json, which records.mjs describes. The tag's files never change, so
+// a record names its error by app, file, line, code and message, the message as the report prints
+// it, with `import("…")` qualifiers left out. Each record must match exactly one error (line 0 for
+// an error with no location); one that matches none fails the run.
 //
 // An error that is not recorded fails the run when the last release has no pre-release part
 // (`--ga` treats it as if it had none); otherwise it is reported. Needs network access to the
-// registry and to the origin remote.
+// origin remote, for the release tags.
 
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -44,55 +37,26 @@ import {
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { type } from 'arktype';
-import { compareCodeUnits } from './flatten.mjs';
+import { compareCodeUnits } from './api-lines.mjs';
 import {
-  compareVersions,
-  fetchReleaseTag,
-  isPrerelease,
-  LastReleaseError,
-  lastRelease,
-} from './release.mjs';
+  byLastRelease,
+  EXAMPLES_FILE,
+  normaliseMessage,
+  RecordsError,
+  readRecords as readRecordFile,
+} from './records.mjs';
+import { fetchReleaseTag, isPrerelease, LastReleaseError, lastRelease } from './release.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-export const RECORDS_FILE = join('examples', 'last-release-errors.json');
+export const RECORDS_FILE = EXAMPLES_FILE;
 export const RUN_FOLDER = '.api-examples';
 const TYPECHECK_TIMEOUT_MS = 10 * 60 * 1000;
 
-const VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
-
-const Records = type({
-  '+': 'reject',
-  app: 'string > 0',
-  file: 'string > 0',
-  line: 'number.integer >= 0',
-  code: /^TS\d+$/,
-  message: 'string > 0',
-  kind: "'allowed' | 'break'",
-  lastRelease: VERSION,
-  reason: /^[^\r\n]+$/,
-}).array();
-
 export class ExamplesError extends Error {}
 
-export function readRecords(root) {
-  const file = join(root, RECORDS_FILE);
-  if (!existsSync(file)) return [];
-  let parsed;
-  try {
-    parsed = JSON.parse(readFileSync(file, 'utf8'));
-  } catch (error) {
-    throw new ExamplesError(`${RECORDS_FILE}: ${error.message}`);
-  }
-  const records = Records(parsed);
-  if (records instanceof type.errors) {
-    throw new ExamplesError(
-      `${RECORDS_FILE}: ${records.summary}. Each record is { "app", "file", "line", "code", "message", "kind", "lastRelease", "reason" }, where the kind is allowed or break, the last release is the version the error is measured against, and the reason is on one line.`,
-    );
-  }
-  return records;
-}
+export const readRecords = (root) =>
+  readRecordFile(join(root, EXAMPLES_FILE), 'examples', EXAMPLES_FILE);
 
 const git = (root, args, options = {}) =>
   execFileSync('git', args, {
@@ -199,7 +163,7 @@ export function parseErrors(output) {
         line: line === undefined ? 0 : Number(line),
         column: column === undefined ? 0 : Number(column),
         code,
-        message: message.trim(),
+        message: normaliseMessage(message.trim()),
       },
     ];
   });
@@ -297,7 +261,7 @@ const recordMatches = (record, app, error) =>
   record.file === error.file &&
   record.line === error.line &&
   record.code === error.code &&
-  record.message === error.message;
+  normaliseMessage(record.message) === error.message;
 
 const recordLabel = (record) =>
   `the record for ${record.app} ${record.file}:${record.line} ${record.code}`;
@@ -308,17 +272,12 @@ export function applyRecords({ results, records, version, strict }) {
   const checked = new Map(
     results.filter((result) => result.errors).map((result) => [result.app, result]),
   );
-  const removable = [];
-  const problems = [];
+  const sorted = byLastRelease(records, version, recordLabel);
+  const removable = sorted.removable;
+  const problems = [...sorted.problems];
   const recorded = [];
-  for (const record of records) {
-    const order = compareVersions(record.lastRelease, version);
-    if (order < 0) removable.push(record);
-    else if (order > 0) {
-      problems.push(
-        `${recordLabel(record)} is for the last release ${record.lastRelease}, which is later than the last release, ${version}.`,
-      );
-    } else if (checked.has(record.app)) {
+  for (const record of sorted.current) {
+    if (checked.has(record.app)) {
       const matches = checked
         .get(record.app)
         .errors.filter((error) => recordMatches(record, record.app, error));
@@ -421,7 +380,14 @@ export function reportText(report) {
   return `${lines.join('\n')}\n`;
 }
 
-const cell = (text) => String(text).replaceAll('|', '\\|').replaceAll('\n', ' ');
+// `<` and `&` are escaped, so that a message such as one naming `<string>` reaches the reader, and
+// a record copied from the summary, as written.
+const cell = (text) =>
+  String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('|', '\\|')
+    .replaceAll('\n', ' ');
 const SAMPLES_PER_FILE = 3;
 
 export function reportMarkdown(report) {
@@ -555,7 +521,13 @@ export async function main({
       findRelease,
     });
   } catch (error) {
-    if (!(error instanceof ExamplesError) && !(error instanceof LastReleaseError)) throw error;
+    if (
+      !(error instanceof ExamplesError) &&
+      !(error instanceof LastReleaseError) &&
+      !(error instanceof RecordsError)
+    ) {
+      throw error;
+    }
     stderr.write(`api:compat:examples: ${error.message}\n`);
     return 1;
   } finally {

@@ -74,11 +74,14 @@ describe('checkPackage, with the release treated as GA', () => {
     deepStrictEqual(result.decidedByMembers, []);
   });
 
-  it('tells apart two unique symbols with one name in two modules', () => {
-    deepStrictEqual(brokenExports(check('symbols-release', { release: 'symbols-release' })), []);
-    deepStrictEqual(brokenExports(check('symbols-changed', { release: 'symbols-release' })), [
-      { path: '.', name: 'Both', test: 'type', failsRun: true },
-    ]);
+  it('gives two unique symbols with one name in one package one name, and lists them as not compared', () => {
+    for (const current of ['symbols-release', 'symbols-changed']) {
+      const result = check(current, { release: 'symbols-release' });
+      deepStrictEqual(brokenExports(result), []);
+      deepStrictEqual(names(result.notCompared), [
+        '* unique symbol fixture-compat:brand unique symbol',
+      ]);
+    }
   });
 
   it('reports a generic signature TypeScript cannot relate between two copies as undecided, not as a break', () => {
@@ -154,12 +157,6 @@ describe('checkPackage, with the release treated as GA', () => {
     deepStrictEqual(brokenExports(check('function-type-only')), [
       { path: '.', name: 'format', test: 'value', failsRun: true },
     ]);
-  });
-
-  it('lists two unique symbols with one name that nothing stable tells apart as not compared', () => {
-    const result = check('symbols-tied', { release: 'symbols-tied' });
-    deepStrictEqual(brokenExports(result), []);
-    deepStrictEqual(names(result.notCompared), ['* fixture-compat:brand unique symbol']);
   });
 
   it('fails when a parameter takes another class whose members are all private', () => {
@@ -313,14 +310,26 @@ describe('checkPackage on members added to another package with declare module',
 
   it('fails when the augmentation is removed', () => {
     deepStrictEqual(brokenExports(check('augment-removed', options)), [
-      { path: '.', name: 'fixture-registry Registry', test: 'augments', failsRun: true },
+      {
+        path: '.',
+        name: 'augments fixture-registry interface Registry',
+        test: 'augments',
+        failsRun: true,
+      },
     ]);
   });
 
   it('fails when an added member is narrowed', () => {
     deepStrictEqual(
       brokenExports(check('augment-narrowed', options)).filter((each) => each.test === 'augments'),
-      [{ path: '.', name: 'fixture-registry Registry', test: 'augments', failsRun: true }],
+      [
+        {
+          path: '.',
+          name: 'augments fixture-registry interface Registry',
+          test: 'augments',
+          failsRun: true,
+        },
+      ],
     );
   });
 });
