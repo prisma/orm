@@ -146,6 +146,7 @@ Review agents are told what to look for, in `packages/9-public/AGENTS.md` and in
 - **Brands.** A branded string is compared as a string, so swapping one brand for another is not seen.
 - **Overloads and generic functions.** Only an overloaded function's last signature is compared, and a generic function is compared at its constraints. A generic type is compared only with `never` for parameters without a default.
 - **Some modifiers.** A property made `readonly` is not seen.
+- **Some abstract classes.** A class exported only as a type, or one with an abstract member keyed by a unique symbol of its own package, gets no subclass check, so a new abstract member on it is not seen; the second kind is listed as not compared.
 - **Methods users override.** A subclass users write may override a method that is not abstract. Narrowing that method's return type, or widening a parameter's type, breaks their override, but the check compares the class only as code that calls it, so it passes.
 - **Members of a namespace that holds only types.**
 - **Third-party types.** Both sides use the same third-party versions, so a dependency upgrade that changes our API, including types we re-export from a package such as `mongodb`, is not seen.
