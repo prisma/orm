@@ -67,8 +67,6 @@ jobs:
         run: pnpm typecheck:packages
       - name: Type check examples
         run: pnpm typecheck:examples
-      - name: Type check the last release's example apps against this build
-        run: pnpm api:examples
 
   lint:
     name: Lint
@@ -171,6 +169,10 @@ jobs:
         if: needs.changes.outputs.inert != 'true'
         # Each package's comparison takes up to about 3 GB; three at once fit the runner.
         run: pnpm api:compat --jobs 3
+      - name: Type check the last release's example apps against this build
+        # Runs when the step above found breaks too, so both reports are in the summary.
+        if: ${{ !cancelled() && needs.changes.outputs.inert != 'true' }}
+        run: pnpm api:examples
 
   fixtures:
     name: Fixtures
