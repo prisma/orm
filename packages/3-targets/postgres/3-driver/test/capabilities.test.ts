@@ -4,9 +4,9 @@ import postgresControlDriver from '../src/exports/control';
 import postgresRuntimeDriver from '../src/exports/runtime';
 
 describe('the driver capabilities', () => {
-  it('declares, on the runtime driver, what the connection provides: nothing yet', () => {
+  it('declares, on the runtime driver, what the connection provides: interactive transactions', () => {
     expect(postgresRuntimeDriver.capabilities).toBe(postgresDriverCapabilities);
-    expect(postgresDriverCapabilities).toEqual({});
+    expect(postgresDriverCapabilities).toEqual({ sql: { interactiveTransactions: true } });
   });
 
   it('declares nothing on the control driver, which migrates and does not run the application', () => {
