@@ -206,6 +206,66 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
     );
   });
 
+  describe('names the rejected document without a lookup in the source when the pipeline may change its _id', () => {
+    const id = new ObjectId('6650a1b2c3d4e5f6a7b8c9d0');
+    const failWithId = (harness: ReturnType<typeof makeHarness>) =>
+      harness.driver.failAggregateWith(
+        new MongoServerError({
+          ok: 0,
+          code: 121,
+          codeName: 'DocumentValidationFailure',
+          errmsg:
+            'PlanExecutor error during aggregation :: caused by :: Document failed validation',
+          errInfo: { failingDocumentId: id, details: {} },
+        }),
+      );
+
+    it.each([
+      ['sets _id', { $set: { _id: '$legacyId' } }],
+      ['groups the documents', { $group: { _id: '$kind' } }],
+      ['drops _id', { $project: { _id: 0, email: 1 } }],
+    ])('a pipeline that %s', async (_name, stage) => {
+      const harness = makeHarness();
+      failWithId(harness);
+
+      const result = await execute(harness, [
+        dataTransform('move User to members', {
+          run: () =>
+            rawAggregate('users', [
+              { $match: { kind: 'user' } },
+              stage,
+              { $merge: { into: 'members' } },
+            ]),
+        }),
+      ]);
+
+      expect(failureFields(result.assertNotOk()).why).toContain(
+        'Document failed validation. The copy wrote the rejected document with _id ObjectId("6650a1b2c3d4e5f6a7b8c9d0"). Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. No later operation of this migration updates the validator of collection members, so change the pipeline',
+      );
+    });
+
+    it('keeps the lookup when the stages before the copy keep _id', async () => {
+      const harness = makeHarness();
+      failWithId(harness);
+
+      const result = await execute(harness, [
+        dataTransform('move User to members', {
+          run: () =>
+            rawAggregate('users', [
+              { $match: { kind: 'user' } },
+              { $set: { email_address: '$email' } },
+              { $unset: ['email'] },
+              { $merge: { into: 'members' } },
+            ]),
+        }),
+      ]);
+
+      expect(failureFields(result.assertNotOk()).why).toContain(
+        'find it with db.getCollection("users").find({ _id: ObjectId("6650a1b2c3d4e5f6a7b8c9d0") }) in mongosh.',
+      );
+    });
+  });
+
   it('names the database of a copy into another database, and gives both routes, since the migration updates validators of its own database only', async () => {
     const harness = makeHarness();
     harness.driver.failAggregateWith(rejected());

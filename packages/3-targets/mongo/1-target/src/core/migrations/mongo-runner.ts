@@ -1298,20 +1298,54 @@ function checksDocumentsOf(
   });
 }
 
-/** The document the validator rejected, as MongoDB's error names it, and where it is in the copy's source. */
-function rejectedDocumentText(error: object, source: string): string {
+const ID_KEEPING_STAGES: readonly string[] = ['$match', '$limit', '$skip', '$sort', '$sample'];
+
+function namesId(path: unknown): boolean {
+  return typeof path === 'string' && (path === '_id' || path.startsWith('_id.'));
+}
+
+/** Whether a pipeline stage gives each document it passes on the `_id` it read. */
+function keepsId(stage: Readonly<Record<string, unknown>>): boolean {
+  const [name, ...others] = Object.keys(stage);
+  if (name === undefined || others.length > 0) return false;
+  if (ID_KEEPING_STAGES.includes(name)) return true;
+  const body = stage[name];
+  if (name === '$set' || name === '$addFields') {
+    return typeof body === 'object' && body !== null && !Object.keys(body).some(namesId);
+  }
+  if (name === '$unset') return !(Array.isArray(body) ? body : [body]).some(namesId);
+  return false;
+}
+
+/** The document the validator rejected, as MongoDB's error names it, and where it is in the copy's source when the stages before the copy keep each document's `_id`. */
+function rejectedDocumentOf(
+  error: object,
+  command: RawAggregateCommand,
+): { readonly text: string; readonly findable: boolean } {
   const info: unknown = Reflect.get(error, 'errInfo');
   const id: unknown =
     typeof info === 'object' && info !== null ? Reflect.get(info, 'failingDocumentId') : undefined;
-  if (id === undefined) return '';
+  if (id === undefined) return { text: '', findable: false };
   const value = mongoshValue(id);
-  return ` The rejected document has _id ${value}: find it with db.getCollection(${JSON.stringify(source)}).find({ _id: ${value} }) in mongosh.`;
+  const copying = command.pipeline.filter((stage) =>
+    WRITING_STAGES.every((writing) => !Object.hasOwn(stage, writing)),
+  );
+  return copying.every(keepsId)
+    ? {
+        text: ` The rejected document has _id ${value}: find it with db.getCollection(${JSON.stringify(command.collection)}).find({ _id: ${value} }) in mongosh.`,
+        findable: true,
+      }
+    : { text: ` The copy wrote the rejected document with _id ${value}.`, findable: false };
 }
 
 /** Why a copy failed when the validator of its target rejected a document it wrote, and the one change that fits the migration. */
 function copyRejectedWhy(
   target: CopyTarget,
-  failure: { readonly mongoError: string; readonly reason: string; readonly document: string },
+  failure: {
+    readonly mongoError: string;
+    readonly reason: string;
+    readonly document: { readonly text: string; readonly findable: boolean };
+  },
   later: LaterValidator,
 ): string {
   const name =
@@ -1325,10 +1359,9 @@ function copyRejectedWhy(
   const pipeline = `change the pipeline in the migration's migration.ts so the documents it writes fit the validator, ${node}`;
   const renamed = (collection: string) =>
     collection === target.collection ? '' : `, as collection ${collection}`;
-  const orPipeline =
-    failure.document === ''
-      ? pipeline
-      : `fix that document in its source and run the command again, or ${pipeline}`;
+  const orPipeline = !failure.document.findable
+    ? pipeline
+    : `fix that document in its source and run the command again, or ${pipeline}`;
   const advice = (() => {
     switch (later.kind) {
       case 'replaced':
@@ -1348,7 +1381,7 @@ function copyRejectedWhy(
         return `If a later validator update checks the documents of collection ${name} against a new validator, ${bypass}, so that update checks the moved documents, and ${node}. Otherwise ${orPipeline}.`;
     }
   })();
-  return `MongoDB error ${failure.mongoError}: ${failure.reason}.${failure.document} ${written} ${advice}`;
+  return `MongoDB error ${failure.mongoError}: ${failure.reason}.${failure.document.text} ${written} ${advice}`;
 }
 
 /**
@@ -1387,8 +1420,8 @@ function rewriteFailure(
               reason,
               document:
                 plan.command instanceof RawAggregateCommand
-                  ? rejectedDocumentText(error, plan.command.collection)
-                  : '',
+                  ? rejectedDocumentOf(error, plan.command)
+                  : { text: '', findable: false },
             },
             laterValidator(target, position.plan.slice(position.operationIndex + 1)),
           ),
