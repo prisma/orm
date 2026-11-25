@@ -129,7 +129,7 @@ The marker row holds two things with different scopes. Its hashes, contract and 
 
 | Record | PostgreSQL | SQLite, MySQL, MongoDB | One row per | Holds |
 | --- | --- | --- | --- | --- |
-| Contract signatures | `_prisma.signatures` | `_prisma_signatures` | contract space | the hashes of the contract the space was signed with, when, and the invariants. The contract's JSON may be included for information. A row stands for one successful signing: `db sign`, or the signing at the end of `db migrate` and `db update` |
+| Contract signatures | `_prisma.signatures` | `_prisma_signatures` | contract space | the hashes of the contract the space was signed with, when, and the invariants. The contract's JSON is not stored here unconditionally, because a contract is large. A row stands for one successful signing: `db sign`, or the signing at the end of `db migrate` and `db update` |
 | Configuration | `_prisma.config` | `_prisma_config` | database | the change policy and the data protection policy |
 | Ledger | `_prisma.ledger` | `_prisma_ledger` | applied change | as today: an append-only record of each change applied, never edited |
 
@@ -149,4 +149,10 @@ Prisma Studio reads these tables for its Migrations view (prisma/studio#1533), s
 ## 9. Not yet discussed
 
 - **A change that is not an addition.** The policy says the ORM stops and names the one command that makes it.
-- **The PostgreSQL `contract` table.** It holds one row per contract, keyed by hash, and each ledger row's destination contract is written to it. It was added for Prisma Studio's Migrations view, which shows the contract before and after each migration. Only PostgreSQL has it. To decide: whether it stays as `_prisma.contracts`, whether every target gets it, or whether the ledger row carries the contract instead.
+## 10. PostgreSQL's contract table stays a PostgreSQL feature
+
+PostgreSQL keeps one more table, `contract`: one row per contract, keyed by hash, holding the contract's JSON. Each ledger row's destination contract is written to it. It was added for Prisma Studio's Migrations view, which shows the contract before and after each migration, so that view works only on PostgreSQL.
+
+The contract is not stored in the signatures or the ledger unconditionally, because a contract is large. This table is how PostgreSQL keeps one copy of each.
+
+It stays as it is: a PostgreSQL feature, moved into the `_prisma` schema with the other tables, not documented, and not something the framework expects of a target. The last slice of this project decides whether it becomes a framework interface that every target provides.

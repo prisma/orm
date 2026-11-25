@@ -145,11 +145,13 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 
 **Purpose.** An upgrade never fails because the tables Prisma keeps for itself in a user's database were created by an earlier release.
 
-**What it achieves.** The requirement in section 6.4 of the spec: the ORM brings the marker, ledger and contract tables up to date itself, or, for a change that is not additive, stops and names the one command that does. The user never edits or drops them by hand.
+**What it achieves.** The requirement in section 6.4 of the spec: the ORM brings its own tables up to date itself, or, for a change that is not additive, stops and names the one command that does. The user never edits or drops them by hand.
 
-**How.** The agreed design is in [designs/7-prismas-own-tables.md](designs/7-prismas-own-tables.md): the tables are a contract space the framework owns, read from the installed package and applied when migrations are executed. `8.0.0` writes the marker row for that space, which is why this project is needed for GA. On PostgreSQL today the tables are created only if absent and never changed afterwards, and a real database has already failed this way; see [analysis.md](analysis.md) (task 4).
+**How.** The agreed design is in [designs/7-prismas-own-tables.md](designs/7-prismas-own-tables.md): each target has a contract space for its own tables, which the framework adds, reads from the installed package and applies before every other space. The marker splits into contract signatures (`_prisma.signatures`, per space) and configuration (`_prisma.config`, per database), beside `_prisma.ledger`. `8.0.0` writes the marker row for that space, which is why this project is needed for GA. On PostgreSQL today the tables are created only if absent and never changed afterwards, and a real database has already failed this way; see [analysis.md](analysis.md) (task 4).
 
-**To decide when it starts.** The points listed as not yet discussed in the design.
+- **A last slice:** decide whether PostgreSQL's contract table, which keeps one copy of each contract for Prisma Studio's Migrations view, becomes a framework interface that every target provides. Until then it stays an undocumented PostgreSQL feature (section 10 of the design).
+
+**To decide when it starts.** What a change that is not an addition looks like (section 9 of the design).
 
 ## Projects that can follow GA
 
