@@ -1014,14 +1014,14 @@ export function errorStatementOriginUnknown(origin: {
         chooseAction('Put the contract source back to the version the database is at, and emit it'),
         runCommandAction(
           'Check that it plans no operations (with the same --db as this command, if any)',
-          '{bin} db update --advance-ref <name> --dry-run',
+          '{bin} db update --advance-ref db --dry-run',
         ),
         runCommandAction(
           'Then store its snapshot, which changes nothing in the database',
-          '{bin} db update --advance-ref <name>',
+          '{bin} db update --advance-ref db',
         ),
         chooseAction(
-          'Put the new contract source back, emit it, and run this command again with --advance-ref <name>',
+          'Put the new contract source back, emit it, and run this command again with --advance-ref db',
         ),
       ],
       meta,

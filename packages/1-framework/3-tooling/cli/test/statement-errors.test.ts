@@ -71,6 +71,28 @@ describe('errorStatementOriginUnknown', () => {
       ].join('\n'),
     );
   });
+
+  it('names the same ref in its actions as in its steps', () => {
+    const envelope = variants['missing snapshot'].toEnvelope();
+    expect(
+      (envelope.nextActions ?? []).map((action) =>
+        'command' in action ? [action.label, action.command] : [action.label],
+      ),
+    ).toEqual([
+      ['Put the contract source back to the version the database is at, and emit it'],
+      [
+        'Check that it plans no operations (with the same --db as this command, if any)',
+        '{bin} db update --advance-ref db --dry-run',
+      ],
+      [
+        'Then store its snapshot, which changes nothing in the database',
+        '{bin} db update --advance-ref db',
+      ],
+      [
+        'Put the new contract source back, emit it, and run this command again with --advance-ref db',
+      ],
+    ]);
+  });
 });
 
 describe('errorStatementNeedsMigrationFile', () => {
