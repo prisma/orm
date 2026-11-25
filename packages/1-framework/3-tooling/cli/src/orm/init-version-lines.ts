@@ -30,7 +30,8 @@ export function exactVersionOf(spec: string): string | undefined {
  * - When init adds the facade itself, a GA one (a plain version) gets a caret on every line:
  *   each tilde peer as the same version with a caret, and the facade with a caret on the version
  *   its tilde peers name (`~8.0.1` gives `^8.0.1`, `~8.1.0` gives `^8.1.0`), or on its own
- *   version when no peer has a tilde, so an update moves every line to the next release
+ *   version when no peer has a tilde or its own major and minor are not theirs, as for a facade
+ *   numbered apart from our releases, so an update moves every line to the next release
  *   together. One whose version has a pre-release part gets a
  *   tilde on every line: each peer at its declared range and the facade at a tilde on its
  *   version, since a caret on a pre-release never selects the next minor's.
@@ -53,9 +54,19 @@ export function versionLines(
     .map((range) => RANGE.exec(withoutWorkspaceProtocol(range)))
     .find((range) => range?.[1] === '~' && !range[2]?.includes('-'))?.[2];
   return {
-    facade: `^${peerVersion ?? facadeVersion}`,
+    facade: `^${peerVersion !== undefined && sameRelease(peerVersion, facadeVersion) ? peerVersion : facadeVersion}`,
     ormPackage: (range) => (range.trim().startsWith('~') ? `^${range.trim().slice(1)}` : range),
   };
+}
+
+function sameRelease(a: string, b: string): boolean {
+  const [left, right] = [semverOf(a), semverOf(b)];
+  return (
+    left !== undefined &&
+    right !== undefined &&
+    left.major === right.major &&
+    left.minor === right.minor
+  );
 }
 
 function withoutWorkspaceProtocol(range: string): string {
