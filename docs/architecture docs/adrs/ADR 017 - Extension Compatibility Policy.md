@@ -2,8 +2,6 @@
 
 **Amended by [ADR 274](ADR%20274%20-%20A%20client%20takes%20a%20typed%20contract%20value%2C%20so%20every%20other%20option%20is%20inferred.md):** the clients no longer accept `contractJson`. They take a contract value, and emitted JSON becomes that value through `contractFromJson<Contract>(json)`.
 
-> **Note ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)):** the separate versions that "Versioning and compatibility matrix" gives the Plan model, the hook API and each adapter's SPI were never built, and neither was the matrix. Only the contract's format version exists. ADR 330 records how packages are versioned: they share one release number, and each has its own patch number or level counter.
-
 ## Context
 
 - Prisma Next intentionally supports multiple query authoring lanes and invites third parties to add new lanes or even alternate runtimes
@@ -15,7 +13,7 @@
 - Define a compatibility policy for third-party lanes and alternate runtimes
 - Conformance is measured against a small set of normative contracts:
   - Data contract JSON, Unified Plan model, Plan identity and hashing, Hook API v1
-- Publish a versioning and compatibility matrix so contributors know which combinations are supported
+- State which combinations are supported through the versions of the packages that publish these contracts ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md))
 
 ## Requirements for third-party lanes
 
@@ -93,28 +91,10 @@ To make adoption incremental, we define levels:
 
 We will certify third-party components at L0, L1, or L2.
 
-## Versioning and compatibility matrix
+## Versioning
 
-### Artifacts and contracts with semver
-
-- **Data contract JSON schema**: `contractSchema` version in file and package version in `@prisma/relational-ir`
-- **Unified Plan model**: exported TypeScript types and JSON schema
-- **Hook API**: `hooksVersion: 1` for v1, bump on breaking change
-- **Adapter SPI**: per-adapter version and capability set
-
-### Minimum compatible versions
-
-| Producer Lane | Plan model | Hook API required | Adapter SPI | Contract schema |
-|---------------|------------|-------------------|-------------|-----------------|
-| SQL DSL core | v1 | none | v1 | v3 |
-| ORM over DSL | v1 | none | v1 | v3 |
-| Raw SQL | v1 | none | n/a | v3 |
-| TypedSQL CLI | v1 | none | v1 for validation | v3 |
-
-| Runtime | Accepts Plan model | Hook API | Adapter SPI | Contract schema |
-|---------|-------------------|----------|-------------|-----------------|
-| Core runtime | v1 | v1 | v1 | v3 |
-| Alt runtime L1 | v1 | v1 | v1 | v3 |
+- **Data contract JSON**: the contract file carries its own format version.
+- **Plan model, hook API and adapter SPI**: they are published in the platform packages and versioned with them. All our packages share one release number, and what is GA stays compatible within a major version. A third-party lane or runtime names the platform packages it builds on at the ranges an extension uses ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
 
 ### Rules
 
@@ -167,4 +147,4 @@ We will certify third-party components at L0, L1, or L2.
 
 - Adopt a formal compatibility policy for third-party lanes and alternate runtimes
 - Require honoring the Plan contract, verifying coreHash, respecting immutability, and documenting hooks
-- Publish a versioning and compatibility matrix and ship a conformance kit to enable safe ecosystem growth
+- State compatibility through package versions and ship a conformance kit to enable safe ecosystem growth

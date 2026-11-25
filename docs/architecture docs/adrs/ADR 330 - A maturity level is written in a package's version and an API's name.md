@@ -2,9 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-11-25
-**Replaces part of:** [ADR 017 — Extension compatibility policy](ADR%20017%20-%20Extension%20Compatibility%20Policy.md): separate version numbers for the framework's parts. [ADR 016 — Adapter SPI for lowering](ADR%20016%20-%20Adapter%20SPI%20for%20Lowering.md): a feature flag for changes to generated SQL.
-**Amends:** [ADR 242 — Public npm surface](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md): all packages are released together, but no longer at one version.
-**Related:** [ADR 329 — An application lists the platform packages, and our packages name each other as peers](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)
+**Related:** [ADR 242 — Public npm surface](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md), [ADR 017 — Extension compatibility policy](ADR%20017%20-%20Extension%20Compatibility%20Policy.md), [ADR 016 — Adapter SPI for lowering](ADR%20016%20-%20Adapter%20SPI%20for%20Lowering.md), [ADR 329 — An application lists the platform packages, and our packages name each other as peers](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)
 
 ## At a glance
 
@@ -144,12 +142,6 @@ Two costs follow for such a maintainer: a feature of theirs that needs no newer 
 - **Our packages do not share one version.** The `version` in this repository's root `package.json` is the release number with a zero patch, and not every package's version.
 - **Moving an API to GA changes its name**, and the old name stays until the next major version.
 - **A user of a facade below GA edits their version lines at each new release.**
-
-## Earlier records
-
-- **[ADR 017](ADR%20017%20-%20Extension%20Compatibility%20Policy.md)** gives the contract format, the plan model, the hook interface and each adapter separate version numbers. This record replaces that for the packages: the platform packages share one release number. The contract's format version stands.
-- **[ADR 016](ADR%20016%20-%20Adapter%20SPI%20for%20Lowering.md)** describes a feature flag for changes to generated SQL. There are no feature flags.
-- **[ADR 242](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md)** has publishing as one operation over all packages at one version. All packages are released together at each release number, each at its own version.
 
 ## A different scale
 

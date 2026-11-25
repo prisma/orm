@@ -97,7 +97,7 @@ const stack = createSqlExecutionStack({
 
 An application imports the runtime entries, as here, and not the `/target`, `/adapter` or `/driver` aggregates, because each aggregate re-exports every entry of its namespace, the control-plane entries included.
 
-Because the application already declares the platform packages the facade was built on, the decomposed install keeps exactly that combination, minus the part being replaced. (Versioning is lockstep repo-wide — one root version, `workspace:` pins, `scripts/set-version-utils` — and this ADR leaves that model untouched.)
+Because the application already declares the platform packages the facade was built on, the decomposed install keeps exactly that combination, minus the part being replaced. (All packages share one release number, and each has its own version within it; see [ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md).)
 
 Decomposing means dropping the facade from the application's declarations; the platform packages are already there. Scaffolding a decomposed project is a different template rather than the same one under a different import root — `prisma-next init` writes an application around a facade's `runtime` entrypoint, which is that facade's own wiring code and has no counterpart in a layout that does the wiring itself.
 
@@ -174,7 +174,7 @@ packages/9-public/
 - Every Prisma Next package on the npm registry has a stated audience; internals are structurally absent rather than "present but discouraged".
 - Generated code and documentation reference only published names; the private workspace names cannot leak because they do not resolve outside the repo. Those names are `@internal/*`, with `@repo/*` for the repository's own tooling — two scopes that cannot be mistaken for a published `@prisma/*` name, which the single old scope could not offer once it stopped matching what shipped.
 - Extension packs name the platform packages they use as peer dependencies (e.g. `@prisma/orm-target-postgres`), and the application declares those packages in both the facade and decomposed configurations, so an extension and the application's client share one copy of each.
-- Publishing remains a lockstep, whole-train operation; the release process is unchanged apart from the package list.
+- All packages are released together at each release number, each at its own version ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
 - Adding a new database means adding one target package, one facade, and (if it starts a new family) one family package — the public surface grows by two or three packages, not by a per-module count.
 
 ## Deferred decisions

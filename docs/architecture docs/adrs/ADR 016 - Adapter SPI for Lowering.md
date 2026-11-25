@@ -1,7 +1,5 @@
 # ADR 016 — Adapter SPI for lowering relational AST
 
-> **Note ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)):** the feature flag that "Versioning policy" offers for a bug fix that changes SQL does not exist, and Prisma 8 has no feature flags. The capabilities it calls "capability flags" are unaffected.
-
 ## Context
 
 The SQL DSL and optional ORM produce a dialect-agnostic relational AST. Relationship traversal is represented by first-class, projection-scoped nodes (`nestArray`, `joinFlat`, including M:N via junction). We need a clear, stable SPI where dialect logic lowers these nodes so lanes stay portable and the core remains thin. Lowering must be deterministic to support plan hashing, golden tests, and agent predictability.
@@ -123,9 +121,10 @@ When capabilities are missing and no safe, single-statement equivalent exists, a
 - Plan hashing per ADR 013 operates on normalized SQL and parameter shape independent of lane
 
 ## Versioning policy
-- adapter.version follows semver; breaking SQL emission changes require a major bump
-- Capability additions may ship in minor versions if they do not affect existing SQL
-- Bug fixes that change SQL must be treated as breaking unless guarded behind a feature flag
+- An adapter is released in its target package, at that package's version ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md))
+- A change to the SQL an adapter emits that breaks a user's query is a breaking change: in a GA package it waits for the next major version, or ships as a new API beside the old behaviour
+- Capability additions may ship in any release if they do not affect existing SQL
+- A bug fix that changes SQL is treated as breaking; there are no feature flags to guard it
 
 ## Testing strategy
 - Golden SQL snapshots per adapter version
