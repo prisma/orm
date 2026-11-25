@@ -69,6 +69,18 @@ describe('checkPackage with recorded breaks', () => {
     deepStrictEqual(pasted.problems, []);
   });
 
+  it('fails, and applies no record, when the package has no api.txt to fingerprint', () => {
+    const empty = apiFingerprint('', '.', 'version');
+    const result = check('removed-export', {
+      records: [{ ...record, export: 'version', fingerprint: empty }],
+    });
+    deepStrictEqual(names(result.breaks), ['. version value']);
+    deepStrictEqual(result.recorded, []);
+    deepStrictEqual(result.problems, [
+      'the package has no api.txt, or an empty one, so its records cannot be checked. Run pnpm api:update.',
+    ]);
+  });
+
   it('fails once the recorded break is undone', () => {
     const { problems } = check('unchanged', { records: [record] });
     deepStrictEqual(problems, [

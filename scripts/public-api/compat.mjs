@@ -986,7 +986,17 @@ export function checkPackage({
   };
   const sameTest = (record) => (each) =>
     each.path === record.path && each.name === record.export && each.test === record.test;
-  const applied = generated.entries.flatMap((entry) => entry.records);
+  // Without api.txt every export has the fingerprint of nothing, which a record would match
+  // whatever the export becomes.
+  const hasApi =
+    apiText !== undefined &&
+    apiText.split(/\r?\n/).some((line) => line !== '' && !line.startsWith('#'));
+  const applied = hasApi ? generated.entries.flatMap((entry) => entry.records) : [];
+  if (!hasApi && generated.entries.some((entry) => entry.records.length > 0)) {
+    problems.add(
+      'the package has no api.txt, or an empty one, so its records cannot be checked. Run pnpm api:update.',
+    );
+  }
   const recordedBreaks = new Set();
   const outdated = new Set();
   const recorded = [];
@@ -1015,15 +1025,19 @@ export function checkPackage({
     .map((each) => ({
       ...each,
       ...(outdated.has(each) ? { note: OUTDATED } : {}),
-      record: {
-        path: each.path,
-        export: each.name,
-        test: each.test,
-        kind: 'break',
-        lastRelease: version,
-        fingerprint: fingerprintOf(each.path, each.name),
-        reason: '…',
-      },
+      ...(hasApi
+        ? {
+            record: {
+              path: each.path,
+              export: each.name,
+              test: each.test,
+              kind: 'break',
+              lastRelease: version,
+              fingerprint: fingerprintOf(each.path, each.name),
+              reason: '…',
+            },
+          }
+        : {}),
     }));
   for (const symbol of host.mergedSymbols) {
     notCompared.push({
