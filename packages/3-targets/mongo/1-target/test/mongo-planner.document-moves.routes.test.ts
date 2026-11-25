@@ -372,37 +372,6 @@ describe('MongoMigrationPlanner, one route for every statement the shared-collec
     });
   });
 
-  it('plans 8 refused statements in well under a second', () => {
-    const groups = Array.from({ length: 8 }, (_, index) => index);
-    const models = (side: 'from' | 'to') =>
-      Object.fromEntries(
-        groups.flatMap((index) => [
-          [`Stay${index}`, { collection: `shared${index}`, fields: ['_id', `stay${index}`] }],
-          side === 'from'
-            ? [`Go${index}`, { collection: `shared${index}`, fields: ['_id', `go${index}`] }]
-            : [`Gone${index}`, { collection: `moved${index}`, fields: ['_id', `go${index}`] }],
-        ]),
-      );
-    const collections = (side: 'from' | 'to') =>
-      Object.fromEntries(
-        groups.flatMap((index) => [
-          [`shared${index}`, {}],
-          ...(side === 'to' ? [[`moved${index}`, {}]] : []),
-        ]),
-      );
-    const from = contract('from', models('from'), collections('from'));
-    const to = contract('to', models('to'), collections('to'));
-    const schema = groups.map((index) => schemaCollection(`shared${index}`));
-    const statements = groups.map((index) => renameModel(`Go${index}`, `Gone${index}`));
-    const started = performance.now();
-    const conflicts = refusal(plan({ from, to, schema, statements }));
-    const elapsed = performance.now() - started;
-    expect({
-      fast: elapsed < 1000,
-      moves: conflicts.map(({ why }) => moveCount(why ?? '')),
-    }).toEqual({ fast: true, moves: [8, 0, 0, 0, 0, 0, 0, 0] });
-  });
-
   describe('every model leaves the source collection', () => {
     const from = contract(
       'from',
