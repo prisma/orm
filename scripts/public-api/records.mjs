@@ -2,7 +2,7 @@
 //
 // - api-breaks.json beside a package's api.txt: a break the type tests find, as { "path", "export",
 //   "test", "kind", "lastRelease", "fingerprint", "reason" }. The fingerprint is of the export's
-//   lines in that api.txt and of the declarations they name (apiFingerprint), so the record covers
+//   lines in that api.txt and of the declarations they use as types (fingerprint.mjs), so the record covers
 //   the break only while the export, and what it depends on in its package, stay as recorded; any
 //   further change is judged again.
 // - packages/9-public/removed-packages.json: a released package the repository no longer has, as
@@ -17,9 +17,8 @@
 // removable, one for a later one fails the run. Only Node built-ins, so the pull request check
 // that holds a write token can use it without installing anything.
 
-import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { compareCodeUnits, exportOfLine } from './api-lines.mjs';
+import { compareCodeUnits } from './api-lines.mjs';
 import { compareVersions, isVersion } from './release.mjs';
 
 export const BREAKS_FILE = 'api-breaks.json';
@@ -146,99 +145,6 @@ export const exportLabel = (packageName, path, name) =>
   path === undefined
     ? `${packageName} (not exported): ${name}`
     : `${packageName}${path === '.' ? '' : path.slice(1)}: ${name}`;
-
-const IDENTIFIER = /[A-Za-z_$][\w$]*/g;
-const NAME = '[A-Za-z_$][\\w$]*';
-// Words api.txt writes itself, and TypeScript's own, which never name a declaration of ours.
-const NOT_TYPES = new Set(
-  `exported deprecated export default from everything augments readonly optional required property
-  method protected private public static abstract constructor accessor get set index signature call
-  construct declare async class interface type function const let var enum namespace module extends
-  implements keyof typeof infer is asserts unique new this in out as of`.split(/\s+/),
-);
-const DECLARED = new RegExp(
-  `^(?:(?:abstract|declare|async)\\s+)*(?:class|interface|type|function\\*?|const|let|var|enum|namespace)\\s+(${NAME})`,
-);
-
-// The names a line uses as types: its prefix, string literals (but not the `${…}` parts of a
-// template literal), package specifiers, member, property and parameter names, and api.txt's
-// own words are left out.
-function typeNames(line) {
-  let rest = line.replace(/^(\.[^:]*: |\(not exported\) )/, '').replace(/^deprecated: /, '');
-  rest = rest.replace(/`(?:[^`\\$]|\\.|\$(?!\{))*`/g, (text) =>
-    (text.match(/\$\{[^}]*\}/g) ?? []).join(' '),
-  );
-  rest = rest.replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g, ' ');
-  rest = rest.replace(/@[\w.-]+\/[\w./-]+/g, ' ');
-  rest = rest.replace(new RegExp(`\\b(property|method|accessor) ${NAME}`, 'g'), ' ');
-  rest = rest.replace(
-    new RegExp(
-      `(^|[(,{;[]\\s*|\\b(?:readonly|static|protected|private|public|abstract)\\s+|\\.\\.\\.)(${NAME})(?=\\??\\s*:)`,
-      'g',
-    ),
-    '$1',
-  );
-  return [...rest.matchAll(IDENTIFIER)]
-    .map(([word]) => word)
-    .filter((word) => !NOT_TYPES.has(word));
-}
-
-const linesByOwner = new Map();
-
-// The lines of an api.txt, by the names other lines use for the declaration each belongs to, on
-// any path or not exported: its own name, and for a default export or an augmentation also the
-// name it is declared with.
-function ownersOf(apiText) {
-  if (!linesByOwner.has(apiText)) {
-    const owners = new Map();
-    const add = (name, owner) => owners.set(name, [...(owners.get(name) ?? []), owner]);
-    for (const line of apiText.split(/\r?\n/)) {
-      if (line === '' || line.startsWith('#')) continue;
-      const owner = { line, ...exportOfLine(line) };
-      add(owner.name, owner);
-      const declaration = line
-        .replace(/^(\.[^:]*: |\(not exported\) )/, '')
-        .replace(/^deprecated: /, '');
-      const defaulted = /^export (?:type )?default = (.*)$/.exec(declaration)?.[1];
-      const declared = defaulted && DECLARED.exec(defaulted)?.[1];
-      if (declared) add(declared, owner);
-      const augmented = /^augments \S+ interface ([A-Za-z_$][\w$]*)/.exec(declaration)?.[1];
-      if (augmented) add(augmented, owner);
-    }
-    linesByOwner.set(apiText, owners);
-  }
-  return linesByOwner.get(apiText);
-}
-
-// The lines a fingerprint takes in: an export's lines in an api.txt, its member lines included
-// (for `*`, every line of the import path), and the lines of every declaration in the same api.txt
-// those lines name as a type, followed until nothing new is named. A type of another package is
-// not in the api.txt, so a change to it does not change the fingerprint.
-export function fingerprintLines(apiText, path, name) {
-  const owners = ownersOf(apiText ?? '');
-  const taken = new Set();
-  const queue = [...owners.values()]
-    .flat()
-    .filter((owner) => owner.subpath === path && (name === '*' || owner.name === name));
-  const named = new Set();
-  while (queue.length > 0) {
-    const { line } = queue.pop();
-    if (taken.has(line)) continue;
-    taken.add(line);
-    for (const word of typeNames(line)) {
-      if (named.has(word)) continue;
-      named.add(word);
-      queue.push(...(owners.get(word) ?? []));
-    }
-  }
-  return [...taken].sort(compareCodeUnits);
-}
-
-export const apiFingerprint = (apiText, path, name) =>
-  createHash('sha256')
-    .update(fingerprintLines(apiText, path, name).join('\n'))
-    .digest('hex')
-    .slice(0, 16);
 
 // One line of JSON per record, its fields in the documented order.
 export function recordLine(record, recordFile) {
