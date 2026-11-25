@@ -149,7 +149,7 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 
 **How.** The agreed design is in [designs/7-prismas-own-tables.md](designs/7-prismas-own-tables.md): each target has a contract space for its own tables, which the framework adds, reads from the installed package and applies before every other space. The marker splits into contract signatures (`_prisma.signatures`, per space) and configuration (`_prisma.config`, per database), beside `_prisma.ledger`. `8.0.0` writes the marker row for that space, which is why this project is needed for GA. On PostgreSQL today the tables are created only if absent and never changed afterwards, and a real database has already failed this way; see [analysis.md](analysis.md) (task 4).
 
-- **A last slice:** decide whether PostgreSQL's contract table, which keeps one copy of each contract for Prisma Studio's Migrations view, becomes a framework interface that every target provides. Until then it stays an undocumented PostgreSQL feature (section 10 of the design).
+- **A last slice:** decide whether PostgreSQL's contract table, which keeps one copy of each contract for Prisma Studio's Migrations view, becomes a first-class feature: a framework interface every target provides, and a setting that controls whether contracts are stored. Until then it stays an undocumented PostgreSQL feature (section 10 of the design).
 
 **To decide when it starts.** What a change that is not an addition looks like (section 9 of the design).
 
