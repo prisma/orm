@@ -160,9 +160,9 @@ TypeScript does not follow Semantic Versioning: any TypeScript release may break
 
 ### 6.4 Database records
 
-- Prisma's own tables are the marker, the ledger and the contract table. No upgrade fails with a database error because they are missing or are in the form an earlier release wrote. The ORM brings them up to date itself, or, for a change that is not additive, stops and names the one command that does.
-- The marker and ledger change additively (they gain columns, rows or fields, and existing ones keep their meaning), or through a command the user runs that states it will change them.
-- Either way, the release makes the change to an existing database: it applies an additive change itself, and any other change through that command. The user never edits or drops the marker or ledger by hand. Where possible they stay usable by the earlier release.
+- Prisma's own tables are the contract signatures, the configuration and the ledger (project 7). No upgrade fails with a database error because they are missing or are in the form an earlier release wrote.
+- They are a contract space each target provides, and the ordinary migration system brings them up to date: whenever migrations are applied or a database is signed, this space is migrated first. The user runs no extra command and never edits or drops these tables by hand.
+- Within a major version their migrations only add (columns, rows or fields; existing ones keep their meaning), so an instance on an earlier release keeps working during a deploy. A change that is not an addition waits for a major version, and is applied the same way, by the commands the user already runs.
 
 The ledger gets no version field of its own.
 

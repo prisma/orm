@@ -146,9 +146,10 @@ MongoDB gets the same three collections, in place of its one `_prisma_migrations
 
 Prisma Studio reads these tables for its Migrations view (prisma/studio#1533), so it changes with them.
 
-## 9. Not yet discussed
+## 9. A change that is not an addition
 
-- **A change that is not an addition.** The policy says the ORM stops and names the one command that makes it.
+It needs nothing of its own. The space's migrations are ordinary migrations, applied by the commands the user already runs (section 3). Within a major they only add (section 4). A change that is not an addition goes into the next major's migrations and is applied the same way. The policy's older wording, that the ORM stops and names one command, came before this design and is replaced in section 6.4 of the spec.
+
 ## 10. PostgreSQL's contract table stays a PostgreSQL feature
 
 PostgreSQL keeps one more table, `contract`: one row per contract, keyed by hash, holding the contract's JSON. Each ledger row's destination contract is written to it. It was added for Prisma Studio's Migrations view, which shows the contract before and after each migration, so that view works only on PostgreSQL.
