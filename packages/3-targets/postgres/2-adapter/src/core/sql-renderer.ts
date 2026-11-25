@@ -178,7 +178,7 @@ function unreachableKind(value: never): string {
 interface ParamIndexMap {
   readonly indexMap: Map<AnyParamRef, number>;
   readonly types: RenderTypes;
-  readonly capabilities: CapabilityMatrix;
+  readonly contract: PostgresContract;
 }
 
 interface RenderTypes {
@@ -208,7 +208,7 @@ export function renderLoweredSql(
   const pim: ParamIndexMap = {
     indexMap,
     types: { codecDescriptorRegistry, dataTypeLookup },
-    capabilities: contract.capabilities,
+    contract,
   };
 
   const node = ast;
@@ -271,7 +271,7 @@ function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamInde
   const limitClause = renderLimitOffset('LIMIT', ast.limit, contract, pim);
   const offsetClause = renderLimitOffset('OFFSET', ast.offset, contract, pim);
   const lockingClause = (ast.locking ?? [])
-    .map((clause) => renderLockingClause(clause, pim.capabilities))
+    .map((clause) => renderLockingClause(clause, pim.contract.capabilities))
     .join(' ');
 
   const clauses = [
@@ -325,7 +325,7 @@ function requireCapability(
   if (capability !== undefined) {
     throw adapterError(
       'RUNTIME.AST_UNSUPPORTED',
-      `The contract does not list capability ${capability}, which this locking clause needs`,
+      `The contract does not list capability ${capability}, which this locking clause needs. Write the contract for a database that provides it.`,
       { meta: { target: 'postgres', feature: 'locking-clause', capability } },
     );
   }

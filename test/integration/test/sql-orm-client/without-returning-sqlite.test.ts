@@ -465,7 +465,7 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
         expect.objectContaining({
           code: 'ORM.CAPABILITY_MISSING',
           message:
-            'createAll() requires contract capability "insertOnConflictTarget". Re-emit the contract against an adapter that reports it.',
+            'createAll() requires contract capability "insertOnConflictTarget", which the contract does not list. Write the contract for a database and connection that provide it, and emit it again.',
         }),
       );
       await expect(db.User.createAll([ada], { onConflict: 'skip' })).rejects.toThrow(

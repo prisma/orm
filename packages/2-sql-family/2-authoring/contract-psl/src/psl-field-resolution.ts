@@ -334,7 +334,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       if (capabilities['sql']?.['scalarList'] !== true) {
         diagnostics.push({
           code: 'PSL_SCALAR_LIST_UNSUPPORTED_TARGET',
-          message: `Field "${model.name}.${field.name}" is a scalar list, but target "${targetId}" does not support scalar lists (the adapter does not report the "scalarList" capability). Remove the list or author it against a target that supports scalar lists.`,
+          message: `Field "${model.name}.${field.name}" is a scalar list, but the contract's capabilities for target "${targetId}" do not include "sql.scalarList". Remove the list, or write the contract for a database that has scalar lists.`,
           ...source.at(field.span),
         });
         continue;

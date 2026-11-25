@@ -1011,7 +1011,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       if (input.capabilities['sql']?.['checkConstraint'] !== true) {
         diagnostics.push({
           code: 'PSL_CHECK_UNSUPPORTED_TARGET',
-          message: `Model "${model.name}" declares "@@check", but target "${input.targetId}" does not support check constraints (the adapter does not report the "checkConstraint" capability). Remove the check or author it against a target that supports check constraints.`,
+          message: `Model "${model.name}" declares "@@check", but the contract's capabilities for target "${input.targetId}" do not include "sql.checkConstraint". Remove the check, or write the contract for a database that has check constraints.`,
           ...source.at(modelAttribute.span),
         });
         continue;

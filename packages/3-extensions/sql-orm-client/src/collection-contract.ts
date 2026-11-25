@@ -969,7 +969,7 @@ function requireCapability(
 
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${action} requires contract capability "${capability}". Re-emit the contract against an adapter that reports it.`,
+    `${action} requires contract capability "${capability}", which the contract does not list. Write the contract for a database and connection that provide it, and emit it again.`,
     { meta: { capability, action } },
   );
 }
