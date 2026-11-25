@@ -278,107 +278,137 @@ describe('apiFingerprint, on words TypeScript and api.txt also use', () => {
   });
 });
 
-// A second reading of each committed api.txt line with TypeScript's scanner, written apart from
-// fingerprint.mjs: every name that is not a member or parameter name, a string's text, a word
-// api.txt writes, or a reserved word, which cannot name a declaration. The fingerprint must take in
-// every line this reaches.
-function referenceNames(line) {
-  const K = ts.SyntaxKind;
-  const rest = line
-    .replace(/^(\.[^:]*: |\(not exported\) )/, '')
-    .replace(/^deprecated: /, '')
-    .replace(/^(?:export (?:type )?(\S+)(?: = \S+)?|everything) from \S+$/, (_, name) => name ?? '')
-    .replace(/^augments \S+ /, '')
-    .replace(/@[\w.-]+\/[\w./-]+\.[A-Za-z_$][\w$]*/g, ' ')
-    .replace(
-      /^((?:abstract )?class|interface|enum|namespace|interface) [\w$]+, (?:(?:abstract|static|protected|private|public|readonly) )*(?:(?:required|optional) (?:property|method) [\w$]+|index signature|call signature|construct signature)/,
-      '',
-    );
-  const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, ts.LanguageVariant.Standard, rest);
-  const tokens = [];
-  const spans = [];
-  for (let kind = scanner.scan(); kind !== K.EndOfFileToken; kind = scanner.scan()) {
-    if (kind === K.TemplateHead) spans.push(0);
-    else if (kind === K.OpenBraceToken && spans.length > 0) spans[spans.length - 1]++;
-    else if (kind === K.CloseBraceToken && spans.length > 0) {
-      if (spans.at(-1) === 0) {
-        kind = scanner.reScanTemplateToken(false);
-        if (kind === K.TemplateTail) spans.pop();
-      } else spans[spans.length - 1]--;
-    }
-    tokens.push({ kind, text: scanner.getTokenText() });
+// A reading of each committed api.txt line independent of fingerprint.mjs's token rules: the line
+// is turned back into a TypeScript declaration and parsed, and the names it uses as types are read
+// from the syntax tree (type references, `typeof` queries, heritage clauses, computed keys, and the
+// value of `export X = y`). For every export, the fingerprint must take in every line this reaches.
+const OTHER_PACKAGE_TYPE = /@[\w.-]+\/[\w./-]+\.([A-Za-z_$][\w$]*)/g;
+const MEMBER =
+  /^(?:abstract )?(class|interface|enum|namespace) ([\w$]+), ((?:(?:abstract|static|protected|private|public|readonly) )*)(?:(required|optional) (property|method) |(index|call|construct) signature ?|(?=constructor))(.*)$/;
+
+function sourceOf(line) {
+  let rest = line.replace(/^(\.[^:]*: |\(not exported\) )/, '').replace(/^deprecated: /, '');
+  if (/^(?:export (?:type )?\S+(?: = \S+)? |everything )from \S+$/.test(rest)) return null;
+  rest = rest.replace(/^augments \S+ /, '');
+  // A type of another package becomes a name no declaration of this package has.
+  rest = rest.replace(OTHER_PACKAGE_TYPE, '__Outside_$1');
+  const member = MEMBER.exec(rest);
+  if (member) {
+    const [, , , modifiers, presence, kind, signature, body] = member;
+    const mods = modifiers.replace(/readonly /, kind === 'method' ? '' : 'readonly ');
+    if (signature === 'call') return `interface __M { ${body}; }`;
+    if (signature === 'construct') return `interface __M { ${body}; }`;
+    if (signature === 'index') return `declare class __M { ${mods}${body}; }`;
+    if (!kind) return `declare class __M { ${body}; }`;
+    let text = body;
+    if (presence === 'optional' && !/^[\w$'"]+\?/.test(text))
+      text = text.replace(/^([\w$]+|'[^']*'|"[^"]*")/, '$1?');
+    return `declare class __M { ${mods}${text}; }`;
   }
-  const before = new Set([
-    K.OpenParenToken,
-    K.CommaToken,
-    K.OpenBraceToken,
-    K.SemicolonToken,
-    K.OpenBracketToken,
-    K.DotDotDotToken,
-    K.ReadonlyKeyword,
-    K.StaticKeyword,
-    K.ProtectedKeyword,
-    K.PrivateKeyword,
-    K.PublicKeyword,
-    K.AbstractKeyword,
-  ]);
-  return tokens
-    .filter(({ kind, text }, index) => {
-      const reserved = kind >= K.FirstReservedWord && kind <= K.LastReservedWord;
-      const word =
-        kind === K.Identifier || (kind >= K.FirstKeyword && kind <= K.LastKeyword && !reserved);
-      if (!word || !/^[A-Za-z_$][\w$]*$/.test(text)) return false;
-      const next = tokens[index + 1];
-      const named =
-        next &&
-        (next.kind === K.ColonToken ||
-          (next.kind === K.QuestionToken && tokens[index + 2]?.kind === K.ColonToken));
-      return !(named && (index === 0 || before.has(tokens[index - 1].kind)));
-    })
-    .map(({ text }) => text);
+  if (
+    /^(?:interface|class|enum|namespace) [\w$]+(?:<.*>)?(?: (?:extends|implements) .*)?$/.test(
+      rest,
+    ) &&
+    !rest.includes('{')
+  ) {
+    if (rest.startsWith('namespace ')) return null;
+    const [, kind, tail] = /^(\w+) (.*)$/.exec(rest);
+    return kind === 'class' ? `declare class ${tail} {}` : `${kind} ${tail} {}`;
+  }
+  rest = rest.replace(/^export type (?=class |interface |enum )/, '');
+  if (/^(?:abstract )?class /.test(rest)) return `declare ${rest} {}`;
+  if (/^(?:interface|enum) /.test(rest)) return `${rest} {}`;
+  rest = rest.replace(/^export (?:type )?default = /, '');
+  const alias = /^export (?:type )?([\w$]+) = ([\w$.]+)$/.exec(rest);
+  if (alias) return `type __A = typeof ${alias[2]};`;
+  if (/^(?:const|let|var|function|async function|function\*) /.test(rest))
+    return `declare ${rest};`;
+  if (/^type /.test(rest)) return `${rest};`;
+  return `type __Default = ${rest};`;
+}
+
+function namesOf(source) {
+  const file = ts.createSourceFile('x.ts', source, ts.ScriptTarget.Latest, true);
+  const names = new Set();
+  const leftmost = (name) => {
+    let node = name;
+    while (ts.isQualifiedName(node)) node = node.left;
+    while (ts.isPropertyAccessExpression(node)) node = node.expression;
+    if (ts.isIdentifier(node)) names.add(node.text);
+  };
+  const visit = (node) => {
+    if (ts.isTypeReferenceNode(node)) leftmost(node.typeName);
+    else if (ts.isTypeQueryNode(node)) leftmost(node.exprName);
+    else if (ts.isExpressionWithTypeArguments(node)) leftmost(node.expression);
+    else if (ts.isComputedPropertyName(node)) leftmost(node.expression);
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return { names: [...names], errors: file.parseDiagnostics.length };
+}
+
+// The lines the syntax-tree reading reaches from each export of an api.txt that the fingerprint
+// does not take in.
+function missedBy(fingerprint, text) {
+  const all = text
+    .split('\n')
+    .filter((line) => line && !line.startsWith('#'))
+    .map((line) => ({ line, ...exportOfLine(line) }));
+  const owners = new Map();
+  const add = (name, owner) => owners.set(name, [...(owners.get(name) ?? []), owner]);
+  for (const owner of all) {
+    add(owner.name, owner);
+    const declaration = owner.line
+      .replace(/^(\.[^:]*: |\(not exported\) )/, '')
+      .replace(/^deprecated: /, '');
+    const declared =
+      /^export (?:type )?default = (?:(?:abstract|declare|async)\s+)*(?:class|interface|type|function\*?|const|let|var|enum|namespace)\s+([A-Za-z_$][\w$]*)/.exec(
+        declaration,
+      )?.[1];
+    if (declared) add(declared, owner);
+    const augmented = /^augments \S+ interface ([A-Za-z_$][\w$]*)/.exec(declaration)?.[1];
+    if (augmented) add(augmented, owner);
+  }
+  const names = new Map(
+    all.map(({ line }) => {
+      const source = sourceOf(line);
+      return [line, source === null ? [] : namesOf(source).names];
+    }),
+  );
+  const missed = [];
+  const exports = new Map(
+    all.filter((owner) => owner.subpath).map((owner) => [`${owner.subpath}\0${owner.name}`, owner]),
+  );
+  for (const { subpath, name } of exports.values()) {
+    const taken = new Set();
+    const followed = new Set();
+    const queue = all.filter((owner) => owner.subpath === subpath && owner.name === name);
+    while (queue.length > 0) {
+      const { line } = queue.pop();
+      if (taken.has(line)) continue;
+      taken.add(line);
+      for (const word of names.get(line)) {
+        if (followed.has(word)) continue;
+        followed.add(word);
+        queue.push(...(owners.get(word) ?? []));
+      }
+    }
+    const fingerprinted = new Set(fingerprint(text, subpath, name));
+    const lost = [...taken].filter((line) => !fingerprinted.has(line));
+    if (lost.length > 0)
+      missed.push(`${subpath} ${name}: ${lost.length}, such as ${lost[0].slice(0, 100)}`);
+  }
+  return missed;
 }
 
 describe('apiFingerprint, on the committed api.txt files', () => {
-  it('takes in, for every export, every line a second reading with TypeScript’s scanner reaches', () => {
+  it('takes in, for every export, every line a reading of the syntax tree reaches', () => {
     const root = new URL('../../packages/9-public/@prisma/', import.meta.url);
-    const missed = [];
-    for (const dir of readdirSync(root)) {
-      const text = readFileSync(new URL(`${dir}/api.txt`, root), 'utf8');
-      const all = text
-        .split('\n')
-        .filter((line) => line && !line.startsWith('#'))
-        .map((line) => ({ line, ...exportOfLine(line) }));
-      const owners = new Map();
-      const add = (name, owner) => owners.set(name, [...(owners.get(name) ?? []), owner]);
-      for (const owner of all) add(owner.name, owner);
-      const names = new Map(all.map((owner) => [owner.line, referenceNames(owner.line)]));
-      const exports = new Map(
-        all
-          .filter((owner) => owner.subpath)
-          .map((owner) => [`${owner.subpath}\0${owner.name}`, owner]),
-      );
-      for (const { subpath, name } of exports.values()) {
-        const taken = new Set();
-        const followed = new Set();
-        const queue = all.filter((owner) => owner.subpath === subpath && owner.name === name);
-        while (queue.length > 0) {
-          const { line } = queue.pop();
-          if (taken.has(line)) continue;
-          taken.add(line);
-          for (const word of names.get(line)) {
-            if (followed.has(word)) continue;
-            followed.add(word);
-            queue.push(...(owners.get(word) ?? []));
-          }
-        }
-        const fingerprinted = new Set(fingerprintLines(text, subpath, name));
-        const lost = [...taken].filter((line) => !fingerprinted.has(line));
-        if (lost.length > 0)
-          missed.push(
-            `@prisma/${dir} ${subpath} ${name}: ${lost.length}, such as ${lost[0].slice(0, 100)}`,
-          );
-      }
-    }
+    const missed = readdirSync(root).flatMap((dir) =>
+      missedBy(fingerprintLines, readFileSync(new URL(`${dir}/api.txt`, root), 'utf8')).map(
+        (each) => `@prisma/${dir} ${each}`,
+      ),
+    );
     deepStrictEqual(missed, []);
   });
 });
