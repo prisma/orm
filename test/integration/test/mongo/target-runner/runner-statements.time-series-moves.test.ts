@@ -164,3 +164,80 @@ describe('MongoMigrationPlanner and runner - a move into a new time-series colle
     timeouts.spinUpMongoMemoryServer,
   );
 });
+
+describe('MongoMigrationPlanner and runner - the copy of the time-series rename route', () => {
+  const fromReadings = contract(
+    'from',
+    { Event: event, Measurement: { collection: 'readings', fields: ['_id', 'at'] } },
+    { events: new MongoCollection({}), readings: new MongoCollection({}) },
+  );
+  const renameCopy = dataTransform('copy readings to measurements', {
+    run: () => rawAggregate('measurements', [{ $unionWith: 'readings' }, { $out: 'measurements' }]),
+  });
+
+  it(
+    'keeps every document once when the apply stops between the copy and the drop, and the source is dropped as the failure says',
+    async () => {
+      await live
+        .db()
+        .collection('events')
+        .insertMany([{ name: 'launch' }]);
+      await live
+        .db()
+        .collection('readings')
+        .insertMany([
+          { at, value: 1 },
+          { at, value: 2 },
+        ]);
+      await live.initMarker(fromReadings);
+      const planned = await new MongoMigrationPlanner().plan({
+        contract: to,
+        schema: await introspectSchema(live.db()),
+        policy,
+        fromContract: fromReadings,
+        origin: { storageHash: 'from' },
+        statements: [],
+        frameworkComponents: [],
+        snapshotsImportPath: '../../snapshots',
+      });
+      if (planned.kind !== 'success') throw new Error(JSON.stringify(planned.conflicts));
+      const operations = planned.plan.operations as readonly AnyMongoMigrationOperation[];
+      const drop = operations.find((operation) => operation.label === 'Drop collection readings');
+      if (drop === undefined) throw new Error(JSON.stringify(operations.map((o) => o.label)));
+      const others = operations.filter((operation) => operation !== drop);
+      const create = others.findIndex((operation) => operation.label.includes('measurements'));
+      const before = others.slice(0, create + 1);
+      const after = others.slice(create + 1);
+
+      const first = await live.runOperations(
+        [...before, renameCopy, failing, drop, ...after],
+        fromReadings,
+        to,
+        { policy },
+      );
+      const advice = first.ok ? undefined : first.failure.why;
+      await live.db().dropCollection('readings');
+      const second = await live.runOperations(
+        [...before, renameCopy, drop, ...after],
+        fromReadings,
+        to,
+        { policy },
+      );
+
+      expect({
+        advice,
+        second: second.ok ? 'applied' : second.failure,
+        readings: await live.db().listCollections({ name: 'readings' }).toArray(),
+        ...(await state()),
+      }).toEqual({
+        advice: expect.stringContaining(
+          `Operation data_transform.copy readings to measurements copied the documents of collection readings into collection measurements with an $out stage, and operation ${drop.id}, which drops collection readings, has not run. Before you run the command again, delete the documents of collection readings or drop it yourself`,
+        ),
+        second: 'applied',
+        readings: [],
+        ...moved,
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});

@@ -117,6 +117,21 @@ export function timeSeriesCopyLimits(collection: string): string {
   return `Collection "${collection}" is a time-series collection, which a $merge stage cannot write into, and an $out stage replaces everything it holds.`;
 }
 
+/**
+ * The copy of every document of collection `from` into the time-series collection `to` that
+ * replaces it, as it goes in `migration.ts`, and what its re-run does: the plan drops `from` after
+ * it, and once `from` is gone the copy adds nothing.
+ */
+export function timeSeriesRenameCopyText(from: string, to: string): string {
+  const call = [
+    `${CODE_INDENT}rawAggregate(${jsonToTsSource(to)}, [`,
+    `${CODE_INDENT}${CODE_INDENT}${oneLine(jsonToTsSource({ $unionWith: from }))},`,
+    `${CODE_INDENT}${CODE_INDENT}${oneLine(jsonToTsSource({ $out: to }))},`,
+    `${CODE_INDENT}])`,
+  ].join('\n');
+  return `${timeSeriesCopyLimits(to)} So its run reads the documents collection "${to}" holds, adds those of collection "${from}" with a $unionWith stage, and writes them all back with an $out stage, which rewrites the whole collection:\n\n${call}\n\nThe copy has no check, so it runs again on every run of the migration; once collection "${from}" is dropped, it adds nothing. If the apply stops after the copy and before the drop, delete the documents of collection "${from}" or drop it yourself before you run db migrate again: otherwise the copy adds them to collection "${to}" a second time. Do not delete documents from collection "${to}" instead.`;
+}
+
 function rawAggregateCall(
   move: DocumentMove,
   collection: string,

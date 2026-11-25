@@ -133,7 +133,7 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
     ]);
   });
 
-  it('gives both routes for a time-series collection, each saying to stop writes until the source is dropped', () => {
+  it('gives both routes for a time-series collection, each saying to stop writes until the source is dropped, and names a copy that is safe to run again after the drop', () => {
     expect(
       refusal(
         plan({
@@ -144,7 +144,7 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
         }),
       ).map(({ why }) => why),
     ).toEqual([
-      'MongoDB cannot rename a time-series collection. Leave out this statement. With db update, first create collection "users" yourself with the time-series options of collection "profiles", which db.getCollectionInfos({ name: "profiles" }) shows in mongosh, stop writes to collection "profiles", copy the documents into it, and run db update again with --delete naming the model, which drops "profiles"; allow writes again once it has run, since a document written to "profiles" after the copy is dropped with it. With migration plan, plan with --delete naming the model; the migration.ts it writes creates collection "users", and there add a dataTransform that copies the documents right after that creation and before the drop of collection "profiles". Then run that migration.ts to emit its ops.json, stop writes to collection "profiles", and apply it with db migrate; allow writes again once it has run, since a document written to "profiles" after the copy is dropped with it.',
+      'MongoDB cannot rename a time-series collection. Leave out this statement. With db update, first create collection "users" yourself with the time-series options of collection "profiles", which db.getCollectionInfos({ name: "profiles" }) shows in mongosh, stop writes to collection "profiles", copy the documents into it, and run db update again with --delete naming the model, which drops "profiles"; allow writes again once it has run, since a document written to "profiles" after the copy is dropped with it. With migration plan, plan with --delete naming the model; the migration.ts it writes creates collection "users", and there add a dataTransform right after that creation and before the drop of collection "profiles". Collection "users" is a time-series collection, which a $merge stage cannot write into, and an $out stage replaces everything it holds. So its run reads the documents collection "users" holds, adds those of collection "profiles" with a $unionWith stage, and writes them all back with an $out stage, which rewrites the whole collection:\n\n  rawAggregate("users", [\n    { $unionWith: "profiles" },\n    { $out: "users" },\n  ])\n\nThe copy has no check, so it runs again on every run of the migration; once collection "profiles" is dropped, it adds nothing. If the apply stops after the copy and before the drop, delete the documents of collection "profiles" or drop it yourself before you run db migrate again: otherwise the copy adds them to collection "users" a second time. Do not delete documents from collection "users" instead.\n\nThen run that migration.ts to emit its ops.json, stop writes to collection "profiles", and apply it with db migrate; allow writes again once it has run, since a document written to "profiles" after the copy is dropped with it.',
     ]);
   });
 
