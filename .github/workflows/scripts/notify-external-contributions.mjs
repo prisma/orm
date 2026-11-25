@@ -168,8 +168,8 @@ function parseOptions() {
   return { dryRun: true, hours };
 }
 
-async function scheduledWindow(github) {
-  const { createdAt, workflowId } = await github.currentRun(requireEnv('GITHUB_RUN_ID'));
+export async function scheduledWindow(github, runId) {
+  const { createdAt, workflowId } = await github.currentRun(runId);
   const runs = await github.successfulScheduledRuns(workflowId);
   return resolveWindow(lastScheduledRunStart(runs), createdAt);
 }
@@ -185,7 +185,13 @@ async function main() {
   const now = new Date();
   const { since, until, skipped } = options.dryRun
     ? { since: new Date(now.getTime() - options.hours * 3_600_000), until: now, skipped: undefined }
-    : await scheduledWindow(github);
+    : await scheduledWindow(github, requireEnv('GITHUB_RUN_ID'));
+  if (since >= until) {
+    console.log(
+      'A later scheduled run has already covered this run’s time, so there is nothing to post.',
+    );
+    return;
+  }
   if (skipped) {
     console.log(
       `::warning::No scheduled run succeeded from ${skipped.from.toISOString()} to ${skipped.to.toISOString()}. Items created then were not posted.`,

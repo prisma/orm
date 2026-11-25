@@ -9,6 +9,7 @@ import {
   lastScheduledRunStart,
   postToSlack,
   resolveWindow,
+  scheduledWindow,
 } from './notify-external-contributions.mjs';
 
 const user = (login, type = 'User') => ({
@@ -79,14 +80,22 @@ describe('lastScheduledRunStart', () => {
     assert.deepEqual(lastScheduledRunStart(runs), new Date('2026-11-25T11:50:00Z'));
   });
 
-  it('gives a re-run of an older run an empty window once a newer run has succeeded', () => {
-    const rerunCreated = new Date('2026-11-25T10:03:00Z');
-    const since = lastScheduledRunStart([{ created_at: '2026-11-25T10:13:00Z' }]);
-    const page = [
-      issue({ created_at: '2026-11-25T10:00:00Z' }),
-      issue({ created_at: '2026-11-25T09:55:00Z' }),
-    ];
-    assert.deepEqual(itemsCreatedInWindow(page, since, rerunCreated).items, []);
+  it('gives a re-run of an older run an empty window once a newer run has succeeded', async () => {
+    const github = {
+      currentRun: async () => ({ createdAt: new Date('2026-11-25T10:03:00Z'), workflowId: 42 }),
+      successfulScheduledRuns: async () => [
+        { created_at: '2026-11-25T09:53:00Z' },
+        { created_at: '2026-11-25T10:13:00Z' },
+      ],
+    };
+    const { since, until } = await scheduledWindow(github, '1');
+    assert.deepEqual(
+      { since, until },
+      {
+        since: new Date('2026-11-25T10:13:00Z'),
+        until: new Date('2026-11-25T10:03:00Z'),
+      },
+    );
   });
 
   it('finds nothing when no run has succeeded', () => {
