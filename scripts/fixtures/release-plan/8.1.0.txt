@@ -1,7 +1,7 @@
 @prisma/orm-better-auth                 ga           8.1.0       latest  @prisma/orm-family-sql ^8.1.0, @prisma/orm-framework ^8.1.0, @prisma/orm-toolchain ^8.1.0
 @prisma/orm-extension-arktype-json      ga           8.1.0       latest  @prisma/orm-family-sql ^8.1.0, @prisma/orm-framework ^8.1.0, @prisma/orm-target-postgres ^8.1.0
 @prisma/orm-extension-middleware-cache  ga           8.1.0       latest  @prisma/orm-framework ^8.1.0
-@prisma/orm-extension-paradedb          own version  0.1.0       latest  (not republished)
+@prisma/orm-extension-paradedb          own version  0.18.0      latest  (not republished)
 @prisma/orm-extension-pgvector          ga           8.1.0       latest  @prisma/orm-family-sql ^8.1.0, @prisma/orm-framework ^8.1.0, @prisma/orm-target-postgres ^8.1.0, @prisma/orm-toolchain ^8.1.0
 @prisma/orm-extension-postgis           ga           8.1.0       latest  @prisma/orm-family-sql ^8.1.0, @prisma/orm-framework ^8.1.0, @prisma/orm-target-postgres ^8.1.0, @prisma/orm-toolchain ^8.1.0
 @prisma/orm-extension-supabase          ea           8.1.0-ea.0  latest  @prisma/orm-family-sql ^8.1.0, @prisma/orm-framework ^8.1.0, @prisma/orm-postgres ^8.1.0, @prisma/orm-target-postgres ^8.1.0, @prisma/orm-toolchain ^8.1.0

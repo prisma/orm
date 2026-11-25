@@ -86,7 +86,7 @@ Extensions already shipping:
 
 - **[`@prisma/orm-extension-pgvector`](https://www.npmjs.com/package/@prisma/orm-extension-pgvector)**: vector columns and similarity search.
 - **[`@prisma/orm-extension-postgis`](https://www.npmjs.com/package/@prisma/orm-extension-postgis)**: geometry columns and geo queries.
-- **[`@prisma/orm-extension-paradedb`](https://www.npmjs.com/package/@prisma/orm-extension-paradedb)**: BM25 full-text search indexes. From release 8.0 it is numbered on its own, starting at `0.1.0`.
+- **[`@prisma/orm-extension-paradedb`](https://www.npmjs.com/package/@prisma/orm-extension-paradedb)**: BM25 full-text search indexes. From release 8.0 it has its own version, starting at `0.18.0`.
 - **[`@prisma/orm-extension-supabase`](https://www.npmjs.com/package/@prisma/orm-extension-supabase)**: Supabase auth and storage tables, role-bound clients. Early Access from release 8.0.
 - **[`@prisma/orm-extension-arktype-json`](https://www.npmjs.com/package/@prisma/orm-extension-arktype-json)**: JSON columns validated by an arktype schema.
 - **[`@prisma/orm-postgres-contrib`](https://www.npmjs.com/package/@prisma/orm-postgres-contrib)**: packs for the trusted PostgreSQL contrib modules, starting with `citext` case-insensitive text.

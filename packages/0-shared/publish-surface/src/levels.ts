@@ -30,7 +30,7 @@ export const packageNumbering: ReadonlyMap<string, Numbering> = new Map<string, 
   ['@prisma/orm-target-mariadb', 'ea'],
   ['@prisma/orm-sqlite', 'ea'],
   ['@prisma/orm-target-sqlite', 'ea'],
-  ['@prisma/orm-extension-paradedb', { firstVersion: '0.1.0' }],
+  ['@prisma/orm-extension-paradedb', { firstVersion: '0.18.0' }],
 ]);
 
 /**

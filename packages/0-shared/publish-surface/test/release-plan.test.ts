@@ -30,7 +30,7 @@ const graph: Record<string, { numbering: Numbering; kind: PackageKind; uses: str
   mariadb: { numbering: 'ea', kind: 'facade', uses: ['mysql', 'target-mysql'] },
   supabase: { numbering: 'preview', kind: 'extension', uses: ['postgres'] },
   'better-auth': { numbering: 'preview', kind: 'library-integration', uses: ['framework'] },
-  paradedb: { numbering: { firstVersion: '0.1.0' }, kind: 'extension', uses: ['framework'] },
+  paradedb: { numbering: { firstVersion: '0.18.0' }, kind: 'extension', uses: ['framework'] },
 };
 
 const AT_8_1 = {
@@ -45,7 +45,7 @@ const AT_8_1 = {
   mariadb: '8.1.0-ea.0',
   supabase: '8.1.0-preview.0',
   'better-auth': '8.1.0-preview.0',
-  paradedb: '0.1.0',
+  paradedb: '0.18.0',
 };
 
 const AT_8_0: Record<string, string> = Object.fromEntries(
@@ -169,7 +169,7 @@ describe('planRelease', () => {
       framework: '8.2.0 latest',
       mysql: '8.2.0-ea.0 latest framework ~8.2.0 target-mysql ~8.2.0-ea.0',
       supabase: '8.2.0-preview.0 latest postgres ^8.2.0',
-      paradedb: '0.1.0 latest framework ^8.2.0',
+      paradedb: '0.18.0 latest framework ^8.2.0',
     });
   });
 
@@ -185,7 +185,7 @@ describe('planRelease', () => {
     [
       'a package with its own version: a caret, its version untouched',
       'paradedb',
-      '0.1.0 latest framework ^8.1.0',
+      '0.18.0 latest framework ^8.1.0',
     ],
   ])('writes for %s', (_case, name, expected) => {
     expect(line(planRelease(input({})), name)).toContain(expected);
@@ -234,7 +234,7 @@ describe('planRelease', () => {
         {},
         {
           mariadb: '8.1.0-ea.0-dev.4 dev mysql 8.1.0-ea.0-dev.4 target-mysql 8.1.0-ea.0-dev.4',
-          paradedb: '0.1.0-dev.4 dev framework 8.1.0-dev.4',
+          paradedb: '0.18.0-dev.4 dev framework 8.1.0-dev.4',
         },
       ],
       [
@@ -242,7 +242,7 @@ describe('planRelease', () => {
         { bump: ['framework'] },
         {
           mariadb: '8.1.0-ea.0-dev.4 dev mysql 8.1.0-ea.0-dev.4 target-mysql 8.1.0-ea.0-dev.4',
-          paradedb: '0.1.0-dev.4 dev framework 8.1.1-dev.4',
+          paradedb: '0.18.0-dev.4 dev framework 8.1.1-dev.4',
         },
       ],
     ])(
@@ -336,7 +336,7 @@ describe('planRelease', () => {
       mongo: '8.0.1-rc.0 latest framework ~8.0.1',
       mysql: '8.0.1-ea.0 latest framework ~8.0.1 target-mysql ~8.0.1-ea.0',
       supabase: '8.0.1-preview.0 latest postgres ^8.0.1',
-      paradedb: '0.1.0 latest framework ^8.0.1',
+      paradedb: '0.18.0 latest framework ^8.0.1',
     });
   });
 
@@ -440,13 +440,13 @@ describe('planRelease', () => {
   describe('a package with its own version', () => {
     it('keeps its version at a later release', () => {
       expect(line(planRelease(input({ release: { major: 8, minor: 2 } })), 'paradedb')).toBe(
-        '0.1.0 latest framework ^8.2.0',
+        '0.18.0 latest framework ^8.2.0',
       );
     });
 
     it('raises its patch when it gets a fix', () => {
       expect(line(planRelease(input({ bump: ['paradedb'] })), 'paradedb')).toBe(
-        '0.1.1 latest framework ^8.1.0',
+        '0.18.1 latest framework ^8.1.0',
       );
     });
   });
@@ -580,7 +580,7 @@ describe('a planned version never sorts below the version a package has', () => 
   });
 
   it('at the first release with levels, moves back only ParadeDB, which leaves the release number', () => {
-    expect(movedBack(FIRST_RELEASE_WITH_LEVELS)).toEqual(['paradedb: 8.0.0-rc.26 to 0.1.0']);
+    expect(movedBack(FIRST_RELEASE_WITH_LEVELS)).toEqual(['paradedb: 8.0.0-rc.26 to 0.18.0']);
   });
 });
 

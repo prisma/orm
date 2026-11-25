@@ -146,7 +146,7 @@ describe('releaseTagsFor', () => {
 
 describe('ownVersionsAlreadyPublished', () => {
   const packages = [
-    { name: '@prisma/orm-extension-paradedb', version: '0.1.0' },
+    { name: '@prisma/orm-extension-paradedb', version: '0.18.0' },
     { name: '@prisma/orm-postgres', version: '8.1.0' },
   ];
 
@@ -155,7 +155,7 @@ describe('ownVersionsAlreadyPublished', () => {
       ownVersionsAlreadyPublished({
         rootVersion: '8.1.0',
         packages,
-        publishedVersions: () => ['0.1.0', '8.1.0'],
+        publishedVersions: () => ['0.18.0', '8.1.0'],
       }),
       ['@prisma/orm-extension-paradedb'],
     );
@@ -165,8 +165,8 @@ describe('ownVersionsAlreadyPublished', () => {
     assert.deepEqual(
       ownVersionsAlreadyPublished({
         rootVersion: '8.1.0',
-        packages: [{ name: '@prisma/orm-extension-paradedb', version: '0.1.1' }],
-        publishedVersions: () => ['0.1.0'],
+        packages: [{ name: '@prisma/orm-extension-paradedb', version: '0.18.1' }],
+        publishedVersions: () => ['0.18.0'],
       }),
       [],
     );

@@ -10,7 +10,7 @@ const AT_8_0_1 = `
     better-auth                 8.0.1            latest  family-sql ^8.0.1, framework ^8.0.1, toolchain ^8.0.1
     extension-arktype-json      8.0.1            latest  family-sql ^8.0.1, framework ^8.0.1, target-postgres ^8.0.1
     extension-middleware-cache  8.0.1            latest  framework ^8.0.1
-    extension-paradedb          0.1.0            latest  family-sql ^8.0.1, framework ^8.0.1, toolchain ^8.0.1
+    extension-paradedb          0.18.0           latest  family-sql ^8.0.1, framework ^8.0.1, toolchain ^8.0.1
     extension-pgvector          8.0.1            latest  family-sql ^8.0.1, framework ^8.0.1, target-postgres ^8.0.1, toolchain ^8.0.1
     extension-postgis           8.0.1            latest  family-sql ^8.0.1, framework ^8.0.1, target-postgres ^8.0.1, toolchain ^8.0.1
     extension-supabase          8.0.1-ea.0       latest  family-sql ^8.0.1, framework ^8.0.1, postgres ^8.0.1, target-postgres ^8.0.1, toolchain ^8.0.1
@@ -35,7 +35,7 @@ const AT_8_1_0 = `
     better-auth                 8.1.0            latest  family-sql ^8.1.0, framework ^8.1.0, toolchain ^8.1.0
     extension-arktype-json      8.1.0            latest  family-sql ^8.1.0, framework ^8.1.0, target-postgres ^8.1.0
     extension-middleware-cache  8.1.0            latest  framework ^8.1.0
-    extension-paradedb          0.1.0            latest  family-sql ^8.1.0, framework ^8.1.0, toolchain ^8.1.0
+    extension-paradedb          0.18.0           latest  family-sql ^8.1.0, framework ^8.1.0, toolchain ^8.1.0
     extension-pgvector          8.1.0            latest  family-sql ^8.1.0, framework ^8.1.0, target-postgres ^8.1.0, toolchain ^8.1.0
     extension-postgis           8.1.0            latest  family-sql ^8.1.0, framework ^8.1.0, target-postgres ^8.1.0, toolchain ^8.1.0
     extension-supabase          8.1.0-ea.0       latest  family-sql ^8.1.0, framework ^8.1.0, postgres ^8.1.0, target-postgres ^8.1.0, toolchain ^8.1.0
