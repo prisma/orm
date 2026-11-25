@@ -31,10 +31,10 @@ The rule in one sentence: **a write skips validation only when a later operation
 
 A future model of operation dependencies needs these edges for the move:
 
-1. after the operation that brings the target into being: its `createCollection`, or the `renameCollection` of another collection to its name;
-2. before every operation on the source collection, because the source's rewrites change the documents the move reads;
+1. after the operation that brings the target into being: its `createCollection`, or the `renameCollection` of another collection to its name; and after the `renameCollection` of the source, when the plan renames it;
+2. before every other operation on the source collection, because the source's rewrites change the documents the move reads;
 3. before the target's validator update, which checks the moved documents;
-4. no rewrite on the target may select the moved documents. A target rewrite running after the move would change them (P01, D05). When the plan has a rewrite on the target collection, the route is the two-plan route instead.
+4. before the target's rewrites. A rewrite of another model's documents must not reach the moved documents, and the rewrite check refuses one that would: every rewrite counts the models the destination stores in the collection, field renames included (ADR 324), and the moving model is one of them. A rewrite of the moving model's own documents in the target must reach them, and does, because it runs after the move.
 
 ### Accepted gaps on a re-run
 
@@ -72,14 +72,15 @@ A new module, `mongo-document-moves.ts`, holds the `DocumentMove` type (moved fr
 - `after`: the operation the move comes after. One of `{ kind: 'createCollection' }`, `{ kind: 'renameCollection'; from: string }`, or `undefined` when nothing in the plan has to come first. `undefined` covers a target that exists, and a new target that no `createCollection` creates, such as one with indexes and no validator.
 - `bypassDocumentValidation`: true when the target's collection at copy time (the target itself, or the collection renamed to its name) has a validator, and the plan replaces or removes it.
 - `validatorChange`: `'replaced' | 'removed' | undefined`, so the text says what happens to the moved documents afterwards.
-- `twoPlans`: true when the plan has a document rewrite on the target collection, or on the collection renamed to it. The route then says to move the documents in a plan of their own first, and make the rest of the change in a second plan.
-- `fieldStages`: the `$set` and `$unset` stages that write the moving model's documents in its destination shape, from its stored-name changes (`storedNameMoves`, `storedFieldsKeptOf`). A field rename on a model that moves out without a collection rename is neither planned nor refused (`planFieldRename` returns unchanged), so the copy must write it.
+- `source`: the name of the source collection when the move runs. The plan without the statement can rename the source, when the models left in it all move to one new collection; the move then reads the source under its new name, right after that rename.
+
+The copies are a fact of each moving model, not of the order. Each moving model gives its stored-name changes (the plan's field renames, its stated field renames, and the fields its destination model names alike) and, when it is a variant in the target, its discriminator value. Models whose documents change alike share one copy; otherwise each gets its own, with its own filter. A field rename on a model that moves out without a collection rename is neither planned nor refused (`planFieldRename` returns unchanged), so the copy must write it. The copy writes stored names and the discriminator value only: fields the destination model drops stay in the moved documents, and new required fields are not filled.
 
 The renames come from `CollectionRenames.changes`, worked out from both contracts before the statement loop starts, minus the change this refusal drops. They do not come from the map the loop fills, which lacks the stated renames not yet planned (D03).
 
 The rewrites on the target are known only after statement planning. The route text is therefore built once those facts are known. If building it later is not a contained change, the implementer reports that before building something else.
 
-The source collection must not be renamed in the same plan. A collection rename is found only when every model in it moves together, so this should never happen. `documentMoveOrder` asserts it, and a planner test proves it.
+The source collection can be renamed in the plan the route describes: once the statement is left out, the moving model is removed, and the models left in the source can all move to one new collection. The move then reads the source under its new name, after its rename. A planner test shows it. When the plan without the statement is refused as well, the route gives no move and says so, since its facts would describe a plan the user cannot make.
 
 **Variant route.** The route's first plan keeps the variant as it is and moves the documents. `documentMoveOrder` is computed for that first plan: the destination contract with the variant kept. If that contract is not available where the route is built, the text says it assumes the first plan makes every other change to collection "to", and a test shows it (D04).
 
@@ -90,7 +91,7 @@ The source collection must not be renamed in the same plan. A collection rename 
 The placement:
 
 - after `createCollection`: right after the creation of collection "to", and before any other operation on collection "from";
-- after `renameCollection`: right after the rename of collection "from-of-rename" to "to", and before any other operation on collection "from";
+- after `renameCollection`: right after the rename of collection "from-of-rename" to "to" (and of the source, when the plan renames it), and before any other operation on the source;
 - otherwise: at the start of the operations, before any other operation on collection "from".
 
 The example pipeline is `[{ $match: … }, …fieldStages, { $merge: { into: "to" } }]`. With the bypass, the call ends with `, { bypassDocumentValidation: true }`, and one sentence says why:
@@ -98,7 +99,7 @@ The example pipeline is `[{ $match: … }, …fieldStages, { $merge: { into: "to
 - replaced: the copy skips document validation because collection "to" still has its old validator; the later validator update on "to" checks the moved documents. If that check stops the apply, the moved documents are in collection "to": fix them there and run `db migrate` again;
 - removed: the copy skips document validation because collection "to" still has its old validator, which the plan then removes.
 
-With `twoPlans`, the text gives the two-plan route and no in-plan placement.
+When the moving models' copies differ, the text gives one `rawAggregate` per copy, each with a filter that selects only its models' documents, and one `deleteDocuments` for all of them.
 
 ## Docs
 
@@ -117,7 +118,9 @@ With `twoPlans`, the text gives the two-plan route and no in-plan placement.
 - **Wire and hash**: an aggregate without the option has the same wire fields and the same content hash as before.
 - **AST, adapter, serializer**: the option round-trips, and an `ops.json` without it still reads.
 - **Runner unit**: error 13 on a `RawAggregateCommand` with the option gives the refusal, beside the mocked case in `mongo-runner.test.ts`.
-- **`documentMoveOrder` unit tests**: each `after` case; bypass for a replaced validator, none for an added one, the removal sentence for a removed one; no bypass for an `external` target; `twoPlans` for a field rename on the target (the `members`/`Guest`/`User` `name` case); concrete `fieldStages` for one renamed field on the moving model; the assertion that the source is not renamed.
+- **`documentMoveOrder` unit tests**: each `after` case; bypass for a replaced validator, none for an added one, the removal sentence for a removed one; no bypass for an `external` target; a source the plan renames.
+- **Copy unit tests**: stages for one renamed field; one copy for models whose documents change alike, one each when they differ or converge on one stored name; the discriminator value of a model that becomes a variant.
+- **Planner tests for the target's rewrites**: a rewrite of another model on the target that would reach the moved documents is refused in the plan the route describes, one test per rewrite kind (field rename, cast, conversion, fill, backfill, removal, enum value replacement, key rename inside an embedded model); a rewrite that cannot reach them leaves the move in the same plan; the moving model's own rewrite is planned after the move.
 - **One planner text test per route.** Both use the same function, so one test per route is enough.
 - **Runner, end to end**: the case QA found. The operations come from the planner's plan, with the move inserted where the text says, not from a hand-ordered list. The target exists with a validator that rejects the moving model, and the plan widens it and renames a field of the model that stays in the source. Run it to the end and read back both collections. Then stop at `deleteDocuments` and run it again, and stop at the target's validator update and run it again (throw from `callbacks.onOperationStart`). Read back both collections after each re-run.
 - **Runner, end to end**: the rename case (`guests` renamed to `members`).
@@ -126,6 +129,7 @@ With `twoPlans`, the text gives the two-plan route and no in-plan placement.
 
 - **Order the plan by collection.** This does not fix the move: the target's block would have to come before the source's block, and the planner cannot know that without modelling the dependency. It also changes the order of every MongoDB plan.
 - **Tell the user to move the target's validator update before the source's rewrites.** This breaks when the target has rewrites of its own, which must come before its validator update.
-- **The two-plan route in every case.** It always works, but it costs the user an extra contract edit and migration for every move. It is kept for the case where the target has rewrites.
+- **The two-plan route in every case.** It always works, but it costs the user an extra contract edit and migration for every move.
+- **The two-plan route when the plan rewrites the target.** An earlier version of this design used it. It counted only field renames, sent the user to two plans for a rename that could not reach the moved documents, and ended in a refusal when it could. The rewrite check already refuses every rewrite of another model that would reach them, once field renames count the destination's models as ADR 324 says, so the extra route protects nothing.
 - **Always skip validation.** After a create, or when the policy leaves the target alone, nothing would check the moved documents.
 - **Predict the plan from the contracts in the text code.** This was the first draft. It misses the control policy and drifts from the planner.

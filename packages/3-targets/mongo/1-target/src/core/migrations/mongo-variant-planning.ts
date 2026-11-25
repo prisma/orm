@@ -24,7 +24,12 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { collectionControlPolicy } from './mongo-control-policy';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
-import { type DocumentMoveOrder, documentMoveOrder } from './mongo-document-moves';
+import {
+  type DocumentMove,
+  documentCopiesOf,
+  documentMoveOrder,
+  type MovingModel,
+} from './mongo-document-moves';
 import { documentCollectionOf, modelCoordinates, sameModel } from './mongo-model-coordinates';
 import { capitalized, documentMoveSteps, joinedList, modelNamesText } from './mongo-plan-text';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
@@ -291,13 +296,6 @@ function collectionRefusal(
   );
 }
 
-/** The root models that move out of a variant's collection into one other collection. */
-interface MovingModels {
-  readonly names: readonly string[];
-  readonly to: string;
-  readonly order: DocumentMoveOrder;
-}
-
 /**
  * How to make a variant change that other root models' documents block. A model that stays in the
  * collection can only be moved apart, or the change carried out by hand; a model that moves out
@@ -307,22 +305,18 @@ interface MovingModels {
  */
 function variantRoute(
   change: VariantChange,
-  moves: readonly MovingModels[],
+  moves: readonly DocumentMove[],
   staying: readonly string[],
 ): string {
   const keep = `keep ${change.to === undefined ? variantText(change.model) : `the discriminator value ${quoted(change.from)}`} in the contract`;
-  const moving = moves.flatMap((move) => move.names);
+  const namesOf = (move: DocumentMove) => move.copies.flatMap((copy) => copy.models);
+  const moving = moves.flatMap(namesOf);
   const destinations = joinedList(
-    moves.map((move) => `${modelNamesText(move.names)} to collection ${quoted(move.to)}`),
+    moves.map((move) => `${modelNamesText(namesOf(move))} to collection ${quoted(move.to)}`),
   );
   const steps = moves.map((move) => {
-    const text = documentMoveSteps({
-      moving: modelNamesText(move.names),
-      from: change.collection,
-      to: move.to,
-      order: move.order,
-    });
-    return moves.length === 1 ? text : `For ${modelNamesText(move.names)}, ${text}`;
+    const text = documentMoveSteps(move);
+    return moves.length === 1 ? text : `For ${modelNamesText(namesOf(move))}, ${text}`;
   });
   const assumes = `This assumes that first plan makes every change to ${moves.length === 1 ? `collection ${quoted(moves[0]?.to ?? '')}` : 'those collections'} that this plan makes.`;
   const firstMove = `First move ${destinations}, keep ${variantText(change.model)} as it is, and plan that with migration plan${moves.length === 1 ? `: ${steps.join(' ')}` : `. ${steps.join(' ')}`} ${assumes} Under db update, apply that change, then move the documents out of collection ${quoted(change.collection)} by hand.`;
@@ -379,29 +373,33 @@ function sharedCollectionRefusal(
       ),
   );
   const staying = others.filter((name) => !moving.includes(name));
+  const movingModel = (name: string): MovingModel => {
+    const origin = { namespaceId: change.model.namespaceId, model: name };
+    const destination = destinationModelOf(origin, matchInput);
+    return {
+      name,
+      storedNameMoves: movedStoredNames(matchInput, [origin]),
+      variant:
+        destination === undefined
+          ? undefined
+          : selectedVariantOf(input.contract.domain, destination),
+    };
+  };
   const moves = [...new Set(moving.map(destinationOf))]
     .filter((to): to is string => to !== undefined)
-    .map((to) => {
+    .map((to): DocumentMove => {
       const names = moving.filter((name) => destinationOf(name) === to);
       return {
-        names,
         to,
         order: documentMoveOrder({
           schema: input.schema,
           fromContract,
           contract: input.contract,
-          from: change.collection,
+          from: originCollection,
           to,
           collectionRenames: input.collectionRenames,
-          rewrittenCollections: new Set([
-            ...input.fieldRenameCalls.map(({ collection }) => collection),
-            ...input.enumReplacements.map(({ options }) => options.collection),
-          ]),
-          storedNameMoves: movedStoredNames(
-            matchInputOf(fromContract, input),
-            names.map((name) => ({ namespaceId: change.model.namespaceId, model: name })),
-          ),
         }),
+        copies: documentCopiesOf(names.map(movingModel)),
       };
     });
   const effect =

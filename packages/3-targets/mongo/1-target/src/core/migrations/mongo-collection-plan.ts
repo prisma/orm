@@ -1,4 +1,8 @@
 import type { Contract, ControlPolicy } from '@internal/contract/types';
+import {
+  canonicalizeSchemasForVerification,
+  contractToMongoSchemaIR,
+} from '@internal/family-mongo/control';
 import type { MigrationPlannerConflict } from '@internal/framework-components/control';
 import {
   canonicalize,
@@ -12,6 +16,7 @@ import type {
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
 import { deepEqual, MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
+import { ifDefined } from '@internal/utils/defined';
 import { collectionHasOptions, writesCollectionCreate } from './mongo-collection-creates';
 import { type CollectionControl, collectionControlOf } from './mongo-control-policy';
 import type { OpFactoryCall } from './op-factory-call';
@@ -373,6 +378,47 @@ export interface CollectionPlanSchemas {
   readonly origin: MongoSchemaIR;
   readonly destination: MongoSchemaIR;
   readonly writtenDestination: MongoSchemaIR;
+}
+
+function withIndexesOf(schema: MongoSchemaIR, indexesFrom: MongoSchemaIR): MongoSchemaIR {
+  return new MongoSchemaIR(
+    schema.collections.map(
+      (collection) =>
+        new MongoSchemaCollection({
+          name: collection.name,
+          indexes: indexesFrom.collection(collection.name)?.indexes ?? collection.indexes,
+          ...ifDefined('validator', collection.validator),
+          ...ifDefined('options', collection.options),
+        }),
+    ),
+    { fromDatabase: schema.fromDatabase },
+  );
+}
+
+/**
+ * The origin and destination with indexes the planner can pair by content. A database reports a text index's keys as `_fts` and `_ftsx` and fills in its weights and languages and a collation's unwritten fields, so the indexes of a database origin are compared as the verifier compares them. A contract origin is compared exactly.
+ */
+function comparableIndexes(
+  origin: MongoSchemaIR,
+  destination: MongoSchemaIR,
+  fromDatabase: boolean,
+): { readonly origin: MongoSchemaIR; readonly destination: MongoSchemaIR } {
+  if (!fromDatabase) return { origin, destination };
+  const canonical = canonicalizeSchemasForVerification(origin, destination);
+  return {
+    origin: withIndexesOf(origin, canonical.live),
+    destination: withIndexesOf(destination, canonical.expected),
+  };
+}
+
+/** The schemas a plan compares its collections in, from the schema it starts from and its destination contract. */
+export function collectionPlanSchemasOf(
+  origin: MongoSchemaIR,
+  contract: MongoContract,
+  fromDatabase: boolean,
+): CollectionPlanSchemas {
+  const writtenDestination = contractToMongoSchemaIR(contract);
+  return { ...comparableIndexes(origin, writtenDestination, fromDatabase), writtenDestination };
 }
 
 /**

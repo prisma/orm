@@ -2,6 +2,7 @@ import { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { describe, expect, it } from 'vitest';
 import {
   type DocumentMoveOrderInput,
+  documentCopiesOf,
   documentMoveOrder,
 } from '../src/core/migrations/mongo-document-moves';
 import { type CollectionSpec, contract, schemaCollection } from './mongo-statement-fixtures';
@@ -15,8 +16,6 @@ function moveInput(options: {
   readonly destination?: CollectionSpec;
   readonly guestsIn?: string;
   readonly renames?: DocumentMoveOrderInput['collectionRenames'];
-  readonly rewritten?: readonly string[];
-  readonly storedNameMoves?: DocumentMoveOrderInput['storedNameMoves'];
 }): DocumentMoveOrderInput {
   const guestsIn = options.guestsIn ?? 'members';
   return {
@@ -50,8 +49,6 @@ function moveInput(options: {
     from: 'users',
     to: 'members',
     collectionRenames: options.renames ?? [],
-    rewrittenCollections: new Set(options.rewritten ?? []),
-    storedNameMoves: options.storedNameMoves ?? [],
   };
 }
 
@@ -62,11 +59,10 @@ describe('documentMoveOrder', () => {
   describe('the operation the move comes after', () => {
     it('is the creation of a new target the plan creates', () => {
       expect(documentMoveOrder(moveInput({ destination: WIDER }))).toEqual({
+        source: 'users',
         after: { kind: 'createCollection' },
         bypassDocumentValidation: false,
         validatorChange: undefined,
-        twoPlans: false,
-        fieldStages: [],
       });
     });
 
@@ -80,7 +76,7 @@ describe('documentMoveOrder', () => {
             renames: [{ from: 'guests', to: 'members' }],
           }),
         ).after,
-      ).toEqual({ kind: 'renameCollection', from: 'guests' });
+      ).toEqual({ kind: 'renameCollection', renames: [{ from: 'guests', to: 'members' }] });
     });
 
     it('is nothing for a target that exists', () => {
@@ -113,7 +109,7 @@ describe('documentMoveOrder', () => {
           }),
         ),
       ).toMatchObject({
-        after: { kind: 'renameCollection', from: 'guests' },
+        after: { kind: 'renameCollection', renames: [{ from: 'guests', to: 'members' }] },
         bypassDocumentValidation: true,
         validatorChange: 'replaced',
       });
@@ -156,31 +152,90 @@ describe('documentMoveOrder', () => {
     });
   });
 
-  it('asks for two plans when the plan rewrites documents in the target', () => {
-    expect(
-      documentMoveOrder(moveInput({ origin: OPEN, destination: WIDER, rewritten: ['members'] }))
-        .twoPlans,
-    ).toBe(true);
-  });
-
-  it("writes the moving model's stored-name changes into the copy", () => {
+  it('reads the source under the name the plan renames it to, right after that rename', () => {
     expect(
       documentMoveOrder(
-        moveInput({
-          destination: WIDER,
+        moveInput({ origin: {}, destination: {}, renames: [{ from: 'users', to: 'people' }] }),
+      ),
+    ).toMatchObject({
+      source: 'people',
+      after: { kind: 'renameCollection', renames: [{ from: 'users', to: 'people' }] },
+    });
+  });
+});
+
+describe('documentCopiesOf', () => {
+  it("writes the moving model's stored-name changes into its copy", () => {
+    expect(
+      documentCopiesOf([
+        {
+          name: 'User',
           storedNameMoves: [
             { from: 'name', to: 'fullName' },
             { from: 'a', to: 'b' },
             { from: 'b', to: 'a' },
           ],
-        }),
-      ).fieldStages,
-    ).toEqual([{ $set: { fullName: '$name', b: '$a', a: '$b' } }, { $unset: ['name'] }]);
+          variant: undefined,
+        },
+      ]),
+    ).toEqual([
+      {
+        models: ['User'],
+        fieldStages: [{ $set: { fullName: '$name', b: '$a', a: '$b' } }, { $unset: ['name'] }],
+      },
+    ]);
   });
 
-  it('refuses a move whose source collection the plan renames', () => {
-    expect(() =>
-      documentMoveOrder(moveInput({ renames: [{ from: 'users', to: 'people' }] })),
-    ).toThrow('A document move reads collection "users", which the plan renames');
+  it('copies models whose documents change alike together', () => {
+    expect(
+      documentCopiesOf([
+        { name: 'Admin', storedNameMoves: [], variant: undefined },
+        { name: 'Staff', storedNameMoves: [], variant: undefined },
+      ]),
+    ).toEqual([{ models: ['Admin', 'Staff'], fieldStages: [] }]);
+  });
+
+  it('gives each model its own copy when one renames a field the other keeps', () => {
+    expect(
+      documentCopiesOf([
+        { name: 'Admin', storedNameMoves: [{ from: 'n', to: 'name' }], variant: undefined },
+        { name: 'Staff', storedNameMoves: [], variant: undefined },
+      ]),
+    ).toEqual([
+      { models: ['Admin'], fieldStages: [{ $set: { name: '$n' } }, { $unset: ['n'] }] },
+      { models: ['Staff'], fieldStages: [] },
+    ]);
+  });
+
+  it('gives each model its own copy when their fields move to the same stored name', () => {
+    expect(
+      documentCopiesOf([
+        { name: 'Admin', storedNameMoves: [{ from: 'a', to: 'x' }], variant: undefined },
+        { name: 'Staff', storedNameMoves: [{ from: 'b', to: 'x' }], variant: undefined },
+      ]),
+    ).toEqual([
+      { models: ['Admin'], fieldStages: [{ $set: { x: '$a' } }, { $unset: ['a'] }] },
+      { models: ['Staff'], fieldStages: [{ $set: { x: '$b' } }, { $unset: ['b'] }] },
+    ]);
+  });
+
+  it('sets the discriminator value of a model that becomes a variant in the target', () => {
+    expect(
+      documentCopiesOf([
+        {
+          name: 'User',
+          storedNameMoves: [{ from: 'name', to: 'fullName' }],
+          variant: { field: 'kind', value: 'member' },
+        },
+      ]),
+    ).toEqual([
+      {
+        models: ['User'],
+        fieldStages: [
+          { $set: { fullName: '$name', kind: { $literal: 'member' } } },
+          { $unset: ['name'] },
+        ],
+      },
+    ]);
   });
 });
