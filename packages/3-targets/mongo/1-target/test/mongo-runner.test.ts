@@ -56,6 +56,7 @@ import {
   rawUpdateMany,
   renameCollection,
   renameField,
+  setValidation,
   unsetField,
 } from '../src/core/migrations/migration-factories';
 import { serializeMongoOps } from '../src/core/migrations/mongo-ops-serializer';
@@ -1074,7 +1075,7 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
       errmsg: 'PlanExecutor error during aggregation :: caused by :: Document failed validation',
     });
 
-  it('calls it a copy into that collection, and names the option that skips validation and the documents to fix', async () => {
+  it('calls it a copy into that collection, and with no later validator update names the pipeline to fix', async () => {
     const harness = makeHarness();
     harness.driver.failAggregateWith(rejected());
 
@@ -1089,13 +1090,97 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
       code: 'MIGRATION.EXECUTION_FAILED',
       message:
         'Operation data_transform.move User to members failed: the validator of collection members rejected a document the copy wrote',
-      why: "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. If a later validator update in this migration replaces the validator of collection members, add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents. Otherwise change the pipeline in the migration's migration.ts so the documents it writes fit the validator. Run the file with node, then run the command again. The operations that ran before the failure stay applied.",
+      why: "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. No later operation of this migration updates the validator of collection members, so change the pipeline in the migration's migration.ts so the documents it writes fit the validator. Run the file with node, then run the command again. The operations that ran before the failure stay applied.",
       meta: {
         operationId: 'data_transform.move User to members',
         mongoCode: 121,
         codeName: 'DocumentValidationFailure',
         collection: 'members',
       },
+    });
+  });
+
+  it('names the option that skips validation when a later operation of the migration updates the validator', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(rejected());
+
+    const result = await execute(harness, [
+      dataTransform('move User to members', {
+        run: () =>
+          rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
+      }),
+      setValidation('members', { bsonType: 'object' }),
+    ]);
+
+    expect(failureFields(result.assertNotOk()).why).toBe(
+      "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. A later operation of this migration updates the validator of collection members: add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents. Run the file with node, then run the command again. The operations that ran before the failure stay applied.",
+    );
+  });
+
+  it('names the database of a copy into another database, and gives both routes, since the migration updates validators of its own database only', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(rejected());
+
+    const result = await execute(harness, [
+      dataTransform('move User to members', {
+        run: () =>
+          rawAggregate('users', [
+            { $match: { kind: 'user' } },
+            { $merge: { into: { db: 'archive', coll: 'members' } } },
+          ]),
+      }),
+    ]);
+
+    expect(failureFields(result.assertNotOk())).toMatchObject({
+      message:
+        'Operation data_transform.move User to members failed: the validator of collection archive.members rejected a document the copy wrote',
+      why: expect.stringContaining(
+        "If a later validator update replaces the validator of collection archive.members, add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents. Otherwise change the pipeline",
+      ),
+    });
+  });
+
+  it('says an $out stage leaves its collection as it was, since it replaces the collection only when it succeeds', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(rejected());
+
+    const result = await execute(harness, [
+      dataTransform('rebuild members', {
+        run: () => rawAggregate('users', [{ $match: { kind: 'user' } }, { $out: 'members' }]),
+      }),
+    ]);
+
+    expect(failureFields(result.assertNotOk())).toMatchObject({
+      message:
+        'Operation data_transform.rebuild members failed: the validator of collection members rejected a document the $out stage wrote',
+      why: expect.stringContaining(
+        'Collection members is as it was: an $out stage replaces it only when the whole pipeline succeeds.',
+      ),
+    });
+  });
+
+  it('gives a copy that fails for another reason the advice for any data transform', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(
+      new MongoServerError({
+        ok: 0,
+        code: 11000,
+        codeName: 'DuplicateKey',
+        errmsg: 'E11000 duplicate key error',
+      }),
+    );
+
+    const result = await execute(harness, [
+      dataTransform('move User to members', {
+        run: () =>
+          rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
+      }),
+    ]);
+
+    expect(failureFields(result.assertNotOk())).toMatchObject({
+      message:
+        'Operation data_transform.move User to members failed: MongoDB error 11000 (DuplicateKey): E11000 duplicate key error',
+      why: expect.not.stringContaining('bypassDocumentValidation'),
     });
   });
 });

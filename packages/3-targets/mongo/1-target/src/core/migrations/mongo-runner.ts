@@ -1103,22 +1103,87 @@ function indexBuildFailure(
 
 const MONGO_DOCUMENT_VALIDATION = 121;
 
-/** The collection a raw aggregate's `$merge` or `$out` stage writes into, in the same database. */
-function copyTargetOf(plan: MongoQueryPlan): string | undefined {
+/** Where a data operation runs: its index in the migration's operations, the destination contract, and those operations. */
+interface DmlPosition {
+  readonly operationIndex: number;
+  readonly contract: MongoContract;
+  readonly plan: readonly AnyMongoMigrationOperation[];
+}
+
+/** The collection a raw aggregate's `$merge` or `$out` stage writes into, with its database when the stage names one. */
+interface CopyTarget {
+  readonly stage: '$merge' | '$out';
+  readonly collection: string;
+  readonly database: string | undefined;
+}
+
+function namespaceTarget(stage: CopyTarget['stage'], into: unknown): CopyTarget | undefined {
+  if (typeof into === 'string') return { stage, collection: into, database: undefined };
+  if (typeof into !== 'object' || into === null) return undefined;
+  const coll: unknown = Reflect.get(into, 'coll');
+  const db: unknown = Reflect.get(into, 'db');
+  return typeof coll === 'string'
+    ? { stage, collection: coll, database: typeof db === 'string' ? db : undefined }
+    : undefined;
+}
+
+function copyTargetOf(plan: MongoQueryPlan): CopyTarget | undefined {
   if (!(plan.command instanceof RawAggregateCommand)) return undefined;
   for (const stage of plan.command.pipeline) {
-    const target: unknown = Reflect.get(stage, '$merge') ?? Reflect.get(stage, '$out');
-    const into: unknown =
-      typeof target === 'object' && target !== null && Object.hasOwn(target, 'into')
-        ? Reflect.get(target, 'into')
-        : target;
-    if (typeof into === 'string') return into;
-    if (typeof into === 'object' && into !== null) {
-      const coll: unknown = Reflect.get(into, 'coll');
-      if (typeof coll === 'string') return coll;
+    const merge: unknown = Reflect.get(stage, '$merge');
+    if (merge !== undefined) {
+      return namespaceTarget(
+        '$merge',
+        typeof merge === 'object' && merge !== null && Object.hasOwn(merge, 'into')
+          ? Reflect.get(merge, 'into')
+          : merge,
+      );
     }
+    const out: unknown = Reflect.get(stage, '$out');
+    if (out !== undefined) return namespaceTarget('$out', out);
   }
   return undefined;
+}
+
+/**
+ * Whether a later operation of the migration updates the validator of the collection a copy writes
+ * into: `undefined` for a collection in another database, whose validator the migration's operations
+ * do not touch, so the runner cannot tell.
+ */
+function laterValidatorUpdate(
+  target: CopyTarget,
+  later: readonly AnyMongoMigrationOperation[],
+): boolean | undefined {
+  if (target.database !== undefined) return undefined;
+  return later.some(
+    (operation) =>
+      !isMongoDmlOperation(operation) &&
+      validatorSetBy(operation)?.collection === target.collection,
+  );
+}
+
+/** Why a copy failed when the validator of its target rejected a document it wrote, and the one change that fits the migration. */
+function copyRejectedWhy(
+  target: CopyTarget,
+  mongoError: string,
+  reason: string,
+  later: boolean | undefined,
+): string {
+  const name =
+    target.database === undefined ? target.collection : `${target.database}.${target.collection}`;
+  const written =
+    target.stage === '$merge'
+      ? `Documents the copy wrote before the error stay in collection ${name}, and the copy runs again on a re-run.`
+      : `Collection ${name} is as it was: an $out stage replaces it only when the whole pipeline succeeds.`;
+  const bypass = `add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents`;
+  const pipeline = `change the pipeline in the migration's migration.ts so the documents it writes fit the validator`;
+  const advice =
+    later === true
+      ? `A later operation of this migration updates the validator of collection ${name}: ${bypass}.`
+      : later === false
+        ? `No later operation of this migration updates the validator of collection ${name}, so ${pipeline}.`
+        : `If a later validator update replaces the validator of collection ${name}, ${bypass}. Otherwise ${pipeline}.`;
+  return `MongoDB error ${mongoError}: ${reason}. ${written} ${advice} Run the file with node, then run the command again.`;
 }
 
 /**
@@ -1131,7 +1196,7 @@ function rewriteFailure(
   op: MongoDmlOperation,
   plan: MongoQueryPlan,
   error: unknown,
-  position: { readonly operationIndex: number; readonly contract: MongoContract },
+  position: DmlPosition,
 ): MongoMigrationRunnerResult | undefined {
   if (typeof error !== 'object' || error === null) return undefined;
   const mongoCode: unknown = Reflect.get(error, 'code');
@@ -1140,18 +1205,27 @@ function rewriteFailure(
   const mongoError = typeof codeName === 'string' ? `${mongoCode} (${codeName})` : `${mongoCode}`;
   const reason = mongoErrorText(error);
   if (op.operationClass === 'data') {
-    const copiedInto = mongoCode === MONGO_DOCUMENT_VALIDATION ? copyTargetOf(plan) : undefined;
-    if (copiedInto !== undefined) {
+    const target = mongoCode === MONGO_DOCUMENT_VALIDATION ? copyTargetOf(plan) : undefined;
+    if (target !== undefined) {
+      const name =
+        target.database === undefined
+          ? target.collection
+          : `${target.database}.${target.collection}`;
       return runnerFailure(
         'MIGRATION.EXECUTION_FAILED',
-        `Operation ${op.id} failed: the validator of collection ${copiedInto} rejected a document the copy wrote`,
+        `Operation ${op.id} failed: the validator of collection ${name} rejected a document ${target.stage === '$merge' ? 'the copy' : 'the $out stage'} wrote`,
         {
-          why: `MongoDB error ${mongoError}: ${reason}. Documents the copy wrote before the error stay in collection ${copiedInto}, and the copy runs again on a re-run. If a later validator update in this migration replaces the validator of collection ${copiedInto}, add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents. Otherwise change the pipeline in the migration's migration.ts so the documents it writes fit the validator. Run the file with node, then run the command again.`,
+          why: copyRejectedWhy(
+            target,
+            mongoError,
+            reason,
+            laterValidatorUpdate(target, position.plan.slice(position.operationIndex + 1)),
+          ),
           meta: {
             operationId: op.id,
             mongoCode,
             ...(typeof codeName === 'string' ? { codeName } : {}),
-            collection: copiedInto,
+            collection: name,
           },
         },
       );
@@ -1297,7 +1371,7 @@ export class MongoMigrationRunner {
             runPrechecks,
             runPostchecks,
             wrote,
-            { operationIndex, contract: options.destinationContract },
+            { operationIndex, contract: options.destinationContract, plan: operations },
           );
           if (result.failure) return result.failure;
           if (result.executed) operationsExecuted += 1;
@@ -1532,7 +1606,7 @@ export class MongoMigrationRunner {
     runPrechecks: boolean,
     runPostchecks: boolean,
     wrote: () => void,
-    position: { readonly operationIndex: number; readonly contract: MongoContract },
+    position: DmlPosition,
   ): Promise<{ executed: boolean; failure?: MongoMigrationRunnerResult }> {
     if (runPostchecks && runIdempotency && op.postcheck.length > 0) {
       const allSatisfied = await this.evaluateDmlChecks(op.postcheck, filterEvaluator);
