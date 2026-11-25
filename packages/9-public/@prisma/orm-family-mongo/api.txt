@@ -684,6 +684,7 @@
 ./contract-ts: type RestatedFieldDifference = 'many' | 'nullable' | 'storedName' | 'type'
 ./contract/canonicalization-hooks: const mongoContractCanonicalizationHooks: { readonly shouldPreserveEmpty: PreserveEmptyPredicate; }
 ./contract/data-type: function bsonTypesOfCodec(codecId: string, lookups: TypeLookups): readonly string[] | undefined
+./contract/data-type: function codecStoresValue(codecId: string, json: JsonValue, lookups: TypeLookups): boolean
 ./contract/data-type: function codecTypeParamsProblem(codecId: string, typeParams: Readonly<Record<string, unknown>>, lookups: TypeLookups): DataTypeParamsProblem | undefined
 ./contract/data-type: function isMongoDataType(type: DataType): type is MongoDataType
 ./contract/data-type: function mongoDataType(id: string, spec: MongoDataTypeSpec): MongoDataType
