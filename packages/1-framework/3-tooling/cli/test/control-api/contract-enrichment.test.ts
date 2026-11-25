@@ -130,6 +130,27 @@ describe('enrichContract', () => {
     );
   });
 
+  it('writes and hashes only enabled flags, so a namespace whose flags are all false is left out of both', () => {
+    const ir = makeIR();
+    const adapter = makeAdapter({
+      capabilities: { postgres: { lateral: true, returning: false } },
+    });
+    const extension = makeExtension({
+      capabilities: { pgvector: { cosine: false } },
+    });
+
+    const result = enrichContract(ir, [adapter, extension]);
+
+    expect(result.capabilities).toEqual({ postgres: { lateral: true } });
+    expect(result.profileHash).toBe(
+      computeProfileHash({
+        target: 'postgres',
+        targetFamily: 'sql',
+        capabilities: { postgres: { lateral: true } },
+      }),
+    );
+  });
+
   it('extracts extension pack metadata from extension descriptors', () => {
     const extension = makeExtension({
       id: 'pgvector',

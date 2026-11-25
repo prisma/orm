@@ -29,6 +29,17 @@ function sortDeepTyped<T>(value: T): T {
   return sortDeep(value) as T;
 }
 
+function enabledCapabilities(
+  matrix: Record<string, Record<string, boolean>>,
+): Record<string, Record<string, boolean>> {
+  return Object.fromEntries(
+    Object.entries(matrix).flatMap(([namespace, flags]) => {
+      const enabled = Object.entries(flags).filter(([, flag]) => flag);
+      return enabled.length > 0 ? [[namespace, Object.fromEntries(enabled)]] : [];
+    }),
+  );
+}
+
 const TYPE_IMPORT_MEMBERS_THE_EMITTER_READS_FROM_THE_DESCRIPTOR = [
   'import',
   'typeImports',
@@ -82,13 +93,15 @@ function extractExtensionPackMeta(
 }
 
 /**
- * Enriches a raw contract with framework-derived metadata: capabilities from all component descriptors, the profile hash of those capabilities, and extension pack metadata from extension descriptors. Produces deterministically sorted output.
+ * Enriches a raw contract with framework-derived metadata: the enabled capabilities of all component descriptors, the profile hash of those capabilities, and extension pack metadata from extension descriptors. Produces deterministically sorted output.
  */
 export function enrichContract(
   ir: Contract,
   components: ReadonlyArray<TargetBoundComponentDescriptor<string, string>>,
 ): Contract {
-  const capabilities = sortDeepTyped(mergeCapabilityMatrices(ir.capabilities, components));
+  const capabilities = sortDeepTyped(
+    enabledCapabilities(mergeCapabilityMatrices(ir.capabilities, components)),
+  );
 
   const extensionsMeta: Record<string, unknown> = {};
   for (const component of components) {
