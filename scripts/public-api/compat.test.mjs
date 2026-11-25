@@ -19,7 +19,7 @@ describe('checkPackage, with the release treated as GA', () => {
       exports: 8,
       forwarded: 0,
       notCompared: 0,
-      tests: 9,
+      tests: 10,
     });
   });
 
@@ -58,6 +58,37 @@ describe('checkPackage, with the release treated as GA', () => {
   it('fails when a class is made abstract', () => {
     deepStrictEqual(brokenExports(check('class-made-abstract')), [
       { path: '.', name: 'Client', test: 'value', failsRun: true },
+    ]);
+  });
+
+  it('fails when a constructor parameter is narrowed', () => {
+    deepStrictEqual(
+      brokenExports(check('constructor-narrowed', { release: 'constructor-release' })),
+      [{ path: '.', name: 'Client', test: 'constructor', failsRun: true }],
+    );
+  });
+
+  it('passes a class whose private members changed, in TypeScript’s own comparison', () => {
+    const result = check('private-changed');
+    deepStrictEqual(brokenExports(result), []);
+    deepStrictEqual(result.undecided, []);
+    deepStrictEqual(result.fallbacks, []);
+  });
+
+  it('tells apart two unique symbols with one name in two modules', () => {
+    deepStrictEqual(brokenExports(check('symbols-release', { release: 'symbols-release' })), []);
+    deepStrictEqual(brokenExports(check('symbols-changed', { release: 'symbols-release' })), [
+      { path: '.', name: 'Both', test: 'type', failsRun: true },
+    ]);
+  });
+
+  it('passes a generic signature TypeScript cannot relate between two copies, without calling it a break', () => {
+    const result = check('generic', { release: 'generic' });
+    deepStrictEqual(brokenExports(result), []);
+    deepStrictEqual(result.undecided, []);
+    deepStrictEqual(result.problems, []);
+    deepStrictEqual(result.fallbacks, [
+      { path: '.', name: 'required', test: 'value', passedIn: 'erase' },
     ]);
   });
 
@@ -114,9 +145,37 @@ describe('checkPackage on types too deep to compare', () => {
     match(undecided.at(-1).message, /the time for comparing it again ran out/);
   });
 
+  it('reports a comparison too deep to finish as undecided, and compares the rest again', () => {
+    const { breaks, undecided } = check('deep', { release: 'deep' });
+    deepStrictEqual(breaks, []);
+    deepStrictEqual(names(undecided), ['. Big type']);
+  });
+
+  it('reports the tests after one too deep as undecided when there is no time to compare them again', () => {
+    const { undecided } = check('deep', { release: 'deep', budgetMs: 0 });
+    deepStrictEqual(names(undecided), ['. Big type', '. Holder type']);
+    match(undecided.at(-1).message, /the time for comparing it again ran out/);
+  });
+
   it('reports a break that sits beside a comparison too deep to finish', () => {
     const { breaks } = check('row-changed', { release: 'row-release' });
     deepStrictEqual(names(breaks), ['. Row type']);
+  });
+});
+
+describe('checkPackage on third-party packages', () => {
+  it('reads one copy of a third-party version that is installed twice, with different peers', () => {
+    const copy = (side) => ({ side, folder: 'third-party', name: 'fixture-third-party' });
+    const result = check('third-party-user', {
+      release: 'third-party-user',
+      installed: [
+        copy('release'),
+        copy('current'),
+        { side: 'current', folder: 'third-party-peer', name: 'fixture-peer' },
+      ],
+    });
+    deepStrictEqual(brokenExports(result), []);
+    deepStrictEqual(result.fallbacks, []);
   });
 });
 

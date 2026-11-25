@@ -1,0 +1,12 @@
+{
+  "name": "fixture-compat",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "fixture-third-party": "1.0.0"
+  }
+}
