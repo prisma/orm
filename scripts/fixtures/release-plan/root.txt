@@ -5,17 +5,17 @@
 @prisma/orm-extension-pgvector          ga           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-target-postgres <root>, @prisma/orm-toolchain <root>
 @prisma/orm-extension-postgis           ga           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-target-postgres <root>, @prisma/orm-toolchain <root>
 @prisma/orm-extension-supabase          preview      <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-postgres <root>, @prisma/orm-target-postgres <root>, @prisma/orm-toolchain <root>
-@prisma/orm-family-mongo                preview      <root>  latest  @prisma/orm-framework <root>, @prisma/orm-toolchain <root>
+@prisma/orm-family-mongo                ea           <root>  latest  @prisma/orm-framework <root>, @prisma/orm-toolchain <root>
 @prisma/orm-family-sql                  ga           <root>  latest  @prisma/orm-framework <root>, @prisma/orm-toolchain <root>
 @prisma/orm-framework                   ga           <root>  latest  -
 @prisma/orm-mariadb                     ea           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-mysql <root>, @prisma/orm-target-mariadb <root>, @prisma/orm-target-mysql <root>, @prisma/orm-toolchain <root>
-@prisma/orm-mongo                       preview      <root>  latest  @prisma/orm-family-mongo <root>, @prisma/orm-framework <root>, @prisma/orm-target-mongo <root>, @prisma/orm-toolchain <root>
+@prisma/orm-mongo                       ea           <root>  latest  @prisma/orm-family-mongo <root>, @prisma/orm-framework <root>, @prisma/orm-target-mongo <root>, @prisma/orm-toolchain <root>
 @prisma/orm-mysql                       ea           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-target-mysql <root>, @prisma/orm-toolchain <root>
 @prisma/orm-postgres                    ga           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-target-postgres <root>, @prisma/orm-toolchain <root>
 @prisma/orm-postgres-contrib            ga           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-target-postgres <root>, @prisma/orm-toolchain <root>
 @prisma/orm-sqlite                      ea           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-target-sqlite <root>, @prisma/orm-toolchain <root>
 @prisma/orm-target-mariadb              ea           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-target-mysql <root>
-@prisma/orm-target-mongo                preview      <root>  latest  @prisma/orm-family-mongo <root>, @prisma/orm-framework <root>, @prisma/orm-toolchain <root>
+@prisma/orm-target-mongo                ea           <root>  latest  @prisma/orm-family-mongo <root>, @prisma/orm-framework <root>, @prisma/orm-toolchain <root>
 @prisma/orm-target-mysql                ea           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-toolchain <root>
 @prisma/orm-target-postgres             ga           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-toolchain <root>
 @prisma/orm-target-sqlite               ea           <root>  latest  @prisma/orm-family-sql <root>, @prisma/orm-framework <root>, @prisma/orm-toolchain <root>

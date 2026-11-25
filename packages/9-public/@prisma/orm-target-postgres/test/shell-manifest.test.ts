@@ -188,7 +188,7 @@ describe('the shell build checks a shell manifest against its bundle', () => {
 
       expect(() =>
         validateShellManifest('@prisma/orm-postgres', facadeManifest(), scratch, '8.1.0'),
-      ).toThrow('@prisma/orm-postgres (ga) names @prisma/orm-mongo (preview)');
+      ).toThrow('@prisma/orm-postgres (ga) names @prisma/orm-mongo (ea)');
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }

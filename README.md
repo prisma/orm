@@ -99,7 +99,7 @@ See [Using extensions](https://www.prisma.io/docs/orm/extensions/using-extension
 Every package but `@prisma/orm-extension-paradedb`, which has its own version, has a [maturity level](./docs/oss/versioning.md#maturity-levels) from `8.0.0`: Generally Available, Release Candidate, Preview or Early Access. Until then every package is a release candidate.
 
 - **PostgreSQL**: Generally Available from `8.0.0`
-- **MongoDB**: Preview from `8.0.0`
+- **MongoDB**: Early Access from `8.0.0`
 - **SQLite**: Early Access from `8.0.0`
 - **MySQL**: Early Access from `8.0.0`, MySQL 8.4 and later ([`@prisma/orm-mysql`](./packages/9-public/@prisma/orm-mysql/README.md))
 - **MariaDB**: Early Access from `8.0.0`, MariaDB 10.11 and later ([`@prisma/orm-mariadb`](./packages/9-public/@prisma/orm-mariadb/README.md))

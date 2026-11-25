@@ -73,7 +73,7 @@ describe('validate package READMEs', () => {
       const wrong = run();
       writeFileSync(
         join(dir, 'README.md'),
-        '# @prisma/orm-mongo\n\n> **Maturity level: Preview.**\n',
+        '# @prisma/orm-mongo\n\n> **Maturity level: Early Access.**\n',
       );
       const right = run();
 
