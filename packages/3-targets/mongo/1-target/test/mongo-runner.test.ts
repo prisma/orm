@@ -52,6 +52,7 @@ import {
   createCollection,
   createIndex,
   dataTransform,
+  rawAggregate,
   rawUpdateMany,
   renameCollection,
   renameField,
@@ -85,12 +86,16 @@ class EventLog {
 class StubMongoDriver implements MongoQueryable {
   readonly executeCalls: WireCommand[] = [];
   private readonly responses: Row[][] = [];
-  private failure: unknown;
+  private failure: { readonly kind: WireCommand['kind']; readonly error: unknown } | undefined;
 
   constructor(private readonly log?: EventLog) {}
 
   failUpdateManyWith(error: unknown): void {
-    this.failure = error;
+    this.failure = { kind: 'updateMany', error };
+  }
+
+  failAggregateWith(error: unknown): void {
+    this.failure = { kind: 'aggregate', error };
   }
 
   queueResponse(rows: Row[]): void {
@@ -100,7 +105,7 @@ class StubMongoDriver implements MongoQueryable {
   execute<R>(wireCommand: WireCommand): AsyncIterable<R> {
     this.executeCalls.push(wireCommand);
     this.log?.record(`dml:${wireCommand.kind}:${wireCommand.collection}`);
-    const failure = wireCommand.kind === 'updateMany' ? this.failure : undefined;
+    const failure = wireCommand.kind === this.failure?.kind ? this.failure.error : undefined;
     const rows = failure === undefined ? (this.responses.shift() ?? []) : [];
     return (async function* () {
       if (failure !== undefined) throw failure;
@@ -931,7 +936,7 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
       code: 'MIGRATION.EXECUTION_FAILED',
       message:
         'Operation field.users.nickname.unset failed: the database user may not skip document validation',
-      why: 'Rewriting documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
+      why: 'Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
       meta: {
         operationId: 'field.users.nickname.unset',
         mongoCode: 13,
@@ -1018,6 +1023,26 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
     expect(result.assertNotOk().message).toBe(
       'Operation data_transform.User.age failed: the database user may not skip document validation',
     );
+  });
+
+  it('gives a data transform whose copy skips validation the same advice', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(unauthorized());
+
+    const result = await execute(harness, [
+      dataTransform('move User to members', {
+        run: () =>
+          rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }], {
+            bypassDocumentValidation: true,
+          }),
+      }),
+    ]);
+
+    expect(failureFields(result.assertNotOk())).toMatchObject({
+      message:
+        'Operation data_transform.move User to members failed: the database user may not skip document validation',
+      why: 'Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
+    });
   });
 
   it("names any other failure of a data transform's update, with the user's update as the place to fix it", async () => {

@@ -139,12 +139,23 @@ export function dataTransform(
   };
 }
 
-/** A raw `aggregate` on a collection, as a data transform's check reads documents. */
+/**
+ * A raw `aggregate` on a collection. It is a read, as a data transform's check makes, or a write
+ * when the pipeline ends in `$merge` or `$out`, which can skip document validation as `rawUpdateMany` can.
+ */
 export function rawAggregate(
   collectionName: string,
   pipeline: readonly Document[],
+  options?: { readonly bypassDocumentValidation?: boolean },
 ): MongoQueryPlan {
-  return rewritePlan(collectionName, new RawAggregateCommand(collectionName, pipeline));
+  return rewritePlan(
+    collectionName,
+    new RawAggregateCommand(
+      collectionName,
+      pipeline,
+      ifDefined('bypassDocumentValidation', options?.bypassDocumentValidation),
+    ),
+  );
 }
 
 /**

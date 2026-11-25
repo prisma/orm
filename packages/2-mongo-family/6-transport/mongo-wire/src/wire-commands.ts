@@ -157,10 +157,17 @@ export class FindOneAndDeleteWireCommand extends MongoWireCommand {
 export class AggregateWireCommand extends MongoWireCommand {
   readonly kind = 'aggregate' as const;
   readonly pipeline: RawPipeline;
+  /** Present only when `true`, so every other aggregate keeps its fields and content hash. */
+  declare readonly bypassDocumentValidation?: true;
 
-  constructor(collection: string, pipeline: RawPipeline) {
+  constructor(
+    collection: string,
+    pipeline: RawPipeline,
+    options?: { readonly bypassDocumentValidation?: boolean },
+  ) {
     super(collection);
     this.pipeline = pipeline;
+    if (options?.bypassDocumentValidation === true) this.bypassDocumentValidation = true;
     this.freeze();
   }
 }

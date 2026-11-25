@@ -216,6 +216,7 @@ const RawAggregateJson = type({
   kind: '"rawAggregate"',
   collection: 'string',
   pipeline: 'Record<string, unknown>[]',
+  'bypassDocumentValidation?': 'boolean',
 });
 
 const RawFindOneAndUpdateJson = type({
@@ -646,7 +647,11 @@ export function deserializeDmlCommand(json: unknown): AnyMongoCommand {
     }
     case 'rawAggregate': {
       const data = validate(RawAggregateJson, json, 'rawAggregate command');
-      return new RawAggregateCommand(data.collection, data.pipeline);
+      return new RawAggregateCommand(
+        data.collection,
+        data.pipeline,
+        ifDefined('bypassDocumentValidation', data.bypassDocumentValidation),
+      );
     }
     case 'rawFindOneAndUpdate': {
       const data = validate(RawFindOneAndUpdateJson, json, 'rawFindOneAndUpdate command');

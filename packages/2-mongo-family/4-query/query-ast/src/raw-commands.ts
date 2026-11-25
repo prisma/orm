@@ -1,15 +1,26 @@
 import type { Document } from '@internal/mongo-value';
 import { MongoAstNode } from './ast-node';
 
+export interface RawAggregateOptions {
+  readonly bypassDocumentValidation?: boolean;
+}
+
 export class RawAggregateCommand extends MongoAstNode {
   readonly kind = 'rawAggregate' as const;
   readonly collection: string;
   readonly pipeline: ReadonlyArray<Document>;
+  declare readonly bypassDocumentValidation?: boolean;
 
-  constructor(collection: string, pipeline: ReadonlyArray<Document>) {
+  constructor(
+    collection: string,
+    pipeline: ReadonlyArray<Document>,
+    options?: RawAggregateOptions,
+  ) {
     super();
     this.collection = collection;
     this.pipeline = pipeline;
+    if (options?.bypassDocumentValidation !== undefined)
+      this.bypassDocumentValidation = options.bypassDocumentValidation;
     this.freeze();
   }
 }

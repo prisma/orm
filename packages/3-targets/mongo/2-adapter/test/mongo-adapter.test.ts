@@ -257,6 +257,28 @@ describe('MongoAdapter', () => {
       const wire = narrowWire(await adapter.lower(plan('orders', command), {}), 'aggregate');
       expect(wire.pipeline).toEqual(pipeline);
     });
+
+    it('passes bypassDocumentValidation through to the wire command only when set', async () => {
+      const pipeline = [{ $match: {} }, { $merge: { into: 'members' } }];
+      const bypassing = narrowWire(
+        await adapter.lower(
+          plan(
+            'users',
+            new RawAggregateCommand('users', pipeline, { bypassDocumentValidation: true }),
+          ),
+          {},
+        ),
+        'aggregate',
+      );
+      const plain = narrowWire(
+        await adapter.lower(plan('users', new RawAggregateCommand('users', pipeline)), {}),
+        'aggregate',
+      );
+      expect({
+        bypassing: bypassing.bypassDocumentValidation,
+        plainHasKey: 'bypassDocumentValidation' in plain,
+      }).toEqual({ bypassing: true, plainHasKey: false });
+    });
   });
 
   describe('RawInsertOneCommand', () => {

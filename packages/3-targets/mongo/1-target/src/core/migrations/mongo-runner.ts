@@ -948,7 +948,7 @@ function touchedSentence(
 const MONGO_UNAUTHORIZED = 13;
 
 /**
- * The failure for a rewrite that skips validation when the database user lacks the
+ * The failure for a rewrite or a copy that skips validation when the database user lacks the
  * `bypassDocumentValidation` action, as a `readWrite` user on a hosted cluster does.
  */
 function bypassValidationRefusal(
@@ -956,9 +956,10 @@ function bypassValidationRefusal(
   plan: MongoQueryPlan,
   error: unknown,
 ): MongoMigrationRunnerResult | undefined {
-  if (!(plan.command instanceof RawUpdateManyCommand) || !plan.command.bypassDocumentValidation) {
-    return undefined;
-  }
+  const skipsValidation =
+    (plan.command instanceof RawUpdateManyCommand || plan.command instanceof RawAggregateCommand) &&
+    plan.command.bypassDocumentValidation === true;
+  if (!skipsValidation) return undefined;
   if (typeof error !== 'object' || error === null) return undefined;
   if (Reflect.get(error, 'code') !== MONGO_UNAUTHORIZED) return undefined;
   const codeName: unknown = Reflect.get(error, 'codeName');
@@ -966,7 +967,7 @@ function bypassValidationRefusal(
     'MIGRATION.EXECUTION_FAILED',
     `Operation ${op.id} failed: the database user may not skip document validation`,
     {
-      why: `Rewriting documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error ${MONGO_UNAUTHORIZED} (${String(codeName)}). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped.`,
+      why: `Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error ${MONGO_UNAUTHORIZED} (${String(codeName)}). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped.`,
       meta: {
         operationId: op.id,
         mongoCode: MONGO_UNAUTHORIZED,

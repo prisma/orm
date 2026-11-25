@@ -74,6 +74,18 @@ describe('RawUpdateOneCommand', () => {
     expect(cmd.update).toEqual(update);
   });
 
+  it('carries bypassDocumentValidation on an aggregate only when given', () => {
+    const pipeline = [{ $match: {} }, { $merge: { into: 'members' } }];
+    const plain = new RawAggregateCommand('users', pipeline);
+    const bypassing = new RawAggregateCommand('users', pipeline, {
+      bypassDocumentValidation: true,
+    });
+    expect({
+      plainHasKey: 'bypassDocumentValidation' in plain,
+      bypassing: bypassing.bypassDocumentValidation,
+    }).toEqual({ plainHasKey: false, bypassing: true });
+  });
+
   it('carries bypassDocumentValidation only when given', () => {
     const plain = new RawUpdateManyCommand('users', filter, update);
     const bypassing = new RawUpdateManyCommand('users', filter, update, {

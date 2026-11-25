@@ -230,7 +230,10 @@ export class MongoDriverImpl implements MongoQueryable {
 
   protected async *executeAggregateCommand<Row>(cmd: AggregateWireCommand): AsyncIterable<Row> {
     const collection = this.db.collection(cmd.collection);
-    const cursor = collection.aggregate(cmd.pipeline as Record<string, unknown>[]);
+    const cursor = collection.aggregate(
+      cmd.pipeline as Record<string, unknown>[],
+      cmd.bypassDocumentValidation ? { bypassDocumentValidation: true } : {},
+    );
     yield* cursor as AsyncIterable<Row>;
   }
 

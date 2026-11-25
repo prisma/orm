@@ -205,6 +205,44 @@ describe('MongoDriver', () => {
       expect(docs).toEqual([{ fullName: 'Ada' }]);
     });
 
+    it('skips validation of a $merge when the aggregate sets bypassDocumentValidation', async () => {
+      const db = seedClient.db(dbName);
+      const driver = MongoDriverImpl.fromDb(db);
+      const source = 'driver_aggregate_bypass_source';
+      const closed = 'driver_aggregate_bypass_target';
+      await db.dropCollection(source).catch(() => undefined);
+      await db.dropCollection(closed).catch(() => undefined);
+      await db.createCollection(closed, {
+        validator: {
+          $jsonSchema: {
+            bsonType: 'object',
+            required: ['name'],
+            properties: { _id: { bsonType: 'objectId' }, name: { bsonType: 'string' } },
+            additionalProperties: false,
+          },
+        },
+        validationLevel: 'strict',
+        validationAction: 'error',
+      });
+      await db.collection(source).insertOne({ fullName: 'Ada' });
+      const pipeline = [{ $match: {} }, { $merge: { into: closed } }];
+
+      await expect(
+        collect(driver.execute(new AggregateWireCommand(source, pipeline))),
+      ).rejects.toThrow(/Document failed validation/);
+      await collect(
+        driver.execute(
+          new AggregateWireCommand(source, pipeline, { bypassDocumentValidation: true }),
+        ),
+      );
+
+      const docs = await db
+        .collection(closed)
+        .find({}, { projection: { _id: 0 } })
+        .toArray();
+      expect(docs).toEqual([{ fullName: 'Ada' }]);
+    });
+
     it('updates multiple documents and returns counts', async () => {
       const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {

@@ -160,7 +160,12 @@ class MongoAdapterImpl implements MongoAdapter {
           pipeline: structuralLowerPipeline(command.pipeline),
         };
       case 'rawAggregate':
-        return { kind: 'rawAggregate', collection: command.collection, pipeline: command.pipeline };
+        return {
+          kind: 'rawAggregate',
+          collection: command.collection,
+          pipeline: command.pipeline,
+          ...(command.bypassDocumentValidation === true ? { bypassDocumentValidation: true } : {}),
+        };
       case 'rawInsertOne':
         return {
           kind: 'rawInsertOne',
@@ -287,7 +292,11 @@ class MongoAdapterImpl implements MongoAdapter {
           ),
         );
       case 'rawAggregate':
-        return new AggregateWireCommand(draft.collection, draft.pipeline);
+        return new AggregateWireCommand(
+          draft.collection,
+          draft.pipeline,
+          draft.bypassDocumentValidation === true ? { bypassDocumentValidation: true } : undefined,
+        );
       case 'rawInsertOne':
         return new InsertOneWireCommand(draft.collection, draft.document);
       case 'rawInsertMany':

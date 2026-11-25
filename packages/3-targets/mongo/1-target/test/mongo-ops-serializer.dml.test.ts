@@ -145,6 +145,30 @@ describe('deserializeDmlCommand', () => {
       });
     });
 
+    it('round-trips bypassDocumentValidation on rawAggregate, and reads a rawAggregate without it', () => {
+      const pipeline = [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }];
+      const bypassing = deserializeDmlCommand(
+        JSON.parse(
+          JSON.stringify(
+            new RawAggregateCommand('users', pipeline, { bypassDocumentValidation: true }),
+          ),
+        ),
+      );
+      const plain = deserializeDmlCommand({ kind: 'rawAggregate', collection: 'users', pipeline });
+      expect({
+        bypassing: JSON.parse(JSON.stringify(bypassing)),
+        plain: JSON.parse(JSON.stringify(plain)),
+      }).toEqual({
+        bypassing: {
+          kind: 'rawAggregate',
+          collection: 'users',
+          pipeline,
+          bypassDocumentValidation: true,
+        },
+        plain: { kind: 'rawAggregate', collection: 'users', pipeline },
+      });
+    });
+
     it('round-trips rawFindOneAndUpdate', () => {
       const cmd = new RawFindOneAndUpdateCommand(
         'users',

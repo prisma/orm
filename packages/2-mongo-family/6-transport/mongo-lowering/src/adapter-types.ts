@@ -119,6 +119,7 @@ export type MongoLoweredDraft =
       readonly kind: 'rawAggregate';
       readonly collection: string;
       readonly pipeline: ReadonlyArray<Record<string, unknown>>;
+      readonly bypassDocumentValidation?: true;
     };
 
 /** Wraps a DDL command for passage to `MongoAdapter.lower`. */
