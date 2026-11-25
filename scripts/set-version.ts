@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { planWorkspace, releaseOfRootVersion } from './release-plan-workspace.ts';
 import {
-  participatesInLockstep,
+  lockstepManifest,
   restampExtensionVersion,
   rewriteManifestByPlan,
   rewriteWorkspaceDepsByPlan,
@@ -87,8 +87,8 @@ const trackedManifests = execSync("git ls-files -- '*package.json'", {
   .filter((abs) => !memberPaths.has(abs));
 
 for (const manifestPath of trackedManifests) {
-  const packageJson: PackageJson = JSON.parse(await fs.readFile(manifestPath, 'utf-8'));
-  if (!participatesInLockstep(packageJson)) continue;
+  const packageJson = lockstepManifest(await fs.readFile(manifestPath, 'utf-8'));
+  if (packageJson === undefined) continue;
   packageJson.version = version;
   rewriteWorkspaceDepsByPlan(packageJson, {
     rootVersion: version,

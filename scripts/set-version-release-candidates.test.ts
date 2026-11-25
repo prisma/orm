@@ -6,8 +6,8 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { planWorkspace, releaseOfRootVersion } from './release-plan-workspace.ts';
 import {
+  lockstepManifest,
   type MutablePackageJson,
-  participatesInLockstep,
   rewriteManifestByPlan,
   rewriteWorkspaceDepsByPlan,
 } from './set-version-utils.ts';
@@ -57,7 +57,7 @@ describe('set-version on the 8.0.0 release candidates writes what one version fo
       for (const path of tracked) {
         const text = readFileSync(path, 'utf-8');
         const isMember = members.has(path);
-        if (!isMember && !participatesInLockstep(JSON.parse(text))) continue;
+        if (!isMember && lockstepManifest(text) === undefined) continue;
         const expected: MutablePackageJson = JSON.parse(text);
         oneVersionForAll(expected, version);
         const written: MutablePackageJson = JSON.parse(text);
