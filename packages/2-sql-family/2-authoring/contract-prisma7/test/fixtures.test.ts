@@ -7,7 +7,7 @@ import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { basename, dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { prisma7Contract } from '../src/provider';
-import { composedExtensionsOf, postgresSourceContextWithPacks } from './support';
+import { composedExtensionsOf, postgresSourceContext } from './support';
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const update = process.env['UPDATE_PRISMA7_FIXTURES'] === '1';
@@ -40,6 +40,10 @@ const cases = readdirSync(fixturesDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
   .sort();
+
+const casesWithoutPacks = cases.filter(
+  (caseName) => composedExtensionsOf(join(fixturesDir, caseName)).length === 0,
+);
 
 describe('Prisma 7 fixtures', () => {
   it('has a case per rule row', () => {
@@ -159,19 +163,14 @@ describe('Prisma 7 fixtures', () => {
     ]);
   });
 
-  for (const caseName of cases) {
+  for (const caseName of casesWithoutPacks) {
     it(caseName, async () => {
       const directory = join(fixturesDir, caseName, 'schema');
       const schemaPath = existsSync(directory)
         ? directory
         : join(fixturesDir, caseName, 'schema.prisma');
       const config = prisma7Contract(schemaPath, { binding: prisma7PostgresBinding });
-      const result = await config.source.load(
-        await postgresSourceContextWithPacks(
-          [schemaPath],
-          composedExtensionsOf(join(fixturesDir, caseName)),
-        ),
-      );
+      const result = await config.source.load(postgresSourceContext([schemaPath]));
       const diagnosticsPath = expectedPath(caseName, 'expected-diagnostics.json');
       const contractPath = expectedPath(caseName, 'expected-contract.json');
 

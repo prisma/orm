@@ -26,7 +26,7 @@ pnpm dlx prisma@7.10.0 migrate diff --from-empty --to-schema schema.prisma --scr
 
 Copy the resulting `migration.sql` into the case folder unchanged.
 
-A case with a `composed-extensions.json`, a list of extension pack ids, is read with those packs composed, here and in the integration test.
+A case with a `composed-extensions.json`, a list of extension pack ids, is read with those packs composed. This package cannot depend on an extension pack, so its fixture test leaves such a case out; the integration package checks its expected contract (`composed-pack-fixtures.integration.test.ts`) and verifies it against the database (`interpreter-fixtures.integration.test.ts`).
 
 `extensions-schema` and `extensions-pack-composed-in-schema` add `CREATE SCHEMA IF NOT EXISTS "extensions"` at the top of their `migration.sql`: Prisma 7.10.0 does not create a schema that only an extension uses, so its SQL fails on an empty database without it.
 

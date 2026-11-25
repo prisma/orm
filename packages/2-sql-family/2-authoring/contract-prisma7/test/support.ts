@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import type { ContractSourceContext } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
@@ -47,32 +47,10 @@ export function postgresSourceContext(
   };
 }
 
-/** The extension pack ids a fixture's `composed-extensions.json` lists; none when the fixture has no such file. */
+/** The extension pack ids a fixture's `composed-extensions.json` lists; none when the fixture has no such file. The integration package reads those fixtures with the packs composed. */
 export function composedExtensionsOf(caseDirectory: string): readonly string[] {
   const path = join(caseDirectory, 'composed-extensions.json');
   return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as string[]) : [];
-}
-
-const extensionPacksDir = join(fixturesDir, '../../../../../3-extensions');
-
-/**
- * The control descriptor of the extension pack `packId`, loaded from the pack's build output by id: the pack depends on this package through the Postgres facade, so it cannot be a dependency here.
- */
-async function packDescriptor(
-  packId: string,
-): Promise<ControlExtensionDescriptor<'sql', 'postgres'>> {
-  const module: { readonly default: ControlExtensionDescriptor<'sql', 'postgres'> } = await import(
-    pathToFileURL(join(extensionPacksDir, packId, 'dist/control.mjs')).href
-  );
-  return module.default;
-}
-
-/** The composition `prisma contract emit` builds for a Postgres config with the extension packs whose ids are `packIds`. */
-export async function postgresSourceContextWithPacks(
-  resolvedInputs: readonly string[],
-  packIds: readonly string[],
-): Promise<ContractSourceContext> {
-  return postgresSourceContext(resolvedInputs, await Promise.all(packIds.map(packDescriptor)));
 }
 
 /** The Postgres composition with one default function unregistered. */

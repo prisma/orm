@@ -9,21 +9,13 @@
  * use for it: the contract's, or the one the planner derives.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import postgresAdapter from '@internal/adapter-postgres/control';
-import type { Contract } from '@internal/contract/types';
-import postgresDriver from '@internal/driver-postgres/control';
-import sql from '@internal/family-sql/control';
-import { createControlStack } from '@internal/framework-components/control';
-import type { SqlStorage } from '@internal/sql-contract/types';
-import { prisma7Contract } from '@internal/sql-contract-prisma7/provider';
-import postgres from '@internal/target-postgres/control';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { withClient } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { runSchemaVerify, timeouts, useDevDatabase } from '../family.schema-verify.helpers';
-import { fixtureExtensionPacks, prisma7FixturesDir } from './fixture-extension-packs';
+import { interpretPrisma7Fixture, prisma7FixturesDir } from './fixture-extension-packs';
 
 const fixturesDir = prisma7FixturesDir;
 
@@ -107,38 +99,6 @@ async function databaseConstraintNames(
   return Object.fromEntries(keys.map((key) => [key, found.get(key)]));
 }
 
-function schemaPathOf(fixture: string): string {
-  const directory = join(fixturesDir, fixture, 'schema');
-  return existsSync(directory) ? directory : join(fixturesDir, fixture, 'schema.prisma');
-}
-
-async function interpret(fixture: string): Promise<Contract<SqlStorage>> {
-  const schemaPath = schemaPathOf(fixture);
-  const stack = createControlStack({
-    family: sql,
-    target: postgres,
-    adapter: postgresAdapter,
-    driver: postgresDriver,
-    extensions: fixtureExtensionPacks(fixture),
-  });
-  const loaded = await prisma7Contract(schemaPath, { binding: prisma7PostgresBinding }).source.load(
-    {
-      composedExtensions: stack.extensions.map((extension) => extension.id),
-      defaultNamespaceId: stack.target.defaultNamespaceId,
-      composedExtensionContracts: stack.extensionContracts,
-      authoringContributions: stack.authoringContributions,
-      codecLookup: stack.codecLookup,
-      dataTypes: stack.dataTypes,
-      controlMutationDefaults: stack.controlMutationDefaults,
-      generatorFunctions: stack.generatorFunctions,
-      resolvedInputs: [schemaPath],
-      capabilities: stack.capabilities,
-    },
-  );
-  if (!loaded.ok) throw new Error(JSON.stringify(loaded.failure.diagnostics));
-  return loaded.value as Contract<SqlStorage>;
-}
-
 const resetDatabase = `
 DO $$
 DECLARE name text;
@@ -173,7 +133,7 @@ describe('Prisma 7 contract source fixtures against the database Prisma 7 built'
           await client.query(readFileSync(migrationPath, 'utf8'));
         });
         const serialized = new PostgresContractSerializer().serializeContract(
-          await interpret(fixture),
+          await interpretPrisma7Fixture(fixture),
         );
 
         const lenient = await runSchemaVerify(getConnectionString(), serialized);
