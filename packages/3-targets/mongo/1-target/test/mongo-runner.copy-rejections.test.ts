@@ -1,4 +1,3 @@
-import { MongoExistsExpr } from '@internal/mongo-query-ast/control';
 import { ObjectId } from 'bson';
 import { MongoServerError } from 'mongodb';
 import { describe, expect, it } from 'vitest';
@@ -62,7 +61,7 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
     );
   });
 
-  it('says the copy must fit the validator when the later validator update does not check the documents', async () => {
+  it('says to move the copy after the later validator update, or make it fit the validator, when that update does not check the documents', async () => {
     const harness = makeHarness();
     harness.driver.failAggregateWith(rejected());
 
@@ -75,36 +74,50 @@ describe('MongoMigrationRunner, a copy in a data transform that the target colle
     ]);
 
     expect(failureFields(result.assertNotOk()).why).toBe(
-      "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. A later operation of this migration updates the validator of collection members without checking the documents already in it, so change the pipeline in the migration's migration.ts so the documents it writes fit the validator, run the file with node, then run the command again. The operations that ran before the failure stay applied.",
+      "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. A later operation of this migration updates the validator of collection members without checking the documents already in it. Move the copy to after that update in the migration's migration.ts, so the documents it writes have to fit only the new validator: run the file with node, then run the command again. Or change the pipeline in the migration's migration.ts so the documents it writes fit the validator, run the file with node, then run the command again. The operations that ran before the failure stay applied.",
     );
   });
 
-  it('does not take a later precheck that only reads the target for the check of its documents against the new validator', async () => {
-    const harness = makeHarness();
-    harness.driver.failAggregateWith(rejected());
-    const update = setValidation('members', { bsonType: 'object' });
+  describe('does not take a later precheck for the check of the documents against the new validator when it differs from that check', () => {
+    const validator = { $jsonSchema: { bsonType: 'object' } };
+    const checked = setValidation('members', validator.$jsonSchema, { checkDocuments: true });
+    const collectionExists = checked.precheck.slice(0, -1);
+    const documentsFit = checked.precheck.at(-1);
+    if (documentsFit === undefined) {
+      throw new Error('setValidation with checkDocuments has no document check');
+    }
+    const withPipeline = (pipeline: ReadonlyArray<Record<string, unknown>>) => ({
+      ...documentsFit,
+      source: rawAggregate('members', pipeline),
+    });
+    const rejectedByValidator = { $match: { $nor: [validator] } };
 
-    const result = await execute(harness, [
-      dataTransform('move User to members', {
-        run: () =>
-          rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
-      }),
-      {
-        ...update,
-        precheck: [
-          {
-            description: 'members holds a document',
-            source: rawAggregate('members', [{ $limit: 1 }]),
-            filter: MongoExistsExpr.exists('_id'),
-            expect: 'exists',
-          },
-        ],
-      },
-    ]);
+    it.each([
+      [
+        'matches another filter',
+        withPipeline([{ $match: { email: { $exists: true } } }, { $limit: 1 }]),
+      ],
+      ['expects a document to exist', { ...documentsFit, expect: 'exists' as const }],
+      [
+        'has a stage other than $limit after the $match',
+        withPipeline([rejectedByValidator, { $project: { _id: 1 } }]),
+      ],
+    ])('a precheck that %s', async (_name, precheck) => {
+      const harness = makeHarness();
+      harness.driver.failAggregateWith(rejected());
 
-    expect(failureFields(result.assertNotOk()).why).toContain(
-      'A later operation of this migration updates the validator of collection members without checking the documents already in it',
-    );
+      const result = await execute(harness, [
+        dataTransform('move User to members', {
+          run: () =>
+            rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
+        }),
+        { ...checked, precheck: [...collectionExists, precheck] },
+      ]);
+
+      expect(failureFields(result.assertNotOk()).why).toContain(
+        'A later operation of this migration updates the validator of collection members without checking the documents already in it',
+      );
+    });
   });
 
   it('says what a later validator removal does, which checks nothing', async () => {
