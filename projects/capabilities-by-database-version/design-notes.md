@@ -37,9 +37,27 @@ The facts come from three places:
 2. **How that database is configured:** server settings, such as MySQL's `sql_mode` or the `GROUP_CONCAT` length limit behind `sql.jsonAggWithoutTruncation`, and topology, such as a MongoDB replica set, which transactions need.
 3. **The connection:** the adapter, the driver and the transport. It can narrow what the database offers: an HTTP driver or PgBouncer in transaction mode allows no interactive transactions or no session state. It may also widen it, with batching or pipelining. With SQLite the driver embeds the engine, so it decides the first kind too.
 
-Kinds 1 and 2 describe the database. They are in the contract and its profile hash, and signing checks them. Kind 3 describes one connection to that database. A database is often migrated over a direct connection and queried by the application over a pooler or an HTTP driver, so kind 3 belongs to the runtime stack, not to the contract.
+The contract is where the application states what it requires, so it lists flags of all three kinds. What differs is which step checks them. Kinds 1 and 2 describe the database, and signing checks them. Kind 3 describes one connection to that database, and creating the client checks it. A database is often migrated over a direct connection and queried by the application over a pooler or an HTTP driver, so signing cannot answer for the connection the application will use.
 
 Adding operations and data types is not a capability. It goes through the operation registry and the codecs. The flags extensions declare today (`pgvector.cosine`, `postgis.geometry`, `paradedb/bm25`, in each extension's `descriptor-meta.ts`) are read by nothing and are removed. How an extension's operation depends on the version of the database extension installed, such as HNSW indexes needing pgvector 0.5, belongs to the extension system.
+
+## Scenarios the design must handle
+
+Agreed 2026-11-25.
+
+1. **A new project.** `orm init` connects to the user's PostgreSQL 17 database and sets up the project to match it.
+2. **A feature the production database lacks.** The application uses `MERGE … RETURNING`, which needs PostgreSQL 17. Production runs 16. The design decides whether this is caught at type-check, at emit or at signing.
+3. **The database is upgraded.** Production moves from PostgreSQL 16 to 17, and the user wants the features 17 adds.
+4. **Environments run different versions.** Development runs PostgreSQL 17 locally, and production runs 16.
+5. **The database loses a capability.** A backup is restored to an older server, or the application is pointed at a replica that runs an older version.
+6. **A service differs from the version it reports.** Aurora, Neon or Supabase report a PostgreSQL version but differ from it in places.
+7. **A setting changes behaviour.** MySQL's `sql_mode` changes how queries behave, without any change of version.
+8. **A database extension's version matters.** HNSW indexes need pgvector 0.5. This belongs to the extension system, not to capability flags.
+9. **The driver decides the engine.** With SQLite the library inside `node:sqlite` or `better-sqlite3` is the engine, so its version decides what is available.
+10. **Topology decides a capability.** MongoDB transactions need a replica set. Atlas offers `$vectorSearch`, which a self-hosted server does not.
+11. **We add or drop a version.** PostgreSQL 19 is released, or a version reaches end of life and we stop supporting it.
+12. **The application connects to a database it has not signed.**
+13. **The application queries over a narrower connection than the one it migrates over.** The application uses interactive transactions, so its contract requires them. Migrations run over a direct connection, and that database provides interactive transactions, so signing succeeds. The application then runs on Cloudflare Workers over an HTTP driver, which has no interactive transactions. The client refuses to start, because its connection does not provide what the contract requires.
 
 ## The design
 
