@@ -1,39 +1,12 @@
 import { deepStrictEqual, match, strictEqual } from 'node:assert/strict';
-import { cpSync, mkdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { after, describe, it } from 'node:test';
-import { fileURLToPath } from 'node:url';
-import { checkPackage, isPrerelease, stampVersion } from './compat.mjs';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, it } from 'node:test';
+import { isPrerelease } from './compat.mjs';
+import { brokenExports, fixtureCheck, fixtures, names, workFolder } from './compat-fixture.mjs';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const fixtures = join(here, 'fixtures', 'compat');
-// Inside the repository, so that the declarations resolve @types/node through its node_modules.
-const work = join(here, '..', '..', 'wip', `api-compat-tests-${process.pid}`);
-after(() => rmSync(work, { recursive: true, force: true }));
-
-function check(current, { records = [], version = '1.0.0', strict = true, stamp = true } = {}) {
-  const workDir = join(work, `${current}-${Math.random().toString(36).slice(2)}`);
-  const releaseDir = join(workDir, 'node_modules', 'release-fixture');
-  const currentDir = join(workDir, 'node_modules', 'current-fixture');
-  mkdirSync(dirname(releaseDir), { recursive: true });
-  cpSync(join(fixtures, 'release'), releaseDir, { recursive: true });
-  if (stamp) stampVersion(releaseDir);
-  symlinkSync(join(fixtures, current), currentDir);
-  return checkPackage({
-    name: 'fixture-compat',
-    releaseDir,
-    currentDir,
-    releaseSpecifier: 'release-fixture',
-    currentSpecifier: 'current-fixture',
-    testFile: join(workDir, 'tests', 'fixture.ts'),
-    records,
-    version,
-    strict,
-  });
-}
-
-const brokenExports = (result) =>
-  result.breaks.map(({ path, name, test, failsRun }) => ({ path, name, test, failsRun }));
+const check = fixtureCheck(workFolder('api-compat-tests'));
+const forwardDependency = [{ folder: 'fwd-dep', name: 'fixture-fwd-dep' }];
 
 describe('checkPackage, with the release treated as GA', () => {
   it('passes an unchanged build, private members and generic types included', () => {
@@ -82,6 +55,12 @@ describe('checkPackage, with the release treated as GA', () => {
     deepStrictEqual(brokenExports(check('required-member-on-returned')), []);
   });
 
+  it('fails when a class is made abstract', () => {
+    deepStrictEqual(brokenExports(check('class-made-abstract')), [
+      { path: '.', name: 'Client', test: 'value', failsRun: true },
+    ]);
+  });
+
   it('reports a break in a preview_ export without failing the run', () => {
     deepStrictEqual(brokenExports(check('preview-narrowed')), [
       { path: '.', name: 'preview_format', test: 'value', failsRun: false },
@@ -89,45 +68,57 @@ describe('checkPackage, with the release treated as GA', () => {
   });
 });
 
-describe('checkPackage with recorded breaks', () => {
-  const record = {
-    path: '.',
-    export: 'format',
-    release: '1.0.0',
-    reason: 'format accepts only strings now',
-  };
-
-  it('passes a recorded break and lists it', () => {
-    const result = check('narrowed-parameter', { records: [record] });
+describe('checkPackage on names a path forwards from another package', () => {
+  it('checks only that they still exist', () => {
+    const result = check('forward-release', {
+      release: 'forward-release',
+      dependencies: forwardDependency,
+    });
     deepStrictEqual(brokenExports(result), []);
     deepStrictEqual(result.problems, []);
-    deepStrictEqual(result.recorded, [
-      { path: '.', name: 'format', reason: 'format accepts only strings now' },
-    ]);
+    strictEqual(result.counts.forwarded, 2);
   });
 
-  it('fails once the recorded break is undone', () => {
-    const { problems } = check('unchanged', { records: [record] });
-    deepStrictEqual(problems, [
-      '. format: the recorded break is no longer a break. Remove the record.',
-    ]);
-  });
-
-  it('fails on a record for an earlier release', () => {
-    const { problems, breaks } = check('narrowed-parameter', {
-      records: [{ ...record, release: '0.9.0' }],
+  it('fails when one is no longer forwarded', () => {
+    const result = check('forward-removed', {
+      release: 'forward-release',
+      dependencies: forwardDependency,
     });
-    deepStrictEqual(problems, [
-      '. format: the recorded break is for release 0.9.0, but the last release is 1.0.0. Remove the record.',
+    deepStrictEqual(brokenExports(result), [
+      { path: '.', name: 'fwdFn', test: 'exists', failsRun: true },
+      { path: '.', name: 'Fwd', test: 'exists', failsRun: true },
     ]);
-    strictEqual(breaks.length, 1);
+  });
+});
+
+describe('checkPackage on types too deep to compare', () => {
+  it('compares each export on its own once one is too deep, so none passes on the type left behind', () => {
+    const { breaks, undecided } = check('json-widened', { release: 'json-release' });
+    deepStrictEqual(names([...breaks, ...undecided]).sort(), [
+      '. JsonObject type',
+      '. JsonValue type',
+      '. Row type',
+      '. g value',
+    ]);
   });
 
-  it('fails on a record for an export the release does not have', () => {
-    const { problems } = check('unchanged', { records: [{ ...record, export: 'missing' }] });
-    deepStrictEqual(problems, [
-      '. missing: a break is recorded for an export the last release does not declare in this package. Remove the record.',
-    ]);
+  it('reports a break that sits beside a comparison too deep to finish', () => {
+    const { breaks } = check('row-changed', { release: 'row-release' });
+    deepStrictEqual(names(breaks), ['. Row type']);
+  });
+});
+
+describe('checkPackage on what it cannot compare', () => {
+  it('fails when the release imports a module that is not installed', () => {
+    const { problems } = check('unresolved-narrowed', { release: 'unresolved-release' });
+    strictEqual(problems.length, 1);
+    match(problems[0], /not-installed-anywhere/);
+  });
+
+  it('lists a test whose release side is never or any as not compared', () => {
+    const result = check('paths-release', { release: 'paths-release' });
+    deepStrictEqual(names(result.notCompared), ['. OnlyStrings type']);
+    strictEqual(result.counts.notCompared, 1);
   });
 });
 
@@ -156,7 +147,10 @@ describe('two copies with one name and version', () => {
     const { breaks, problems } = check('removed-export', { stamp: false });
     deepStrictEqual(breaks, []);
     strictEqual(problems.length, 1);
-    match(problems[0], /read the last release and the current build as one package/);
+    match(
+      problems[0],
+      /read two copies of fixture-compat, the last release's and the current build's, as one package/,
+    );
   });
 });
 

@@ -10,6 +10,8 @@
 
 export type requireAssignableTo<_A extends B, B> = true;
 
+export type IsNeverOrAny<T> = [T] extends [never] ? true : 0 extends 1 & T ? true : false;
+
 type ValueOf<T> = T[keyof T];
 type OnlySymbols<T> = T extends symbol ? T : never;
 type WellKnownSymbols = OnlySymbols<ValueOf<typeof Symbol>>;
@@ -38,13 +40,19 @@ type MembersOld<T> = { [K in keyof T as SkipUniqueSymbols<K>]: StructuralOld<T[K
 type CallOld<T> = T extends (...args: infer A) => infer R
   ? (...args: { [K in keyof A]: StructuralOld<A[K]> }) => StructuralOld<R>
   : unknown;
-type ConstructOld<T> = T extends abstract new (
+type ConstructOld<T> = T extends new (
   ...args: infer A
 ) => infer R
-  ? abstract new (
+  ? new (
       ...args: { [K in keyof A]: StructuralOld<A[K]> }
     ) => StructuralOld<R>
-  : unknown;
+  : T extends abstract new (
+        ...args: infer A
+      ) => infer R
+    ? abstract new (
+        ...args: { [K in keyof A]: StructuralOld<A[K]> }
+      ) => StructuralOld<R>
+    : unknown;
 export type StructuralOld<T> = T extends Primitive
   ? WithoutBrand<T>
   : T extends symbol
@@ -57,13 +65,19 @@ type MembersNew<T> = { [K in keyof T as SkipUniqueSymbols<K>]: StructuralNew<T[K
 type CallNew<T> = T extends (...args: infer A) => infer R
   ? (...args: { [K in keyof A]: StructuralNew<A[K]> }) => StructuralNew<R>
   : unknown;
-type ConstructNew<T> = T extends abstract new (
+type ConstructNew<T> = T extends new (
   ...args: infer A
 ) => infer R
-  ? abstract new (
+  ? new (
       ...args: { [K in keyof A]: StructuralNew<A[K]> }
     ) => StructuralNew<R>
-  : unknown;
+  : T extends abstract new (
+        ...args: infer A
+      ) => infer R
+    ? abstract new (
+        ...args: { [K in keyof A]: StructuralNew<A[K]> }
+      ) => StructuralNew<R>
+    : unknown;
 export type StructuralNew<T> = T extends Primitive
   ? WithoutBrand<T>
   : T extends symbol
