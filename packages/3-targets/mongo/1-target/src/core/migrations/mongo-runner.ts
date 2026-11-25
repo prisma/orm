@@ -398,7 +398,6 @@ function runFilterIsCheckFilter(op: MongoDmlOperation, plan: MongoQueryPlan): bo
   const [first, ...rest] = source.pipeline;
   return (
     first !== undefined &&
-    Object.keys(first).length === 1 &&
     canonicalize(Reflect.get(first, '$match')) === canonicalize(run.filter) &&
     rest.every((stage) => Object.keys(stage).length === 1 && Object.hasOwn(stage, '$limit'))
   );

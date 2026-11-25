@@ -1506,6 +1506,57 @@ describe("MongoMigrationRunner, a data transform's update that stops part way", 
 
     expect(failureFields(result.assertNotOk()).why).toBe(otherWhy(mayRunOverChanged, skipped));
   });
+
+  const runFilter = { status: { $exists: false } };
+  it.each([
+    {
+      nearMiss: 'whose check reads another collection',
+      check: { source: () => rawAggregate('accounts', [{ $match: runFilter }, { $limit: 1 }]) },
+      rows: [{ _id: 1 }],
+    },
+    {
+      nearMiss: 'whose check narrows its $match with a later stage',
+      check: {
+        source: () =>
+          rawAggregate(RUN_COLLECTION, [
+            { $match: runFilter },
+            { $match: { plan: 'free' } },
+            { $limit: 1 },
+          ]),
+      },
+      rows: [{ _id: 1 }],
+    },
+    {
+      nearMiss: 'whose postcheck expects a document',
+      check: {
+        source: () => rawAggregate(RUN_COLLECTION, [{ $match: runFilter }, { $limit: 1 }]),
+        expect: 'notExists' as const,
+      },
+      rows: [],
+    },
+    {
+      nearMiss: 'whose check has a filter of its own',
+      check: {
+        source: () => rawAggregate(RUN_COLLECTION, [{ $match: runFilter }, { $limit: 1 }]),
+        filter: MongoFieldFilter.eq('_id', 1),
+      },
+      rows: [{ _id: 1 }],
+    },
+  ])(
+    'says a re-run may run over the documents it changed for an update $nearMiss',
+    async ({ check, rows }) => {
+      const harness = makeHarness();
+      harness.driver.failUpdateManyWith(badValue);
+      harness.driver.queueResponse(rows);
+      harness.driver.queueResponse(rows);
+
+      const result = await execute(harness, [
+        dataTransform('backfill-status', { check, run: () => makeRunPlan() }),
+      ]);
+
+      expect(failureFields(result.assertNotOk()).why).toBe(otherWhy(mayRunOverChanged, skipped));
+    },
+  );
 });
 
 describe('MongoMigrationRunner, a collection rename stopped because the new collection exists', () => {
