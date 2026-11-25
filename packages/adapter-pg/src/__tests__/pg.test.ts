@@ -312,4 +312,64 @@ describe('withDatabase', () => {
     const config = withDatabase({ user: 'user', host: 'host', database: 'maindb' }, 'shadow_db')
     expect(effectiveDatabase(config)).toBe('shadow_db')
   })
+
+  it('treats an empty connection string as absent', () => {
+    const config = withDatabase(
+      { connectionString: '', user: 'user', host: 'host', database: 'maindb', port: 5432 },
+      'shadow_db',
+    )
+    expect(effectiveDatabase(config)).toBe('shadow_db')
+  })
+
+  it('preserves the socket path when changing the database', () => {
+    const config = withDatabase({ connectionString: 'socket:/var/run/postgresql?db=maindb' }, 'shadow_db')
+    const params = new pg.Client(config).connectionParameters
+    expect(params.host).toBe('/var/run/postgresql')
+    expect(params.database).toBe('shadow_db')
+  })
+
+  it('accepts a unix-socket connection string', () => {
+    const config = withDatabase({ connectionString: '/var/run/postgresql maindb' }, 'shadow_db')
+    const params = new pg.Client(config).connectionParameters
+    expect(params.host).toBe('/var/run/postgresql')
+    expect(params.database).toBe('shadow_db')
+  })
+})
+
+describe('connectToShadowDb', () => {
+  it('ends the shadow pool before dropping the database', async () => {
+    const order: string[] = []
+    const config: pg.PoolConfig = { user: 'user', host: 'host', database: 'maindb', port: 5432 }
+    const factory = new PrismaPgAdapterFactory(config)
+
+    const mainAdapter = await factory.connect()
+    const originalExecuteScript = mainAdapter.executeScript.bind(mainAdapter)
+    mainAdapter.executeScript = async (script: string) => {
+      if (script.startsWith('CREATE DATABASE')) {
+        order.push('create')
+        return
+      }
+      if (script.startsWith('DROP DATABASE')) {
+        order.push('drop')
+        return
+      }
+      return originalExecuteScript(script)
+    }
+
+    vi.spyOn(factory, 'connect').mockResolvedValue(mainAdapter)
+
+    const endSpy = vi.spyOn(pg.Pool.prototype, 'end').mockImplementation(() => {
+      order.push('end')
+      return Promise.resolve()
+    })
+
+    try {
+      const shadow = await factory.connectToShadowDb()
+      await shadow.dispose()
+      expect(order).toEqual(['create', 'end', 'drop'])
+    } finally {
+      endSpy.mockRestore()
+      await mainAdapter.dispose()
+    }
+  })
 })
