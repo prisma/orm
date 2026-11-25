@@ -36,6 +36,8 @@ Some lines change without an API change:
 - A declaration exported under several names is referred to by the name that sorts first.
 - An outside type whose name the package also exports is written with its package, such as `mongodb.MongoClient`, so adding an export can add that prefix elsewhere.
 
+Two limits of the lists are known and left as they are. An outside type imported under a local alias is written under the alias; writing API Extractor's referenced name instead made many lines worse, because that name is often not one any package exports. And types inside the members of a `declare module` augmentation are not qualified when their name clashes with one the package exports.
+
 ## The description must name each change
 
 When a pull request changes an `api.txt`, or a record of a break (`api-breaks.json`, `packages/9-public/removed-packages.json` or `examples/last-release-errors.json`), a comment lists, per package, the lines and records it adds and removes, and offers a section to copy. The check fails until the description has a section headed `## API changes` in which each changed export is named in backticks, on a line that says why:
