@@ -27,6 +27,47 @@ const move = [
   deleteDocuments({ collection: 'users', filter: { user: { $exists: true } } }),
 ];
 
+/**
+ * The operations a route prints, in order, as a user pastes them: each `rawAggregate` call as the
+ * run of its own `dataTransform`, and each `deleteDocuments` call. The filter placeholder of the
+ * n-th call becomes `filters[n]`.
+ */
+function pastedOperations(
+  route: string,
+  filters: readonly Record<string, unknown>[],
+): readonly AnyMongoMigrationOperation[] {
+  const calls = [
+    ...route.matchAll(/\n {2}(rawAggregate\([\s\S]*?\n {2}\]\)|deleteDocuments\(.*\))/g),
+  ].map((match) => match[1] ?? '');
+  if (calls.length !== filters.length) {
+    throw new Error(`Expected ${filters.length} calls in the route, found ${calls.length}`);
+  }
+  return calls.map((call, index) => {
+    const pasted: {
+      copy?: ReturnType<typeof rawAggregate>;
+      delete?: ReturnType<typeof deleteDocuments>;
+    } = {};
+    new Function(
+      'rawAggregate',
+      'deleteDocuments',
+      'filter',
+      call.replace(/<a filter[^>]*>|<the same filter>/, 'filter'),
+    )(
+      (...args: Parameters<typeof rawAggregate>) => {
+        pasted.copy = rawAggregate(...args);
+      },
+      (...args: Parameters<typeof deleteDocuments>) => {
+        pasted.delete = deleteDocuments(...args);
+      },
+      filters[index],
+    );
+    const { copy } = pasted;
+    if (copy !== undefined) return dataTransform(`pasted copy ${index}`, { run: () => copy });
+    if (pasted.delete === undefined) throw new Error(`Cannot evaluate ${call}`);
+    return pasted.delete;
+  });
+}
+
 describe('a plan that moves documents into a collection whose validator it then replaces', {
   timeout: timeouts.spinUpMongoMemoryServer,
 }, () => {
@@ -452,31 +493,15 @@ describe('a plan that moves documents into a collection whose validator it then 
       snapshotsImportPath: '../../snapshots',
     });
     const route = refused.kind === 'failure' ? (refused.conflicts[0]?.why ?? '') : '';
-    const copy = (name: string, match: Record<string, unknown>, set: Record<string, string>) =>
-      dataTransform(name, {
-        run: () =>
-          rawAggregate('users', [
-            { $match: match },
-            { $set: set },
-            { $unset: Object.values(set).map((field) => field.slice(1)) },
-            { $merge: { into: 'members' } },
-          ]),
-      });
+    const filters = [
+      { a: { $exists: true } },
+      { b: { $exists: true } },
+      { $or: [{ a: { $exists: true } }, { b: { $exists: true } }] },
+      { clerk: { $exists: true } },
+      { clerk: { $exists: true } },
+    ];
     const operations = [
-      copy('move A to members', { a: { $exists: true } }, { x: '$a' }),
-      copy('move B to members', { b: { $exists: true } }, { y: '$b' }),
-      deleteDocuments({
-        collection: 'users',
-        filter: { $or: [{ a: { $exists: true } }, { b: { $exists: true } }] },
-      }),
-      dataTransform('move Clerk to members', {
-        run: () =>
-          rawAggregate('staff', [
-            { $match: { clerk: { $exists: true } } },
-            { $merge: { into: 'members' } },
-          ]),
-      }),
-      deleteDocuments({ collection: 'staff', filter: { clerk: { $exists: true } } }),
+      ...pastedOperations(route, filters),
       ...(await plannedOperations(from, to)),
     ];
     const result = await runOperations(operations, from, to, { policy });
