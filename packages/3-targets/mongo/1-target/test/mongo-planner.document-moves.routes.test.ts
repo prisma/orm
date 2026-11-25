@@ -363,6 +363,13 @@ describe('MongoMigrationPlanner, one route for every statement the shared-collec
         'Both dataTransforms go in that one migration.ts. Run it to emit its ops.json, and apply it once with db migrate.',
       );
     });
+
+    it('says to check the _id values of both collections the documents move out of against each other as well', () => {
+      const [first] = refusal(plan({ from, to, schema, statements }));
+      expect(first?.why).toContain(
+        'Check first that no _id is in both collections, and stop writes to each collection the documents move into from before that check until the apply finishes, retries included: a document written there after the check could hold the _id of a document that moves. Collections "users" and "staff" both move documents into collection "members", and a document moved from one is merged into a document with the same _id moved from the other: check that no _id is in two of collections "users", "staff" and "members".',
+      );
+    });
   });
 
   it('plans 8 refused statements in well under a second', () => {

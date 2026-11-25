@@ -172,6 +172,25 @@ function applyText(count: number): string {
 const MOVE_LIMITS =
   'Stop writes to each collection the documents move out of until the apply ends: the delete also removes a document of those models written there after the copy, and that document was not copied. $merge matches documents by _id, so a moved document whose _id a document of the collection it moves into already holds is merged into that document. Check first that no _id is in both collections, and stop writes to each collection the documents move into from before that check until the apply finishes, retries included: a document written there after the check could hold the _id of a document that moves.';
 
+/** For each collection the documents of several collections move into, that their `_id` values must be checked against each other as well as against it. */
+function sharedTargetText(moves: readonly DocumentMove[]): string {
+  const sourcesOf = new Map<string, string[]>();
+  for (const { from, to } of moves) {
+    const sources = sourcesOf.get(to) ?? [];
+    if (!sources.includes(from)) sources.push(from);
+    sourcesOf.set(to, sources);
+  }
+  return [...sourcesOf]
+    .filter(([, sources]) => sources.length > 1)
+    .map(([to, sources]) => {
+      const named = quotedList(sources);
+      const each = sources.length === 2 ? 'both' : 'all';
+      const other = sources.length === 2 ? 'the other' : 'another';
+      return ` Collections ${named} ${each} move documents into collection "${to}", and a document moved from one is merged into a document with the same _id moved from ${other}: check that no _id is in two of collections ${quotedList([...sources, to])}.`;
+    })
+    .join('');
+}
+
 function stopText(moves: readonly DocumentMove[]): string {
   const checked = moves.filter((move) => move.order.validatorChange === 'replaced');
   return `If the apply stops, fix what stopped it and run db migrate again.${checked
@@ -194,7 +213,7 @@ export function documentMovesText(moves: readonly DocumentMove[]): string {
   return [
     ...moves.map((move) => moveText(move, moves.length > 1)),
     applyText(moves.reduce((count, move) => count + move.copies.length, 0)),
-    MOVE_LIMITS,
+    `${MOVE_LIMITS}${sharedTargetText(moves)}`,
     stopText(moves),
   ].join('\n\n');
 }
