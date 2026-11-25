@@ -128,10 +128,14 @@ export function printAndReadBack(
   return readPsl(text, { ...options, sourceSettings });
 }
 
-/** The contract in the canonical form `contract emit` writes, without `capabilities`, which the composed stack reports rather than the source. */
+/** The contract in the canonical form `contract emit` writes, without `capabilities`, which the composed stack reports rather than the source, and without `profileHash`, which is the hash of `capabilities`. */
 export function serializedWithoutCapabilities(contract: Contract<SqlStorage>): unknown {
   const serializer = new PostgresContractSerializer();
-  const { capabilities: _, ...authored } = JSON.parse(
+  const {
+    capabilities: _capabilities,
+    profileHash: _profileHash,
+    ...authored
+  } = JSON.parse(
     JSON.stringify(
       canonicalizeContractToObject(contract, {
         serializeContract: () => serializer.serializeContract(contract),

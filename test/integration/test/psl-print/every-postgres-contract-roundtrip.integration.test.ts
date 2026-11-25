@@ -125,14 +125,16 @@ function compositionFor(contract: Contract<SqlStorage>): Composition {
 const serializer = new PostgresContractSerializer();
 
 /**
- * The contract as `contract emit` writes it, without `capabilities` and
- * `extensions`: both are written from the composed stack, not from the source,
+ * The contract as `contract emit` writes it, without `capabilities`,
+ * `extensions` and `profileHash`: the first two are written from the composed
+ * stack, not from the source, and `profileHash` is the hash of `capabilities`,
  * so the printed file has no say over them.
  */
 function comparable(contract: Contract<SqlStorage>): unknown {
   const {
     capabilities: _capabilities,
     extensions: _extensions,
+    profileHash: _profileHash,
     ...rest
   } = canonicalizeContractToObject(contract, {
     serializeContract: (value) =>
