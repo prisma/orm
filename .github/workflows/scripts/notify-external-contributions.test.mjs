@@ -56,14 +56,6 @@ describe('resolveWindow', () => {
     });
   });
 
-  it('looks back a day, without a warning, until a scheduled run has succeeded', () => {
-    assert.deepEqual(resolveWindow(undefined, until), {
-      since: new Date('2026-11-24T12:00:00Z'),
-      until,
-      skipped: undefined,
-    });
-  });
-
   it('looks back at most a day after a long outage and reports the skipped time', () => {
     const lastStart = new Date('2026-11-20T12:00:00Z');
     assert.deepEqual(resolveWindow(lastStart, until), {
@@ -82,6 +74,33 @@ describe('lastScheduledRunStart', () => {
       { created_at: '2026-11-25T11:40:00Z' },
     ];
     assert.deepEqual(lastScheduledRunStart(runs), new Date('2026-11-25T11:50:00Z'));
+  });
+
+  const neverSucceeded = (firstRunStart, createdAt) => ({
+    currentRun: async () => ({ createdAt: new Date(createdAt), workflowId: 42 }),
+    successfulScheduledRuns: async () => [],
+    firstScheduledRunStart: async () => new Date(firstRunStart),
+  });
+
+  it('gives the first scheduled run ever the day before it, without a warning', async () => {
+    const github = neverSucceeded('2026-11-25T10:03:00Z', '2026-11-25T10:03:00Z');
+    assert.deepEqual(await scheduledWindow(github, '1'), {
+      since: new Date('2026-11-24T10:03:00Z'),
+      until: new Date('2026-11-25T10:03:00Z'),
+      skipped: undefined,
+    });
+  });
+
+  it('keeps the first run’s start until a run succeeds, and warns once the day cap cuts into it', async () => {
+    const github = neverSucceeded('2026-11-25T10:03:00Z', '2026-11-25T10:13:00Z');
+    assert.deepEqual(await scheduledWindow(github, '2'), {
+      since: new Date('2026-11-24T10:13:00Z'),
+      until: new Date('2026-11-25T10:13:00Z'),
+      skipped: {
+        from: new Date('2026-11-24T10:03:00Z'),
+        to: new Date('2026-11-24T10:13:00Z'),
+      },
+    });
   });
 
   it('gives a re-run of an older run an empty window once a newer run has succeeded', async () => {
@@ -249,6 +268,27 @@ describe('createGitHubClient', () => {
     await github.successfulScheduledRuns(42);
     assert.match(requested[0], /[?&]event=schedule(&|$)/);
     assert.match(requested[0], /[?&]status=success(&|$)/);
+  });
+
+  it('finds the earliest scheduled run across every page of runs', async () => {
+    const firstPage = Array.from({ length: 100 }, (_, i) => ({
+      created_at: new Date(Date.UTC(2026, 10, 25, 12) - 600_000 * i).toISOString(),
+    }));
+    const { github, requested } = clientFor([
+      [
+        '/repos/o/r/actions/workflows/',
+        (path) =>
+          jsonResponse({
+            workflow_runs: path.endsWith('&page=1')
+              ? firstPage
+              : [{ created_at: '2026-11-24T19:00:00Z' }],
+          }),
+      ],
+    ]);
+
+    assert.deepEqual(await github.firstScheduledRunStart(42), new Date('2026-11-24T19:00:00Z'));
+    assert.equal(requested.length, 2);
+    assert.match(requested[0], /[?&]event=schedule(&|$)/);
   });
 
   it('reports no permission for an account that no longer exists', async () => {

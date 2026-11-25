@@ -23,13 +23,12 @@ export function lastScheduledRunStart(successfulRuns) {
   return starts.length ? new Date(Math.max(...starts)) : undefined;
 }
 
-export function resolveWindow(lastRunStart, until) {
+export function resolveWindow(start, until) {
   const earliest = new Date(until.getTime() - MAX_LOOKBACK_MS);
-  if (!lastRunStart) return { since: earliest, until, skipped: undefined };
-  if (lastRunStart < earliest) {
-    return { since: earliest, until, skipped: { from: lastRunStart, to: earliest } };
+  if (start < earliest) {
+    return { since: earliest, until, skipped: { from: start, to: earliest } };
   }
-  return { since: lastRunStart, until, skipped: undefined };
+  return { since: start, until, skipped: undefined };
 }
 
 export function itemsCreatedInWindow(newestFirstPage, since, until) {
@@ -81,6 +80,17 @@ export function createGitHubClient({ token, repository, fetch = globalThis.fetch
         `/repos/${repository}/actions/workflows/${workflowId}/runs?event=schedule&status=success&per_page=20`,
       );
       return runs;
+    },
+
+    async firstScheduledRunStart(workflowId) {
+      const starts = [];
+      for (let page = 1; ; page++) {
+        const { workflow_runs: runs } = await getJson(
+          `/repos/${repository}/actions/workflows/${workflowId}/runs?event=schedule&per_page=100&page=${page}`,
+        );
+        starts.push(...runs.map((run) => new Date(run.created_at)));
+        if (runs.length < 100) return new Date(Math.min(...starts));
+      }
     },
 
     async itemsCreatedBetween(since, until) {
@@ -171,8 +181,11 @@ function parseOptions() {
 
 export async function scheduledWindow(github, runId) {
   const { createdAt, workflowId } = await github.currentRun(runId);
-  const runs = await github.successfulScheduledRuns(workflowId);
-  return resolveWindow(lastScheduledRunStart(runs), createdAt);
+  const lastSuccess = lastScheduledRunStart(await github.successfulScheduledRuns(workflowId));
+  const start =
+    lastSuccess ??
+    new Date((await github.firstScheduledRunStart(workflowId)).getTime() - MAX_LOOKBACK_MS);
+  return resolveWindow(start, createdAt);
 }
 
 async function main() {
