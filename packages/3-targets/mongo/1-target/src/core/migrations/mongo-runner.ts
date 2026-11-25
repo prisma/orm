@@ -77,6 +77,7 @@ import {
   AggregateCommand,
   type MongoQueryPlan,
   RawAggregateCommand,
+  RawDeleteManyCommand,
   RawUpdateManyCommand,
 } from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
@@ -91,6 +92,7 @@ import {
   unrewritableKeyReason,
 } from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
+import { outCopyRerunText } from './mongo-out-copy-reruns';
 import { byHandRenamePlacement } from './mongo-plan-text';
 import { type RewriteCollection, rewriteRefusals } from './mongo-rewrite-refusals';
 import { storedKeyFieldAt } from './mongo-stored-key-fills';
@@ -205,6 +207,31 @@ export type MongoMigrationRunnerResult = Result<
   MongoSpaceSuccessValue,
   MongoMigrationRunnerFailure
 >;
+
+/** The operations of an apply, and the index of the one it stopped at: the count of operations when it stopped after them all. */
+interface ApplyProgress {
+  operations: readonly AnyMongoMigrationOperation[];
+  stoppedAt: number;
+}
+
+/** The same failure, with `advice` at the end of its why. */
+function withAdvice(
+  failure: MongoMigrationRunnerFailure,
+  advice: string | undefined,
+): MongoMigrationRunnerFailure {
+  if (advice === undefined) return failure;
+  const why =
+    failure.why === undefined
+      ? advice
+      : `${/[.!?]$/.test(failure.why) ? failure.why : `${failure.why}.`} ${advice}`;
+  const advised = migrationRunnerFailure(failure.code, failure.message, {
+    why,
+    meta: failure.meta,
+    ...ifDefined('cause', failure.cause),
+  });
+  if (failure.stack !== undefined) advised.stack = failure.stack;
+  return advised;
+}
 
 function runnerFailure(
   code: MongoMigrationRunnerErrorCode,
@@ -1453,6 +1480,28 @@ function rewriteFailure(
         },
       );
     }
+    const copy = copyTargetOf(plan);
+    if (copy !== undefined) {
+      const name =
+        copy.database === undefined ? copy.collection : `${copy.database}.${copy.collection}`;
+      const written =
+        copy.stage === '$merge'
+          ? `Documents the copy wrote before the error stay in collection ${name}.`
+          : `Collection ${name} is as it was: an $out stage replaces it only when the whole pipeline succeeds.`;
+      return runnerFailure(
+        'MIGRATION.EXECUTION_FAILED',
+        `Operation ${op.id} failed: MongoDB error ${mongoError}: ${reason}`,
+        {
+          why: `${written} Fix what MongoDB names; when it comes from the copy, change its pipeline in the migration's migration.ts and run the file with node. ${rerunText('Then run the command again', ranBefore(position, position.operationIndex + 1))}`,
+          meta: {
+            operationId: op.id,
+            mongoCode,
+            ...(typeof codeName === 'string' ? { codeName } : {}),
+            collection: name,
+          },
+        },
+      );
+    }
     return mongoCode === MONGO_CONVERSION_FAILURE
       ? runnerFailure(
           'MIGRATION.EXECUTION_FAILED',
@@ -1474,6 +1523,20 @@ function rewriteFailure(
             },
           },
         );
+  }
+  if (plan.command instanceof RawDeleteManyCommand) {
+    return runnerFailure(
+      'MIGRATION.EXECUTION_FAILED',
+      `Operation ${op.id} failed: MongoDB error ${mongoError}: ${reason}`,
+      {
+        why: `Documents the delete removed before the error stay removed. ${rerunText('Fix what MongoDB names, then run the command again', ranBefore(position))}`,
+        meta: {
+          operationId: op.id,
+          mongoCode,
+          ...(typeof codeName === 'string' ? { codeName } : {}),
+        },
+      },
+    );
   }
   const rewrite = fieldRewriteOf(op);
   if (rewrite === undefined) return undefined;
@@ -1534,23 +1597,29 @@ export class MongoMigrationRunner {
 
   async execute(options: MongoMigrationRunnerExecuteOptions): Promise<MongoMigrationRunnerResult> {
     let changedDatabase = false;
-    const result = await this.apply(options, () => {
-      changedDatabase = true;
-    });
+    const progress: ApplyProgress = { operations: [], stoppedAt: 0 };
+    const result = await this.apply(
+      options,
+      () => {
+        changedDatabase = true;
+      },
+      progress,
+    );
     return result.ok
       ? ok({ ...result.value, changedDatabase })
       : notOk(
           withDatabaseUnchanged(
-            result.failure,
+            withAdvice(result.failure, outCopyRerunText(progress.operations, progress.stoppedAt)),
             options.databaseChangedBefore !== true && !changedDatabase,
           ),
         );
   }
 
-  /** Applies the plan, calling `wrote` after each command that changes the database. */
+  /** Applies the plan, calling `wrote` after each command that changes the database, and recording in `progress` how far it got. */
   private async apply(
     options: MongoMigrationRunnerExecuteOptions,
     wrote: () => void,
+    progress: ApplyProgress,
   ): Promise<Result<MigrationRunnerPerSpaceSuccessValue, MongoMigrationRunnerFailure>> {
     const { inspectionExecutor, adapter, driver, executeDdl, markerOps } = this.deps;
     const operations = deserializeMongoOps(
@@ -1563,6 +1632,7 @@ export class MongoMigrationRunner {
     // onto the plan; plans without one fall through to the application's
     // well-known space.
     const space = options.plan.spaceId ?? APP_SPACE_ID;
+    progress.operations = operations;
 
     const policyCheck = this.enforcePolicyCompatibility(options.policy, operations);
     if (policyCheck) return policyCheck;
@@ -1584,6 +1654,7 @@ export class MongoMigrationRunner {
     let operationsExecuted = 0;
 
     for (const [operationIndex, operation] of operations.entries()) {
+      progress.stoppedAt = operationIndex;
       options.callbacks?.onOperationStart?.(operation);
       try {
         if (isMongoDmlOperation(operation)) {
@@ -1690,6 +1761,7 @@ export class MongoMigrationRunner {
       }
     }
 
+    progress.stoppedAt = operations.length;
     const destination = options.plan.destination;
     const profileHash = options.destinationContract.profileHash ?? destination.storageHash;
 
