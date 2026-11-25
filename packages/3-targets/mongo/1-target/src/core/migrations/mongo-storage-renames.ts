@@ -193,7 +193,12 @@ export class CollectionRenames {
           `the documents of ${modelsText(moved)} into collection "${collection}"`,
       )
       .join(' and ');
-    return `The origin stores ${modelsText(origin)} in collection "${change.from}", and the destination stores them in different collections, so their storage is being split. ${dataMigration(moves)}`;
+    const removed = origin.filter((model) => destinationOf(model) === undefined);
+    const removedText =
+      removed.length === 0
+        ? ''
+        : ` The documents of ${modelsText(removed)} leave collection "${change.from}" too, and the destination removes ${removed.length === 1 ? 'that model' : 'those models'}: to keep them, rewrite them in the same migration into the collection of the model that takes them over.`;
+    return `The origin stores ${modelsText(origin)} in collection "${change.from}", and the destination stores them in different collections, so their storage is being split. ${dataMigration(moves)}${removedText}`;
   }
 }
 
