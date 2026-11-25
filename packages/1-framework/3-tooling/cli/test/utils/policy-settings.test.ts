@@ -64,11 +64,16 @@ describe('policyValueEffect', () => {
     ['data-loss-forbidden', 'data-loss-permitted', 'loosens'],
     ['data-loss-with-consent', 'data-loss-permitted', 'loosens'],
     ['data-loss-forbidden', 'data-loss-forbidden', 'unchanged'],
+  ] as const)('labels dataLoss %s to %s as %s', (from, to, effect) => {
+    expect(policyValueEffect('dataProtection.dataLoss', from, to)).toBe(effect);
+  });
+
+  it.each([
     ['access-widening-with-consent', 'access-widening-forbidden', 'tightens'],
     ['access-widening-forbidden', 'access-widening-with-consent', 'loosens'],
     ['access-widening-permitted', 'access-widening-permitted', 'unchanged'],
-  ] as const)('labels %s to %s as %s', (from, to, effect) => {
-    expect(policyValueEffect(from, to)).toBe(effect);
+  ] as const)('labels accessWidening %s to %s as %s', (from, to, effect) => {
+    expect(policyValueEffect('dataProtection.accessWidening', from, to)).toBe(effect);
   });
 
   it.each([
@@ -77,7 +82,7 @@ describe('policyValueEffect', () => {
     [['migrate'], ['reconcile'], 'loosens'],
     [['reconcile', 'migrate'], ['migrate', 'reconcile'], 'unchanged'],
   ] as const)('labels change %j to %j as %s', (from, to, effect) => {
-    expect(policyValueEffect(from, to)).toBe(effect);
+    expect(policyValueEffect('change', from, to)).toBe(effect);
   });
 });
 
@@ -88,8 +93,9 @@ describe('declared settings', () => {
       change: ['reconcile', 'migrate', 'reconcile'],
     });
 
-    expect(settings).toEqual({
+    expect(settings).toStrictEqual({
       change: ['migrate', 'reconcile'],
+      'dataProtection.dataLoss': undefined,
       'dataProtection.accessWidening': 'access-widening-forbidden',
     });
     expect(JSON.stringify(declaredPolicies(settings))).toBe(
@@ -98,7 +104,13 @@ describe('declared settings', () => {
         dataProtection: { accessWidening: 'access-widening-forbidden' },
       }),
     );
-    expect(declaredPolicies({ change: undefined })).toBe(undefined);
+    expect(
+      declaredPolicies({
+        change: undefined,
+        'dataProtection.dataLoss': undefined,
+        'dataProtection.accessWidening': undefined,
+      }),
+    ).toBe(undefined);
   });
 
   it('renders the declared settings as one line', () => {

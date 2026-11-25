@@ -29,11 +29,19 @@ function dataLines(outcome: RefPoliciesOutcome): readonly string[] {
   );
 }
 
-function valueText(setting: PolicySetting, value: PolicySettingValue | null): Text {
+/** A value before the change: one the ref did not declare is shown as the default it stood for. */
+function beforeText(setting: PolicySetting, value: PolicySettingValue | null): Text {
   return value === null
     ? [{ text: `${databasePolicyValueText(DEFAULT_SETTINGS[setting])} (default)`, tone: 'muted' }]
     : databasePolicyValueText(value);
 }
+
+/** A value after the change: a removed setting is not declared, and deploys stop comparing it. */
+function afterText(value: PolicySettingValue | null): Text {
+  return value === null ? NOT_DECLARED : databasePolicyValueText(value);
+}
+
+const NOT_DECLARED: Text = [{ text: 'not declared', tone: 'muted' }];
 
 function refHeading(text: string, outcome: RefPoliciesOutcome, cwd: string): Text {
   return [
@@ -64,10 +72,7 @@ export function showPresentations(outcome: RefPoliciesOutcome, cwd: string): Pre
         const value = outcome.declared[setting];
         return {
           label: setting,
-          value:
-            value === undefined
-              ? [{ text: 'not declared', tone: 'muted' }]
-              : databasePolicyValueText(value),
+          value: value === undefined ? NOT_DECLARED : databasePolicyValueText(value),
         };
       }),
     },
@@ -89,9 +94,9 @@ function changesCard(changes: readonly RefPolicyChange[]): Block {
     rows: changes.map(({ setting, before, after, effect }) => ({
       label: setting,
       value: [
-        ...spans(valueText(setting, before)),
+        ...spans(beforeText(setting, before)),
         { text: '  →  ' },
-        ...spans(valueText(setting, after)),
+        ...spans(afterText(after)),
         { text: '  ' },
         { text: effect, tone: EFFECT_TONE[effect] },
       ],
@@ -103,7 +108,11 @@ function changesCard(changes: readonly RefPolicyChange[]): Block {
 export function editPresentations(
   outcome: RefPoliciesOutcome,
   cwd: string,
-  closing: (changes: readonly RefPolicyChange[]) => string,
+  wording: {
+    /** Why nothing changed, after "ref <name>". */
+    readonly nothingChanged: string;
+    readonly closing: (changes: readonly RefPolicyChange[]) => string;
+  },
 ): Presentations {
   const { ref, changes } = outcome.result;
   return presentations(outcome, () =>
@@ -115,7 +124,7 @@ export function editPresentations(
             text: [
               { text: 'Nothing changed: ref ' },
               { text: ref, tone: 'ref' },
-              { text: ' already declares these policies. No file was written.' },
+              { text: ` ${wording.nothingChanged}. No file was written.` },
             ],
           },
         ]
@@ -126,7 +135,7 @@ export function editPresentations(
             text: refHeading('Updated the policies ref ', outcome, cwd),
           },
           changesCard(changes),
-          { kind: 'summary', status: 'info', text: closing(changes) },
+          { kind: 'summary', status: 'info', text: wording.closing(changes) },
         ],
   );
 }

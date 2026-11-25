@@ -150,7 +150,7 @@ function parseSetEdit(input: RefPolicySetInput): Result<Edit, ActionableCliError
   if (!dataLoss.ok) return dataLoss;
   const accessWidening = parseLevel(DATA_PROTECTION_SETTINGS.accessWidening, input.accessWidening);
   if (!accessWidening.ok) return accessWidening;
-  const given: DeclaredSettings = {
+  const given: Partial<DeclaredSettings> = {
     ...ifDefined('change', changeValues.length === 0 ? undefined : change.value),
     ...ifDefined('dataProtection.dataLoss', dataLoss.value),
     ...ifDefined('dataProtection.accessWidening', accessWidening.value),
@@ -202,7 +202,7 @@ function parseDeleteEdit(names: readonly string[]): Result<Edit, ActionableCliEr
     removed.add(setting);
   }
   return ok((declared) => {
-    const kept: { -readonly [S in PolicySetting]?: PolicySettingValue<S> | undefined } = {
+    const kept: { -readonly [S in PolicySetting]: PolicySettingValue<S> | undefined } = {
       ...declared,
     };
     for (const setting of removed) kept[setting] = undefined;
@@ -236,6 +236,7 @@ function settingChanges(
     const to = after[setting];
     if (sameValue(from, to)) return [];
     const effect = policyValueEffect(
+      setting,
       from ?? DEFAULT_SETTINGS[setting],
       to ?? DEFAULT_SETTINGS[setting],
     );

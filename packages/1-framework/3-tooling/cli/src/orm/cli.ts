@@ -144,7 +144,11 @@ export function createBinCommands(createClient: CreateControlClient): MountedTre
   };
 }
 
-export const BIN_COMMANDS: MountedTree = createBinCommands(createControlClient);
+/** The family's own command instances replace the tree's equivalents: the engine finds a command's family, and so its docs link, by the instance. */
+export const BIN_COMMANDS: MountedTree = {
+  ...createBinCommands(createControlClient),
+  ...ormCommandFamily.commands,
+};
 
 export function createOrmCli(): Cli {
   return createCli({

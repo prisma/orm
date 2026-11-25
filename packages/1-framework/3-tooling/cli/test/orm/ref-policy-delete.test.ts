@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import stripAnsi from 'strip-ansi';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanupRefProjects, HASH_A, harness, refPointerPath } from './ref-fixtures';
 import {
@@ -141,6 +142,45 @@ describe('ref policy delete', () => {
     expect(run.exitCode).toBe(0);
     expect(run.presented?.data).toMatchObject({ changes: [] });
     expect(await readText(path)).toBe(handWritten);
+  });
+
+  it('shows a removed setting as not declared, so a row never shows two values as unchanged', async () => {
+    const { dir } = await projectWithRef('staging', FULL);
+
+    const run = await harness().run(
+      ['migration', 'ref', 'policy', 'delete', 'staging', 'data-loss', 'access-widening'],
+      { cwd: dir, isTty: { stdout: true, stderr: true } },
+    );
+    const rendered = stripAnsi(run.stderr)
+      .split('\n')
+      .map((line) => line.trimEnd())
+      .filter((line) => line.includes('→'));
+
+    expect(rendered).toEqual([
+      'dataProtection.dataLoss:        data-loss-forbidden  →  not declared  loosens',
+      'dataProtection.accessWidening:  access-widening-permitted  →  not declared  unchanged',
+    ]);
+  });
+
+  it('says the ref declares none of the settings when there is nothing to remove', async () => {
+    const { dir } = await projectWithRef('production', {
+      ...PLAIN_REF,
+      policies: { change: ['migrate'] },
+    });
+
+    const run = await runPolicy(dir, ['delete', 'production', 'access-widening']);
+
+    expect(run.presented?.presentation.human).toEqual([
+      {
+        kind: 'summary',
+        status: 'info',
+        text: [
+          { text: 'Nothing changed: ref ' },
+          { text: 'production', tone: 'ref' },
+          { text: ' declares none of these settings. No file was written.' },
+        ],
+      },
+    ]);
   });
 
   it('says which settings deploys stop comparing, and that no database changed', async () => {

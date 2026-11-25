@@ -23,8 +23,12 @@ export function createRefPolicySetCommand(
       description:
         'Writes the policies field of migrations/app/refs/<ref>.json, changing only\n' +
         'the settings named. --change replaces the declared list, so --change\n' +
-        'reconcile alone permits only db update. A level is forbidden, with-consent\n' +
-        'or permitted. It never connects to a database: a database takes on the\n' +
+        'reconcile alone permits only db update. --data-loss and --access-widening\n' +
+        'say whether a change may lose data or widen who can read or write data:\n' +
+        'forbidden refuses such a change; with-consent runs it only with consent:\n' +
+        'db update asks first (--delete, --allow), and db migrate runs a migration\n' +
+        'because the consent was given when it was planned; permitted runs it\n' +
+        'without asking. It never connects to a database: a database takes on the\n' +
         'policies only in a deploy its owner gives consent to.\n\n' +
         DO_NOT_LOOSEN_TO_GET_PAST_A_REFUSAL,
       examples: [
@@ -68,7 +72,10 @@ export function createRefPolicySetCommand(
       return ok(
         ctx.present(
           { data: result.value.result },
-          editPresentations(result.value, ctx.cwd, (changes) => closing(ref, changes)),
+          editPresentations(result.value, ctx.cwd, {
+            nothingChanged: 'already declares these policies',
+            closing: (changes) => closing(ref, changes),
+          }),
         ),
       );
     },

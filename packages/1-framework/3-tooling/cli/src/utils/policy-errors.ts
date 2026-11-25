@@ -58,7 +58,8 @@ const APPLY_THE_REF = "Have whoever owns the database apply the ref's policies i
  */
 function mismatchRecoveries(differences: readonly DatabasePolicyDifference[]): readonly string[] {
   const refLooser = differences.filter(
-    ({ declared, inForce }) => policyValueEffect(declared, inForce) === 'tightens',
+    ({ setting, declared, inForce }) =>
+      policyValueEffect(setting, declared, inForce) === 'tightens',
   );
   const others = differences.filter((difference) => !refLooser.includes(difference));
   if (others.length === 0) return [DECLARE_WHAT_THE_DATABASE_HAS];

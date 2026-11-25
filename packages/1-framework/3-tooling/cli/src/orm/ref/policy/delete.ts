@@ -55,7 +55,10 @@ export function createRefPolicyDeleteCommand(
       return ok(
         ctx.present(
           { data: result.value.result },
-          editPresentations(result.value, ctx.cwd, (changes) => closing(ref, changes)),
+          editPresentations(result.value, ctx.cwd, {
+            nothingChanged: 'declares none of these settings',
+            closing: (changes) => closing(ref, changes),
+          }),
         ),
       );
     },

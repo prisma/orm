@@ -39,6 +39,17 @@ describe('advice about ref policies', () => {
     );
   });
 
+  it('says in the help of set what each level does', async () => {
+    const { dir } = await projectWithRef('production', PLAIN_REF);
+
+    const run = await harness().run(['migration', 'ref', 'policy', 'set', '--help'], { cwd: dir });
+    const help = run.stdout.replace(/│/g, '').replace(/\s+/g, ' ');
+
+    expect(help).toContain(
+      'forbidden refuses such a change; with-consent runs it only with consent: db update asks first (--delete, --allow), and db migrate runs a migration because the consent was given when it was planned; permitted runs it without asking.',
+    );
+  });
+
   it('never names the consent flag in any output of the policy commands', async () => {
     const { dir } = await projectWithRef('production', {
       ...PLAIN_REF,

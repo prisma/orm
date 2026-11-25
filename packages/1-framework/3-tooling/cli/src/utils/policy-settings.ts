@@ -43,9 +43,9 @@ export const POLICY_SETTINGS = [
   'dataProtection.accessWidening',
 ] as const satisfies readonly PolicySetting[];
 
-/** The settings a ref declares, by key path; a setting it does not declare is absent or undefined. */
+/** The settings a ref declares, by key path; `undefined` where it declares nothing. */
 export type DeclaredSettings = {
-  readonly [S in PolicySetting]?: PolicySettingValue<S> | undefined;
+  readonly [S in PolicySetting]: PolicySettingValue<S> | undefined;
 };
 
 /** Each setting's value in a database that records no policies. */
@@ -63,12 +63,9 @@ export function canonicalChange(change: Iterable<ChangeStrategy>): ChangeStrateg
 
 export function declaredSettings(policies: DeclaredDatabasePolicies | undefined): DeclaredSettings {
   return {
-    ...ifDefined(
-      'change',
-      policies?.change === undefined ? undefined : canonicalChange(policies.change),
-    ),
-    ...ifDefined('dataProtection.dataLoss', policies?.dataProtection?.dataLoss),
-    ...ifDefined('dataProtection.accessWidening', policies?.dataProtection?.accessWidening),
+    change: policies?.change === undefined ? undefined : canonicalChange(policies.change),
+    'dataProtection.dataLoss': policies?.dataProtection?.dataLoss,
+    'dataProtection.accessWidening': policies?.dataProtection?.accessWidening,
   };
 }
 
@@ -109,14 +106,6 @@ export function settingsText(
 /** What happens to a policy when a setting moves from one value to another. */
 export type PolicyEffect = 'tightens' | 'loosens' | 'unchanged';
 
-/** A level's strictness: its place in the framework's list of its setting's levels, strictest first. */
-function levelRank(level: PolicySettingValue): number {
-  const dataLoss = DATA_LOSS_LEVELS.findIndex((candidate) => candidate === level);
-  return dataLoss === -1
-    ? ACCESS_WIDENING_LEVELS.findIndex((candidate) => candidate === level)
-    : dataLoss;
-}
-
 function changeEffect(
   from: readonly ChangeStrategy[],
   to: readonly ChangeStrategy[],
@@ -127,11 +116,33 @@ function changeEffect(
   return after.size < before.size ? 'tightens' : 'unchanged';
 }
 
-/** Whether moving one setting from `from` to `to` makes the policy stricter or more permissive: adding a change strategy, or a less strict level, loosens it. */
-export function policyValueEffect(from: PolicySettingValue, to: PolicySettingValue): PolicyEffect {
+/** The levels of a data protection setting, strictest first, as the framework lists them; a change policy has none. */
+function levelsOf(setting: PolicySetting): readonly PolicySettingValue[] {
+  switch (setting) {
+    case 'change':
+      return [];
+    case 'dataProtection.dataLoss':
+      return DATA_LOSS_LEVELS;
+    case 'dataProtection.accessWidening':
+      return ACCESS_WIDENING_LEVELS;
+  }
+}
+
+/** Whether moving `setting` from `from` to `to` makes the policy stricter or more permissive: adding a change strategy, or a less strict level, loosens it. */
+export function policyValueEffect<S extends PolicySetting>(
+  setting: S,
+  from: PolicySettingValue<S>,
+  to: PolicySettingValue<S>,
+): PolicyEffect;
+export function policyValueEffect(
+  setting: PolicySetting,
+  from: PolicySettingValue,
+  to: PolicySettingValue,
+): PolicyEffect {
   if (typeof from !== 'string' && typeof to !== 'string') return changeEffect(from, to);
-  const before = levelRank(from);
-  const after = levelRank(to);
+  const levels = levelsOf(setting);
+  const before = levels.indexOf(from);
+  const after = levels.indexOf(to);
   if (before === after) return 'unchanged';
   return after < before ? 'tightens' : 'loosens';
 }
