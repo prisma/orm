@@ -129,7 +129,7 @@ describe('releaseTagsFor', () => {
     });
     assert.deepEqual(
       NAMES.map((name) => tags.get(name)),
-      ['latest', 'preview', 'latest'],
+      ['latest', 'ea', 'latest'],
     );
   });
 
