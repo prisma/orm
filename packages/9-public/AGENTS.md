@@ -34,6 +34,7 @@ A package's `api-breaks.json`, `packages/9-public/removed-packages.json` and `ex
 
 - A record of kind `break` breaks users' code. Is the reason one a user would accept, and is the break also in the release notes?
 - A record of kind `allowed` claims the change is one the compatibility policy allows: for example a new optional property that fails an example app's exact type assertion, or a change to an interface that users only implement. Check that the claim is true. A record that calls a real break allowed hides it from users.
+- A record replaced with a new `fingerprint` means the export, or a type it uses, changed again. The new record covers whatever that test reports now, which may be a different break with the same message. Look at the break the job reports for the current code, not only at the reason, which is often copied unchanged.
 - A removed record means the break it covered is gone, or the last release has moved on. Either is fine.
 
 Ask, rather than guess, when you cannot tell whether a type is one users implement or only receive.

@@ -37,18 +37,21 @@ reviews:
         release. A new record lets one through, so follow the criteria in packages/9-public/AGENTS.md ("What to
         check in a record of a break"): a record of kind break needs a reason a user would accept and a mention
         in the release notes; a record of kind allowed claims the compatibility policy allows the change, so
-        check that claim, because calling a real break allowed hides it from users.
+        check that claim, because calling a real break allowed hides it from users. A record replaced with a new
+        fingerprint covers whatever the export's test reports now, not only the break it first covered: check the
+        current break the job reports, not only the reason.
     - path: "packages/9-public/removed-packages.json"
       instructions: >-
-        These files record changes that CI would otherwise report as breaking code written against the last
-        release. A new record lets one through, so follow the criteria in packages/9-public/AGENTS.md ("What to
-        check in a record of a break"): a record of kind break needs a reason a user would accept and a mention
-        in the release notes; a record of kind allowed claims the compatibility policy allows the change, so
-        check that claim, because calling a real break allowed hides it from users.
+        This file records published packages that were removed, which CI would otherwise report as breaking
+        code written against the last release. Every record is a break: follow the criteria in
+        packages/9-public/AGENTS.md ("What to check in a record of a break"). It needs a reason a user would
+        accept and a mention in the release notes.
     - path: "examples/last-release-errors.json"
       instructions: >-
         These files record changes that CI would otherwise report as breaking code written against the last
         release. A new record lets one through, so follow the criteria in packages/9-public/AGENTS.md ("What to
         check in a record of a break"): a record of kind break needs a reason a user would accept and a mention
         in the release notes; a record of kind allowed claims the compatibility policy allows the change, so
-        check that claim, because calling a real break allowed hides it from users.
+        check that claim, because calling a real break allowed hides it from users. A record replaced with a new
+        fingerprint covers whatever the export's test reports now, not only the break it first covered: check the
+        current break the job reports, not only the reason.

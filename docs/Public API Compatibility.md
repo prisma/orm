@@ -69,7 +69,7 @@ Some breaks are reported for changes the policy allows. The check treats any typ
 
 If the break is not intended, change the code. If it is, record it.
 
-## Recording a deliberate break
+## Recording an accepted failure
 
 A break in a generally available export is an exception to the compatibility policy, and the release notes must name it. Record it in the package's `api-breaks.json`, beside its `api.txt`:
 
@@ -77,7 +77,7 @@ A break in a generally available export is an exception to the compatibility pol
 [{ "path": "./builder", "export": "Db", "test": "type", "kind": "break", "lastRelease": "8.1.0", "fingerprint": "34261bf6461da021", "reason": "Join scopes merge by name; see the release notes" }]
 ```
 
-Do not write the record by hand: the job prints one, ready to paste, under each break it reports, and the job summary has one block per package. `test` is the kind of test that broke: `type`, `value`, `constructor`, `abstract`, `exists`, `path` or `augments`. `kind` is `break` for a deliberate break, which the release notes must name, or `allowed` for a change the policy allows that the check reports anyway, such as widening the return type of a method on an interface users only implement. `lastRelease` is the release the break is measured against. `fingerprint` covers the export's lines in the package's `api.txt` and the lines of every declaration there that they name, followed until nothing new is named. When the export, or a type it uses, changes again, the fingerprint no longer matches, the record stops applying, and the break is reported again with a note, to be judged afresh. Run `pnpm build` and `pnpm api:update` before copying a printed record, so its fingerprint is taken from the lists you commit. Some changes that are not API changes also change a fingerprint: a non-exported type renumbered (`Options_2`), an outside type that gains its package prefix, or an upgrade of TypeScript or API Extractor. After one of those, paste the printed records again. A deleted package is recorded in `packages/9-public/removed-packages.json` as `{ "package", "lastRelease", "reason" }`.
+Do not write the record by hand: the job prints one, ready to paste, under each break it reports, and the job summary has one block per package. `test` is the kind of test that broke: `type`, `value`, `constructor`, `abstract`, `exists`, `path` or `augments`. `kind` is `break` for a deliberate break, which the release notes must name, or `allowed` for a change the policy allows that the check reports anyway, such as widening the return type of a method on an interface users only implement. `lastRelease` is the release the break is measured against. `fingerprint` covers the export's lines in the package's `api.txt` and the lines of every declaration there that they name, followed until nothing new is named. When the export, or a type of the same package that it uses, changes again, the fingerprint no longer matches, the record stops applying, and the break is reported again with a note, to be judged afresh. Run `pnpm build` and `pnpm api:update` before copying a printed record, so its fingerprint is taken from the lists you commit. Some changes that are not API changes also change a fingerprint: a non-exported type renumbered (`Options_2`), an outside type that gains its package prefix, or an upgrade of TypeScript or API Extractor. After one of those, paste the printed records again. A deleted package is recorded in `packages/9-public/removed-packages.json` as `{ "package", "lastRelease", "reason" }`.
 
 ## The last release's example apps fail
 
@@ -93,4 +93,4 @@ A record matches one error by app, file, line, code and message, so copy the mes
 
 ## What the checks do not see
 
-The decision record lists them in its section "What the checks do not see". In short: swapping one branded type for another, changes inside generic functions or between overloads, a property made `readonly`, breaks inside undecided comparisons, third-party type changes, result types the example apps do not exercise, and behaviour. A reviewer is the only check for these.
+The decision record lists them in its section "What the checks do not see". In short: swapping one branded type for another, changes inside generic functions or between overloads, a property made `readonly`, breaks inside undecided comparisons, a change to another package's type behind a recorded export, third-party type changes, result types the example apps do not exercise, and behaviour. A reviewer is the only check for these.
