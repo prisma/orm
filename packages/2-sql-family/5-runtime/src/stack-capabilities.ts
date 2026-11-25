@@ -21,15 +21,17 @@ export function capabilitiesTheStackDoesNotProvide(
     stack.driver.capabilities,
     ...stack.extensions.map((extension) => extension.capabilities),
   ];
-  const missing: string[] = [];
-  for (const [namespace, flags] of Object.entries(contract.capabilities)) {
-    for (const [flag, required] of Object.entries(flags)) {
-      if (!required || flagIn(stack.target.databaseCapabilities, namespace, flag) !== undefined)
-        continue;
-      if (!providers.some((set) => flagIn(set, namespace, flag) === true)) {
-        missing.push(`${namespace}.${flag}`);
-      }
-    }
-  }
-  return missing;
+  const isDatabaseCapability = (namespace: string, flag: string) =>
+    flagIn(stack.target.databaseCapabilities, namespace, flag) !== undefined;
+  const isProvided = (namespace: string, flag: string) =>
+    providers.some((set) => flagIn(set, namespace, flag) === true);
+
+  return Object.entries(contract.capabilities).flatMap(([namespace, flags]) =>
+    Object.entries(flags)
+      .filter(
+        ([flag, required]) =>
+          required && !isDatabaseCapability(namespace, flag) && !isProvided(namespace, flag),
+      )
+      .map(([flag]) => `${namespace}.${flag}`),
+  );
 }
