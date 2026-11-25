@@ -63,7 +63,7 @@ describe('prisma7ConfigFile', { timeout: timeouts.typeScriptCompilation }, () =>
 });
 
 describe('the Prisma 7 config text', () => {
-  it('is the config init has always written, around the module the target package names', () => {
+  it('is the config init has always written, around the module the facade names', () => {
     expect(
       prisma7ConfigFile('prisma/schema.prisma', 'src/prisma', '@prisma/orm-postgres/config'),
     ).toBe(
