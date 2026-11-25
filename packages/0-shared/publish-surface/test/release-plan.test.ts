@@ -342,6 +342,23 @@ describe('planRelease', () => {
         'paradedb: its own version "0.18"',
       ],
       [
+        'a package still at a release candidate of 8.0 when others have left them',
+        input({
+          release: { major: 8, minor: 0 },
+          current: { ...AT_8_0, mongo: '8.0.0-rc.26' },
+          levelChanges: { mongo: 'rc' },
+        }),
+        'mongo: "8.0.0-rc.26"',
+      ],
+      [
+        'a platform package still at a release candidate of 8.0 when its facade has left them',
+        input({
+          release: { major: 8, minor: 0 },
+          current: { ...AT_8_0, 'target-mysql': '8.0.0-rc.26' },
+        }),
+        'target-mysql: "8.0.0-rc.26"',
+      ],
+      [
         'a release-candidate counter of 0',
         input({ line: 'release-candidates', rcCounter: 0, release: { major: 8, minor: 0 } }),
         'starts at 1',

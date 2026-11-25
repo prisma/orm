@@ -312,6 +312,11 @@ function levelVersions(input: ReleasePlanInput, names: readonly string[]): Recor
       continue;
     }
     if (level === undefined) throw new ReleasePlanError(`${name} has no declared level`);
+    if (!first && isPublishedReleaseCandidate(current) && major === 8 && minor === 0) {
+      throw new ReleasePlanError(
+        `${name}: "${text}" is a release candidate, but not every package is still at one; release 8.0 moves every package off the release candidates together`,
+      );
+    }
     versions[name] = first
       ? firstVersionOfMinor({ major, minor }, level)
       : nextVersion(name, text, current, level, input);
