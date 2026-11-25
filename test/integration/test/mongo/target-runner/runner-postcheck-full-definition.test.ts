@@ -208,4 +208,15 @@ describe('createCollection postchecks', { timeout: timeouts.spinUpMongoMemorySer
 
     expect(await postchecksHold(op)).toBe(false);
   });
+
+  it('does not hold for a collection whose validator adds a predicate to the $jsonSchema', async () => {
+    const $jsonSchema = { bsonType: 'object' };
+    await db.createCollection('stock', {
+      validator: { $jsonSchema, $expr: { $gt: ['$qty', 0] } },
+    });
+
+    expect(await postchecksHold(createCollection('stock', { validator: { $jsonSchema } }))).toBe(
+      false,
+    );
+  });
 });

@@ -1394,7 +1394,7 @@ export function createCollection(
 }
 
 /**
- * How the postcheck compares each option `listCollections` reports: the validator by its body, a
+ * How the postcheck compares each option `listCollections` reports: the validator whole, a
  * scalar exactly, and a document by the fields the call gives, since MongoDB completes a time-series
  * spec, a collation and a clustered index with defaults. Every option is listed, so a new one does
  * not compile until it is placed.
@@ -1454,10 +1454,9 @@ function createdCollectionOptionFilters(options: CreateCollectionOptions): Mongo
       if (given === undefined) return [MongoExistsExpr.notExists(`options.${option}`)];
       if (kind === 'validator') {
         return [
-          validatorBodyFilter(
-            blindCast<Readonly<Record<string, unknown>>, 'the validator option is a document'>(
-              given,
-            ),
+          MongoFieldFilter.eq(
+            'options.validator',
+            blindCast<MongoValue, 'the validator option is a plain BSON document'>(given),
           ),
         ];
       }

@@ -50,7 +50,7 @@ describe('createCollection postcheck', () => {
       MongoAndExpr.of([
         MongoFieldFilter.eq('name', 'users'),
         MongoFieldFilter.eq('type', 'collection'),
-        MongoFieldFilter.eq('options.validator.$jsonSchema', schema),
+        MongoFieldFilter.eq('options.validator', { $jsonSchema: schema }),
         MongoFieldFilter.eq('options.validationLevel', 'strict'),
         MongoFieldFilter.eq('options.validationAction', 'error'),
         ...absent('capped', 'size', 'max', ...DOCUMENTS),
