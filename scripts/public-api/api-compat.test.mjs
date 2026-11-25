@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { failsRun, RecordsError, readRecords, reportMarkdown, reportText } from './api-compat.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const work = join(here, '..', '..', 'wip', 'api-compat-main-tests', String(process.pid));
+const work = join(here, '..', '..', 'wip', `api-compat-main-tests-${process.pid}`);
 after(() => rmSync(work, { recursive: true, force: true }));
 
 function packageWithRecords(text) {

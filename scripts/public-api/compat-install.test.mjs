@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { aliasOf, thirdPartyVersions } from './compat-install.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const work = join(here, '..', '..', 'wip', 'api-compat-install-tests', String(process.pid));
+const work = join(here, '..', '..', 'wip', `api-compat-install-tests-${process.pid}`);
 after(() => rmSync(work, { recursive: true, force: true }));
 
 function writePackage(dir, manifest) {

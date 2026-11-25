@@ -8,7 +8,7 @@ import { checkPackage, isPrerelease, stampVersion } from './compat.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(here, 'fixtures', 'compat');
 // Inside the repository, so that the declarations resolve @types/node through its node_modules.
-const work = join(here, '..', '..', 'wip', 'api-compat-tests', String(process.pid));
+const work = join(here, '..', '..', 'wip', `api-compat-tests-${process.pid}`);
 after(() => rmSync(work, { recursive: true, force: true }));
 
 function check(current, { records = [], version = '1.0.0', strict = true, stamp = true } = {}) {
