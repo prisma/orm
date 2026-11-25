@@ -314,7 +314,7 @@ export function generateTests({
 
 // One test file: the imports of `side` ('current' or 'twin') against the release's, and the
 // comparisons of `stage` for the given export entries.
-export function render(entries, { stage = 'native', side = 'current', mustFail = true } = {}) {
+function render(entries, { stage = 'native', side = 'current', mustFail = true } = {}) {
   const lines = [
     "import type { EraseNew, EraseOld, IsNeverOrAny, requireAssignableTo, StructuralNew, StructuralOld } from 'HELPERS';",
   ];
@@ -347,7 +347,7 @@ export function render(entries, { stage = 'native', side = 'current', mustFail =
   return { lines, cases };
 }
 
-export function packageNameOf(fileName, cache) {
+function packageNameOf(fileName, cache) {
   for (let folder = dirname(fileName); dirname(folder) !== folder; folder = dirname(folder)) {
     if (!cache.has(folder)) {
       const manifest = join(folder, 'package.json');
@@ -467,7 +467,7 @@ function compileOnce({ testFile, entries, stage, side, mustFail, options, host, 
 // already decided, until a pass has no new TS2589 or the time runs out. A test that overflows the
 // stack takes the whole program with it, so a batch that overflows is halved until the test that
 // does it is alone, and that test is not decided.
-export function compileTests({
+function compileTests({
   testFile,
   imports,
   entries,
