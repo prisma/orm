@@ -103,7 +103,7 @@ Decomposing means dropping the facade from the application's declarations; the p
 
 ## Why entrypoints, not bundles: module identity
 
-The runtime recognises some of its values by which copy of a module made them, such as the private field a data-type value carries, so those checks only work when a given module exists **once** in an application's module graph. For the same reason, every published package names the platform packages it uses as peer dependencies ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)). This yields the core packaging rule:
+The runtime recognises some of its values by which copy of a module made them, such as the private field a data-type value carries, so that recognition only works when a given module exists **once** in an application's module graph. For the same reason, every published package names the platform packages it uses as peer dependencies ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)). This yields the core packaging rule:
 
 > Every internal module is published from exactly one package. Consolidation happens by re-exporting internal packages as subpath entrypoints of a single published shell — never by bundling the same code into multiple packages.
 
