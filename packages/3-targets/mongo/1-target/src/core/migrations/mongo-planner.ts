@@ -1,19 +1,18 @@
 import type { Contract, ContractWithDomain } from '@internal/contract/types';
 import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
-import {
-  type MigrationDataLoss,
-  type MigrationOperationPolicy,
-  type MigrationPlanner,
-  type MigrationPlannerConflict,
-  type MigrationPlannerResult,
-  type MigrationPlanWithAuthoringSurface,
-  type MigrationScaffoldContext,
-  type ModelCoordinate,
-  modelDisplayName,
-  type PlanOrigin,
-  type ResolvedMigrationStatement,
-  type ResolvedRenameStatement,
+import type {
+  MigrationDataLoss,
+  MigrationOperationPolicy,
+  MigrationPlanner,
+  MigrationPlannerConflict,
+  MigrationPlannerResult,
+  MigrationPlanWithAuthoringSurface,
+  MigrationScaffoldContext,
+  ModelCoordinate,
+  PlanOrigin,
+  ResolvedMigrationStatement,
+  ResolvedRenameStatement,
 } from '@internal/framework-components/control';
 import {
   collectionOfModel,
@@ -35,12 +34,7 @@ import {
 import { documentsNotRewrittenWarnings } from './mongo-documents-not-rewritten';
 import { planEnumValueRewrites } from './mongo-enum-value-planning';
 import { planFieldFills } from './mongo-field-fills';
-import {
-  documentCollectionOf,
-  isRootModel,
-  modelCoordinates,
-  modelsADropLoses,
-} from './mongo-model-coordinates';
+import { modelsADropLoses } from './mongo-model-coordinates';
 import {
   type DiscriminatorFilter,
   type OrderedRewrite,
