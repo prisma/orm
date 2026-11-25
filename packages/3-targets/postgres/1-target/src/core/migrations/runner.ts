@@ -48,9 +48,12 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Result } from '@internal/utils/result';
 import { notOk, ok, okVoid } from '@internal/utils/result';
-import { postgresDatabaseShortfall, postgresDatabaseShortfallMessage } from '../database-shortfall';
+import {
+  postgresDatabaseCapabilitiesNotProvided,
+  postgresDatabaseCapabilitiesNotProvidedMessage,
+} from '../database-capabilities-not-provided';
 import { postgresError } from '../errors';
-import { postgresCapabilitiesByVersion } from '../server-version';
+import { type CapabilitiesByVersion, postgresCapabilitiesByVersion } from '../server-version';
 import { readPostgresServerVersionNumber } from '../server-version-number';
 import { CONTROL_PLANE_LC_MONETARY, quoteIdentifier } from '../sql-utils';
 import {
@@ -150,14 +153,21 @@ function failedTypeChangeOf(
 /** Sets `lc_monetary` for the rest of the current transaction only; {@link CONTROL_PLANE_LC_MONETARY} says why the runner sets it. */
 const SET_LOCAL_LC_MONETARY_SQL = "SELECT set_config('lc_monetary', $1, true)";
 
+/**
+ * @param capabilitiesByVersion The table the runner checks the database against; tests pass one whose rows differ.
+ */
 export function createPostgresMigrationRunner(
   family: SqlControlFamilyInstance,
+  capabilitiesByVersion: CapabilitiesByVersion = postgresCapabilitiesByVersion,
 ): SqlMigrationRunner<PostgresPlanTargetDetails> {
-  return new PostgresMigrationRunner(family);
+  return new PostgresMigrationRunner(family, capabilitiesByVersion);
 }
 
 class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDetails> {
-  constructor(private readonly family: SqlControlFamilyInstance) {}
+  constructor(
+    private readonly family: SqlControlFamilyInstance,
+    private readonly capabilitiesByVersion: CapabilitiesByVersion,
+  ) {}
 
   /**
    * Body of the migration runner without transaction management. The
@@ -193,12 +203,6 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
 
     const policyCheck = this.enforcePolicyCompatibility(options.policy, planOps);
     if (!policyCheck.ok) return policyCheck;
-
-    const capabilitiesCheck = await this.ensureDatabaseProvidesCapabilities(
-      driver,
-      options.destinationContract,
-    );
-    if (!capabilitiesCheck.ok) return capabilitiesCheck;
 
     await this.readMoneyLiteralsInCents(driver);
     await this.acquireLock(driver);
@@ -323,6 +327,11 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     perSpaceOptions: ReadonlyArray<SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>>,
     expectedDatabasePolicies: DatabasePolicies | undefined,
   ): Promise<MigrationRunnerResult> {
+    const capabilitiesCheck = await this.ensureDatabaseProvidesCapabilities(
+      driver,
+      perSpaceOptions,
+    );
+    if (!capabilitiesCheck.ok) return capabilitiesCheck;
     if (expectedDatabasePolicies !== undefined) {
       await this.acquireLock(driver);
       const policiesCheck = await checkDatabasePoliciesHeld(
@@ -775,21 +784,30 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     return okVoid();
   }
 
-  /** Refuses, before anything is applied, a database that does not provide a capability `contract` requires of it; verification after apply would refuse it too. */
+  /**
+   * Refuses a database that does not provide a capability some space's destination contract requires of it. It reads the server's version once and checks every space before any space runs, so a refused run sends nothing that changes the database.
+   */
   private async ensureDatabaseProvidesCapabilities(
     driver: SqlControlDriverInstance<string>,
-    contract: Contract<SqlStorage>,
+    perSpaceOptions: ReadonlyArray<SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>>,
   ): Promise<Result<void, SqlMigrationRunnerFailure>> {
-    const shortfall = postgresDatabaseShortfall({
-      capabilities: contract.capabilities,
-      table: postgresCapabilitiesByVersion,
-      serverVersionNumber: await readPostgresServerVersionNumber(driver),
-    });
-    if (shortfall === undefined) return okVoid();
-    return runnerFailure(
-      'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED',
-      postgresDatabaseShortfallMessage(shortfall, postgresCapabilitiesByVersion),
-    );
+    const serverVersionNumber = await readPostgresServerVersionNumber(driver);
+    for (const spaceOptions of perSpaceOptions) {
+      const notProvided = postgresDatabaseCapabilitiesNotProvided({
+        capabilities: spaceOptions.destinationContract.capabilities,
+        table: this.capabilitiesByVersion,
+        serverVersionNumber,
+      });
+      if (notProvided === undefined) continue;
+      const failure = runnerFailure(
+        'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED',
+        postgresDatabaseCapabilitiesNotProvidedMessage(notProvided, this.capabilitiesByVersion),
+      );
+      return notOk(
+        withFailingSpace(failure.failure, spaceOptions.space ?? spaceOptions.plan.spaceId),
+      );
+    }
+    return okVoid();
   }
 
   private ensureMarkerCompatibility(

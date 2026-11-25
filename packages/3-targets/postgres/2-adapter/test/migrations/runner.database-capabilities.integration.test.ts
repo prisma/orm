@@ -17,23 +17,24 @@ import {
   testTimeout,
 } from './fixtures/runner-fixtures';
 
-/** The driver, except that the database reports `serverVersionNumber` as its `server_version_num`. */
-function reportingServerVersion(
-  driver: PostgresControlDriver,
-  serverVersionNumber: number,
-): PostgresControlDriver {
-  return new Proxy(driver, {
+/** The driver, except that the database reports `serverVersionNumber` as its `server_version_num`, recording every statement it is sent. */
+function reportingServerVersion(driver: PostgresControlDriver, serverVersionNumber: number) {
+  const sent: string[] = [];
+  const reporting = new Proxy(driver, {
     get(target, property) {
       const value = Reflect.get(target, property);
       if (property === 'query') {
-        return (sql: string, params?: readonly unknown[]) =>
-          sql.includes('server_version_num')
+        return (sql: string, params?: readonly unknown[]) => {
+          sent.push(sql);
+          return sql.includes('server_version_num')
             ? Promise.resolve({ rows: [{ server_version_num: serverVersionNumber }] })
             : target.query(sql, params);
+        };
       }
       return typeof value === 'function' ? value.bind(target) : value;
     },
   });
+  return { driver: reporting, sent };
 }
 
 describe('PostgresMigrationRunner - database capabilities', { concurrent: false }, () => {
@@ -62,7 +63,7 @@ describe('PostgresMigrationRunner - database capabilities', { concurrent: false 
     }
   }, testTimeout);
 
-  it('refuses a server older than the first supported version before it applies the plan', {
+  it('refuses a server older than the first supported version without sending anything that changes the database', {
     timeout: testTimeout,
   }, async () => {
     const planned = postgresTargetDescriptor.createPlanner(controlAdapter).plan({
@@ -77,7 +78,7 @@ describe('PostgresMigrationRunner - database capabilities', { concurrent: false 
       snapshotsImportPath: '../../snapshots',
     });
     if (planned.kind !== 'success') throw new Error('expected planner success');
-    const onPostgres14 = reportingServerVersion(driver!, 140010);
+    const { driver: onPostgres14, sent } = reportingServerVersion(driver!, 140010);
 
     const result = await postgresTargetDescriptor.createRunner(familyInstance).execute({
       driver: onPostgres14,
@@ -110,5 +111,10 @@ describe('PostgresMigrationRunner - database capabilities', { concurrent: false 
     );
     expect(userTable.rows[0]?.exists).toBe(false);
     await expectNoMarkerOrLedgerWrites(driver!);
+    expect(sent).toEqual([
+      'BEGIN',
+      "SELECT current_setting('server_version_num')::int AS server_version_num",
+      'ROLLBACK',
+    ]);
   });
 });
