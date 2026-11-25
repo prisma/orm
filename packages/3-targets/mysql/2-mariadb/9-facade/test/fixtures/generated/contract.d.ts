@@ -609,6 +609,7 @@ type ContractBase = Omit<
       readonly defaultInInsert: true;
       readonly enums: true;
       readonly foreignKeys: true;
+      readonly interactiveTransactions: true;
       readonly jsonAgg: true;
       readonly limit: true;
       readonly orderBy: true;
