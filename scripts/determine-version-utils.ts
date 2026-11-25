@@ -102,12 +102,12 @@ export function planDispatchPublish(
  * Composes the `<base>-dev.N` version for a routine (non-release) push, given
  * the version the anchor package has under the `dev` dist-tag. Every package
  * is published as `<its planned version>-dev.N` with one counter, so the
- * counter must never repeat for a version any package still has. It continues
- * within one release and resets only when the release moves on: on the
- * release candidates when the root version does (every package moves with it),
- * and after them at a new major or minor. A fix to one package within a
- * release, the anchor's included, keeps the counter going. A development build
- * with a suffix the repository does not publish stops here, naming it.
+ * counter must never repeat for a version any package still has. On the
+ * release candidates it resets when the root version moves, since every
+ * package moves with it. After them it never resets: a package with its own
+ * version keeps that version across releases, so a counter that restarted at
+ * a new minor would publish its old development versions again. A development
+ * build with a suffix the repository does not publish stops here, naming it.
  */
 export function composeDevVersion(
   baseVersion: string,
@@ -117,7 +117,10 @@ export function composeDevVersion(
 
   if (latestDevVersion) {
     const latest = parseVersion(latestDevVersion);
-    if (latest.dev !== undefined && releaseOf(latest) === releaseOf(parseVersion(baseVersion))) {
+    if (
+      latest.dev !== undefined &&
+      counterLine(latest) === counterLine(parseVersion(baseVersion))
+    ) {
       buildNumber = latest.dev + 1;
     }
   }
@@ -128,14 +131,21 @@ export function composeDevVersion(
   };
 }
 
-/** The release a version belongs to: the whole version on the `8.0.0` release candidates, else its major and minor. */
-function releaseOf(version: ParsedVersion): string {
-  return version.level?.name === 'rc' &&
+/**
+ * The run of development builds a version's counter belongs to: the whole version on the `8.0.0`
+ * release candidates, the major and minor before Prisma 8, and one run for every release after the
+ * release candidates.
+ */
+function counterLine(version: ParsedVersion): string {
+  if (
+    version.level?.name === 'rc' &&
     version.major === 8 &&
     version.minor === 0 &&
     version.patch === 0
-    ? formatVersion({ ...version, dev: undefined })
-    : `${version.major}.${version.minor}`;
+  ) {
+    return formatVersion({ ...version, dev: undefined });
+  }
+  return version.major < 8 ? `${version.major}.${version.minor}` : 'levels';
 }
 
 /**

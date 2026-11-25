@@ -117,9 +117,16 @@ describe('composeDevVersion', () => {
     });
   });
 
-  it('resets the counter at a new release on the levels line', () => {
+  it('continues the counter at a new release on the levels line, since a package with its own version keeps it across releases', () => {
     assert.deepEqual(composeDevVersion('8.2.0', '8.1.1-dev.9'), {
-      version: '8.2.0-dev.1',
+      version: '8.2.0-dev.10',
+      tag: 'dev',
+    });
+  });
+
+  it('resets the counter when the root leaves the release candidates', () => {
+    assert.deepEqual(composeDevVersion('8.0.1', '8.0.0-rc.35-dev.4'), {
+      version: '8.0.1-dev.1',
       tag: 'dev',
     });
   });
@@ -171,7 +178,7 @@ describe('planPushPublish', () => {
   it('plans a stable release with its dev follow-up', () => {
     assert.deepEqual(
       planPushPublish('8.1.0', { available: true, version: '8.0.1' }, '8.0.1-dev.5'),
-      { version: '8.1.0', tag: 'latest', devVersion: '8.1.0-dev.1' },
+      { version: '8.1.0', tag: 'latest', devVersion: '8.1.0-dev.6' },
     );
   });
 
