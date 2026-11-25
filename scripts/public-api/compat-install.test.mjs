@@ -1,10 +1,11 @@
-import { deepStrictEqual } from 'node:assert/strict';
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { deepStrictEqual, strictEqual } from 'node:assert/strict';
+import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   aliasOf,
+  makeTwin,
   peerDependencies,
   supplyChainSettings,
   thirdPartyVersions,
@@ -131,5 +132,64 @@ describe('supplyChainSettings', () => {
       trustPolicy: 'no-downgrade',
       trustPolicyExclude: ['chokidar@4.0.3'],
     });
+  });
+});
+
+describe('makeTwin', () => {
+  const ours = new Set(['@prisma/orm-a', '@prisma/orm-shared']);
+  const install = (dir, manifest) => {
+    writePackage(dir, manifest);
+    mkdirSync(join(dir, 'dist'), { recursive: true });
+    writeFileSync(join(dir, 'dist', 'index.d.mts'), `export declare const from: '${dir}';\n`);
+  };
+
+  it('links a dependency listed twice once', () => {
+    const release = join(work, 'twice', 'orm-a');
+    install(release, {
+      name: '@prisma/orm-a',
+      version: '1.0.0',
+      dependencies: { x: '^1' },
+      optionalDependencies: { x: '^1' },
+    });
+    writePackage(join(release, 'node_modules', 'x'), { name: 'x', version: '1.0.0' });
+    const twin = makeTwin({
+      releaseDir: release,
+      twinRoot: join(work, 'twice', 'twins'),
+      ownNames: ours,
+    });
+    strictEqual(
+      JSON.parse(readFileSync(join(twin, 'node_modules', 'x', 'package.json'), 'utf8')).name,
+      'x',
+    );
+  });
+
+  it('gives two installed copies of one of our packages twins of their own', () => {
+    const root = join(work, 'copies');
+    const copies = new Map();
+    const twins = ['one', 'two'].map((copy) => {
+      const shared = join(root, copy, 'node_modules', '@prisma', 'orm-shared');
+      install(shared, { name: '@prisma/orm-shared', version: '1.0.0' });
+      const release = join(root, copy, 'node_modules', '@prisma', 'orm-a');
+      install(release, {
+        name: '@prisma/orm-a',
+        version: '1.0.0',
+        dependencies: { '@prisma/orm-shared': '1.0.0' },
+      });
+      return makeTwin({
+        releaseDir: release,
+        twinRoot: join(root, 'twins'),
+        ownNames: ours,
+        copies,
+      });
+    });
+    const sharedOf = (twin) =>
+      readFileSync(
+        join(twin, 'node_modules', '@prisma', 'orm-shared', 'dist', 'index.d.mts'),
+        'utf8',
+      );
+    deepStrictEqual(
+      twins.map((twin, index) => sharedOf(twin).includes(join(root, ['one', 'two'][index]))),
+      [true, true],
+    );
   });
 });

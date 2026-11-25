@@ -5,6 +5,7 @@
 // differ, and each would show up as a break.
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   cpSync,
   existsSync,
@@ -184,7 +185,12 @@ export function makeTwin({ releaseDir, twinRoot, ownNames, copies = new Map() })
   const source = realpathSync(releaseDir);
   if (copies.has(source)) return copies.get(source);
   const manifest = readManifest(source);
-  const dir = join(twinRoot, manifest.name);
+  // Two installed copies of one package, with different peers, each get a twin of their own.
+  const dir = join(
+    twinRoot,
+    manifest.name,
+    createHash('sha256').update(source).digest('hex').slice(0, 12),
+  );
   copies.set(source, dir);
   rmSync(dir, { recursive: true, force: true });
   cpSync(source, dir, {
@@ -193,17 +199,16 @@ export function makeTwin({ releaseDir, twinRoot, ownNames, copies = new Map() })
       !path.slice(source.length).includes(`${sep}node_modules`) && isDeclarationOrManifest(path),
   });
   stampVersion(dir, TWIN_STAMP);
-  for (const field of DEPENDENCY_FIELDS) {
-    for (const name of Object.keys(manifest[field] ?? {})) {
-      const installed = findInstalled(source, name);
-      if (installed === undefined) continue;
-      const target = ownNames.has(name)
-        ? makeTwin({ releaseDir: installed, twinRoot, ownNames, copies })
-        : installed;
-      const link = join(dir, 'node_modules', name);
-      mkdirSync(dirname(link), { recursive: true });
-      symlinkSync(target, link);
-    }
+  const names = new Set(DEPENDENCY_FIELDS.flatMap((field) => Object.keys(manifest[field] ?? {})));
+  for (const name of names) {
+    const installed = findInstalled(source, name);
+    if (installed === undefined) continue;
+    const target = ownNames.has(name)
+      ? makeTwin({ releaseDir: installed, twinRoot, ownNames, copies })
+      : installed;
+    const link = join(dir, 'node_modules', name);
+    mkdirSync(dirname(link), { recursive: true });
+    symlinkSync(target, link);
   }
   return dir;
 }
