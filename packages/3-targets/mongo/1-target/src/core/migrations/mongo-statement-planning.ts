@@ -45,6 +45,7 @@ import { collectionControlPolicy, managedOnBothSides } from './mongo-control-pol
 import { documentMoveOf, type MovingModel } from './mongo-document-moves';
 import {
   documentCollectionOf,
+  hasCollection,
   isRootModel,
   modelCoordinates,
   modelsADropLoses,
@@ -857,7 +858,8 @@ function sharedRouteOf(input: {
   const sourceAfter = (group: RefusedGroup, plan: StatementPlan | undefined) =>
     plan?.renamedCollections.get(sourceOf(group)) ?? sourceOf(group);
   const dropsSource = (group: RefusedGroup, plan: StatementPlan | undefined) => {
-    if (plan === undefined || group.shared.kind !== 'split') return false;
+    if (group.shared.kind !== 'split') return false;
+    if (plan === undefined) return !hasCollection(contract, sourceOf(group));
     const planned = collectionPlanOf(
       sourceAfter(group, plan),
       collectionPlanSchemasOf(plan.schema, contract),
