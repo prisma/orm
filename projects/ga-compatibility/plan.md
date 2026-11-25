@@ -213,7 +213,7 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 
 **How, where we know.**
 
-- Survey every command: its flags, its exit codes and each machine-readable output it has. The `--json` output is the largest part. Today nobody has designed it: each command's document is whatever was chosen when the command was written. The data lines already have a rule in the CLI Style Guide (tab-separated fields, new fields only appended). The Markdown output has none in this repository, so the survey starts by finding where it is produced, which may be `@prisma/cli-engine`, and what in it a reader can depend on.
+- Survey every command: its flags, its exit codes and each machine-readable output it has. The `--json` output is the largest part. Today nobody has designed it: each command's document is whatever was chosen when the command was written. The data lines already have a rule in the CLI Style Guide (tab-separated fields, new fields only appended). The Markdown output is produced by `@prisma/cli-engine`, which renders every command, and has no written rule yet. So part of this project's work is in the engine, and the survey decides what in that output a reader can depend on.
 - Settle the principles in a decision record, for every machine-readable format: what a document reports (the result, or the input given back), stable names, one meaning for each field, how an error is shaped, what a reader must ignore so that an added field does not break it, how a format is versioned, and which maturity level it has. The "JSON semantics" section of the CLI Style Guide is the starting point.
 - Bring each command into line, and add the check.
 
