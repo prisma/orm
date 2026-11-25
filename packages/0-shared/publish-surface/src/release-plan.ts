@@ -346,15 +346,7 @@ function nextVersion(
       `${name}: its level is ${level} but its current version "${text}" is ${currentLevel}; within a minor a level may go up, not down, because a version can only move forward`,
     );
   }
-  if (level !== currentLevel) {
-    const raised = first();
-    if (compareVersions(parseVersion(raised), current) <= 0) {
-      throw new ReleasePlanError(
-        `${name}: moving up to ${level} gives "${raised}", which does not sort above its current version "${text}"`,
-      );
-    }
-    return raised;
-  }
+  if (level !== currentLevel) return first();
   if (!input.bump.includes(name)) return text;
   return formatVersion(
     current.level === undefined
@@ -384,15 +376,6 @@ export function rootVersionOfRelease(release: {
 }): string {
   const patch = release.major === 8 && release.minor === 0 ? 1 : 0;
   return `${release.major}.${release.minor}.${patch}`;
-}
-
-function compareVersions(a: ParsedVersion, b: ParsedVersion): number {
-  const byNumber = a.major - b.major || a.minor - b.minor || a.patch - b.patch;
-  if (byNumber !== 0) return byNumber;
-  if (a.level === undefined || b.level === undefined) {
-    return (a.level === undefined ? 1 : 0) - (b.level === undefined ? 1 : 0);
-  }
-  return LEVEL_ORDER[a.level.name] - LEVEL_ORDER[b.level.name] || a.level.counter - b.level.counter;
 }
 
 function levelRange(input: ReleasePlanInput, user: string, named: string): string {

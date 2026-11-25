@@ -308,6 +308,40 @@ describe('planRelease', () => {
         'rcCounter',
       ],
       [
+        'a release that is not a major and minor',
+        input({ release: { major: 8, minor: 1.5 } }),
+        'release 8.1.5',
+      ],
+      ['a development build counter that is not a count', input({ dev: -1 }), 'dev -1'],
+      [
+        'a package with no declared kind',
+        input({
+          kinds: Object.fromEntries(
+            Object.entries(input({}).kinds).filter(([name]) => name !== 'mongo'),
+          ),
+        }),
+        'mongo has no declared kind',
+      ],
+      [
+        'a numbering for a package with no current version',
+        input({ numbering: new Map([...input({}).numbering, ['ghost', 'ga']]) }),
+        'ghost has a declared numbering',
+      ],
+      [
+        'a release-candidate counter that is not a whole number',
+        input({ line: 'release-candidates', rcCounter: 1.5, release: { major: 8, minor: 0 } }),
+        'rcCounter 1.5',
+      ],
+      [
+        'an own version this repository does not publish',
+        input({
+          release: { major: 8, minor: 0 },
+          current: { ...AT_8_0, paradedb: '8.0.0-rc.26' },
+          levelChanges: { paradedb: { firstVersion: '0.18' } },
+        }),
+        'paradedb: its own version "0.18"',
+      ],
+      [
         'a release-candidate counter of 0',
         input({ line: 'release-candidates', rcCounter: 0, release: { major: 8, minor: 0 } }),
         'starts at 1',

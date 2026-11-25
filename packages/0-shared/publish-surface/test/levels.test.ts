@@ -138,6 +138,12 @@ describe('levelViolations', () => {
       [],
     ],
     [
+      'a package naming one with no numbering, which it leaves to the plan',
+      { a: 'ga' },
+      { a: ['b'] },
+      [],
+    ],
+    [
       'a package naming one with its own version',
       { a: 'ga', b: { firstVersion: '0.1.0' } },
       { a: ['b'] },
