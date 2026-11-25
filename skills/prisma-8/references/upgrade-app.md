@@ -1,6 +1,6 @@
 # Upgrade Prisma 8 (user app)
 
-This reference upgrades a project that **consumes** Prisma 8 via the public package API (`@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, the contract files in `prisma/`, etc.). Package names below are the published `@prisma/orm-*` names, which is what `package.json`, the lockfile, and the registry use. The other references in this skill use the same names. If the project is itself a Prisma 8 *extension*, use [`upgrade-extension.md`](upgrade-extension.md) instead — or both, if the repo contains both an app and an extension package.
+This reference upgrades a project that **consumes** Prisma 8 via the public package API (a database package, `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` or `@prisma/orm-mariadb`, the contract files in `prisma/`, etc.). Package names below are the published `@prisma/orm-*` names, which is what `package.json`, the lockfile, and the registry use. The other references in this skill use the same names. If the project is itself a Prisma 8 *extension*, use [`upgrade-extension.md`](upgrade-extension.md) instead — or both, if the repo contains both an app and an extension package.
 
 The per-transition instructions this reference reads live under [`../upgrading/app/upgrades/`](../upgrading/app/upgrades/).
 
@@ -12,18 +12,21 @@ Do the version bump first (step 1 of the per-step flow below), re-sync the skill
 
 ## Pre-flight — extension compatibility
 
-Before changing any code, refuse to upgrade past any installed extension's pinned Prisma 8 version. Extensions in Prisma 8 pin every `@prisma/orm-*` dependency to a single exact version (no carets, no ranges); that pin is the highest version the extension has been validated against. Upgrading the user app past that pin would silently desynchronise the extension's type identity from the app's.
+Before changing any code, work out how far the chain can go. The application can take a step only when every extension published by someone else has a release that names that step's Prisma version. Extensions in Prisma 8 name every `@prisma/orm-*` package they use as a peer dependency at a single exact version (no carets, no ranges); that pin is the one release the extension has been validated against. An application on another release makes the extension's peer dependencies disagree with the app's list until the extension catches up. npm refuses the install when the packages that disagree are ones the application lists itself; pnpm, Yarn and Bun install and print a peer dependency warning, so a successful install does not prove the versions match.
+
+This pre-flight is for extensions published by someone else. Every `@prisma/orm-*` package, such as `@prisma/orm-extension-pgvector`, `@prisma/orm-postgres-contrib` or `@prisma/orm-better-auth`, is published from the Prisma repository at every release, at that release's version, so it moves to `<to>` with the database package in the bump step below and does not limit the target.
 
 Steps:
 
-1. **Read `prisma.config.ts`** (or its TS-discoverable equivalent at the project root) and enumerate the list of extension packages it imports. Each `extensions: [...]` entry corresponds to an installed npm package.
-2. **For each extension**, read its installed `package.json` from `node_modules/<extension-package-name>/package.json` and find every `@prisma/orm-*` entry under `dependencies`, `peerDependencies`, or `optionalDependencies` (`@prisma/orm-framework`, `@prisma/orm-family-sql` or `@prisma/orm-family-mongo`, `@prisma/orm-toolchain`, and a `@prisma/orm-target-*` peer). By construction those entries are exact-version pins (e.g. `"8.0.0-rc.11"`), set when the extension author last ran their own upgrade.
-3. **Compute the lowest pinned version across all extensions.** That is the highest Prisma 8 version reachable by this app on its current extension set.
-4. **Compare to the user's target.** If the target exceeds the lowest pin, halt with a structured message naming each lagging extension and its pinned version, and offer two paths:
-   - (a) Wait for the lagging extension to publish a compatible release, then re-run.
-   - (b) Re-run with `--to=<highest-reachable>` (or whatever flag/option the user is using to set the target).
+1. **Read `prisma.config.ts`** (or its TS-discoverable equivalent at the project root) and enumerate the list of extension packages it imports. Each `extensions: [...]` entry corresponds to an installed npm package. Leave out every `@prisma/orm-*` package.
+2. **For each extension**, read its installed `package.json` from `node_modules/<extension-package-name>/package.json` and find every `@prisma/orm-*` entry under `dependencies`, `peerDependencies`, or `optionalDependencies` (`@prisma/orm-framework`, `@prisma/orm-family-sql` or `@prisma/orm-family-mongo`, `@prisma/orm-toolchain`, and a `@prisma/orm-target-*` package). By construction those entries are exact-version pins (e.g. `"8.0.0-rc.11"`), set when the extension author last ran their own upgrade.
+3. **Find each extension's releases.** List its published versions (`pnpm view <extension> versions --json`) and, for each, the Prisma version it names (`pnpm view <extension>@<version> peerDependencies`). For each step's `<to>` in the chain below, note the release of each extension that names exactly that version.
+4. **Find the last step every extension allows.** Walk the chain from the first step. The chain can go as far as the last step before the first one for which some extension has no release. If that is short of the user's target, tell the user before installing anything: which extension has no release for which Prisma version, how far the upgrade can go, and their options:
+   - (a) Wait for, or ask for, a release of the extension for that version, then re-run.
+   - (b) Upgrade only as far as the last step every extension allows.
+   - (c) Remove the extension, and upgrade without it.
 
-Do not auto-downgrade the target; do not skip the lagging extension; do not bump past it. If the user explicitly overrides the halt, surface the risk clearly first.
+Do not skip a step, do not leave an extension at a release that names another Prisma version, and do not install past the last step every extension allows.
 
 If `prisma.config.ts` is absent or names no extensions, skip the pre-flight.
 
@@ -31,14 +34,14 @@ If `prisma.config.ts` is absent or names no extensions, skip the pre-flight.
 
 This flow applies when the project **consumes** Prisma 8:
 
-- `package.json` declares `@prisma/orm-postgres`, `@prisma/orm-mongo`, or `@prisma/orm-sqlite` under `dependencies` / `devDependencies`, and
-- the package is *not* itself an extension (no `@prisma/orm-framework` or other SPI package under `dependencies`/`peerDependencies`; name does not match `^@.*/extension-`; not referenced from a sibling app's `prisma.config.ts`).
+- `package.json` declares a database package, `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` or `@prisma/orm-mariadb`, under `dependencies` / `devDependencies`, and
+- it names no `@prisma/orm-framework` or other platform package under `peerDependencies`: an application lists them under `dependencies` beside its database package. A package that names one as a peer, such as an extension, a library integration or a database package built outside this repository, takes [`upgrade-extension.md`](upgrade-extension.md#role-detection) instead, even when it also lists a database package.
 
-If the project also matches the extension-author role, run **this** flow first and then [`upgrade-extension.md`](upgrade-extension.md) in the same session. If detection is ambiguous, ask the user.
+If the repository also holds an extension, in a `package.json` of its own, run **this** flow for the application first and then [`upgrade-extension.md`](upgrade-extension.md) for the extension, in the same session. If detection is ambiguous, ask the user.
 
 ## Version detection
 
-- **From-version.** Read the currently-installed Prisma 8 version from `pnpm-lock.yaml` (or `package-lock.json` / `yarn.lock`) by inspecting the resolved version of the app's Prisma packages: `@prisma/orm-postgres`, `@prisma/orm-mongo`, or `@prisma/orm-sqlite`. Do not read it from a `@prisma/orm-extension-*` package; extensions carry their own version and are handled by the pre-flight above. Compare full semver strings, prerelease identifier included: `8.0.0-rc.10` and `8.0.0-rc.11` are different versions and different steps in the chain below. If the lockfile shows the app's Prisma packages at different versions (already broken), the **lowest** is the from-version.
+- **From-version.** Read the currently-installed Prisma 8 version from `pnpm-lock.yaml` (or `package-lock.json` / `yarn.lock`) by inspecting the resolved version of the app's database package: `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` or `@prisma/orm-mariadb`. Do not read it from an extension published by someone else; such an extension carries its own version and is handled by the pre-flight above. Compare full semver strings, prerelease identifier included: `8.0.0-rc.10` and `8.0.0-rc.11` are different versions and different steps in the chain below. If the lockfile shows the app's Prisma packages at different versions (already broken), the **lowest** is the from-version.
 - **To-version.** Either the version the user specified, or whatever `npm view @prisma/orm-postgres dist-tags.latest` reports. Do not assume that is a stable version: while Prisma 8 is a release candidate, `latest` tracks the newest release, `8.0.0-rc.N` included. If the user wants a stable version specifically, they must name it.
 
 Report both back to the user before continuing.
@@ -55,13 +58,13 @@ The [`../upgrading/app/upgrades/`](../upgrading/app/upgrades/) directories name 
 
 Apply each step in order, fully: bump, install, run instructions, validate, commit — before moving to the next. Halt the chain on the first failed step; do not skip ahead.
 
-The chain order does not depend on which extensions are installed; the pre-flight has already established the target is reachable.
+The chain order does not depend on which extensions are installed; the pre-flight has already worked out how far it can go.
 
 ## Per-step flow
 
 For each `(from, to)` step in the chain:
 
-1. **Bump the app's Prisma packages.** Rewrite every `@prisma/orm-postgres`, `@prisma/orm-mongo`, and `@prisma/orm-sqlite` entry in the project's `package.json` to the exact `<to>` version (no caret, no tilde). All entries advance to the same version. Cover `dependencies` and `devDependencies`. Leave `@prisma/orm-extension-*` entries unchanged: each extension pins its own Prisma version, and the pre-flight has already confirmed every installed extension supports `<to>`. The skill itself ships inside the Prisma packages, so bumping them is what updates it; there is no separate skill package to bump.
+1. **Bump the app's Prisma packages.** Rewrite every `@prisma/orm-*` entry in the project's `package.json` to the exact `<to>` version (no caret, no tilde): the database package, such as `@prisma/orm-postgres`, the platform packages it names as peer dependencies, and every extension or library integration published from the Prisma repository (`@prisma/orm-extension-*`, `@prisma/orm-postgres-contrib`, `@prisma/orm-better-auth`). Each of those is published at every release and names the other Prisma packages at that release's exact version, so one left behind disagrees with the rest. All entries advance to the same version. Cover `dependencies` and `devDependencies`. If the database package at `<to>` names a `@prisma/orm-*` peer dependency the project does not list, add it at `<to>`: the application lists every one, so it holds one copy of each. A monorepo whose applications are on different Prisma versions can still get two copies under npm workspaces and Bun's hoisted linker; keep such applications on one version, or use pnpm, Yarn or Bun's isolated linker. Set each extension published by someone else to its release that names `<to>`, found in the pre-flight. If one has no such release, halt before this step's install: the project stays at the last step that worked, and the user gets the pre-flight's message for that extension and step. The skill itself ships inside the Prisma packages, so bumping them is what updates it; there is no separate skill package to bump.
 
 2. **Install.** Run `pnpm install` (or the project's lockfile-managing command). The project's code is now broken against the new types — the upgrade instructions for `<from> → <to>` exist to fix it.
 
@@ -99,4 +102,4 @@ Report back to the user: the number of steps applied, the SHAs of the commits yo
 
 When a step fails: surface a structured error with code `PN-UPGRADE-NNNN`, the failing change's `id`, the file paths touched (or the lockfile, or the validation command), and the inferred remediation. Do not retry automatically; do not auto-roll-back. The user can revert if they want a clean slate.
 
-If a pre-flight halt fires, do not bump anything; the project is left unchanged.
+If the pre-flight finds that the first step is already blocked, do not bump anything; the project is left unchanged. A halt at a later step leaves the project at the last step that worked.

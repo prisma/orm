@@ -1,6 +1,6 @@
 # @internal/mongo
 
-One-package MongoDB setup for Prisma 8. Install this single package to get config, runtime, contract authoring, control-plane access, and BSON value constructors — no reach-ins to internal packages required.
+MongoDB setup for Prisma 8, published as `@prisma/orm-mongo`. An application installs it beside the platform packages it names as peer dependencies (`@prisma/orm-framework`, `@prisma/orm-family-mongo`, `@prisma/orm-target-mongo` and `@prisma/orm-toolchain`, at the same version), and gets config, runtime, contract authoring, control-plane access, and BSON value constructors from it — no reach-ins to internal packages required.
 
 > **Breaking change:** the top-level `@internal/mongo` barrel (`import { ObjectId } from '@internal/mongo'`) has been removed. Move BSON constructor imports to `@internal/mongo/bson`:
 >
@@ -86,10 +86,11 @@ The contract carries no `$jsonSchema` validators, because a Prisma 6 database ha
 
 ##### Running the Prisma 6 and Prisma 8 CLIs in one project
 
-Both CLIs are published as `prisma`, so one package name cannot resolve to both. Keep Prisma 8 as `prisma` (`prisma.config.ts` imports its `prisma/config`) and install the Prisma 6 CLI under an npm alias, `prisma6`, at the version of your `@prisma/client` (6.19.3 here):
+Both CLIs are published as `prisma`, so one package name cannot resolve to both. Keep Prisma 8 as `prisma` (`prisma.config.ts` imports its `prisma/config`) and install the Prisma 6 CLI under an npm alias, `prisma6`, at the version of your `@prisma/client` (6.19.3 here). Give every `@prisma/orm-*` package the same version, `<version>`: the release the `prisma` CLI you install runs, which is the version of `@prisma/orm-toolchain` that `prisma` depends on. With `prisma@latest`, as below, that is the latest release (`pnpm view prisma@latest dependencies` names it). For an older release, install the `prisma` version that depends on it instead of `prisma@latest`:
 
 ```sh
-pnpm add @prisma/orm-mongo@latest dotenv mongodb
+pnpm add @prisma/orm-mongo@<version> @prisma/orm-framework@<version> @prisma/orm-family-mongo@<version> @prisma/orm-target-mongo@<version> @prisma/orm-toolchain@<version>
+pnpm add dotenv mongodb
 pnpm add -D prisma@latest prisma6@npm:prisma@6.19.3
 ```
 

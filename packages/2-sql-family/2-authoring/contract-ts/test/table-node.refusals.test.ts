@@ -1,6 +1,7 @@
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import type { ColumnNode, ModelNode, TableNode } from '../src/contract-definition';
-import { build, columnIndex, definitionOf, field } from './table-node-helpers';
+import { build, columnIndex, definitionOf, field, targetPack } from './table-node-helpers';
 
 const user: ModelNode = {
   modelName: 'User',
@@ -112,6 +113,26 @@ describe('table node refusals', () => {
         code: 'CONTRACT.NAME_DUPLICATE',
         message: 'Table "audit_rows" in namespace "public" is declared by two table nodes.',
         meta: { kind: 'table', name: 'audit_rows', namespaceId: 'public' },
+      }),
+    );
+  });
+
+  it('leaves the namespace out of the refusal of two table nodes on a target without namespaces', () => {
+    expect(() =>
+      build({
+        ...definitionOf([user], {
+          tables: [
+            { tableName: 'audit_rows', columns: [idColumn] },
+            { tableName: 'audit_rows', columns: [legacyKey] },
+          ],
+        }),
+        target: { ...targetPack, defaultNamespaceId: UNBOUND_NAMESPACE_ID },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.NAME_DUPLICATE',
+        message: 'Table "audit_rows" is declared by two table nodes.',
+        meta: { kind: 'table', name: 'audit_rows', namespaceId: UNBOUND_NAMESPACE_ID },
       }),
     );
   });
