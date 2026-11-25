@@ -38,7 +38,7 @@ Prisma 8 supports several databases, and they are not equally finished. A user n
 
 1. **One scale of maturity, with four levels:** Early Access, Preview, Release Candidate and Generally Available (GA). "Below GA" means any of the first three.
 2. **A level is written in two places only:** a package's version number, and the start of an API's name. Docs may repeat a level, and a check keeps each package's README in step with the level the package declares in the release scripts, but neither is where it is decided.
-3. **All our packages share a release number**, the major and the minor. The rest of a version is each package's own.
+3. **All our packages share a release number**, the major and the minor, except a package another team owns, which has [its own version](#packages-with-their-own-version). The rest of a version is each package's own.
 4. **The ranges between our packages, and the tag each package is published under, follow from the release number and the levels.** The release scripts compute them.
 5. **No feature flags.** Functionality that is not ready ships in a package below GA, or as an API whose name carries its level.
 
@@ -83,7 +83,7 @@ Where a name is not a TypeScript identifier, the same word is used with that kin
 
 ## Version numbers
 
-- **The major and minor are the release number.** Release `8.3` publishes every package at `8.3`.
+- **The major and minor are the release number.** Release `8.3` publishes every package at `8.3`, except a package with [its own version](#packages-with-their-own-version).
 - **A GA package has its own patch number.** A fix to one GA package raises that package's patch number, to `8.3.1`, and no other package's.
 - **A package below GA has a suffix with its level and a counter.** A fix to it raises the counter, `8.3.0-preview.0` to `8.3.0-preview.1`, and not the patch number.
 
@@ -98,7 +98,7 @@ That is why a fix below GA raises the counter: `8.3.1-preview.0` would sort abov
 
 Before levels existed, every package was published as `8.0.0-rc.N`. A version below GA with patch number 0 would sort below those: `8.0.0-ea.0` comes before `8.0.0-rc.26`, because `ea` sorts before `rc`. A user's `~8.0.0-ea.0` would then select the old release candidate. In a trial, Bun always installed it, Yarn did unless the release candidates were marked deprecated, and npm and pnpm did once `latest` pointed at a later minor.
 
-So release `8.0` starts every package at patch 1, above the release candidates:
+So release `8.0` starts every package that shares the release number at patch 1, above the release candidates:
 
 | Level | First version at release `8.0` | At a later release |
 | --- | --- | --- |
@@ -131,10 +131,10 @@ A version published before release `8.0` says nothing about a package's level. T
 
 ## What an application writes
 
-These rules cover the lines for our packages that share the release number.
+These rules cover the lines for our packages that share the release number. A package with its own version is written at a range on that version, such as `^0.18.0`.
 
-- **With a GA facade:** a caret on every line, `^8.3.0`. An update moves all of them to the next release together.
-- **With a facade below GA:** a tilde on every line, `~8.3.0-ea.0` and `~8.3.0`. A caret would let the GA lines move to `8.4` while the facade, a pre-release, could not follow. At each new release the user edits the lines to the new minor by hand. The package managers' update commands are not a substitute: pnpm's `update` rewrites a tilde on a pre-release as an exact version, which never moves again, and Yarn's update to the latest version writes a caret, so the next update moves the GA lines without the facade.
+- **With a GA facade:** a caret on every line for a GA package, `^8.3.0`. An update moves all of them to the next release together. A package below GA that the application adds, such as an Early Access extension, is at a tilde on its first version of the minor, `~8.3.0-ea.0`, because a caret on a plain version never selects a pre-release; the user edits that line at each new minor.
+- **With a facade below GA:** a tilde on every line, `~8.3.0-ea.0` for a package below GA and `~8.3.0` for a GA one. A caret would let the GA lines move to `8.4` while the facade, a pre-release, could not follow. At each new release the user edits the lines to the new minor by hand. The package managers' update commands are not a substitute: pnpm's `update` rewrites a tilde on a pre-release as an exact version, which never moves again, and Yarn's update to the latest version writes a caret, so the next update moves the GA lines without the facade.
 
 `prisma orm init` writes the lines this way when it adds the facade. When the project already lists the facade, `init` leaves that line as the user wrote it, and writes each platform package at the range the installed facade declares, so that it never installs a platform package the user's facade does not accept.
 
