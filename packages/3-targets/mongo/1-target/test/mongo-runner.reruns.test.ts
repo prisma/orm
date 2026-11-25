@@ -11,6 +11,7 @@ import {
   createIndex,
   dataTransform,
   rawAggregate,
+  rawUpdateMany,
   removeStoredValue,
   renameCollection,
   renameField,
@@ -202,7 +203,7 @@ describe("MongoMigrationRunner, a data transform's update that stops part way", 
     '. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again.';
   const skipped = '; operations that already ran are skipped.';
   const changesTheRest =
-    'When the command runs again, this update changes only the documents its filter still selects, the same documents its check finds, so it does not change again a document it already took out of that filter.';
+    'When the command runs again, this update changes only the documents its filter still selects, the same documents its check finds. A document it already took out of that filter is not changed again. A document it changed but left inside that filter, as an update of only other fields does, is changed again.';
   const mayRunOverChanged =
     'When the command runs again, this update runs again over every document its filter selects then. If that filter still selects documents it already changed, make the update give the same result when it runs twice, or restore those documents before you run the command again.';
   const conversion = new MongoServerError({
@@ -264,6 +265,27 @@ describe("MongoMigrationRunner, a data transform's update that stops part way", 
       expect(failureFields(result.assertNotOk()).why).toBe(why);
     },
   );
+
+  it("says an update whose filter is its check's changes again on a re-run a document it changed but left in that filter, such as with an $inc", async () => {
+    const harness = makeHarness();
+    harness.driver.failUpdateManyWith(badValue);
+    harness.driver.queueResponse([{ _id: 1 }]);
+    harness.driver.queueResponse([{ _id: 1 }]);
+    const runFilter = { status: { $exists: false } };
+
+    const result = await execute(harness, [
+      dataTransform('count-attempts', {
+        check: {
+          source: () => rawAggregate(RUN_COLLECTION, [{ $match: runFilter }, { $limit: 1 }]),
+        },
+        run: () => rawUpdateMany(RUN_COLLECTION, runFilter, { $inc: { attempts: 1 } }),
+      }),
+    ]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      'A document it changed but left inside that filter, as an update of only other fields does, is changed again.',
+    );
+  });
 
   it("says a re-run may run over the documents it changed when the update's filter is not its check's", async () => {
     const harness = makeHarness();

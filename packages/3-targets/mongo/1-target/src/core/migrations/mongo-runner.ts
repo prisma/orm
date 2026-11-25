@@ -370,12 +370,13 @@ function createTargetExistsRefusal(
 /**
  * What a re-run of a data transform's update that stopped part way does with the documents it
  * already changed. An update whose filter is the `$match` of its check, as the transforms the
- * planner writes for `--convert` and `--backfill` are, changes only the documents still to change:
- * its postcheck holds only once no document matches that filter.
+ * planner writes for `--convert` and `--backfill` are, runs again only over the documents that
+ * filter still selects. Whether a changed document left the filter depends on the update, which the
+ * user writes, so the text says what happens either way.
  */
 function updateRerunText(op: MongoDmlOperation, plan: MongoQueryPlan): string {
   return runFilterIsCheckFilter(op, plan)
-    ? 'When the command runs again, this update changes only the documents its filter still selects, the same documents its check finds, so it does not change again a document it already took out of that filter.'
+    ? 'When the command runs again, this update changes only the documents its filter still selects, the same documents its check finds. A document it already took out of that filter is not changed again. A document it changed but left inside that filter, as an update of only other fields does, is changed again.'
     : 'When the command runs again, this update runs again over every document its filter selects then. If that filter still selects documents it already changed, make the update give the same result when it runs twice, or restore those documents before you run the command again.';
 }
 
