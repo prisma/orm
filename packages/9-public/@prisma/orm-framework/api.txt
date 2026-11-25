@@ -3892,6 +3892,17 @@
 ./contract/enum-accessor: type EnumValues<A> = A extends { readonly values: ReadonlyArray<infer V>; } ? V : never
 ./contract/enum-accessor: type NamespaceEnumAccessors<TContract extends Contract, NsId extends keyof TContract['domain']['namespaces']> = EnumEntriesToAccessors<NamespaceEnumEntries<TContract['domain']['namespaces'][NsId]>>
 ./contract/enum-accessor: type NamespacedEnums<TContract extends Contract> = { readonly [Ns in keyof TContract['domain']['namespaces']]: NamespaceEnumAccessors<TContract, Ns>; }
+./contract/format-version: const CONTRACT_FORMAT_VERSIONS: readonly [1]
+./contract/format-version: function formatVersionErrorAt(error: StructuredError, path: string): StructuredError
+./contract/format-version: function isFormatVersionError(error: unknown): error is StructuredError
+./contract/format-version: function readFormatVersion<TVersion extends number>(document: unknown, options: ReadFormatVersionOptions<TVersion>): TVersion
+./contract/format-version: interface ReadFormatVersionOptions, readonly optional property bundledIn?: string | undefined
+./contract/format-version: interface ReadFormatVersionOptions, readonly optional property path?: string | undefined
+./contract/format-version: interface ReadFormatVersionOptions, readonly required property kind: StoredFileKind
+./contract/format-version: interface ReadFormatVersionOptions, readonly required property knownVersions: readonly TVersion[]
+./contract/format-version: interface ReadFormatVersionOptions<TVersion extends number>
+./contract/format-version: type ContractFormatVersion = (typeof CONTRACT_FORMAT_VERSIONS)[number]
+./contract/format-version: type StoredFileKind = 'contract' | 'migration' | 'ref'
 ./contract/hashing-utils: function compareByNameProperty(a: unknown, b: unknown): number
 ./contract/hashing-utils: function compareCodeUnits(a: string, b: string): number
 ./contract/hashing-utils: function createPreserveEmptyPredicate(patterns: readonly PathPattern[]): PreserveEmptyPredicate
@@ -3910,13 +3921,14 @@
 ./contract/hashing: function computeProfileHash(args: { target: string; targetFamily: string; capabilities: Record<string, Record<string, boolean>>; }): ProfileHashBase<string>
 ./contract/hashing: function computeStorageHash(args: ComputeStorageHashArgs): StorageHashBase<string>
 ./contract/hashing: interface CanonicalizeContractOptions
-./contract/hashing: interface CanonicalizeContractOptions, readonly optional property schemaVersion?: string
 ./contract/hashing: interface CanonicalizeContractOptions, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
 ./contract/hashing: interface CanonicalizeContractOptions, readonly optional property sortStorage?: StorageSort
 ./contract/hashing: interface CanonicalizeContractOptions, readonly required property serializeContract: SerializeContract
 ./contract/hashing: type PreserveEmptyPredicate = (path: readonly string[]) => boolean
 ./contract/hashing: type SerializeContract = (contract: Contract) => JsonObject
 ./contract/hashing: type StorageSort = (storage: unknown) => unknown
+./contract/internal/format-version: function carriesFormatVersion(value: unknown): boolean
+./contract/internal/format-version: function isContractBuiltInMemory(value: unknown): boolean
 ./contract/is-plain-record: function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>>
 ./contract/resolve-domain-model: function resolveDomainModel(domain: ApplicationDomain, modelName: string): ResolvedDomainModel | undefined
 ./contract/resolve-domain-model: interface ResolvedDomainModel
@@ -4109,6 +4121,7 @@
 ./contract: class ContractValidationError, readonly required property code = "CONTRACT.VALIDATION_FAILED"
 ./contract: class ContractValidationError, readonly required property meta: Readonly<Record<string, unknown>> | undefined
 ./contract: class ContractValidationError, readonly required property phase: ContractValidationPhase
+./contract: const CONTRACT_FORMAT_VERSIONS: readonly [1]
 ./contract: const ContractExecutionSectionSchema: ObjectType<ContractExecutionSection, {}>
 ./contract: const ContractFieldTypeSchema: ObjectType<{ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "union"; members: ({ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; })[]; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; }, {}>
 ./contract: const ContractValueObjectFieldSchema: ObjectType<{ nullable: boolean; type: { kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "union"; members: ({ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; })[]; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; }; many?: false | { elementNullable: boolean; }; dict?: true; valueSet?: { plane: "storage"; namespaceId: string; entityKind: "valueSet"; entityName: string; spaceId?: string; }; }, {}>
@@ -4123,6 +4136,7 @@
 ./contract: function buildNamespacedEnums<TContract extends Contract>(domain: TContract['domain'], codecFor: EnumMemberCodecFor): NamespacedEnums<TContract>
 ./contract: function canonicalizeContract(contract: Contract, options: CanonicalizeContractOptions): string
 ./contract: function canonicalizeContractToObject(contract: Contract, options: CanonicalizeContractOptions): Record<string, unknown>
+./contract: function carriesFormatVersion(value: unknown): boolean
 ./contract: function compareByNameProperty(a: unknown, b: unknown): number
 ./contract: function compareCodeUnits(a: string, b: string): number
 ./contract: function computeExecutionHash(args: { target: string; targetFamily: string; execution: Record<string, unknown>; }): ExecutionHashBase<string>
@@ -4136,13 +4150,17 @@
 ./contract: function domainModelsAtDefaultNamespace(domain: ApplicationDomain): Record<string, ContractModelBase>
 ./contract: function effectiveControlPolicy(nodeControl: ControlPolicy | undefined, defaultControlPolicy: ControlPolicy | undefined): ControlPolicy
 ./contract: function executionHash<const T extends string>(value: T): ExecutionHashBase<T>
+./contract: function formatVersionErrorAt(error: StructuredError, path: string): StructuredError
 ./contract: function governingControlPolicy(subject: undefined | { readonly explicitNodeControlPolicy?: ControlPolicy | undefined; }, defaultControlPolicy: ControlPolicy | undefined): ControlPolicy
 ./contract: function isColumnDefault(value: unknown): value is ColumnDefault
 ./contract: function isColumnDefaultLiteralInputValue(value: unknown): value is ColumnDefaultLiteralInputValue
+./contract: function isContractBuiltInMemory(value: unknown): boolean
 ./contract: function isExecutionMutationDefaultValue(value: unknown): value is ExecutionMutationDefaultValue
+./contract: function isFormatVersionError(error: unknown): error is StructuredError
 ./contract: function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>>
 ./contract: function matchesPathPattern(path: readonly string[], pattern: PathPattern): boolean
 ./contract: function profileHash<const T extends string>(value: T): ProfileHashBase<T>
+./contract: function readFormatVersion<TVersion extends number>(document: unknown, options: ReadFormatVersionOptions<TVersion>): TVersion
 ./contract: function removedDomainKeyProblems(contract: unknown): readonly string[]
 ./contract: function resolveDomainModel(domain: ApplicationDomain, modelName: string): ResolvedDomainModel | undefined
 ./contract: function soleDomainNamespaceId(domain: { readonly namespaces: Readonly<Record<string, unknown>>; }): string
@@ -4157,7 +4175,6 @@
 ./contract: interface ApplicationDomainNamespace, readonly optional property enum?: Record<string, ContractEnum>
 ./contract: interface ApplicationDomainNamespace, readonly required property models: Record<string, ContractModelBase>
 ./contract: interface CanonicalizeContractOptions
-./contract: interface CanonicalizeContractOptions, readonly optional property schemaVersion?: string
 ./contract: interface CanonicalizeContractOptions, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
 ./contract: interface CanonicalizeContractOptions, readonly optional property sortStorage?: StorageSort
 ./contract: interface CanonicalizeContractOptions, readonly required property serializeContract: SerializeContract
@@ -4261,6 +4278,11 @@
 ./contract: interface PlanMeta, readonly required property lane: string
 ./contract: interface PlanMeta, readonly required property storageHash: string
 ./contract: interface PlanMeta, readonly required property target: string
+./contract: interface ReadFormatVersionOptions, readonly optional property bundledIn?: string | undefined
+./contract: interface ReadFormatVersionOptions, readonly optional property path?: string | undefined
+./contract: interface ReadFormatVersionOptions, readonly required property kind: StoredFileKind
+./contract: interface ReadFormatVersionOptions, readonly required property knownVersions: readonly TVersion[]
+./contract: interface ReadFormatVersionOptions<TVersion extends number>
 ./contract: interface ResolvedDomainModel
 ./contract: interface ResolvedDomainModel, readonly required property model: ContractModelBase
 ./contract: interface ResolvedDomainModel, readonly required property namespaceId: string
@@ -4291,6 +4313,7 @@
 ./contract: type ContractExecutionSection<THash extends string = string> = { readonly executionHash: ExecutionHashBase<THash>; readonly mutations: { readonly defaults: ReadonlyArray<ExecutionMutationDefault>; }; }
 ./contract: type ContractField = { readonly nullable: boolean; readonly type: ContractFieldType; readonly many?: false | { readonly elementNullable: boolean; }; readonly dict?: true; readonly valueSet?: ValueSetRef; }
 ./contract: type ContractFieldType = ScalarFieldType | UnionFieldType | ValueObjectReference
+./contract: type ContractFormatVersion = (typeof CONTRACT_FORMAT_VERSIONS)[number]
 ./contract: type ContractManyToManyRelation = { readonly to: CrossReference; readonly cardinality: 'N:M'; readonly on: ContractRelationOn; readonly through: ContractRelationThrough; }
 ./contract: type ContractNonJunctionRelation = ContractToManyRelation | ContractToOneRelation
 ./contract: type ContractReferenceRelation = ContractManyToManyRelation | ContractNonJunctionRelation
@@ -4337,6 +4360,7 @@
 ./contract: type StorageHashBase<THash extends string> = THash & Brand<'StorageHash'>
 ./contract: type StorageSort = (storage: unknown) => unknown
 ./contract: type StorageSortPathSegment = '*' | string
+./contract: type StoredFileKind = 'contract' | 'migration' | 'ref'
 ./contract: type StoredValueType<Item, CodecId, TypeParams, Override, CodecTypes, ParameterizedOutputs extends ParameterizedOutputTypesFunction, Side extends ValueTypeSide> = Item extends { readonly many?: infer Many; readonly dict?: infer Dictionary; } ? ScalarValueType<CodecId, TypeParams, Override, NullableFlag<Item>, Many, Dictionary, CodecTypes, ParameterizedOutputs, Side> : never
 ./contract: type UnionFieldType = { readonly kind: 'union'; readonly members: ReadonlyArray<ScalarFieldType | ValueObjectReference>; }
 ./contract: type ValueObjectTypesFromStorage<StorageNamespaces, CodecTypes, ParameterizedOutputs extends ParameterizedOutputTypesFunction, Overrides, Side extends ValueTypeSide> = { readonly [Ns in keyof StorageNamespaces]: { readonly [V in keyof Lookup<Lookup<StorageNamespaces[Ns], 'entries'>, 'valueObject'>]: ValueObjectType<Ns, V, ContractParts<StorageNamespaces, Overrides>, CodecTypes, ParameterizedOutputs, Side>; }; }
@@ -5726,11 +5750,15 @@
 ./utils/text: function withoutTrailing(text: string, character: string): string
 ./utils/types: type Simplify<T> = { [K in keyof T]: T[K]; } & {}
 ./utils/types: type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends ((k: infer I) => void) ? I : never
+./utils/upgrade-guides: const APP_UPGRADE_GUIDES_URL = "https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading/app"
+./utils/upgrade-guides: const UPGRADE_GUIDES_URL = "https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading"
 ./utils: class InternalError extends Error
 ./utils: class InternalError, constructor(message: string, options?: { readonly cause?: unknown; })
 ./utils: class InternalError, readonly required property isPrismaInternalError = true
+./utils: const APP_UPGRADE_GUIDES_URL = "https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading/app"
 ./utils: const DOCS_BASE = "https://docs.prisma.io/docs/orm/v8/reference/error-reference"
 ./utils: const DOCS_ERRORS_VERSION = "v8"
+./utils: const UPGRADE_GUIDES_URL = "https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading"
 ./utils: function abortable(signal: AbortSignal): <T>(promise: Promise<T>) => Promise<T>
 ./utils: function and<T, U, E>(left: Result<T, readonly E[]>, right: Result<U, readonly E[]>): Result<void, readonly E[]>
 ./utils: function assertDefined<T>(value: T | null | undefined, message: string): asserts value is T

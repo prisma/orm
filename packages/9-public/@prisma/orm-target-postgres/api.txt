@@ -2118,7 +2118,7 @@
 ./target/runtime: class PostgresContractSerializer, constructor(extraPackEntityKinds?: readonly AnyEntityKindDescriptor[])
 ./target/runtime: class PostgresContractSerializer, protected required method hydrateSqlNamespaceEntry(nsId: string, raw: Record<string, unknown>): Namespace | SqlNamespaceInput
 ./target/runtime: class PostgresContractSerializer, protected required method hydrateSqlStorage(validated: Contract<SqlStorage>): Contract<SqlStorage>
-./target/runtime: class PostgresContractSerializer, required method serializeContract(contract: Contract<SqlStorage>): JsonObject
+./target/runtime: class PostgresContractSerializer, protected required method printContractV1(contract: Contract<SqlStorage>): JsonObject
 ./target/runtime: class PostgresContractSerializer, required property shouldPreserveEmpty: PreserveEmptyPredicate
 ./target/runtime: const PostgresContractView: { from<TContract extends Contract<SqlStorage>>(contract: TContract): PostgresContractView<TContract>; fromJson<TContract extends Contract<SqlStorage> = Contract<SqlStorage<string>>>(json: unknown): PostgresContractView<TContract>; }
 ./target/runtime: const postgresIsolationLevelSchema: StringType<"ReadCommitted" | "ReadUncommitted" | "RepeatableRead" | "Serializable", {}>
@@ -3117,7 +3117,7 @@
 ./target: class PostgresContractSerializer, constructor(extraPackEntityKinds?: readonly AnyEntityKindDescriptor[])
 ./target: class PostgresContractSerializer, protected required method hydrateSqlNamespaceEntry(nsId: string, raw: Record<string, unknown>): Namespace | SqlNamespaceInput
 ./target: class PostgresContractSerializer, protected required method hydrateSqlStorage(validated: Contract<SqlStorage>): Contract<SqlStorage>
-./target: class PostgresContractSerializer, required method serializeContract(contract: Contract<SqlStorage>): JsonObject
+./target: class PostgresContractSerializer, protected required method printContractV1(contract: Contract<SqlStorage>): JsonObject
 ./target: class PostgresContractSerializer, required property shouldPreserveEmpty: PreserveEmptyPredicate
 ./target: class PostgresCreateIndex extends PostgresDdlNode
 ./target: class PostgresCreateIndex, constructor(options: { readonly schema: string | undefined; readonly table: string; readonly name: string; readonly unique: boolean; readonly elements: DdlIndexElements; readonly type: string | undefined; readonly options: Record<string, unknown> | undefined; readonly where: OpaqueSql | undefined; })

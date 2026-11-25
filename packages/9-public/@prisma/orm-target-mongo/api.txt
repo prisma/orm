@@ -325,7 +325,7 @@
 ./target/control: class MongoMigrationRunner, required method execute(options: MongoMigrationRunnerExecuteOptions): Promise<MongoMigrationRunnerResult>
 ./target/control: class MongoTargetContractSerializer extends MongoContractSerializerBase<MongoTargetContract>
 ./target/control: class MongoTargetContractSerializer, protected required method constructTargetContract(validated: MongoContract): MongoTargetContract
-./target/control: class MongoTargetContractSerializer, required method serializeContract(contract: MongoTargetContract): JsonObject
+./target/control: class MongoTargetContractSerializer, protected required method printContractV1(contract: MongoTargetContract): JsonObject
 ./target/control: class MongoTargetDatabase extends NamespaceBase
 ./target/control: class MongoTargetDatabase, constructor(input: MongoTargetDatabaseInput)
 ./target/control: class MongoTargetDatabase, readonly required property entries: MongoNamespaceEntries
@@ -536,7 +536,7 @@
 ./target: class MongoMigrationRunner, required method execute(options: MongoMigrationRunnerExecuteOptions): Promise<MongoMigrationRunnerResult>
 ./target: class MongoTargetContractSerializer extends MongoContractSerializerBase<MongoTargetContract>
 ./target: class MongoTargetContractSerializer, protected required method constructTargetContract(validated: MongoContract): MongoTargetContract
-./target: class MongoTargetContractSerializer, required method serializeContract(contract: MongoTargetContract): JsonObject
+./target: class MongoTargetContractSerializer, protected required method printContractV1(contract: MongoTargetContract): JsonObject
 ./target: class MongoTargetDatabase extends NamespaceBase
 ./target: class MongoTargetDatabase, constructor(input: MongoTargetDatabaseInput)
 ./target: class MongoTargetDatabase, readonly required property entries: MongoNamespaceEntries
