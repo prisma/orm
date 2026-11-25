@@ -82,7 +82,7 @@ Treat the rendered import lines as framework-managed on both targets:
 | `MIGRATION.STATEMENT_INVALID` | `migration plan` / `db update` with `--rename` | The statement is malformed, mixes a model and a field, renames something to itself, swaps two names, or repeats a name. The error's next step is the statement to type instead; use it. |
 | `MIGRATION.STATEMENT_UNRESOLVED` | `migration plan` / `db update` with `--rename` | A name is not where a rename needs it. The error lists the names it found and says what to type: the statement the right way round, the order that works, or to leave out a rename that has already happened. |
 | `MIGRATION.CHANGE_POLICY_FORBIDS` | `db update`, `db sign`, `db migrate` | The database's change policy does not include what the command does (`meta.change` lists what it permits). When `db update` or `db sign` is refused, the database changes only through migrations: follow its advice, which says to apply the migrations on disk that already lead to the target with `db migrate`, or to author one (with `migration plan`, or with `migration new` when the database is already at the target and lacks only invariants) and apply it with `db migrate`. Do not look for a way round the policy. |
-| `MIGRATION.POLICY_MISMATCH` | `db migrate --to <ref>`, `db update --to <ref>`, a Composer deploy | The ref declares a policy that differs from the database's (`why` names each setting with both values). Either the ref is wrong, so fix it to match the database, or the database's owner meant to change the policy, which the deploy does only when told it may. Never loosen a policy to make your own deploy pass. See *Policies* below. |
+| `MIGRATION.POLICY_MISMATCH` | `db migrate --to <ref>`, `db update --to <ref>`, a Composer deploy | The ref declares a policy that differs from the database's (`why` names each setting with both values). Follow the error's advice. Where the ref is looser than the database, it says to make the ref declare what the database has and have the change reviewed. Otherwise it says to have whoever owns the database apply the ref's policies in a deploy, which the deploy does only when told it may. Never loosen a policy to make your own deploy pass. See *Policies* below. |
 | `MIGRATION.STATEMENT_ORIGIN_UNKNOWN` | `db update --rename` | `db update` has no snapshot of the contract the database is at. Follow the error's steps: emit that contract, run `db update --advance-ref <name> --dry-run` and check it plans no operations, then run it without `--dry-run` to store its snapshot, then emit the new contract and run the rename. Do not drop the statements to get past it: without them the plan drops the renamed table with its rows. |
 
 ## Decision — which path do you take?
@@ -525,7 +525,7 @@ Copying the data elsewhere first does not help: the drop is still a drop. Really
 
 A loss is an operation whose class is `destructive`. An access change is disabling row-level security or dropping a row-level-security policy (Postgres only); `access-widening-forbidden` refuses both, though a dropped policy may narrow access as well as widen it. In a recorded migration these are recognised from the operation itself, so an access change written as raw SQL is not seen: `access-widening-forbidden` does not stop a hand-written `DISABLE ROW LEVEL SECURITY`. Adding a policy, or changing a policy's condition, is not counted as an access change by any command.
 
-**Declaring policies.** A ref declares the policies its database should have. Edit the ref file; every key is optional, and a key you leave out declares nothing:
+**Declaring policies.** A ref declares the policies its database should have, in the `policies` field of its file. Every key is optional, and a key you leave out declares nothing, which is not the same as declaring the default:
 
 ```json
 // migrations/app/refs/production.json
@@ -539,11 +539,21 @@ A loss is an operation whose class is `destructive`. An access change is disabli
 }
 ```
 
-Commands that rewrite a ref (`migration ref set`, `db update`, `db sign`, `db migrate`) keep `policies` and `invariants`.
+Write the field by hand, or with the `migration ref policy` commands, which change only the ref file and never connect to a database:
+
+| Command | What it does |
+|---|---|
+| `prisma migration ref policy show <ref>` | Prints each setting the ref declares, or "not declared". It is what the ref declares, not what a database has; `migration status --to <ref> --db <url>` compares the two. |
+| `prisma migration ref policy set <ref> --change <strategy> --data-loss <level> --access-widening <level>` | Writes the settings named and leaves the rest. `--change` is repeatable and replaces the declared list. A level is `forbidden`, `with-consent` or `permitted`. An invalid value is refused before the file is touched. |
+| `prisma migration ref policy delete <ref> <setting>...` | Removes settings (`change`, `dataProtection.dataLoss`, `dataProtection.accessWidening`, or `data-loss`, `access-widening`), so the ref declares nothing about them. |
+
+`set` and `delete` print each changed setting before and after, labelled `tightens`, `loosens` or `unchanged`, and `--json` returns `{ ok, ref, policies, changes }`. A ref's policies are a decision about how that database may change: change them only when the team means to, and have the change reviewed like code.
+
+No other command changes a ref's policies. Commands that rewrite a ref (`migration ref set`, `db update`, `db sign`, `db migrate`, and the `migration ref policy` commands) keep the fields the ref format defines (`hash`, `invariants`, `policies`) and drop any other top-level key.
 
 **Applying a declared policy.** `db migrate --to <ref>` and `db update --to <ref>` compare the ref's declarations with the database before running anything. If they differ, the command fails with `MIGRATION.POLICY_MISMATCH` and nothing runs. The database's policy changes only when the deploy is told it may: `prisma db migrate --to production --permit-policy-change --db <url>`. The run is checked against the ref's policies, runs, and writes them into the marker when it succeeds, so a failed run leaves the old policy. With nothing pending, the run writes only the policies. A pipeline that should apply reviewed policy changes passes the flag on every deploy; a cautious team leaves it out and applies policy changes by hand. The flag needs `--to <ref>`: with a hash, `@db`, `@empty` or no `--to`, the command fails with `CLI.INVALID_ARGUMENTS` before it connects. A ref that declares no policies is accepted and changes nothing, so a pipeline can pass the flag on every deploy.
 
-The flag is consent, like `--delete`. It is for the person who owns the database and reviewed the ref change. Never add it to make your own deploy pass, and never edit a ref's `policies` to get `db update` past a refusal: the policy is there to stop exactly that.
+The flag is consent, like `--delete`. It is for the person who owns the database and reviewed the ref change. Never add it to make your own deploy pass, and never loosen a ref's `policies`, by hand or with `migration ref policy set` or `delete`, to get a deploy, a plan or `db update` past a refusal: the policy is there to stop exactly that.
 
 ## Workflow — Re-sign the marker
 

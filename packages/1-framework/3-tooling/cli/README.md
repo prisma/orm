@@ -89,6 +89,7 @@ Two commands print a document instead of data lines: `contract print` prints the
 | `migration new`, `migration plan` | the directories written, each once, the baseline first |
 | `migration ref list` | `name`, `hash`, `invariants` (comma-separated) per ref |
 | `migration ref set` | the contract hash the ref now points at |
+| `migration ref policy show`, `set`, `delete` | `setting<TAB>value` per setting the ref declares afterwards (`change`, `dataProtection.dataLoss`, `dataProtection.accessWidening`), `change` comma-separated; a setting not declared is left out |
 | `db migrate` | `space`, `name`, `from`, `to`, `operations` per applied migration |
 | `db migrate --show` | `space`, `name`, `from`, `to` per migration that will run; there is no operation count before the run |
 | `db sign` | `space`, `status`, `storage hash` per space; `status` is the JSON status (`created`, `updated`, `unchanged`, `conflict`, `failed` or `missing-invariants`) |
@@ -1265,7 +1266,13 @@ Manage named refs, one file per ref at `migrations/<space>/refs/<name>.json`. Re
 prisma migration ref set <name> <contract>          # Set a ref to a contract (hash, ref, dir, ...)
 prisma migration ref list                           # List all refs (use `migration ref list` and filter for one ref)
 prisma migration ref delete <name>                  # Delete a ref
+prisma migration ref policy show <ref>              # Print the policies a ref declares
+prisma migration ref policy set <ref> --change migrate --data-loss forbidden
+                                                    # Declare settings; --change repeats and replaces the list
+prisma migration ref policy delete <ref> <setting>  # Remove settings, so the ref declares nothing about them
 ```
+
+The `migration ref policy` commands rewrite only the ref file and never connect to a database: a database takes on a ref's policies only in a deploy its owner gives consent to (see `db migrate`). `set` and `delete` label each change `tightens`, `loosens` or `unchanged`. A refused deploy or plan is not a reason to loosen a ref's policies.
 
 **Options (all subcommands):**
 - `--config <path>`: Path to `prisma.config.ts`

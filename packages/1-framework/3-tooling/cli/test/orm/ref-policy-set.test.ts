@@ -257,6 +257,11 @@ describe('ref policy set', () => {
         ['--data-loss', 'access-widening-forbidden'],
         'CLI.INVALID_ARGUMENTS',
       ],
+      [
+        'an access-widening level that does not exist',
+        ['--access-widening', 'never'],
+        'CLI.INVALID_ARGUMENTS',
+      ],
       ['a strategy that does not exist', ['--change', 'push'], 'CLI.INVALID_ARGUMENTS'],
       ['comma-separated strategies', ['--change', 'migrate,reconcile'], 'CLI.INVALID_ARGUMENTS'],
       ['no setting at all', [], 'CLI.INVALID_ARGUMENTS'],

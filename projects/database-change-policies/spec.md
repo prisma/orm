@@ -51,7 +51,7 @@ The defaults are today's behaviour, so existing databases behave exactly as befo
 
 ### Where policies are stored
 
-**In a ref.** A ref file gains an optional `policies` field. Users write it by editing the ref file, as they do for `invariants`:
+**In a ref.** A ref file gains an optional `policies` field. Users write it by editing the ref file, as they do for `invariants`, or with `migration ref policy set` and `delete` (ADR 334):
 
 ```json
 // migrations/app/refs/production.json
@@ -68,7 +68,7 @@ The defaults are today's behaviour, so existing databases behave exactly as befo
 }
 ```
 
-Every key is optional. A key a ref omits is **undeclared**: the ref says nothing about that setting. Every command that writes a ref file (`migration ref set`, ref advancement by `db init`, `db update`, `db sign` and `db migrate --advance-ref`) keeps an existing `policies` field unchanged. Only a person editing the file changes it.
+Every key is optional. A key a ref omits is **undeclared**: the ref says nothing about that setting. Every command that writes a ref file (`migration ref set`, ref advancement by `db init`, `db update`, `db sign` and `db migrate --advance-ref`) keeps an existing `policies` field unchanged. Only a person changes it, by hand or with the `migration ref policy` commands; no command changes it as a side effect of doing something else.
 
 **In the marker.** The application space's marker row stores the policies in force under `meta.policies`, in the same shape as the ref's `policies`. The `meta` column already exists on Postgres, SQLite, MySQL and MongoDB, so no marker table changes. MySQL's marker upsert currently replaces `meta` with `{}` on every write, and must stop doing so. A marker write that does not change policy keeps `meta.policies` as it is.
 
@@ -131,7 +131,7 @@ The next actions depend on the database's change policy:
 |---|---|---|
 | `MIGRATION.CHANGE_POLICY_FORBIDS` | A command needs a strategy the database's change policy does not include | When `reconcile` is refused: author a migration with `prisma migration plan` and deploy it. When `migrate` is refused: run `prisma db update`. |
 | `MIGRATION.DATA_PROTECTION_FORBIDS` | A run or plan contains an operation the data protection policy forbids. `meta` lists each operation and its subject. | Change the contract or the migration so it does not lose data or widen access: state a rename, convert a type change, or keep the data. Really dropping data takes a change to the database's policy by its owner first. |
-| `MIGRATION.POLICY_MISMATCH` | A ref declares a policy that differs from the database's. `why` lists each differing setting with both values. | Make the ref match the database, or have whoever owns the database apply the ref's policies. |
+| `MIGRATION.POLICY_MISMATCH` | A ref declares a policy that differs from the database's. `why` lists each differing setting with both values. | Chosen per difference (ADR 334): where the ref is looser than the database, "Make the ref declare what the database has, and have the change reviewed."; otherwise "Have whoever owns the database apply the ref's policies in a deploy." |
 
 ### Composer
 
