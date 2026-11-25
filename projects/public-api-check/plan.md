@@ -21,7 +21,7 @@ Spike records are in [spikes/](spikes/).
 
 **Outcome.**
 
-- The joined reading of a package (what the compiler sees exported, written out by API Extractor) becomes one function that the list and the type-test generator both call, and it can write to a folder the caller chooses, so it can read the last release from the registry without writing into `node_modules`.
+- Generated type tests take their export names from the same compiler reading as the list, run over the last release's declarations. They need no printed signatures, so the reading is not reshaped (decided 2026-11-25 from the trial).
 - Generated type tests compare each export of the last release with the current build. A deliberate break is recorded as an expected failure.
 - CI compiles the last release's example apps, with their type tests, against the current build.
 - A pull request that changes an `api.txt` fails until its description names each added and removed export, and gets a comment listing them.
