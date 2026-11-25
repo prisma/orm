@@ -287,12 +287,12 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
 
   /**
    * The renames of the plan. The refusals whose route tells the user to plan without some statements
-   * read that plan: this planner's whole plan of the same contracts without them, made once. That
-   * plan builds no route of its own, so there is one level of re-planning.
+   * read that plan: this planner's whole plan of the same contracts without them, made once. A plan
+   * without them has no statement the shared-collection rule refuses, so it builds no route of its
+   * own, and there is one level of re-planning.
    */
   #statementPlanOf(
     options: MongoPlanOptions,
-    nested = false,
   ): Result<StatementPlan, readonly MigrationPlannerConflict[]> {
     return planStatements({
       statements: renamesOf(options.statements),
@@ -300,14 +300,13 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       contract: mongoContractOf(options.contract),
       schema: mongoSchemaOf(options.schema),
       planWithout: (leftOut) => {
-        if (nested) return undefined;
         const without = {
           ...options,
           statements: options.statements.filter(
             (statement) => !leftOut.some((each) => each === statement),
           ),
         };
-        const statementPlan = this.#statementPlanOf(without, true);
+        const statementPlan = this.#statementPlanOf(without);
         if (!statementPlan.ok) return statementPlan;
         const planned = this.#planFrom(without, statementPlan.value);
         return planned.kind === 'success' ? statementPlan : notOk(planned.conflicts);

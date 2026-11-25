@@ -231,14 +231,10 @@ interface PlanningInput {
   ) => SharedCollection | undefined;
 }
 
-/**
- * The whole plan of the same contracts without `statements`: its renames when it is made, its
- * refusals when it is refused, and `undefined` when it is not planned, as in a plan that is itself
- * planned without statements, whose refusal text nobody reads.
- */
+/** The whole plan of the same contracts without `statements`: its renames when it is made, its refusals when it is refused. */
 export type PlanWithout = (
   statements: readonly ResolvedRenameStatement[],
-) => Result<StatementPlan, readonly MigrationPlannerConflict[]> | undefined;
+) => Result<StatementPlan, readonly MigrationPlannerConflict[]>;
 
 /**
  * Plans the renames of a plan against the schema it starts from: those its statements ask for,
@@ -646,7 +642,7 @@ interface SharedRoute {
   /** The statements to leave out, as the CLI takes them. */
   readonly statementsText: string;
   readonly text: () => string;
-  /** The refusals of the plan without the statements, once the text has read that plan and found it refused. */
+  /** The refusals of the plan without the statements, when it is refused. */
   readonly leftOutRefusals: () => readonly MigrationPlannerConflict[];
 }
 
@@ -692,8 +688,17 @@ function staysIn(group: RefusedGroup): readonly ModelCoordinate[] {
 
 /** The models of one collection the moving models become, and the documents already there they read. */
 interface MoveDestination {
+  readonly collection: string;
   readonly renamedTo: readonly ModelCoordinate[];
   readonly readers: readonly ModelCoordinate[];
+}
+
+/** Models the plan without the statements removes from a collection that keeps other models, which still read their documents. */
+interface LeftBehind {
+  readonly moving: readonly ModelCoordinate[];
+  readonly staying: readonly ModelCoordinate[];
+  /** The source collection, by its name after the plan's renames. */
+  readonly from: string;
 }
 
 function destinationStartText({ renamedTo, readers }: MoveDestination): string {
@@ -703,15 +708,56 @@ function destinationStartText({ renamedTo, readers }: MoveDestination): string {
     : `${capitalized(modelsText(renamedTo))} ${one ? 'reads' : 'read'} the documents of ${modelsText(readers)} already stored in ${one ? 'its' : 'their'} collection, since no discriminator tells them apart.`;
 }
 
-/** What the plan without the statements does to models whose documents no discriminator tells apart from those of the models that stay: they are removed, and nothing is asked. */
+/**
+ * What the plan without the statements does to models whose documents no discriminator tells apart
+ * from those of the models that stay: they are removed, and nothing is asked. With several source
+ * collections, one paragraph says it for all of them.
+ */
 function removedText(
-  moving: readonly ModelCoordinate[],
-  staying: readonly ModelCoordinate[],
+  left: readonly LeftBehind[],
   destinations: readonly MoveDestination[],
-  from: string,
 ): string {
+  const moving = left.flatMap((each) => each.moving);
   const one = moving.length === 1;
-  return `${capitalized(modelsText(moving))} ${one ? 'is' : 'are'} then removed and nothing is asked, since nothing is deleted. ${one ? 'Its' : 'Their'} documents stay in collection "${from}", where ${modelsText(staying)} still read${staying.length === 1 ? 's' : ''} them. ${destinations.map(destinationStartText).join(' ')} If the new validator of collection "${from}" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there.`;
+  const stillRead = ({ staying }: LeftBehind) =>
+    `${modelsText(staying)} still read${staying.length === 1 ? 's' : ''} them`;
+  const [only] = left;
+  const places = left.map(
+    (each) =>
+      `those of ${modelsText(each.moving)} in collection "${each.from}", where ${stillRead(each)}`,
+  );
+  const where =
+    left.length === 1 && only !== undefined
+      ? `${one ? 'Its' : 'Their'} documents stay in collection "${only.from}", where ${stillRead(only)}.`
+      : `Their documents stay where they are: ${places.slice(0, -1).join(', ')}, and ${places.at(-1)}.`;
+  const sources = left.map(({ from }) => `"${from}"`);
+  const validated =
+    sources.length === 1 ? sources[0] : `${sources.slice(0, -1).join(', ')} or ${sources.at(-1)}`;
+  return `${capitalized(modelsText(moving))} ${one ? 'is' : 'are'} then removed and nothing is asked, since nothing is deleted. ${where} ${destinations.map(destinationStartText).join(' ')} If the new validator of collection ${validated} does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there.`;
+}
+
+/** The destinations of the moving models, one to a collection. */
+function byCollection(destinations: readonly MoveDestination[]): readonly MoveDestination[] {
+  const merged: MoveDestination[] = [];
+  for (const destination of destinations) {
+    const index = merged.findIndex(({ collection }) => collection === destination.collection);
+    const found = merged[index];
+    if (found === undefined) {
+      merged.push(destination);
+      continue;
+    }
+    merged[index] = {
+      collection: found.collection,
+      renamedTo: [...found.renamedTo, ...destination.renamedTo],
+      readers: [
+        ...found.readers,
+        ...destination.readers.filter(
+          (reader) => !found.readers.some((each) => sameModel(each, reader)),
+        ),
+      ],
+    };
+  }
+  return merged;
 }
 
 /** What the plan without the statements does to models whose documents it drops with their collection: it asks about them. */
@@ -723,12 +769,9 @@ function askedText(moving: readonly ModelCoordinate[], kept: boolean): string {
 }
 
 /** What the route says when the plan without the statements is refused as well, so its own refusals say what to change first. */
-function leftOutPlanRefused(
-  count: number,
-  refusals: readonly MigrationPlannerConflict[] | undefined,
-): string {
+function leftOutPlanRefused(count: number, refusals: readonly MigrationPlannerConflict[]): string {
   const planned = `Planned without ${count === 1 ? 'it' : 'them'}, the change is refused for another reason as well`;
-  if (refusals === undefined || refusals.length === 0) return `${planned}.`;
+  if (refusals.length === 0) return `${planned}.`;
   const one = refusals.length === 1;
   return `${planned}: ${joinedList(refusals.map(({ summary }) => `"${summary}"`))}. ${one ? 'That refusal is' : 'Those refusals are'} listed here too, with what to change first.`;
 }
@@ -779,10 +822,54 @@ function sharedRouteOf(input: {
         !renames.some((renamed) => sameModel(renamed.to, model)),
     );
   const opening = `Leave out ${statementsText} to plan the change without moving them.`;
-  let leftOutRefusals: readonly MigrationPlannerConflict[] = [];
+  let leftOutResult: { readonly value: ReturnType<PlanWithout> } | undefined;
+  const leftOutPlan = () => {
+    leftOutResult ??= { value: input.planWithout(leftOutStatements) };
+    return leftOutResult.value;
+  };
+  const leftBehindGroup = (group: RefusedGroup) => leavesBehind(group) && staysIn(group).length > 0;
+
+  /** What the plan without the statements does to each group's models; `kept` when the route then keeps the data it asks about. */
+  const consequences = (plan: StatementPlan | undefined, kept: boolean): string => {
+    const left = groups.filter(leftBehindGroup);
+    const asked = groups.filter((group) => !leftBehindGroup(group));
+    const fromOf = (group: RefusedGroup) => {
+      const from = group.changes[0]?.from ?? '';
+      return plan?.renamedCollections.get(from) ?? from;
+    };
+    const removed =
+      left.length === 0
+        ? []
+        : [
+            removedText(
+              left.map((group) => ({
+                moving: movingModelsOf(group),
+                staying: staysIn(group),
+                from: fromOf(group),
+              })),
+              byCollection(
+                left.flatMap((group) =>
+                  group.changes.map((change) => ({
+                    collection: change.to,
+                    renamedTo: change.renames.map((renamed) => renamed.to),
+                    readers: readersIn(change.to, group),
+                  })),
+                ),
+              ),
+            ),
+          ];
+    return [
+      opening,
+      ...removed,
+      ...(asked.length === 0 ? [] : [askedText(asked.flatMap(movingModelsOf), kept)]),
+    ].join(' ');
+  };
+
+  const refusedText = (leftOut: ReturnType<PlanWithout>) =>
+    leftOut.ok ? '' : `\n\n${leftOutPlanRefused(leftOutStatements.length, leftOut.failure)}`;
 
   const handWritten = (): string => {
-    const consequences = groups.map((group) => askedText(movingModelsOf(group), false));
+    const leftOut = leftOutPlan();
     const what = joinedList(
       groups.map((group) => {
         const staying = staysIn(group);
@@ -801,34 +888,14 @@ function sharedRouteOf(input: {
         );
       }),
     );
-    return `${opening} ${consequences.join(' ')}\n\n${handWrittenRoute(what)}`;
+    return `${consequences(leftOut.ok ? leftOut.value : undefined, false)}${refusedText(leftOut)}\n\n${handWrittenRoute(what)}`;
   };
 
   const leaveBehind = (): string => {
-    const leftOut = input.planWithout(leftOutStatements);
-    const plan = leftOut?.ok ? leftOut.value : undefined;
+    const leftOut = leftOutPlan();
+    if (!leftOut.ok) return `${consequences(undefined, false)}${refusedText(leftOut)}`;
+    const plan = leftOut.value;
     const asked = groups.filter((group) => staysIn(group).length === 0);
-    const consequences = groups.map((group) => {
-      const staying = staysIn(group);
-      const moving = movingModelsOf(group);
-      const from = group.changes[0]?.from ?? '';
-      return staying.length === 0
-        ? askedText(moving, plan !== undefined)
-        : removedText(
-            moving,
-            staying,
-            group.changes.map((change) => ({
-              renamedTo: change.renames.map((renamed) => renamed.to),
-              readers: readersIn(change.to, group),
-            })),
-            plan?.renamedCollections.get(from) ?? from,
-          );
-    });
-    const said = `${opening} ${consequences.join(' ')}`;
-    if (plan === undefined) {
-      leftOutRefusals = leftOut?.ok === false ? leftOut.failure : [];
-      return `${said}\n\n${leftOutPlanRefused(leftOutStatements.length, leftOut?.ok === false ? leftOut.failure : undefined)}`;
-    }
     const match: ModelMatchInput = {
       statements,
       models,
@@ -869,7 +936,7 @@ function sharedRouteOf(input: {
       askedModels.length === 0
         ? ''
         : `, and answer its question about ${modelsText(askedModels)} with the --delete it offers: the copies below run before the plan drops collection${asked.length === 1 ? '' : 's'} ${dropped}, so they keep the documents, and the drop removes only the emptied collection${asked.length === 1 ? '' : 's'}`;
-    return `${said}\n\nWith migration plan, keep the documents by moving them in the migration that plan writes. Plan the change without ${statementsText}${answer}.\n\n${documentMovesText(moves)}`;
+    return `${consequences(plan, true)}\n\nWith migration plan, keep the documents by moving them in the migration that plan writes. Plan the change without ${statementsText}${answer}.\n\n${documentMovesText(moves)}`;
   };
 
   let built: string | undefined;
@@ -880,7 +947,10 @@ function sharedRouteOf(input: {
       built ??= groups.every(leavesBehind) ? leaveBehind() : handWritten();
       return built;
     },
-    leftOutRefusals: () => leftOutRefusals,
+    leftOutRefusals: () => {
+      const leftOut = leftOutPlan();
+      return leftOut.ok ? [] : leftOut.failure;
+    },
   };
 }
 

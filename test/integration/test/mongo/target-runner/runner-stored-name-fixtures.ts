@@ -2,6 +2,13 @@ import type { ResolvedMigrationStatement } from '@internal/framework-components/
 import { MongoCollection, type MongoContract } from '@internal/mongo-contract';
 import { NS } from './runner-statements-fixtures';
 
+export const renameModel = (from: string, to: string): ResolvedMigrationStatement => ({
+  kind: 'rename',
+  entity: 'model',
+  from: { namespaceId: NS, model: from },
+  to: { namespaceId: NS, model: to },
+});
+
 export const renameField = (
   fromModel: string,
   from: string,

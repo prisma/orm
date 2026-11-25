@@ -57,16 +57,16 @@ function movingText({ copies }: DocumentMove): string {
   return modelNamesText(copies.flatMap((copy) => copy.models));
 }
 
-/** Where the move's dataTransform goes, as a clause that starts in lower case so it can follow "For model …,". */
+/** Where the move's dataTransforms go, as a clause that starts in lower case so it can follow "For model …,". */
 function placementClause({ from, to, order }: DocumentMove): string {
   const before = `before the plan's own operations on collection "${from}"`;
   switch (order.after?.kind) {
     case 'createCollection':
-      return `in the operations of the migration.ts it writes, right after the creation of collection "${to}" and ${before}, add a dataTransform.`;
+      return `in the operations of the migration.ts it writes, right after the creation of collection "${to}" and ${before}`;
     case 'renameCollection':
-      return `in the operations of the migration.ts it writes, right after the ${joinedList(order.after.renames.map((rename) => `rename of collection "${rename.from}" to "${rename.to}"`))} and ${before}, add a dataTransform.`;
+      return `in the operations of the migration.ts it writes, right after the ${joinedList(order.after.renames.map((rename) => `rename of collection "${rename.from}" to "${rename.to}"`))} and ${before}`;
     case undefined:
-      return `at the start of the operations of the migration.ts it writes, ${before}, add a dataTransform.`;
+      return `at the start of the operations of the migration.ts it writes, ${before}`;
   }
 }
 
@@ -113,18 +113,19 @@ function copyCall(move: DocumentMove, copy: DocumentCopy, selects: string): stri
   ].join('\n');
 }
 
+/**
+ * The dataTransforms of a move, one for each copy, since a dataTransform's run is one query plan,
+ * and after them the delete, which is an operation of its own.
+ */
 function copiesText(move: DocumentMove): string {
   const { from, to, copies } = move;
   const [only] = copies;
-  const calls =
-    copies.length === 1 && only !== undefined
-      ? `Its run copies the documents of ${movingText(move)} into collection "${to}":\n\n${copyCall(move, only, 'those documents')}`
-      : `Its run copies the documents of ${movingText(move)} into collection "${to}", with one copy for each group of models whose documents change alike on the way:\n\n${copies.map((copy) => copyCall(move, copy, `the documents of ${modelNamesText(copy.models)}`)).join('\n')}`;
-  const filter =
-    copies.length === 1
-      ? '<the same filter>'
-      : '<a filter that selects the documents of all of them>';
-  return `${calls}\n\nThen it deletes them from collection "${from}":\n\n${CODE_INDENT}deleteDocuments({ collection: ${jsonToTsSource(from)}, filter: ${filter} })`;
+  const deleteCall = (filter: string) =>
+    `${CODE_INDENT}deleteDocuments({ collection: ${jsonToTsSource(from)}, filter: ${filter} })`;
+  const deletes = `the operation that deletes the documents of ${movingText(move)} from collection "${from}"`;
+  return copies.length === 1 && only !== undefined
+    ? `add a dataTransform. Its run copies the documents of ${movingText(move)} into collection "${to}":\n\n${copyCall(move, only, 'those documents')}\n\nAfter it, add ${deletes}:\n\n${deleteCall('<the same filter>')}`
+    : `add one dataTransform for each group of models whose documents change alike on the way into collection "${to}". The run of each is one of these copies:\n\n${copies.map((copy) => copyCall(move, copy, `the documents of ${modelNamesText(copy.models)}`)).join('\n\n')}\n\nAfter them, add ${deletes}:\n\n${deleteCall('<a filter that selects the documents of all of them>')}`;
 }
 
 function droppedText({ copies }: DocumentMove): string {
@@ -146,8 +147,8 @@ function filterText(move: DocumentMove): string {
 
 function moveText(move: DocumentMove, naming: boolean): string {
   const placement = naming
-    ? `For ${movingText(move)}, ${placementClause(move)}`
-    : capitalized(placementClause(move));
+    ? `For ${movingText(move)}, ${placementClause(move)},`
+    : `${capitalized(placementClause(move))},`;
   return `${placement} ${copiesText(move)}\n\n${filterText(move)}${droppedText(move)}${bypassText(move)}`;
 }
 
@@ -169,7 +170,7 @@ function stopText(moves: readonly DocumentMove[]): string {
 
 /**
  * The steps that add document moves to the migration.ts a plan writes, in short paragraphs: for
- * each move, where its dataTransform goes (see `documentMoveOrder`) with its copies and delete, and
+ * each move, where its dataTransforms go (see `documentMoveOrder`) with its copies and delete, and
  * the filter they need; then how to apply them, together, and what to do if the apply stops. With
  * several moves, each starts with the models that move. The target's rewrites come after the move:
  * those of another model that would reach the moved documents are refused, and those of a moving
@@ -178,7 +179,7 @@ function stopText(moves: readonly DocumentMove[]): string {
 export function documentMovesText(moves: readonly DocumentMove[]): string {
   return [
     ...moves.map((move) => moveText(move, moves.length > 1)),
-    applyText(moves.length),
+    applyText(moves.reduce((count, move) => count + move.copies.length, 0)),
     stopText(moves),
   ].join('\n\n');
 }

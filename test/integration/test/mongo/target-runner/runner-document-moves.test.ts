@@ -7,7 +7,7 @@ import { dataTransform, deleteDocuments, rawAggregate } from '@internal/target-m
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { closedSchema, useStatementsDatabase } from './runner-statements-fixtures';
-import { contract } from './runner-stored-name-fixtures';
+import { contract, renameModel } from './runner-stored-name-fixtures';
 
 const policy: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
@@ -406,6 +406,96 @@ describe('a plan that moves documents into a collection whose validator it then 
     expect(result.failure.why).toContain(
       `The rejected document has _id ObjectId("${String(inserted.insertedIds[1])}"): find it with db.getCollection("users").find({ _id: ObjectId("${String(inserted.insertedIds[1])}") }) in mongosh.`,
     );
+  });
+
+  it('runs a move with two copies and a second move, each copy in its own dataTransform and each delete after them, as the route writes them', async () => {
+    const from = contract(
+      'from',
+      {
+        Admin: { collection: 'users', fields: { admin: 'admin' } },
+        A: { collection: 'users', fields: { a: 'a' } },
+        B: { collection: 'users', fields: { b: 'b' } },
+        Guest: { collection: 'members', fields: { guest: 'guest' } },
+        Staff: { collection: 'staff', fields: { staff: 'staff' } },
+        Clerk: { collection: 'staff', fields: { clerk: 'clerk' } },
+      },
+      {},
+    );
+    const to = contract(
+      'to',
+      {
+        Admin: { collection: 'users', fields: { admin: 'admin' } },
+        A2: { collection: 'members', fields: { a: 'x' } },
+        B2: { collection: 'members', fields: { b: 'y' } },
+        Guest: { collection: 'members', fields: { guest: 'guest' } },
+        Staff: { collection: 'staff', fields: { staff: 'staff' } },
+        Teller: { collection: 'members', fields: { clerk: 'clerk' } },
+      },
+      {},
+    );
+    await db()
+      .collection('users')
+      .insertMany([{ admin: 'Ada' }, { a: 'Alan' }, { b: 'Barbara' }]);
+    await db().collection('members').insertOne({ guest: 'Grace' });
+    await db()
+      .collection('staff')
+      .insertMany([{ staff: 'Sam' }, { clerk: 'Carl' }]);
+    await initMarker(from);
+    const refused = new MongoMigrationPlanner().plan({
+      contract: to,
+      schema: await introspectSchema(db()),
+      policy,
+      fromContract: from,
+      origin: { storageHash: from.storage.storageHash },
+      statements: [renameModel('A', 'A2'), renameModel('B', 'B2'), renameModel('Clerk', 'Teller')],
+      frameworkComponents: [],
+      snapshotsImportPath: '../../snapshots',
+    });
+    const route = refused.kind === 'failure' ? (refused.conflicts[0]?.why ?? '') : '';
+    const copy = (name: string, match: Record<string, unknown>, set: Record<string, string>) =>
+      dataTransform(name, {
+        run: () =>
+          rawAggregate('users', [
+            { $match: match },
+            { $set: set },
+            { $unset: Object.values(set).map((field) => field.slice(1)) },
+            { $merge: { into: 'members' } },
+          ]),
+      });
+    const operations = [
+      copy('move A to members', { a: { $exists: true } }, { x: '$a' }),
+      copy('move B to members', { b: { $exists: true } }, { y: '$b' }),
+      deleteDocuments({
+        collection: 'users',
+        filter: { $or: [{ a: { $exists: true } }, { b: { $exists: true } }] },
+      }),
+      dataTransform('move Clerk to members', {
+        run: () =>
+          rawAggregate('staff', [
+            { $match: { clerk: { $exists: true } } },
+            { $merge: { into: 'members' } },
+          ]),
+      }),
+      deleteDocuments({ collection: 'staff', filter: { clerk: { $exists: true } } }),
+      ...(await plannedOperations(from, to)),
+    ];
+    const result = await runOperations(operations, from, to, { policy });
+    expect({
+      route: [
+        route.includes('add one dataTransform for each group of models whose documents change'),
+        route.includes('All 3 dataTransforms go in that one migration.ts.'),
+      ],
+      ok: result.ok,
+      users: await documents('users'),
+      members: await documents('members'),
+      staff: await documents('staff'),
+    }).toEqual({
+      route: [true, true],
+      ok: true,
+      users: [{ admin: 'Ada' }],
+      members: [{ x: 'Alan' }, { y: 'Barbara' }, { guest: 'Grace' }, { clerk: 'Carl' }],
+      staff: [{ staff: 'Sam' }],
+    });
   });
 
   it('keeps the documents when every model leaves the source, with the drop the plan without the statements writes', async () => {
