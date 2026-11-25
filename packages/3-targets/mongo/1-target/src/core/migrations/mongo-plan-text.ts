@@ -158,6 +158,10 @@ function applyText(count: number): string {
     : `${count === 2 ? 'Both' : `All ${count}`} dataTransforms go in that one migration.ts. Run it to emit its ops.json, and apply it once with db migrate.`;
 }
 
+/** What the user must hold while a hand-written move runs, since its copy and delete are two operations with no transaction, and `$merge` matches by `_id`. */
+const MOVE_LIMITS =
+  'Stop writes to each collection the documents move out of until the apply ends: the delete also removes a document of those models written there after the copy, and that document was not copied. $merge matches documents by _id, so a moved document whose _id a document of the collection it moves into already holds is merged into that document. Check first that no _id is in both collections.';
+
 function stopText(moves: readonly DocumentMove[]): string {
   const checked = moves.filter((move) => move.order.validatorChange === 'replaced');
   return `If the apply stops, fix what stopped it and run db migrate again.${checked
@@ -180,6 +184,7 @@ export function documentMovesText(moves: readonly DocumentMove[]): string {
   return [
     ...moves.map((move) => moveText(move, moves.length > 1)),
     applyText(moves.reduce((count, move) => count + move.copies.length, 0)),
+    MOVE_LIMITS,
     stopText(moves),
   ].join('\n\n');
 }
