@@ -51,7 +51,7 @@ MySQL is published today as `8.0.0-rc.25`. The move is made once, at release `8.
 
 ### 3.1 The requirement
 
-An application must end up with exactly one copy of each platform package: the framework, the family, the target and the toolchain. The platform packages recognise some values by which copy made them. A data-type value carries a private field, and a copy refuses one that another copy made (`requireValueOf` in the framework's `data-type.ts`). Expressions are checked with `instanceof` (`projectionAstOf` in the SQL query builder), so one from another copy is refused or quietly takes another path.
+An application must end up with exactly one copy of each platform package: the framework, the family, the target and the toolchain. An extension's contributions are made with the extension's copy of the platform packages and used by the client's copy, and the platform packages recognise a data-type value by which copy made it. The value carries a private field that only the copy that constructed it can read, so a copy refuses a data-type value that another copy made (`requireValueOf` in the framework's `data-type.ts`). The decision record on how the packages name each other gives the details.
 
 The combination the policy promises must work: an extension built against `8.1` in an application on `8.4`.
 
