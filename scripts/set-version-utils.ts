@@ -42,7 +42,8 @@ export interface PlanSpecifierRule {
  * written without the protocol. Any other specifier on a published package is the root version on
  * the release candidates, as one version for all wrote it, and `workspace:*` on the levels line,
  * which the local package satisfies whatever its own version. A specifier on a private package,
- * aliased ones included, is the root version, which private packages follow.
+ * aliased ones included, is the root version, which private packages follow. An alias on a
+ * published package is refused.
  */
 export function rewriteWorkspaceDepsByPlan(
   packageJson: MutablePackageJson,
@@ -54,6 +55,11 @@ export function rewriteWorkspaceDepsByPlan(
     for (const [name, spec] of Object.entries(deps)) {
       if (typeof spec !== 'string' || !spec.startsWith('workspace:')) continue;
       const alias = /^workspace:((?:@[^/@]+\/)?[^@]+)@/.exec(spec)?.[1];
+      if (alias !== undefined && rule.published.has(alias)) {
+        throw new Error(
+          `${packageJson.name ?? 'a manifest'} names ${alias} through the alias ${name}; a published package has its own version, not the root version an alias is written at, so name it by its own name`,
+        );
+      }
       const range = rule.ranges?.[name];
       deps[name] = alias
         ? `workspace:${alias}@${rule.rootVersion}`

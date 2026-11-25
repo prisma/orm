@@ -274,4 +274,15 @@ describe('rewriteWorkspaceDepsByPlan', () => {
       '@internal/utils': 'workspace:8.1.0',
     });
   });
+
+  it('refuses an alias on a published package, which has its own version and not the root one', () => {
+    assert.throws(
+      () =>
+        rewriteWorkspaceDepsByPlan(
+          { name: 'example', dependencies: { db: 'workspace:@prisma/orm-postgres@8.0.0-rc.25' } },
+          { rootVersion: '8.1.0', line: 'levels', published: names, ranges: undefined },
+        ),
+      /example names @prisma\/orm-postgres through the alias db/,
+    );
+  });
 });
