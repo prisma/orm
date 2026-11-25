@@ -662,7 +662,13 @@ function placesTogether(places: readonly EnumPlace[]): readonly EnumPlace[] {
     const known = byPlace.get(key);
     byPlace.set(
       key,
-      known === undefined ? each : { ...known, together: [...known.together, ...each.together] },
+      known === undefined
+        ? each
+        : {
+            ...known,
+            required: known.required || each.required,
+            together: [...known.together, ...each.together],
+          },
     );
   }
   return [...byPlace.values()];

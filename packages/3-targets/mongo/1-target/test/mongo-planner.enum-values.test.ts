@@ -243,6 +243,39 @@ describe('MongoMigrationPlanner, a removed enum value', () => {
     ]);
   });
 
+  it('marks the field required when any model sharing the collection requires it', () => {
+    const shared = (seed: string, status: EnumSpec) =>
+      contract(
+        seed,
+        {
+          User: {
+            collection: 'people',
+            fields: ['_id', 'status'],
+            types: { _id: OBJECT_ID, status: { ...STATUS, nullable: true } },
+          },
+          Admin: {
+            collection: 'people',
+            fields: ['_id', 'status'],
+            types: { _id: OBJECT_ID, status: STATUS },
+          },
+        },
+        { people: {} },
+        {},
+        { Status: status },
+      );
+    expect(
+      rendered(
+        plan({
+          from: shared('from', BEFORE),
+          to: shared('to', REMOVED),
+          schema: [schemaCollection('people')],
+        }),
+      ),
+    ).toEqual([
+      'removeStoredValue({collection:"people",field:"status",value:"archived",required:true,enumValue:{enum:"Status",member:"ARCHIVED"}})',
+    ]);
+  });
+
   it('runs removals after the other rewrites and replacements before them', () => {
     const result = plan({
       from: users('from', statuses({ ACTIVE: 'active', ARCHIVED: 'archived', OLD: 'old' })),
