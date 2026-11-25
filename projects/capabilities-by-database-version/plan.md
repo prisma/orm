@@ -43,6 +43,13 @@ What follows for the design:
 
 Slices 1 to 3 are what GA waits for. Slice 1 changes hashes, so it is coordinated with the stored-format work on contract hashes.
 
+## What the hash rule means for this project
+
+The pull request that fixes the hash rules (prisma/orm#31203) makes the SQL profile hash cover the contract's whole capability list. Its decision record adds that, within a major version, the list Prisma writes for an unchanged contract source and configuration does not change. For this project:
+
+- **A supported version's row is fixed for the major.** Adding a flag to the row of PostgreSQL 17 would change the hash of every contract for 17, and every signed database would have to be signed again. So a feature that needs a newer database can arrive in a minor release only with a new version row, such as PostgreSQL 19. A new flag on an existing row waits for a major. A test in the target pins each row as literals.
+- **The connection's capabilities are in the signed list.** Switching to a driver with a different set changes the profile hash, and each database is signed again with `db sign`. Signing checks only the database's flags, so the hash could cover only those. That would need the hash function to know which flags are the database's, at emit and wherever a contract's hashes are verified, through a hook the hash rules have just removed. One rule over the whole list is simpler, a change of driver is rare, and signing again is one command. A driver's set is fixed for the major for the same reason a row is.
+
 ## Must not be lost
 
 - By the end of the project the Prisma schema language syntax is at least designed.
