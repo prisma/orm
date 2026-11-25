@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { planWorkspace, releaseOfRootVersion } from './release-plan-workspace.ts';
 import {
-  lockstepManifest,
+  manifestFollowingRootVersion,
   restampExtensionVersion,
   rewriteManifestByPlan,
   rewriteWorkspaceDepsByPlan,
@@ -73,9 +73,9 @@ for (const pkg of workspacePackages) {
 
 // Project-boundary manifests (tracked package.json files that are not
 // workspace members but carry `workspace:` pins, e.g. the per-database
-// halves of examples/bundle-size) version in lockstep too. Without this
-// sweep they go stale on every bump and fail at install once the old
-// version leaves the registry.
+// halves of examples/bundle-size) take the root version, as private packages
+// do. Without this sweep they go stale on every bump and fail at install once
+// the old version leaves the registry.
 const memberPaths = new Set(workspacePackages.map((pkg) => path.join(pkg.path, 'package.json')));
 const trackedManifests = execSync("git ls-files -- '*package.json'", {
   cwd: rootDir,
@@ -87,7 +87,7 @@ const trackedManifests = execSync("git ls-files -- '*package.json'", {
   .filter((abs) => !memberPaths.has(abs));
 
 for (const manifestPath of trackedManifests) {
-  const packageJson = lockstepManifest(await fs.readFile(manifestPath, 'utf-8'));
+  const packageJson = manifestFollowingRootVersion(await fs.readFile(manifestPath, 'utf-8'));
   if (packageJson === undefined) continue;
   packageJson.version = version;
   rewriteWorkspaceDepsByPlan(packageJson, {

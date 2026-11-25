@@ -294,7 +294,7 @@ export function findValidatorViolations(section) {
  * dependencies/peer/optional gets a version-qualified key
  * (`name@declared-spec`) mapped to its absolute `file:` tarball path when
  * the declared spec is one exact version, and its bare name when the spec
- * is a range (`~8.1.0`, `^8.1.0-preview.0`), which no version-qualified key
+ * is a range (`^8.1.0`, `~8.1.0-preview.0`), which no version-qualified key
  * names. Cycles between siblings are tolerated. Pure; exported for tests.
  *
  * @param {object} args

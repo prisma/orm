@@ -20,37 +20,6 @@ const DEP_FIELDS = [
   'optionalDependencies',
 ] as const;
 
-/**
- * Rewrite every workspace dep spec in `packageJson` to
- * `workspace:<version>`. Mutates in place. Idempotent: re-running with the
- * same version is a no-op.
- *
- * The literal-version form is the mechanism that gives every published
- * package an exact-version pin on its siblings: pnpm rewrites
- * `workspace:<X.Y.Z>` to exactly `X.Y.Z` at publish time, while resolving to
- * the local workspace package during development.
- *
- * Every scope is rewritten rather than one, because every package in this
- * workspace is versioned in lockstep — the published `@prisma/orm-*` shells,
- * the internal `@internal/*` packages they are built from, and the
- * `@internal/*` development packages alike. Singling out one scope would leave
- * the others pinned at whatever version they were last released under.
- *
- * Non-workspace specs (e.g. caret ranges from the registry, catalog entries)
- * are intentionally left alone; only `workspace:` specifiers are rewritten.
- */
-export function rewriteWorkspaceDeps(packageJson: MutablePackageJson, version: string): void {
-  for (const field of DEP_FIELDS) {
-    const deps = packageJson[field];
-    if (!deps) continue;
-    for (const [name, spec] of Object.entries(deps)) {
-      if (typeof spec !== 'string' || !spec.startsWith('workspace:')) continue;
-      const alias = /^workspace:((?:@[^/@]+\/)?[^@]+)@/.exec(spec)?.[1];
-      deps[name] = alias ? `workspace:${alias}@${version}` : `workspace:${version}`;
-    }
-  }
-}
-
 export interface PlanSpecifierRule {
   /** The root version, `-dev.N` included for a development build. */
   readonly rootVersion: string;
@@ -69,7 +38,7 @@ export interface PlanSpecifierRule {
  *
  * A published package's specifier on a package of ours it names is the plan's range, under
  * `peerDependencies` and `devDependencies` alike: `workspace:8.0.0-rc.26` on the release candidates,
- * `workspace:~8.1.0` or `workspace:^8.1.0-preview.0` on the levels line, and pnpm publishes it as
+ * `workspace:~8.1.0` or `workspace:~8.1.0-preview.0` on the levels line, and pnpm publishes it as
  * written without the protocol. Any other specifier on a published package is the root version on
  * the release candidates, as one version for all wrote it, and `workspace:*` on the levels line,
  * which the local package satisfies whatever its own version. A specifier on a private package,
@@ -130,22 +99,20 @@ export function rewriteManifestByPlan(
  * manifest without such a pin is left unread, so a fixture that is not valid JSON on purpose does
  * not stop a version bump.
  */
-export function lockstepManifest(text: string): MutablePackageJson | undefined {
+export function manifestFollowingRootVersion(text: string): MutablePackageJson | undefined {
   if (!text.includes('workspace:')) return undefined;
   const packageJson: MutablePackageJson = JSON.parse(text);
-  return participatesInLockstep(packageJson) ? packageJson : undefined;
+  return followsRootVersion(packageJson) ? packageJson : undefined;
 }
 
 /**
- * Whether a manifest that is NOT a workspace member still versions in
- * lockstep with the workspace. A `workspace:` dep spec is the tell:
- * project-boundary manifests (e.g. `examples/bundle-size/src/postgres`,
- * which exists so the emitter can resolve an import root per database)
- * pin workspace packages and go stale on every bump unless swept.
- * Fixture manifests with only registry-style specs are test data and
- * must be left alone.
+ * Whether a manifest that is not a workspace member still takes the root version, as private
+ * packages do. A `workspace:` specifier is the tell: project-boundary manifests (such as
+ * `examples/bundle-size/src/postgres`, which exists so the emitter can resolve an import root per
+ * database) name workspace packages and go stale on every bump unless swept. Fixture manifests with
+ * only registry specifiers are test data and are left alone.
  */
-export function participatesInLockstep(packageJson: MutablePackageJson): boolean {
+export function followsRootVersion(packageJson: MutablePackageJson): boolean {
   for (const field of DEP_FIELDS) {
     const deps = packageJson[field];
     if (!deps) continue;
@@ -169,8 +136,8 @@ export function participatesInLockstep(packageJson: MutablePackageJson): boolean
  *
  * The stamp is what tells a consumer's `prisma skills sync` whether the copy
  * of the skill in its agent directories still describes the installed
- * packages, so it versions in lockstep with everything else the publish
- * pipeline rewrites. A skill that has lost the key throws rather than shipping
+ * packages, so the publish pipeline rewrites it with the root version on
+ * every bump. A skill that has lost the key throws rather than shipping
  * an unstamped copy that no consumer can compare against.
  */
 export function stampSkillMetadata(skillMd: string, key: string, value: string): string {
