@@ -412,10 +412,16 @@ export function planStatements(input: {
         pairing,
       );
       if (outcome.kind === 'refused') conflicts.push(outcome.conflict);
-      if (outcome.kind === 'renameField') {
-        addFieldRename(outcome.rename);
+      const made =
+        outcome.kind === 'renameField'
+          ? outcome.rename
+          : outcome.kind === 'unchanged'
+            ? callRenamingEveryDocument(rename, fieldRenameCalls, renamedCollections, planning)
+            : undefined;
+      if (made !== undefined) {
+        addFieldRename(made);
         fieldRenames.push(rename);
-        fieldChanges.push(fieldChangeOf(rename, outcome.rename));
+        fieldChanges.push(fieldChangeOf(rename, made));
       }
     }
   }
@@ -446,6 +452,32 @@ export function planStatements(input: {
     collections,
     renamedCollections,
   });
+}
+
+/**
+ * The planned call that already renames, in every document of its collection, the field a rename
+ * no statement asks for renames there, as a statement's call does for the other models of a shared
+ * collection the plan does not otherwise rename fields in. That rename is then made by the call.
+ */
+function callRenamingEveryDocument(
+  rename: FieldRename,
+  calls: readonly FieldRenameCall[],
+  renamedCollections: ReadonlyMap<string, string>,
+  input: PlanningInput,
+): FieldRenameCall | undefined {
+  const origin = collectionOfModel(input.fromContract.domain, rename.from);
+  if (origin === undefined) return undefined;
+  const collection = renamedCollections.get(origin) ?? origin;
+  if (collectionOfModel(input.contract.domain, rename.to) !== collection) return undefined;
+  const from = resolvedStoredNameAt(input.fromContract, rename.from);
+  const to = resolvedStoredNameAt(input.contract, rename.to);
+  return calls.find(
+    ({ call, discriminatorFilter }) =>
+      discriminatorFilter === undefined &&
+      call.collection === collection &&
+      call.from === from &&
+      call.to === to,
+  );
 }
 
 function fieldChangeOf(rename: FieldRename, { call }: FieldRenameCall): FieldChange {

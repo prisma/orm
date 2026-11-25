@@ -292,3 +292,40 @@ describe('MongoMigrationPlanner, variant field renames whose documents never mee
     });
   });
 });
+
+describe('MongoMigrationPlanner, a field rename statement in a shared collection the origin leaves external and the destination manages', () => {
+  const from = contract(
+    'from',
+    {
+      Admin: { collection: 'people', fields: ['_id', 'name'] },
+      User: { collection: 'people', fields: ['_id', 'name'] },
+    },
+    { people: { control: 'external' } },
+  );
+  const to = contract(
+    'to',
+    {
+      Admin: { collection: 'people', fields: ['_id', 'name'], storedAs: { name: 'n' } },
+      User: { collection: 'people', fields: ['_id', 'n'] },
+    },
+    { people: { control: 'managed' } },
+  );
+
+  it("plans one rename, which also renames the other model's field, and asks nothing about that field", () => {
+    expect(
+      planned(
+        plan({
+          from,
+          to,
+          schema: [schemaCollection('people')],
+          statements: [renameField('User', 'name', 'User', 'n')],
+        }),
+      ),
+    ).toEqual({
+      labels: ['Rename field name to n in collection people'],
+      classes: ['widening'],
+      applied: [[0]],
+      dataLoss: [],
+    });
+  });
+});
