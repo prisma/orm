@@ -113,7 +113,9 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 - Add a check that fails when an error code disappears.
 - Record which exported interfaces users implement, for project 4.
 
-**To decide when it starts.** How a hidden built-in name is reached, and which name wins for an aggregate operation.
+**Agreed so far.** A set that may grow gets a catch-all member such as `(string & {})`, so a user's exhaustiveness check cannot compile and a new case falls to their default branch. A set marked closed changes only in a major version.
+
+**For the project to settle, from the existing guidance.** The hidden built-in on `db.orm` and the clash between our methods and an extension's are one problem: a name we add shares a space with a name a user or an extension chose. The operator recalls that the decision records and design docs already settle it: there is always a way to write the user's name fully qualified, the system's name takes precedence, and there is guidance on whether something specific to the ORM may be promoted onto `db`. A quick search did not find those passages, so the project starts by finding them. Section 5.1 of the [spec](spec.md) says the opposite for PSL (the user's name takes precedence over a built-in); reconcile the two and correct whichever is wrong.
 
 ### 6. Show whether something is GA in a package's version and an API's name, and release each package at its own level
 
