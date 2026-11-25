@@ -204,9 +204,14 @@ function checkInput(input: ReleasePlanInput, names: readonly string[]): void {
     );
   }
   if (input.line === 'release-candidates') {
-    if (!isCount(input.rcCounter)) {
+    if (!Number.isInteger(input.rcCounter)) {
       throw new ReleasePlanError(`rcCounter ${input.rcCounter} is not a release-candidate counter`);
     }
+    checkReleaseCandidate(
+      `release ${release.major}.${release.minor} at rcCounter ${input.rcCounter}`,
+      release,
+      input.rcCounter,
+    );
     if (input.bump.length > 0) {
       throw new ReleasePlanError(
         'bump applies on the levels line only; the release candidates move together',
@@ -226,7 +231,45 @@ function parseCurrent(input: ReleasePlanInput, name: string): ParsedVersion {
   if (parsed.dev !== undefined) {
     throw new ReleasePlanError(`${name}: "${text}" is a development build, not a released version`);
   }
+  if (
+    !hasOwnVersion(input.numbering.get(name)) &&
+    parsed.level !== undefined &&
+    !isPublishedReleaseCandidate(parsed) &&
+    formatVersion({ ...parsed, level: undefined }) !== rootVersionOfRelease(parsed)
+  ) {
+    throw new ReleasePlanError(
+      `${name}: "${text}" is below GA at another patch than ${rootVersionOfRelease(parsed)}, its minor's first; a version below GA keeps its minor's first patch, so that a range on that minor's first version admits it`,
+    );
+  }
   return parsed;
+}
+
+/** One of the `8.0.0-rc.N` versions every package was published as before the levels. */
+function isPublishedReleaseCandidate(version: ParsedVersion): boolean {
+  return (
+    version.level?.name === 'rc' &&
+    version.major === 8 &&
+    version.minor === 0 &&
+    version.patch === 0
+  );
+}
+
+/** Refuses a release-candidate line other than the `8.0.0` release candidates, which count from 1. */
+function checkReleaseCandidate(
+  subject: string,
+  release: { readonly major: number; readonly minor: number },
+  counter: number,
+): void {
+  if (release.major !== 8 || release.minor !== 0) {
+    throw new ReleasePlanError(
+      `${subject} is a release candidate of ${release.major}.${release.minor}; only the 8.0.0 release candidates are planned, and a release-candidate line for another release is not built`,
+    );
+  }
+  if (counter < 1) {
+    throw new ReleasePlanError(
+      `${subject} is not a release candidate: the release-candidate counter starts at 1`,
+    );
+  }
 }
 
 function candidateVersions(
@@ -239,22 +282,16 @@ function candidateVersions(
 }
 
 /**
- * The first release with levels follows the release candidates, when every package without its own
- * version still holds one `X.Y.0-rc.N` of the release's minor.
+ * The first release with levels is release `8.0` planned from the release candidates, when every
+ * package without its own version still holds one `8.0.0-rc.N`.
  */
 function isFirstReleaseWithLevels(input: ReleasePlanInput, names: readonly string[]): boolean {
+  if (input.release.major !== 8 || input.release.minor !== 0) return false;
   const leveled = names.filter((name) => !hasOwnVersion(input.numbering.get(name)));
   const versions = new Set(leveled.map((name) => input.current[name]));
   if (versions.size !== 1) return false;
   const [only] = [...versions];
-  const parsed = only === undefined ? undefined : parseVersion(only);
-  return (
-    parsed !== undefined &&
-    parsed.level?.name === 'rc' &&
-    parsed.major === input.release.major &&
-    parsed.minor === input.release.minor &&
-    parsed.patch === 0
-  );
+  return only !== undefined && isPublishedReleaseCandidate(parseVersion(only));
 }
 
 function levelVersions(input: ReleasePlanInput, names: readonly string[]): Record<string, string> {
@@ -414,16 +451,7 @@ export function releaseOfRootVersion(version: string): RootRelease {
   const parsed = parseVersion(version);
   const release = { major: parsed.major, minor: parsed.minor };
   if (parsed.patch === 0 && parsed.level?.name === 'rc') {
-    if (parsed.major !== 8 || parsed.minor !== 0) {
-      throw new ReleasePlanError(
-        `root version "${version}" is a release candidate of ${parsed.major}.${parsed.minor}; only the 8.0.0 release candidates are planned, and a release-candidate line for another release is not built`,
-      );
-    }
-    if (parsed.level.counter < 1) {
-      throw new ReleasePlanError(
-        `root version "${version}" is not a release candidate: the release-candidate counter starts at 1`,
-      );
-    }
+    checkReleaseCandidate(`root version "${version}"`, release, parsed.level.counter);
     return {
       release,
       line: 'release-candidates',

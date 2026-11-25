@@ -308,6 +308,43 @@ describe('planRelease', () => {
         'rcCounter',
       ],
       [
+        'a release-candidate counter of 0',
+        input({ line: 'release-candidates', rcCounter: 0, release: { major: 8, minor: 0 } }),
+        'starts at 1',
+      ],
+      [
+        'a release-candidate line of a release other than 8.0',
+        input({ line: 'release-candidates', rcCounter: 1, release: { major: 9, minor: 0 } }),
+        'only the 8.0.0 release candidates',
+      ],
+      [
+        'a package below GA at a patch that is not its minor’s first',
+        input({ current: { ...AT_8_1, 'target-mysql': '8.1.1-ea.0' } }),
+        'target-mysql: "8.1.1-ea.0"',
+      ],
+      [
+        'a package below GA at patch 0 of release 8.0',
+        input({
+          release: { major: 8, minor: 0 },
+          current: { ...AT_8_0, mongo: '8.0.0-preview.0' },
+        }),
+        'mongo: "8.0.0-preview.0"',
+      ],
+      [
+        'a level going down within a minor whose packages all hold one release candidate',
+        input({
+          current: Object.fromEntries(
+            Object.keys(graph).map((name) => [name, name === 'paradedb' ? '0.18.0' : '8.1.0-rc.2']),
+          ),
+          levelChanges: Object.fromEntries(
+            Object.entries(graph)
+              .filter(([name, entry]) => typeof entry.numbering === 'string' && name !== 'mariadb')
+              .map(([name]) => [name, 'rc']),
+          ),
+        }),
+        'mariadb',
+      ],
+      [
         'a bump on the release candidates',
         input({
           line: 'release-candidates',
