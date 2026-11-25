@@ -28,7 +28,7 @@ describe('the transaction option', () => {
     expect(() => prismaAdapter(withTransactions, { transaction: true })).not.toThrow();
   });
 
-  it('refuses a Postgres client whose contract does not list them when it is on, as a JavaScript caller might pass it', () => {
+  it('refuses a client whose contract does not list them when it is on, as a JavaScript caller might pass it', () => {
     const options = { transaction: true } as const;
     expect(() =>
       // @ts-expect-error the type already refuses it
@@ -38,7 +38,7 @@ describe('the transaction option', () => {
     );
   });
 
-  it('accepts a SQLite client when it is on: SQLite contracts do not list the capability yet', () => {
+  it('accepts a SQLite client when it is on: its adapter lists interactive transactions', () => {
     const client = sqlite({ contract: defineSqliteContract({}), path: ':memory:' });
     expect(() => prismaAdapter(client, { transaction: true })).not.toThrow();
   });

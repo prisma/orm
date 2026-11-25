@@ -52,14 +52,8 @@ function hasTransaction(db: PrismaClientLike): db is TransactionalPrismaClientLi
   return 'transaction' in db && typeof db.transaction === 'function';
 }
 
-// A Postgres client runs transaction() only for a contract that lists interactive transactions, as its type says. SQLite contracts do not list the capability until the SQLite driver declares it.
-const targetsWhoseTransactionsNeedTheCapability = ['postgres'];
-
 function listsInteractiveTransactions(contract: SqlContract): boolean {
-  return (
-    !targetsWhoseTransactionsNeedTheCapability.includes(contract.target) ||
-    contract.capabilities['sql']?.['interactiveTransactions'] === true
-  );
+  return contract.capabilities['sql']?.['interactiveTransactions'] === true;
 }
 
 const supportedTargets = ['postgres', 'sqlite'];
