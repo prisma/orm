@@ -107,7 +107,7 @@ So release `8.0` starts its packages above the release candidates:
 | Preview | `8.0.1-preview.0` | `8.3.0-preview.0` |
 | Early Access | `8.0.1-ea.0` | `8.3.0-ea.0` |
 
-A fix to a package below GA at release `8.0` raises the counter, as at any release: `8.0.1-ea.0` to `8.0.1-ea.1`.
+A fix to a package below GA at release `8.0` raises the counter, as at any release: `8.0.1-ea.0` to `8.0.1-ea.1`. A package that started at patch 1 keeps it when it moves up within release `8.0`: `8.0.1-ea.1` to `8.0.1-rc.0`, then to `8.0.1`, because `8.0.0-rc.27` and `8.0.0` would sort below the version it left.
 
 ## Ranges between our packages
 
