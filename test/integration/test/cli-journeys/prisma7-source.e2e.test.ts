@@ -6,6 +6,7 @@
  * SQL Prisma 7.10.0 generated, with exit 0 and zero findings. Prisma 7 creates no check on a list column, so a `String[]` column reads as a list whose elements may be null, and verifies with no migration. The contract keeps the columns of `@ignore` fields and the tables of `@@ignore` models, so `db verify --strict` reports no findings either. A schema with a `view` fails `contract emit` with one diagnostic and writes nothing.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { computeProfileHash } from '@internal/contract/hashing';
 import { withClient } from '@repo/test-utils';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
@@ -210,6 +211,34 @@ withTempDir(({ createTempDir }) => {
           mode: 'full',
           schema: { strict: true, warnings: [] },
         });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'contract emit writes the profile hash of the capabilities it writes',
+      async () => {
+        const ctx = setupPrisma7Project(createTempDir, db.connectionString, {
+          copyFrom: join(PRISMA7_FIXTURES, 'supported/schema.prisma'),
+        });
+
+        const emit = await runContractEmit(ctx, ['--json']);
+
+        expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);
+        const contract = JSON.parse(readFileSync(join(ctx.testDir, 'contract.json'), 'utf-8')) as {
+          readonly target: string;
+          readonly targetFamily: string;
+          readonly capabilities: Record<string, Record<string, boolean>>;
+          readonly profileHash: string;
+        };
+        expect(Object.keys(contract.capabilities).sort()).toEqual(['postgres', 'sql']);
+        expect(contract.profileHash).toBe(
+          computeProfileHash({
+            target: contract.target,
+            targetFamily: contract.targetFamily,
+            capabilities: contract.capabilities,
+          }),
+        );
       },
       timeouts.spinUpPpgDev,
     );

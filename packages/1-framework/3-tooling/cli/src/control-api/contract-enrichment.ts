@@ -1,3 +1,4 @@
+import { computeProfileHash } from '@internal/contract/hashing';
 import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import type { Contract } from '@internal/contract/types';
 import {
@@ -81,13 +82,13 @@ function extractExtensionPackMeta(
 }
 
 /**
- * Enriches a raw contract with framework-derived metadata: capabilities from all component descriptors and extension pack metadata from extension descriptors. Produces deterministically sorted output.
+ * Enriches a raw contract with framework-derived metadata: capabilities from all component descriptors, the profile hash of those capabilities, and extension pack metadata from extension descriptors. Produces deterministically sorted output.
  */
 export function enrichContract(
   ir: Contract,
   components: ReadonlyArray<TargetBoundComponentDescriptor<string, string>>,
 ): Contract {
-  const mergedCapabilities = mergeCapabilityMatrices(ir.capabilities, components);
+  const capabilities = sortDeepTyped(mergeCapabilityMatrices(ir.capabilities, components));
 
   const extensionsMeta: Record<string, unknown> = {};
   for (const component of components) {
@@ -103,7 +104,12 @@ export function enrichContract(
 
   return {
     ...ir,
-    capabilities: sortDeepTyped(mergedCapabilities),
+    capabilities,
+    profileHash: computeProfileHash({
+      target: ir.target,
+      targetFamily: ir.targetFamily,
+      capabilities,
+    }),
     extensions: sortDeepTyped(extensions),
   };
 }

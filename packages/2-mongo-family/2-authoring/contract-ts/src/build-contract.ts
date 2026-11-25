@@ -143,7 +143,7 @@ export function buildMongoContractFromDefinition(
     valueSets: storageValueSets,
     valueObjects: builtValueObjects,
   });
-  // Contracts carry no capabilities when built; emit adds the stack's. The profile hash fingerprints this empty set.
+  // Contracts carry no capabilities when built; emit adds the stack's and writes the profile hash of the list it writes.
   const capabilities: Record<string, Record<string, boolean>> = {};
   const execution = buildExecutionSection({
     target: definition.target.targetId,
