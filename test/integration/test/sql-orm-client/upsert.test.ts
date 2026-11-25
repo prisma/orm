@@ -1,7 +1,12 @@
 import { Collection } from '@internal/sql-orm-client';
 import { describe, expect, it } from 'vitest';
 import { withReturningCapability } from './collection-fixtures';
-import { deserializeTestContract, getTestContext, getTestContract } from './helpers';
+import {
+  deserializeTestContract,
+  getTestContext,
+  getTestContract,
+  printTestContract,
+} from './helpers';
 import {
   createReturningTagsCollection,
   createReturningUsersCollection,
@@ -76,7 +81,7 @@ describe('integration/upsert', () => {
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const raw = JSON.parse(
-          JSON.stringify(withReturningCapability(getTestContract())),
+          JSON.stringify(printTestContract(withReturningCapability(getTestContract()))),
         ) as Record<string, unknown>;
         const usersTable = (
           raw['storage'] as {
