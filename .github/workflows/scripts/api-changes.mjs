@@ -1,6 +1,7 @@
-// Lists the lines a pull request adds to and removes from the packages' api.txt files, keeps one
-// comment with that list current, and fails until the description names each changed export.
-// The line format is written by scripts/public-api/flatten.mjs.
+// Lists the lines a pull request adds to and removes from the packages' api.txt files, and the
+// records it adds to and removes from api-breaks.json and examples/last-release-errors.json. Keeps
+// one comment with that list current, and fails until the description names each changed export,
+// and the package or app of each changed record.
 
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
@@ -16,7 +17,9 @@ export class ApiChangesError extends Error {
 
 export const MARKER = '<!-- api-changes -->';
 export const SECTION = '## API changes';
-const API_FILE = /^packages\/9-public\/(@prisma\/[^/]+)\/api\.txt$/;
+const BREAKS_FILE = 'api-breaks.json';
+const EXAMPLES_FILE = 'examples/last-release-errors.json';
+const PACKAGE_FILE = /^packages\/9-public\/(@prisma\/[^/]+)\/(api\.txt|api-breaks\.json)$/;
 const COMMENT_LIMIT = 60_000;
 export const SUMMARY_BYTES = 1_000_000;
 const SUMMARY_MARGIN = 1_000;
@@ -37,18 +40,87 @@ function linesOf(text) {
 
 export function apiChanges(files) {
   const changes = [];
-  for (const { packageName, before, after } of files) {
-    const old = linesOf(before);
-    const current = linesOf(after);
-    const added = [...current].filter((line) => !old.has(line)).sort(compareCodeUnits);
-    const removed = [...old].filter((line) => !current.has(line)).sort(compareCodeUnits);
-    if (added.length === 0 && removed.length === 0) continue;
-    const exports = new Set(
-      [...added, ...removed].map((line) => exportLabel(packageName, exportOfLine(line))),
-    );
-    changes.push({ packageName, added, removed, exports: [...exports].sort(compareCodeUnits) });
+  for (const file of files) {
+    if (file.kind === 'breaks') changes.push(...breakChanges(file));
+    else if (file.kind === 'examples') changes.push(...exampleChanges(file));
+    else changes.push(...listChanges(file));
   }
   return changes;
+}
+
+function difference(before, after) {
+  const added = [...after].filter((line) => !before.has(line)).sort(compareCodeUnits);
+  const removed = [...before].filter((line) => !after.has(line)).sort(compareCodeUnits);
+  return { added, removed };
+}
+
+function listChanges({ packageName, before, after }) {
+  const { added, removed } = difference(linesOf(before), linesOf(after));
+  if (added.length === 0 && removed.length === 0) return [];
+  const exports = new Set(
+    [...added, ...removed].map((line) => exportLabel(packageName, exportOfLine(line))),
+  );
+  return [{ packageName, added, removed, exports: [...exports].sort(compareCodeUnits) }];
+}
+
+const BREAK_KEYS = ['path', 'export', 'test', 'release', 'reason'];
+const EXAMPLE_KEYS = ['app', 'file', 'line', 'code', 'message', 'release', 'reason'];
+
+function recordsOf(text, file) {
+  if (text === undefined) return [];
+  let records;
+  try {
+    records = JSON.parse(text);
+  } catch (error) {
+    throw new ApiChangesError(`${file}: ${error.message}`);
+  }
+  if (!Array.isArray(records)) throw new ApiChangesError(`${file}: is not a JSON array of records`);
+  return records;
+}
+
+// One line per record, with its keys in the documented order, so that reordering changes nothing.
+function recordLine(record, keys) {
+  if (record === null || typeof record !== 'object') return JSON.stringify(record);
+  const ordered = [
+    ...keys.filter((key) => Object.hasOwn(record, key)),
+    ...Object.keys(record)
+      .filter((key) => !keys.includes(key))
+      .sort(compareCodeUnits),
+  ];
+  return JSON.stringify(Object.fromEntries(ordered.map((key) => [key, record[key]])));
+}
+
+function breakChanges({ packageName, before, after }) {
+  const heading = `packages/9-public/${packageName}/${BREAKS_FILE}`;
+  const lines = (text) =>
+    new Set(recordsOf(text, heading).map((record) => recordLine(record, BREAK_KEYS)));
+  const { added, removed } = difference(lines(before), lines(after));
+  if (added.length === 0 && removed.length === 0) return [];
+  return [{ packageName, heading, added, removed, exports: [packageName] }];
+}
+
+function exampleChanges({ before, after }) {
+  const byApp = (text) => {
+    const apps = new Map();
+    for (const record of recordsOf(text, EXAMPLES_FILE)) {
+      const app = typeof record?.app === 'string' ? record.app : undefined;
+      if (!apps.has(app)) apps.set(app, new Set());
+      apps.get(app).add(recordLine(record, EXAMPLE_KEYS));
+    }
+    return apps;
+  };
+  const old = byApp(before);
+  const current = byApp(after);
+  const apps = [...new Set([...old.keys(), ...current.keys()])].sort((a, b) =>
+    compareCodeUnits(a ?? '', b ?? ''),
+  );
+  return apps.flatMap((app) => {
+    const { added, removed } = difference(old.get(app) ?? new Set(), current.get(app) ?? new Set());
+    if (added.length === 0 && removed.length === 0) return [];
+    const name = app === undefined ? EXAMPLES_FILE : `examples/${app}`;
+    const heading = app === undefined ? EXAMPLES_FILE : `${EXAMPLES_FILE}: ${app}`;
+    return [{ packageName: name, heading, added, removed, exports: [name] }];
+  });
 }
 
 export function readChangedFiles({ git }) {
@@ -60,19 +132,32 @@ export function readChangedFiles({ git }) {
     HEAD,
     '--',
     'packages/9-public/@prisma/*/api.txt',
+    `packages/9-public/@prisma/*/${BREAKS_FILE}`,
+    EXAMPLES_FILE,
   ]);
   const files = [];
   for (const entry of status.split('\n')) {
     const [change, path] = entry.split('\t');
-    const packageName = API_FILE.exec(path ?? '')?.[1];
-    if (packageName === undefined) continue;
+    const kind = kindOf(path ?? '');
+    if (kind === undefined) continue;
     files.push({
-      packageName,
+      path,
+      kind: kind.kind,
+      packageName: kind.packageName,
       before: change === 'A' ? undefined : git(['show', `${BASE}:${path}`]),
       after: change === 'D' ? undefined : git(['show', `${HEAD}:${path}`]),
     });
   }
-  return files.sort((a, b) => compareCodeUnits(a.packageName, b.packageName));
+  return files
+    .sort((a, b) => compareCodeUnits(a.path, b.path))
+    .map(({ path: _path, ...file }) => file);
+}
+
+function kindOf(path) {
+  if (path === EXAMPLES_FILE) return { kind: 'examples', packageName: undefined };
+  const match = PACKAGE_FILE.exec(path);
+  if (match === null) return undefined;
+  return { kind: match[2] === 'api.txt' ? 'api' : 'breaks', packageName: match[1] };
 }
 
 function outsideFences(lines) {
@@ -153,6 +238,12 @@ function entries(groups, names = new Set(groups.flatMap(({ exports }) => exports
 const PACKAGE_FORM =
   'A package name in backticks, on a line with a reason, covers every change in that package.';
 
+const RECORDS_FORM =
+  'A change to a package’s api-breaks.json is named by the package, and a change to examples/last-release-errors.json by `examples/<app>`.';
+
+const isRecord = (change) => change.heading !== undefined;
+const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
 export function failureMessage({ section, missing, withoutReason }, groups) {
   const parts = [
     'This pull request changes the public API, and its description does not yet say why for each change.',
@@ -170,6 +261,7 @@ export function failureMessage({ section, missing, withoutReason }, groups) {
       `These exports are named on a line that gives no reason; write why on the same line:\n${entries(groups, new Set(withoutReason))}`,
     );
   }
+  if (groups.some(isRecord)) parts.push(RECORDS_FORM);
   parts.push(
     `For example:\n\n${SECTION}\n\n- \`@prisma/orm-postgres/config: defineConfig\`: added so a config file can name the database URL.\n- \`@prisma/orm-framework\`: regenerated after the TypeScript upgrade, no API change.`,
   );
@@ -194,12 +286,21 @@ function diffLines({ added, removed }) {
 }
 
 function render(changes, { shown, template, where }) {
-  const packages = changes.length === 1 ? '1 package' : `${changes.length} packages`;
+  const lists = changes.filter((change) => !isRecord(change)).length;
+  const records = changes.length - lists;
+  const subject = [
+    lists > 0 ? `the \`api.txt\` list of ${plural(lists, 'package')}` : undefined,
+    records > 0
+      ? `the recorded breaks or expected example-app errors of ${records === 1 ? 'one package or app' : `${records} packages or apps`}`
+      : undefined,
+  ]
+    .filter((part) => part !== undefined)
+    .join(' and ');
   const out = [
     MARKER,
     '## Public API changes',
     '',
-    `This pull request changes the \`api.txt\` list of ${packages}. Its description needs a section headed \`${SECTION}\` that names each export below, in backticks, on a line that says why it changes. ${PACKAGE_FORM}${template ? ' You can start from this:' : ` The names are in the ${where}.`}`,
+    `This pull request changes ${subject}. Its description needs a section headed \`${SECTION}\` that names each export below, in backticks, on a line that says why it changes. ${PACKAGE_FORM}${records > 0 ? ` ${RECORDS_FORM}` : ''}${template ? ' You can start from this:' : ` The names are in the ${where}.`}`,
     '',
   ];
   if (template) out.push('```markdown', SECTION, '', entries(changes), '```', '');
@@ -212,7 +313,14 @@ function render(changes, { shown, template, where }) {
     left -= visible.length;
     if (visible.length === 0) continue;
     const fence = fenceFor(visible);
-    out.push(`### \`${change.packageName}\``, '', `${fence}diff`, ...visible, fence, '');
+    out.push(
+      `### \`${change.heading ?? change.packageName}\``,
+      '',
+      `${fence}diff`,
+      ...visible,
+      fence,
+      '',
+    );
   }
   const omitted = total - Math.min(shown, total);
   if (omitted > 0) {

@@ -351,6 +351,185 @@ describe('commentBody', () => {
   });
 });
 
+describe('record files', () => {
+  const brk = (name, reason = 'Join scopes merge by name') => ({
+    path: '.',
+    export: name,
+    test: 'type',
+    release: '8.1.0',
+    reason,
+  });
+  const err = (app, line) => ({
+    app,
+    file: 'test/rows.test-d.ts',
+    line,
+    code: 'TS2344',
+    message: 'Type mismatch',
+    release: '8.1.0',
+    reason: 'Rows gain createdBy',
+  });
+  const json = (value) => JSON.stringify(value, null, 2);
+
+  it('lists added and removed deliberate breaks under the package, which must be named', () => {
+    const changes = apiChanges([
+      {
+        kind: 'breaks',
+        packageName: '@prisma/p',
+        before: json([brk('Old'), brk('Kept')]),
+        after: json([brk('Kept'), brk('New')]),
+      },
+    ]);
+    assert.deepEqual(changes, [
+      {
+        packageName: '@prisma/p',
+        heading: 'packages/9-public/@prisma/p/api-breaks.json',
+        added: [
+          '{"path":".","export":"New","test":"type","release":"8.1.0","reason":"Join scopes merge by name"}',
+        ],
+        removed: [
+          '{"path":".","export":"Old","test":"type","release":"8.1.0","reason":"Join scopes merge by name"}',
+        ],
+        exports: ['@prisma/p'],
+      },
+    ]);
+  });
+
+  it('groups expected example-app errors by app, each named as examples/<app>', () => {
+    const changes = apiChanges([
+      {
+        kind: 'examples',
+        before: json([err('demo', 1)]),
+        after: json([err('demo', 2), err('shop', 3)]),
+      },
+    ]);
+    assert.deepEqual(
+      changes.map(({ packageName, heading, added, removed, exports }) => ({
+        packageName,
+        heading,
+        added: added.length,
+        removed: removed.length,
+        exports,
+      })),
+      [
+        {
+          packageName: 'examples/demo',
+          heading: 'examples/last-release-errors.json: demo',
+          added: 1,
+          removed: 1,
+          exports: ['examples/demo'],
+        },
+        {
+          packageName: 'examples/shop',
+          heading: 'examples/last-release-errors.json: shop',
+          added: 1,
+          removed: 0,
+          exports: ['examples/shop'],
+        },
+      ],
+    );
+  });
+
+  it('counts no change when only the order of keys or records changes', () => {
+    const reordered = {
+      reason: 'Join scopes merge by name',
+      release: '8.1.0',
+      test: 'type',
+      export: 'A',
+      path: '.',
+    };
+    assert.deepEqual(
+      apiChanges([
+        {
+          kind: 'breaks',
+          packageName: '@prisma/p',
+          before: json([brk('B'), brk('A')]),
+          after: json([reordered, brk('B')]),
+        },
+      ]),
+      [],
+    );
+  });
+
+  it('fails with the file name when a record file is not a JSON array', () => {
+    assert.throws(
+      () =>
+        apiChanges([
+          { kind: 'breaks', packageName: '@prisma/p', before: undefined, after: '{ nope' },
+        ]),
+      (error) =>
+        error instanceof ApiChangesError &&
+        error.message.includes('packages/9-public/@prisma/p/api-breaks.json'),
+    );
+    assert.throws(
+      () => apiChanges([{ kind: 'examples', before: undefined, after: '{}' }]),
+      (error) =>
+        error instanceof ApiChangesError &&
+        error.message.includes('examples/last-release-errors.json'),
+    );
+  });
+
+  it('requires the package or app named with a reason', () => {
+    const changes = apiChanges([
+      { kind: 'breaks', packageName: '@prisma/p', before: undefined, after: json([brk('A')]) },
+      { kind: 'examples', before: undefined, after: json([err('demo', 1)]) },
+    ]);
+    assert.deepEqual(checkDescription('## API changes\n\n- `@prisma/p`:', changes), {
+      section: true,
+      missing: ['examples/demo'],
+      withoutReason: ['@prisma/p'],
+    });
+    const body =
+      '## API changes\n\n- `@prisma/p`: A breaks on purpose, named in the release notes.\n- `examples/demo`: rows gain the optional createdBy field.';
+    assert.deepEqual(checkDescription(body, changes), {
+      section: true,
+      missing: [],
+      withoutReason: [],
+    });
+    assert.match(failureMessage(checkDescription('', changes), changes), /api-breaks\.json/);
+  });
+
+  it('lists the records in the comment under their file', () => {
+    const body = commentBody(
+      apiChanges([
+        { kind: 'breaks', packageName: '@prisma/p', before: undefined, after: json([brk('A')]) },
+      ]),
+    );
+    assert.ok(
+      body.includes(
+        '### `packages/9-public/@prisma/p/api-breaks.json`\n\n```diff\n+ {"path":".","export":"A","test":"type","release":"8.1.0","reason":"Join scopes merge by name"}\n```',
+      ),
+      body,
+    );
+    assert.ok(body.includes('- `@prisma/p`:'), body);
+  });
+
+  it('fails a pull request that changes only a record file until the description names it', async () => {
+    const quiet = {
+      repository: 'o/r',
+      readFiles: () => [
+        { kind: 'breaks', packageName: '@prisma/p', before: undefined, after: json([brk('A')]) },
+      ],
+      appendSummary: () => {},
+      log: () => {},
+      request: async (method) => (method === 'GET' ? [] : {}),
+    };
+    const event = (body) => ({
+      number: 7,
+      pull_request: { body, head: { repo: { full_name: 'o/r' } } },
+    });
+    assert.equal((await run({ ...quiet, event: event('Nothing.') })).ok, false);
+    assert.equal(
+      (
+        await run({
+          ...quiet,
+          event: event('## API changes\n\n- `@prisma/p`: A breaks on purpose for the join rework.'),
+        })
+      ).ok,
+      true,
+    );
+  });
+});
+
 describe('readChangedFiles', () => {
   it('compares the merge commit with its first parent, file by file', () => {
     const calls = [];
@@ -359,6 +538,9 @@ describe('readChangedFiles', () => {
       'HEAD:packages/9-public/@prisma/orm-postgres/api.txt': 'after',
       'HEAD:packages/9-public/@prisma/orm-new/api.txt': 'new',
       'HEAD^1:packages/9-public/@prisma/orm-old/api.txt': 'old',
+      'HEAD:packages/9-public/@prisma/orm-postgres/api-breaks.json': '[]',
+      'HEAD^1:examples/last-release-errors.json': '[1]',
+      'HEAD:examples/last-release-errors.json': '[2]',
     };
     const git = (args) => {
       calls.push(args.join(' '));
@@ -368,6 +550,9 @@ describe('readChangedFiles', () => {
           'A\tpackages/9-public/@prisma/orm-new/api.txt',
           'D\tpackages/9-public/@prisma/orm-old/api.txt',
           'M\tpackages/9-public/@prisma/orm-postgres/src/api.txt',
+          'A\tpackages/9-public/@prisma/orm-postgres/api-breaks.json',
+          'M\texamples/last-release-errors.json',
+          'M\texamples/demo/last-release-errors.json',
           '',
         ].join('\n');
       }
@@ -375,11 +560,16 @@ describe('readChangedFiles', () => {
       throw new ApiChangesError(`unexpected git ${args.join(' ')}`);
     };
     assert.deepEqual(readChangedFiles({ git }), [
-      { packageName: '@prisma/orm-new', before: undefined, after: 'new' },
-      { packageName: '@prisma/orm-old', before: 'old', after: undefined },
-      { packageName: '@prisma/orm-postgres', before: 'before', after: 'after' },
+      { kind: 'examples', packageName: undefined, before: '[1]', after: '[2]' },
+      { kind: 'api', packageName: '@prisma/orm-new', before: undefined, after: 'new' },
+      { kind: 'api', packageName: '@prisma/orm-old', before: 'old', after: undefined },
+      { kind: 'breaks', packageName: '@prisma/orm-postgres', before: undefined, after: '[]' },
+      { kind: 'api', packageName: '@prisma/orm-postgres', before: 'before', after: 'after' },
     ]);
-    assert.ok(calls[0].startsWith('diff --name-status --no-renames HEAD^1 HEAD --'), calls[0]);
+    assert.equal(
+      calls[0],
+      'diff --name-status --no-renames HEAD^1 HEAD -- packages/9-public/@prisma/*/api.txt packages/9-public/@prisma/*/api-breaks.json examples/last-release-errors.json',
+    );
     assert.ok(!calls.some((call) => call.startsWith('merge-base')));
   });
 });
