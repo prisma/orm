@@ -90,6 +90,8 @@ The packages of one release are tested together, so among themselves they accept
 
 `prisma orm init` writes the lines this way when it adds the facade itself. When the project already lists the facade, `init` leaves that line as the user wrote it and writes each platform package at the range the installed facade declares for it, so that it never installs a platform package the user's facade does not accept.
 
+At release 8.0 the lines are written on its first versions, `^8.0.1` and `~8.0.1-ea.0`, never on `8.0.0`: `~8.0.0-ea.0` would admit an old `8.0.0-rc.N`.
+
 On the release candidates `init` writes the exact `8.0.0-rc.N` on every line.
 
 Under pnpm a line on a package below GA is exact: pnpm writes `8.1.0-ea.0` even when it is given `~8.1.0-ea.0`, and `pnpm update` rewrites such a line to an exact version. That is pnpm's behaviour, which `init` does not change. To take a fix to that package, such as `8.1.0-ea.1`, change the line or add the package again.

@@ -50,7 +50,7 @@ This flow assumes you are an **external extension author** — your extension li
 
 For each `(from, to)` step in the chain:
 
-1. **Bump `@prisma/orm-*` deps.** On the `8.0.0` release candidates, rewrite every `@prisma/orm-*` entry in the extension's `package.json` to the exact `<to>` version, another extension published from the Prisma repository such as `@prisma/orm-extension-pgvector` included: every `@prisma/orm-*` package is published at every release and names the others at that release's version (e.g. `"8.0.0-rc.11"` — no caret, no tilde, no range, no `workspace:` specifier; the exact-pin rule below details why). All entries advance to the same version. Every such package the extension's shipped code imports belongs under `peerDependencies` and again under `devDependencies`, at the same version. One that only the extension's tests use, such as a database package the tests run against, belongs under `devDependencies` alone, at the same version. Move any entry still under `dependencies` or `optionalDependencies` there: an extension written for an earlier release held the framework, the family and the toolchain as ordinary dependencies. The skill itself ships inside the Prisma packages, so bumping them is what updates it; there is no separate skill package to bump. From `8.0.0`, write the ranges [below](#from-800-number-your-package-and-declare-ranges) instead.
+1. **Bump `@prisma/orm-*` deps.** On the `8.0.0` release candidates, rewrite every `@prisma/orm-*` entry in the extension's `package.json` to the exact `<to>` version, another extension published from the Prisma repository such as `@prisma/orm-extension-pgvector` included: every `@prisma/orm-*` package is published at every release and names the others at that release's version (e.g. `"8.0.0-rc.11"` — no caret, no tilde, no range, no `workspace:` specifier; the exact-pin rule below details why). All entries advance to the same version. Every such package the extension's shipped code imports belongs under `peerDependencies` and again under `devDependencies`, at the same version. One that only the extension's tests use, such as a database package the tests run against, belongs under `devDependencies` alone, at the same version. Move any entry still under `dependencies` or `optionalDependencies` there: an extension written for an earlier release held the framework, the family and the toolchain as ordinary dependencies. The skill itself ships inside the Prisma packages, so bumping them is what updates it; there is no separate skill package to bump. From release 8.0, write the ranges [below](#from-release-80-number-your-package-and-declare-ranges) instead.
 
 2. **Install.** Run `pnpm install` (or the project's lockfile-managing command). The extension's source is now broken against the new SPI — the upgrade instructions for `<from> → <to>` exist to fix it.
 
@@ -60,7 +60,7 @@ For each `(from, to)` step in the chain:
    node -e 'const p=require("./package.json");const to=process.argv[1];const ours=(n)=>n.startsWith("@prisma/orm-");const bad=[];for(const f of ["dependencies","optionalDependencies"])for(const n of Object.keys(p[f]??{}))if(ours(n))bad.push(f+": "+n+" belongs in peerDependencies, or in devDependencies alone if only tests use it");for(const f of ["peerDependencies","devDependencies"])for(const [n,v] of Object.entries(p[f]??{}))if(ours(n)&&v!==to)bad.push(f+": "+n+"@"+v);for(const n of Object.keys(p.peerDependencies??{}))if(ours(n)&&!(n in (p.devDependencies??{})))bad.push("devDependencies: "+n+" is missing");if(bad.length){console.error(bad.join("\n"));process.exit(1)}' <to>
    ```
 
-   If it fails, the bump step did not rewrite every spec — fix the offending entries and re-run before proceeding. From `8.0.0` the check does not apply: the entries are ranges, described [below](#from-800-number-your-package-and-declare-ranges).
+   If it fails, the bump step did not rewrite every spec — fix the offending entries and re-run before proceeding. From release 8.0 the check does not apply: the entries are ranges, described [below](#from-release-80-number-your-package-and-declare-ranges).
 
 4. **Read the upgrade instructions.** Re-sync the skills (`prisma skills sync`) so the tree matches the version just installed, then load `../upgrading/extension/upgrades/<from>-to-<to>/instructions.md`. Parse the YAML frontmatter and pay particular attention to its `changes[]` array.
 
@@ -90,7 +90,7 @@ Move on to the next step. Repeat.
 
 ## Exact-pin rule
 
-This rule holds until `8.0.0`, while every Prisma 8 package is published as `8.0.0-rc.N`. From `8.0.0` it is replaced by ranges; see [below](#from-800-number-your-package-and-declare-ranges).
+This rule holds until release 8.0, while every Prisma 8 package is published as `8.0.0-rc.N`. From release 8.0 it is replaced by ranges; see [below](#from-release-80-number-your-package-and-declare-ranges).
 
 A Prisma 8 extension names every `@prisma/orm-*` package its shipped code uses, another extension published from the Prisma repository included, as a **peer dependency** at a single **exact** version (no `^`, no `~`, no range, no wildcard, no `workspace:` specifier in the published `package.json`), and lists the same packages under `devDependencies` at that version, so its own build and tests install them. A package of ours that only its tests use is a development dependency alone, at that version. None of them is an ordinary dependency. All of those entries share the same version. The pin advances after each successful upgrade step, release-candidate steps included.
 
@@ -98,13 +98,14 @@ The version is the one the application's database package (`@prisma/orm-postgres
 
 The one-line check in step 3 of the per-step flow enforces the rule; the `prisma-8-check-pins` guard the monorepo uses for its own extensions is not published. Wire the check into the extension's CI alongside the build/test step so an accidental range pin fails the PR before it lands.
 
-## From `8.0.0`: number your package and declare ranges
+## From release 8.0: number your package and declare ranges
 
-From `8.0.0` our packages share a release number, the major and minor, and each has its own patch number, or a level suffix such as `-preview.0` while it is below Generally Available ([versioning](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#version-numbers)). For a package maintained outside this repository we recommend the same convention ([ADR 330](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md#packages-maintained-outside-this-repository)):
+From release 8.0 our packages share a release number, the major and minor, and each has its own patch number, or a level suffix such as `-preview.0` while it is below Generally Available ([versioning](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#version-numbers)). For a package maintained outside this repository we recommend the same convention ([ADR 330](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md#packages-maintained-outside-this-repository)):
 
 - **Your version's major and minor are the first release of ours your package works with**, and the patch number is your own. A package built on release `8.1` is `8.1.0`, then `8.1.1`, `8.1.2` for your own changes.
 - **The number means "needs at least this release", not "must equal it".** A package at `8.1.2` declares `^8.1.0` on our GA packages, as peer dependencies, and works in an application on `8.4`. An application on a release below `8.1` gets a mismatch reported at install.
 - **A package that uses an API below Generally Available declares a range within one minor** on the package that has it, such as `~8.1.0`, because that API may change in the next minor. Everything in a package of ours below Generally Available is below Generally Available, so a range on it stays within one minor and starts at that package's first version of the minor, such as `~8.1.0-preview.0`.
+- **At release 8.0 every package of ours starts at patch 1**, so write `^8.0.1` on a GA package and `~8.0.1-ea.0` (or `-preview.0`, `-rc.0`) on one below GA. Never write `8.0.0` in a range on our packages: `~8.0.0-ea.0` admits the old `8.0.0-rc.N` release candidates, because `rc` sorts after `ea`, and some package managers install one.
 
 Two costs follow: a feature of yours that needs no newer release of ours ships as a patch, and once your package is Generally Available you cannot make a breaking change of your own inside our major version.
 
