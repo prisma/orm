@@ -86,7 +86,7 @@ No rule or decision record explains the difference between one underscore and tw
 
 What changes:
 
-- The PostgreSQL schema is renamed to begin with `_prisma`, automatically at `8.0.0` (section 5). Its final name is decided with the names in section 8.
+- The PostgreSQL schema is renamed `_prisma`, automatically at `8.0.0` (section 5).
 - The temporary names become `_prisma_swap…`. Nothing is stored, so nothing is migrated.
 - The query aliases move to one underscore. They are never stored and never seen by a user.
 - The space is named `_prisma`.
@@ -121,10 +121,32 @@ The project writes these, in the pull requests that change the code. Each entry 
 
 ### 7.3 Further records that depend on section 8
 
-MongoDB's collection and the marker table's name each change a recorded decision if they change. They are written once section 8 is settled.
+The split of the marker into contract signatures and configuration, the names, and MongoDB's three collections (section 8). This updates in place the decision records on marker storage and on MongoDB's migration state, and the glossary.
 
-## 8. Not yet discussed
+## 8. The tables and their names
+
+The marker row holds two things with different scopes. Its hashes, contract and invariants say which contract one contract space was signed with. Its policies (`meta.policies`, the change policy and the data protection policy) describe the whole database, not one space. So the marker is split in two, and each record is named for what it is.
+
+| Record | PostgreSQL | SQLite, MySQL, MongoDB | One row per | Holds |
+| --- | --- | --- | --- | --- |
+| Contract signatures | `_prisma.signatures` | `_prisma_signatures` | contract space | the hashes of the contract the space was signed with, when, and the invariants. The contract's JSON may be included for information. A row stands for one successful signing: `db sign`, or the signing at the end of `db migrate` and `db update` |
+| Configuration | `_prisma.config` | `_prisma_config` | database | the change policy and the data protection policy |
+| Ledger | `_prisma.ledger` | `_prisma_ledger` | applied change | as today: an append-only record of each change applied, never edited |
+
+The reasons:
+
+- "Marker" says nothing to someone who finds the table in their database. "Signature" matches the command that writes the row, `db sign`, and the error reference and command output already call the row a signature. In prose and errors the term is "contract signature", which keeps it apart from a cryptographic signature and from a PostgreSQL function signature.
+- "State" was considered and rejected: everything persisted is state, so the word says nothing.
+- "History" was considered for the ledger and rejected: a ledger has the exact meaning needed, an append-only record of what happened.
+- Policies are per database, so they cannot live in a per-space row.
+
+The concept is renamed everywhere, not only the tables, since no name can change after `8.0.0`: the client option `verifyMarker`, the flag `db verify --marker-only`, the error codes such as `CONTRACT.MARKER_MISSING`, the error fields such as `markerHash`, the `marker` object in `--json` output, the command-line messages, the glossary and the skill. The research behind this, with counts and paths, is in `wip/research/2026-11-25-prisma-table-names.md` on the planning session's worktree; run the search again when building.
+
+MongoDB gets the same three collections, in place of its one `_prisma_migrations` collection. The decision record on MongoDB's migration state rejected separate collections because they doubled the setup. That no longer holds: there is a row per contract space, PostgreSQL has several tables, and the collection needs no setup today. Prisma 7 never created `_prisma_migrations` on MongoDB, so nothing reads the old name. The record is updated in place.
+
+Prisma Studio reads these tables for its Migrations view (prisma/studio#1533), so it changes with them.
+
+## 9. Not yet discussed
 
 - **A change that is not an addition.** The policy says the ORM stops and names the one command that makes it.
-- **MongoDB.** It keeps marker and ledger documents in one collection named `_prisma_migrations`. The name is wrong, since nothing in it is a migration, and it is the same name as Prisma 7's table. The decision record on MongoDB's migration state considered separate `_prisma_marker` and `_prisma_ledger` collections and rejected them as doubling the setup for no benefit.
-- **The names themselves.** Whether the marker table keeps the name "marker" (a name such as "contract signatures" was raised), and the PostgreSQL schema's final name. If either changes it must be before GA, and the rename at `8.0.0` is the moment that makes a table rename nearly free. Needs research into how far the current names reach in the docs and code.
+- **The PostgreSQL `contract` table.** It holds one row per contract, keyed by hash, and each ledger row's destination contract is written to it. It was added for Prisma Studio's Migrations view, which shows the contract before and after each migration. Only PostgreSQL has it. To decide: whether it stays as `_prisma.contracts`, whether every target gets it, or whether the ledger row carries the contract instead.
