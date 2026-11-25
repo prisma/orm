@@ -95,13 +95,13 @@ Decided on 2026-11-24:
 | Level | Packages |
 | --- | --- |
 | GA | `@prisma/orm-postgres`, and what it depends on: `orm-framework`, `orm-toolchain`, `orm-family-sql`, `orm-target-postgres`. `orm-extension-pgvector`, `orm-extension-postgis`, `orm-postgres-contrib` (citext), `orm-extension-arktype-json`, `orm-extension-middleware-cache`, `orm-better-auth` |
-| Preview | `orm-extension-supabase` |
-| Early Access | `orm-mongo`, `orm-family-mongo`, `orm-target-mongo`, `orm-mysql`, `orm-target-mysql`, `orm-mariadb`, `orm-target-mariadb`, `orm-sqlite`, `orm-target-sqlite` |
+| Preview | none |
+| Early Access | `orm-mongo`, `orm-family-mongo`, `orm-target-mongo`, `orm-extension-supabase`, `orm-mysql`, `orm-target-mysql`, `orm-mariadb`, `orm-target-mariadb`, `orm-sqlite`, `orm-target-sqlite` |
 | Numbered `0.x` | `orm-extension-paradedb`, until it is removed from this repository |
 
 The cache middleware and the Better Auth integration were not named in that decision. On 2026-11-25 the operator put both at GA with the rest of the release, or at Release Candidate if either is found not ready before `8.0.0`.
 
-On 2026-11-25 the operator also moved MongoDB's three packages to Early Access: it promises less than they do today, they can be promoted later, and it keeps the "Early access" label prisma.io already gives MongoDB.
+On 2026-11-25 the operator also moved MongoDB's three packages and the Supabase extension to Early Access: it promises less than they do today, and they can be promoted later. For MongoDB it also keeps the "Early access" label prisma.io already gives it.
 
 MariaDB's packages depend on MySQL's, so MariaDB can never be at a higher level than MySQL.
 
@@ -127,6 +127,7 @@ No adapter code changes. Every target's published package changes its `package.j
 - A dry run of the publish workflow for `8.0.0` prints, for each published package, the version, the ranges and the tag this spec gives it, and prints which earlier release candidates it would mark as deprecated, with the message.
 - A dry run for a fix to one GA package publishes that package alone. A dry run for a release on an older major shows that major's own tag and not `latest`.
 - The build fails when a GA package is made to name a package below GA. Shown by a test.
+- Every page of the Prisma 8 docs site that tells a user what to install lists the platform packages beside the package for the database, and its install lines work under npm, pnpm, Yarn and Bun.
 - Every label for maturity in this repository's docs and in the Prisma 8 docs site is one of the four levels, and each page that introduces a package says its level.
 - The `prisma-8` skill tells a user of `8.0.0` or later that an upgrade within Prisma 8 needs no change, and how to move a package below GA to its next release.
 - The docs for extension authors say how to number a package maintained outside this repository, what range to declare, and how an API below GA is named and later renamed.

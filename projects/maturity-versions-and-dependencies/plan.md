@@ -16,7 +16,7 @@ Four slices, in the order of what cannot be changed after `8.0.0`.
 | 1, [TML-3935](https://linear.app/prisma-company/issue/TML-3935) | The application lists the platform packages, and our packages name each other as peers | prisma/orm, with small changes in prisma/prisma-cli, prisma/composer and prisma/web | nothing | the last release candidate |
 | 2, [TML-3936](https://linear.app/prisma-company/issue/TML-3936) | Each package declares its level, and its version, ranges and tag follow from it | prisma/orm | 1 | the last release candidate |
 | 3, [TML-3937](https://linear.app/prisma-company/issue/TML-3937) | Releasing `8.0.0`, one package alone, and an older major | prisma/orm | 2 | `8.0.0` |
-| 4, [TML-3938](https://linear.app/prisma-company/issue/TML-3938) | The levels and each package's level in the Prisma 8 docs site | prisma/web | 2 for the text | published with `8.0.0` |
+| 4, [TML-3938](https://linear.app/prisma-company/issue/TML-3938) | The public docs: what an application installs, the levels, and each package's level | prisma/web | 1 for the install instructions, 2 for the levels | the install instructions with the release that ships slice 1; the levels with `8.0.0` |
 | 5 | Every release's notes have a "How to upgrade" section | prisma/orm | nothing | the next release candidate after slice 1 |
 
 Slices 1 and 2 are a stack. Slice 4's draft can be written while slice 3 is built. Slice 5 is independent of the others and starts after slice 1's pull request.
@@ -81,15 +81,26 @@ Agreed with the operator on 2026-11-25, through the stream. From the next releas
 - **A fix to one package:** its patch number or counter rises, it alone is published, and the release notes say which package.
 - **A release of an older major always names its own tag,** so it cannot take `latest` back.
 - **Upgrade skills.** From `8.0.0`, the `prisma-8` skill says an upgrade within Prisma 8 needs no change, keeps the per-release instructions for the release candidates only, and says how a user of a package below GA moves to the next minor, including what their lines should read after their package manager has rewritten them. `check-upgrade-coverage.mjs` stops requiring a guide for every release after `8.0.0`.
-- **The procedure for releasing `8.0.0`** in `docs/oss/versioning.md`, with the list of docs to rewrite on that day, the removal of the ParadeDB extension from the repository, and a check that each package that is Preview at `8.0.0` has, in its reference documentation, the list of what it does not yet support. The level's definition requires that list, and none exists today. A draft exists on the branch `docs/compatibility-policy-records`.
+- **The procedure for releasing `8.0.0`** in `docs/oss/versioning.md`, with the list of docs to rewrite on that day, the removal of the ParadeDB extension from the repository, and the levels at `8.0.0`, where no package is Preview. A package promoted to Preview later needs, in its reference documentation, the list of what it does not yet support, which the level's definition requires. A draft exists on the branch `docs/compatibility-policy-records`.
 - **How long a major receives fixes:** fixes go to the latest minor; the previous major receives critical and security fixes for 12 months after a new major. Recorded in a decision record, from the draft on the same branch, and stated in `SECURITY.md` and `docs/oss/versioning.md`. Prisma 7 keeps the 18 months already promised for it; the 12 months apply from Prisma 8 on.
 - **The check.** Dry runs, in CI, of: `8.0.0`; a fix to one GA package; a fix to one package below GA; a release on an older major.
 
-### 4. The levels and each package's level in the Prisma 8 docs site
+### 4. The public docs
 
-**After this slice:** the Prisma 8 docs have a page that defines the four levels and says how to read one from a version and a name. Every page that introduces a database or an extension says its level. The five undefined labels used there today are gone. MongoDB keeps "Early access"; MySQL and MariaDB ("Early preview") and SQLite ("Experimental") become Early Access. A short section says what a user of a package below GA does at each new minor, and that a monorepo keeps its applications on one minor unless its package manager keeps each workspace's packages apart. The page also states how long a major receives fixes.
+**After this slice:** the Prisma 8 docs on prisma.io say what this project changes for a user. It is a pull request in prisma/web, written from the decision records of slices 1 and 2. It has two parts, published at different times.
 
-It is a pull request in prisma/web. It is written from the decision records of slices 1 and 2 and published with `8.0.0`.
+**What an application installs,** published with the release that ships slice 1. From that release an application lists the platform packages beside the package for its database, because the package for its database names them as peers and Yarn installs no peers. Every page that tells a user what to install changes: the install column of the supported-databases page (today `npm install @prisma/orm-postgres pg`), each quickstart, each extension's page, and the upgrade guide from Prisma 7. Each says that `prisma orm init` writes these lines, and shows them for a user who adds a database to an existing application. The pages for extension authors say an extension names the platform packages as peers and not the package for a database.
+
+**The levels,** published with `8.0.0`:
+
+- A page that defines the four levels and says how to read one from a version and from an API's name.
+- Every page that introduces a database or an extension says its level. At `8.0.0`: PostgreSQL and its packages, pgvector, PostGIS, citext, arktype JSON, the cache middleware and Better Auth are GA; MongoDB, Supabase, MySQL, MariaDB and SQLite are Early Access. No package is Preview.
+- The five undefined labels used there today are gone. MongoDB keeps "Early access"; MySQL and MariaDB ("Early preview") and SQLite ("Experimental") become Early Access; PostgreSQL ("Release candidate") becomes GA.
+- A short section says what a user of a package below GA does at each new minor: write a tilde on every `@prisma/orm-*` line and edit the lines by hand, because a package manager's update command rewrites them. It also says that a monorepo keeps its applications on one minor unless its package manager keeps each workspace's packages apart.
+- The release-status page states how long a major receives fixes.
+- The ParadeDB extension's page, if there is one, says its team now maintains it outside this repository.
+
+**The check:** each page's install lines are run against packages packed from the release, under npm, pnpm, Yarn and Bun, before the pull request is merged.
 
 ## Proposed split: the command-line tool's rules as their own project
 
