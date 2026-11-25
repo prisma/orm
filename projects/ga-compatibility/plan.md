@@ -199,23 +199,29 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 
 **How, where we know.** It is the spec rewritten for users, not a new design. It is written last, once the other projects are complete, so that it states what was built and includes what we learned on the way (task 23).
 
-### 13. Design the command-line tool's JSON output as a public format, and bring every command into line before `8.0.0`
+### 13. Keep scripts and agents that drive the command-line tool working, by designing its flags, exit codes and JSON output before `8.0.0` and checking them in CI
 
-**Purpose.** A script or an agent that reads a command's `--json` output keeps working across every `8.x` release, and can tell what each field means.
+**Purpose.** A script or an agent that calls a command and reads its result keeps working across every `8.x` release, and can tell what each field of the output means.
 
-**What it achieves.** The policy covers the command-line tool's machine-readable output. Today nobody has designed it: each command's document is whatever was chosen when the command was written. After `8.0.0` a format cannot change, so the formats are designed and corrected before it.
+**Why it is a project of its own.** The policy promises three surfaces: the TypeScript API, what Prisma stores, and the command-line tool. Projects 3 and 4 decide and check the first, and project 2 the second. No project did either for the third. Its intent is different from theirs, it needs its own design, and its work is spread over every command. The config file is not here: its options are TypeScript types, which projects 3 and 4 cover.
+
+**What it achieves.**
+
+- What a script may depend on is written down: each command's name, flags, exit codes and `--json` document.
+- Each `--json` document follows one set of principles, and the ones that do not are corrected before `8.0.0`, because a format cannot change after it.
+- A check in CI fails when any of these changes incompatibly, as project 4's does for exports.
 
 **How, where we know.**
 
-- Survey the `--json` output of every command.
-- Settle the principles in a decision record: what a document reports (the result, or the input given back), stable names, one meaning for each field, how an error is shaped, how a format is versioned, and which maturity level it has. The "JSON semantics" section of the CLI Style Guide is the starting point.
-- Bring each command into line.
+- Survey every command: its flags, its exit codes and its `--json` output. The `--json` output is the largest part. Today nobody has designed it: each command's document is whatever was chosen when the command was written.
+- Settle the principles in a decision record: what a document reports (the result, or the input given back), stable names, one meaning for each field, how an error is shaped, what a reader must ignore so that an added field does not break it, how a format is versioned, and which maturity level it has. The "JSON semantics" section of the CLI Style Guide is the starting point.
+- Bring each command into line, and add the check.
 
 **The example that raised it.** `prisma orm init --json`, whose schema is in `packages/1-framework/3-tooling/cli/src/commands/init/output.ts` and is published as `@prisma/orm-toolchain/cli/init-output`. Its `package` field is one string, the database package, although `init` installs many packages, which it reports separately under `packagesInstalled`. Its `target` field held `'postgres'` or `'mongodb'` until prisma/orm#31093; since then it holds a short name for a database in Prisma's list and a package name for any other, so a reader cannot tell which kind of value it has. Nothing documented reads either field.
 
 **Already decided.** The input flag `--target` keeps its name. Project 6 changes no JSON format.
 
-**To decide when it starts.** Its design discussion has not been held.
+**To decide when it starts.** Its design discussion has not been held. One question for it: whether a command whose output has not been corrected by `8.0.0` can ship that output below GA, and how a user would see that.
 
 ## Moved out of this stream
 
