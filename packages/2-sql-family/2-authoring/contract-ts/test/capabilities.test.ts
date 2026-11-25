@@ -1,5 +1,6 @@
+import type { CapabilityMatrix } from '@internal/framework-components/components';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { type CapabilitySet, resolveCapabilities } from '../src/capabilities';
+import { resolveCapabilities } from '../src/capabilities';
 
 const row = { sql: { returning: true, lateral: true }, postgres: { distinctOn: true } } as const;
 
@@ -24,7 +25,7 @@ describe('resolveCapabilities', () => {
   });
 
   it('keeps the type of the earlier sets when a set has a wide type, which says nothing the type can merge', () => {
-    const wide: CapabilitySet = { sql: { batch: true } };
+    const wide: CapabilityMatrix = { sql: { batch: true } };
     const resolved = resolveCapabilities([row, wide]);
 
     expect(resolved).toEqual({ ...row, sql: { ...row.sql, batch: true } });
@@ -32,5 +33,26 @@ describe('resolveCapabilities', () => {
       readonly returning: true;
       readonly lateral: true;
     }>();
+  });
+});
+
+describe('resolveCapabilities with a list of unknown length', () => {
+  it('keeps the type of the entries the type knows at the front', () => {
+    const rest: CapabilityMatrix[] = [{ sql: { batch: true } }];
+    const resolved = resolveCapabilities([row, ...rest]);
+
+    expect(resolved.sql).toEqual({ ...row.sql, batch: true });
+    expectTypeOf(resolved.sql).toEqualTypeOf<{
+      readonly returning: true;
+      readonly lateral: true;
+    }>();
+  });
+
+  it('keeps a flag in the type that a set with a wide type turns off at run time, a known limit', () => {
+    const off: CapabilityMatrix = { sql: { returning: false } };
+    const resolved = resolveCapabilities([row, off]);
+
+    expect(resolved.sql).toEqual({ lateral: true });
+    expectTypeOf(resolved.sql.returning).toEqualTypeOf<true>();
   });
 });
