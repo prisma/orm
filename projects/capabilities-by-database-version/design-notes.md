@@ -97,7 +97,13 @@ Agreed 2026-11-25. The database version and the capabilities required of the con
 - A default of the recommended version would change every user's contract when the recommendation moves.
 - With no default, "recommended" is only what the docs and `orm init` write. Moving the recommendation changes no existing project.
 
-Whether it is written as a version number or as a named profile object is not decided.
+It is written as a version value that the target resolves against its table, such as `17` or `'8.0.19'`, not as a named object per version:
+
+- MySQL and SQLite add features in patch releases (check constraints in MySQL 8.0.16, `RETURNING` in SQLite 3.35), so an object per version would mean dozens of exported names.
+- A new database version is a new row in the target's table, not a new export.
+- Accepting a profile object as well, for example for a service that differs from the version it reports, can be added later. Going from objects to values could not.
+
+How the target resolves the value is left to the building session.
 
 **The connection capabilities** are those a database version cannot imply, because the driver or adapter provides them. Interactive transactions are the example: the driver provides them, never the database, and a driver that works over HTTP does not declare them. The user passes them in, usually by taking them from the driver the application runs with. When they are omitted, the facade supplies the capabilities of its default driver, which is the driver its client uses by default.
 
@@ -189,7 +195,6 @@ It is not purely additive.
 
 ## Open
 
-- Whether the version is written as a version number or as a named profile object.
 - The syntax in the Prisma schema language for the version and the connection capabilities. It must be designed by the end of the project.
 - The form of the capabilities value, so that a driver's declared capabilities can be passed in directly.
 - Which versions get a profile for each target at GA, and which is recommended.
