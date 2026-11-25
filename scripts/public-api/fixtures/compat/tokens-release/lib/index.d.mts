@@ -2,4 +2,5 @@ import { Token as First } from "./a.mjs";
 import { Token as Second } from "./b.mjs";
 declare function make(): First;
 declare function use(token: First): void;
-export { make, use };
+declare function plain(): string;
+export { make, plain, use };

@@ -806,6 +806,57 @@ function compileTests({
 //
 // Each comparison is first TypeScript's own, on declarations rewritten as compat-declarations.mjs
 // describes; the pipeline is described in api-compat.mjs.
+// The exports of the package in `dir`, as `path\0name`, whose declarations reach, through the names
+// they use, a declaration of one of `targets`: `package:name` of a class or unique symbol. Only the
+// compiler's own library files are not followed.
+function exportsReaching(dir, targets) {
+  const root = realpathSync(dir);
+  const entryPoints = entryPointsOf(root);
+  const options = compilerOptions(root);
+  const program = ts.createProgram(
+    entryPoints.map(({ declarationFile }) => declarationFile),
+    options,
+  );
+  const checker = program.getTypeChecker();
+  const isTarget = (declaration) => {
+    const name = declaration.name;
+    if (!name || !ts.isIdentifier(name)) return false;
+    const owner = packageOf(declaration.getSourceFile().fileName)?.name;
+    return targets.has(`${owner}:${name.text}`);
+  };
+  const reaching = new Map();
+  const reaches = (symbol) => {
+    const seen = new Set();
+    const pending = [symbol];
+    while (pending.length > 0) {
+      let next = pending.pop();
+      if (next.flags & ts.SymbolFlags.Alias) next = checker.getAliasedSymbol(next);
+      for (const declaration of next.declarations ?? []) {
+        if (seen.has(declaration)) continue;
+        seen.add(declaration);
+        if (program.isSourceFileDefaultLibrary(declaration.getSourceFile())) continue;
+        if (isTarget(declaration)) return true;
+        const visit = (node) => {
+          if (ts.isIdentifier(node)) {
+            const found = checker.getSymbolAtLocation(node);
+            if (found) pending.push(found);
+          }
+          ts.forEachChild(node, visit);
+        };
+        visit(declaration);
+      }
+    }
+    return false;
+  };
+  for (const { subpath, declarationFile } of entryPoints) {
+    const module = checker.getSymbolAtLocation(program.getSourceFile(declarationFile));
+    for (const exported of module ? checker.getExportsOfModule(module) : []) {
+      reaching.set(`${subpath}\0${exported.name}`, reaches(exported));
+    }
+  }
+  return new Set([...reaching].filter(([, reached]) => reached).map(([key]) => key));
+}
+
 export function checkPackage({
   name,
   releaseDir,
@@ -1058,6 +1109,43 @@ export function checkPackage({
       );
     } else if (each.partial) notDecided(each.entry, each.segment, 'member', PARTIAL);
     else decidedByMembers.push(testOf(each.entry, each.segment));
+  }
+
+  // Two classes or unique symbols with one name share one marker, so a comparison that reaches one
+  // can pass where the other was swapped in. Such a pass decides nothing, on either side.
+  const ambiguous = [
+    ...[...host.mergedClasses].map((each) => ({ key: each, label: `private class ${each}` })),
+    ...[...host.mergedSymbols].map((each) => ({ key: each, label: `unique symbol ${each}` })),
+  ];
+  if (ambiguous.length > 0) {
+    const targets = new Set(ambiguous.map(({ key }) => key));
+    const reaching = new Set([
+      ...exportsReaching(releaseDir, targets),
+      ...exportsReaching(currentDir, targets),
+    ]);
+    const labels = ambiguous.map(({ label }) => label).join(', ');
+    const settled = (list, entry, segment) =>
+      list.some(
+        (each) =>
+          each.path === entry.path && each.name === entry.name && each.test === segment.test,
+      );
+    for (const entry of exported) {
+      if (!reaching.has(`${entry.path}\0${entry.name}`)) continue;
+      for (const segment of entry.segments.filter((each) => !each.probe && !each.use)) {
+        if (settled(breaks, entry, segment) || settled(undecided, entry, segment)) continue;
+        if (settled(notCompared, entry, segment)) continue;
+        undecided.push({
+          ...testOf(entry, segment),
+          stage: 'native',
+          message: `not decided: it uses one of ${labels}, which share one marker with another of that name, so a pass cannot tell them apart`,
+        });
+        const index = decidedByMembers.findIndex(
+          (each) =>
+            each.path === entry.path && each.name === entry.name && each.test === segment.test,
+        );
+        if (index !== -1) decidedByMembers.splice(index, 1);
+      }
+    }
   }
 
   // A record covers the breaks of one test of one export while the fingerprint of the export in

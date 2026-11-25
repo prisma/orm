@@ -105,6 +105,16 @@ describe('checkPackage, with the release treated as GA', () => {
     );
   });
 
+  it('leaves undecided an export that reaches two private classes with one name, and decides the rest', () => {
+    const result = check('tokens-swapped', { release: 'tokens-release' });
+    deepStrictEqual(brokenExports(result), []);
+    deepStrictEqual(
+      result.undecided.map(({ name, test }) => `${name} ${test}`),
+      ['make value', 'use value'],
+    );
+    match(result.undecided[0].message, /private class fixture-compat:Token/);
+  });
+
   it('fails when the release imports a file of its own that is missing', () => {
     const { problems } = check('relative-release', { release: 'relative-missing' });
     strictEqual(problems.length, 1);
@@ -148,6 +158,10 @@ describe('checkPackage, with the release treated as GA', () => {
       deepStrictEqual(names(result.notCompared), [
         '* unique symbol fixture-compat:brand unique symbol',
       ]);
+      deepStrictEqual(
+        result.undecided.map(({ name, test }) => `${name} ${test}`),
+        ['Both type'],
+      );
     }
   });
 
