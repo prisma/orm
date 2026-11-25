@@ -1315,8 +1315,12 @@ function copyRejectedWhy(
     switch (later.kind) {
       case 'replaced':
         return `A later operation of this migration updates the validator of collection ${name}${renamed(later.collection)}: ${bypass}, so that update checks the moved documents. Run the file with node, then run the command again.`;
-      case 'unchecked':
-        return `A later operation of this migration updates the validator of collection ${name}${renamed(later.collection)} without checking the documents already in it. Move the copy to after that update in the migration's migration.ts, so the documents it writes have to fit only the new validator: ${node}. Or ${orPipeline}.`;
+      case 'unchecked': {
+        const sameName = later.collection === target.collection;
+        const updated = sameName ? name : `${name}, as collection ${later.collection},`;
+        const retarget = sameName ? '' : ` and make it write into collection ${later.collection}`;
+        return `A later operation of this migration updates the validator of collection ${updated} without checking the documents already in it. Move the copy to after that update in the migration's migration.ts${retarget}, so the documents it writes have to fit only the new validator: ${node}. Or ${orPipeline}.`;
+      }
       case 'removed':
         return `A later operation of this migration removes the validator of collection ${name}${renamed(later.collection)}: ${bypass}, so the copy does not have to fit the validator that is then removed. Run the file with node, then run the command again.`;
       case 'none':
