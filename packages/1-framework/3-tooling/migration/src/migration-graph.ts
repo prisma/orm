@@ -133,10 +133,9 @@ export function findPath(
  * key is the JSON encoding of `[node, sortedCoveredIds]`, which distinguishes
  * distinct `(node, covered)` tuples for any node name or invariant id.
  *
- * The search never enqueues a state that cannot reach the goal: its node does not reach `toHash`,
- * or some invariant it still lacks has no provider it can still take on the way. Those states
- * have no satisfying continuation, so dropping them leaves the returned path unchanged while
- * keeping a fresh database's history from doubling the state count per same-hash provider.
+ * The search never enqueues a state that provably cannot reach the goal: its node does not reach
+ * `toHash`, or for some invariant it still lacks, its node cannot reach a migration providing the
+ * invariant on a route to the target. Dropping those states leaves the returned path unchanged.
  *
  * Neighbour ordering when `required ≠ ∅`: edges covering ≥1 still-needed
  * invariant come first, with `createdAt → to → migrationHash` as the
@@ -159,15 +158,15 @@ export function findPathWithInvariants(
   }
   const stateKey = (s: InvState): string => JSON.stringify([s.node, [...s.covered].sort()]);
 
-  const reachesTarget = collectNodesReachingTarget(graph, toHash);
-  const canStillProvide = nodesThatCanStillProvide(graph, required, reachesTarget);
+  const reachesTarget = collectNodesReaching(graph, [toHash]);
+  const reachesProvider = collectNodesReachingProvider(graph, required, reachesTarget);
   const requiredIds = [...required];
-  const canReachGoal = (s: InvState): boolean =>
-    reachesTarget.has(s.node) &&
-    requiredIds.every((inv) => s.covered.has(inv) || canStillProvide.get(inv)?.has(s.node));
+  const cannotReachGoal = (s: InvState): boolean =>
+    !reachesTarget.has(s.node) ||
+    requiredIds.some((inv) => !s.covered.has(inv) && !reachesProvider.get(inv)?.has(s.node));
 
   const start: InvState = { node: fromHash, covered: new Set() };
-  if (!canReachGoal(start)) return null;
+  if (cannotReachGoal(start)) return null;
 
   const neighbours = (s: InvState): Iterable<{ next: InvState; edge: MigrationEdge }> => {
     const outgoing = graph.forwardChain.get(s.node) ?? [];
@@ -185,7 +184,7 @@ export function findPathWithInvariants(
         }
         return { edge, useful, nextCovered: next ?? s.covered };
       })
-      .filter(({ edge, nextCovered }) => canReachGoal({ node: edge.to, covered: nextCovered }))
+      .filter(({ edge, nextCovered }) => !cannotReachGoal({ node: edge.to, covered: nextCovered }))
       .sort((a, b) => {
         if (a.useful !== b.useful) return a.useful ? -1 : 1;
         return compareTieBreak(a.edge, b.edge);
@@ -222,23 +221,23 @@ export function findPathWithInvariants(
 }
 
 /**
- * Reverse-BFS from `toHash` over `reverseChain` to collect every node from
- * which `toHash` is reachable (inclusive of `toHash` itself).
+ * Reverse-BFS over `reverseChain` from `seeds` to collect every node from which some seed is
+ * reachable (inclusive of the seeds themselves).
  */
-function collectNodesReachingTarget(graph: MigrationGraph, toHash: string): Set<string> {
+function collectNodesReaching(graph: MigrationGraph, seeds: Iterable<string>): Set<string> {
   const reached = new Set<string>();
-  for (const step of bfs([toHash], (n) => reverseNeighbours(graph, n))) {
+  for (const step of bfs(seeds, (n) => reverseNeighbours(graph, n))) {
     reached.add(step.state);
   }
   return reached;
 }
 
 /**
- * For each required invariant, the nodes from which some edge providing it can still be taken on
- * the way to the target: the edge's `from` is reachable from the node and its `to` reaches the
- * target.
+ * For each required invariant, the nodes that can still reach a migration providing the
+ * invariant on a route to the target: the migration's `from` is reachable from the node and its
+ * `to` reaches the target.
  */
-function nodesThatCanStillProvide(
+function collectNodesReachingProvider(
   graph: MigrationGraph,
   required: ReadonlySet<string>,
   reachesTarget: ReadonlySet<string>,
@@ -255,19 +254,9 @@ function nodesThatCanStillProvide(
       }
     }
   }
-  const result = new Map<string, ReadonlySet<string>>();
-  for (const [inv, sources] of providerSources) {
-    result.set(
-      inv,
-      new Set(
-        Array.from(
-          bfs(sources, (n) => reverseNeighbours(graph, n)),
-          (step) => step.state,
-        ),
-      ),
-    );
-  }
-  return result;
+  return new Map(
+    Array.from(providerSources, ([inv, sources]) => [inv, collectNodesReaching(graph, sources)]),
+  );
 }
 
 export interface PathDecision {
@@ -384,7 +373,7 @@ export function findPathWithDecision(
   // Single reverse BFS marks every node from which `toHash` is reachable.
   // Replaces a per-edge `findPath(e.to, toHash)` call inside the loop below,
   // which made the whole function O(|path| · (V + E)) instead of O(V + E).
-  const reachesTarget = collectNodesReachingTarget(graph, toHash);
+  const reachesTarget = collectNodesReaching(graph, [toHash]);
   const coveragePrefixes = requiredCoveragePrefixes(required, path);
 
   const tieBreakReasons: string[] = [];
