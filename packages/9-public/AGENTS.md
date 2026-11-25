@@ -28,4 +28,12 @@ For each removed or changed line:
 
 The pull request description's `## API changes` section must name each changed export and say why. If the reason given does not match the change, say so.
 
+## What to check in a record of a break
+
+A package's `api-breaks.json`, `packages/9-public/removed-packages.json` and `examples/last-release-errors.json` record changes that CI would otherwise report as breaks against the last release. A new record is a decision to let one through, so review it as such:
+
+- A record of kind `break` breaks users' code. Is the reason one a user would accept, and is the break also in the release notes?
+- A record of kind `allowed` claims the change is one the compatibility policy allows: for example a new optional property that fails an example app's exact type assertion, or a change to an interface that users only implement. Check that the claim is true. A record that calls a real break allowed hides it from users.
+- A removed record means the break it covered is gone, or the last release has moved on. Either is fine.
+
 Ask, rather than guess, when you cannot tell whether a type is one users implement or only receive.
