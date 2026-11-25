@@ -71,11 +71,21 @@ Consequences:
 - Upgrading the database does not change the contract or its hashes.
 - The framework compares two capability sets. It never reads or compares a version, so version knowledge stays inside each target.
 
-### A target offers one profile per supported version
+### Each capability is declared by the component that knows the fact
 
-A profile is the target as one database version provides it: the same target, with only the capabilities that version has. The capability list stops being one list per adapter and becomes one list per profile.
+Agreed 2026-11-25.
+
+| Fact | Declared by | Example |
+| --- | --- | --- |
+| What the database provides, by version | Target | `MERGE … RETURNING` from PostgreSQL 17 |
+| What the connection provides | Driver | Interactive transactions |
+| What the adapter can write as a query | Adapter | Whether it can render a lateral join |
+
+The target holds the table of which version provides which capability. A profile is the target as one database version provides it: the same target, with only the capabilities that version has. Whether PostgreSQL 17 has a feature is a fact about PostgreSQL, the same for every adapter, and the table is also where the error message "requires PostgreSQL 17 or later" comes from.
 
 A behaviour that a later version drops is a capability the later profile does not have. Capabilities that describe behaviour already exist, for example `sql.jsonAggWithoutTruncation`, which MariaDB's adapter turns off.
+
+This reverses a recorded position. The [Runtime & Middleware Framework](../../docs/architecture%20docs/subsystems/4.%20Runtime%20%26%20Middleware%20Framework.md) doc and the rule `.agents/rules/capabilities-ownership.mdc` say capabilities are reported by the adapter and not defined by the target. Today every PostgreSQL flag is declared on the adapter, and the target and driver declare none. The project updates that doc and that rule in place.
 
 ### The contract states the version and the connection capabilities it requires
 
@@ -101,19 +111,28 @@ export const contract = defineContract({
 });
 ```
 
-**A contract written in the Prisma schema language** cannot state either today: the file names no target and cannot import a driver. For now both are given in the config's contract entry, beside the path to the file. The version goes to the target the config builds, not to the interpreter that reads the file. The names below are illustrative:
+**A contract written in the Prisma schema language** cannot state either today: the file names no target and cannot import a driver. For now both are given in the config's contract entry, beside the path to the file. The names below are illustrative:
 
 ```ts
 import neonHttp from 'prisma-orm-driver-neon-http';
 
 export default defineConfig({
-  contract: prismaContract('./prisma/contract.prisma', {
+  contract: {
+    path: './prisma/contract.prisma',
     version: 17,
     capabilities: neonHttp.capabilities,
-  }),
-  db: { url: env('DATABASE_URL') },
+  },
+  db: { connection: env('DATABASE_URL') },
 });
 ```
+
+How it reaches the contract:
+
+1. The facade's `defineConfig` uses the version to pick the target's capabilities for that version.
+2. It adds the connection capabilities. By default these are the capabilities of the adapter and driver the facade's client uses at runtime. A project on another driver passes that driver's capabilities, which replace the default.
+3. The interpreter receives one capability list through the context the tooling already gives the contract source (`context.capabilities` in `packages/2-sql-family/2-authoring/contract-psl/src/provider.ts`). It never sees a version. It already writes the list into the contract and checks the file against it: a model with `@@check` is rejected when `sql.checkConstraint` is missing.
+
+Not yet confirmed in the code: how the tooling builds that context's capability list from the config's components. The building session confirms it first, since it decides whether this needs any change outside the facade and the SQL family.
 
 This is a compromise. The idiomatic form is syntax in the Prisma schema language, so that the contract file states its own requirements. **By the end of this project that syntax must at least be designed, and preferably built.** When it exists, the config options keep working until the next major version, as the compatibility policy requires.
 
