@@ -38,7 +38,7 @@ Every pull request is checked against the last release in three ways.
 
 **The last release** is the version under the registry's `latest` tag for `@prisma/orm-postgres`, and its git tag is `v<version>`. This assumes every package is released at one version; when packages get versions of their own, the lookup becomes per package.
 
-**A deliberate break** is recorded with the release it is measured against and its reason. A record for the last release must match a break, or the check fails, so a record cannot outlive its break. A record for an earlier release is skipped and listed as removable in the job's report.
+**A deliberate break** is recorded with the release it is measured against and its reason. A record for the last release lists that export's breaks as recorded; once the export is compared and no longer breaks, the record fails, so it cannot outlive its break. A record for an earlier release is skipped and listed as removable in the job's report.
 
 ## Why
 
@@ -52,7 +52,7 @@ Each needs its own check. The first is judged best by the compiler, against decl
 
 ## How the type tests judge compatibility
 
-The method adapts Microsoft's Fluid Framework, which generates one compile-time test per export of its previous release. We keep its structure: install the previous release, generate a test per export, record deliberate breaks as expected errors. We change how two types are compared, as below.
+The method adapts Microsoft's Fluid Framework, which generates one compile-time test per export of its previous release. We keep its structure: install the previous release, generate a test per export, record deliberate breaks. We change how two types are compared, as below.
 
 **The test.** For each export the release declares, the generator writes one line. For `createCacheMiddleware` it is:
 
@@ -60,34 +60,40 @@ The method adapts Microsoft's Fluid Framework, which generates one compile-time 
 import type * as r0 from 'release-orm-extension-middleware-cache';
 import type * as c0 from 'current-orm-extension-middleware-cache';
 
-type t4 = [requireAssignableTo<StructuralNew<typeof c0.createCacheMiddleware>, StructuralOld<typeof r0.createCacheMiddleware>>];
+type t4 = [requireAssignableTo<typeof c0.createCacheMiddleware, typeof r0.createCacheMiddleware>];
 ```
 
-`release-…` is the last release, installed under that alias; `current-…` links to the current build. `requireAssignableTo<A, B>` compiles only when `A` is assignable to `B`. `StructuralNew` and `StructuralOld` remove what makes two copies of one declaration differ without mattering to a user. Each test is a type named after its line in the generated file, so an error maps back to its export. A type export gets the same test without `typeof`.
+`release-…` is the last release, installed under that alias; `current-…` links to the current build. `requireAssignableTo<A, B>` compiles only when `A` is assignable to `B`. Each test is a type named after its line in the generated file, so an error maps back to its export. A type export gets the same test without `typeof`, and a class also gets one for its constructor's parameters, which TypeScript otherwise compares loosely.
 
 **Only one direction.** Fluid asks in both directions and needs every interface tagged as one users implement or one they only receive, because a new member breaks the first kind and not the second. We ask only whether the current export is assignable to the last release's, and the tags become unnecessary. A new required member on `CacheStore`, which users implement, fails through the exported function that accepts a `CacheStore`: the current `createCacheMiddleware` no longer accepts an old store, so it is not assignable to the old `createCacheMiddleware`. A new member on `CacheMiddleware`, which users only receive, passes, because a type with more members is still assignable to the old one. This relies on an exported function or type accepting the interface; one that nothing accepts cannot be implemented in any useful way.
 
-**Signatures are kept.** Fluid's helper replaces every function and method with an empty object type, so it checks only that a function exists. Ours removes private members, unique-symbol keys and brands on primitives, and keeps call and construct signatures. It also turns each method into a property of function type. TypeScript lets a method accept a narrower parameter than the method it replaces, so with methods left as methods, this narrowing passes:
+**TypeScript compares, on declarations rewritten as it reads them.** Fluid maps every type through a helper that replaces functions and methods with empty objects, so it checks only that a function exists. We let TypeScript compare the two exports itself, because its comparison handles recursive types, such as JSON values, that a mapping cannot. Three things would make a plain comparison wrong, so a compiler host rewrites our packages' declaration files on both sides as TypeScript reads them:
 
-```ts
-interface Last { get(key: string | number): void }
-interface Now  { get(key: string): void }   // assignable to Last as a method, not as a property
-```
+- Each method becomes a property of function type. TypeScript lets a method accept a narrower parameter than the method it replaces, so with methods left as methods, this narrowing passes:
 
-The helper is written twice, once for each side, because when both sides use one generic alias, TypeScript compares the two by a shortcut that misses the same narrowing.
+  ```ts
+  interface Last { get(key: string | number): void }
+  interface Now  { get(key: string): void }   // assignable to Last as a method, not as a property
+  ```
+
+- Private, protected and `#private` members are dropped. TypeScript treats two copies of a class with private members as unrelated, and users cannot reach them.
+- Each `unique symbol` constant becomes a string literal named after its module and name, because two copies of a unique symbol are different symbols. Keys made from it are still compared.
+
+In third-party declarations only private and protected members are dropped: rewriting their methods would change how TypeScript compares arrays and other built-in types.
+
+**When TypeScript cannot relate two copies.** For some generic types TypeScript cannot tell that two copies of one declaration are the same, and a comparison fails although nothing changed. So the release is installed twice, the second copy called its twin, and a failure counts as a break only when the same test passes between the release and its twin. When it fails there too, the test is made again with the generic signatures instantiated at their constraints, and then with a helper that maps the types member by member. A test none of these decides is reported as undecided, neither a break nor a pass.
 
 **Making sure the comparison is real.**
 
 - The current build and the last release can have the same name and version, and TypeScript then treats them as one package and compares nothing. The installed release is stamped with a version of its own, and the run fails if TypeScript still merged any of our packages.
-- The release's third-party dependencies are installed at the versions in the repository's lockfile, so that a difference in, say, `pg` is not reported as ours.
+- The release's third-party dependencies are installed at the versions in the repository's lockfile, and every import of one third-party name and version is resolved to one copy, so that a difference in, say, `pg` or its peers is not reported as ours.
 - Every generated file ends with a line that must not compile. If it compiles, the compiler did not check the file, and the run fails.
 - A type from the release that cannot be resolved would be treated as `any` and pass everything; an unresolved import is reported as a failure.
+- When TypeScript stops with "type instantiation is excessively deep", it caches the failure and lets later tests of the same type pass unchecked, so every test after it is compiled again without it. A test that overflows the compiler's stack is isolated the same way. Both are reported as undecided, as is any test left when the package's time budget runs out.
 
 **Re-exports.** A database's package, such as `@prisma/orm-postgres`, re-exports most of the import paths of the database-independent packages it is built on. A re-exported name gets only a test that it still exists; its type is compared in the package that declares it.
 
 **Generic types.** A type parameter without a default is set to `never`, as Fluid does, because inventing arguments would mean guessing how users instantiate it. A test whose release side then resolves to `never` or `any` compares nothing and is counted as not compared.
-
-**Comparisons TypeScript gives up on.** For some recursive types, such as JSON values, TypeScript stops with "type instantiation is excessively deep". Such a test is reported as undecided, neither a break nor a pass. Because TypeScript caches the failure and lets later tests of the same type pass unchecked, every test after an undecided one is compiled again without it.
 
 ## How the example apps cover result types
 
@@ -119,7 +125,7 @@ Review agents are told what to look for, in `packages/9-public/AGENTS.md` and in
 
 - A break in a generally available export cannot merge unless someone records why, and the release notes must name it. A new export cannot merge unless the description names it.
 - Some changed lines are not API changes, and the description must still mention them, at least by package.
-- The type tests install a release from the registry on every run, so they depend on the registry being reachable. Measured in November 2026, a run over all packages took under a minute on a laptop and up to 3 GB of memory for the largest package.
+- The type tests install a release from the registry on every run, so they depend on the registry being reachable. Measured in November 2026, a run over all packages took about three minutes on a laptop with three packages at a time, and up to 4.3 GB of memory for the largest.
 - When the last release moves forward, its records stop applying and are listed as removable.
 
 ## What the checks do not see
@@ -129,7 +135,8 @@ Review agents are told what to look for, in `packages/9-public/AGENTS.md` and in
 - **Some modifiers.** A property made `readonly`, or a change to a `protected` member, is not seen.
 - **Members of a namespace that holds only types.**
 - **Third-party types.** Both sides use the same third-party versions, so a dependency upgrade that changes our API is not seen.
-- **Types TypeScript gives up on.** A break inside an undecided comparison is not seen.
+- **Undecided comparisons.** A break inside a comparison TypeScript cannot decide, or cannot relate between two copies, is not seen. On the packages in November 2026 that was under one per cent of comparisons, mostly generic builders.
+- **A unique symbol that moves to another file.** Its key changes name, and the change is reported as a break.
 - **Result types the example apps do not exercise.** Coverage grows with the apps' type tests.
 - **Behaviour.** Runtime behaviour, error codes, command output and file formats are outside these checks.
 
@@ -137,6 +144,7 @@ Review agents are told what to look for, in `packages/9-public/AGENTS.md` and in
 
 - **Comparing the text of the lists**, as Go compares its `api/go1.*.txt` files. Text cannot tell an added optional parameter from a removed one, so every changed line needs a person and an entry in an exceptions file. AWS CDK's grew to about 4,200 lines.
 - **Fluid Framework's method as it is.** Because its helper erases signatures, it checks only that each function exists; in a test with known signature changes on our packages it missed every one. It then needs every interface tagged by hand.
+- **Mapping every type through a structural helper and comparing the results.** It handles the cases a plain comparison gets wrong, but TypeScript gives up on deep and recursive types: on our packages it left more than four in five comparisons undecided. It stays as the last fallback.
 - **API Extractor's own reports as the committed files**, as Angular and Backstage commit them. For our packages they are about ten times the size of the lists and repeat one declaration in up to 40 files.
 - **Only type tests and example apps, with no list**, as Drizzle, Kysely, Zod and tRPC do. Nothing in that approach notices an accidental export.
 - **Compiling the example apps from the pull request's branch.** The pull request can change an app to fit its own break.
