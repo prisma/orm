@@ -95,6 +95,7 @@ withTempDir(({ createTempDir }) => {
         );
         const refused = await runDbVerify(ctx);
         expect(refused.exitCode, `db verify before the upgrade\n${output(refused)}`).not.toBe(0);
+        expect(output(refused)).toContain('[CONTRACT.FORMAT_VERSION_MISSING]');
 
         const removeNoCheck = spawnSync(process.execPath, [appScript], {
           cwd: ctx.testDir,
