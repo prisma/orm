@@ -170,6 +170,7 @@ jobs:
         if: needs.changes.outputs.inert != 'true'
         run: pnpm install --frozen-lockfile
       - name: Build packages (restored from Turbo cache)
+        id: api-compat-build
         if: needs.changes.outputs.inert != 'true'
         run: pnpm build
       - name: Find breaks since the last release
@@ -178,7 +179,7 @@ jobs:
         run: pnpm api:compat --jobs 2
       - name: Type check the last release's example apps against this build
         # Runs when the step above found breaks too, so both reports are in the summary.
-        if: ${{ !cancelled() && needs.changes.outputs.inert != 'true' }}
+        if: ${{ !cancelled() && steps.api-compat-build.outcome == 'success' }}
         run: pnpm api:compat:examples
 
   fixtures:

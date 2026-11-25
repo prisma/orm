@@ -10,6 +10,7 @@ import {
   isExemptExport,
   isPrerelease,
   isReleased,
+  isVersion,
   LastReleaseError,
   lastRelease,
   releaseTags,
@@ -27,6 +28,8 @@ before(() => {
   git(origin, 'init', '--quiet', '--initial-branch=main');
   git(origin, 'config', 'user.email', 'test@example.com');
   git(origin, 'config', 'user.name', 'test');
+  git(origin, 'config', 'commit.gpgSign', 'false');
+  git(origin, 'config', 'tag.gpgSign', 'false');
   writeFileSync(join(origin, 'package.json'), JSON.stringify({ version: '1.1.0-rc.2' }));
   git(origin, 'add', '.');
   git(origin, 'commit', '--quiet', '-m', 'bump');
@@ -159,6 +162,24 @@ describe('the version rules', () => {
       ['1.0.0', '1.0.0-rc.10', '0.9.0', '1.0.0-rc.2', '1.0.0-dev.1', '1.1.0'].sort(compareVersions),
       ['0.9.0', '1.0.0-dev.1', '1.0.0-rc.2', '1.0.0-rc.10', '1.0.0', '1.1.0'],
     );
+  });
+
+  it('orders numeric identifiers of any length exactly', () => {
+    deepStrictEqual(
+      ['8.0.0-rc.9007199254740993', '8.0.0-rc.9007199254740992', '8.0.0-rc.10', '8.0.0-rc.2'].sort(
+        compareVersions,
+      ),
+      ['8.0.0-rc.2', '8.0.0-rc.10', '8.0.0-rc.9007199254740992', '8.0.0-rc.9007199254740993'],
+    );
+  });
+
+  it('is not a version with an empty pre-release identifier', () => {
+    deepStrictEqual(['8.0.0-rc..1', '8.0.0-.rc', '8.0.0-rc.', '8.0.0-rc.1'].map(isVersion), [
+      false,
+      false,
+      false,
+      true,
+    ]);
   });
 
   it('calls a version with a pre-release part a pre-release', () => {

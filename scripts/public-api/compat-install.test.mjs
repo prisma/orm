@@ -135,6 +135,21 @@ describe('supplyChainSettings', () => {
   });
 });
 
+describe('supplyChainSettings, with lists written on one line', () => {
+  it('reads them as lists', () => {
+    deepStrictEqual(
+      supplyChainSettings(
+        "minimumReleaseAge: 10\nminimumReleaseAgeExclude: [chokidar, '@a/b']\ntrustPolicyExclude: []\n",
+      ),
+      {
+        minimumReleaseAge: 10,
+        minimumReleaseAgeExclude: ['chokidar', '@a/b', '@prisma/*'],
+        trustPolicyExclude: [],
+      },
+    );
+  });
+});
+
 describe('makeTwin', () => {
   const ours = new Set(['@prisma/orm-a', '@prisma/orm-shared']);
   const install = (dir, manifest) => {

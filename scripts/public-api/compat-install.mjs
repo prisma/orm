@@ -56,7 +56,8 @@ const scalar = (text) => {
 };
 
 // The repository's supply-chain settings, from its pnpm-workspace.yaml, for the install of the
-// last release. They are top-level scalars and lists of scalars, which is all this reads. Our own
+// last release. They are top-level scalars and lists of scalars, in either form, which is all this
+// reads. Our own
 // packages are excluded from the release-age cooldown, since the last release may be minutes old.
 export function supplyChainSettings(workspaceYaml) {
   const settings = {};
@@ -66,8 +67,16 @@ export function supplyChainSettings(workspaceYaml) {
     if (key) {
       list = undefined;
       if (!SUPPLY_CHAIN_KEYS.includes(key[1])) continue;
-      if (key[2].replace(/#.*$/, '').trim() === '') settings[key[1]] = list = [];
-      else settings[key[1]] = scalar(key[2]);
+      const value = key[2].replace(/\s+#.*$/, '').trim();
+      if (value === '') settings[key[1]] = list = [];
+      else if (/^\[.*\]$/.test(value)) {
+        settings[key[1]] = value
+          .slice(1, -1)
+          .split(',')
+          .map((item) => item.trim())
+          .filter((item) => item !== '')
+          .map(scalar);
+      } else settings[key[1]] = scalar(value);
       continue;
     }
     const item = /^\s+-\s+(.*)$/.exec(line);

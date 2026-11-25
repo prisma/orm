@@ -11,7 +11,10 @@
 import { execFileSync } from 'node:child_process';
 
 const REGISTRY = 'https://registry.npmjs.org';
-const VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
+const IDENTIFIERS = '[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*';
+const VERSION = new RegExp(
+  `^(\\d+)\\.(\\d+)\\.(\\d+)(?:-(${IDENTIFIERS}))?(?:\\+${IDENTIFIERS})?$`,
+);
 const EXEMPT_PREFIXES = ['preview_', 'ea_'];
 const NETWORK_ATTEMPTS = 3;
 
@@ -26,25 +29,31 @@ function parse(version) {
   const match = VERSION.exec(version);
   if (!match) throw new LastReleaseError(`${version} is not a version`);
   return {
-    core: match.slice(1, 4).map(Number),
+    core: match.slice(1, 4),
     pre: match[4] === undefined ? [] : match[4].split('.'),
   };
 }
 
 const isNumeric = (identifier) => /^\d+$/.test(identifier);
+// Digits compared exactly, however many there are.
+const compareNumbers = (a, b) => {
+  const [x, y] = [BigInt(a), BigInt(b)];
+  return x === y ? 0 : x < y ? -1 : 1;
+};
 
 // Semver precedence; build metadata is ignored.
 export function compareVersions(a, b) {
   const x = parse(a);
   const y = parse(b);
   for (let index = 0; index < 3; index++) {
-    if (x.core[index] !== y.core[index]) return x.core[index] - y.core[index];
+    const order = compareNumbers(x.core[index], y.core[index]);
+    if (order !== 0) return order;
   }
   if (x.pre.length === 0 || y.pre.length === 0) return y.pre.length - x.pre.length;
   for (let index = 0; index < Math.min(x.pre.length, y.pre.length); index++) {
     const [p, q] = [x.pre[index], y.pre[index]];
     if (p === q) continue;
-    if (isNumeric(p) && isNumeric(q)) return Number(p) - Number(q);
+    if (isNumeric(p) && isNumeric(q)) return compareNumbers(p, q);
     if (isNumeric(p) !== isNumeric(q)) return isNumeric(p) ? -1 : 1;
     return p < q ? -1 : 1;
   }

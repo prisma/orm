@@ -42,6 +42,11 @@ const git = (cwd, ...args) =>
       GIT_AUTHOR_EMAIL: 'test@example.com',
       GIT_COMMITTER_NAME: 'test',
       GIT_COMMITTER_EMAIL: 'test@example.com',
+      GIT_CONFIG_COUNT: '2',
+      GIT_CONFIG_KEY_0: 'commit.gpgSign',
+      GIT_CONFIG_VALUE_0: 'false',
+      GIT_CONFIG_KEY_1: 'tag.gpgSign',
+      GIT_CONFIG_VALUE_1: 'false',
     },
   });
 
