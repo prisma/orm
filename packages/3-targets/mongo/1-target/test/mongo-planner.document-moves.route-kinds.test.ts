@@ -1,3 +1,4 @@
+import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import {
   contract,
@@ -103,7 +104,7 @@ describe('MongoMigrationPlanner, a route over refused groups of different kinds'
     const MERGE_REASON =
       'A collection rename moves the documents of one collection, and collection "guests" would also store the documents of model "Visitor". Moving the documents of two collections into one is a data migration, which a plan does not write.';
 
-    function textsOf(statements: Parameters<typeof plan>[0]['statements']) {
+    function textsOf(statements: readonly ResolvedMigrationStatement[]) {
       const [printer, pointer] = refusal(plan({ from, to, schema, statements }));
       return {
         printer: { summary: printer?.summary, why: printer?.why?.split('\n\n')[0] },
