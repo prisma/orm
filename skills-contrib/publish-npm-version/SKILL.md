@@ -25,7 +25,7 @@ Maintainers of Prisma 8 who have permission to push branches and open PRs in the
 Read [`docs/oss/versioning.md`](../../docs/oss/versioning.md) before running this skill. It covers:
 
 - The source-of-truth model (root `package.json` `version`).
-- The lockstep guarantee (every workspace package matches the root).
+- Each published package at the version the release plan gives it (until release 8.0, every package at the root version).
 - The v8 RC line (`8.0.0-rc.N`, with `latest` tracking the newest RC or stable release).
 - The dist-tag convention (`latest` / `dev` / `beta`).
 - The full release procedure (this skill covers steps 1-2 of 3; merging the PR is the publish trigger — there is no separate dispatch step).
