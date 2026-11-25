@@ -199,11 +199,11 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 
 **How, where we know.** It is the spec rewritten for users, not a new design. It is written last, once the other projects are complete, so that it states what was built and includes what we learned on the way (task 23).
 
-### 13. Keep scripts and agents that drive the command-line tool working, by designing its flags, exit codes and machine-readable output before `8.0.0` and checking them in CI
+### 13. Keep scripts and agents that drive the `prisma` command-line tool working, by designing every command's flags, exit codes and machine-readable output before `8.0.0` and checking them in CI
 
 **Purpose.** A script or an agent that calls a command and reads its result keeps working across every `8.x` release, and can tell what each field of the output means.
 
-**Why it is a project of its own.** The policy promises three surfaces: the TypeScript API, what Prisma stores, and the command-line tool. Projects 3 and 4 decide and check the first, and project 2 the second. No project did either for the third. Its intent is different from theirs, it needs its own design, and its work is spread over every command. The config file is not here: its options are TypeScript types, which projects 3 and 4 cover.
+**Why it is a project of its own.** The policy promises three surfaces: the TypeScript API, what Prisma stores, and the command-line tool. Projects 3 and 4 decide and check the first, and project 2 the second. No project did either for the third. Its intent is different from theirs, it needs its own design, and its work is spread over every command. It covers the whole `prisma` tool, the commands of every product in it, Composer's included. `prisma` takes the ORM's major and minor version (project 6), and a user who sees `prisma` 8.4 reads that number as one promise for every command in it. The config file is not here: its options are TypeScript types, which projects 3 and 4 cover.
 
 **What it achieves.**
 
@@ -215,17 +215,19 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 
 - Survey every command: its flags, its exit codes and each machine-readable output it has. The `--json` output is the largest part. Today nobody has designed it: each command's document is whatever was chosen when the command was written. The data lines already have a rule in the CLI Style Guide (tab-separated fields, new fields only appended). The Markdown output is produced by `@prisma/cli-engine`, which renders every command, and has no written rule yet. So part of this project's work is in the engine, and the survey decides what in that output a reader can depend on.
 - Settle the principles in a decision record, for every machine-readable format: what a document reports (the result, or the input given back), stable names, one meaning for each field, how an error is shaped, what a reader must ignore so that an added field does not break it, how a format is versioned, and which maturity level it has. The "JSON semantics" section of the CLI Style Guide is the starting point.
+- Each command's help and usage text states its maturity level when it is below GA. A command that is GA carries the full promise, including any file it writes. No other form is added to mark a level: no `alpha` or `beta` command groups, no change to the command's name.
 - Bring each command into line, and add the check.
+- The work and the checks run in three repositories: this one (the ORM's commands), prisma-cli (the `prisma` tool and `@prisma/cli-engine`), and Composer's command-line package (`@prisma/composer-cli`). The design is done in this stream. `@prisma/composer-cli`'s own version number becomes internal: users rely on the version of `prisma`.
 
 **The example that raised it.** `prisma orm init --json`, whose schema is in `packages/1-framework/3-tooling/cli/src/commands/init/output.ts` and is published as `@prisma/orm-toolchain/cli/init-output`. Its `package` field is one string, the database package, although `init` installs many packages, which it reports separately under `packagesInstalled`. Its `target` field held `'postgres'` or `'mongodb'` until prisma/orm#31093; since then it holds a short name for a database in Prisma's list and a package name for any other, so a reader cannot tell which kind of value it has. Nothing documented reads either field.
 
-**Outside it.** Commands that other products add to the `prisma` tool, such as Composer's `prisma deploy` and its `--report` file. The policy treats Composer as a user of the ORM, not as part of it. Their formats are those products' to keep stable.
+**A second example.** create-prisma runs `prisma deploy --report <file>` and, on a failed deploy, reads `failure.code` from the file for telemetry. The file carries a format version, now `2`. create-prisma's parser accepted only `1`, so when the format moved to `2` the code was dropped with no error and no failing test. It was found by reading the code and fixed in create-prisma 0.14.10. Nothing yet would catch the next change.
 
 **Already decided.** The input flag `--target` keeps its name. Project 6 changes no JSON format.
 
 **GA waits for it.** `8.0.0` is not released until this work is complete. No output ships uncorrected under a lower maturity level.
 
-**To decide when it starts.** Its design discussion has not been held.
+**To decide when it starts.** Its design discussion has not been held. One question for it: project 6 puts a level in a flag's name (`--preview-foo`), while a command states its level only in its help text. Whether flags should follow commands, for one form across the tool.
 
 ## Moved out of this stream
 
