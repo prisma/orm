@@ -40,6 +40,27 @@ function isTypeOnly(declaration) {
   return false;
 }
 
+const TYPE_FLAGS =
+  ts.SymbolFlags.Interface | ts.SymbolFlags.TypeAlias | ts.SymbolFlags.Class | ts.SymbolFlags.Enum;
+const VALUE_FLAGS =
+  ts.SymbolFlags.Variable |
+  ts.SymbolFlags.Function |
+  ts.SymbolFlags.Class |
+  ts.SymbolFlags.Enum |
+  ts.SymbolFlags.ValueModule;
+
+// Whether a forwarded name is a type, and whether users can use it as a value: a value that is not
+// exported type-only on the way.
+function kindsOf(checker, exported) {
+  const target =
+    exported.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exported) : exported;
+  return {
+    type: (target.flags & TYPE_FLAGS) !== 0,
+    value: (target.flags & VALUE_FLAGS) !== 0 && !isTypeOnlyExport(checker, exported),
+    target,
+  };
+}
+
 // Whether any import or export between a path and the declaration it exports is type-only.
 function isTypeOnlyExport(checker, symbol) {
   let current = symbol;
@@ -54,8 +75,9 @@ function isTypeOnlyExport(checker, symbol) {
 
 const packageNames = new Map();
 
-// The name in the package.json nearest above a file: the package that declares what is in it.
-function packageOf(fileName) {
+// The package that declares what is in a file: the name in the package.json nearest above it, and
+// that package.json's folder.
+export function packageOf(fileName) {
   for (let folder = dirname(fileName); dirname(folder) !== folder; folder = dirname(folder)) {
     if (!packageNames.has(folder)) {
       const manifest = join(folder, 'package.json');
@@ -65,7 +87,7 @@ function packageOf(fileName) {
       );
     }
     const name = packageNames.get(folder);
-    if (name !== undefined) return name;
+    if (name !== undefined) return { name, root: folder };
   }
   return undefined;
 }
@@ -80,7 +102,7 @@ function declaringPackage(checker, symbol) {
   for (let node = declaration.parent; node; node = node.parent) {
     if (ts.isModuleDeclaration(node) && ts.isStringLiteral(node.name)) return node.name.text;
   }
-  return packageOf(realpathSync(declaration.getSourceFile().fileName));
+  return packageOf(realpathSync(declaration.getSourceFile().fileName))?.name;
 }
 
 // Follows an export through imports and re-exports to the first non-relative module it passes:
@@ -252,6 +274,9 @@ function augmentationsOf(files, problems) {
           continue;
         }
         found.push({
+          module: statement.name.text,
+          name: declaration.name.text,
+          typeParameters: declaration.typeParameters?.length ?? 0,
           head: `augments ${statement.name.text} interface ${declaration.name.text}`,
           heritage: [...(declaration.heritageClauses ?? [])],
           members: [...declaration.members],
@@ -274,6 +299,7 @@ function readPath(checker, program, file, packageDir) {
     starForwards: [],
     starCovered: new Set(),
     forwardedFrom: new Map(),
+    forwardKinds: new Map(),
     augmentations: [],
     problems: [],
   };
@@ -304,6 +330,7 @@ function readPath(checker, program, file, packageDir) {
       if (starNames.has(name)) {
         info.starCovered.add(name);
         info.forwardedFrom.set(name, declaringPackage(checker, starNames.get(name)));
+        info.forwardKinds.set(name, kindsOf(checker, starNames.get(name)));
       } else info.problems.push(`cannot tell where the export ${name} comes from`);
       continue;
     }
@@ -328,6 +355,7 @@ function readPath(checker, program, file, packageDir) {
       continue;
     }
     const forward = traceForward(checker, exported);
+    info.forwardKinds.set(name, kindsOf(checker, exported));
     if (forward === undefined) {
       info.problems.push(
         `cannot list the export ${name}: it is neither declared in this package nor forwarded from another`,

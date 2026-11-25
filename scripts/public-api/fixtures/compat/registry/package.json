@@ -1,0 +1,8 @@
+{
+  "name": "fixture-registry",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.mjs"
+  }
+}

@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./lib/index.mjs",
+    "./second": "./lib/second.mjs",
     "./package.json": "./package.json"
   }
 }

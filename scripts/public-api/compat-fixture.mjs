@@ -5,8 +5,8 @@ import { cpSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { checkPackage, stampVersion } from './compat.mjs';
-import { makeTwin } from './compat-install.mjs';
+import { checkPackage } from './compat.mjs';
+import { makeTwin, stampVersion } from './compat-install.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const fixtures = join(here, 'fixtures', 'compat');
@@ -29,6 +29,7 @@ export function fixtureCheck(work) {
       stamp = true,
       dependencies = [],
       installed = [],
+      own = [],
       mustFail,
       budgetMs,
     } = {},
@@ -46,14 +47,18 @@ export function fixtureCheck(work) {
         recursive: true,
       });
     }
+    const ownNames = ['fixture-compat', ...own];
     for (const { side, folder, name } of installed) {
       const dir = side === 'release' ? releaseDir : currentDir;
       cpSync(join(fixtures, folder), join(dir, 'node_modules', name), { recursive: true });
+      if (side === 'release' && own.includes(name)) {
+        stampVersion(join(dir, 'node_modules', name));
+      }
     }
     const twin = makeTwin({
       releaseDir,
       twinRoot: join(modules, '.twins'),
-      ownNames: new Set(['fixture-compat']),
+      ownNames: new Set(ownNames),
     });
     symlinkSync(twin, join(modules, 'twin-fixture'));
     return checkPackage({
@@ -67,7 +72,7 @@ export function fixtureCheck(work) {
       records,
       version,
       strict,
-      ownNames: ['fixture-compat'],
+      ownNames,
       mustFail,
       budgetMs,
     });

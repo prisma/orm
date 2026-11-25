@@ -3,29 +3,21 @@
 // them, and sorts the results into breaks, undecided comparisons and problems with the run. The
 // design is in api-compat.mjs.
 
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  renameSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { createCompareHost } from './compat-declarations.mjs';
 import { COMPILER_OPTIONS } from './compiler-options.mjs';
 import { entryPointsOf } from './read-api.mjs';
-import { readExports } from './read-exports.mjs';
+import { packageOf, readExports } from './read-exports.mjs';
+import { compareVersions, isExemptExport } from './release.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const HELPERS = join(here, 'compat-structural.ts');
 const ROOT = realpathSync(resolve(here, '..', '..'));
 
 export const RECORDS_FILE = 'api-breaks.json';
-export const STAMP = 'last-release';
-export const TWIN_STAMP = 'twin';
 
 const EXCESSIVELY_DEEP = 2589;
 const EXCESSIVE_STACK_DEPTH = 2321;
@@ -52,51 +44,6 @@ const VALUE_FLAGS =
   ts.SymbolFlags.Enum |
   ts.SymbolFlags.ValueModule;
 
-export const isPrerelease = (version) => /^\d+\.\d+\.\d+-/.test(version);
-export const isExemptExport = (name) => name.startsWith('preview_') || name.startsWith('ea_');
-
-function parseVersion(version) {
-  const plain = version.split('+')[0];
-  const dash = plain.indexOf('-');
-  return {
-    core: (dash < 0 ? plain : plain.slice(0, dash)).split('.').map(Number),
-    pre: dash < 0 ? [] : plain.slice(dash + 1).split('.'),
-  };
-}
-
-const isNumeric = (identifier) => /^\d+$/.test(identifier);
-
-// Semver precedence.
-export function compareVersions(a, b) {
-  const x = parseVersion(a);
-  const y = parseVersion(b);
-  for (let index = 0; index < 3; index++) {
-    if (x.core[index] !== y.core[index]) return x.core[index] - y.core[index];
-  }
-  if (x.pre.length === 0 || y.pre.length === 0) return y.pre.length - x.pre.length;
-  for (let index = 0; index < Math.min(x.pre.length, y.pre.length); index++) {
-    const [p, q] = [x.pre[index], y.pre[index]];
-    if (p === q) continue;
-    if (isNumeric(p) && isNumeric(q)) return Number(p) - Number(q);
-    if (isNumeric(p) !== isNumeric(q)) return isNumeric(p) ? -1 : 1;
-    return p < q ? -1 : 1;
-  }
-  return x.pre.length - y.pre.length;
-}
-
-// TypeScript treats two copies of a package with the same name and version as one and reads only
-// the first, so the release's copy gets a version of its own, and so does its twin. The manifest
-// is replaced, not written in place, because pnpm hard-links it from its global store.
-export function stampVersion(packageDir, stamp = STAMP) {
-  const file = join(packageDir, 'package.json');
-  const manifest = JSON.parse(readFileSync(file, 'utf8'));
-  const version = manifest.version.replace(new RegExp(`-(${STAMP}|${TWIN_STAMP})$`), '');
-  if (manifest.version === `${version}-${stamp}`) return;
-  manifest.version = `${version}-${stamp}`;
-  writeFileSync(`${file}.new`, `${JSON.stringify(manifest, null, 2)}\n`);
-  renameSync(`${file}.new`, file);
-}
-
 const withoutRoot = (text) => text.replaceAll(`${ROOT}${sep}`, '');
 
 function compilerOptions(dir) {
@@ -106,8 +53,6 @@ function compilerOptions(dir) {
 
 const specifierFor = (packageSpecifier, subpath) =>
   subpath === '.' ? packageSpecifier : `${packageSpecifier}${subpath.slice(1)}`;
-
-const recordKey = (path, name, test) => `${path}\0${name}\0${test}`;
 
 function isForwarded(info, name) {
   return (
@@ -157,28 +102,6 @@ const isConstructible = (symbol) =>
     ),
   );
 
-// What each import path exports, as symbols with their aliases followed. readExports keeps its
-// program to itself, and its groups hold only the package's own declarations.
-function exportedSymbols(entryPoints, releaseRoot) {
-  const program = ts.createProgram(
-    entryPoints.map(({ declarationFile }) => declarationFile),
-    compilerOptions(releaseRoot),
-  );
-  const checker = program.getTypeChecker();
-  return new Map(
-    entryPoints.map(({ subpath, declarationFile }) => {
-      const module = checker.getSymbolAtLocation(program.getSourceFile(declarationFile));
-      const symbols = new Map(
-        (module ? checker.getExportsOfModule(module) : []).map((symbol) => [
-          symbol.name,
-          symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol,
-        ]),
-      );
-      return [subpath, symbols];
-    }),
-  );
-}
-
 // The comparisons of one export or member: TypeScript's own assignability, and the structural
 // mapping it falls back to.
 const comparisons = (newer, older) => ({
@@ -225,48 +148,143 @@ function membersOf(checker, symbol, test) {
   return { keys, partial };
 }
 
+const memberName = (member) =>
+  member.name && (ts.isIdentifier(member.name) || ts.isStringLiteral(member.name))
+    ? member.name.text
+    : undefined;
+
+// A module specifier for a declaration file, by its absolute path.
+const specifierOfFile = (fileName) =>
+  fileName
+    .replace(/\.d\.mts$/, '.mjs')
+    .replace(/\.d\.cts$/, '.cjs')
+    .replace(/\.d\.ts$/, '.js');
+
+function resolveFrom(module, containingFile) {
+  const { options } = ts.convertCompilerOptionsFromJson(COMPILER_OPTIONS, dirname(containingFile));
+  return ts.resolveModuleName(module, containingFile, options, ts.sys).resolvedModule
+    ?.resolvedFileName;
+}
+
+// The members a release adds with `declare module` to an interface of another of our packages:
+// each must still be added, with a type the release's is assignable from. The augmented module is
+// imported as each side resolves it, so that the release's augmentation is read on the release's
+// copy of that package and the current build's on the current one.
+function augmentationTests({
+  paths,
+  entries,
+  counts,
+  notCompared,
+  problems,
+  take,
+  id,
+  sides,
+  hasTwin,
+  ownNames,
+}) {
+  const seen = new Set();
+  let index = 0;
+  for (const [subpath, info] of paths) {
+    for (const augmentation of info.augmentations) {
+      const key = `${augmentation.file.fileName}\0${augmentation.head}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const name = `${augmentation.module} ${augmentation.name}`;
+      if (!ownNames.has(augmentation.module.replace(/^(@[^/]+\/[^/]+|[^@/][^/]*).*$/, '$1'))) {
+        notCompared.push({
+          path: subpath,
+          name,
+          test: 'augments',
+          reason: 'it augments a third-party module, which both sides read from one copy',
+        });
+        continue;
+      }
+      const resolved = {
+        release: resolveFrom(augmentation.module, augmentation.file.fileName),
+        current:
+          sides.current && resolveFrom(augmentation.module, join(sides.current, 'package.json')),
+        twin:
+          hasTwin && sides.twin
+            ? resolveFrom(augmentation.module, join(sides.twin, 'package.json'))
+            : undefined,
+      };
+      if (!resolved.release || !resolved.current) {
+        problems.push(
+          `${subpath} ${name}: the augmented module does not resolve, so the augmentation was not compared.`,
+        );
+        continue;
+      }
+      const alias = { release: `ra${index}`, current: `ca${index}` };
+      index++;
+      const importOf = (side) =>
+        resolved[side] &&
+        `import type * as ${alias.current} from '${specifierOfFile(resolved[side])}';`;
+      entries.push({
+        kind: 'import',
+        augmentation: true,
+        path: subpath,
+        release: `import type * as ${alias.release} from '${specifierOfFile(resolved.release)}';`,
+        current: importOf('current'),
+        twin: importOf('twin'),
+        records: [],
+      });
+      const args =
+        augmentation.typeParameters > 0
+          ? `<${Array(augmentation.typeParameters).fill('never').join(', ')}>`
+          : '';
+      const segments = augmentation.members
+        .map(memberName)
+        .filter((member) => member !== undefined)
+        .map((member) => ({
+          id: id++,
+          test: 'augments',
+          member,
+          texts: comparisons(
+            `${alias.current}.${augmentation.name}${args}[${JSON.stringify(member)}]`,
+            `${alias.release}.${augmentation.name}${args}[${JSON.stringify(member)}]`,
+          ),
+        }));
+      if (segments.length === 0) continue;
+      counts.tests += segments.length;
+      entries.push({ kind: 'export', path: subpath, name, segments, records: take(subpath, name) });
+    }
+  }
+  return id;
+}
+
 // The tests for one package, as entries that render() turns into a file.
 export function generateTests({
   releaseDir,
+  currentDir,
+  twinDir,
   releaseSpecifier,
   currentSpecifier,
   twinSpecifier,
   records,
   version,
+  ownNames = new Set(),
 }) {
   const releaseRoot = realpathSync(releaseDir);
   const entryPoints = entryPointsOf(releaseRoot);
   const { paths, checker } = readExports(releaseRoot, entryPoints);
-  const anyForwards = [...paths.values()].some((info) =>
-    info.exportNames.some((name) => isForwarded(info, name)),
-  );
-  const symbolsByPath = anyForwards ? exportedSymbols(entryPoints, releaseRoot) : undefined;
   const entries = [];
   const counts = { paths: 0, exports: 0, forwarded: 0, tests: 0 };
   const notCompared = [];
   const problems = [];
   const removable = [];
-  const pending = new Map();
+  const pending = new Set();
   for (const record of records) {
-    const order = compareVersions(record.release, version);
-    if (order < 0)
-      removable.push({
-        path: record.path,
-        export: record.export,
-        test: record.test,
-        release: record.release,
-      });
+    const order = compareVersions(record.lastRelease, version);
+    if (order < 0) removable.push(record);
     else if (order > 0) {
       problems.push(
-        `${record.path} ${record.export}: the recorded break is for release ${record.release}, which is later than the last release, ${version}.`,
+        `${record.path} ${record.export} (${record.test}): the record is for the last release ${record.lastRelease}, which is later than the last release, ${version}.`,
       );
-    } else pending.set(recordKey(record.path, record.export, record.test), record);
+    } else pending.add(record);
   }
   const take = (path, name) => {
-    const taken = [...pending.values()].filter(
-      (record) => record.path === path && record.export === name,
-    );
-    for (const record of taken) pending.delete(recordKey(path, name, record.test));
+    const taken = [...pending].filter((record) => record.path === path && record.export === name);
+    for (const record of taken) pending.delete(record);
     return taken;
   };
 
@@ -276,8 +294,9 @@ export function generateTests({
     const info = paths.get(subpath);
     const release = `r${index}`;
     const current = `c${index}`;
+    const values = `cv${index}`;
     const importOf = (specifier) =>
-      `import type * as ${current} from '${specifierFor(specifier, subpath)}';`;
+      `import type * as ${current} from '${specifierFor(specifier, subpath)}'; import * as ${values} from '${specifierFor(specifier, subpath)}';`;
     entries.push({
       kind: 'import',
       path: subpath,
@@ -286,28 +305,35 @@ export function generateTests({
       twin: twinSpecifier && importOf(twinSpecifier),
       records: take(subpath, '*'),
     });
+    // A value used through a value import fails when the current build exports it type-only.
+    const valueUse = (name) => ({
+      id: id++,
+      test: 'value',
+      use: true,
+      texts: { native: `${values}.${name};` },
+    });
 
     const own = new Map();
+    const typeOnly = new Map();
     for (const group of info.groups.values()) {
-      for (const name of group.names) own.set(name, group.symbol);
+      for (const name of group.names) {
+        own.set(name, group.symbol);
+        typeOnly.set(name, group.typeOnly.get(name));
+      }
     }
     for (const name of info.exportNames) {
       counts.exports++;
       const segments = [];
       if (isForwarded(info, name)) {
         counts.forwarded++;
-        const target = symbolsByPath.get(subpath).get(name);
-        if (target && target.flags & VALUE_FLAGS) {
+        const kinds = info.forwardKinds.get(name);
+        if (kinds?.value) {
+          segments.push({ ...valueUse(name), test: 'exists' });
+        } else if (kinds?.type) {
           segments.push({
             id: id++,
             test: 'exists',
-            texts: { native: `typeof ${current}.${name}` },
-          });
-        } else if (target && target.flags & TYPE_FLAGS) {
-          segments.push({
-            id: id++,
-            test: 'exists',
-            texts: { native: `${current}.${name}${typeArguments(target)}` },
+            texts: { native: `${current}.${name}${typeArguments(kinds.target)}` },
           });
         }
       } else {
@@ -331,6 +357,7 @@ export function generateTests({
           );
         }
         if (symbol && symbol.flags & VALUE_FLAGS) {
+          if (!typeOnly.get(name)) segments.push(valueUse(name));
           segments.push(
             {
               id: id++,
@@ -373,7 +400,7 @@ export function generateTests({
             },
           });
         }
-        counts.tests += segments.filter((segment) => !segment.probe).length;
+        counts.tests += segments.filter((segment) => !segment.probe && !segment.use).length;
       }
       if (segments.length === 0) {
         notCompared.push({
@@ -404,7 +431,19 @@ export function generateTests({
       });
     }
   }
-  for (const record of pending.values()) {
+  id = augmentationTests({
+    paths,
+    entries,
+    counts,
+    notCompared,
+    problems,
+    take,
+    id,
+    sides: { release: releaseRoot, current: currentDir, twin: twinDir },
+    hasTwin: twinSpecifier !== undefined,
+    ownNames,
+  });
+  for (const record of pending) {
     problems.push(
       `${record.path} ${record.export}: a break is recorded for an export the last release does not declare in this package. Remove the record.`,
     );
@@ -425,11 +464,17 @@ function render(entries, { stage = 'native', side = 'current', mustFail = true }
   };
   for (const entry of entries) {
     if (entry.kind === 'import') {
+      if (entry[side] === undefined) continue;
       add(undefined, entry.release);
       add({ kind: 'import', entry }, entry[side]);
       continue;
     }
-    const segments = entry.segments.filter((segment) => segment.texts[stage]);
+    for (const segment of entry.segments.filter((each) => each.use && each.texts[stage])) {
+      const text = segment.texts[stage];
+      add({ kind: 'export', entry, positions: [{ segment, start: 0, end: text.length }] }, text);
+    }
+    const segments = entry.segments.filter((segment) => !segment.use && segment.texts[stage]);
+    if (segments.length === 0) continue;
     const prefix = `type t${lines.length + 1} = [`;
     let column = prefix.length;
     const positions = segments.map((segment) => {
@@ -447,22 +492,16 @@ function render(entries, { stage = 'native', side = 'current', mustFail = true }
   return { lines, cases };
 }
 
-// The name and folder of the package a file belongs to.
-function packageOf(fileName, cache) {
-  for (let folder = dirname(fileName); dirname(folder) !== folder; folder = dirname(folder)) {
-    if (!cache.has(folder)) {
-      const manifest = join(folder, 'package.json');
-      cache.set(
-        folder,
-        existsSync(manifest) ? JSON.parse(readFileSync(manifest, 'utf8')).name : undefined,
-      );
-    }
-    if (cache.get(folder) !== undefined) return { name: cache.get(folder), root: folder };
-  }
-  return undefined;
-}
+const packageNameOf = (fileName) => packageOf(fileName)?.name;
 
-const packageNameOf = (fileName, cache) => packageOf(fileName, cache)?.name;
+// The folder a package is installed in, as Node resolves it from a folder.
+function installedFrom(dir, name) {
+  for (let folder = dir; ; folder = dirname(folder)) {
+    const candidate = join(folder, 'node_modules', name);
+    if (existsSync(join(candidate, 'package.json'))) return realpathSync(candidate);
+    if (dirname(folder) === folder) return undefined;
+  }
+}
 
 const isBare = (specifier) => !specifier.startsWith('.') && !specifier.startsWith('/');
 
@@ -475,7 +514,7 @@ function programProblems(program, testFile, ownNames, names) {
   const merged = new Set();
   for (const file of program.getSourceFiles()) {
     if (!file.redirectInfo) continue;
-    const name = packageNameOf(file.fileName, names);
+    const name = packageNameOf(file.fileName);
     if (ownNames.has(name)) merged.add(name);
   }
   for (const name of merged) {
@@ -496,7 +535,7 @@ function programProblems(program, testFile, ownNames, names) {
       return;
     }
     const importer = program.getSourceFileByPath(filePath)?.fileName ?? filePath;
-    if (!ownNames.has(packageNameOf(importer, names))) return;
+    if (!ownNames.has(packageNameOf(importer))) return;
     unresolved.add(`${name} (imported by ${withoutRoot(importer)})`);
   });
   if (unresolved.size > 0) {
@@ -701,19 +740,21 @@ export function checkPackage({
 }) {
   const started = performance.now();
   const deadline = started + budgetMs;
-  const owners = new Map();
   const own = new Set(ownNames);
   const generated = generateTests({
     releaseDir,
+    currentDir,
+    twinDir: twinSpecifier && installedFrom(dirname(testFile), twinSpecifier),
     releaseSpecifier,
     currentSpecifier,
     twinSpecifier,
     records,
     version,
+    ownNames: own,
   });
   const options = compilerOptions(dirname(testFile));
   const host = createCompareHost(options, {
-    packageOf: (fileName) => packageOf(fileName, owners),
+    packageOf,
     isOwn: (packageName) => own.has(packageName),
   });
   const imports = generated.entries.filter(({ kind }) => kind === 'import');
@@ -744,11 +785,18 @@ export function checkPackage({
   const breaks = [];
   const undecided = [];
   const notCompared = [];
-  const fallbacks = [];
+  const decidedByMembers = [];
   const currentExports =
     JSON.parse(readFileSync(join(currentDir, 'package.json'), 'utf8')).exports ?? {};
+  const failedImports = new Set();
   for (const { entry, code, message } of native.importFailures) {
-    if (Object.hasOwn(currentExports, entry.path)) {
+    if (failedImports.has(entry)) continue;
+    failedImports.add(entry);
+    if (entry.augmentation) {
+      problems.add(
+        `${entry.path}: a module this package augments cannot be imported (TS${code} ${message}).`,
+      );
+    } else if (Object.hasOwn(currentExports, entry.path)) {
       problems.add(
         `${entry.path}: the current build cannot be imported (TS${code} ${message}). Run \`pnpm build\`.`,
       );
@@ -772,8 +820,13 @@ export function checkPackage({
       const probe = entry.segments.find((each) => each.probe && each.test === segment.test);
       const probeOutcome = probe && native.outcomes.get(probe.id);
       if (outcome && deepOnly(outcome)) notDecided(entry, segment, 'native', outcome.message);
-      else if (outcome && segment.test === 'exists') broke(entry, segment, outcome);
-      else if (outcome) failed.push({ entry, segment, outcome });
+      else if (outcome && (segment.test === 'exists' || segment.use)) {
+        // A value removed outright fails its comparison too; the use is reported only alone.
+        const compared = entry.segments.find(
+          (other) => other !== segment && !other.probe && !other.use && other.test === segment.test,
+        );
+        if (!compared || !native.outcomes.has(compared.id)) broke(entry, segment, outcome);
+      } else if (outcome) failed.push({ entry, segment, outcome });
       else if (probeOutcome && deepOnly(probeOutcome)) {
         notDecided(entry, segment, 'native', probeOutcome.message);
       } else if (probeOutcome) {
@@ -907,22 +960,38 @@ export function checkPackage({
         `not decided for ${open.map((failure) => failure.segment.member).join(', ')}: ${open[0].message.replace(/^not decided: /, '')}`,
       );
     } else if (each.partial) notDecided(each.entry, each.segment, 'member', PARTIAL);
-    else fallbacks.push({ ...testOf(each.entry, each.segment), decidedBy: 'members' });
+    else decidedByMembers.push(testOf(each.entry, each.segment));
   }
 
-  // A record stands for the breaks of one test of one export; one whose test no longer fails, and
-  // is decided, must be removed.
-  const matches = (record) => (each) =>
+  // A record stands for exactly one break: of one test of one export, with the message the report
+  // prints for it. One that matches no break, where that test is decided, must be removed.
+  const sameTest = (record) => (each) =>
     each.path === record.path && each.name === record.export && each.test === record.test;
+  const matches = (record) => (each) => sameTest(record)(each) && each.message === record.message;
   const applied = generated.entries.flatMap((entry) => entry.records);
+  const recordedBreaks = new Set();
   for (const record of applied) {
-    if (!breaks.some(matches(record)) && !undecided.some(matches(record))) {
+    const found = breaks.filter(matches(record));
+    const label = `${record.path} ${record.export} (${record.test})`;
+    if (found.length === 1) recordedBreaks.add(found[0]);
+    else if (found.length > 1) {
       problems.add(
-        `${record.path} ${record.export} (${record.test}): the recorded break is no longer a break. Remove the record.`,
+        `${label}: the record matches ${found.length} breaks; it must match exactly one.`,
       );
+    } else if (!undecided.some(sameTest(record))) {
+      problems.add(`${label}: the record matches no break. Remove it, or correct its message.`);
     }
   }
-  const unrecorded = breaks.filter((each) => !applied.some((record) => matches(record)(each)));
+  const unrecorded = breaks.filter((each) => !recordedBreaks.has(each));
+  for (const symbol of host.mergedSymbols) {
+    notCompared.push({
+      path: '*',
+      name: symbol,
+      test: 'unique symbol',
+      reason:
+        'the package declares two unique symbols with this name, in files that the same import paths reach, so nothing stable tells them apart and they are compared as one',
+    });
+  }
   const allNotCompared = [...generated.notCompared, ...notCompared];
   return {
     name,
@@ -940,7 +1009,7 @@ export function checkPackage({
     })),
     removable: generated.removable,
     problems: [...problems],
-    fallbacks,
+    decidedByMembers,
     passes,
     ms: Math.round(performance.now() - started),
   };

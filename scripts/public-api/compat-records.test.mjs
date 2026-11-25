@@ -2,18 +2,22 @@ import { deepStrictEqual, match, strictEqual } from 'node:assert/strict';
 import { linkSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { compareVersions, stampVersion } from './compat.mjs';
 import { brokenExports, fixtureCheck, names, workFolder } from './compat-fixture.mjs';
+import { stampVersion } from './compat-install.mjs';
 
 const work = workFolder('api-compat-records-tests');
 const check = fixtureCheck(work);
+
+const messageOf = (current, options, name) =>
+  check(current, options).breaks.find((each) => each.name === name).message;
 
 describe('checkPackage with recorded breaks', () => {
   const record = {
     path: '.',
     export: 'format',
     test: 'value',
-    release: '1.0.0',
+    lastRelease: '1.0.0',
+    message: messageOf('narrowed-parameter', {}, 'format'),
     reason: 'format accepts only strings now',
   };
 
@@ -29,25 +33,34 @@ describe('checkPackage with recorded breaks', () => {
   it('fails once the recorded break is undone', () => {
     const { problems } = check('unchanged', { records: [record] });
     deepStrictEqual(problems, [
-      '. format (value): the recorded break is no longer a break. Remove the record.',
+      '. format (value): the record matches no break. Remove it, or correct its message.',
+    ]);
+  });
+
+  it('does not cover a break of the same test with another message', () => {
+    const result = check('narrowed-parameter', {
+      records: [{ ...record, message: 'Type something else.' }],
+    });
+    deepStrictEqual(names(result.breaks), ['. format value']);
+    deepStrictEqual(result.problems, [
+      '. format (value): the record matches no break. Remove it, or correct its message.',
     ]);
   });
 
   it('skips a record for an earlier release and lists it as removable', () => {
-    const result = check('narrowed-parameter', { records: [{ ...record, release: '1.0.0-rc.3' }] });
+    const stale = { ...record, lastRelease: '1.0.0-rc.3' };
+    const result = check('narrowed-parameter', { records: [stale] });
     deepStrictEqual(result.problems, []);
     deepStrictEqual(names(result.breaks), ['. format value']);
-    deepStrictEqual(result.removable, [
-      { path: '.', export: 'format', test: 'value', release: '1.0.0-rc.3' },
-    ]);
+    deepStrictEqual(result.removable, [stale]);
   });
 
   it('fails on a record for a later release than the last', () => {
     const { problems } = check('narrowed-parameter', {
-      records: [{ ...record, release: '1.0.1' }],
+      records: [{ ...record, lastRelease: '1.0.1' }],
     });
     deepStrictEqual(problems, [
-      '. format: the recorded break is for release 1.0.1, which is later than the last release, 1.0.0.',
+      '. format (value): the record is for the last release 1.0.1, which is later than the last release, 1.0.0.',
     ]);
   });
 
@@ -61,14 +74,18 @@ describe('checkPackage with recorded breaks', () => {
 
 describe('checkPackage with a recorded break of one test', () => {
   it('still reports the breaks of the export’s other tests', () => {
+    const options = { release: 'record-release' };
     const result = check('record-changed', {
-      release: 'record-release',
+      ...options,
       records: [
         {
           path: '.',
           export: 'Client',
           test: 'constructor',
-          release: '1.0.0',
+          lastRelease: '1.0.0',
+          message: check('record-changed', options).breaks.find(
+            (each) => each.test === 'constructor',
+          ).message,
           reason: 'the constructor takes strings only',
         },
       ],
@@ -80,15 +97,39 @@ describe('checkPackage with a recorded break of one test', () => {
     deepStrictEqual(result.problems, []);
   });
 
+  it('still reports a later break of the same test, whose message differs', () => {
+    const message = messageOf('narrowed-method-parameter', {}, 'CacheStore');
+    const result = check('narrowed-method-parameter-other', {
+      records: [
+        {
+          path: '.',
+          export: 'CacheStore',
+          test: 'type',
+          lastRelease: '1.0.0',
+          message,
+          reason: 'narrowed',
+        },
+      ],
+    });
+    deepStrictEqual(names(result.breaks), ['. CacheStore type']);
+  });
+
   it('fails on a record for a test the export does not have', () => {
     const { problems } = check('narrowed-parameter', {
       records: [
-        { path: '.', export: 'format', test: 'type', release: '1.0.0', reason: 'narrowed' },
+        {
+          path: '.',
+          export: 'format',
+          test: 'type',
+          lastRelease: '1.0.0',
+          message: 'x',
+          reason: 'narrowed',
+        },
       ],
     });
     deepStrictEqual(problems, [
       '. format: a break is recorded for its type test, which this export does not have. Remove the record or correct its test.',
-      '. format (type): the recorded break is no longer a break. Remove the record.',
+      '. format (type): the record matches no break. Remove it, or correct its message.',
     ]);
   });
 });
@@ -98,7 +139,8 @@ describe('checkPackage on import paths', () => {
     path: './sub',
     export: '*',
     test: 'path',
-    release: '1.0.0',
+    lastRelease: '1.0.0',
+    message: messageOf('paths-removed', { release: 'paths-release' }, '*'),
     reason: 'the sub path is gone',
   };
 
@@ -123,7 +165,7 @@ describe('checkPackage on import paths', () => {
       records: [pathRecord],
     });
     deepStrictEqual(problems, [
-      './sub * (path): the recorded break is no longer a break. Remove the record.',
+      './sub * (path): the record matches no break. Remove it, or correct its message.',
     ]);
   });
 
@@ -156,21 +198,5 @@ describe('stampVersion', () => {
       '1.0.0-last-release',
     );
     strictEqual(JSON.parse(readFileSync(join(work, 'store-copy.json'), 'utf8')).version, '1.0.0');
-  });
-});
-
-describe('compareVersions', () => {
-  it('orders versions as semver does', () => {
-    const sorted = ['1.0.0', '1.0.0-rc.10', '0.9.0', '1.0.0-rc.2', '1.0.0-dev.1', '1.1.0'].sort(
-      compareVersions,
-    );
-    deepStrictEqual(sorted, [
-      '0.9.0',
-      '1.0.0-dev.1',
-      '1.0.0-rc.2',
-      '1.0.0-rc.10',
-      '1.0.0',
-      '1.1.0',
-    ]);
   });
 });

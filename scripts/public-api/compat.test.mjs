@@ -2,7 +2,6 @@ import { deepStrictEqual, match, strictEqual } from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { isPrerelease } from './compat.mjs';
 import { brokenExports, fixtureCheck, fixtures, names, workFolder } from './compat-fixture.mjs';
 
 const check = fixtureCheck(workFolder('api-compat-tests'));
@@ -72,7 +71,7 @@ describe('checkPackage, with the release treated as GA', () => {
     const result = check('private-changed');
     deepStrictEqual(brokenExports(result), []);
     deepStrictEqual(result.undecided, []);
-    deepStrictEqual(result.fallbacks, []);
+    deepStrictEqual(result.decidedByMembers, []);
   });
 
   it('tells apart two unique symbols with one name in two modules', () => {
@@ -96,7 +95,7 @@ describe('checkPackage, with the release treated as GA', () => {
     const result = check('generic-changed', { release: 'generic' });
     deepStrictEqual(brokenExports(result), []);
     deepStrictEqual(names(result.undecided), ['. required value']);
-    deepStrictEqual(result.fallbacks, []);
+    deepStrictEqual(result.decidedByMembers, []);
   });
 
   it('fails when a generic function returns a wider type, which only the comparison with the twin can tell', () => {
@@ -148,6 +147,21 @@ describe('checkPackage, with the release treated as GA', () => {
     deepStrictEqual(brokenExports(check('symbol-moved', { release: 'symbol-moved-release' })), []);
   });
 
+  it('fails when a class or a function is made type-only', () => {
+    deepStrictEqual(brokenExports(check('class-type-only')), [
+      { path: '.', name: 'Client', test: 'value', failsRun: true },
+    ]);
+    deepStrictEqual(brokenExports(check('function-type-only')), [
+      { path: '.', name: 'format', test: 'value', failsRun: true },
+    ]);
+  });
+
+  it('lists two unique symbols with one name that nothing stable tells apart as not compared', () => {
+    const result = check('symbols-tied', { release: 'symbols-tied' });
+    deepStrictEqual(brokenExports(result), []);
+    deepStrictEqual(names(result.notCompared), ['* fixture-compat:brand unique symbol']);
+  });
+
   it('fails when a parameter takes another class whose members are all private', () => {
     deepStrictEqual(brokenExports(check('opaque-release', { release: 'opaque-release' })), []);
     deepStrictEqual(brokenExports(check('opaque-swapped', { release: 'opaque-release' })), [
@@ -171,6 +185,16 @@ describe('checkPackage on names a path forwards from another package', () => {
     deepStrictEqual(brokenExports(result), []);
     deepStrictEqual(result.problems, []);
     strictEqual(result.counts.forwarded, 2);
+  });
+
+  it('fails when a forwarded value is made type-only', () => {
+    const result = check('forward-type-only', {
+      release: 'forward-release',
+      dependencies: forwardDependency,
+    });
+    deepStrictEqual(brokenExports(result), [
+      { path: '.', name: 'fwdFn', test: 'exists', failsRun: true },
+    ]);
   });
 
   it('fails when one is no longer forwarded', () => {
@@ -256,7 +280,36 @@ describe('checkPackage on third-party packages', () => {
       ],
     });
     deepStrictEqual(brokenExports(result), []);
-    deepStrictEqual(result.fallbacks, []);
+    deepStrictEqual(result.decidedByMembers, []);
+  });
+});
+
+describe('checkPackage on members added to another package with declare module', () => {
+  const registry = (side) => ({ side, folder: 'registry', name: 'fixture-registry' });
+  const options = {
+    release: 'augment-release',
+    installed: [registry('release'), registry('current')],
+    own: ['fixture-registry'],
+  };
+
+  it('passes an unchanged augmentation', () => {
+    const result = check('augment-release', options);
+    deepStrictEqual(brokenExports(result), []);
+    deepStrictEqual(result.problems, []);
+    deepStrictEqual(result.undecided, []);
+  });
+
+  it('fails when the augmentation is removed', () => {
+    deepStrictEqual(brokenExports(check('augment-removed', options)), [
+      { path: '.', name: 'fixture-registry Registry', test: 'augments', failsRun: true },
+    ]);
+  });
+
+  it('fails when an added member is narrowed', () => {
+    deepStrictEqual(
+      brokenExports(check('augment-narrowed', options)).filter((each) => each.test === 'augments'),
+      [{ path: '.', name: 'fixture-registry Registry', test: 'augments', failsRun: true }],
+    );
   });
 });
 
@@ -302,15 +355,6 @@ describe('two copies with one name and version', () => {
     match(
       problems[0],
       /read two copies of fixture-compat, the last release's and the current build's, as one package/,
-    );
-  });
-});
-
-describe('isPrerelease', () => {
-  it('is true only for a version with a pre-release part', () => {
-    deepStrictEqual(
-      ['8.0.0-rc.25', '8.0.0', '8.1.2+build.1', '8.0.0-dev.3+abc'].map(isPrerelease),
-      [true, false, false, true],
     );
   });
 });
