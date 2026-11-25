@@ -460,8 +460,8 @@ function fieldChangeOf(rename: FieldRename, { call }: FieldRenameCall): FieldCha
 
 /**
  * The refusal of each embed relation whose stored name changes while its name and its model's pair
- * stay, in a collection managed in both contracts: renaming an embedded relation is not planned, as
- * a statement on one is refused.
+ * stay, in a collection managed in both contracts that the destination model still reads: renaming
+ * an embedded relation is not planned, as a statement on one is refused.
  */
 function embedRelationRefusals(match: ModelMatchInput): readonly MigrationPlannerConflict[] {
   return modelCoordinates(match.fromContract).flatMap((origin) => {
@@ -482,6 +482,7 @@ function embedRelationRefusals(match: ModelMatchInput): readonly MigrationPlanne
     }
     const collection = match.collectionAfterRenames(originCollection);
     if (
+      collectionOfModel(match.contract.domain, destination) !== collection ||
       !managedOnBothSides(match.fromContract, match.contract, {
         from: originCollection,
         to: collection,

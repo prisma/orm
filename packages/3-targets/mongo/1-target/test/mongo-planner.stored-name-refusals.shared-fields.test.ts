@@ -45,6 +45,27 @@ describe('MongoMigrationPlanner, an embedded relation whose stored name changes'
     ]);
   });
 
+  it('is not refused when the model moves out of the collection it shares, since no document moves', () => {
+    const people = (seed: string, collection: string, stored: string) =>
+      contract(
+        seed,
+        {
+          Admin: { collection: 'people', fields: ['_id'] },
+          User: { collection, fields: ['_id'], embeds: { addr: stored } },
+          Address: { fields: ['city'], owner: 'User' },
+        },
+        Object.fromEntries([...new Set(['people', collection])].map((name) => [name, {}])),
+      );
+    const result = plan({
+      from: people('from', 'people', 'addr'),
+      to: people('to', 'members', 'address'),
+      schema: [schemaCollection('people')],
+    });
+    expect(result.kind === 'failure' ? result.conflicts.map(({ summary }) => summary) : []).toEqual(
+      [],
+    );
+  });
+
   it('plans nothing once the stored name is kept, as the refusal says', () => {
     expect(
       planned(
