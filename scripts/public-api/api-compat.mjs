@@ -29,7 +29,12 @@ import { parseArgs } from 'node:util';
 import { type } from 'arktype';
 import { publishedPackageDirs } from './api.mjs';
 import { isPrerelease, RECORDS_FILE } from './compat.mjs';
-import { aliasOf, installRelease, thirdPartyVersions } from './compat-install.mjs';
+import {
+  aliasOf,
+  installRelease,
+  peerDependencies,
+  thirdPartyVersions,
+} from './compat-install.mjs';
 import { compareCodeUnits } from './flatten.mjs';
 import {
   fetchReleaseTag,
@@ -321,7 +326,18 @@ export async function main({
     stderr.write(`api:compat: ${key} is installed at ${all.join(' and ')}, so it is not pinned\n`);
   }
   try {
-    installRelease({ dir: installDir, packages: released, version, overrides: versions, ownNames });
+    installRelease({
+      dir: installDir,
+      packages: released,
+      version,
+      overrides: versions,
+      peers: peerDependencies(
+        inRepository.map(({ dir }) => dir),
+        ownNames,
+        versions,
+      ),
+      ownNames,
+    });
   } catch (error) {
     return fail(`installing the last release failed: ${error.message}`);
   }

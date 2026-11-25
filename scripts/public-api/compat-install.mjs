@@ -101,15 +101,31 @@ function addTo(map, key, value) {
 const sortedObject = (object) =>
   Object.fromEntries(Object.entries(object).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 
+// pnpm does not install optional peers, and a release whose declarations import a missing one
+// would compare as \`any\`. Every peer of our packages is therefore installed beside the release,
+// at the version the current build has.
+export function peerDependencies(packageDirs, ownNames, versions) {
+  const peers = {};
+  for (const dir of packageDirs) {
+    for (const name of Object.keys(readManifest(dir).peerDependencies ?? {})) {
+      if (!ownNames.has(name) && versions[name] !== undefined) peers[name] = versions[name];
+    }
+  }
+  return sortedObject(peers);
+}
+
 export const aliasOf = (side, name) => `${side}-${name.replace(/^@prisma\//, '')}`;
 
 // Writes the install folder's manifest and workspace, installs, stamps every copy of our packages
 // with a version of its own, and links each current package beside its release.
-export function installRelease({ dir, packages, version, overrides, ownNames }) {
+export function installRelease({ dir, packages, version, overrides, peers, ownNames }) {
   mkdirSync(dir, { recursive: true });
-  const dependencies = Object.fromEntries(
-    packages.map(({ name }) => [aliasOf('release', name), `npm:${name}@${version}`]),
-  );
+  const dependencies = {
+    ...peers,
+    ...Object.fromEntries(
+      packages.map(({ name }) => [aliasOf('release', name), `npm:${name}@${version}`]),
+    ),
+  };
   writeFileSync(
     join(dir, 'package.json'),
     `${JSON.stringify({ name: 'api-compat', private: true, type: 'module', dependencies }, null, 2)}\n`,

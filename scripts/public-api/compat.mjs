@@ -315,7 +315,9 @@ function packageNameOf(fileName, cache) {
 const isBare = (specifier) => !specifier.startsWith('.') && !specifier.startsWith('/');
 
 // Problems with the program itself: two copies of one of our packages read as one, so that nothing
-// is compared, and imports that do not resolve, whose types compare as `any` and always pass.
+// is compared, and imports in our packages that do not resolve, whose types compare as `any` and
+// always pass. Third-party declarations are the same on both sides, so their optional imports
+// (vite's `less`, for one) are left alone.
 function programProblems(program, testFile, ownNames) {
   const problems = [];
   const names = new Map();
@@ -343,6 +345,7 @@ function programProblems(program, testFile, ownNames) {
       return;
     }
     const importer = program.getSourceFileByPath(filePath)?.fileName ?? filePath;
+    if (!ownNames.has(packageNameOf(importer, names))) return;
     unresolved.add(`${name} (imported by ${withoutRoot(importer)})`);
   });
   if (unresolved.size > 0) {
