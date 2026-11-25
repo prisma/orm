@@ -1,0 +1,166 @@
+import { introspectSchema } from '@internal/adapter-mongo/control';
+import type { MigrationOperationPolicy } from '@internal/framework-components/control';
+import { MongoCollection } from '@internal/mongo-contract';
+import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
+import { MongoMigrationPlanner } from '@internal/target-mongo/control';
+import { dataTransform, deleteDocuments, rawAggregate } from '@internal/target-mongo/migration';
+import { timeouts } from '@repo/test-utils';
+import { describe, expect, it } from 'vitest';
+import { contract, NS, useStatementsDatabase } from './runner-statements-fixtures';
+
+const live = useStatementsDatabase('runner_statements_time_series_moves_test');
+
+const policy: MigrationOperationPolicy = {
+  allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
+};
+
+const at = new Date('2026-01-01T00:00:00Z');
+const event = { collection: 'events', fields: ['_id', 'name'] };
+const from = contract(
+  'from',
+  { Event: event, Measurement: { collection: 'events', fields: ['_id', 'at'] } },
+  { events: new MongoCollection({}) },
+);
+const to = contract(
+  'to',
+  { Event: event, Reading: { collection: 'measurements', fields: ['_id', 'at'] } },
+  {
+    events: new MongoCollection({}),
+    measurements: new MongoCollection({ options: { timeseries: { timeField: 'at' } } }),
+  },
+);
+const filter = { at: { $exists: true } };
+const copy = dataTransform('move Measurement documents to measurements', {
+  run: () =>
+    rawAggregate('measurements', [
+      { $unionWith: { coll: 'events', pipeline: [{ $match: filter }] } },
+      { $out: 'measurements' },
+    ]),
+});
+const deletion = deleteDocuments({ collection: 'events', filter });
+const failing = dataTransform('an operation that fails', {
+  run: () => rawAggregate('events', [{ $nonsenseStage: 1 }]),
+});
+
+async function planFor(statements: Parameters<MongoMigrationPlanner['plan']>[0]['statements']) {
+  return new MongoMigrationPlanner().plan({
+    contract: to,
+    schema: await introspectSchema(live.db()),
+    policy,
+    fromContract: from,
+    origin: { storageHash: 'from' },
+    statements,
+    frameworkComponents: [],
+    snapshotsImportPath: '../../snapshots',
+  });
+}
+
+/** The plan without the statement, split where the refusal says the copy and the delete go: right after the creation of collection measurements. */
+async function routeAround(): Promise<{
+  readonly route: string | undefined;
+  readonly before: readonly AnyMongoMigrationOperation[];
+  readonly after: readonly AnyMongoMigrationOperation[];
+}> {
+  await live
+    .db()
+    .collection('events')
+    .insertMany([{ name: 'launch' }, { at, value: 1 }, { at, value: 2 }]);
+  await live.initMarker(from);
+  const refused = await planFor([
+    {
+      kind: 'rename',
+      entity: 'model',
+      from: { namespaceId: NS, model: 'Measurement' },
+      to: { namespaceId: NS, model: 'Reading' },
+    },
+  ]);
+  const planned = await planFor([]);
+  if (planned.kind !== 'success') throw new Error(JSON.stringify(planned.conflicts));
+  const operations = planned.plan.operations as readonly AnyMongoMigrationOperation[];
+  const create = operations.findIndex((operation) => operation.label.includes('measurements'));
+  return {
+    route: refused.kind === 'failure' ? refused.conflicts[0]?.why : undefined,
+    before: operations.slice(0, create + 1),
+    after: operations.slice(create + 1),
+  };
+}
+
+async function state() {
+  return {
+    measurements: await live.documents('measurements'),
+    kind: (await live.db().listCollections({ name: 'measurements' }).toArray())[0]?.['type'],
+    events: await live.documents('events'),
+    further: await live.furtherPlanLabels(to),
+  };
+}
+
+const moved = {
+  measurements: [
+    { at, value: 1 },
+    { at, value: 2 },
+  ],
+  kind: 'timeseries',
+  events: [{ name: 'launch' }],
+  further: [],
+};
+
+describe('MongoMigrationPlanner and runner - a move into a new time-series collection', () => {
+  it(
+    'keeps every moved document once when the apply stops after the delete and runs again',
+    async () => {
+      const { route, before, after } = await routeAround();
+      expect(route).toContain(
+        '  rawAggregate("measurements", [\n    { $unionWith: { coll: "events", pipeline: [{ $match: <a filter that selects only those documents> }] } },\n    { $out: "measurements" },\n  ])',
+      );
+
+      const first = await live.runOperations(
+        [...before, copy, deletion, failing, ...after],
+        from,
+        to,
+        { policy },
+      );
+      const second = await live.runOperations([...before, copy, deletion, ...after], from, to, {
+        policy,
+      });
+
+      expect({
+        first: first.ok ? 'applied' : 'stopped',
+        second: second.ok ? 'applied' : second.failure,
+        ...(await state()),
+      }).toEqual({ first: 'stopped', second: 'applied', ...moved });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'keeps every moved document once when the apply stops between the copy and the delete, and the delete is finished as the failure says',
+    async () => {
+      const { before, after } = await routeAround();
+
+      const first = await live.runOperations(
+        [...before, copy, failing, deletion, ...after],
+        from,
+        to,
+        { policy },
+      );
+      const advice = first.ok ? undefined : first.failure.why;
+      await live.db().collection('events').deleteMany(filter);
+      const second = await live.runOperations([...before, copy, deletion, ...after], from, to, {
+        policy,
+      });
+
+      expect({
+        advice,
+        second: second.ok ? 'applied' : second.failure,
+        ...(await state()),
+      }).toEqual({
+        advice: expect.stringContaining(
+          `Operation data_transform.move Measurement documents to measurements copied documents into collection measurements with an $out stage, and operation ${deletion.id}, which deletes them from collection events, has not finished. Before you run the command again, finish that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts`,
+        ),
+        second: 'applied',
+        ...moved,
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
