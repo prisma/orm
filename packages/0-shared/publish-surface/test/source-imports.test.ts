@@ -6,10 +6,10 @@ import { describe, expect, it } from 'vitest';
 const SOURCES = ['shells.ts', 'levels.ts', 'release-plan.ts'];
 
 /**
- * Every import that runs, as its source text: an `import` or `export … from` that is not type-only
- * (one with an empty list of names included, since it still loads its module), an `import './x'`
- * for its side effects, an `import x = require(…)`, and a dynamic `import(…)`. A type query such as
- * `import('./x').T` loads nothing and is not one.
+ * Every import that runs, as its source text: every `import` or `export … from` except one marked
+ * `type` as a whole, since one whose names are all marked `type` one by one, or that has no names,
+ * still loads its module once the types are stripped; an `import x = require(…)`; and a dynamic
+ * `import(…)`. A type query such as `import('./x').T` loads nothing and is not one.
  */
 function runTimeImports(source: string): string[] {
   const file = ts.createSourceFile('source.ts', source, ts.ScriptTarget.Latest, true);
@@ -23,27 +23,12 @@ function runTimeImports(source: string): string[] {
 }
 
 function loadsAtRunTime(node: ts.Node): boolean {
-  if (ts.isImportDeclaration(node)) {
-    const clause = node.importClause;
-    if (clause === undefined) return true;
-    if (clause.isTypeOnly) return false;
-    if (clause.name !== undefined) return true;
-    const bindings = clause.namedBindings;
-    return bindings === undefined || !ts.isNamedImports(bindings) || !onlyTypes(bindings.elements);
-  }
-  if (ts.isExportDeclaration(node)) {
-    if (node.moduleSpecifier === undefined || node.isTypeOnly) return false;
-    const clause = node.exportClause;
-    return clause === undefined || !ts.isNamedExports(clause) || !onlyTypes(clause.elements);
-  }
+  if (ts.isImportDeclaration(node)) return node.importClause?.isTypeOnly !== true;
+  if (ts.isExportDeclaration(node)) return node.moduleSpecifier !== undefined && !node.isTypeOnly;
   if (ts.isImportEqualsDeclaration(node)) {
     return !node.isTypeOnly && ts.isExternalModuleReference(node.moduleReference);
   }
   return ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword;
-}
-
-function onlyTypes(elements: ts.NodeArray<ts.ImportSpecifier | ts.ExportSpecifier>): boolean {
-  return elements.length > 0 && elements.every((element) => element.isTypeOnly);
 }
 
 describe('the sources the release scripts load before the build', () => {
@@ -61,6 +46,7 @@ describe('the sources the release scripts load before the build', () => {
           "import type { B } from './y';",
           "import { type C, d } from './z';",
           "import {} from './empty';",
+          "import { type H } from './inline-type';",
           "import './side-effect';",
           "export { e } from './re-export';",
           "export type { F } from './type-re-export';",
@@ -73,8 +59,10 @@ describe('the sources the release scripts load before the build', () => {
       "import { a } from './x'",
       "import { type C, d } from './z'",
       "import {} from './empty'",
+      "import { type H } from './inline-type'",
       "import './side-effect'",
       "export { e } from './re-export'",
+      "export { type G } from './type-names-re-export'",
       "import('./later')",
     ]);
   });
