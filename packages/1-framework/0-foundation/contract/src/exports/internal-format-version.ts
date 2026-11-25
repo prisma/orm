@@ -1,1 +1,5 @@
-export { carriesFormatVersion, isContractBuiltInMemory } from '../format-version';
+export {
+  carriesFormatVersion,
+  formatVersionErrorAt,
+  isContractBuiltInMemory,
+} from '../format-version';
