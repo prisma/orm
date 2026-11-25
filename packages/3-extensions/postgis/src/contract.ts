@@ -53,16 +53,19 @@ const codecLookup = assemblePostgresCodecRegistryWithBuiltins(
   dataTypeLookup,
 );
 
-export const contract = defineContract({ version: 15, codecLookup, dataTypeLookup }, () => ({
-  databaseTypes: {
-    [POSTGIS_NATIVE_TYPE]: {
-      kind: 'codec-instance',
-      codecId: POSTGIS_GEOMETRY_CODEC_ID,
-      typeParams: {},
+export const contract = defineContract(
+  { databaseVersion: 15, codecLookup, dataTypeLookup },
+  () => ({
+    databaseTypes: {
+      [POSTGIS_NATIVE_TYPE]: {
+        kind: 'codec-instance',
+        codecId: POSTGIS_GEOMETRY_CODEC_ID,
+        typeParams: {},
+      },
     },
-  },
-  models: {},
-  entities: [extension(POSTGIS_EXTENSION_NAME, { namespace: unbound })],
-}));
+    models: {},
+    entities: [extension(POSTGIS_EXTENSION_NAME, { namespace: unbound })],
+  }),
+);
 
 export default contract;

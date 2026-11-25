@@ -30,7 +30,7 @@ const Owner = OwnerBase.relations({
   items: rel.hasMany(() => Item, { by: 'ownerCode' }),
 }).sql({ table: 'ci_owners' });
 
-const contract = defineContract({ version: 18, models: { Owner, Item } });
+const contract = defineContract({ databaseVersion: 18, models: { Owner, Item } });
 
 describe.each(includeStrategies)('includes matched by a case-insensitive key (%s)', (strategy) => {
   it(

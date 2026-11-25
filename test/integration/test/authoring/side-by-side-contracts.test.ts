@@ -167,7 +167,7 @@ describe('side-by-side contract examples', () => {
 
       const fixture = await loadFixture(fixtureCase);
       const provider = prismaContract(fixtureCase.contractPslPath, {
-        capabilities: postgresContractCapabilities({ version: 18 }),
+        capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
         target: postgresPackRef,
         createNamespace: postgresCreateNamespace,
       });

@@ -22,7 +22,7 @@ export default definePrismaConfig({
     extensions: [supabasePack],
     contract: {
       ...prismaContract('./no-policy/contract.prisma', {
-        capabilities: postgresContractCapabilities({ version: 18 }),
+        capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
         output: 'no-policy/contract.json',
         target: postgresPackRef,
         createNamespace: postgresCreateNamespace,

@@ -5,7 +5,7 @@ import citext from '@prisma/orm-postgres-contrib/citext/control';
 
 export default definePrismaConfig({
   orm: definePostgresConfig({
-    contract: prisma7Schema('prisma/schema.prisma', { version: 18 }),
+    contract: prisma7Schema('prisma/schema.prisma', { databaseVersion: 18 }),
     output: 'generated/prisma8',
     extensions: [citext],
     db: {

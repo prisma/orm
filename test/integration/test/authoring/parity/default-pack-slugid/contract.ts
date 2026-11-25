@@ -3,7 +3,7 @@ import { defineContract } from '@internal/postgres/contract-builder';
 import { slugidDefaultsPack } from './packs';
 
 export const contract = defineContract(
-  { version: 18, extensions: { 'slugid-defaults': slugidDefaultsPack } },
+  { databaseVersion: 18, extensions: { 'slugid-defaults': slugidDefaultsPack } },
   ({ field, gen, model }) => ({
     models: {
       User: model('User', {

@@ -8,7 +8,7 @@ A contract written in TypeScript states its own requirements:
 
 ```ts
 export const contract = defineContract({
-  version: 17,
+  databaseVersion: 17,
   capabilities: [neonAdapter.capabilities, neonHttp.capabilities],
   // models…
 });
@@ -18,7 +18,7 @@ A contract written in the Prisma schema language cannot. Its version and capabil
 
 ```ts
 export default defineConfig({
-  contract: { path: './prisma/contract.prisma', version: 17 },
+  contract: { path: './prisma/contract.prisma', databaseVersion: 17 },
 });
 ```
 
@@ -49,7 +49,7 @@ database {
 
 ## How it is evaluated
 
-The interpreter cannot evaluate a version: which capabilities PostgreSQL 17 provides is the target's knowledge. So it does not. The contract source provider is already given the target by the facade. The facade gives it one more thing: a function from `{ version, capabilities }` to a resolved capability list, which for PostgreSQL is `postgresContractCapabilities`. The interpreter reads the block as syntax, hands its values to that function, and gets back the list it already works with.
+The interpreter cannot evaluate a version: which capabilities PostgreSQL 17 provides is the target's knowledge. So it does not. The contract source provider is already given the target by the facade. The facade gives it one more thing: a function from `{ databaseVersion, capabilities }` to a resolved capability list, which for PostgreSQL is `postgresContractCapabilities`. The interpreter reads the block as syntax, hands its values to that function, and gets back the list it already works with.
 
 - The interpreter still receives one capability list and never interprets a version.
 - A version the target does not support is reported at the block's position in the file, with the target's own message.

@@ -26,7 +26,7 @@ export function defineConfig(options: StandinConfigOptions): PrismaConfig<'sql',
     extensions: options.extensions ?? [],
     contract: {
       ...prismaContract(options.contract, {
-        capabilities: postgresContractCapabilities({ version: 18 }),
+        capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
         output: options.output ?? defaultContractOutputPath(options.contract),
         target: postgresPack,
         createNamespace: postgresCreateNamespace,

@@ -29,7 +29,7 @@ test('a vector column without a length reads as the plain vector type', () => {
 
 test('a contract written in TypeScript types vector() and pgvector.Vector() columns as number[]', () => {
   const contract = defineContract(
-    { version: 18, extensions: { pgvector } },
+    { databaseVersion: 18, extensions: { pgvector } },
     ({ field, model, type }) => ({
       models: {
         Doc: model('Doc', {

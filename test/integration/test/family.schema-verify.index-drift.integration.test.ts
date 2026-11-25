@@ -49,7 +49,7 @@ describe('index drift', () => {
         });
 
         const contract = defineContract({
-          version: 18,
+          databaseVersion: 18,
           models: {
             User: model('User', {
               fields: {
@@ -97,7 +97,7 @@ describe('index drift', () => {
         });
 
         const contract = defineContract(
-          { version: 18 },
+          { databaseVersion: 18 },
           ({ field: packField, model: packModel }) => ({
             models: {
               User: packModel('User', {
@@ -143,7 +143,7 @@ describe('index drift', () => {
         });
 
         const contract = defineContract({
-          version: 18,
+          databaseVersion: 18,
           models: {
             User: model('User', {
               fields: {

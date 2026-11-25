@@ -23,7 +23,7 @@ function emit(schema: string) {
   const bound = bindPslSchema(schema, {
     sourceId: 'raw-columns.psl',
     context: contractSourceContextFromControlStack(stack, {
-      capabilities: postgresContractCapabilities({ version: 18 }),
+      capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
     }),
   });
   return withSeedDiagnostics(

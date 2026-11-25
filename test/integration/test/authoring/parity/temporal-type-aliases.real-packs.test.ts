@@ -118,7 +118,7 @@ describe('the temporal type aliases with real packs', () => {
   });
 
   it('give the TypeScript builder on Postgres what DateTime with the matching generators gives it', () => {
-    const throughAliases = defineContract({ version: 18 }, ({ type, field, model }) => ({
+    const throughAliases = defineContract({ databaseVersion: 18 }, ({ type, field, model }) => ({
       models: {
         Event: model('Event', {
           fields: {
@@ -129,17 +129,20 @@ describe('the temporal type aliases with real packs', () => {
         }).sql({ table: 'Event' }),
       },
     }));
-    const throughGenerators = defineContract({ version: 18 }, ({ type, field, model, gen }) => ({
-      models: {
-        Event: model('Event', {
-          fields: {
-            id: field.column(type.Int()).id(),
-            createdAt: field.column(type.DateTime()).onCreate(gen.now()),
-            updatedAt: field.column(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()),
-          },
-        }).sql({ table: 'Event' }),
-      },
-    }));
+    const throughGenerators = defineContract(
+      { databaseVersion: 18 },
+      ({ type, field, model, gen }) => ({
+        models: {
+          Event: model('Event', {
+            fields: {
+              id: field.column(type.Int()).id(),
+              createdAt: field.column(type.DateTime()).onCreate(gen.now()),
+              updatedAt: field.column(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()),
+            },
+          }).sql({ table: 'Event' }),
+        },
+      }),
+    );
     expect(throughAliases).toEqual(throughGenerators);
     expect(throughAliases).toEqual(
       succeeded(

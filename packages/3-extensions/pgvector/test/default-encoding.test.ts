@@ -5,7 +5,7 @@ import pgvector from '../src/exports/pack';
 
 function embeddingDefault(literal: number[], form: 'typeHelper' | 'column'): unknown {
   const contract = defineContract(
-    { version: 18, extensions: { pgvector } },
+    { databaseVersion: 18, extensions: { pgvector } },
     ({ field, model, type, gen }) => {
       const embedding = field.column(form === 'typeHelper' ? type.pgvector.Vector(3) : vector(3));
       return {
@@ -64,7 +64,7 @@ describe('literal defaults on a codec contributed through extensions', () => {
     'stores a default without a dimension through %s',
     (form) => {
       const contract = defineContract(
-        { version: 18, extensions: { pgvector } },
+        { databaseVersion: 18, extensions: { pgvector } },
         ({ field, model, type, gen }) => {
           const embedding = field.column(form === 'typeHelper' ? type.pgvector.Vector() : vector());
           return {
@@ -93,7 +93,7 @@ describe('literal defaults on a codec contributed through extensions', () => {
     it('reports the type parameters, not the default', () => {
       expect(() =>
         defineContract(
-          { version: 18, extensions: { pgvector } },
+          { databaseVersion: 18, extensions: { pgvector } },
           ({ field, model, gen, type }) => ({
             models: {
               Doc: model('Doc', {

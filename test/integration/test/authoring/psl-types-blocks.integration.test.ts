@@ -21,7 +21,7 @@ async function load(schema: string) {
   const schemaPath = join(mkdtempSync(join(tmpdir(), 'psl-types-blocks-')), 'schema.prisma');
   writeFileSync(schemaPath, schema, 'utf-8');
   const result = await prismaContract(schemaPath, {
-    capabilities: postgresContractCapabilities({ version: 18 }),
+    capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
     target: postgresPackRef,
     createNamespace: postgresCreateNamespace,
   }).source.load({

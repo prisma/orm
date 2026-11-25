@@ -6,7 +6,7 @@ import { packageCopiedConfig } from '../package-copied-config';
 export default definePrismaConfig({
   orm: packageCopiedConfig(
     ormConfig({
-      contract: { path: './contract.prisma', version: 18 },
+      contract: { path: './contract.prisma', databaseVersion: 18 },
       output: 'generated',
       extensions: [pgvector],
     }),

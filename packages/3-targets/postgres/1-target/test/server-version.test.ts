@@ -51,15 +51,15 @@ describe('the capabilities by PostgreSQL version', () => {
     ['17', "Write the PostgreSQL version as the number 17, not the string '17'."],
     [
       Number.NaN,
-      'Write the PostgreSQL version as a number, for example version: 18. The supported versions are 15, 16, 17, 18.',
+      'Write the PostgreSQL version as a number, for example databaseVersion: 18. The supported versions are 15, 16, 17, 18.',
     ],
     [
       undefined,
-      'State the PostgreSQL version your database runs, for example version: 18. The supported versions are 15, 16, 17, 18.',
+      'State the PostgreSQL version your database runs, for example databaseVersion: 18. The supported versions are 15, 16, 17, 18.',
     ],
     [
       null,
-      'State the PostgreSQL version your database runs, for example version: 18. The supported versions are 15, 16, 17, 18.',
+      'State the PostgreSQL version your database runs, for example databaseVersion: 18. The supported versions are 15, 16, 17, 18.',
     ],
   ])('refuses %j with a message that says what to write', (version, message) => {
     expect(refusalOf(version)).toMatchObject({ code: 'CONTRACT.ARGUMENT_INVALID', message });

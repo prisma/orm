@@ -26,8 +26,8 @@ function withTheDefaultConnection<Row extends { readonly sql: object }>(row: Row
 describe('the version a TypeScript contract states', () => {
   it('selects its own row of the table', () => {
     expect([
-      defineContractWithALaterFeature({ version: 16 }).capabilities,
-      defineContractWithALaterFeature({ version: 17 }).capabilities,
+      defineContractWithALaterFeature({ databaseVersion: 16 }).capabilities,
+      defineContractWithALaterFeature({ databaseVersion: 17 }).capabilities,
     ]).toEqual([
       withTheDefaultConnection(version16Capabilities),
       withTheDefaultConnection(version17Capabilities),
@@ -37,14 +37,14 @@ describe('the version a TypeScript contract states', () => {
   it.each([15, 16, 17, 18] as const)(
     'makes version %i require its row of the shipped table',
     (version) => {
-      expect(defineContract({ version }).capabilities).toEqual(
+      expect(defineContract({ databaseVersion: version }).capabilities).toEqual(
         withTheDefaultConnection(postgresCapabilitiesByVersion[version]),
       );
     },
   );
 
   it('requires none of the flags nothing reads', () => {
-    const { capabilities } = defineContract({ version: 18 });
+    const { capabilities } = defineContract({ databaseVersion: 18 });
     for (const [namespace, flags] of Object.entries(removedFlags)) {
       for (const flag of flags) {
         expect(capabilities[namespace as 'sql']).not.toHaveProperty(flag);
@@ -53,19 +53,19 @@ describe('the version a TypeScript contract states', () => {
   });
 
   it('refuses a contract that states no version, saying how to state it', () => {
-    expect(() => defineContract({} as { version: 15 })).toThrow(
-      'State the PostgreSQL version your database runs in defineContract, for example defineContract({ version: 18, ... }). The supported versions are 15, 16, 17, 18.',
+    expect(() => defineContract({} as { databaseVersion: 15 })).toThrow(
+      'State the PostgreSQL version your database runs in defineContract, for example defineContract({ databaseVersion: 18, ... }). The supported versions are 15, 16, 17, 18.',
     );
   });
 
   it('refuses a version written as a string, saying to write the number', () => {
-    expect(() => defineContract({ version: '17' as unknown as 17 })).toThrow(
+    expect(() => defineContract({ databaseVersion: '17' as unknown as 17 })).toThrow(
       "Write the PostgreSQL version as the number 17, not the string '17'.",
     );
   });
 
   it('refuses a version the table does not list', () => {
-    expect(() => defineContract({ version: 14 as 15 })).toThrow(
+    expect(() => defineContract({ databaseVersion: 14 as 15 })).toThrow(
       'PostgreSQL 14 is not supported. The supported versions are 15, 16, 17, 18.',
     );
   });
@@ -80,7 +80,7 @@ describe('the version a TypeScript contract states', () => {
       capabilities: { example: { search: true } },
     } as const;
 
-    expect(defineContract({ version: 18, extensions: { example } }).capabilities).toEqual({
+    expect(defineContract({ databaseVersion: 18, extensions: { example } }).capabilities).toEqual({
       ...withTheDefaultConnection(postgresCapabilitiesByVersion[18]),
       example: { search: true },
     });
@@ -90,7 +90,7 @@ describe('the version a TypeScript contract states', () => {
 describe('the capabilities list of a TypeScript contract', () => {
   it('merges the sets over the row in order, a later flag replacing an earlier one and false turning one off', () => {
     const { capabilities } = defineContract({
-      version: 15,
+      databaseVersion: 15,
       capabilities: [
         { sql: { returning: false, interactiveTransactions: true, pipelining: true } },
         { sql: { pipelining: false }, http: { batch: true } },
@@ -108,7 +108,7 @@ describe('the capabilities list of a TypeScript contract', () => {
   it('refuses a single set where the list belongs, as a JavaScript caller might pass it', () => {
     expect(() =>
       defineContract({
-        version: 18,
+        databaseVersion: 18,
         capabilities: { sql: { interactiveTransactions: true } } as unknown as [],
       }),
     ).toThrow(
@@ -117,22 +117,24 @@ describe('the capabilities list of a TypeScript contract', () => {
   });
 
   it('defaults to the adapter and driver the client runs with, whose driver provides interactive transactions', () => {
-    expect(defineContract({ version: 17 }).capabilities).toEqual(
+    expect(defineContract({ databaseVersion: 17 }).capabilities).toEqual(
       defineContract({
-        version: 17,
+        databaseVersion: 17,
         capabilities: [postgresAdapter.capabilities, postgresDriver.capabilities],
       }).capabilities,
     );
-    expect(defineContract({ version: 17 }).capabilities.sql.interactiveTransactions).toBe(true);
-    expect(defineContract({ version: 17, capabilities: [] }).capabilities.sql).not.toHaveProperty(
-      'interactiveTransactions',
+    expect(defineContract({ databaseVersion: 17 }).capabilities.sql.interactiveTransactions).toBe(
+      true,
     );
+    expect(
+      defineContract({ databaseVersion: 17, capabilities: [] }).capabilities.sql,
+    ).not.toHaveProperty('interactiveTransactions');
   });
 
   it('gives the same capabilities as postgresContractCapabilities, for configs built by hand', () => {
     const capabilities = [{ sql: { interactiveTransactions: true } }] as const;
-    expect(defineContract({ version: 16, capabilities }).capabilities).toEqual(
-      postgresContractCapabilities({ version: 16, capabilities }),
+    expect(defineContract({ databaseVersion: 16, capabilities }).capabilities).toEqual(
+      postgresContractCapabilities({ databaseVersion: 16, capabilities }),
     );
   });
 });

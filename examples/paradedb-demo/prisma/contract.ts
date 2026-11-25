@@ -3,7 +3,7 @@ import { int4Column, textColumn } from '@prisma/orm-postgres/adapter/column-type
 import { defineContract } from '@prisma/orm-postgres/contract-builder';
 
 export const contract = defineContract(
-  { version: 18, extensions: { paradedb } },
+  { databaseVersion: 18, extensions: { paradedb } },
   ({ field, model }) => {
     const Item = model('Item', {
       fields: {

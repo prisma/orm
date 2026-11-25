@@ -124,7 +124,7 @@ function contractWith(
   extensions: Partial<typeof extensionPacks> = extensionPacks,
 ) {
   return defineContract({
-    version: 18,
+    databaseVersion: 18,
     extensions,
     enums,
     models: Object.fromEntries(

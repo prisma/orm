@@ -41,7 +41,7 @@ const Session = model('Session', {
 });
 
 const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   namespaces: ['auth'],
   models: {
     User: User.relations({

@@ -2,7 +2,7 @@ import { expectTypeOf, test } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
 
 test('type.* has a helper for every PSL type constructor', () => {
-  defineContract({ version: 18 }, ({ type }) => {
+  defineContract({ databaseVersion: 18 }, ({ type }) => {
     expectTypeOf(type.TimestampString(3).codecId).toEqualTypeOf<'pg/timestamp-string@1'>();
     expectTypeOf(type.TimestampString(3).typeParams).toEqualTypeOf<{ readonly precision: 3 }>();
     expectTypeOf(type.String().codecId).toEqualTypeOf<'pg/text@1'>();
@@ -11,7 +11,7 @@ test('type.* has a helper for every PSL type constructor', () => {
 });
 
 test('field.namedType takes only an enum handle', () => {
-  defineContract({ version: 18 }, ({ type, field }) => {
+  defineContract({ databaseVersion: 18 }, ({ type, field }) => {
     // @ts-expect-error a codec instance is written with field.column
     field.namedType(type.sql.Varchar(5));
     // @ts-expect-error a type alias name is written as a constant
@@ -22,13 +22,13 @@ test('field.namedType takes only an enum handle', () => {
 
 test('the contract takes databaseTypes, not types', () => {
   defineContract({
-    version: 18,
+    databaseVersion: 18,
     databaseTypes: {
       vector: { kind: 'codec-instance', codecId: 'pg/text@1', typeParams: {} },
     },
   });
   defineContract({
-    version: 18,
+    databaseVersion: 18,
     // @ts-expect-error a type alias is a constant
     types: {},
   });
@@ -44,7 +44,7 @@ type GeneratesOnCreate<Builder> = Builder extends { readonly __state: infer Stat
   : false;
 
 test('a field typed by temporal.CreatedAt is optional on create', () => {
-  defineContract({ version: 18 }, ({ type, field }) => {
+  defineContract({ databaseVersion: 18 }, ({ type, field }) => {
     const createdAt = field.column(type.temporal.CreatedAt());
     const updatedAt = field.column(type.temporal.UpdatedAt()).optional();
     const plain = field.column(type.TimestamptzTemporal());
@@ -57,7 +57,7 @@ test('a field typed by temporal.CreatedAt is optional on create', () => {
 });
 
 test('a type helper requires its required arguments and not its optional ones', () => {
-  defineContract({ version: 18 }, ({ type }) => {
+  defineContract({ databaseVersion: 18 }, ({ type }) => {
     // @ts-expect-error sql.Char takes a required length
     type.sql.Char();
     // @ts-expect-error sql.Varchar takes a required length
@@ -70,7 +70,7 @@ test('a type helper requires its required arguments and not its optional ones', 
 });
 
 test('type.Ulid and type.sql.Ulid are sql/char@1 of length 26, as type.Char(26) and type.sql.Char(26) are, with no generator', () => {
-  defineContract({ version: 18 }, ({ type }) => {
+  defineContract({ databaseVersion: 18 }, ({ type }) => {
     const char26 = {
       kind: 'codec-instance',
       codecId: 'sql/char@1',

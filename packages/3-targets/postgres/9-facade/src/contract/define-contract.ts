@@ -105,7 +105,7 @@ type PostgresBaseScaffold<
   | 'dataTypeLookup'
 > & {
   /** The PostgreSQL version the database runs. The contract requires the capabilities that version provides. */
-  readonly version: Version;
+  readonly databaseVersion: Version;
   /**
    * The capabilities the connection provides, one set per component, merged over the version's in order: a later set's flag replaces an earlier one's, and `false` turns a flag off. Defaults to `defaultConnectionCapabilities`, the sets of the adapter and the driver the client runs with. A list given here replaces the default, so a list that keeps the driver's interactive transactions starts from it: `capabilities: [...defaultConnectionCapabilities, { sql: { insertOnConflictTarget: false } }]`.
    *
@@ -262,11 +262,11 @@ export function defineContractFor<const Table extends CapabilitiesByVersion>(
       readonly enums?: EnumsConstraint;
     },
   ) {
-    const { version, capabilities, ...rest } = definition;
+    const { databaseVersion, capabilities, ...rest } = definition;
     const required = contractCapabilitiesFor(
       table,
-      capabilities === undefined ? { version } : { version, capabilities },
-      `State the PostgreSQL version your database runs in defineContract, for example defineContract({ version: 18, ... }). ${supportedVersionsText}`,
+      capabilities === undefined ? { databaseVersion } : { databaseVersion, capabilities },
+      `State the PostgreSQL version your database runs in defineContract, for example defineContract({ databaseVersion: 18, ... }). ${supportedVersionsText}`,
     );
     const extensions: readonly ExtensionPackRef<'sql', string>[] = Object.values(
       definition.extensions ?? {},
@@ -298,7 +298,7 @@ export function defineContractFor<const Table extends CapabilitiesByVersion>(
 /** The type of the PostgreSQL `defineContract`. */
 export type PostgresDefineContract = DefineContractFor<typeof postgresCapabilitiesByVersion>;
 
-/** Defines a PostgreSQL contract. `version` selects the capabilities the contract requires. */
+/** Defines a PostgreSQL contract. `databaseVersion` selects the capabilities the contract requires. */
 export const defineContract: PostgresDefineContract = defineContractFor(
   postgresCapabilitiesByVersion,
 );

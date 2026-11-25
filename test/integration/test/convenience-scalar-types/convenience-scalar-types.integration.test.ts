@@ -165,7 +165,7 @@ async function emitWithWarnings(text: string) {
     writeFileSync(path, text);
     const warnings: ContractSourceDiagnostic[] = [];
     const result = await prismaContract(path, {
-      capabilities: postgresContractCapabilities({ version: 18 }),
+      capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
       target: postgresPackRef,
       createNamespace: postgresCreateNamespace,
       enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },

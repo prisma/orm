@@ -43,7 +43,7 @@ function emit() {
   const bound = bindPslSchema(REPRESENTATIVE_SCHEMA, {
     sourceId: 'scalar-type-parity.test.psl',
     context: contractSourceContextFromControlStack(stack, {
-      capabilities: postgresContractCapabilities({ version: 18 }),
+      capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
     }),
   });
   return withSeedDiagnostics(

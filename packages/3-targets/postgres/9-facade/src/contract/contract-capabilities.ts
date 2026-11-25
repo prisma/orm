@@ -35,7 +35,7 @@ export interface CapabilitiesInputFor<
   Capabilities extends CapabilitiesList,
 > {
   /** The PostgreSQL version the database runs. The contract requires the capabilities that version provides. */
-  readonly version: Version;
+  readonly databaseVersion: Version;
   /** The connection's capabilities list, merged over the version's row in order; see `CapabilitiesList`. */
   readonly capabilities?: Capabilities;
 }
@@ -45,7 +45,7 @@ export interface PostgresCapabilitiesInput<
   Capabilities extends CapabilitiesList = CapabilitiesList,
 > {
   /** The PostgreSQL version the database runs. The contract requires the capabilities that version provides. */
-  readonly version: PostgresVersion;
+  readonly databaseVersion: PostgresVersion;
   /** The connection's capabilities list, merged over the version's row in order; see `CapabilitiesList`. */
   readonly capabilities?: Capabilities;
 }
@@ -79,7 +79,7 @@ export function contractCapabilitiesFor<
   input: CapabilitiesInputFor<Version, Capabilities>,
   missingVersion: string,
 ): ContractCapabilitiesFor<Table, Version, Capabilities> {
-  if (input.version === undefined) {
+  if (input.databaseVersion === undefined) {
     throw postgresError('CONTRACT.ARGUMENT_INVALID', missingVersion);
   }
   if (input.capabilities !== undefined && !Array.isArray(input.capabilities)) {
@@ -88,7 +88,7 @@ export function contractCapabilitiesFor<
       'capabilities is a list of capability sets, for example capabilities: [{ sql: { interactiveTransactions: true } }].',
     );
   }
-  const row = postgresCapabilitiesForVersionIn(table, input.version);
+  const row = postgresCapabilitiesForVersionIn(table, input.databaseVersion);
   return blindCast<
     ContractCapabilitiesFor<Table, Version, Capabilities>,
     'Capabilities defaults to the default list when the input states none'
@@ -96,7 +96,7 @@ export function contractCapabilitiesFor<
 }
 
 /**
- * The capabilities a PostgreSQL contract requires for `{ version, capabilities }`. A config that builds its contract source without `defineConfig` passes the result to the source, such as `prismaContract`'s `capabilities` option.
+ * The capabilities a PostgreSQL contract requires for `{ databaseVersion, capabilities }`. A config that builds its contract source without `defineConfig` passes the result to the source, such as `prismaContract`'s `capabilities` option.
  */
 export function postgresContractCapabilities<
   const Version extends PostgresVersion,
@@ -107,6 +107,6 @@ export function postgresContractCapabilities<
   return contractCapabilitiesFor(
     postgresCapabilitiesByVersion,
     input,
-    `State the PostgreSQL version your database runs, for example postgresContractCapabilities({ version: 18 }). ${supportedVersionsText}`,
+    `State the PostgreSQL version your database runs, for example postgresContractCapabilities({ databaseVersion: 18 }). ${supportedVersionsText}`,
   );
 }

@@ -111,7 +111,7 @@ describe('templates', () => {
       expect(POSTGRES_NEWEST_VERSION).toBe(18);
       expect(schema).toMatch(
         new RegExp(
-          `defineContract\\(\\s*\\{ version: ${POSTGRES_NEWEST_VERSION} \\},\\s*\\(\\{ field, model, rel(, gen)?, type \\}\\) => [({]`,
+          `defineContract\\(\\s*\\{ databaseVersion: ${POSTGRES_NEWEST_VERSION} \\},\\s*\\(\\{ field, model, rel(, gen)?, type \\}\\) => [({]`,
         ),
       );
       expect(schema).not.toMatch(/\{ family:/);

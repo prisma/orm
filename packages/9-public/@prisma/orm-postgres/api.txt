@@ -2,7 +2,7 @@
 (not exported) const ENUM_TYPE_HANDLE_BRAND = "__prismaEnumTypeHandle__"
 (not exported) function pgEnumColumn<const Name extends string, const TypeName extends string, const Members extends readonly [string, ...string[]]>(handle: NativeEnumHandle<Name, TypeName, Members>): PgEnumColumnDescriptor<Members>
 (not exported) interface CapabilitiesInputFor, readonly optional property capabilities?: Capabilities
-(not exported) interface CapabilitiesInputFor, readonly required property version: Version
+(not exported) interface CapabilitiesInputFor, readonly required property databaseVersion: Version
 (not exported) interface CapabilitiesInputFor<Version extends number, Capabilities extends CapabilitiesList>
 (not exported) interface DefineContractFor, call signature <const Version extends keyof Table & number, const Capabilities extends ConnectionCapabilitiesConstraint = DefaultConnectionCapabilities, const DatabaseTypes extends DatabaseTypesConstraint = Record<never, never>, const Models extends ModelsConstraint = Record<never, never>, const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined, const Enums extends EnumsConstraint = Record<never, never>, const Namespaces extends NamespacesConstraint = undefined, const ForeignKeyDefaults extends ForeignKeyDefaultsConstraint = undefined>(definition: PostgresDefinition<Table, Version, Capabilities, DatabaseTypes, Models, Extensions, Enums, Namespaces, ForeignKeyDefaults>): PostgresResult<Table, Version, Capabilities, DatabaseTypes, Models, Extensions, Enums, Namespaces, ForeignKeyDefaults>
 (not exported) interface DefineContractFor, call signature <const Version extends keyof Table & number, const Capabilities extends ConnectionCapabilitiesConstraint = DefaultConnectionCapabilities, const DatabaseTypes extends DatabaseTypesConstraint = Record<never, never>, const Models extends ModelsConstraint = Record<never, never>, const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined, const ScaffoldEnums extends EnumsConstraint = Record<never, never>, const FactoryEnums extends EnumsConstraint = Record<never, never>, const Namespaces extends NamespacesConstraint = undefined, const ForeignKeyDefaults extends ForeignKeyDefaultsConstraint = undefined>(scaffold: PostgresScaffold<Table, Version, Capabilities, Extensions, ScaffoldEnums, Namespaces, ForeignKeyDefaults>, factory: (helpers: ComposedAuthoringHelpers<SqlFamily, PostgresPack, Extensions>) => { readonly databaseTypes?: DatabaseTypes; readonly models?: Models; readonly enums?: FactoryEnums; }): PostgresResult<Table, Version, Capabilities, DatabaseTypes, Models, Extensions, MergeEnums<ScaffoldEnums, FactoryEnums>, Namespaces, ForeignKeyDefaults>
@@ -74,7 +74,7 @@
 (not exported) type NamespacesConstraint = readonly string[] | undefined
 (not exported) type OrmClient<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses> = ReturnType<typeof orm<TContract, TCollections>>
 (not exported) type PgEnumColumnDescriptor<Members extends readonly [string, ...string[]]> = ColumnTypeDescriptor<typeof PG_ENUM_CODEC_ID> & { readonly entityRef: { readonly entityKind: 'native_enum'; readonly entityName: string; readonly entity: PostgresNativeEnum<Members>; }; }
-(not exported) type PostgresBaseScaffold<Table extends CapabilitiesByVersion, Version extends keyof Table & number, Capabilities extends ConnectionCapabilitiesConstraint, Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined, ForeignKeyDefaults extends ForeignKeyDefaultsConstraint = undefined> = Omit<ContractInput<SqlFamily, PostgresPack, Record<never, never>, Record<never, never>, Extensions>, 'adapter' | 'codecLookup' | 'createNamespace' | 'dataTypeLookup' | 'databaseTypes' | 'entities' | 'enums' | 'family' | 'foreignKeyDefaults' | 'models' | 'namespaces' | 'target'> & { readonly version: Version; readonly capabilities?: Capabilities; readonly foreignKeyDefaults?: ForeignKeyDefaults; readonly codecLookup?: CodecLookupWithDescriptors; readonly dataTypeLookup?: DataTypeLookup; readonly entities?: readonly (ExtensionHandle | RlsEntityHandle)[]; }
+(not exported) type PostgresBaseScaffold<Table extends CapabilitiesByVersion, Version extends keyof Table & number, Capabilities extends ConnectionCapabilitiesConstraint, Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined, ForeignKeyDefaults extends ForeignKeyDefaultsConstraint = undefined> = Omit<ContractInput<SqlFamily, PostgresPack, Record<never, never>, Record<never, never>, Extensions>, 'adapter' | 'codecLookup' | 'createNamespace' | 'dataTypeLookup' | 'databaseTypes' | 'entities' | 'enums' | 'family' | 'foreignKeyDefaults' | 'models' | 'namespaces' | 'target'> & { readonly databaseVersion: Version; readonly capabilities?: Capabilities; readonly foreignKeyDefaults?: ForeignKeyDefaults; readonly codecLookup?: CodecLookupWithDescriptors; readonly dataTypeLookup?: DataTypeLookup; readonly entities?: readonly (ExtensionHandle | RlsEntityHandle)[]; }
 (not exported) type PostgresBindingFields = { readonly binding?: PostgresBinding; readonly url?: string; readonly pg?: Client | Pool; }
 (not exported) type PostgresBindingInput = { readonly binding: PostgresBinding; readonly url?: never; readonly pg?: never; } | { readonly pg: Client | Pool; readonly binding?: never; readonly url?: never; } | { readonly url: string; readonly binding?: never; readonly pg?: never; }
 (not exported) type PostgresContributions<Capabilities> = typeof postgresAdapterContractContributions & { readonly capabilities: Capabilities; }
@@ -123,7 +123,7 @@
 ./config: export type CapabilityMatrix from @prisma/orm-framework/components/components
 ./config: function postgresContractCapabilities<const Version extends PostgresVersion, const Capabilities extends CapabilitiesList = DefaultConnectionCapabilities>(input: CapabilitiesInputFor<Version, Capabilities>): PostgresContractCapabilities<Version, Capabilities>
 ./config: interface PostgresCapabilitiesInput, readonly optional property capabilities?: Capabilities
-./config: interface PostgresCapabilitiesInput, readonly required property version: PostgresVersion
+./config: interface PostgresCapabilitiesInput, readonly required property databaseVersion: PostgresVersion
 ./config: interface PostgresCapabilitiesInput<Capabilities extends CapabilitiesList = CapabilitiesList>
 ./config: interface PostgresConfigOptions, readonly optional property db?: { readonly connection?: string; }
 ./config: interface PostgresConfigOptions, readonly optional property extensions?: readonly ControlExtensionDescriptor<'sql', 'postgres'>[]
@@ -135,7 +135,7 @@
 ./config: type CapabilitiesList = readonly CapabilityMatrix[]
 ./config: type DefaultConnectionCapabilities = typeof defaultConnectionCapabilities
 ./config: type PostgresContractCapabilities<Version extends PostgresVersion, Capabilities extends CapabilitiesList = DefaultConnectionCapabilities> = ResolvedCapabilities<readonly [(typeof postgresCapabilitiesByVersion)[Version], ...Capabilities]>
-./config: type PostgresContractEntry<Path extends string = string> = { readonly path: Path; } & (Path extends `${string}.ts` ? { readonly version?: never; readonly capabilities?: never; } : PostgresCapabilitiesInput)
+./config: type PostgresContractEntry<Path extends string = string> = { readonly path: Path; } & (Path extends `${string}.ts` ? { readonly databaseVersion?: never; readonly capabilities?: never; } : PostgresCapabilitiesInput)
 ./config: type PostgresDefineConfig = <const Path extends string>(options: PostgresConfigOptions<Path>) => PrismaConfig<'sql', 'postgres'>
 ./config: type Prisma7SchemaOptions = PostgresCapabilitiesInput
 ./contract-builder: const defaultConnectionCapabilities: readonly [Readonly<{}>, Readonly<{ readonly sql: Readonly<{ interactiveTransactions: true; }>; }>]
@@ -203,7 +203,7 @@
 ./contract-builder: interface NativeEnumHandle, required method map<const MappedTypeName extends string>(typeName: MappedTypeName): NativeEnumHandle<Name, MappedTypeName, Members>
 ./contract-builder: interface NativeEnumHandle<Name extends string = string, TypeName extends string = string, Members extends readonly [string, ...string[]] = readonly [string, ...string[]]>
 ./contract-builder: interface PostgresCapabilitiesInput, readonly optional property capabilities?: Capabilities
-./contract-builder: interface PostgresCapabilitiesInput, readonly required property version: PostgresVersion
+./contract-builder: interface PostgresCapabilitiesInput, readonly required property databaseVersion: PostgresVersion
 ./contract-builder: interface PostgresCapabilitiesInput<Capabilities extends CapabilitiesList = CapabilitiesList>
 ./contract-builder: interface RlsEnablementHandle
 ./contract-builder: interface RlsEnablementHandle, readonly required property entityKind: 'rls'

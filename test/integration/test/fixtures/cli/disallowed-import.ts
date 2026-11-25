@@ -5,7 +5,7 @@ import { int4Column, textColumn } from '@repo/test-utils/column-descriptors';
 import { something } from 'some-other-package';
 
 export const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   models: {
     User: model('User', {
       fields: {

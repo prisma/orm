@@ -14,7 +14,7 @@ function domainModels(namespaces: Record<string, { readonly models: object }>) {
 describe('the namespaces of a TypeScript contract', () => {
   it('holds every model in its declared namespace and no default namespace', () => {
     const contract = defineContract(
-      { version: 18, namespaces: ['auth'] },
+      { databaseVersion: 18, namespaces: ['auth'] },
       ({ field, model, gen, type }) => ({
         models: {
           Session: model('Session', {
@@ -47,7 +47,7 @@ describe('the namespaces of a TypeScript contract', () => {
 
   it('has no domain namespace for a declared namespace without models', () => {
     const contract = defineContract(
-      { version: 18, namespaces: ['audit'] },
+      { databaseVersion: 18, namespaces: ['audit'] },
       ({ field, model, gen, type }) => ({
         models: {
           User: model('User', {
@@ -71,7 +71,7 @@ describe('the namespaces of a TypeScript contract', () => {
 
   it('places each model in its own namespace', () => {
     const contract = defineContract(
-      { version: 18, namespaces: ['auth'] },
+      { databaseVersion: 18, namespaces: ['auth'] },
       ({ field, model, gen, type }) => ({
         models: {
           User: model('User', {
@@ -105,7 +105,7 @@ describe('the namespaces of a TypeScript contract', () => {
 
   it('types the rows of a model in a declared namespace with the codec output types', async () => {
     const contract = defineContract(
-      { version: 18, namespaces: ['auth'] },
+      { databaseVersion: 18, namespaces: ['auth'] },
       ({ field, model, type, gen }) => ({
         models: {
           Session: model('Session', {
@@ -133,7 +133,7 @@ describe('the namespaces of a TypeScript contract', () => {
   it('lists every model in every namespace when a model namespace is not a literal', () => {
     const sessionNamespace: string = 'auth';
     const contract = defineContract(
-      { version: 18, namespaces: ['auth', 'billing'] },
+      { databaseVersion: 18, namespaces: ['auth', 'billing'] },
       ({ field, model, gen, type }) => ({
         models: {
           User: model('User', {

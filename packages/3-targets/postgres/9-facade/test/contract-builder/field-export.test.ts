@@ -12,7 +12,7 @@ describe('the field exported by contract-builder', () => {
 
   it('builds the same contract as the field of the callback', () => {
     const fromCallback = defineContract(
-      { version: 18 },
+      { databaseVersion: 18 },
       ({ field: callbackField, model, type: t }) => ({
         models: {
           Post: model('Post', {
@@ -24,7 +24,7 @@ describe('the field exported by contract-builder', () => {
         },
       }),
     );
-    const fromImport = defineContract({ version: 18 }, ({ model }) => ({
+    const fromImport = defineContract({ databaseVersion: 18 }, ({ model }) => ({
       models: {
         Post: model('Post', {
           fields: {

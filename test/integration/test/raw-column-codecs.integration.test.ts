@@ -5,7 +5,7 @@ import { timeouts, withPushedContractRuntime } from './sql-orm-client/integratio
 
 const Status = nativeEnum('Status', 'draft', 'published').map('sample_status');
 const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   models: {
     Sample: model('Sample', {
       fields: {

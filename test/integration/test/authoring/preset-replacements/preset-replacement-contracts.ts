@@ -142,7 +142,7 @@ export function interpretMongo(schema: string): Interpreted {
 
 /** The TypeScript contract with one model per row, each field written as its replacement. */
 export function postgresTs(rows: readonly SqlRow<PostgresHelpers>[]): Contract {
-  return definePostgresContract({ version: 18 }, (helpers) => ({
+  return definePostgresContract({ databaseVersion: 18 }, (helpers) => ({
     models: Object.fromEntries(
       rows.map((row) => {
         const value = row.ts(helpers);

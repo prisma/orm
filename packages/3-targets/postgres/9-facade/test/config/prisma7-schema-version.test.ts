@@ -17,14 +17,14 @@ afterEach(async () => {
 
 describe('prisma7Schema', () => {
   it('refuses a call that states no version', () => {
-    expect(() => prisma7Schema('./prisma/schema.prisma', {} as { version: 18 })).toThrow(
-      "State the PostgreSQL version your database runs beside the Prisma 7 schema path, for example prisma7Schema('./prisma/schema.prisma', { version: 18 }). The supported versions are 15, 16, 17, 18.",
+    expect(() => prisma7Schema('./prisma/schema.prisma', {} as { databaseVersion: 18 })).toThrow(
+      "State the PostgreSQL version your database runs beside the Prisma 7 schema path, for example prisma7Schema('./prisma/schema.prisma', { databaseVersion: 18 }). The supported versions are 15, 16, 17, 18.",
     );
   });
 
   it('refuses a call with no options', () => {
     expect(() =>
-      prisma7Schema('./prisma/schema.prisma', undefined as unknown as { version: 18 }),
+      prisma7Schema('./prisma/schema.prisma', undefined as unknown as { databaseVersion: 18 }),
     ).toThrow('State the PostgreSQL version your database runs beside the Prisma 7 schema path');
   });
 
@@ -41,7 +41,7 @@ describe('prisma7Schema', () => {
       );
       const config = defineConfig({
         contract: prisma7SchemaFor(versionsWithALaterFeature)(schemaPath, {
-          version,
+          databaseVersion: version,
           capabilities: [{ sql: { interactiveTransactions: true } }],
         }),
       });

@@ -17,7 +17,7 @@ const Post = model('Post', {
 }).sql({ table: 'post' });
 
 export const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   models: {
     User,
     Post,

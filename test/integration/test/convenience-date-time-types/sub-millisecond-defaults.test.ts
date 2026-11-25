@@ -19,7 +19,7 @@ describe('a default with digits below a millisecond on a field read as a Date', 
   });
 
   it('cannot be written in the TypeScript builder, whose Date default is stored at the millisecond', () => {
-    const contract = defineContract({ version: 18 }, ({ type, field, model }) => ({
+    const contract = defineContract({ databaseVersion: 18 }, ({ type, field, model }) => ({
       models: {
         Event: model('Event', {
           fields: {

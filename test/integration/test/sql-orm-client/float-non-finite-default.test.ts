@@ -18,7 +18,7 @@ const Reading = model('Reading', {
   },
 }).sql({ table: 'float_default_readings' });
 
-const contract = defineContract({ version: 18, models: { Reading } });
+const contract = defineContract({ databaseVersion: 18, models: { Reading } });
 
 describe('a NaN or infinite float default authored in TypeScript', () => {
   it(

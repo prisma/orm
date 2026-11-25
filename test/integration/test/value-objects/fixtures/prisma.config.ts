@@ -18,7 +18,7 @@ export default definePrismaConfig({
     driver: postgresDriver,
     contract: {
       ...prismaContract('./schema.prisma', {
-        capabilities: postgresContractCapabilities({ version: 18 }),
+        capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
         output: 'generated/sql-contract.json',
         target: postgresPackRef,
         createNamespace: postgresCreateNamespace,

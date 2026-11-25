@@ -2,7 +2,7 @@ import { int4Column, timeTemporalColumn } from '@internal/adapter-postgres/colum
 import { defineContract, field, gen, model } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   models: {
     Event: model('Event', {
       fields: {

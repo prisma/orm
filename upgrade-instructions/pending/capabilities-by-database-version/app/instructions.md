@@ -2,14 +2,14 @@
 changes:
   - id: postgres-contract-states-database-version
     summary: |
-      A PostgreSQL contract now states the version of the database it runs on, where the contract is written: `defineContract({ version: 18, ... })`, the config's contract entry `{ path: './prisma/contract.prisma', version: 18 }`, or `prisma7Schema(path, { version: 18 })`. The version selects the capabilities the contract requires. Add it, run `prisma contract emit`, then run `prisma db sign` against each database.
+      A PostgreSQL contract now states the version of the database it runs on, where the contract is written: `defineContract({ databaseVersion: 18, ... })`, the config's contract entry `{ path: './prisma/contract.prisma', databaseVersion: 18 }`, or `prisma7Schema(path, { databaseVersion: 18 })`. The version selects the capabilities the contract requires. Add it, run `prisma contract emit`, then run `prisma db sign` against each database.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs}"
       matches:
         - '@prisma/orm-postgres/(?:config|contract-builder)[''"]'
   - id: postgres-config-without-define-config-passes-capabilities
     summary: |
-      A config that builds a PostgreSQL contract source itself, with `prismaContract` or `prisma7Contract` instead of the PostgreSQL `defineConfig`, passes the source `capabilities: postgresContractCapabilities({ version: 18 })` from `@prisma/orm-postgres/config`. Without it the contract lists no capabilities.
+      A config that builds a PostgreSQL contract source itself, with `prismaContract` or `prisma7Contract` instead of the PostgreSQL `defineConfig`, passes the source `capabilities: postgresContractCapabilities({ databaseVersion: 18 })` from `@prisma/orm-postgres/config`. Without it the contract lists no capabilities.
     detection:
       glob: "**/*.{ts,mts,cts,js,mjs,cjs}"
       matches:
@@ -77,14 +77,14 @@ export const contract = defineContract({ extensions: { pgvector } }, ({ field, m
 After:
 
 ```ts
-export const contract = defineContract({ version: 18, extensions: { pgvector } }, ({ field, model }) => ({
+export const contract = defineContract({ databaseVersion: 18, extensions: { pgvector } }, ({ field, model }) => ({
   // ...
 }));
 ```
 
-A `defineContract({}, ...)` becomes `defineContract({ version: 18 }, ...)`. Without a version, `defineContract` is a type error, and at run time it throws:
+A `defineContract({}, ...)` becomes `defineContract({ databaseVersion: 18 }, ...)`. Without a version, `defineContract` is a type error, and at run time it throws:
 
-> State the PostgreSQL version your database runs in defineContract, for example defineContract({ version: 18, ... }). The supported versions are 15, 16, 17, 18.
+> State the PostgreSQL version your database runs in defineContract, for example defineContract({ databaseVersion: 18, ... }). The supported versions are 15, 16, 17, 18.
 
 A contract written in the Prisma schema language states it in the config's contract entry, in the `defineConfig` from `@prisma/orm-postgres/config`. The contract path becomes an object. Before:
 
@@ -101,16 +101,16 @@ After:
 ```ts
 export default definePrismaConfig({
   orm: defineConfig({
-    contract: { path: './prisma/contract.prisma', version: 18 },
+    contract: { path: './prisma/contract.prisma', databaseVersion: 18 },
   }),
 });
 ```
 
 A `.prisma` path without a version is a type error, and loading the config fails with:
 
-> State the PostgreSQL version your database runs beside the contract path, for example contract: { path: './prisma/contract.prisma', version: 18 }. The supported versions are 15, 16, 17, 18.
+> State the PostgreSQL version your database runs beside the contract path, for example contract: { path: './prisma/contract.prisma', databaseVersion: 18 }. The supported versions are 15, 16, 17, 18.
 
-A config whose contract is a TypeScript file (`contract: './prisma/contract.ts'`) does not change. The TypeScript contract states its version in `defineContract`, so the config refuses a `version` or `capabilities` beside a `.ts` path.
+A config whose contract is a TypeScript file (`contract: './prisma/contract.ts'`) does not change. The TypeScript contract states its version in `defineContract`, so the config refuses a `databaseVersion` or `capabilities` beside a `.ts` path.
 
 A Prisma 7 schema read with `prisma7Schema` takes it as a second argument. Before:
 
@@ -121,18 +121,18 @@ contract: prisma7Schema('prisma/schema.prisma'),
 After:
 
 ```ts
-contract: prisma7Schema('prisma/schema.prisma', { version: 18 }),
+contract: prisma7Schema('prisma/schema.prisma', { databaseVersion: 18 }),
 ```
 
 Without it, loading the config fails with:
 
-> State the PostgreSQL version your database runs beside the Prisma 7 schema path, for example prisma7Schema('prisma/schema.prisma', { version: 18 }). The supported versions are 15, 16, 17, 18.
+> State the PostgreSQL version your database runs beside the Prisma 7 schema path, for example prisma7Schema('prisma/schema.prisma', { databaseVersion: 18 }). The supported versions are 15, 16, 17, 18.
 
 The fourth form, a config built without this `defineConfig`, is in `postgres-config-without-define-config-passes-capabilities` below.
 
 ### 3. Leave out `capabilities`, unless you need it
 
-Each of these forms also takes an optional `capabilities` list, beside `version`. It holds the capabilities the connection provides, one set per component, merged over the version's in order. A later set's flag replaces an earlier one's, and `false` turns a flag off.
+Each of these forms also takes an optional `capabilities` list, beside `databaseVersion`. It holds the capabilities the connection provides, one set per component, merged over the version's in order. A later set's flag replaces an earlier one's, and `false` turns a flag off.
 
 When you leave it out, it is `defaultConnectionCapabilities`: the sets of the adapter and the driver the PostgreSQL client runs with. Today that adds `sql.interactiveTransactions`, from the driver. Most projects leave it out.
 
@@ -143,7 +143,7 @@ import { defaultConnectionCapabilities, defineConfig } from '@prisma/orm-postgre
 
 contract: {
   path: './prisma/contract.prisma',
-  version: 18,
+  databaseVersion: 18,
   capabilities: [...defaultConnectionCapabilities, { sql: { insertOnConflictTarget: false } }],
 },
 ```
@@ -172,7 +172,7 @@ Signing now checks that the database provides every capability the contract requ
 
 ## `postgres-config-without-define-config-passes-capabilities`
 
-A config that builds its contract source itself, with `prismaContract` from `@prisma/orm-family-sql/contract-psl/provider` or `prisma7Contract` from `@prisma/orm-family-sql/contract-prisma7/provider`, does not go through the PostgreSQL `defineConfig`. The target, adapter and driver in that config no longer add capabilities to the contract. So pass the source its capabilities, from `postgresContractCapabilities` in `@prisma/orm-postgres/config`. It takes the same `version` and optional `capabilities` list as the other forms.
+A config that builds its contract source itself, with `prismaContract` from `@prisma/orm-family-sql/contract-psl/provider` or `prisma7Contract` from `@prisma/orm-family-sql/contract-prisma7/provider`, does not go through the PostgreSQL `defineConfig`. The target, adapter and driver in that config no longer add capabilities to the contract. So pass the source its capabilities, from `postgresContractCapabilities` in `@prisma/orm-postgres/config`. It takes the same `databaseVersion` and optional `capabilities` list as the other forms.
 
 Before:
 
@@ -189,7 +189,7 @@ After:
 import { postgresContractCapabilities } from '@prisma/orm-postgres/config';
 
 contract: prismaContract('./prisma/contract.prisma', {
-  capabilities: postgresContractCapabilities({ version: 18 }),
+  capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
   target: postgres,
   createNamespace: postgresCreateNamespace,
 }),

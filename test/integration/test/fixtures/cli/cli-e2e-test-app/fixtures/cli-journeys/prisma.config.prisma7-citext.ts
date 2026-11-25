@@ -7,7 +7,7 @@ import { definePrismaConfig } from '@prisma/cli-engine';
 
 export default definePrismaConfig({
   orm: postgres({
-    contract: prisma7Schema('./schema.prisma', { version: 18 }),
+    contract: prisma7Schema('./schema.prisma', { databaseVersion: 18 }),
     extensions: [citext],
     db: {
       connection: '{{DB_URL}}',

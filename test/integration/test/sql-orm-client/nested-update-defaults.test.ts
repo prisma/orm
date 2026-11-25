@@ -26,7 +26,7 @@ const Article = model('Article', {
 }).sql({ table: 'ud_articles' });
 
 const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   models: {
     Author: Author.relations({ articles: rel.hasMany(() => Article, { by: 'authorId' }) }).sql({
       table: 'ud_authors',

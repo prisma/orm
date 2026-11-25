@@ -233,7 +233,11 @@ function unboundNamespace(contract: {
 
 describe('TS and PSL RLS authoring parity with real packs', () => {
   const models = buildTsModels();
-  const tsContract = defineContract({ version: 18, models, entities: buildTsEntities(models) });
+  const tsContract = defineContract({
+    databaseVersion: 18,
+    models,
+    entities: buildTsEntities(models),
+  });
 
   const interpreted = interpretWithRealPacks(PSL_SOURCE);
 

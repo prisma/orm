@@ -7,7 +7,7 @@ import postgis from '../src/exports/pack';
 
 function buildWithLocation(descriptor: ColumnTypeDescriptor) {
   return defineContract(
-    { version: 18, extensions: { postgis } },
+    { databaseVersion: 18, extensions: { postgis } },
     ({ field, model, gen, type }) => ({
       models: {
         Place: model('Place', {

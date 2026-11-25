@@ -111,7 +111,7 @@ How the target resolves the value is left to the building session.
 
 ```ts
 export const contract = defineContract({
-  target: postgres({ version: 17 }),
+  target: postgres({ databaseVersion: 17 }),
   capabilities: neonHttp.capabilities,
   // models…
 });
@@ -125,7 +125,7 @@ import neonHttp from 'prisma-orm-driver-neon-http';
 export default defineConfig({
   contract: {
     path: './prisma/contract.prisma',
-    version: 17,
+    databaseVersion: 17,
     capabilities: neonHttp.capabilities,
   },
   db: { connection: env('DATABASE_URL') },

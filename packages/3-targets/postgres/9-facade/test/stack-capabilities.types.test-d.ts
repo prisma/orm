@@ -10,9 +10,9 @@ import postgresServerless from '../src/exports/serverless';
 
 const url = 'postgres://localhost/db';
 
-const withTheDefaultList = defineContract({ version: 18 });
+const withTheDefaultList = defineContract({ databaseVersion: 18 });
 const withoutInteractiveTransactions = defineContract({
-  version: 18,
+  databaseVersion: 18,
   capabilities: [postgresAdapter.capabilities],
 });
 
@@ -38,7 +38,10 @@ test('for a contract whose list lacks interactive transactions, transaction() is
 });
 
 test('creating a client from a known contract is a type error when its adapter and driver lack a capability the contract requires', () => {
-  const contract = defineContract({ version: 18, capabilities: [{ http: { batch: true } }] });
+  const contract = defineContract({
+    databaseVersion: 18,
+    capabilities: [{ http: { batch: true } }],
+  });
   // @ts-expect-error the adapter and driver do not provide http.batch
   postgres({ contract, url });
   // @ts-expect-error the adapter and driver do not provide http.batch

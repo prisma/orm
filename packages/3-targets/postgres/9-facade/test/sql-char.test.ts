@@ -18,7 +18,7 @@ function interpret(schema: string) {
   const bound = bindPslSchema(schema, {
     sourceId: 'sql-char.psl',
     context: contractSourceContextFromControlStack(stack, {
-      capabilities: postgresContractCapabilities({ version: 18 }),
+      capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
     }),
   });
   const result = withSeedDiagnostics(
@@ -54,7 +54,7 @@ describe('sql.Char on Postgres', () => {
   });
 
   it('stores what Char stores, from the TypeScript builder', () => {
-    const throughSqlChar = defineContract({ version: 18 }, ({ field, model, type }) => {
+    const throughSqlChar = defineContract({ databaseVersion: 18 }, ({ field, model, type }) => {
       const id = type.sql.Char(36);
       expectTypeOf(id.typeParams).toEqualTypeOf<{ readonly length: 36 }>();
       return {
@@ -63,7 +63,7 @@ describe('sql.Char on Postgres', () => {
         },
       };
     });
-    const throughChar = defineContract({ version: 18 }, ({ field, model, type }) => ({
+    const throughChar = defineContract({ databaseVersion: 18 }, ({ field, model, type }) => ({
       models: {
         Token: model('Token', { fields: { id: field.column(type.Char(36)).id() } }).sql({
           table: 'Token',

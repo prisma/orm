@@ -22,7 +22,7 @@ function wideContract(wideColumns: readonly string[]) {
     relations: { comments: rel.hasMany(() => Comment, { by: 'postId' }) },
   }).sql({ table: 'wide_posts' });
 
-  return defineContract({ version: 18, models: { Post, Comment } });
+  return defineContract({ databaseVersion: 18, models: { Post, Comment } });
 }
 
 describe.each(includeStrategies)(

@@ -44,4 +44,4 @@ const User = model('User', {
   })
   .sql({ table: 'users' });
 
-export const contract = defineContract({ version: 18, models: { User, Tag, UserTag } });
+export const contract = defineContract({ databaseVersion: 18, models: { User, Tag, UserTag } });

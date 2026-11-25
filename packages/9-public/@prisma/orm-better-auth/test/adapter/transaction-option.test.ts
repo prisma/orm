@@ -12,9 +12,9 @@ const url = 'postgres://localhost:5432/db';
 const [postgresAdapterCapabilities] = defaultConnectionCapabilities;
 
 // Without a list, a contract requires the adapter's and the driver's capabilities, interactive transactions among them; this list names only the adapter's.
-const withTransactions = postgres({ contract: defineContract({ version: 18 }), url });
+const withTransactions = postgres({ contract: defineContract({ databaseVersion: 18 }), url });
 const withoutTransactions = postgres({
-  contract: defineContract({ version: 18, capabilities: [postgresAdapterCapabilities] }),
+  contract: defineContract({ databaseVersion: 18, capabilities: [postgresAdapterCapabilities] }),
   url,
 });
 

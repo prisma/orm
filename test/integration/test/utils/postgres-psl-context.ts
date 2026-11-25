@@ -8,6 +8,6 @@ import { contractSourceContextFromControlStack } from '@internal/psl-parser/test
  */
 export function postgresPslContext(stack: ControlStack): ContractSourceContext {
   return contractSourceContextFromControlStack(stack, {
-    capabilities: postgresContractCapabilities({ version: 18 }),
+    capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
   });
 }

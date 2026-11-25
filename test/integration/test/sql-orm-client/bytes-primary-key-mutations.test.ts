@@ -29,7 +29,7 @@ const Document = DocumentBase.relations({
   revisions: rel.hasMany(() => Revision, { by: 'documentId' }),
 }).sql({ table: 'bpk_documents' });
 
-const documentsContract = defineContract({ version: 18, models: { Document, Revision } });
+const documentsContract = defineContract({ databaseVersion: 18, models: { Document, Revision } });
 const documentsContext = createExecutionContext({
   contract: documentsContract,
   stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),

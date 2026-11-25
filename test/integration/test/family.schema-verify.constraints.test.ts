@@ -37,7 +37,7 @@ describe('family instance schemaVerify - constraints', () => {
       'returns ok=false with a not-equal issue for the primary key',
       async () => {
         const contract = defineContract({
-          version: 18,
+          databaseVersion: 18,
           models: {
             User: model('User', {
               fields: {
@@ -78,7 +78,7 @@ describe('family instance schemaVerify - constraints', () => {
       'returns ok=false with a not-found issue for the missing unique constraint',
       async () => {
         const contract = defineContract({
-          version: 18,
+          databaseVersion: 18,
           models: {
             User: model('User', {
               fields: {
@@ -145,7 +145,7 @@ describe('family instance schemaVerify - constraints', () => {
         }).sql({ table: 'post' });
 
         const contract = defineContract({
-          version: 18,
+          databaseVersion: 18,
           models: {
             User: User.relations({
               posts: rel.hasMany(Post, { by: 'userId' }),

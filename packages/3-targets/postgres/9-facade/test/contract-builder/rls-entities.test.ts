@@ -71,7 +71,7 @@ describe('entities lowering: every helper lands in entries with PSL-matching key
   const usingSql = sql`owner_id = current_setting('app.uid')::int`;
 
   const contract = defineContract({
-    version: 18,
+    databaseVersion: 18,
     models: { Profile },
     entities: [
       role('app_user'),
@@ -104,7 +104,7 @@ describe('entities lowering: every helper lands in entries with PSL-matching key
     const emitWarning = vi.spyOn(process, 'emitWarning').mockImplementation(() => {});
     try {
       defineContract({
-        version: 18,
+        databaseVersion: 18,
         models: { Profile: makeProfile() },
         entities: [
           rlsEnabled(Profile),
@@ -231,7 +231,7 @@ describe('round-trip through the contract serializer', () => {
   it('preserves policy, rls, and role entries losslessly', () => {
     const Profile = makeProfile();
     const contract = defineContract({
-      version: 18,
+      databaseVersion: 18,
       models: { Profile },
       entities: [
         role('app_user'),
@@ -269,7 +269,7 @@ describe('load-time diagnostics name the prefix', () => {
     const what = `Policy "p" ${predicate}`;
     expect(() =>
       defineContract({
-        version: 18,
+        databaseVersion: 18,
         models: { Profile },
         entities: [
           rlsEnabled(Profile),
@@ -289,7 +289,7 @@ describe('load-time diagnostics name the prefix', () => {
     const Profile = makeProfile();
     expect(() =>
       defineContract({
-        version: 18,
+        databaseVersion: 18,
         models: { Profile },
         entities: [
           rlsEnabled(Profile),
@@ -308,7 +308,7 @@ describe('load-time diagnostics name the prefix', () => {
 
     expect(() =>
       defineContract({
-        version: 18,
+        databaseVersion: 18,
         models: { Profile },
         entities: [policySelect(Orphan, { name: 'p_orphan', roles: [anon], using: sql`true` })],
       }),
@@ -320,7 +320,7 @@ describe('load-time diagnostics name the prefix', () => {
       fields: { id: field.column(intColumn).id() },
     }).sql({ table: 'orphans' });
 
-    expect(() => defineContract({ version: 18, entities: [rlsEnabled(Orphan)] })).toThrow(
+    expect(() => defineContract({ databaseVersion: 18, entities: [rlsEnabled(Orphan)] })).toThrow(
       /rlsEnabled entry targets model "Orphan", which is not in the contract's models/,
     );
   });
@@ -329,7 +329,7 @@ describe('load-time diagnostics name the prefix', () => {
     const Profile = makeProfile();
     expect(() =>
       defineContract({
-        version: 18,
+        databaseVersion: 18,
         models: { Profile },
         entities: [policySelect(Profile, { name: 'p_read', roles: [anon], using: sql`true` })],
       }),
@@ -346,7 +346,7 @@ describe('load-time diagnostics name the prefix', () => {
 
     expect(() =>
       defineContract({
-        version: 18,
+        databaseVersion: 18,
         models: { Profile },
         entities: [
           rlsEnabled(Profile),
@@ -363,7 +363,7 @@ describe('load-time diagnostics name the prefix', () => {
       'supabase',
     );
 
-    expect(() => defineContract({ version: 18, entities: [rlsEnabled(AuthUser)] })).toThrow(
+    expect(() => defineContract({ databaseVersion: 18, entities: [rlsEnabled(AuthUser)] })).toThrow(
       /rlsEnabled entry targets model "AuthUser", which lives in another contract space/,
     );
   });
@@ -372,7 +372,7 @@ describe('load-time diagnostics name the prefix', () => {
     const Profile = makeProfile();
     expect(() =>
       defineContract({
-        version: 18,
+        databaseVersion: 18,
         models: { Profile },
         entities: [role('app_user'), role('app_user')],
       }),
@@ -384,7 +384,7 @@ describe('load-time diagnostics name the prefix', () => {
     const longPrefix = 'p'.repeat(55);
     expect(() =>
       defineContract({
-        version: 18,
+        databaseVersion: 18,
         models: { Profile },
         entities: [
           rlsEnabled(Profile),
@@ -398,7 +398,7 @@ describe('load-time diagnostics name the prefix', () => {
     const Profile = makeProfile();
     const maxPrefix = 'p'.repeat(54);
     const contract = defineContract({
-      version: 18,
+      databaseVersion: 18,
       models: { Profile },
       entities: [
         rlsEnabled(Profile),
@@ -415,7 +415,7 @@ describe('tableName is always the build-resolved table name', () => {
     // would produce "order" and mismatch the real table.
     const Order = model('Order', { fields: { id: field.column(intColumn).id() } });
     const contract = defineContract({
-      version: 18,
+      databaseVersion: 18,
       models: { Order },
       entities: [
         rlsEnabled(Order),
@@ -433,7 +433,7 @@ describe('tableName is always the build-resolved table name', () => {
       fields: { id: field.column(intColumn).id() },
     }).sql(() => ({ table: 'profile_rows' }));
     const contract = defineContract({
-      version: 18,
+      databaseVersion: 18,
       models: { Profile },
       entities: [
         rlsEnabled(Profile),
@@ -452,7 +452,7 @@ describe('tableName is always the build-resolved table name', () => {
       fields: { id: field.column(intColumn).id() },
     }).sql({ table: 'sessions' });
     const contract = defineContract({
-      version: 18,
+      databaseVersion: 18,
       namespaces: ['auth'],
       models: { Session },
       entities: [
@@ -476,7 +476,7 @@ describe('entities coexist with the factory authoring form', () => {
     const Profile = makeProfile();
     const contract = defineContract(
       {
-        version: 18,
+        databaseVersion: 18,
         entities: [
           rlsEnabled(Profile),
           policySelect(Profile, { name: 'p_read', roles: [anon], using: sql`true` }),

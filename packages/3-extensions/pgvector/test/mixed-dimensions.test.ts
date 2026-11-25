@@ -7,7 +7,7 @@ import pgvector from '../src/exports/pack';
 import pgvectorRuntime from '../src/exports/runtime';
 
 const contract = defineContract(
-  { version: 18, extensions: { pgvector } },
+  { databaseVersion: 18, extensions: { pgvector } },
   ({ field, model, type }) => ({
     models: {
       Doc: model('Doc', {

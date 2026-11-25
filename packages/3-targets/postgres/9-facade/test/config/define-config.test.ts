@@ -14,7 +14,7 @@ describe('defineConfig facade', () => {
   it('produces config equivalent to manual wiring for .prisma contracts', () => {
     const contractPath = './prisma/contract.prisma';
 
-    const facadeConfig = defineConfig({ contract: { path: contractPath, version: 18 } });
+    const facadeConfig = defineConfig({ contract: { path: contractPath, databaseVersion: 18 } });
 
     const extensions: [] = [];
 
@@ -46,7 +46,7 @@ describe('defineConfig facade', () => {
   });
 
   it('derives output path by swapping .prisma to .json', () => {
-    const config = defineConfig({ contract: { path: './foo/bar.prisma', version: 18 } });
+    const config = defineConfig({ contract: { path: './foo/bar.prisma', databaseVersion: 18 } });
 
     expect(config.contract?.output).toBe('./foo/bar.json');
   });
@@ -59,7 +59,9 @@ describe('defineConfig facade', () => {
 
   it('selects TypeScript contract provider for .ts files (distinct from PSL provider)', () => {
     const tsConfig = defineConfig({ contract: './prisma/contract.ts' });
-    const pslConfig = defineConfig({ contract: { path: './prisma/contract.prisma', version: 18 } });
+    const pslConfig = defineConfig({
+      contract: { path: './prisma/contract.prisma', databaseVersion: 18 },
+    });
 
     expect(typeof tsConfig.contract?.source.load).toBe('function');
     expect(tsConfig.contract?.output).toBe('./prisma/contract.json');
@@ -69,7 +71,7 @@ describe('defineConfig facade', () => {
 
   it('writes into the given output directory when provided', () => {
     const config = defineConfig({
-      contract: { path: './prisma/contract.prisma', version: 18 },
+      contract: { path: './prisma/contract.prisma', databaseVersion: 18 },
       output: './custom/dir',
     });
 
@@ -78,7 +80,7 @@ describe('defineConfig facade', () => {
 
   it('always uses the canonical filename contract.json regardless of contract source name', () => {
     const config = defineConfig({
-      contract: { path: './prisma/my-schema.prisma', version: 18 },
+      contract: { path: './prisma/my-schema.prisma', databaseVersion: 18 },
       output: './out',
     });
 
@@ -97,7 +99,7 @@ describe('defineConfig facade', () => {
 
   it('accepts absolute output', () => {
     const config = defineConfig({
-      contract: { path: './prisma/contract.prisma', version: 18 },
+      contract: { path: './prisma/contract.prisma', databaseVersion: 18 },
       output: '/abs/path/to/dir',
     });
 
@@ -105,15 +107,21 @@ describe('defineConfig facade', () => {
   });
 
   it('derives output from the static prefix directory of a glob contract', () => {
-    const config = defineConfig({ contract: { path: './prisma/**/*.prisma', version: 18 } });
+    const config = defineConfig({
+      contract: { path: './prisma/**/*.prisma', databaseVersion: 18 },
+    });
 
     expect(config.contract?.output).toBe('./prisma/contract.json');
     expect(config.contract?.source.inputs).toEqual(['./prisma/**/*.prisma']);
   });
 
   it('derives the same output from a backslash-separated glob contract as its forward-slash twin', () => {
-    const forwardSlash = defineConfig({ contract: { path: './prisma/**/*.prisma', version: 18 } });
-    const backslash = defineConfig({ contract: { path: '.\\prisma\\**\\*.prisma', version: 18 } });
+    const forwardSlash = defineConfig({
+      contract: { path: './prisma/**/*.prisma', databaseVersion: 18 },
+    });
+    const backslash = defineConfig({
+      contract: { path: '.\\prisma\\**\\*.prisma', databaseVersion: 18 },
+    });
 
     expect(backslash.contract?.output).toBe(forwardSlash.contract?.output);
     expect(backslash.contract?.output).toBe('./prisma/contract.json');
@@ -121,7 +129,7 @@ describe('defineConfig facade', () => {
 
   it('passes db config through', () => {
     const config = defineConfig({
-      contract: { path: './prisma/contract.prisma', version: 18 },
+      contract: { path: './prisma/contract.prisma', databaseVersion: 18 },
       db: { connection: 'postgres://localhost:5432/db' },
     });
 
@@ -130,7 +138,7 @@ describe('defineConfig facade', () => {
 
   it('passes migrations config through', () => {
     const config = defineConfig({
-      contract: { path: './prisma/contract.prisma', version: 18 },
+      contract: { path: './prisma/contract.prisma', databaseVersion: 18 },
       migrations: { dir: 'custom-migrations' },
     });
 
@@ -139,14 +147,16 @@ describe('defineConfig facade', () => {
 
   it('omits db when it is not provided', () => {
     const config = defineConfig({
-      contract: { path: './prisma/contract.prisma', version: 18 },
+      contract: { path: './prisma/contract.prisma', databaseVersion: 18 },
     });
 
     expect(Object.hasOwn(config, 'db')).toBe(false);
   });
 
   it('names its own modules for generated files', () => {
-    const config = defineConfig({ contract: { path: './prisma/contract.prisma', version: 18 } });
+    const config = defineConfig({
+      contract: { path: './prisma/contract.prisma', databaseVersion: 18 },
+    });
 
     expect(config.contract?.typesModule).toBe('@internal/postgres/contract-types');
     expect(config.migrations).toEqual({ module: '@internal/postgres/migration' });
@@ -180,7 +190,7 @@ describe('defineConfig facade', () => {
     };
 
     const config = defineConfig({
-      contract: { path: './prisma/contract.prisma', version: 18 },
+      contract: { path: './prisma/contract.prisma', databaseVersion: 18 },
       extensions: [mockExtension],
     });
 
@@ -189,7 +199,7 @@ describe('defineConfig facade', () => {
 
   it('passes formatter config through', () => {
     const config = defineConfig({
-      contract: { path: './prisma/contract.prisma', version: 18 },
+      contract: { path: './prisma/contract.prisma', databaseVersion: 18 },
       formatter: { indent: 'tab', newline: 'CRLF' },
     });
 
@@ -197,7 +207,9 @@ describe('defineConfig facade', () => {
   });
 
   it('leaves formatter out when it is not given', () => {
-    const config = defineConfig({ contract: { path: './prisma/contract.prisma', version: 18 } });
+    const config = defineConfig({
+      contract: { path: './prisma/contract.prisma', databaseVersion: 18 },
+    });
 
     expect(Object.hasOwn(config, 'formatter')).toBe(false);
   });

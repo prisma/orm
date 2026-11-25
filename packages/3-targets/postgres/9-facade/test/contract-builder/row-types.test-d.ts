@@ -7,7 +7,7 @@ import postgres from '../../src/exports/runtime';
 const Level = enumType('Level', { codecId: 'pg/int8@1' }, member('Low', 1n), member('High', 10n));
 
 const contract = defineContract(
-  { version: 18, enums: { Level } },
+  { databaseVersion: 18, enums: { Level } },
   ({ field, model, type, gen }) => ({
     models: {
       Reading: model('Reading', {

@@ -32,7 +32,7 @@ const pgInt = { codecId: 'pg/int4@1' } as const;
 const Level = enumType('Level', pgInt, member('Low', 1), member('High', 10));
 
 const contract = defineContract(
-  { version: 18, enums: { Level } },
+  { databaseVersion: 18, enums: { Level } },
   ({ field, model, gen, type }) => ({
     models: {
       Event: model('Event', {

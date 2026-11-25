@@ -5,7 +5,7 @@ describe('the type exported by contract-builder', () => {
   it('declares a fragment field with the column a TimestamptzTemporal contract field stores', () => {
     const fragmentField = field.column(type.TimestamptzTemporal()).optional().build();
     const contract = defineContract(
-      { version: 18 },
+      { databaseVersion: 18 },
       ({ field: callbackField, model, type: callbackType }) => ({
         models: {
           Post: model('Post', {
@@ -37,7 +37,7 @@ describe('the type exported by contract-builder', () => {
 
   it('builds the same contract as the type of the callback', () => {
     const fromCallback = defineContract(
-      { version: 18 },
+      { databaseVersion: 18 },
       ({ field: callbackField, model, type: callbackType, gen: callbackGen }) => ({
         models: {
           Token: model('Token', {
@@ -48,7 +48,7 @@ describe('the type exported by contract-builder', () => {
         },
       }),
     );
-    const fromImport = defineContract({ version: 18 }, ({ model }) => ({
+    const fromImport = defineContract({ databaseVersion: 18 }, ({ model }) => ({
       models: {
         Token: model('Token', {
           fields: { id: field.column(type.Char(36)).id().onCreate(gen.uuid()) },

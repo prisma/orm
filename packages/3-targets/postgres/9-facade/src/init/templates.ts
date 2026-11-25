@@ -37,7 +37,7 @@ function contractSampleTs(): string {
 import { defineContract } from '${builder}';
 
 export const contract = defineContract(
-  { version: ${POSTGRES_NEWEST_VERSION} },
+  { databaseVersion: ${POSTGRES_NEWEST_VERSION} },
   ({ field, model, gen, type }) => ({
     models: {
       User: model('User', {
@@ -82,7 +82,7 @@ model Post {
 function starterContractTs(): string {
   return `import { defineContract, now } from '${builder}';
 
-export const contract = defineContract({ version: ${POSTGRES_NEWEST_VERSION} }, ({ field, model, rel, gen, type }) => {
+export const contract = defineContract({ databaseVersion: ${POSTGRES_NEWEST_VERSION} }, ({ field, model, rel, gen, type }) => {
   const User = model('User', {
     fields: {
       id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),

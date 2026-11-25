@@ -8,7 +8,7 @@ import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: { path: './src/contract.prisma', version: 18 },
+    contract: { path: './src/contract.prisma', databaseVersion: 18 },
     migrations: { dir: 'migrations' },
   }),
 });

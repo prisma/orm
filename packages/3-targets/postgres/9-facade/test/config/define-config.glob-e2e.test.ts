@@ -43,7 +43,9 @@ describe('defineConfig with a glob contract path', () => {
       'utf-8',
     );
 
-    const config = defineConfig({ contract: { path: join(dir, '**/*.prisma'), version: 18 } });
+    const config = defineConfig({
+      contract: { path: join(dir, '**/*.prisma'), databaseVersion: 18 },
+    });
     expect(config.contract?.output).toBe(join(dir, 'contract.json'));
 
     const resolvedInputs = await expandContractInputs(config.contract?.source.inputs);

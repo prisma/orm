@@ -5,7 +5,7 @@ export default definePrismaConfig({
   orm: ormConfig({
     contract: {
       path: './contract.prisma',
-      version: 18,
+      databaseVersion: 18,
       capabilities: [{ sql: { insertOnConflictTarget: false } }],
     },
     output: 'generated',

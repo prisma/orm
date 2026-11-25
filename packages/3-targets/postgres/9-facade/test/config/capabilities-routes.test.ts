@@ -45,7 +45,9 @@ describe('the same version and capabilities list, through every authoring route'
       prismaSchema: await emitted(async (dir) => {
         const path = join(dir, 'contract.prisma');
         await writeFile(path, '// use prisma-8\nmodel User {\n  id Int @id\n}\n', 'utf-8');
-        return defineConfig({ contract: { path, version: 16, capabilities: connectionList } });
+        return defineConfig({
+          contract: { path, databaseVersion: 16, capabilities: connectionList },
+        });
       }),
       prisma7Schema: await emitted(async (dir) => {
         const path = join(dir, 'schema.prisma');
@@ -55,7 +57,7 @@ describe('the same version and capabilities list, through every authoring route'
           'utf-8',
         );
         return defineConfig({
-          contract: prisma7Schema(path, { version: 16, capabilities: connectionList }),
+          contract: prisma7Schema(path, { databaseVersion: 16, capabilities: connectionList }),
         });
       }),
     };

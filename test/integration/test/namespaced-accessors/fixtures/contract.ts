@@ -10,7 +10,7 @@ import { postgresTypeLookups } from '../../postgres-type-lookups';
 const idDescriptor = { codecId: 'pg/int4@1' } as const;
 const textDescriptor = { codecId: 'pg/text@1' } as const;
 
-// This contract is built without the facade's defineContract, so it states the capabilities that defineContract({ version: 18 }) would.
+// This contract is built without the facade's defineContract, so it states the capabilities that defineContract({ databaseVersion: 18 }) would.
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
   id: 'postgres',
@@ -18,7 +18,7 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   targetId: 'postgres',
   version: '0.0.1',
   defaultNamespaceId: 'public',
-  capabilities: postgresContractCapabilities({ version: 18 }),
+  capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
 };
 
 // Same bare table name `users` in BOTH namespaces with DIFFERENT columns:

@@ -370,7 +370,7 @@ describe('a transaction on a serverless connection', () => {
 });
 
 describe('transaction() for a contract that does not list interactive transactions', () => {
-  const withoutInteractiveTransactions = defineContract({ version: 18, capabilities: [] });
+  const withoutInteractiveTransactions = defineContract({ databaseVersion: 18, capabilities: [] });
   const refusal = {
     code: 'ORM.CAPABILITY_MISSING',
     meta: { capability: 'sql.interactiveTransactions', method: 'transaction' },

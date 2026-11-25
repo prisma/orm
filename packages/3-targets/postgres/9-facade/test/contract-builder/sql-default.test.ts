@@ -5,7 +5,7 @@ import { defineContract, field, model, sql } from '../../src/exports/contract-bu
 describe('postgres contract builder defaults', () => {
   it('lowers .default(sql`gen_random_uuid()`) through defineContract', () => {
     const contract = defineContract({
-      version: 18,
+      databaseVersion: 18,
       models: {
         T: model('T', {
           fields: { id: field.column(textColumn).default(sql`gen_random_uuid()`).id() },

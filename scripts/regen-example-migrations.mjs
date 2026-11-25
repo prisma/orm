@@ -315,7 +315,7 @@ function buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily) {
       `      ...prismaContract('${schemaSrc}', {\n` +
       '        target: postgresPackRef,\n' +
       '        createNamespace: postgresCreateNamespace,\n' +
-      '        capabilities: postgresContractCapabilities({ version: 18 }),\n' +
+      '        capabilities: postgresContractCapabilities({ databaseVersion: 18 }),\n' +
       '      }),\n' +
       '      typesModule: realConfig.orm.contract.typesModule,\n' +
       '    },\n' +

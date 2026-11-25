@@ -107,7 +107,7 @@ describe('a generator on a generated id column alias', () => {
 });
 
 function postgresKeyAndForeignKey(written: 'alias' | 'char'): Contract {
-  return definePostgresContract({ version: 18 }, ({ field, model, rel, gen, type }) => {
+  return definePostgresContract({ databaseVersion: 18 }, ({ field, model, rel, gen, type }) => {
     const column = () => field.column(written === 'alias' ? type.Ulid() : type.Char(26));
     const Author = model('Author', { fields: { id: column().id().onCreate(gen.ulid()) } });
     const Post = model('Post', {

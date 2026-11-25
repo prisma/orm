@@ -1,7 +1,7 @@
 import { textColumn } from '@prisma/orm-postgres/adapter/column-types';
 import { defineContract, fullTextIndex } from '@prisma/orm-postgres/contract-builder';
 
-export const indexed = defineContract({ version: 18 }, ({ field, model, gen, type }) => {
+export const indexed = defineContract({ databaseVersion: 18 }, ({ field, model, gen, type }) => {
   const Author = model('Author', {
     fields: { id: field.column(type.Char(36)).id().onCreate(gen.uuid()) },
   });

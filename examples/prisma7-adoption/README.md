@@ -40,7 +40,7 @@ import citext from '@prisma/orm-postgres-contrib/citext/control';
 
 export default definePrismaConfig({
   orm: definePostgresConfig({
-    contract: prisma7Schema('prisma/schema.prisma', { version: 18 }),
+    contract: prisma7Schema('prisma/schema.prisma', { databaseVersion: 18 }),
     output: 'generated/prisma8',
     extensions: [citext],
     db: {
@@ -124,7 +124,7 @@ A Prisma 7 schema that uses `@ignore`, `@@ignore` or `Unsupported("...")` fields
 |---|---|
 | `prisma/schema.prisma`, `prisma/migrations/` | The Prisma 7 schema and its migrations; Prisma 7 owns both. |
 | `prisma7.config.ts` | Prisma 7's config (`@prisma/prisma7/config`). |
-| `prisma.config.ts` | Prisma 8's config; `prisma7Schema('prisma/schema.prisma', { version: 18 })` is the contract source, and the citext pack is composed. |
+| `prisma.config.ts` | Prisma 8's config; `prisma7Schema('prisma/schema.prisma', { databaseVersion: 18 })` is the contract source, and the citext pack is composed. |
 | `migrations/` | Prisma 8's record of what was signed, and the citext pack's contract and migration (committed). |
 | `generated/prisma8/` | `contract.json` and `contract.d.ts` emitted by Prisma 8 (committed). |
 | `generated/prisma7/` | The Prisma 7 client (`pnpm v7:generate`, gitignored). |

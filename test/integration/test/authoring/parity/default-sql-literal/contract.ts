@@ -2,7 +2,7 @@ import { textColumn, timestamptzTemporalColumn } from '@internal/adapter-postgre
 import { defineContract, field, model, sql } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   models: {
     T: model('T', {
       fields: {

@@ -9,4 +9,4 @@ const Event = model('Event', {
   },
 }).sql({ table: 'event' });
 
-export const contract = defineContract({ version: 18, models: { Event } });
+export const contract = defineContract({ databaseVersion: 18, models: { Event } });

@@ -4,7 +4,7 @@ import type { Temporal } from 'temporal-spec';
 import { expectTypeOf, test } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
 
-const contract = defineContract({ version: 18 }, ({ type, field, model, gen }) => ({
+const contract = defineContract({ databaseVersion: 18 }, ({ type, field, model, gen }) => ({
   models: {
     Event: model('Event', {
       fields: {
@@ -52,7 +52,7 @@ test('a timestamp read as a Date reads a Date, and an interval read as a string 
   expectTypeOf<EventRow['span']>().toEqualTypeOf<string>();
 });
 
-const convenience = defineContract({ version: 18 }, ({ type, field, model, gen }) => ({
+const convenience = defineContract({ databaseVersion: 18 }, ({ type, field, model, gen }) => ({
   models: {
     Order: model('Order', {
       fields: {
@@ -97,7 +97,7 @@ test('a convenience type is typed as the value of the explicit type it chooses',
 });
 
 test('a convenience type helper refuses a combination with no explicit type', () => {
-  defineContract({ version: 18 }, ({ type, field, model, gen }) => ({
+  defineContract({ databaseVersion: 18 }, ({ type, field, model, gen }) => ({
     models: {
       Order: model('Order', {
         fields: {
@@ -119,7 +119,7 @@ test('a convenience type helper refuses a combination with no explicit type', ()
 });
 
 test('each convenience type call has the type of the explicit type helper it chooses', () => {
-  defineContract({ version: 18 }, ({ type }) => {
+  defineContract({ databaseVersion: 18 }, ({ type }) => {
     expectTypeOf(type.DateTime()).toEqualTypeOf(type.TimestamptzJsDate(3));
     expectTypeOf(type.DateTime({ precision: 6 })).toEqualTypeOf(type.TimestamptzJsDate(6));
     expectTypeOf(type.DateTime({ as: 'jsDate', storage: 'timestamptz' })).toEqualTypeOf(

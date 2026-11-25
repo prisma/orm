@@ -13,7 +13,7 @@ import {
   supportedVersionsText,
 } from '../contract/contract-capabilities';
 
-/** The database a Prisma 7 schema contract is written for: the PostgreSQL `version` and the optional `capabilities` list. */
+/** The database a Prisma 7 schema contract is written for: the PostgreSQL `databaseVersion` and the optional `capabilities` list. */
 export type Prisma7SchemaOptions = PostgresCapabilitiesInput;
 
 /** `prisma7Schema` for `table`. The facade exports it for the table Prisma 8 ships; tests pass a table whose rows differ. */
@@ -25,7 +25,7 @@ export function prisma7SchemaFor<const Table extends CapabilitiesByVersion>(tabl
     const capabilities = contractCapabilitiesFor(
       table,
       options ?? {},
-      `State the PostgreSQL version your database runs beside the Prisma 7 schema path, for example prisma7Schema('${schemaPath}', { version: 18 }). ${supportedVersionsText}`,
+      `State the PostgreSQL version your database runs beside the Prisma 7 schema path, for example prisma7Schema('${schemaPath}', { databaseVersion: 18 }). ${supportedVersionsText}`,
     );
     return prisma7Contract(schemaPath, { binding: prisma7PostgresBinding, capabilities });
   };

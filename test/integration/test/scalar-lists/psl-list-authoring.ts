@@ -78,7 +78,7 @@ export interface SqlAuthoringResult {
 export async function authorSqlContractFromPsl(schema: string): Promise<SqlAuthoringResult> {
   const schemaPath = writeSchemaToTempFile(schema);
   const provider = prismaContract(schemaPath, {
-    capabilities: postgresContractCapabilities({ version: 18 }),
+    capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
     target: postgresPackRef,
     createNamespace: postgresCreateNamespace,
   });

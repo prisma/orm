@@ -14,7 +14,7 @@ import featureFlags from '../packages/feature-flags/src/control';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: { path: './src/contract.prisma', version: 18 },
+    contract: { path: './src/contract.prisma', databaseVersion: 18 },
     extensions: [audit, featureFlags],
     migrations: { dir: 'migrations' },
   }),

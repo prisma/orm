@@ -12,7 +12,7 @@ import {
 type PostgresHelpers = Parameters<NonNullable<Parameters<typeof defineContract>[1]>>[0];
 
 function storedDefault(build: (helpers: PostgresHelpers) => ScalarFieldBuilder): unknown {
-  const contract = defineContract({ version: 18 }, (helpers) => {
+  const contract = defineContract({ databaseVersion: 18 }, (helpers) => {
     const { field, model, gen, type } = helpers;
     return {
       models: {
@@ -129,7 +129,7 @@ describe('postgres defineContract encodes literal defaults through the column co
       member('Long', 'abc'),
     );
     expect(() =>
-      defineContract({ version: 18, enums: { Code } }, ({ field, model, gen, type }) => ({
+      defineContract({ databaseVersion: 18, enums: { Code } }, ({ field, model, gen, type }) => ({
         models: {
           Event: model('Event', {
             fields: {
@@ -163,7 +163,7 @@ describe('postgres defineContract encodes literal defaults through the column co
       member('High', 10n),
     );
     const contract = defineContract(
-      { version: 18, enums: { Level } },
+      { databaseVersion: 18, enums: { Level } },
       ({ field, model, gen, type }) => ({
         models: {
           Event: model('Event', {
@@ -188,7 +188,7 @@ describe('postgres defineContract encodes literal defaults through the column co
       member('High', 10n),
     );
     const contract = defineContract(
-      { version: 18, enums: { Level } },
+      { databaseVersion: 18, enums: { Level } },
       ({ field, model, gen, type }) => ({
         models: {
           Event: model('Event', {
@@ -221,7 +221,7 @@ describe('postgres defineContract encodes literal defaults through the column co
     });
     const contract = defineContract(
       {
-        version: 18,
+        databaseVersion: 18,
         codecLookup: {
           ...builtinCodecs,
           descriptorFor: (id) => {

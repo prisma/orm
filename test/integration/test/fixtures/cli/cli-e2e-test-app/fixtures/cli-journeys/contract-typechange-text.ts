@@ -7,7 +7,7 @@ import { defineContract, field, model } from '@internal/postgres/contract-builde
  * through the Postgres planner's `typeChangeCallStrategy`.
  */
 export const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   models: {
     User: model('User', {
       fields: {

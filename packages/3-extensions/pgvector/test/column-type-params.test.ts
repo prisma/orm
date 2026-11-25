@@ -5,7 +5,7 @@ import pgvector from '../src/exports/pack';
 
 function buildWithEmbedding(length: number) {
   return defineContract(
-    { version: 18, extensions: { pgvector } },
+    { databaseVersion: 18, extensions: { pgvector } },
     ({ field, model, gen, type }) => ({
       models: {
         Doc: model('Doc', {

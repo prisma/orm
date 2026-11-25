@@ -15,7 +15,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 describe('paradedb bm25 narrowing in TS authoring DSL', () => {
   it('typechecks and accepts a well-formed bm25 index via the helpers factory', () => {
     const contract = defineContract(
-      { version: 18, extensions: { paradedb: paradedbPack } },
+      { databaseVersion: 18, extensions: { paradedb: paradedbPack } },
       ({ model: helperModel, field: helperField }) => {
         const Doc = helperModel('Doc', {
           fields: {
@@ -50,7 +50,7 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
   it('rejects a bm25 index with an unknown options key at compile time', () => {
     expect(() =>
       defineContract(
-        { version: 18, extensions: { paradedb: paradedbPack } },
+        { databaseVersion: 18, extensions: { paradedb: paradedbPack } },
         ({ model: helperModel, field: helperField }) => {
           const Doc = helperModel('Doc', {
             fields: {
@@ -76,7 +76,7 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
   it('rejects a bm25 index missing the required key_field at compile time', () => {
     expect(() =>
       defineContract(
-        { version: 18, extensions: { paradedb: paradedbPack } },
+        { databaseVersion: 18, extensions: { paradedb: paradedbPack } },
         ({ model: helperModel, field: helperField }) => {
           const Doc = helperModel('Doc', {
             fields: {
@@ -102,7 +102,7 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
   it('rejects an unregistered index type at compile time', () => {
     expect(() =>
       defineContract(
-        { version: 18, extensions: { paradedb: paradedbPack } },
+        { databaseVersion: 18, extensions: { paradedb: paradedbPack } },
         ({ model: helperModel, field: helperField }) => {
           const Doc = helperModel('Doc', {
             fields: {
@@ -128,7 +128,7 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
   it('rejects options without a type at compile time', () => {
     expect(() =>
       defineContract(
-        { version: 18, extensions: { paradedb: paradedbPack } },
+        { databaseVersion: 18, extensions: { paradedb: paradedbPack } },
         ({ model: helperModel, field: helperField }) => {
           const Doc = helperModel('Doc', {
             fields: {
@@ -165,7 +165,7 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
       ],
     }));
 
-    expect(() => defineContract({ version: 18, models: { Doc } })).toThrow(
+    expect(() => defineContract({ databaseVersion: 18, models: { Doc } })).toThrow(
       /unregistered index type "made-up"/,
     );
   });
@@ -182,12 +182,12 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
     }));
     expectTypeOf<typeof Doc.__indexTypes>().toEqualTypeOf<Record<never, never>>();
 
-    defineContract({ version: 18, models: { Doc } });
+    defineContract({ databaseVersion: 18, models: { Doc } });
   });
 
   it("helpers-bound model() carries the merged packs' index-type map", () => {
     defineContract(
-      { version: 18, extensions: { paradedb: paradedbPack } },
+      { databaseVersion: 18, extensions: { paradedb: paradedbPack } },
       ({ model: helperModel, field: helperField }) => {
         const Doc = helperModel('Doc', {
           fields: {

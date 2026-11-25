@@ -44,7 +44,7 @@ export interface EmittedContract {
 function configFor(target: TargetName, contractPath: string) {
   return target === 'sqlite'
     ? sqliteConfig({ contract: contractPath })
-    : postgresConfig({ contract: { path: contractPath, version: 18 } });
+    : postgresConfig({ contract: { path: contractPath, databaseVersion: 18 } });
 }
 
 function controlClientFor(target: TargetName, connection?: string) {

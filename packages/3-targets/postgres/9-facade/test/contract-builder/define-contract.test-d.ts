@@ -8,11 +8,11 @@ type SoleNamespaceModels<
 
 test('takes the capabilities as a list of sets, refusing a single set', () => {
   // @ts-expect-error a single set is refused; the list is an array of sets
-  defineContract({ version: 18, capabilities: { sql: { lateral: true } } });
+  defineContract({ databaseVersion: 18, capabilities: { sql: { lateral: true } } });
 });
 
 test('limits Date authoring to the JsDate types', () => {
-  defineContract({ version: 18 }, ({ type: t }) => {
+  defineContract({ databaseVersion: 18 }, ({ type: t }) => {
     expectTypeOf(t).not.toBeAny();
     expectTypeOf(t).not.toHaveProperty('DateTimeDate');
     expectTypeOf(t).not.toHaveProperty('TimestamptzDate');
@@ -27,7 +27,7 @@ test('limits Date authoring to the JsDate types', () => {
   });
 });
 
-const result = defineContract({ version: 18 });
+const result = defineContract({ databaseVersion: 18 });
 expectTypeOf(result.target).toEqualTypeOf<'postgres'>();
 expectTypeOf(result.targetFamily).toEqualTypeOf<'sql'>();
 
@@ -36,7 +36,7 @@ const textColumn = {
   typeParams: {},
 };
 const withModel = defineContract({
-  version: 18,
+  databaseVersion: 18,
   models: {
     User: model('User', { fields: { id: field.column(textColumn).id() } }),
   },
@@ -44,11 +44,14 @@ const withModel = defineContract({
 expectTypeOf(withModel.target).toEqualTypeOf<'postgres'>();
 expectTypeOf<SoleNamespaceModels<typeof withModel>['User']>().not.toBeNever();
 
-const withFactory = defineContract({ version: 18 }, ({ model: m, field: f, gen, type }) => ({
-  models: {
-    Post: m('Post', { fields: { id: f.column(type.Char(36)).id().onCreate(gen.uuid()) } }),
-  },
-}));
+const withFactory = defineContract(
+  { databaseVersion: 18 },
+  ({ model: m, field: f, gen, type }) => ({
+    models: {
+      Post: m('Post', { fields: { id: f.column(type.Char(36)).id().onCreate(gen.uuid()) } }),
+    },
+  }),
+);
 expectTypeOf(withFactory.target).toEqualTypeOf<'postgres'>();
 expectTypeOf<SoleNamespaceModels<typeof withFactory>['Post']>().not.toBeNever();
 
@@ -59,7 +62,7 @@ const Role = enumType('Role', pgText, member('User', 'user'), member('Admin', 'a
 const Priority = enumType('Priority', pgText, member('Low', 'low'), member('High', 'high'));
 
 const mixedEnums = defineContract(
-  { version: 18, enums: { Role } },
+  { databaseVersion: 18, enums: { Role } },
   ({ model: m, field: f, gen, type }) => ({
     enums: { Priority },
     models: {

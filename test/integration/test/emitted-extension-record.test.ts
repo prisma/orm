@@ -46,7 +46,7 @@ describe('the record an emitted contract keeps of an extension', () => {
     );
     process.chdir(testDir);
     const loaded = await prismaContract('./schema.prisma', {
-      capabilities: postgresContractCapabilities({ version: 18 }),
+      capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
       target: postgresPackRef,
       createNamespace: postgresCreateNamespace,
     }).source.load({

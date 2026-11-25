@@ -2,7 +2,7 @@ import { defineContract, field, model } from '@internal/postgres/contract-builde
 import { int4Column, textColumn } from '@repo/test-utils/column-descriptors';
 
 const contractObj = defineContract({
-  version: 18,
+  databaseVersion: 18,
   models: {
     User: model('User', {
       fields: {

@@ -68,7 +68,7 @@ describe('family instance schemaVerify - basic', () => {
         }));
 
         const contract = defineContract({
-          version: 18,
+          databaseVersion: 18,
           models: {
             User: User.relations({
               posts: rel.hasMany(Post, { by: 'userId' }),
@@ -106,7 +106,7 @@ describe('family instance schemaVerify - basic', () => {
       'returns ok=false with a not-found issue for the missing table',
       async () => {
         const contract = defineContract({
-          version: 18,
+          databaseVersion: 18,
           models: {
             User: model('User', {
               fields: {
@@ -150,7 +150,7 @@ describe('family instance schemaVerify - basic', () => {
       'returns ok=false with a not-found issue for the missing column',
       async () => {
         const contract = defineContract({
-          version: 18,
+          databaseVersion: 18,
           models: {
             User: model('User', {
               fields: {

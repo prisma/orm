@@ -60,7 +60,7 @@ const Project = model('Project', {
 }));
 
 export const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   enums,
   models: {
     Account,

@@ -30,7 +30,7 @@ import { postgresTypeLookups } from './postgres-type-lookups';
 
 function postContract(naming: { readonly name: string } | { readonly map: string }) {
   return defineContract({
-    version: 18,
+    databaseVersion: 18,
     models: {
       Post: model('Post', {
         fields: {

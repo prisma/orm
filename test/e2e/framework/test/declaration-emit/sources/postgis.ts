@@ -3,7 +3,7 @@ import postgis from '@prisma/orm-extension-postgis/pack';
 import { defineContract } from '@prisma/orm-postgres/contract-builder';
 
 export const geo = defineContract(
-  { version: 18, extensions: { postgis } },
+  { databaseVersion: 18, extensions: { postgis } },
   ({ field, model, gen, type }) => {
     const Place = model('Place', {
       fields: {

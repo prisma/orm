@@ -2,7 +2,7 @@ import { defineContract, field, model } from '../../../src/exports/contract-buil
 import { connectionList } from './connection-list';
 
 export const contract = defineContract({
-  version: 16,
+  databaseVersion: 16,
   capabilities: connectionList,
   models: {
     User: model('User', {

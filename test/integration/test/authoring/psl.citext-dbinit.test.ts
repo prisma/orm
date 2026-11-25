@@ -85,7 +85,7 @@ describe('a citext column applied with db init', () => {
     writeFileSync(schemaPath, `// use prisma-8\n\n${schemaText}`, 'utf-8');
     process.chdir(testDir);
     const contractConfig = prismaContract('./schema.prisma', {
-      capabilities: postgresContractCapabilities({ version: 18 }),
+      capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
       target: postgresPackRef,
       createNamespace: postgresCreateNamespace,
     });

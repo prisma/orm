@@ -14,7 +14,7 @@ describe('citext column type', () => {
 
   it('builds a column of the citext/citext data type', () => {
     const contract = defineContract(
-      { version: 18, extensions: { citext: citextPack } },
+      { databaseVersion: 18, extensions: { citext: citextPack } },
       ({ field, model, type }) => ({
         models: {
           User: model('User', {

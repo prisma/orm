@@ -17,7 +17,7 @@ export default definePrismaConfig({
     extensions: [],
     contract: {
       ...prismaContract('./schema.prisma', {
-        capabilities: postgresContractCapabilities({ version: 18 }),
+        capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
         output: 'output/contract.json',
         target: postgres,
         createNamespace: postgresCreateNamespace,

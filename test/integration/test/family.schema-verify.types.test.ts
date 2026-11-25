@@ -35,7 +35,7 @@ describe('family instance schemaVerify - types', () => {
       'runs verification without error, whether or not the adapter maps VARCHAR onto the contract type',
       async () => {
         const contract = defineContract({
-          version: 18,
+          databaseVersion: 18,
           models: {
             User: model('User', {
               fields: {
@@ -76,7 +76,7 @@ describe('family instance schemaVerify - types', () => {
       'returns ok=false with a not-equal issue for the nullability mismatch',
       async () => {
         const contract = defineContract({
-          version: 18,
+          databaseVersion: 18,
           models: {
             User: model('User', {
               fields: {
@@ -123,7 +123,7 @@ describe('family instance schemaVerify - types', () => {
         });
 
         const contract = defineContract({
-          version: 18,
+          databaseVersion: 18,
           models: {
             User: model('User', {
               fields: {

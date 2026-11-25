@@ -15,7 +15,7 @@ describe('uuid-backed enum authoring against the real Postgres pack', () => {
       member('B', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'),
     );
     const built = defineContract(
-      { version: 18, enums: { Key } },
+      { databaseVersion: 18, enums: { Key } },
       ({ field, model, gen, type }) => ({
         models: {
           Item: model('Item', {
@@ -59,7 +59,7 @@ describe('uuid-backed enum authoring against the real Postgres pack', () => {
   ])('refuses a member written in %s, saying the text Postgres stores', (_spelling, written) => {
     const Key = enumType('Key', pgUuid, member('A', written));
     expect(() =>
-      defineContract({ version: 18, enums: { Key } }, ({ field, model, gen, type }) => ({
+      defineContract({ databaseVersion: 18, enums: { Key } }, ({ field, model, gen, type }) => ({
         models: {
           Item: model('Item', {
             fields: {
@@ -80,7 +80,7 @@ describe('uuid-backed enum authoring against the real Postgres pack', () => {
   it('refuses a number member on pg/numeric from the untyped builder as an enum error', () => {
     const Ratio = untypedEnumType('Ratio', { codecId: 'pg/numeric@1' }, member('Half', 1.5));
     expect(() =>
-      defineContract({ version: 18, enums: { Ratio } }, ({ field, model, gen, type }) => ({
+      defineContract({ databaseVersion: 18, enums: { Ratio } }, ({ field, model, gen, type }) => ({
         models: {
           Item: model('Item', {
             fields: {

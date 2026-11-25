@@ -58,7 +58,7 @@ import postgres from '../src/runtime/postgres';
 
 const contract = createContract<SqlStorage>();
 // The default capabilities list includes the driver's interactive transactions.
-const transactionalContract = defineContract({ version: 18 });
+const transactionalContract = defineContract({ databaseVersion: 18 });
 
 function poolEndSpy() {
   return (Pool as unknown as { _endSpy: ReturnType<typeof vi.fn> })._endSpy;

@@ -3,7 +3,7 @@ import pgvector from '@internal/extension-pgvector/pack';
 import { autoincrement, defineContract, now, rel } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract(
-  { version: 18, extensions: { pgvector } },
+  { databaseVersion: 18, extensions: { pgvector } },
   ({ field, model, type }) => {
     const Embedding = field.column(type.pgvector.Vector(1536));
     const User = model('User', {

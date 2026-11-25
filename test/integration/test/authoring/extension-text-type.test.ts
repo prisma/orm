@@ -110,7 +110,7 @@ async function author(schema: string) {
   const schemaPath = join(folder, 'schema.prisma');
   writeFileSync(schemaPath, `// use prisma-8\n\n${schema}`, 'utf-8');
   const result = await prismaContract(schemaPath, {
-    capabilities: postgresContractCapabilities({ version: 18 }),
+    capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
     target: postgresPackRef,
     createNamespace: postgresCreateNamespace,
   }).source.load({

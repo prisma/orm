@@ -41,7 +41,7 @@ const Account = AccountBase.relations({
   notes: rel.hasMany(() => Note, { by: ['tenantId', 'accountId'] }),
 }).sql({ table: 'cpk_accounts' });
 
-const accountsContract = defineContract({ version: 18, models: { Account, Note } });
+const accountsContract = defineContract({ databaseVersion: 18, models: { Account, Note } });
 function accountsContext(strategy: IncludeStrategy) {
   return createExecutionContext({
     contract: withIncludeStrategy(accountsContract, strategy),

@@ -5,7 +5,7 @@ import { definePrismaConfig } from '@prisma/cli-engine';
 
 export default definePrismaConfig({
   orm: postgres({
-    contract: { path: './contract.prisma', version: 18 },
+    contract: { path: './contract.prisma', databaseVersion: 18 },
     db: {
       connection: '{{DB_URL}}',
     },

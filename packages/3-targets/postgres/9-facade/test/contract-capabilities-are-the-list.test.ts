@@ -14,9 +14,9 @@ const User = model('User', {
   fields: { id: field.column({ codecId: 'pg/int4@1' } as const).id() },
 }).sql({ table: 'users' });
 
-const withLocking = defineContract({ version: 18, models: { User } });
+const withLocking = defineContract({ databaseVersion: 18, models: { User } });
 const withoutLocking = defineContract({
-  version: 18,
+  databaseVersion: 18,
   capabilities: [{ sql: { forUpdate: false } }],
   models: { User },
 });

@@ -16,7 +16,7 @@ The canonical runnable Prisma 8 + Supabase app, and the walking skeleton the [`e
 [`prisma.config.ts`](prisma.config.ts) states the contract and the PostgreSQL version it is written for, and composes the Supabase pack:
 
 ```ts
-contract: { path: './src/contract.prisma', version: 18 },
+contract: { path: './src/contract.prisma', databaseVersion: 18 },
 extensions: [supabasePack],
 ```
 

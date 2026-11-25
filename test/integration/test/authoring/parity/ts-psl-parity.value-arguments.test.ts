@@ -117,20 +117,23 @@ function thrownMessage(build: () => unknown): string | undefined {
 
 describe('type-constructor value arguments give the same contract from PSL and TypeScript', () => {
   it('on Postgres: sql.Varchar and Raw through TypeScript helpers that read value arguments, and Varchar and Numeric, which TypeScript writes with fixed column helpers', () => {
-    const tsContract = definePostgresContract({ version: 18 }, ({ field, model, type }) => ({
-      models: {
-        Account: model('Account', {
-          fields: {
-            id: field.column(int4Column).id(),
-            name: field.column(varcharColumn(255)),
-            price: field.column(numericStringColumn(10, 2)),
-            label: field.column(type.sql.Varchar(50)),
-            kind: field.column(type.Raw(sql`"MyType"[]`)).optional(),
-            shape: field.column(postgresRawColumn(sql`"MyType"[]`)).optional(),
-          },
-        }),
-      },
-    }));
+    const tsContract = definePostgresContract(
+      { databaseVersion: 18 },
+      ({ field, model, type }) => ({
+        models: {
+          Account: model('Account', {
+            fields: {
+              id: field.column(int4Column).id(),
+              name: field.column(varcharColumn(255)),
+              price: field.column(numericStringColumn(10, 2)),
+              label: field.column(type.sql.Varchar(50)),
+              kind: field.column(type.Raw(sql`"MyType"[]`)).optional(),
+              shape: field.column(postgresRawColumn(sql`"MyType"[]`)).optional(),
+            },
+          }),
+        },
+      }),
+    );
 
     const interpreted = interpretPostgres(`model Account {
   id    Int @id
@@ -148,7 +151,7 @@ describe('type-constructor value arguments give the same contract from PSL and T
 
   it('on Postgres with extensions: pgvector.Vector and postgis.Geometry, through TypeScript helpers that read value arguments', () => {
     const tsContract = definePostgresContract(
-      { version: 18, extensions: { pgvector: pgvectorPack, postgis: postgisPack } },
+      { databaseVersion: 18, extensions: { pgvector: pgvectorPack, postgis: postgisPack } },
       ({ field, model, type }) => ({
         models: {
           Place: model('Place', {
@@ -211,7 +214,7 @@ describe('a value its argument’s data type cannot hold is refused with the sam
       ? []
       : interpreted.failure.diagnostics.map(({ message }) => message);
     const tsMessage = thrownMessage(() =>
-      definePostgresContract({ version: 18 }, ({ field, model, type }) => ({
+      definePostgresContract({ databaseVersion: 18 }, ({ field, model, type }) => ({
         models: {
           Account: model('Account', {
             fields: {

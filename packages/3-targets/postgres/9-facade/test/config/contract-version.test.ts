@@ -50,26 +50,28 @@ function expectNoRemovedFlags(capabilities: Record<string, Record<string, boolea
 describe('the contract entry of the config', () => {
   it('refuses a Prisma schema path that states no version', () => {
     expect(() => defineConfig({ contract: './prisma/contract.prisma' as `${string}.ts` })).toThrow(
-      "State the PostgreSQL version your database runs beside the contract path, for example contract: { path: './prisma/contract.prisma', version: 18 }. The supported versions are 15, 16, 17, 18.",
+      "State the PostgreSQL version your database runs beside the contract path, for example contract: { path: './prisma/contract.prisma', databaseVersion: 18 }. The supported versions are 15, 16, 17, 18.",
     );
   });
 
   it('refuses a version for a TypeScript contract, which states its own in defineContract', () => {
     expect(() =>
-      defineConfig({ contract: { path: './prisma/contract.ts', version: 17 } as never }),
+      defineConfig({ contract: { path: './prisma/contract.ts', databaseVersion: 17 } as never }),
     ).toThrow(
-      'The TypeScript contract "./prisma/contract.ts" states its PostgreSQL version and capabilities in defineContract. Remove version and capabilities from its contract entry in the config.',
+      'The TypeScript contract "./prisma/contract.ts" states its PostgreSQL version and capabilities in defineContract. Remove databaseVersion and capabilities from its contract entry in the config.',
     );
   });
 
   it('refuses a version the table does not list', () => {
     expect(() =>
-      defineConfig({ contract: { path: './prisma/contract.prisma', version: 14 as 15 } }),
+      defineConfig({ contract: { path: './prisma/contract.prisma', databaseVersion: 14 as 15 } }),
     ).toThrow('PostgreSQL 14 is not supported');
   });
 
   it('gives the target, the control adapter and the control driver no capabilities, so emit adds nothing to what the source writes', () => {
-    const config = defineConfig({ contract: { path: './prisma/contract.prisma', version: 17 } });
+    const config = defineConfig({
+      contract: { path: './prisma/contract.prisma', databaseVersion: 17 },
+    });
     expect([
       config.target.capabilities,
       config.adapter?.capabilities,
@@ -88,7 +90,7 @@ describe('contract emit', () => {
         defineConfigFor(versionsWithALaterFeature)({
           contract: {
             path: schemaPath,
-            version,
+            databaseVersion: version,
             capabilities: [{ sql: { interactiveTransactions: true } }, { http: { batch: true } }],
           },
         }),
@@ -127,7 +129,7 @@ describe('contract emit', () => {
 describe('the control client', () => {
   it('emits the row a Prisma schema contract states and the default connection list, which its source carries', async () => {
     const { dir, schemaPath } = await schemaDir();
-    const { contract } = defineConfig({ contract: { path: schemaPath, version: 17 } });
+    const { contract } = defineConfig({ contract: { path: schemaPath, databaseVersion: 17 } });
     if (contract?.typesModule === undefined) throw new Error('defineConfig set no contract');
 
     const client = createPostgresControlClient();

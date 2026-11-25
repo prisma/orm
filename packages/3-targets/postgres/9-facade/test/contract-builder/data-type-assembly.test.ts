@@ -14,7 +14,7 @@ const duplicateText: ExtensionPackRef<'sql', 'postgres'> = {
 
 describe('postgres defineContract data types', () => {
   it('refuses an extension that registers a data type the target already registers', () => {
-    expect(() => defineContract({ version: 18, extensions: { duplicateText } })).toThrow(
+    expect(() => defineContract({ databaseVersion: 18, extensions: { duplicateText } })).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DATA_TYPE_DUPLICATE',
         details: expect.objectContaining({ dataType: 'pg/text', contributedBy: 'duplicate-text' }),

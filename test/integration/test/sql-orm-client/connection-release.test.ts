@@ -26,7 +26,7 @@ const Child = model('Child', {
   relations: { parent: rel.belongsTo(Parent, { from: 'parentId', to: 'id' }) },
 }).sql({ table: 'children' });
 const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   models: {
     Parent: Parent.relations({ children: rel.hasMany(() => Child, { by: 'parentId' }) }),
     Child,

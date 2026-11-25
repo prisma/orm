@@ -1,7 +1,7 @@
 import { defineContract, field, model } from '../../../src/exports/contract-builder';
 
 export const contract = defineContract({
-  version: 16,
+  databaseVersion: 16,
   capabilities: [{ sql: { interactiveTransactions: true } }],
   models: {
     User: model('User', {

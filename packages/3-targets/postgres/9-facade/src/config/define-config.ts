@@ -31,19 +31,19 @@ import { contractBuilderModule, contractTypesModule, controlComponents } from '.
 import { moduleBase } from './module-base';
 
 /**
- * A contract file and the database it is written for, for any table of versions. A Prisma schema (`.prisma`, a glob or a directory) states the PostgreSQL `version` and the optional `capabilities` list here; a TypeScript contract (`.ts`) states them in `defineContract`, so its entry takes neither.
+ * A contract file and the database it is written for, for any table of versions. A Prisma schema (`.prisma`, a glob or a directory) states the PostgreSQL `databaseVersion` and the optional `capabilities` list here; a TypeScript contract (`.ts`) states them in `defineContract`, so its entry takes neither.
  */
 type ContractEntryFor<Version extends number, Path extends string = string> = {
   readonly path: Path;
 } & (Path extends `${string}.ts`
-  ? { readonly version?: never; readonly capabilities?: never }
+  ? { readonly databaseVersion?: never; readonly capabilities?: never }
   : CapabilitiesInputFor<Version, CapabilitiesList>);
 
-/** The contract entry of a PostgreSQL config: a Prisma schema states its PostgreSQL `version` and optional `capabilities` list here; a TypeScript contract (`.ts`) takes neither. */
+/** The contract entry of a PostgreSQL config: a Prisma schema states its PostgreSQL `databaseVersion` and optional `capabilities` list here; a TypeScript contract (`.ts`) takes neither. */
 export type PostgresContractEntry<Path extends string = string> = {
   readonly path: Path;
 } & (Path extends `${string}.ts`
-  ? { readonly version?: never; readonly capabilities?: never }
+  ? { readonly databaseVersion?: never; readonly capabilities?: never }
   : PostgresCapabilitiesInput);
 
 /** The options of the PostgreSQL `defineConfig`. */
@@ -73,7 +73,7 @@ const postgresContractTarget = { target: postgresPackRef, contractBuilderModule 
 
 interface UntypedEntry {
   readonly path: string;
-  readonly version?: unknown;
+  readonly databaseVersion?: unknown;
   readonly capabilities?: unknown;
 }
 
@@ -87,10 +87,10 @@ function contractConfigFromEntry(
   output: string,
 ): ContractConfig {
   if (extname(entry.path) === '.ts') {
-    if (entry.version !== undefined || entry.capabilities !== undefined) {
+    if (entry.databaseVersion !== undefined || entry.capabilities !== undefined) {
       throw postgresError(
         'CONTRACT.ARGUMENT_INVALID',
-        `The TypeScript contract "${entry.path}" states its PostgreSQL version and capabilities in defineContract. Remove version and capabilities from its contract entry in the config.`,
+        `The TypeScript contract "${entry.path}" states its PostgreSQL version and capabilities in defineContract. Remove databaseVersion and capabilities from its contract entry in the config.`,
         { meta: { contract: entry.path } },
       );
     }
@@ -102,7 +102,7 @@ function contractConfigFromEntry(
       CapabilitiesInputFor<number, CapabilitiesList>,
       'contractCapabilitiesFor refuses a missing or unsupported version and a capabilities value that is not a list'
     >(entry),
-    `State the PostgreSQL version your database runs beside the contract path, for example contract: { path: '${entry.path}', version: 18 }. ${supportedVersionsText}`,
+    `State the PostgreSQL version your database runs beside the contract path, for example contract: { path: '${entry.path}', databaseVersion: 18 }. ${supportedVersionsText}`,
   );
   return prismaContract(entry.path, {
     output,

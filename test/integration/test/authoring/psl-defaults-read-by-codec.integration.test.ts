@@ -21,7 +21,7 @@ async function load(schema: string) {
   const path = join(mkdtempSync(join(tmpdir(), 'psl-codec-reads-')), 'schema.prisma');
   writeFileSync(path, `// use prisma-8\n\n${schema}`, 'utf-8');
   return prismaContract(path, {
-    capabilities: postgresContractCapabilities({ version: 18 }),
+    capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
     target: postgresPackRef,
     createNamespace: postgresCreateNamespace,
     enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
@@ -429,7 +429,7 @@ model Tag {
     ])('refuses %s when the TypeScript contract is built', (_name, value, codecId, message) => {
       const build = () =>
         defineContract({
-          version: 18,
+          databaseVersion: 18,
           models: {
             Reading: model('Reading', {
               fields: { id: field.column(int4Column).id(), value: value() },

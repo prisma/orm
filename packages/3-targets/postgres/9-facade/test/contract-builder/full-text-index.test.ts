@@ -136,7 +136,7 @@ type MessageColumns = { readonly [K in keyof typeof messageFields]: ColumnRef<K>
 
 function indexesOf(indexes: (cols: MessageColumns) => readonly IndexConstraint[]) {
   const contract = defineContract({
-    version: 18,
+    databaseVersion: 18,
     models: {
       Message: model('Message', { fields: messageFields }).sql(({ cols }) => ({
         table: 'message',
@@ -312,7 +312,7 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
 
     expect(() =>
       defineContract({
-        version: 18,
+        databaseVersion: 18,
         models: {
           Message: model('Message', {
             fields: { id: field.column(intColumn).id(), mood: field.column(pg.enum(Mood)) },
@@ -400,7 +400,7 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
       ],
     }));
 
-    expect(() => defineContract({ version: 18, models: { Author, Message } })).toThrow(
+    expect(() => defineContract({ databaseVersion: 18, models: { Author, Message } })).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.ARGUMENT_INVALID',
         message: expect.stringContaining(

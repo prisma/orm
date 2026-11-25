@@ -18,7 +18,7 @@ export default definePrismaConfig({
     contract:
       contractSource === 'ts'
         ? './src/prisma/contract.ts'
-        : { path: './src/prisma/contract.prisma', version: 18 },
+        : { path: './src/prisma/contract.prisma', databaseVersion: 18 },
     ...(process.env['DATABASE_URL'] !== undefined && {
       db: { connection: process.env['DATABASE_URL'] },
     }),

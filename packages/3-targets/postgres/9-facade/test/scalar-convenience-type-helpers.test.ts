@@ -4,7 +4,7 @@ import { defineContract } from '../src/exports/contract-builder';
 
 describe('a scalar convenience type helper', () => {
   it('emits the contract its explicit type emits', () => {
-    const convenience = defineContract({ version: 18 }, ({ type, field, model }) => ({
+    const convenience = defineContract({ databaseVersion: 18 }, ({ type, field, model }) => ({
       models: {
         Account: model('Account', {
           fields: {
@@ -27,7 +27,7 @@ describe('a scalar convenience type helper', () => {
         }),
       },
     }));
-    const explicit = defineContract({ version: 18 }, ({ type, field, model }) => ({
+    const explicit = defineContract({ databaseVersion: 18 }, ({ type, field, model }) => ({
       models: {
         Account: model('Account', {
           fields: {
@@ -60,7 +60,7 @@ describe('a scalar convenience type helper', () => {
     ],
   ])('refuses BigInt(%o) at its argument', (written, message) => {
     expect(() =>
-      defineContract({ version: 18 }, ({ type }) => {
+      defineContract({ databaseVersion: 18 }, ({ type }) => {
         type.BigInt(written as never);
         return { models: {} };
       }),
@@ -69,7 +69,7 @@ describe('a scalar convenience type helper', () => {
 
   it('refuses a length on String, whose default Text takes none', () => {
     expect(() =>
-      defineContract({ version: 18 }, ({ type }) => {
+      defineContract({ databaseVersion: 18 }, ({ type }) => {
         type.String({ length: 12 } as never);
         return { models: {} };
       }),
@@ -79,7 +79,7 @@ describe('a scalar convenience type helper', () => {
   });
 
   it('emits, for PlainJson and Jsonb, the contract their column helpers emit', () => {
-    const helpers = defineContract({ version: 18 }, ({ type, field, model }) => ({
+    const helpers = defineContract({ databaseVersion: 18 }, ({ type, field, model }) => ({
       models: {
         Event: model('Event', {
           fields: {
@@ -90,7 +90,7 @@ describe('a scalar convenience type helper', () => {
         }),
       },
     }));
-    const columns = defineContract({ version: 18 }, ({ type, field, model }) => ({
+    const columns = defineContract({ databaseVersion: 18 }, ({ type, field, model }) => ({
       models: {
         Event: model('Event', {
           fields: {

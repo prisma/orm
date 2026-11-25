@@ -3,7 +3,7 @@ import { definePrismaConfig } from '@prisma/cli-engine';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: { path: './contract.prisma', version: 18 },
+    contract: { path: './contract.prisma', databaseVersion: 18 },
     output: 'generated',
   }),
 });

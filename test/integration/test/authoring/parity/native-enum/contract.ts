@@ -12,7 +12,7 @@ const Role = nativeEnum('Role', 'user', 'admin');
 const AalLevel = nativeEnum('AalLevel', 'aal1', 'aal2', 'aal3').map('aal_level');
 
 export const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   namespaces: ['auth'],
   models: {
     Account: model('Account', {

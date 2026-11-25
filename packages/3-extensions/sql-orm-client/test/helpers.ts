@@ -316,7 +316,7 @@ export const perRelationCapabilities = {
   sql: { outerReferencesInDerivedTables: false, jsonAggWithoutTruncation: false },
 } as const;
 
-// The capabilities `defineContract({ version: 18, capabilities: [...] })` gives a contract, as `@internal/postgres` resolves them: the version's row, then the list in order, keeping the flags that are on. With `withCapabilities`, a test gives a contract one of these lists, with a type that matches it.
+// The capabilities `defineContract({ databaseVersion: 18, capabilities: [...] })` gives a contract, as `@internal/postgres` resolves them: the version's row, then the list in order, keeping the flags that are on. With `withCapabilities`, a test gives a contract one of these lists, with a type that matches it.
 const postgres18 = postgresCapabilitiesByVersion[18];
 export const statedCapabilities = {
   perRelation: resolveCapabilities([postgres18, perRelationCapabilities] as const),

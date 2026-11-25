@@ -78,7 +78,7 @@ describe('an application that lists the Postgres facade and its platform shells'
   it('names its own published modules in the config its defineConfig returns', () => {
     const script = [
       `const { defineConfig } = await import('${facade}/config');`,
-      "const config = defineConfig({ contract: { path: './prisma/contract.prisma', version: 18 } });",
+      "const config = defineConfig({ contract: { path: './prisma/contract.prisma', databaseVersion: 18 } });",
       'console.log(JSON.stringify([config.contract.typesModule, config.migrations.module]));',
     ].join('\n');
     expect(JSON.parse(runInScratch(scratch, script))).toEqual([

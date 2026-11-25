@@ -7,10 +7,10 @@ import postgresServerless from '../src/exports/serverless';
 
 const url = 'postgres://localhost:5432/db';
 
-const providedByTheStack = defineContract({ version: 18 });
+const providedByTheStack = defineContract({ databaseVersion: 18 });
 // A contract whose list names a driver over HTTP, which the facade's own driver is not.
 const requiringBatches = defineContract({
-  version: 18,
+  databaseVersion: 18,
   capabilities: [{ sql: { interactiveTransactions: true } }, { http: { batch: true } }],
 });
 

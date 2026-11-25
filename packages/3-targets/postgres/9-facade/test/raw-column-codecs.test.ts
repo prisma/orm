@@ -4,7 +4,7 @@ import postgresStatic from '../src/static/postgres-static';
 
 const Status = nativeEnum('Status', 'draft', 'published').map('sample_status');
 const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   models: {
     Sample: model('Sample', {
       fields: {

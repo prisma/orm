@@ -7,6 +7,6 @@ export const documents = defineMongoContract({}, ({ field, model, type }) => ({
   },
 }));
 
-export const rows = defineSqlContract({ version: 18 }, ({ field, model, type }) => ({
+export const rows = defineSqlContract({ databaseVersion: 18 }, ({ field, model, type }) => ({
   models: { Row: model('Row', { fields: { id: field.column(type.Int()).id(), body: field.column(type.Jsonb()) } }) },
 }));

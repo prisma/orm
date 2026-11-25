@@ -11,7 +11,7 @@ function contractWithAlias(output: Record<string, unknown>) {
     targetId: 'postgres',
     authoring: { type: { ids: { Short: { kind: 'typeAlias', output } } } },
   } as unknown as ExtensionPackRef<'sql', 'postgres'>;
-  return () => defineContract({ version: 18, extensions: { shortIds }, models: {} });
+  return () => defineContract({ databaseVersion: 18, extensions: { shortIds }, models: {} });
 }
 
 describe('a Postgres TypeScript contract whose extension contributes a type alias', () => {

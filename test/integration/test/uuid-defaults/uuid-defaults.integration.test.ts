@@ -186,7 +186,7 @@ function emitPsl(testDir: string, source: string) {
   return createClient().emit({
     contractConfig: {
       source: prismaContract(schemaPath, {
-        capabilities: postgresContractCapabilities({ version: 18 }),
+        capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
         target: postgresPackRef,
         createNamespace: postgresCreateNamespace,
       }).source,
@@ -311,7 +311,7 @@ describe(
       'in the TypeScript builder, emit as the lower-case text Postgres stores, are created by db init, and pass db verify --strict',
       async () => {
         const contract = defineContract({
-          version: 18,
+          databaseVersion: 18,
           models: {
             T: model('T', {
               fields: {
@@ -361,7 +361,7 @@ describe(
           member('B', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'),
         );
         const contract = defineContract({
-          version: 18,
+          databaseVersion: 18,
           enums: { Key },
           models: {
             T: model('T', {

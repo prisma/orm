@@ -10,7 +10,7 @@ const Ratio = enumType('Ratio', pgNumeric, member('Half', '0.5'), member('Whole'
 const Level = enumType('Level', pgInt, member('Low', 1), member('High', 10));
 
 const contract = defineContract(
-  { version: 18, enums: { Ratio, Level } },
+  { databaseVersion: 18, enums: { Ratio, Level } },
   ({ field, model, gen, type }) => ({
     models: {
       Reading: model('Reading', {

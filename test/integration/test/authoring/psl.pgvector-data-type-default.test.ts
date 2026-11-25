@@ -93,7 +93,7 @@ model Document {
         process.chdir(testDir);
 
         const pslResult = await prismaContract('./schema.prisma', {
-          capabilities: postgresContractCapabilities({ version: 18 }),
+          capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
           target: postgresPackRef,
           createNamespace: postgresCreateNamespace,
         }).source.load({

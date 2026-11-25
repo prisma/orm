@@ -27,7 +27,7 @@ const Item = model('Item', {
 }).sql({ table: 'item' });
 
 const appContract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   extensions: { supabase: supabasePack },
   models: { Item },
 });

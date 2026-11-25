@@ -28,7 +28,7 @@ export default definePrismaConfig({
     adapter: postgresAdapter,
     contract: {
       ...prismaContract('src/contract.prisma', {
-        capabilities: postgresContractCapabilities({ version: 15 }),
+        capabilities: postgresContractCapabilities({ databaseVersion: 15 }),
         target: postgres,
         createNamespace: postgresCreateNamespace,
       }),

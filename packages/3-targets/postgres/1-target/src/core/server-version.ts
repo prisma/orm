@@ -94,13 +94,13 @@ function versionsOf(table: CapabilitiesByVersion): string {
 function versionRefusal(version: unknown, table: CapabilitiesByVersion): string {
   const supported = `The supported versions are ${versionsOf(table)}.`;
   if (version === undefined || version === null) {
-    return `State the PostgreSQL version your database runs, for example version: 18. ${supported}`;
+    return `State the PostgreSQL version your database runs, for example databaseVersion: 18. ${supported}`;
   }
   if (typeof version === 'string' && Object.hasOwn(table, version)) {
     return `Write the PostgreSQL version as the number ${version}, not the string '${version}'.`;
   }
   if (typeof version !== 'number' || !Number.isFinite(version)) {
-    return `Write the PostgreSQL version as a number, for example version: 18. ${supported}`;
+    return `Write the PostgreSQL version as a number, for example databaseVersion: 18. ${supported}`;
   }
   return `PostgreSQL ${version} is not supported. ${supported}`;
 }

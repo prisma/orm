@@ -51,14 +51,14 @@ const withoutReturning: CapabilityMatrix[] = [
   { sql: { returning: false } },
 ];
 const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   capabilities: withReturning,
   models: { Owner, Item },
 });
 const contracts = {
   'with returning': contract,
   'without returning': defineContract({
-    version: 18,
+    databaseVersion: 18,
     capabilities: withoutReturning,
     models: { Owner, Item },
   }),

@@ -9,7 +9,7 @@ const Level = enumType(
 );
 
 test('.default() takes the codec input type in a project without exactOptionalPropertyTypes', () => {
-  defineContract({ version: 18, enums: { Level } }, ({ field, model, gen, type }) => ({
+  defineContract({ databaseVersion: 18, enums: { Level } }, ({ field, model, gen, type }) => ({
     models: {
       Accepted: model('Accepted', {
         fields: {

@@ -15,7 +15,7 @@ const Post = model('Post', {
   },
 }).sql({ table: 'realm_posts' });
 
-const contract = defineContract({ version: 18, models: { Post } });
+const contract = defineContract({ databaseVersion: 18, models: { Post } });
 const context = createExecutionContext({
   contract,
   stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),

@@ -14,7 +14,7 @@ const InstantLevel = enumType(
 const contractJson: unknown = JSON.parse(
   JSON.stringify(
     defineContract(
-      { version: 18, enums: { TextLevel, InstantLevel } },
+      { databaseVersion: 18, enums: { TextLevel, InstantLevel } },
       ({ field, model, gen, type }) => ({
         models: {
           Reading: model('Reading', {

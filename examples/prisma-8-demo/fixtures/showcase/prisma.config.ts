@@ -13,7 +13,7 @@ import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 //   pnpm exec prisma migration graph --config ./fixtures/showcase/prisma.config.ts
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: { path: './contract.prisma', version: 18 },
+    contract: { path: './contract.prisma', databaseVersion: 18 },
     db: {
       connection: 'postgresql://showcase:showcase@localhost:5432/showcase',
     },

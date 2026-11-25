@@ -8,7 +8,7 @@ describe('int-backed enum authoring against the real Postgres pack', () => {
   it('emits numeric membership checks for scalar and array enum columns', () => {
     const Level = enumType('Level', pgInt, member('Low', 1), member('High', 10));
     const contract = defineContract(
-      { version: 18, enums: { Level } },
+      { databaseVersion: 18, enums: { Level } },
       ({ field, model, gen, type }) => ({
         models: {
           Event: model('Event', {
@@ -35,7 +35,7 @@ describe('int-backed enum authoring against the real Postgres pack', () => {
   it('accepts a text-backed enum on the same shape', () => {
     const Role = enumType('Role', pgText, member('User', 'user'), member('Admin', 'admin'));
     expect(() =>
-      defineContract({ version: 18, enums: { Role } }, ({ field, model, gen, type }) => ({
+      defineContract({ databaseVersion: 18, enums: { Role } }, ({ field, model, gen, type }) => ({
         models: {
           Event: model('Event', {
             fields: {

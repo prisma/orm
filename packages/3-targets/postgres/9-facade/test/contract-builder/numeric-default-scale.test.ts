@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
 
 function storedDefault(value: string) {
-  const contract = defineContract({ version: 18 }, ({ field, model, gen, type }) => ({
+  const contract = defineContract({ databaseVersion: 18 }, ({ field, model, gen, type }) => ({
     models: {
       Price: model('Price', {
         fields: {

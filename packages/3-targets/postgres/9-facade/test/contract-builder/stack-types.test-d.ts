@@ -11,7 +11,7 @@ const Post = model('Post', {
 });
 
 const contract = defineContract({
-  version: 18,
+  databaseVersion: 18,
   models: {
     User: model('User', {
       fields: { id: field.column(int4).id(), name: field.column(text), score: field.column(int4) },
@@ -85,7 +85,7 @@ const bitwise = {
 
 test('an extension contributes aggregates, settled against the contract codecs as emission settles them', async () => {
   const withExtension = defineContract({
-    version: 18,
+    databaseVersion: 18,
     extensions: { bitwise },
     models: {
       User: model('User', {

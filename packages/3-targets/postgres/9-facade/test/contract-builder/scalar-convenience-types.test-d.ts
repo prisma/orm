@@ -2,7 +2,7 @@ import { expectTypeOf, test } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
 
 test('each scalar convenience call has the type of the explicit type helper it chooses', () => {
-  defineContract({ version: 18 }, ({ type }) => {
+  defineContract({ databaseVersion: 18 }, ({ type }) => {
     expectTypeOf(type.Int()).toEqualTypeOf(type.Int4());
     expectTypeOf(type.Int({ storage: 'int2' })).toEqualTypeOf(type.Int2());
     expectTypeOf(type.BigInt()).toEqualTypeOf(type.Int8BigInt());
@@ -29,7 +29,7 @@ test('each scalar convenience call has the type of the explicit type helper it c
 });
 
 test('a scalar convenience call with no row does not compile', () => {
-  defineContract({ version: 18 }, ({ type }) => {
+  defineContract({ databaseVersion: 18 }, ({ type }) => {
     // @ts-expect-error no row stores a number as numeric
     type.BigInt({ as: 'number', storage: 'numeric' });
     // @ts-expect-error Text takes no length
@@ -43,7 +43,7 @@ test('a scalar convenience call with no row does not compile', () => {
 });
 
 test('a deprecated explicit type name has the type of its replacement', () => {
-  defineContract({ version: 18 }, ({ type }) => {
+  defineContract({ databaseVersion: 18 }, ({ type }) => {
     expectTypeOf(type.SmallInt().codecId).toEqualTypeOf(type.Int2().codecId);
     expectTypeOf(type.VarChar(12).codecId).toEqualTypeOf(type.Varchar(12).codecId);
     expectTypeOf(type.Numeric(10, 2).codecId).toEqualTypeOf(type.NumericString(10, 2).codecId);
