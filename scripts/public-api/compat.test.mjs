@@ -129,6 +129,15 @@ describe('checkPackage, with the release treated as GA', () => {
     );
   });
 
+  it('leaves undecided an export that reaches two static unique symbols with a quoted or numeric name', () => {
+    const result = check('quoted-symbol-swapped', { release: 'quoted-symbol-release' });
+    deepStrictEqual(brokenExports(result), []);
+    deepStrictEqual(
+      result.undecided.map(({ name, test }) => `${name} ${test}`),
+      ['indexed value', 'keyed value', 'numbered value', 'quoted value'],
+    );
+  });
+
   it('fails when the release imports a file of its own that is missing', () => {
     const { problems } = check('relative-release', { release: 'relative-missing' });
     strictEqual(problems.length, 1);

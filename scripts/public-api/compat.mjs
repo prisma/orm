@@ -830,14 +830,14 @@ function exportsReaching(program, entryPoints, { classes, symbols }) {
     type.operator === ts.SyntaxKind.UniqueKeyword;
   const isTarget = (declaration) => {
     const name = declaration.name;
-    if (!name || !ts.isIdentifier(name)) return false;
+    if (!name) return false;
     const owner = packageOf(declaration.getSourceFile().fileName)?.name;
     if (ts.isClassDeclaration(declaration)) return classes.has(`${owner}:${name.text}`);
     if (!isUniqueSymbol(declaration.type)) return false;
-    if (ts.isVariableDeclaration(declaration)) return symbols.has(`${owner}:${name.text}`);
+    if (ts.isVariableDeclaration(declaration)) return symbols.has(`${owner}:${nameText(name)}`);
     if (ts.isPropertyDeclaration(declaration) && ts.isClassDeclaration(declaration.parent)) {
       const className = declaration.parent.name?.text;
-      return symbols.has(`${owner}:${className ? `${className}.` : ''}${name.text}`);
+      return symbols.has(`${owner}:${className ? `${className}.` : ''}${nameText(name)}`);
     }
     return false;
   };
@@ -845,6 +845,33 @@ function exportsReaching(program, entryPoints, { classes, symbols }) {
     const resolved =
       symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
     return resolved.declarations ?? [];
+  };
+  // What a node names: an identifier, or a member picked by a literal, as in `K[0]`, `K["id"]` and
+  // `(typeof K)["id"]`.
+  const namesAt = (node) => {
+    if (ts.isIdentifier(node)) return [checker.getSymbolAtLocation(node)].filter(Boolean);
+    const parent = node.parent;
+    if (
+      (ts.isStringLiteral(node) || ts.isNumericLiteral(node)) &&
+      parent &&
+      ts.isElementAccessExpression(parent) &&
+      parent.argumentExpression === node
+    ) {
+      return [checker.getSymbolAtLocation(node)].filter(Boolean);
+    }
+    if (
+      ts.isLiteralTypeNode(node) &&
+      (ts.isStringLiteral(node.literal) || ts.isNumericLiteral(node.literal)) &&
+      parent &&
+      ts.isIndexedAccessTypeNode(parent) &&
+      parent.indexType === node
+    ) {
+      const property = checker
+        .getTypeFromTypeNode(parent.objectType)
+        .getProperty(node.literal.text);
+      return property ? [property] : [];
+    }
+    return [];
   };
   const namedBy = new Map();
   const pending = [];
@@ -864,9 +891,8 @@ function exportsReaching(program, entryPoints, { classes, symbols }) {
     namedBy.set(declaration, named);
     if (declaration.getSourceFile().hasNoDefaultLib) continue;
     const visit = (node) => {
-      if (ts.isIdentifier(node)) {
-        const found = checker.getSymbolAtLocation(node);
-        for (const each of found ? declarationsOf(found) : []) {
+      for (const found of namesAt(node)) {
+        for (const each of declarationsOf(found)) {
           named.add(each);
           if (!namedBy.has(each)) pending.push(each);
         }
