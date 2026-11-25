@@ -17,7 +17,7 @@ The storage hash of a contract is the SHA-256 of exactly this, canonicalized:
 }
 ```
 
-The profile hash covers `target`, `targetFamily` and the capabilities the contract requires; the execution hash covers `target`, `targetFamily` and `execution`. Nothing else enters any of them.
+The profile hash covers `target`, `targetFamily` and the contract's `capabilities`; the execution hash covers `target`, `targetFamily` and `execution`. Nothing else enters any of them.
 
 A team on `8.0.0` emits a contract and migrates a database. On `8.4`, with the same contract source, `prisma contract emit` writes the same `storageHash`, the database's marker still matches, and every migration still connects to the one before it.
 
@@ -28,10 +28,10 @@ A team on `8.0.0` emits a contract and migrates a database. On `8.4`, with the s
 | Hash | Covers | Identifies |
 | --- | --- | --- |
 | Storage hash | `targetFamily`, `target`, `storage` | Which contract a database matches; the ends of each migration; the name of each snapshot |
-| Profile hash | `targetFamily`, `target`, and the capability requirements the family passes in | The capabilities a contract requires |
+| Profile hash | `targetFamily`, `target`, `capabilities` | The capabilities a contract requires |
 | Execution hash | `targetFamily`, `target`, `execution` | The execution defaults a contract carries |
 
-The family decides which capabilities the profile hash covers. The SQL family covers the requirements a contract's author declares, and none can be declared today, so every SQL contract of one target has the same profile hash. The MongoDB family covers the contract's `capabilities` section.
+In every family the profile hash covers the contract's capability list, its `capabilities` section. Two contracts that list different capabilities have different profile hashes, so the profile hash a database's marker records names the capabilities the database was signed for. Which capabilities a contract lists is content, not a rule: a release that lists other capabilities for the same contract source gives it another profile hash, as a release that writes other `storage` gives it another storage hash.
 
 A hash is computed from the contract as it is in memory after reading, never from the file as written. Where a hash is checked against a stored contract, such as a snapshot or the contract an extension package ships, the file is first read into a contract and the hash computed from that. The file's `formatVersion` ([ADR 331](ADR%20331%20-%20Stored%20files%20carry%20a%20format%20version%2C%20and%20a%20reader%20refuses%20one%20it%20does%20not%20know.md)) is therefore not an input, and the same contract written in two format versions has the same hashes.
 
