@@ -140,6 +140,7 @@ check the flags
   → resolve the facade
   → for an unlisted package, check the keyword
   → first install: the facade, dotenv, and for a listed package its drivers
+  → install the required peers the installed facade declares
   → load the contribution
   → ask: authoring mode, contract path, and consent to replace files if the project is already set up
   → write the files
