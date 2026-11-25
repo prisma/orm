@@ -15,7 +15,11 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
+    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
     "@prisma/orm-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "mongodb": "catalog:"
   },
   "devDependencies": {

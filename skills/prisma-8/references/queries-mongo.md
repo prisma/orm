@@ -51,7 +51,7 @@ const recent = await db.orm.posts
 
 **`.where(...)`** accepts a plain object whose keys are model field names and values are compared with equality (codec-aware — `ObjectId` fields accept string ids from the contract). Chain multiple `.where({ ... })` calls to AND-compose filters.
 
-For operators the object form doesn't cover (`.in([...])`, range comparisons, nested logic), pass a `MongoFilterExpr` — today that means importing filter helpers from `@prisma/orm-mongo/query-ast/execution` (a façade-completeness gap; see *What Prisma 8 doesn't do yet* in [`queries.md`](./queries.md)). Prefer the object form whenever equality suffices.
+For operators the object form doesn't cover (`.in([...])`, range comparisons, nested logic), pass a `MongoFilterExpr` — today that means importing filter helpers from `@prisma/orm-mongo/query-ast/execution` (a gap in the database package; see *What Prisma 8 doesn't do yet* in [`queries.md`](./queries.md)). Prefer the object form whenever equality suffices.
 
 **Polymorphic roots.** When the contract declares variants on a model, narrow before querying. `.variant()` takes the discriminator value a variant declares (`"article"` from `@@base(Post, "article")`), not the variant's model name. Call it once, on the base collection; a second `.variant()` on a variant collection is refused:
 
@@ -247,8 +247,8 @@ In an ORM read, a placeholder goes in `limit`, `offset`, a scalar field's value 
 2. **Using `.all()` when you wanted one row.** Use `.where({ ... }).first()` — not `.all()`.
 3. **Calling `.update()` / `.delete()` without `.where()`.** Mutations other than `.create` / `.createAll` require a filter — the compiler enforces this at the type level where possible.
 4. **Using PascalCase model names on ORM.** Roots are lowercased plurals from the contract (`db.orm.users`, not `db.orm.User`).
-5. **Expecting Postgres-style lambda `.where((u) => u.email.eq(...))` on ORM.** Prefer object equality `.where({ email: '...' })`; richer operators need `MongoFilterExpr` helpers (façade gap today).
-6. **Expecting `db.transaction(...)`.** The Mongo façade does not expose it today. Multi-document atomicity requires MongoDB transactions on a replica set via the driver — not yet wrapped in the Prisma 8 façade. Route to *What Prisma 8 doesn't do yet* / `references/feedback.md` if the user needs this.
+5. **Expecting Postgres-style lambda `.where((u) => u.email.eq(...))` on ORM.** Prefer object equality `.where({ email: '...' })`; richer operators need `MongoFilterExpr` helpers (a gap in the database package today).
+6. **Expecting `db.transaction(...)`.** The Mongo package does not expose it today. Multi-document atomicity requires MongoDB transactions on a replica set via the driver — not yet wrapped in the Prisma 8 database package. Route to *What Prisma 8 doesn't do yet* / `references/feedback.md` if the user needs this.
 7. **Trying to use `db.sql`.** There is no `db.sql` on Mongo.
 8. **Trying to `db.execute(plan)` directly, or reading documents with `execute`.** Run query-builder plans via `(await db.runtime()).query(plan)`. `execute(plan)` resolves statistics only and throws `RUNTIME.MONGO_STATISTICS_UNSUPPORTED` for a find or aggregate.
 9. **Expecting ORM `.aggregate(...)` / `.groupBy(...)`.** Use `db.query.from(...).group(...).build()` instead.

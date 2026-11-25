@@ -10,6 +10,7 @@ import {
   formatRunCommand,
   formatRunScriptCommand,
   hasProjectManifest,
+  quoteSpec,
 } from '../../../src/commands/init/detect-package-manager';
 
 describe('detectPackageManager', () => {
@@ -169,6 +170,30 @@ describe('formatAddArgs', () => {
       'add',
       '@internal/postgres',
       'dotenv',
+    ]);
+  });
+});
+
+describe('quoteSpec', () => {
+  it.each([
+    [
+      'a range with a space and comparators',
+      '@prisma/orm-better-auth@>=1.7.6 <1.8.0',
+      '"@prisma/orm-better-auth@>=1.7.6 <1.8.0"',
+    ],
+    ['a caret range', '@types/pg@^8.20.0', '"@types/pg@^8.20.0"'],
+    ['a tilde at the start of the range', 'temporal-polyfill@~1.0.8', '"temporal-polyfill@~1.0.8"'],
+    ['a plain version', '@prisma/orm-framework@8.1.0', '@prisma/orm-framework@8.1.0'],
+    ['a bare name', 'dotenv', 'dotenv'],
+  ])('quotes %s only when a shell would read it', (_case, spec, quoted) => {
+    expect(quoteSpec(spec)).toBe(quoted);
+  });
+
+  it('quotes the specs in a printed add command', () => {
+    expect(formatAddArgs('pnpm', ['temporal-polyfill@^1.0.8', 'pg'])).toEqual([
+      'add',
+      '"temporal-polyfill@^1.0.8"',
+      'pg',
     ]);
   });
 });
