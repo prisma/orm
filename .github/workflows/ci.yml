@@ -149,6 +149,24 @@ jobs:
           BASE: ${{ github.base_ref || 'main' }}
         run: pnpm check:release-notes --mode pr --prev "origin/$BASE"
 
+  api-compat:
+    name: API compatibility
+    # Depends on build only for its caches, as Lint does.
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build packages (restored from Turbo cache)
+        run: pnpm build
+      - name: Find breaks since the last release
+        # Each package's comparison takes up to about 3 GB; three at once fit the runner.
+        run: pnpm api:compat --jobs 3
+
   fixtures:
     name: Fixtures
     needs: [build, changes]
