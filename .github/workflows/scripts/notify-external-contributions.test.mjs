@@ -70,19 +70,27 @@ describe('resolveWindow', () => {
 });
 
 describe('lastScheduledRunStart', () => {
-  const until = new Date('2026-11-25T12:00:00Z');
-
-  it('picks the latest run created before this one, whatever order the API returns', () => {
+  it('picks the latest successful run, whatever order the API returns', () => {
     const runs = [
       { created_at: '2026-11-25T11:30:00Z' },
-      { created_at: '2026-11-25T12:00:00Z' },
       { created_at: '2026-11-25T11:50:00Z' },
+      { created_at: '2026-11-25T11:40:00Z' },
     ];
-    assert.deepEqual(lastScheduledRunStart(runs, until), new Date('2026-11-25T11:50:00Z'));
+    assert.deepEqual(lastScheduledRunStart(runs), new Date('2026-11-25T11:50:00Z'));
   });
 
-  it('finds nothing when no earlier run succeeded', () => {
-    assert.equal(lastScheduledRunStart([], until), undefined);
+  it('gives a re-run of an older run an empty window once a newer run has succeeded', () => {
+    const rerunCreated = new Date('2026-11-25T10:03:00Z');
+    const since = lastScheduledRunStart([{ created_at: '2026-11-25T10:13:00Z' }]);
+    const page = [
+      issue({ created_at: '2026-11-25T10:00:00Z' }),
+      issue({ created_at: '2026-11-25T09:55:00Z' }),
+    ];
+    assert.deepEqual(itemsCreatedInWindow(page, since, rerunCreated).items, []);
+  });
+
+  it('finds nothing when no run has succeeded', () => {
+    assert.equal(lastScheduledRunStart([]), undefined);
   });
 });
 
@@ -177,6 +185,34 @@ describe('createGitHubClient', () => {
     assert.deepEqual(items[0].number, 2);
     assert.deepEqual(items.at(-1).number, 300);
     assert.equal(items.length, 101);
+  });
+
+  it('stops after one full page once that page reaches the start of the window', async () => {
+    const since = new Date('2026-11-25T10:00:00Z');
+    const until = new Date('2026-11-25T12:00:00Z');
+    const fullPage = Array.from({ length: 100 }, (_, i) =>
+      issue({
+        number: 300 - i,
+        created_at: new Date(until.getTime() - 90_000 * (i + 1)).toISOString(),
+      }),
+    );
+    const { github, requested } = clientFor([
+      ['/repos/o/r/issues', (path) => jsonResponse(path.endsWith('&page=1') ? fullPage : [])],
+    ]);
+
+    const items = await github.itemsCreatedBetween(since, until);
+
+    assert.equal(requested.length, 1);
+    assert.equal(items.length, 80);
+  });
+
+  it('counts only scheduled runs toward the window, so a manual dry run does not move it', async () => {
+    const { github, requested } = clientFor([
+      ['/repos/o/r/actions/workflows/', () => jsonResponse({ workflow_runs: [] })],
+    ]);
+    await github.successfulScheduledRuns(42);
+    assert.match(requested[0], /[?&]event=schedule(&|$)/);
+    assert.match(requested[0], /[?&]status=success(&|$)/);
   });
 
   it('reports no permission for an account that no longer exists', async () => {

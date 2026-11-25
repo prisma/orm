@@ -19,10 +19,8 @@ export function isTeamAccount(user) {
   return user.type === 'Bot' || TEAM_AGENT_ACCOUNTS.has(user.login);
 }
 
-export function lastScheduledRunStart(successfulRuns, until) {
-  const starts = successfulRuns
-    .map((run) => new Date(run.created_at))
-    .filter((start) => start < until);
+export function lastScheduledRunStart(successfulRuns) {
+  const starts = successfulRuns.map((run) => new Date(run.created_at));
   return starts.length ? new Date(Math.max(...starts)) : undefined;
 }
 
@@ -173,7 +171,7 @@ function parseOptions() {
 async function scheduledWindow(github) {
   const { createdAt, workflowId } = await github.currentRun(requireEnv('GITHUB_RUN_ID'));
   const runs = await github.successfulScheduledRuns(workflowId);
-  return resolveWindow(lastScheduledRunStart(runs, createdAt), createdAt);
+  return resolveWindow(lastScheduledRunStart(runs), createdAt);
 }
 
 async function main() {
