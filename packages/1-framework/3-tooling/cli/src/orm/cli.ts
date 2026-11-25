@@ -4,38 +4,11 @@ import { ifDefined } from '@internal/utils/defined';
 import type { Cli, HostProcess, MountedTree, Runtime } from '@prisma/cli-engine';
 import { createCli, telemetryCommandGroup } from '@prisma/cli-engine';
 import { version as CLI_VERSION } from '../../package.json' with { type: 'json' };
-import { createControlClient } from '../control-api/client';
 import type { CreateControlClient } from '../control-api/types';
-import { contractEmitCommand } from './contract/emit';
-import { contractInferCommand } from './contract/infer';
-import { contractPrintCommand } from './contract/print';
-import { createDbInitCommand } from './db/init';
-import { createDbSchemaCommand } from './db/schema';
-import { createDbSignCommand } from './db/sign';
-import { createDbUpdateCommand } from './db/update';
-import { createDbVerifyCommand } from './db/verify';
-import { ormCommandFamily } from './family';
-import { formatCommand } from './format';
-import { initCommand } from './init';
+import { createOrmCommands, ormCommandFamily } from './family';
 import { loadOrmConfig } from './load-config';
-import { lspCommand } from './lsp';
-import { createMigrateCommand } from './migrate';
-import { migrationCheckCommand } from './migration/check';
-import { migrationGraphCommand } from './migration/graph';
-import { migrationListCommand } from './migration/list';
-import { migrationLogCommand } from './migration/log';
-import { createMigrationNewCommand } from './migration/new';
-import { createMigrationPlanCommand } from './migration/plan';
-import { migrationShowCommand } from './migration/show';
-import { migrationStatusCommand } from './migration/status';
 import { normalizeError } from './normalize-error';
 import { runPackageManager } from './package-manager-runner';
-import { refDeleteCommand } from './ref/delete';
-import { refListCommand } from './ref/list';
-import { refPolicyDeleteCommand } from './ref/policy/delete';
-import { refPolicySetCommand } from './ref/policy/set';
-import { refPolicyShowCommand } from './ref/policy/show';
-import { refSetCommand } from './ref/set';
 import { resolveTelemetryHooks } from './telemetry/reporting';
 
 /**
@@ -109,46 +82,15 @@ export const BIN_GROUPS = {
 } as const;
 
 /**
- * The command tree with its client factory injected, so tests can mount the
- * same tree over a control-client double instead of mocking modules.
+ * The ORM's commands over `createClient`, plus the telemetry commands, so tests can mount the bin's tree over a
+ * control-client double instead of mocking modules.
  */
 export function createBinCommands(createClient: CreateControlClient): MountedTree {
-  return {
-    'contract print': contractPrintCommand,
-    'contract emit': contractEmitCommand,
-    'contract format': formatCommand,
-    'contract infer': contractInferCommand,
-    'db init': createDbInitCommand(createClient),
-    'db migrate': createMigrateCommand(createClient),
-    'db schema': createDbSchemaCommand(createClient),
-    'db sign': createDbSignCommand(createClient),
-    'db update': createDbUpdateCommand(createClient),
-    'db verify': createDbVerifyCommand(createClient),
-    lsp: lspCommand,
-    'migration check': migrationCheckCommand,
-    'migration graph': migrationGraphCommand,
-    'migration list': migrationListCommand,
-    'migration log': migrationLogCommand,
-    'migration new': createMigrationNewCommand(createClient),
-    'migration plan': createMigrationPlanCommand(createClient),
-    'migration ref delete': refDeleteCommand,
-    'migration ref list': refListCommand,
-    'migration ref policy delete': refPolicyDeleteCommand,
-    'migration ref policy set': refPolicySetCommand,
-    'migration ref policy show': refPolicyShowCommand,
-    'migration ref set': refSetCommand,
-    'migration show': migrationShowCommand,
-    'migration status': migrationStatusCommand,
-    'orm init': initCommand,
-    ...telemetry.commands,
-  };
+  return { ...createOrmCommands(createClient), ...telemetry.commands };
 }
 
-/** The family's own command instances replace the tree's equivalents: the engine finds a command's family, and so its docs link, by the instance. */
-export const BIN_COMMANDS: MountedTree = {
-  ...createBinCommands(createControlClient),
-  ...ormCommandFamily.commands,
-};
+/** The family's own command instances, which is how the engine finds a command's family and so its docs link. */
+export const BIN_COMMANDS: MountedTree = { ...ormCommandFamily.commands, ...telemetry.commands };
 
 export function createOrmCli(): Cli {
   return createCli({

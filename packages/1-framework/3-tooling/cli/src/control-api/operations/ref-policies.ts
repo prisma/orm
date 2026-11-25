@@ -21,6 +21,7 @@ import {
   type DeclaredSettings,
   declaredPolicies,
   declaredSettings,
+  type GivenSettings,
   levelFromInput,
   POLICY_SETTINGS,
   type PolicyEffect,
@@ -150,7 +151,7 @@ function parseSetEdit(input: RefPolicySetInput): Result<Edit, ActionableCliError
   if (!dataLoss.ok) return dataLoss;
   const accessWidening = parseLevel(DATA_PROTECTION_SETTINGS.accessWidening, input.accessWidening);
   if (!accessWidening.ok) return accessWidening;
-  const given: Partial<DeclaredSettings> = {
+  const given: GivenSettings = {
     ...ifDefined('change', changeValues.length === 0 ? undefined : change.value),
     ...ifDefined('dataProtection.dataLoss', dataLoss.value),
     ...ifDefined('dataProtection.accessWidening', accessWidening.value),

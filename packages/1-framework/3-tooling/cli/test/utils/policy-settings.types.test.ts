@@ -2,6 +2,7 @@ import type { ChangeStrategy, DataLossLevel } from '@internal/framework-componen
 import { describe, expectTypeOf, it } from 'vitest';
 import {
   type DeclaredSettings,
+  type GivenSettings,
   type PolicySettingValue,
   policyValueEffect,
 } from '../../src/utils/policy-settings';
@@ -29,5 +30,13 @@ describe('policy setting types', () => {
         | PolicySettingValue<'dataProtection.accessWidening'>
         | undefined;
     }>();
+  });
+
+  it('lets a set give a setting or leave it out, never give it as undefined', () => {
+    const given: GivenSettings = { change: ['migrate'] };
+    // @ts-expect-error a set never removes a setting
+    const removing: GivenSettings = { change: undefined };
+    expectTypeOf(given).toEqualTypeOf<GivenSettings>();
+    expectTypeOf(removing).toEqualTypeOf<GivenSettings>();
   });
 });

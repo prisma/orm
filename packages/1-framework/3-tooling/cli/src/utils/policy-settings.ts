@@ -48,6 +48,11 @@ export type DeclaredSettings = {
   readonly [S in PolicySetting]: PolicySettingValue<S> | undefined;
 };
 
+/** The settings a `set` writes: a setting is given or left out, and a left-out setting keeps what the ref declares. */
+export type GivenSettings = {
+  readonly [S in PolicySetting]?: PolicySettingValue<S>;
+};
+
 /** Each setting's value in a database that records no policies. */
 export const DEFAULT_SETTINGS: { readonly [S in PolicySetting]: PolicySettingValue<S> } = {
   change: DEFAULT_DATABASE_POLICIES.change,

@@ -2,24 +2,26 @@ import { ormConfigSection } from '@internal/config-loader';
 import { DOCS_BASE } from '@internal/utils/structured-error';
 import type { AnyCommand, RedirectSpec } from '@prisma/cli-engine';
 import { defineCommandFamily } from '@prisma/cli-engine';
+import { createControlClient } from '../control-api/client';
+import type { CreateControlClient } from '../control-api/types';
 import { contractEmitCommand } from './contract/emit';
 import { contractInferCommand } from './contract/infer';
 import { contractPrintCommand } from './contract/print';
-import { dbInitCommand } from './db/init';
-import { dbSchemaCommand } from './db/schema';
-import { dbSignCommand } from './db/sign';
-import { dbUpdateCommand } from './db/update';
-import { dbVerifyCommand } from './db/verify';
+import { createDbInitCommand } from './db/init';
+import { createDbSchemaCommand } from './db/schema';
+import { createDbSignCommand } from './db/sign';
+import { createDbUpdateCommand } from './db/update';
+import { createDbVerifyCommand } from './db/verify';
 import { formatCommand } from './format';
 import { initCommand } from './init';
 import { lspCommand } from './lsp';
-import { migrateCommand } from './migrate';
+import { createMigrateCommand } from './migrate';
 import { migrationCheckCommand } from './migration/check';
 import { migrationGraphCommand } from './migration/graph';
 import { migrationListCommand } from './migration/list';
 import { migrationLogCommand } from './migration/log';
-import { migrationNewCommand } from './migration/new';
-import { migrationPlanCommand } from './migration/plan';
+import { createMigrationNewCommand } from './migration/new';
+import { createMigrationPlanCommand } from './migration/plan';
 import { migrationShowCommand } from './migration/show';
 import { migrationStatusCommand } from './migration/status';
 import { refDeleteCommand } from './ref/delete';
@@ -35,34 +37,42 @@ import { refSetCommand } from './ref/set';
  */
 const DOCS_BASE_URL = `${DOCS_BASE}/`;
 
-const commands: Readonly<Record<string, AnyCommand>> = {
-  'contract print': contractPrintCommand,
-  'contract emit': contractEmitCommand,
-  'contract format': formatCommand,
-  'contract infer': contractInferCommand,
-  'db init': dbInitCommand,
-  'db migrate': migrateCommand,
-  'db schema': dbSchemaCommand,
-  'db sign': dbSignCommand,
-  'db update': dbUpdateCommand,
-  'db verify': dbVerifyCommand,
-  lsp: lspCommand,
-  'migration check': migrationCheckCommand,
-  'migration graph': migrationGraphCommand,
-  'migration list': migrationListCommand,
-  'migration log': migrationLogCommand,
-  'migration new': migrationNewCommand,
-  'migration plan': migrationPlanCommand,
-  'migration ref delete': refDeleteCommand,
-  'migration ref list': refListCommand,
-  'migration ref policy delete': refPolicyDeleteCommand,
-  'migration ref policy set': refPolicySetCommand,
-  'migration ref policy show': refPolicyShowCommand,
-  'migration ref set': refSetCommand,
-  'migration show': migrationShowCommand,
-  'migration status': migrationStatusCommand,
-  'orm init': initCommand,
-};
+/**
+ * The ORM's commands by name, with the control client factory the database commands use, so tests can mount the
+ * same commands over a control-client double. The family holds them over the real client.
+ */
+export function createOrmCommands(
+  createClient: CreateControlClient,
+): Readonly<Record<string, AnyCommand>> {
+  return {
+    'contract print': contractPrintCommand,
+    'contract emit': contractEmitCommand,
+    'contract format': formatCommand,
+    'contract infer': contractInferCommand,
+    'db init': createDbInitCommand(createClient),
+    'db migrate': createMigrateCommand(createClient),
+    'db schema': createDbSchemaCommand(createClient),
+    'db sign': createDbSignCommand(createClient),
+    'db update': createDbUpdateCommand(createClient),
+    'db verify': createDbVerifyCommand(createClient),
+    lsp: lspCommand,
+    'migration check': migrationCheckCommand,
+    'migration graph': migrationGraphCommand,
+    'migration list': migrationListCommand,
+    'migration log': migrationLogCommand,
+    'migration new': createMigrationNewCommand(createClient),
+    'migration plan': createMigrationPlanCommand(createClient),
+    'migration ref delete': refDeleteCommand,
+    'migration ref list': refListCommand,
+    'migration ref policy delete': refPolicyDeleteCommand,
+    'migration ref policy set': refPolicySetCommand,
+    'migration ref policy show': refPolicyShowCommand,
+    'migration ref set': refSetCommand,
+    'migration show': migrationShowCommand,
+    'migration status': migrationStatusCommand,
+    'orm init': initCommand,
+  };
+}
 
 const CLI_DOCS_URL = 'https://www.prisma.io/docs/cli';
 
@@ -217,7 +227,7 @@ const redirects: readonly RedirectSpec[] = [
  */
 export const ormCommandFamily = defineCommandFamily({
   configSection: ormConfigSection,
-  commands,
+  commands: createOrmCommands(createControlClient),
   docsBaseUrl: DOCS_BASE_URL,
   redirects,
 });
