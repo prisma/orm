@@ -67,6 +67,8 @@ jobs:
         run: pnpm typecheck:packages
       - name: Type check examples
         run: pnpm typecheck:examples
+      - name: Type check the last release's example apps against this build
+        run: pnpm api:examples
 
   lint:
     name: Lint
