@@ -94,12 +94,14 @@ Decided on 2026-11-24:
 
 | Level | Packages |
 | --- | --- |
-| GA | `@prisma/orm-postgres`, and what it depends on: `orm-framework`, `orm-toolchain`, `orm-family-sql`, `orm-target-postgres`. `orm-extension-pgvector`, `orm-extension-postgis`, `orm-postgres-contrib` (citext), `orm-extension-arktype-json` |
+| GA | `@prisma/orm-postgres`, and what it depends on: `orm-framework`, `orm-toolchain`, `orm-family-sql`, `orm-target-postgres`. `orm-extension-pgvector`, `orm-extension-postgis`, `orm-postgres-contrib` (citext), `orm-extension-arktype-json`, `orm-extension-middleware-cache`, `orm-better-auth` |
 | Preview | `orm-mongo`, `orm-family-mongo`, `orm-target-mongo`, `orm-extension-supabase` |
 | Early Access | `orm-mysql`, `orm-target-mysql`, `orm-mariadb`, `orm-target-mariadb`, `orm-sqlite`, `orm-target-sqlite` |
 | Numbered `0.x` | `orm-extension-paradedb`, until it is removed from this repository |
 
-Two packages were not named in that decision: `orm-extension-middleware-cache` and `orm-better-auth`. Which level each has at `8.0.0` is the operator's decision and is asked. Until it is answered the project assumes **Preview** for both, the level that claims least: nobody has said that either is finished, which Release Candidate would claim, and GA would put both under the compatibility promise. Changing the answer is a one-line change in slice 2.
+The cache middleware and the Better Auth integration were not named in that decision. On 2026-11-25 the operator put both at GA with the rest of the release, or at Release Candidate if either is found not ready before `8.0.0`.
+
+prisma.io calls MongoDB "Early access" and MySQL and MariaDB "Early preview". What it describes for MongoDB, a library that works with its gaps listed, is what Preview means here; what it describes for MySQL and MariaDB is Early Access. So the levels above stand, and the docs site takes the four names in slice 4.
 
 MariaDB's packages depend on MySQL's, so MariaDB can never be at a higher level than MySQL.
 
@@ -133,8 +135,6 @@ No adapter code changes. Every target's published package changes its `package.j
 The command-line tool's rules are not in this list. They are required for GA and belong to the proposed project.
 
 ## Open questions
-
-One for the operator: the level of `orm-extension-middleware-cache` and `orm-better-auth` at `8.0.0` (see "Levels at `8.0.0`").
 
 Points the design left to this project, and how each was decided, are in [plan.md](plan.md) under "Decisions made in this project". Two of them are told to the operator when the first pull request is handed over, because they limit what the design promises: the monorepo limit, and that an extension released at a later minor cannot be installed alone into an application on an earlier one.
 
