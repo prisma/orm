@@ -33,10 +33,15 @@ const SUSPECT_BATCH = 32;
 const OUT_OF_TIME =
   'not decided: compared after a comparison too deep to finish, which may have let it pass, and the time for comparing it again ran out';
 const UNCONFIRMED =
-  "not decided: TypeScript's own comparison fails, and the time for comparing it again ran out";
+  ' (not confirmed against the copy of the last release: the time ran out; raise the budget)';
 const OUT_OF_STACK = 'not decided: TypeScript ran out of stack comparing it';
 const UNRELATABLE =
-  "not decided: TypeScript's own comparison fails between the last release and a copy of it too, so it cannot compare the two copies, and the structural comparison is too deep";
+  "TypeScript's own comparison fails between the last release and a copy of it too, so it cannot compare the two copies here";
+const STRUCTURAL_ONLY = `not decided: ${UNRELATABLE}, and only the structural comparison, which instantiates generic signatures with their constraints, passes`;
+const STRUCTURAL_DEEP = `not decided: ${UNRELATABLE}, and the structural comparison is too deep`;
+const STRUCTURAL_LATE = `not decided: ${UNRELATABLE}, and the time for the structural comparison ran out`;
+const PARTIAL =
+  'not decided: its members pass one by one, but its call, construct or index signatures, or its symbol keys, could not be compared that way';
 
 const TYPE_FLAGS =
   ts.SymbolFlags.Interface | ts.SymbolFlags.TypeAlias | ts.SymbolFlags.Class | ts.SymbolFlags.Enum;
@@ -102,7 +107,7 @@ function compilerOptions(dir) {
 const specifierFor = (packageSpecifier, subpath) =>
   subpath === '.' ? packageSpecifier : `${packageSpecifier}${subpath.slice(1)}`;
 
-const recordKey = (path, name) => `${path}\0${name}`;
+const recordKey = (path, name, test) => `${path}\0${name}\0${test}`;
 
 function isForwarded(info, name) {
   return (
@@ -123,6 +128,26 @@ function typeArguments(symbol) {
 const isRestricted = (modifier) =>
   modifier.kind === ts.SyntaxKind.PrivateKeyword ||
   modifier.kind === ts.SyntaxKind.ProtectedKeyword;
+
+// The abstract members of a class, which a subclass implements, under their rewritten keys.
+const abstractKeys = (symbol) =>
+  (symbol.declarations ?? [])
+    .flatMap((declaration) => declaration.members ?? [])
+    .filter(
+      (member) =>
+        member.name !== undefined &&
+        !ts.isPrivateIdentifier(member.name) &&
+        !ts.isComputedPropertyName(member.name) &&
+        member.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AbstractKeyword) &&
+        !member.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.PrivateKeyword),
+    )
+    .map((member) => {
+      const name = member.name.text;
+      return member.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.ProtectedKeyword)
+        ? `protected ${name}`
+        : name;
+    })
+    .filter((key, index, all) => all.indexOf(key) === index);
 
 // A class users can construct: one whose constructor is neither private nor protected.
 const isConstructible = (symbol) =>
@@ -154,13 +179,51 @@ function exportedSymbols(entryPoints, releaseRoot) {
   );
 }
 
-// The comparisons of one export, in the order they are tried: TypeScript's own assignability, then
-// with generic signatures erased one level deep, then the structural mapping.
+// The comparisons of one export or member: TypeScript's own assignability, and the structural
+// mapping it falls back to.
 const comparisons = (newer, older) => ({
   native: `requireAssignableTo<${newer}, ${older}>`,
-  erase: `requireAssignableTo<EraseNew<${newer}>, EraseOld<${older}>>`,
   structural: `requireAssignableTo<StructuralNew<${newer}>, StructuralOld<${older}>>`,
 });
+
+const isRestrictedMember = (declaration) =>
+  (ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.Private) !== 0 ||
+  (declaration.name !== undefined && ts.isPrivateIdentifier(declaration.name));
+
+// The members of a release type or value that can be compared one by one, under the keys the
+// rewritten declarations give them, and whether it has more than those (call, construct or index
+// signatures, or symbol keys). Undefined when it cannot be split: a union, or a generic type alias.
+function membersOf(checker, symbol, test) {
+  const isClass = (symbol.flags & ts.SymbolFlags.Class) !== 0;
+  if (test === 'type') {
+    const generic = symbol.declarations?.some((declaration) => declaration.typeParameters?.length);
+    if (generic && !(symbol.flags & (ts.SymbolFlags.Interface | ts.SymbolFlags.Class)))
+      return undefined;
+  }
+  const type =
+    test === 'type' ? checker.getDeclaredTypeOfSymbol(symbol) : checker.getTypeOfSymbol(symbol);
+  if (type.isUnion() || !(type.flags & (ts.TypeFlags.Object | ts.TypeFlags.Intersection)))
+    return undefined;
+  let partial =
+    checker.getIndexInfosOfType(type).length > 0 ||
+    type.getCallSignatures().length > 0 ||
+    (!isClass && type.getConstructSignatures().length > 0);
+  const keys = [];
+  for (const property of checker.getPropertiesOfType(type)) {
+    const declaration = property.valueDeclaration ?? property.declarations?.[0];
+    if (declaration && isRestrictedMember(declaration)) continue;
+    if (isClass && test === 'value' && property.name === 'prototype') continue;
+    if (property.escapedName.startsWith('__@')) {
+      partial = true;
+      continue;
+    }
+    const isProtected =
+      declaration !== undefined &&
+      (ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.Protected) !== 0;
+    keys.push(isProtected ? `protected ${property.name}` : property.name);
+  }
+  return { keys, partial };
+}
 
 // The tests for one package, as entries that render() turns into a file.
 export function generateTests({
@@ -173,7 +236,7 @@ export function generateTests({
 }) {
   const releaseRoot = realpathSync(releaseDir);
   const entryPoints = entryPointsOf(releaseRoot);
-  const { paths } = readExports(releaseRoot, entryPoints);
+  const { paths, checker } = readExports(releaseRoot, entryPoints);
   const anyForwards = [...paths.values()].some((info) =>
     info.exportNames.some((name) => isForwarded(info, name)),
   );
@@ -187,17 +250,24 @@ export function generateTests({
   for (const record of records) {
     const order = compareVersions(record.release, version);
     if (order < 0)
-      removable.push({ path: record.path, export: record.export, release: record.release });
+      removable.push({
+        path: record.path,
+        export: record.export,
+        test: record.test,
+        release: record.release,
+      });
     else if (order > 0) {
       problems.push(
         `${record.path} ${record.export}: the recorded break is for release ${record.release}, which is later than the last release, ${version}.`,
       );
-    } else pending.set(recordKey(record.path, record.export), record);
+    } else pending.set(recordKey(record.path, record.export, record.test), record);
   }
   const take = (path, name) => {
-    const record = pending.get(recordKey(path, name));
-    pending.delete(recordKey(path, name));
-    return record;
+    const taken = [...pending.values()].filter(
+      (record) => record.path === path && record.export === name,
+    );
+    for (const record of taken) pending.delete(recordKey(path, name, record.test));
+    return taken;
   };
 
   let id = 0;
@@ -214,7 +284,7 @@ export function generateTests({
       release: `import type * as ${release} from '${specifierFor(releaseSpecifier, subpath)}';`,
       current: importOf(currentSpecifier),
       twin: twinSpecifier && importOf(twinSpecifier),
-      record: take(subpath, '*'),
+      records: take(subpath, '*'),
     });
 
     const own = new Map();
@@ -277,7 +347,8 @@ export function generateTests({
             },
           );
         }
-        // Parameters of a constructor declaration compare in both directions, as a method's do.
+        // Parameters of a constructor declaration compare in both directions, as a method's do,
+        // and a subclass must implement each abstract member as the release declares it.
         if (symbol && symbol.flags & ts.SymbolFlags.Class && isConstructible(symbol)) {
           const value = comparisons(`typeof ${current}.${name}`, `typeof ${release}.${name}`);
           segments.push({
@@ -285,8 +356,20 @@ export function generateTests({
             test: 'constructor',
             texts: {
               native: `requireAssignableTo<ConstructorParameters<typeof ${release}.${name}>, ConstructorParameters<typeof ${current}.${name}>>`,
-              erase: value.erase,
               structural: value.structural,
+            },
+          });
+        }
+        const abstract = symbol && symbol.flags & ts.SymbolFlags.Class ? abstractKeys(symbol) : [];
+        if (abstract.length > 0) {
+          const args = typeArguments(symbol);
+          const member = (side, key) => `${side}.${name}${args}[${JSON.stringify(key)}]`;
+          segments.push({
+            id: id++,
+            test: 'abstract',
+            texts: {
+              native: `[${abstract.map((key) => `requireAssignableTo<${member(release, key)}, ${member(current, key)}>`).join(', ')}]`,
+              structural: `[${abstract.map((key) => `requireAssignableTo<StructuralNew<${member(release, key)}>, StructuralOld<${member(current, key)}>>`).join(', ')}]`,
             },
           });
         }
@@ -301,7 +384,24 @@ export function generateTests({
         });
         continue;
       }
-      entries.push({ kind: 'export', path: subpath, name, segments, record: take(subpath, name) });
+      const records = take(subpath, name);
+      for (const record of records) {
+        if (!segments.some((segment) => !segment.probe && segment.test === record.test)) {
+          problems.push(
+            `${record.path} ${record.export}: a break is recorded for its ${record.test} test, which this export does not have. Remove the record or correct its test.`,
+          );
+        }
+      }
+      entries.push({
+        kind: 'export',
+        path: subpath,
+        name,
+        segments,
+        records,
+        symbol: own.get(name),
+        release,
+        current,
+      });
     }
   }
   for (const record of pending.values()) {
@@ -309,14 +409,14 @@ export function generateTests({
       `${record.path} ${record.export}: a break is recorded for an export the last release does not declare in this package. Remove the record.`,
     );
   }
-  return { entries, counts, notCompared, problems, removable };
+  return { entries, counts, notCompared, problems, removable, checker, nextId: id };
 }
 
 // One test file: the imports of `side` ('current' or 'twin') against the release's, and the
 // comparisons of `stage` for the given export entries.
 function render(entries, { stage = 'native', side = 'current', mustFail = true } = {}) {
   const lines = [
-    "import type { EraseNew, EraseOld, IsNeverOrAny, requireAssignableTo, StructuralNew, StructuralOld } from 'HELPERS';",
+    "import type { IsNeverOrAny, requireAssignableTo, StructuralNew, StructuralOld } from 'HELPERS';",
   ];
   const cases = new Map();
   const add = (testCase, line) => {
@@ -347,7 +447,8 @@ function render(entries, { stage = 'native', side = 'current', mustFail = true }
   return { lines, cases };
 }
 
-function packageNameOf(fileName, cache) {
+// The name and folder of the package a file belongs to.
+function packageOf(fileName, cache) {
   for (let folder = dirname(fileName); dirname(folder) !== folder; folder = dirname(folder)) {
     if (!cache.has(folder)) {
       const manifest = join(folder, 'package.json');
@@ -356,10 +457,12 @@ function packageNameOf(fileName, cache) {
         existsSync(manifest) ? JSON.parse(readFileSync(manifest, 'utf8')).name : undefined,
       );
     }
-    if (cache.get(folder) !== undefined) return cache.get(folder);
+    if (cache.get(folder) !== undefined) return { name: cache.get(folder), root: folder };
   }
   return undefined;
 }
+
+const packageNameOf = (fileName, cache) => packageOf(fileName, cache)?.name;
 
 const isBare = (specifier) => !specifier.startsWith('.') && !specifier.startsWith('/');
 
@@ -406,6 +509,10 @@ function programProblems(program, testFile, ownNames, names) {
 
 const lastMessageLine = (message) =>
   withoutRoot(ts.flattenDiagnosticMessageText(message, '\n').split('\n').at(-1).trim());
+
+// V8 reports a stack overflow only as a RangeError with this message.
+const isStackOverflow = (error) =>
+  error instanceof RangeError && error.message === 'Maximum call stack size exceeded';
 
 const isDeep = (code) => code === EXCESSIVELY_DEEP || code === EXCESSIVE_STACK_DEPTH;
 const deepOnly = (outcome) => [...outcome.codes].every(isDeep);
@@ -488,7 +595,6 @@ function compileTests({
   let passes = 0;
   let oldProgram;
   let size = queue.length;
-  let overflowed = false;
   const undecided = (entry, message) => {
     for (const segment of entry.segments) {
       outcomes.set(segment.id, { codes: new Set([EXCESSIVELY_DEEP]), message });
@@ -510,14 +616,21 @@ function compileTests({
         oldProgram,
       });
     } catch (error) {
-      if (!(error instanceof RangeError)) throw error;
+      if (!isStackOverflow(error)) throw error;
       oldProgram = undefined;
-      overflowed = true;
-      if (batch.length <= 1) {
-        if (batch.length === 1) undecided(batch[0], OUT_OF_STACK);
+      const [first] = batch;
+      if (batch.length > 1) size = Math.ceil(batch.length / 2);
+      else if (first?.segments.length > 1) {
+        queue = [
+          ...first.segments.map((segment) => ({ ...first, segments: [segment] })),
+          ...queue.slice(1),
+        ];
+      } else {
+        if (first) undecided(first, OUT_OF_STACK);
         queue = queue.slice(1);
         passes = Math.max(passes, 1);
-      } else size = Math.ceil(batch.length / 2);
+        size = 1;
+      }
       continue;
     }
     oldProgram = pass.program;
@@ -557,9 +670,9 @@ function compileTests({
     }
     queue = [...suspects, ...queue.slice(batch.length)];
     // The tests after a TS2589 go again in small batches, so that the next one too deep poisons
-    // few others; a batch with none doubles the size of the next, unless one has overflowed.
+    // few others; a batch with none doubles the size of the next.
     if (cut !== Number.POSITIVE_INFINITY) size = Math.min(size, SUSPECT_BATCH);
-    else if (!overflowed) size *= 2;
+    else size *= 2;
   }
   for (const entry of queue) undecided(entry, OUT_OF_TIME);
   return { outcomes, problems, importFailures, passes };
@@ -570,10 +683,7 @@ function compileTests({
 // `budgetMs` is the time for the whole package.
 //
 // Each comparison is first TypeScript's own, on declarations rewritten as compat-declarations.mjs
-// describes. A failure is a break when the same comparison passes between the release and its
-// twin. Otherwise TypeScript cannot compare the two copies there, and the comparison is made again
-// with generic signatures erased one level deep, where a pass is a pass, and then with the
-// structural mapping, which decides it unless it too is too deep.
+// describes; the pipeline is described in api-compat.mjs.
 export function checkPackage({
   name,
   releaseDir,
@@ -587,7 +697,7 @@ export function checkPackage({
   strict,
   ownNames,
   mustFail = true,
-  budgetMs = 120_000,
+  budgetMs = 600_000,
 }) {
   const started = performance.now();
   const deadline = started + budgetMs;
@@ -602,7 +712,10 @@ export function checkPackage({
     version,
   });
   const options = compilerOptions(dirname(testFile));
-  const host = createCompareHost(options, (fileName) => own.has(packageNameOf(fileName, owners)));
+  const host = createCompareHost(options, {
+    packageOf: (fileName) => packageOf(fileName, owners),
+    isOwn: (packageName) => own.has(packageName),
+  });
   const imports = generated.entries.filter(({ kind }) => kind === 'import');
   const exported = generated.entries.filter(({ kind }) => kind === 'export');
   const problems = new Set(generated.problems);
@@ -628,54 +741,44 @@ export function checkPackage({
   };
 
   const native = run('native', exported);
-  const fallbacks = [];
   const breaks = [];
   const undecided = [];
   const notCompared = [];
+  const fallbacks = [];
   const currentExports =
     JSON.parse(readFileSync(join(currentDir, 'package.json'), 'utf8')).exports ?? {};
-  const brokenPaths = new Set();
   for (const { entry, code, message } of native.importFailures) {
     if (Object.hasOwn(currentExports, entry.path)) {
       problems.add(
         `${entry.path}: the current build cannot be imported (TS${code} ${message}). Run \`pnpm build\`.`,
       );
-    } else {
-      brokenPaths.add(entry.path);
-      breaks.push({ path: entry.path, name: '*', test: 'path', code, message });
-    }
+    } else breaks.push({ path: entry.path, name: '*', test: 'path', code, message });
   }
 
-  const failure = (entry, segment) => ({ path: entry.path, name: entry.name, test: segment.test });
-  let pending = [];
+  const testOf = (entry, segment) => ({ path: entry.path, name: entry.name, test: segment.test });
+  const broke = (entry, segment, outcome, note = '') =>
+    breaks.push({
+      ...testOf(entry, segment),
+      code: [...outcome.codes][0],
+      message: `${segment.member === undefined ? '' : `${segment.member}: `}${outcome.message}${note}`,
+    });
+  const notDecided = (entry, segment, stage, message) =>
+    undecided.push({ ...testOf(entry, segment), stage, code: EXCESSIVELY_DEEP, message });
+
+  let failed = [];
   for (const entry of exported) {
     for (const segment of entry.segments.filter((each) => !each.probe)) {
       const outcome = native.outcomes.get(segment.id);
       const probe = entry.segments.find((each) => each.probe && each.test === segment.test);
       const probeOutcome = probe && native.outcomes.get(probe.id);
-      if (outcome && deepOnly(outcome)) {
-        undecided.push({
-          ...failure(entry, segment),
-          code: EXCESSIVELY_DEEP,
-          message: outcome.message,
-        });
-      } else if (outcome && segment.test === 'exists') {
-        breaks.push({
-          ...failure(entry, segment),
-          code: [...outcome.codes][0],
-          message: outcome.message,
-        });
-      } else if (outcome) {
-        pending.push({ entry, segment, native: outcome });
-      } else if (probeOutcome && deepOnly(probeOutcome)) {
-        undecided.push({
-          ...failure(entry, segment),
-          code: EXCESSIVELY_DEEP,
-          message: probeOutcome.message,
-        });
+      if (outcome && deepOnly(outcome)) notDecided(entry, segment, 'native', outcome.message);
+      else if (outcome && segment.test === 'exists') broke(entry, segment, outcome);
+      else if (outcome) failed.push({ entry, segment, outcome });
+      else if (probeOutcome && deepOnly(probeOutcome)) {
+        notDecided(entry, segment, 'native', probeOutcome.message);
       } else if (probeOutcome) {
         notCompared.push({
-          ...failure(entry, segment),
+          ...testOf(entry, segment),
           reason: 'the last release has it as never or any',
         });
       }
@@ -684,91 +787,135 @@ export function checkPackage({
 
   const asEntries = (list) => list.map(({ entry, segment }) => ({ ...entry, segments: [segment] }));
   const outOfTime = () => performance.now() > deadline;
-  const settle = (list, message) => {
-    for (const each of list) {
-      undecided.push({ ...failure(each.entry, each.segment), code: EXCESSIVELY_DEEP, message });
-    }
-    return [];
-  };
-
-  if (pending.length > 0 && twinSpecifier !== undefined) {
-    if (outOfTime()) pending = settle(pending, UNCONFIRMED);
-    else {
-      const twin = run('native', asEntries(pending), 'twin');
-      for (const { entry } of twin.importFailures) {
-        problems.add(`${entry.path}: the copy of the last release cannot be imported.`);
-      }
-      pending = pending.filter((each) => {
-        if (twin.outcomes.has(each.segment.id)) return true;
-        breaks.push({
-          ...failure(each.entry, each.segment),
-          code: [...each.native.codes][0],
-          message: each.native.message,
-        });
-        return false;
-      });
-    }
-  }
-  for (const stage of ['erase', 'structural']) {
-    if (pending.length === 0) break;
+  // A failure stands when the same comparison passes between the release and its twin. One with no
+  // time left for that is reported as a break too, so that a slow run never passes one.
+  const confirm = (list) => {
+    if (list.length === 0) return [];
     if (outOfTime()) {
-      pending = settle(pending, UNCONFIRMED);
-      break;
+      for (const each of list) broke(each.entry, each.segment, each.outcome, UNCONFIRMED);
+      return [];
     }
-    const result = run(stage, asEntries(pending));
-    pending = pending.filter((each) => {
-      const outcome = result.outcomes.get(each.segment.id);
-      if (!outcome) {
-        fallbacks.push({ ...failure(each.entry, each.segment), passedIn: stage });
-        return false;
-      }
-      if (stage === 'erase') return true;
-      if (deepOnly(outcome)) {
-        const message = outcome.message === OUT_OF_TIME ? UNCONFIRMED : UNRELATABLE;
-        undecided.push({ ...failure(each.entry, each.segment), code: EXCESSIVELY_DEEP, message });
-      } else {
-        breaks.push({
-          ...failure(each.entry, each.segment),
-          code: [...outcome.codes][0],
-          message: outcome.message,
-        });
-      }
+    const twin = run('native', asEntries(list), 'twin');
+    for (const { entry } of twin.importFailures) {
+      problems.add(`${entry.path}: the copy of the last release cannot be imported.`);
+    }
+    return list.filter((each) => {
+      const outcome = twin.outcomes.get(each.segment.id);
+      if (outcome === undefined) broke(each.entry, each.segment, each.outcome);
+      else if (outcome.message === OUT_OF_TIME) {
+        broke(each.entry, each.segment, each.outcome, UNCONFIRMED);
+      } else return true;
       return false;
     });
+  };
+  failed = confirm(failed);
+
+  // What TypeScript cannot compare between two copies is compared again member by member, each
+  // member with the same twin rule; a member that still cannot be compared, and an export with no
+  // members to compare, go to the structural mapping, whose pass decides nothing.
+  let nextId = generated.nextId;
+  const split = [];
+  const whole = [];
+  for (const each of failed) {
+    const { entry, segment } = each;
+    const members =
+      segment.test === 'type' || segment.test === 'value'
+        ? membersOf(generated.checker, entry.symbol, segment.test)
+        : undefined;
+    if (members === undefined || members.keys.length === 0) {
+      whole.push(each);
+      continue;
+    }
+    const args = segment.test === 'type' ? typeArguments(entry.symbol) : '';
+    const side = (alias) =>
+      segment.test === 'type' ? `${alias}.${entry.name}${args}` : `(typeof ${alias}.${entry.name})`;
+    const memberSegments = members.keys.map((key) => ({
+      id: nextId++,
+      test: segment.test,
+      member: key,
+      texts: comparisons(
+        `${side(entry.current)}[${JSON.stringify(key)}]`,
+        `${side(entry.release)}[${JSON.stringify(key)}]`,
+      ),
+    }));
+    split.push({ ...each, members: memberSegments, partial: members.partial });
+  }
+  const structural = [...whole];
+  const memberFailures = [];
+  if (split.length > 0) {
+    if (outOfTime()) {
+      for (const each of split) notDecided(each.entry, each.segment, 'member', STRUCTURAL_LATE);
+    } else {
+      const perMember = split.flatMap((each) =>
+        each.members.map((member) => ({ entry: each.entry, segment: member, parent: each })),
+      );
+      const result = run('native', asEntries(perMember));
+      const failing = [];
+      for (const each of perMember) {
+        const outcome = result.outcomes.get(each.segment.id);
+        if (outcome === undefined) continue;
+        if (deepOnly(outcome))
+          memberFailures.push({ ...each, stage: 'member', message: outcome.message });
+        else failing.push({ ...each, outcome });
+      }
+      structural.push(...confirm(failing));
+    }
   }
 
-  // A recorded break stands for every failure of its export; one that no longer fails, and is
-  // decided, must be removed.
-  const isBroken = (entry) =>
-    breaks.some((each) => each.path === entry.path && each.name === (entry.name ?? '*'));
-  const isUndecided = (entry) =>
-    undecided.some((each) => each.path === entry.path && each.name === entry.name);
-  const recordedEntries = generated.entries.filter(({ record }) => record);
-  for (const entry of recordedEntries) {
-    if (!isBroken(entry) && !isUndecided(entry)) {
+  if (structural.length > 0) {
+    const result = outOfTime() ? undefined : run('structural', asEntries(structural));
+    for (const each of structural) {
+      const outcome = result?.outcomes.get(each.segment.id);
+      const verdict =
+        result === undefined || outcome?.message === OUT_OF_TIME
+          ? STRUCTURAL_LATE
+          : outcome === undefined
+            ? STRUCTURAL_ONLY
+            : deepOnly(outcome)
+              ? STRUCTURAL_DEEP
+              : undefined;
+      if (verdict === undefined) broke(each.entry, each.segment, outcome);
+      else if (each.parent) memberFailures.push({ ...each, stage: 'structural', message: verdict });
+      else notDecided(each.entry, each.segment, 'structural', verdict);
+    }
+  }
+  for (const each of split) {
+    const key = (list) => list.filter((failure) => failure.parent === each);
+    const broken = breaks.some(
+      (failure) =>
+        failure.path === each.entry.path &&
+        failure.name === each.entry.name &&
+        failure.test === each.segment.test,
+    );
+    const open = key(memberFailures);
+    if (broken) continue;
+    if (open.length > 0) {
+      const stage = open.some((failure) => failure.stage === 'structural')
+        ? 'structural'
+        : 'member';
+      notDecided(
+        each.entry,
+        each.segment,
+        stage,
+        `not decided for ${open.map((failure) => failure.segment.member).join(', ')}: ${open[0].message.replace(/^not decided: /, '')}`,
+      );
+    } else if (each.partial) notDecided(each.entry, each.segment, 'member', PARTIAL);
+    else fallbacks.push({ ...testOf(each.entry, each.segment), decidedBy: 'members' });
+  }
+
+  // A record stands for the breaks of one test of one export; one whose test no longer fails, and
+  // is decided, must be removed.
+  const matches = (record) => (each) =>
+    each.path === record.path && each.name === record.export && each.test === record.test;
+  const applied = generated.entries.flatMap((entry) => entry.records);
+  for (const record of applied) {
+    if (!breaks.some(matches(record)) && !undecided.some(matches(record))) {
       problems.add(
-        `${entry.path} ${entry.name ?? '*'}: the recorded break is no longer a break. Remove the record.`,
+        `${record.path} ${record.export} (${record.test}): the recorded break is no longer a break. Remove the record.`,
       );
     }
   }
-  const recordedKeys = new Set(
-    recordedEntries.map((entry) => recordKey(entry.path, entry.name ?? '*')),
-  );
-  const unrecorded = breaks.filter(
-    (each) =>
-      !recordedKeys.has(recordKey(each.path, each.name)) &&
-      !(
-        each.name !== '*' &&
-        brokenPaths.has(each.path) &&
-        recordedKeys.has(recordKey(each.path, '*'))
-      ),
-  );
-
-  const recorded = recordedEntries.map((entry) => ({
-    path: entry.path,
-    name: entry.name ?? '*',
-    reason: entry.record.reason,
-  }));
+  const unrecorded = breaks.filter((each) => !applied.some((record) => matches(record)(each)));
   const allNotCompared = [...generated.notCompared, ...notCompared];
   return {
     name,
@@ -778,7 +925,12 @@ export function checkPackage({
     breaks: unrecorded.map((each) => ({ ...each, failsRun: strict && !isExemptExport(each.name) })),
     undecided,
     notCompared: allNotCompared,
-    recorded,
+    recorded: applied.map((record) => ({
+      path: record.path,
+      name: record.export,
+      test: record.test,
+      reason: record.reason,
+    })),
     removable: generated.removable,
     problems: [...problems],
     fallbacks,
