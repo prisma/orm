@@ -11,7 +11,10 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { relationalNodeGranularity, SqlColumnIR, SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import { verifySqlSchemaByDiff } from '../src/core/diff/schema-verify';
-import type { SqlSchemaDiffFn } from '../src/exports/control';
+import {
+  type SqlSchemaDiffFn,
+  VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+} from '../src/exports/control';
 import { createTestContract } from './schema-verify.helpers';
 
 /**
@@ -28,6 +31,7 @@ function stubDiff(control: 'observed' | 'managed'): SqlSchemaDiffFn {
     ],
     resolveControlPolicy: () => control,
     namespacePairs: [],
+    capabilityShortfall: undefined,
   });
 }
 
@@ -64,4 +68,46 @@ describe('verifySqlSchemaByDiff surfaces warnings without failing', () => {
     expect(result.schema.issues).toHaveLength(1);
     expect(result.schema.warnings?.issues ?? []).toEqual([]);
   });
+});
+
+describe('verifySqlSchemaByDiff refuses a database that lacks capabilities the contract requires', () => {
+  const database = new SqlSchemaIR({ tables: {} });
+  const shortfall = {
+    path: ['database'],
+    expected: database,
+    actual: database,
+    explanation: {
+      text: 'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 15.4.',
+      cause: 'differs' as const,
+    },
+  };
+
+  function verifyWithShortfall(control: 'observed' | 'managed', strict: boolean) {
+    return verifySqlSchemaByDiff({
+      contract: createTestContract({}, {}, undefined, { defaultControlPolicy: control }),
+      schema: database,
+      strict,
+      frameworkComponents: [],
+      diffSchema: (input) => ({ ...stubDiff(control)(input), capabilityShortfall: shortfall }),
+      granularityOf: relationalNodeGranularity,
+    });
+  }
+
+  it.each([
+    ['managed', true],
+    ['observed', false],
+  ] as const)(
+    'with its own code and summary, under a %s policy (strict: %s)',
+    (control, strict) => {
+      const result = verifyWithShortfall(control, strict);
+
+      expect(result).toMatchObject({
+        ok: false,
+        code: VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+        summary: shortfall.explanation.text,
+      });
+      expect(result.schema.issues[0]).toBe(shortfall);
+      expect(result.schema.warnings?.issues ?? []).not.toContain(shortfall);
+    },
+  );
 });

@@ -1,6 +1,6 @@
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
-import type { SchemaDiffIssue } from '@internal/framework-components/control';
+import type { MismatchExplanation, SchemaDiffIssue } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 
@@ -30,7 +30,19 @@ export interface SqlSchemaDiffResult {
    * schema; a flat target repeats its sole actual root per such namespace.
    */
   readonly namespacePairs: ReadonlyArray<{ readonly actual: SqlSchemaIRNode | undefined }>;
+  /**
+   * The capabilities the contract requires of the database that the database does not provide, as one issue whose explanation says why in the user's terms. No control policy or strictness relaxes it: verification fails with {@link VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED} and the explanation as its summary.
+   */
+  readonly capabilityShortfall: SqlCapabilityShortfall | undefined;
 }
+
+export interface SqlCapabilityShortfall extends SchemaDiffIssue {
+  readonly explanation: MismatchExplanation;
+}
+
+/** The code of a verification that failed because the database does not provide a capability the contract requires of it. */
+export const VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED =
+  'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED';
 
 export interface SqlSchemaDiffInput {
   readonly contract: Contract<SqlStorage>;

@@ -68,5 +68,6 @@ export function diffMysqlSchema(input: {
     issues: diffSchemas(expected, actual),
     resolveControlPolicy: (issue) => resolveControlPolicy(issue, input.contract),
     namespacePairs: namespacesWithTables.map(() => ({ actual })),
+    capabilityShortfall: undefined,
   };
 }

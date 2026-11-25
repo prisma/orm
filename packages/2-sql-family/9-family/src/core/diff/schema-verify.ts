@@ -33,7 +33,11 @@ import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { extractCodecControlHooks } from '../assembly';
-import type { SqlSchemaDiffFn } from '../migrations/schema-differ';
+import {
+  type SqlCapabilityShortfall,
+  type SqlSchemaDiffFn,
+  VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+} from '../migrations/schema-differ';
 import type { CodecControlHooks } from '../migrations/types';
 import { verifierDisposition } from './verifier-disposition';
 
@@ -265,6 +269,23 @@ export interface VerifySqlSchemaByDiffInput {
   readonly granularityOf: (nodeKind: string) => DiffSubjectGranularity;
 }
 
+function verdictOf(
+  failCount: number,
+  shortfall: SqlCapabilityShortfall | undefined,
+): { readonly code?: string; readonly summary: string } {
+  if (shortfall !== undefined) {
+    return {
+      code: VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+      summary: shortfall.explanation.text,
+    };
+  }
+  if (failCount === 0) return { summary: 'Database schema satisfies contract' };
+  return {
+    code: VERIFY_CODE_SCHEMA_FAILURE,
+    summary: `Database schema does not satisfy contract (${failCount} failure${failCount === 1 ? '' : 's'})`,
+  };
+}
+
 /**
  * THE SQL schema verify: runs the target's full-tree node diff, grades it
  * through the family's post-diff filters (strict gating + control-policy
@@ -293,7 +314,13 @@ export function verifySqlSchemaByDiff(
     namespacePairs: verdictDiff.namespacePairs,
     codecHooks: extractCodecControlHooks(input.frameworkComponents),
   });
-  const failCount = diffVerdict.failures.length + storageTypeVerdict.failures.length;
+  const shortfall = verdictDiff.capabilityShortfall;
+  const failures = [
+    ...(shortfall === undefined ? [] : [shortfall]),
+    ...diffVerdict.failures,
+    ...storageTypeVerdict.failures,
+  ];
+  const failCount = failures.length;
   const ok = failCount === 0;
   const profileHash =
     'profileHash' in input.contract && typeof input.contract.profileHash === 'string'
@@ -301,10 +328,7 @@ export function verifySqlSchemaByDiff(
       : undefined;
   return {
     ok,
-    ...(ok ? {} : { code: VERIFY_CODE_SCHEMA_FAILURE }),
-    summary: ok
-      ? 'Database schema satisfies contract'
-      : `Database schema does not satisfy contract (${failCount} failure${failCount === 1 ? '' : 's'})`,
+    ...verdictOf(failCount, shortfall),
     contract: {
       storageHash: input.contract.storage.storageHash,
       ...ifDefined('profileHash', profileHash),
@@ -314,7 +338,7 @@ export function verifySqlSchemaByDiff(
       actual: input.contract.target,
     },
     schema: {
-      issues: [...diffVerdict.failures, ...storageTypeVerdict.failures],
+      issues: failures,
       warnings: {
         issues: [...diffVerdict.warnings, ...storageTypeVerdict.warnings],
       },

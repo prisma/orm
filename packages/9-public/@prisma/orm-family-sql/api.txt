@@ -2748,6 +2748,7 @@
 ./family/control: const INIT_ADDITIVE_POLICY: MigrationOperationPolicy
 ./family/control: const NO_RENAMED_ORIGINS: WorkingSchemaOrigins
 ./family/control: const TABLE_NAME_CASE_CHANGED_CODE = "MIGRATION.TABLE_NAME_CASE_CHANGED"
+./family/control: const VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED = "CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED"
 ./family/control: const exactName: SameName
 ./family/control: export assembleAuthoringContributions from @prisma/orm-framework/components/control
 ./family/control: export default = const _default: SqlFamilyDescriptor
@@ -2992,6 +2993,8 @@
 ./family/control: interface SchemaTables, required method tablesNamed(namespaceId: string, table: string): readonly string[]
 ./family/control: interface SingleOperationCall
 ./family/control: interface SingleOperationCall, readonly required property operationClass: MigrationOperationClass
+./family/control: interface SqlCapabilityShortfall extends SchemaDiffIssue
+./family/control: interface SqlCapabilityShortfall, readonly required property explanation: MismatchExplanation
 ./family/control: interface SqlControlAdapterDescriptor, readonly optional property queryOperations?: () => SqlOperationDescriptors
 ./family/control: interface SqlControlAdapterDescriptor<TTargetId extends string> extends ControlAdapterDescriptor<'sql', TTargetId, SqlControlAdapter<TTargetId>>
 ./family/control: interface SqlControlExtensionDescriptor, readonly optional property contractSpace?: ContractSpace<Contract<SqlStorage>>
@@ -3125,6 +3128,7 @@
 ./family/control: interface SqlSchemaDiffInput, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>
 ./family/control: interface SqlSchemaDiffInput, readonly required property schema: SqlSchemaIRNode
 ./family/control: interface SqlSchemaDiffResult
+./family/control: interface SqlSchemaDiffResult, readonly required property capabilityShortfall: SqlCapabilityShortfall | undefined
 ./family/control: interface SqlSchemaDiffResult, readonly required property issues: readonly SchemaDiffIssue[]
 ./family/control: interface SqlSchemaDiffResult, readonly required property namespacePairs: ReadonlyArray<{ readonly actual: SqlSchemaIRNode | undefined; }>
 ./family/control: interface SqlSchemaDiffResult, readonly required property resolveControlPolicy: (issue: SchemaDiffIssue) => ControlPolicy | undefined
@@ -3252,7 +3256,7 @@
 ./family/control: type ReportedLiteralDefault = { readonly kind: 'list'; readonly elements: readonly (ReportedBody | null)[]; } | { readonly kind: 'value'; readonly body: ReportedBody; }
 ./family/control: type SameName = (left: string, right: string) => boolean
 ./family/control: type SqlDefaultFunctionName = 'autoincrement' | 'now'
-./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
+./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
 ./family/control: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
 ./family/control: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation'
 ./family/control: type SqlPlannerResult<TTargetDetails> = SqlPlannerFailureResult | SqlPlannerSuccessResult<TTargetDetails>
@@ -3445,6 +3449,7 @@
 ./family: const INIT_ADDITIVE_POLICY: MigrationOperationPolicy
 ./family: const NO_RENAMED_ORIGINS: WorkingSchemaOrigins
 ./family: const TABLE_NAME_CASE_CHANGED_CODE = "MIGRATION.TABLE_NAME_CASE_CHANGED"
+./family: const VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED = "CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED"
 ./family: const exactName: SameName
 ./family: export UNBOUND_DOMAIN_NAMESPACE_ID from @prisma/orm-framework/contract/types
 ./family: export assembleAuthoringContributions from @prisma/orm-framework/components/control
@@ -3758,6 +3763,8 @@
 ./family: interface SchemaTables, required method tablesNamed(namespaceId: string, table: string): readonly string[]
 ./family: interface SingleOperationCall
 ./family: interface SingleOperationCall, readonly required property operationClass: MigrationOperationClass
+./family: interface SqlCapabilityShortfall extends SchemaDiffIssue
+./family: interface SqlCapabilityShortfall, readonly required property explanation: MismatchExplanation
 ./family: interface SqlControlAdapter, optional method holdMarkerLock?<T>(driver: SqlControlDriverInstance<TTarget>, work: () => Promise<T>): Promise<T>
 ./family: interface SqlControlAdapter, readonly required property markerLocation: string
 ./family: interface SqlControlAdapter, required method bootstrapControlTableQueries(): readonly DdlNode[]
@@ -3913,6 +3920,7 @@
 ./family: interface SqlSchemaDiffInput, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>
 ./family: interface SqlSchemaDiffInput, readonly required property schema: SqlSchemaIRNode
 ./family: interface SqlSchemaDiffResult
+./family: interface SqlSchemaDiffResult, readonly required property capabilityShortfall: SqlCapabilityShortfall | undefined
 ./family: interface SqlSchemaDiffResult, readonly required property issues: readonly SchemaDiffIssue[]
 ./family: interface SqlSchemaDiffResult, readonly required property namespacePairs: ReadonlyArray<{ readonly actual: SqlSchemaIRNode | undefined; }>
 ./family: interface SqlSchemaDiffResult, readonly required property resolveControlPolicy: (issue: SchemaDiffIssue) => ControlPolicy | undefined
@@ -4069,7 +4077,7 @@
 ./family: type SameName = (left: string, right: string) => boolean
 ./family: type SqlDefaultFunctionName = 'autoincrement' | 'now'
 ./family: type SqlEntityHydrationFactory = (entry: unknown) => unknown
-./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
+./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
 ./family: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
 ./family: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation'
 ./family: type SqlPlannerResult<TTargetDetails> = SqlPlannerFailureResult | SqlPlannerSuccessResult<TTargetDetails>

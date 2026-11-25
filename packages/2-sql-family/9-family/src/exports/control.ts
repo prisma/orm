@@ -117,10 +117,12 @@ export {
   rowsHoldingValueMeta,
   rowsHoldingValueOf,
 } from '../core/migrations/rows-holding-value';
-export type {
-  SqlSchemaDiffFn,
-  SqlSchemaDiffInput,
-  SqlSchemaDiffResult,
+export {
+  type SqlCapabilityShortfall,
+  type SqlSchemaDiffFn,
+  type SqlSchemaDiffInput,
+  type SqlSchemaDiffResult,
+  VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
 } from '../core/migrations/schema-differ';
 export type { SchemaTables } from '../core/migrations/schema-tables';
 export type { SqlQuote, SqlQuotingRules } from '../core/migrations/sql-expression-text';
