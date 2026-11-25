@@ -1099,6 +1099,26 @@ function indexBuildFailure(
   );
 }
 
+const MONGO_DOCUMENT_VALIDATION = 121;
+
+/** The collection a raw aggregate's `$merge` or `$out` stage writes into, in the same database. */
+function copyTargetOf(plan: MongoQueryPlan): string | undefined {
+  if (!(plan.command instanceof RawAggregateCommand)) return undefined;
+  for (const stage of plan.command.pipeline) {
+    const target: unknown = Reflect.get(stage, '$merge') ?? Reflect.get(stage, '$out');
+    const into: unknown =
+      typeof target === 'object' && target !== null && Object.hasOwn(target, 'into')
+        ? Reflect.get(target, 'into')
+        : target;
+    if (typeof into === 'string') return into;
+    if (typeof into === 'object' && into !== null) {
+      const coll: unknown = Reflect.get(into, 'coll');
+      if (typeof coll === 'string') return coll;
+    }
+  }
+  return undefined;
+}
+
 /**
  * The failure when a rewrite fails after MongoDB began it: documents it reached may already be
  * rewritten. A planner cast that meets a value `$convert` cannot cast names the field, which the
@@ -1107,6 +1127,7 @@ function indexBuildFailure(
  */
 function rewriteFailure(
   op: MongoDmlOperation,
+  plan: MongoQueryPlan,
   error: unknown,
   position: { readonly operationIndex: number; readonly contract: MongoContract },
 ): MongoMigrationRunnerResult | undefined {
@@ -1117,6 +1138,22 @@ function rewriteFailure(
   const mongoError = typeof codeName === 'string' ? `${mongoCode} (${codeName})` : `${mongoCode}`;
   const reason = mongoErrorText(error);
   if (op.operationClass === 'data') {
+    const copiedInto = mongoCode === MONGO_DOCUMENT_VALIDATION ? copyTargetOf(plan) : undefined;
+    if (copiedInto !== undefined) {
+      return runnerFailure(
+        'MIGRATION.EXECUTION_FAILED',
+        `Operation ${op.id} failed: the validator of collection ${copiedInto} rejected a document the copy wrote`,
+        {
+          why: `MongoDB error ${mongoError}: ${reason}. Documents the copy wrote before the error stay in collection ${copiedInto}, and the copy runs again on a re-run. If a later validator update in this migration replaces the validator of collection ${copiedInto}, add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents. Otherwise change the pipeline in the migration's migration.ts so the documents it writes fit the validator. Run the file with node, then run the command again.`,
+          meta: {
+            operationId: op.id,
+            mongoCode,
+            ...(typeof codeName === 'string' ? { codeName } : {}),
+            collection: copiedInto,
+          },
+        },
+      );
+    }
     return mongoCode === MONGO_CONVERSION_FAILURE
       ? runnerFailure(
           'MIGRATION.EXECUTION_FAILED',
@@ -1533,7 +1570,7 @@ export class MongoMigrationRunner {
       } catch (error) {
         const refusal = bypassValidationRefusal(op, plan, error);
         if (refusal !== undefined) return { executed: false, failure: refusal };
-        const failure = rewriteFailure(op, error, position);
+        const failure = rewriteFailure(op, plan, error, position);
         if (failure === undefined) throw error;
         wrote();
         return { executed: false, failure };

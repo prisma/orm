@@ -1065,6 +1065,41 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
   });
 });
 
+describe('MongoMigrationRunner, a copy in a data transform that the target collection rejects', () => {
+  const rejected = () =>
+    new MongoServerError({
+      ok: 0,
+      code: 121,
+      codeName: 'DocumentValidationFailure',
+      errmsg: 'PlanExecutor error during aggregation :: caused by :: Document failed validation',
+    });
+
+  it('calls it a copy into that collection, and names the option that skips validation and the documents to fix', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(rejected());
+
+    const result = await execute(harness, [
+      dataTransform('move User to members', {
+        run: () =>
+          rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }]),
+      }),
+    ]);
+
+    expect(failureFields(result.assertNotOk())).toMatchObject({
+      code: 'MIGRATION.EXECUTION_FAILED',
+      message:
+        'Operation data_transform.move User to members failed: the validator of collection members rejected a document the copy wrote',
+      why: "MongoDB error 121 (DocumentValidationFailure): Document failed validation. Documents the copy wrote before the error stay in collection members, and the copy runs again on a re-run. If a later validator update in this migration replaces the validator of collection members, add { bypassDocumentValidation: true } as the last argument of the copy's rawAggregate call, so that update checks the moved documents. Otherwise change the pipeline in the migration's migration.ts so the documents it writes fit the validator. Run the file with node, then run the command again. The operations that ran before the failure stay applied.",
+      meta: {
+        operationId: 'data_transform.move User to members',
+        mongoCode: 121,
+        codeName: 'DocumentValidationFailure',
+        collection: 'members',
+      },
+    });
+  });
+});
+
 describe('MongoMigrationRunner, a field rename stopped because documents already hold the new name', () => {
   it('says which collection, how to find the documents, and that nothing changed when no operation ran before it', async () => {
     const harness = makeHarness();
