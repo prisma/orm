@@ -6,7 +6,7 @@ In this plan, "our packages" means the 22 packages this repository publishes und
 
 ## Slices
 
-Slices 1 to 4 are in the order of what cannot be changed after `8.0.0`; slices 5 and 6 were added later.
+Slices 1 to 4 are in the order of what cannot be changed after release `8.0`; slices 5 and 6 were added later.
 
 - Who lists whom comes first. Once applications exist that list only a facade, moving the platform packages to peers would break every one of them.
 - The suffixes in a version come second. `-ea.0` and `-preview.0` cannot be renamed once a package has been published with them.
@@ -16,7 +16,7 @@ Slices 1 to 4 are in the order of what cannot be changed after `8.0.0`; slices 5
 | 1, [TML-3935](https://linear.app/prisma-company/issue/TML-3935) | The application lists the platform packages, and our packages name each other as peers | prisma/orm, with small changes in prisma/prisma-cli, prisma/composer and prisma/web | nothing | the last release candidate |
 | 2, [TML-3936](https://linear.app/prisma-company/issue/TML-3936) | Each package declares its level, and its version, ranges and tag follow from it | prisma/orm | 1 | the last release candidate |
 | 3, [TML-3937](https://linear.app/prisma-company/issue/TML-3937) | Releasing release `8.0` as `8.0.1`, one package alone, and an older major | prisma/orm | 2 | `8.0.1` |
-| 4, [TML-3938](https://linear.app/prisma-company/issue/TML-3938) | The public docs: what an application installs, the levels, and each package's level | prisma/web | 1 for the install instructions, 2 for the levels | the install instructions with the release that ships slice 1; the levels with `8.0.0` |
+| 4, [TML-3938](https://linear.app/prisma-company/issue/TML-3938) | The public docs: what an application installs, the levels, and each package's level | prisma/web | 1 for the install instructions, 2 for the levels | the install instructions with the release that ships slice 1; the levels with release `8.0` |
 | 5 | Every release's notes have a "How to upgrade" section | prisma/orm | nothing | the next release candidate after slice 1 |
 | 6, [TML-3956](https://linear.app/prisma-company/issue/TML-3956) | Apps that create-prisma generates list the platform packages | prisma/create-prisma | the first release of prisma/orm that contains slice 1 | create-prisma's move to that release |
 
@@ -39,13 +39,13 @@ What changes:
 - Every generated `package.json` that lists the package for a database also lists the platform packages that package names as peers, at the same version, and every other required peer they declare, such as `@prisma/cli-engine` and `temporal-polyfill`. For every package manager, not only Yarn: the app's own lines are what give it one copy, as ADR 329 records. The list comes from the database package's published `peerDependencies`, through the existing check against the registry, so it cannot drift from the release.
 - Whether Deno needs the same lines is checked, not assumed.
 - CI builds, installs and emits a Yarn PostgreSQL app; today it builds a Yarn MongoDB app only.
-- From `8.0.0`, the lines follow what an application writes under ADR 330: a caret for a GA package, a tilde on every line for an app on a package below GA, such as MongoDB's. That is a later change in create-prisma, made when it moves to `8.0.0`.
+- From release `8.0`, the lines follow what an application writes under ADR 330: a caret for a GA package, a tilde on every line for an app on a package below GA, such as MongoDB's. That is a later change in create-prisma, made when it moves to release `8.0`.
 
 It lands in the create-prisma pull request that moves it to the first release of prisma/orm containing slice 1, because the pins are exact and nothing changes before that move.
 
 ### 5. Every release's notes have a "How to upgrade" section
 
-Agreed with the operator on 2026-11-25, through the stream. From the next release candidate, each GitHub Release body (`docs/releases/v<version>.md`, which the publish workflow uses) carries numbered steps a person can follow. Today a release links to recipes written for an agent and lists the breaking changes, with nothing that says what to do. Starting before `8.0.0` is deliberate: it puts pressure on each release candidate to carry few changes a user must make by hand.
+Agreed with the operator on 2026-11-25, through the stream. From the next release candidate, each GitHub Release body (`docs/releases/v<version>.md`, which the publish workflow uses) carries numbered steps a person can follow. Today a release links to recipes written for an agent and lists the breaking changes, with nothing that says what to do. Starting before release `8.0` is deliberate: it puts pressure on each release candidate to carry few changes a user must make by hand.
 
 - The steps for people, the agent's recipe and the list of changes come from one source, never written separately. The likely source is the fragments each pull request adds under `upgrade-instructions/pending/`, which the release-preparation skill already assembles.
 - Whether the fragment system is retired later is another project's decision; this slice does not remove or redesign it.
@@ -70,15 +70,15 @@ Agreed with the operator on 2026-11-25, through the stream. From the next releas
 
 ### 2. Each package declares its level, and its version, ranges and tag follow from it
 
-**After this slice:** the release number is `major.minor`. Each of our packages declares its level in one place. One function gives each package its version, the range it writes on each other package, and its tag. Until `8.0.0` is cut the result is what is published today: `8.0.0-rc.N`, exact, under `latest`.
+**After this slice:** the release number is `major.minor`. Each of our packages declares its level in one place. One function gives each package its version, the range it writes on each other package, and its tag. Until release `8.0` is cut the result is what is published today: `8.0.0-rc.N`, exact, under `latest`.
 
 - **Level declaration,** and a build failure when a GA package of ours names a package of ours below GA.
-- **Versions.** GA: `X.Y.Z`, with its own patch number. Below GA: `X.Y.0-<level>.<n>`, with its own counter. ParadeDB: `0.x`. A development build, published on every push to `main` under the `dev` tag, keeps today's form: the package's version followed by `-dev.N`, with every package of one build naming the others exactly.
-- **Ranges,** written when a package is packed and never by hand: `~X.Y.0` between a facade and the platform packages and among the platform packages; `^X.Y.0` from an extension or a library integration to the platform packages; a tilde on the dependency's own version when the dependency is below GA.
+- **Versions.** GA: `X.Y.Z`, with its own patch number. Below GA: `X.Y.0-<level>.<n>`, with its own counter. At release `8.0` every package starts at patch 1 instead: `8.0.1`, `8.0.1-<level>.<n>`. ParadeDB: `0.x`. A development build, published on every push to `main` under the `dev` tag, keeps today's form: the package's version followed by `-dev.N`, with every package of one build naming the others exactly.
+- **Ranges,** written when a package is packed and never by hand, on the release's first version (`X.Y.0`, or `8.0.1` at release `8.0`): `~X.Y.0` between a facade and the platform packages and among the platform packages; `^X.Y.0` from an extension or a library integration to the platform packages; a tilde on the dependency's own version when the dependency is below GA.
 - **Tags.** A GA release goes under `latest`. A release below GA goes under `latest` when the package has never had a GA release, as the design's section 5 says, and under a tag named after its level otherwise.
 - **`prisma orm init`** writes a caret for a GA facade and a tilde on every line for a facade below GA.
 - **Scripts and checks that assume one version:** `set-version.ts` and its helpers, `determine-version.ts` and its helpers, `bump-version.ts`, `publish-packages.mjs`, `publish.yml`, `check-publish-deps.mjs` (which gains the rule for ranges between our packages), `check-upgrade-coverage.mjs`, `check-release-notes.mjs`, `check-conformance.mjs`, the skill's version stamp, the Supabase extension's version stamp in contracts, and the tests of each.
-- **The check.** A dry run of the publish scripts prints a table of package, version, ranges and tag, and a test compares it with a committed expectation for three releases: the next release candidate, `8.0.0` and `8.1.0`.
+- **The check.** A dry run of the publish scripts prints a table of package, version, ranges and tag, and a test compares it with a committed expectation for three releases: the next release candidate, `8.0.1` and `8.1.0`.
 - **Decision record.** A new record: a maturity level is written in a package's version and an API's name. It holds:
   - the four levels, each defined by the least we do for a package at it (see "Decisions made in this project" for the points the working definitions left open);
   - one release number, the suffix, and each package's own patch number or counter;
@@ -102,8 +102,8 @@ Agreed with the operator on 2026-11-25, through the stream. From the next releas
 - **Packages that move down from `rc`** (the design's section 2.1): at `8.0.1` each is published at its level, and every earlier release candidate of it is marked deprecated on the registry with a message that says where the package went. The trial showed that Yarn and Bun do not print that message, so the release notes and the upgrade instructions say it too.
 - **A fix to one package:** its patch number or counter rises, it alone is published, and the release notes say which package.
 - **A release of an older major always names its own tag,** so it cannot take `latest` back.
-- **Upgrade skills.** From `8.0.0`, the `prisma-8` skill says an upgrade within Prisma 8 needs no change, keeps the per-release instructions for the release candidates only, and says how a user of a package below GA moves to the next minor, including what their lines should read after their package manager has rewritten them. `check-upgrade-coverage.mjs` stops requiring a guide for every release after `8.0.1`.
-- **The procedure for releasing `8.0.1`** in `docs/oss/versioning.md`, with the list of docs to rewrite on that day, the removal of the ParadeDB extension from the repository, and the levels at `8.0.0`, where no package is Preview. A package promoted to Preview later needs, in its reference documentation, the list of what it does not yet support, which the level's definition requires. A draft exists on the branch `docs/compatibility-policy-records`.
+- **Upgrade skills.** From release `8.0`, the `prisma-8` skill says an upgrade within Prisma 8 needs no change, keeps the per-release instructions for the release candidates only, and says how a user of a package below GA moves to the next minor, including what their lines should read after their package manager has rewritten them. `check-upgrade-coverage.mjs` stops requiring a guide for every release after `8.0.1`.
+- **The procedure for releasing `8.0.1`** in `docs/oss/versioning.md`, with the list of docs to rewrite on that day, the removal of the ParadeDB extension from the repository, and the levels at release `8.0`, where no package is Preview. A package promoted to Preview later needs, in its reference documentation, the list of what it does not yet support, which the level's definition requires. A draft exists on the branch `docs/compatibility-policy-records`.
 - **How long a major receives fixes:** fixes go to the latest minor; the previous major receives critical and security fixes for 12 months after a new major. Recorded in a decision record, from the draft on the same branch, and stated in `SECURITY.md` and `docs/oss/versioning.md`. Prisma 7 keeps the 18 months already promised for it; the 12 months apply from Prisma 8 on.
 - **The check.** Dry runs, in CI, of: `8.0.1`; a fix to one GA package; a fix to one package below GA; a release on an older major.
 
@@ -113,10 +113,10 @@ Agreed with the operator on 2026-11-25, through the stream. From the next releas
 
 **What an application installs,** published with the release that ships slice 1. From that release an application lists the platform packages beside the package for its database, because the package for its database names them as peers and Yarn installs no peers. Every page that tells a user what to install changes: the install column of the supported-databases page (today `npm install @prisma/orm-postgres pg`), each quickstart, each extension's page, and the upgrade guide from Prisma 7. Each says that `prisma orm init` writes these lines, and shows them for a user who adds a database to an existing application. The pages for extension authors say an extension names the platform packages as peers and not the package for a database.
 
-**The levels,** published with `8.0.0`:
+**The levels,** published with release `8.0`:
 
 - A page that defines the four levels and says how to read one from a version and from an API's name.
-- Every page that introduces a database or an extension says its level. At `8.0.0`: PostgreSQL and its packages, pgvector, PostGIS, citext, arktype JSON, the cache middleware and Better Auth are GA; MongoDB, Supabase, MySQL, MariaDB and SQLite are Early Access. No package is Preview.
+- Every page that introduces a database or an extension says its level. At release `8.0`: PostgreSQL and its packages, pgvector, PostGIS, citext, arktype JSON, the cache middleware and Better Auth are GA; MongoDB, Supabase, MySQL, MariaDB and SQLite are Early Access. No package is Preview.
 - The five undefined labels used there today are gone. MongoDB keeps "Early access"; MySQL and MariaDB ("Early preview") and SQLite ("Experimental") become Early Access; PostgreSQL ("Release candidate") becomes GA.
 - A short section says what a user of a package below GA does at each new minor: write a tilde on every `@prisma/orm-*` line and edit the lines by hand, because a package manager's update command rewrites them. It also says that a monorepo keeps its applications on one minor unless its package manager keeps each workspace's packages apart.
 - The release-status page states how long a major receives fixes.
@@ -131,12 +131,12 @@ The design's section 4 is the size of a project and is better run as one:
 - **In prisma/orm:** the tool compares its own major and minor with the library installed in the project and stops when they differ. What crosses from the project's config file into the tool is accepted by its shape. Today some values are recognised by which copy of the framework made them: a literal default value carries a private field, and a release candidate once failed on exactly this. The docs currently tell users the tool and the application must share one copy. Finding every such value and changing how it is recognised is an investigation of its own.
 - **In prisma/prisma-cli:** the `prisma` package takes the release number's major and minor, names the toolchain with a same-minor range, and reports newer versions within the ranges the user has written. Today a `prisma` release follows only a release of the toolchain, so the project also decides what follows a fix to another package.
 
-It is required for GA. Once packages have their own patch numbers, the tool and the library will often be different copies. And the number `prisma` takes at `8.0.0` cannot be changed once published. It builds on slice 2 of this project, and touches the same line of the `prisma` manifest as slice 1's change there.
+It is required for GA. Once packages have their own patch numbers, the tool and the library will often be different copies. And the number `prisma` takes at release `8.0` cannot be changed once published. prisma-cli chooses it knowing that the toolchain and every other package of ours start release `8.0` at `8.0.1`, so that the number announced is the number installed. It builds on slice 2 of this project, and touches the same line of the `prisma` manifest as slice 1's change there.
 
 ## Other repositories
 
 - **prisma/prisma-cli:** the framework line before slice 1, and the proposed project above.
-- **prisma/composer:** the framework line before slice 1. Composer can move from exact versions to ranges after `8.0.0`; a ticket records it, and it is not part of this project.
+- **prisma/composer:** the framework line before slice 1. Composer can move from exact versions to ranges after release `8.0`; a ticket records it, and it is not part of this project.
 - **prisma/web:** the install instructions with slice 1, and slice 4.
 - **prisma/create-prisma:** slice 6.
 
@@ -144,7 +144,7 @@ It is required for GA. Once packages have their own patch numbers, the tool and 
 
 - A `prisma` release and a Composer release that list the framework, before slice 1 merges.
 - Slice 1 reaches users in the first release candidate after it merges.
-- Slices 2 and 3 change nothing a user sees until `8.0.0`.
+- Slices 2 and 3 change nothing a user sees until release `8.0`.
 
 ## Decisions made in this project
 
@@ -155,7 +155,7 @@ The design left these to the project. Each is recorded in the pull request of th
 | How the platform packages name each other | As peers | The trial: as ordinary dependencies they gave two copies under Bun and Yarn |
 | How an application on a facade below GA writes its lines | A tilde on every line | The trial: the only form that stayed consistent under every package manager |
 | Who writes the ranges in a new application | `prisma orm init`, explicitly | The trial: pnpm writes an exact version for a pre-release, and Yarn installs no peers |
-| Ranges before `8.0.0` | Exact, as today | A release candidate may break, so a range between release candidates would promise something false |
+| Ranges before release `8.0` | Exact, as today | A release candidate may break, so a range between release candidates would promise something false |
 | The first version of every package at release `8.0` | Patch 1 at every level: `8.0.1`, `8.0.1-rc.0`, `8.0.1-preview.0`, `8.0.1-ea.0`, with the repository, git tag and GitHub release at `8.0.1`. Decided by the operator on 2026-11-25; every later release starts at patch 0 | The third trial: `8.0.0-ea.0` sorts below the old `8.0.0-rc.N`, and a range on it installed an old release candidate under Bun always, Yarn unless deprecated, and npm and pnpm once `latest` moved on. Patch 1 for every level, not only below Release Candidate, is one rule for the release in place of three |
 | Which package carries a database's level | Both the facade and the target package, at the same level | A GA package depends only on GA packages, so a facade cannot be above its target |
 | The framework's level | GA, with the PostgreSQL facade | It is what the PostgreSQL facade depends on |
@@ -163,7 +163,7 @@ The design left these to the project. Each is recorded in the pull request of th
 | Who decides what a Preview package supports | The maintainers, in the list its reference documentation carries | The working definition already requires that list |
 | Release Candidate for a single API | `rc_foo`, by the same rule as `preview_foo` | One scale and one way of writing it |
 | The Supabase extension's dependency on the PostgreSQL facade | Becomes a peer, named as an exception | See the spec's non-goals |
-| Prisma 7's support period | Stays at 18 months after `8.0.0` | Already promised in `SECURITY.md` and the record on Prisma 7. The 12 months are the rule from Prisma 8 on |
+| Prisma 7's support period | Stays at 18 months after release `8.0` | Already promised in `SECURITY.md` and the record on Prisma 7. The 12 months are the rule from Prisma 8 on |
 
 Two findings of the trial limit what the design promises. Both are told to the operator when slice 1 is handed over:
 
