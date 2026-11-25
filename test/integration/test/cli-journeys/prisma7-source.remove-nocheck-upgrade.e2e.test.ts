@@ -1,5 +1,5 @@
 /**
- * The upgrade of a Prisma 7 project whose database was signed under `8.0.0-rc.18`, when the Prisma 7 reader stored every list with non-null elements and a waived element check. The project starts from the `contract.json` and `contract.d.ts` that release stored, with their hashes, and a database marker at those hashes. It then follows the path such a project takes to this release: the script of the app upgrade guide `skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md`, the scripts of the pending `stored-files-format-version` and `contract-hash-inputs` guides, `prisma db sign --db "$DATABASE_URL"` and `prisma contract emit`. `db verify` then passes with no migration.
+ * The upgrade of a Prisma 7 project whose database was signed under `8.0.0-rc.18`, when the Prisma 7 reader stored every list with non-null elements and a waived element check. The project starts from the `contract.json` and `contract.d.ts` that release stored, with their hashes, and a database marker at those hashes. It then follows the path such a project takes to this release: the script of the app upgrade guide `skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md`, the scripts of the pending `stored-files-format-version` and `contract-hash-inputs` guides, `prisma db sign --db "$DATABASE_URL"`, `prisma contract emit`, and the `db sign` the hash guide runs after that emit, since the emitted capability list, and so the profile hash, can differ from the one the script wrote. `db verify` then passes with no migration.
  */
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -73,7 +73,7 @@ withTempDir(({ createTempDir }) => {
     });
 
     it(
-      'the upgrade scripts, db sign and contract emit leave a database that verifies with no migration',
+      'the upgrade scripts, db sign, contract emit and a second db sign leave a database that verifies with no migration',
       async () => {
         const ctx = setupProject(createTempDir, db.connectionString);
         const contractPath = join(ctx.testDir, 'contract.json');
@@ -130,6 +130,10 @@ withTempDir(({ createTempDir }) => {
         const reemit = await runContractEmit(ctx);
         expect(reemit.exitCode, `contract emit\n${output(reemit)}`).toBe(0);
         expect(hashesOf(contractPath).storageHash).toBe(currentHash);
+
+        const signEmitted = await runDbSign(ctx, ['--db', db.connectionString]);
+        expect(signEmitted.exitCode, `db sign after contract emit\n${output(signEmitted)}`).toBe(0);
+        expect(await markerHash(db.connectionString)).toBe(currentHash);
 
         const verify = await runDbVerify(ctx);
         expect(verify.exitCode, `db verify\n${output(verify)}`).toBe(0);
