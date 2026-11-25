@@ -1,0 +1,10 @@
+{
+  "name": "fixture-augment-js",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./registry": "./lib/registry.mjs",
+    "./package.json": "./package.json"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "fixture-own-type-only",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./value": "./lib/value.mjs",
+    "./package.json": "./package.json"
+  }
+}
