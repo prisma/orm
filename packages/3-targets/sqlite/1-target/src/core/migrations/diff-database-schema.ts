@@ -67,6 +67,7 @@ export function verifySqliteDatabaseSchema(
     frameworkComponents: input.frameworkComponents,
     diffSchema: diffSqliteSchema,
     granularityOf: relationalNodeGranularity,
+    databaseCapabilitiesNotProvided: undefined,
   });
 }
 
@@ -126,7 +127,6 @@ export function diffSqliteSchema(input: {
     issues,
     resolveControlPolicy: (issue) => resolveControlPolicy(issue, input.contract),
     namespacePairs: namespacesWithTables.map(() => ({ actual })),
-    capabilityShortfall: undefined,
   };
 }
 

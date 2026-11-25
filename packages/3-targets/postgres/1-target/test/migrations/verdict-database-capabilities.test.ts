@@ -10,6 +10,7 @@ import { PostgresSchema } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { postgresDiffSubjectGranularity } from '../../src/core/schema-ir/schema-node-kinds';
 import { postgresCapabilitiesForVersion } from '../../src/core/server-version';
+import postgresTargetDescriptor from '../../src/exports/control';
 import { postgresTypeComponents } from '../postgres-type-lookups';
 
 const observingContract: Contract<SqlStorageType> = {
@@ -49,6 +50,7 @@ function verify(serverVersionNumber: number | undefined) {
     frameworkComponents: postgresTypeComponents,
     diffSchema: diffPostgresSchema,
     granularityOf: postgresDiffSubjectGranularity,
+    databaseCapabilitiesNotProvided: postgresTargetDescriptor.databaseCapabilitiesNotProvided,
   });
 }
 
@@ -69,7 +71,7 @@ describe('PostgreSQL verification checks the database provides what the contract
     });
     expect(result.schema.issues).toEqual([
       expect.objectContaining({
-        path: ['database'],
+        path: ['capabilities'],
         explanation: { text: message, cause: 'differs' },
       }),
     ]);

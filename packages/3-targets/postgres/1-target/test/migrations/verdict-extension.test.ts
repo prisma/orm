@@ -105,7 +105,7 @@ function actualTree(installed: Readonly<Record<string, string>>) {
         }),
     ),
     existingSchemas: ['public', 'extensions'],
-    serverVersionNumber: 180000,
+    serverVersionNumber: undefined,
   });
 }
 
@@ -123,6 +123,7 @@ function verify(
     frameworkComponents: postgresTypeComponents,
     diffSchema: diffPostgresSchema,
     granularityOf: postgresDiffSubjectGranularity,
+    databaseCapabilitiesNotProvided: undefined,
   });
 }
 

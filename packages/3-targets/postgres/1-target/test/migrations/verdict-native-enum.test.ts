@@ -119,7 +119,7 @@ function actualTree(entries: readonly { typeName: string; values: readonly strin
     },
     roles: [],
     existingSchemas: ['public'],
-    serverVersionNumber: 180000,
+    serverVersionNumber: undefined,
   });
 }
 
@@ -150,6 +150,7 @@ function verify(
     frameworkComponents: postgresTypeComponents,
     diffSchema: diffPostgresSchema,
     granularityOf: postgresDiffSubjectGranularity,
+    databaseCapabilitiesNotProvided: undefined,
   });
 }
 

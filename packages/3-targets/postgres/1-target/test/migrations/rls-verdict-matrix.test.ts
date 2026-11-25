@@ -133,7 +133,7 @@ function actualSchema(options: {
     },
     roles: [],
     existingSchemas: ['public'],
-    serverVersionNumber: 180000,
+    serverVersionNumber: undefined,
   });
 }
 
@@ -145,6 +145,7 @@ function verdictOk(contract: Contract<SqlStorage>, actual: PostgresDatabaseSchem
     frameworkComponents: postgresTypeComponents,
     diffSchema: diffPostgresSchema,
     granularityOf: postgresDiffSubjectGranularity,
+    databaseCapabilitiesNotProvided: undefined,
   });
   return result.ok;
 }

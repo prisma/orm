@@ -22,6 +22,10 @@ export type {
 } from '../core/control-target-descriptor';
 export type { SqlDefaultFunctionName } from '../core/default-functions';
 export { sqlDefaultFunctions } from '../core/default-functions';
+export {
+  type SqlDatabaseCapabilitiesNotProvidedFn,
+  VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+} from '../core/diff/database-capabilities-not-provided';
 export { acceptedByDataType } from '../core/migrations/accepted-by-data-type';
 export type {
   ContractToSchemaIROptions,
@@ -117,12 +121,10 @@ export {
   rowsHoldingValueMeta,
   rowsHoldingValueOf,
 } from '../core/migrations/rows-holding-value';
-export {
-  type SqlCapabilityShortfall,
-  type SqlSchemaDiffFn,
-  type SqlSchemaDiffInput,
-  type SqlSchemaDiffResult,
-  VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+export type {
+  SqlSchemaDiffFn,
+  SqlSchemaDiffInput,
+  SqlSchemaDiffResult,
 } from '../core/migrations/schema-differ';
 export type { SchemaTables } from '../core/migrations/schema-tables';
 export type { SqlQuote, SqlQuotingRules } from '../core/migrations/sql-expression-text';

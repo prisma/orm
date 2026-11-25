@@ -7,8 +7,18 @@
  */
 
 import type { Contract } from '@internal/contract/types';
+import {
+  createAggregateContractSpace,
+  createContractSpaceAggregate,
+  verifyMigration,
+} from '@internal/migration-tools/aggregate';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { relationalNodeGranularity, SqlColumnIR, SqlSchemaIR } from '@internal/sql-schema-ir/types';
+import {
+  relationalNodeGranularity,
+  SqlColumnIR,
+  SqlSchemaIR,
+  SqlTableIR,
+} from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import { verifySqlSchemaByDiff } from '../src/core/diff/schema-verify';
 import {
@@ -31,7 +41,6 @@ function stubDiff(control: 'observed' | 'managed'): SqlSchemaDiffFn {
     ],
     resolveControlPolicy: () => control,
     namespacePairs: [],
-    capabilityShortfall: undefined,
   });
 }
 
@@ -46,6 +55,7 @@ describe('verifySqlSchemaByDiff surfaces warnings without failing', () => {
       frameworkComponents: [],
       diffSchema: stubDiff('observed'),
       granularityOf: relationalNodeGranularity,
+      databaseCapabilitiesNotProvided: undefined,
     });
 
     expect(result.ok).toBe(true);
@@ -62,6 +72,7 @@ describe('verifySqlSchemaByDiff surfaces warnings without failing', () => {
       frameworkComponents: [],
       diffSchema: stubDiff('managed'),
       granularityOf: relationalNodeGranularity,
+      databaseCapabilitiesNotProvided: undefined,
     });
 
     expect(result.ok).toBe(false);
@@ -70,26 +81,41 @@ describe('verifySqlSchemaByDiff surfaces warnings without failing', () => {
   });
 });
 
-describe('verifySqlSchemaByDiff refuses a database that lacks capabilities the contract requires', () => {
+describe('verifySqlSchemaByDiff refuses a database that does not provide capabilities the contract requires', () => {
   const database = new SqlSchemaIR({ tables: {} });
-  const shortfall = {
-    path: ['database'],
-    expected: database,
-    actual: database,
-    explanation: {
-      text: 'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 15.4.',
-      cause: 'differs' as const,
-    },
-  };
+  const notProvided =
+    'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 15.4.';
 
-  function verifyWithShortfall(control: 'observed' | 'managed', strict: boolean) {
+  /** The live database also holds a table no contract declares, which a check across contract spaces strips from each space's result. */
+  const withUndeclaredTable: SqlSchemaDiffFn = (input) => ({
+    ...stubDiff('managed')(input),
+    issues: [
+      {
+        path: ['orphan'],
+        actual: new SqlTableIR({
+          name: 'orphan',
+          columns: {},
+          foreignKeys: [],
+          uniques: [],
+          indexes: [],
+        }),
+      },
+    ],
+  });
+
+  function verifyWith(input: {
+    readonly control: 'observed' | 'managed';
+    readonly strict: boolean;
+    readonly diffSchema?: SqlSchemaDiffFn;
+  }) {
     return verifySqlSchemaByDiff({
-      contract: createTestContract({}, {}, undefined, { defaultControlPolicy: control }),
+      contract: createTestContract({}, {}, undefined, { defaultControlPolicy: input.control }),
       schema: database,
-      strict,
+      strict: input.strict,
       frameworkComponents: [],
-      diffSchema: (input) => ({ ...stubDiff(control)(input), capabilityShortfall: shortfall }),
+      diffSchema: input.diffSchema ?? stubDiff(input.control),
       granularityOf: relationalNodeGranularity,
+      databaseCapabilitiesNotProvided: () => notProvided,
     });
   }
 
@@ -99,15 +125,68 @@ describe('verifySqlSchemaByDiff refuses a database that lacks capabilities the c
   ] as const)(
     'with its own code and summary, under a %s policy (strict: %s)',
     (control, strict) => {
-      const result = verifyWithShortfall(control, strict);
+      const result = verifyWith({ control, strict });
 
       expect(result).toMatchObject({
         ok: false,
         code: VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
-        summary: shortfall.explanation.text,
+        summary: notProvided,
       });
-      expect(result.schema.issues[0]).toBe(shortfall);
-      expect(result.schema.warnings?.issues ?? []).not.toContain(shortfall);
+      expect(JSON.parse(JSON.stringify(result.schema.issues[0]))).toEqual({
+        path: ['capabilities'],
+        expected: { nodeKind: 'database-capabilities', id: 'capabilities' },
+        explanation: { text: notProvided, cause: 'differs' },
+      });
+      expect(result.schema.warnings?.issues ?? []).not.toContainEqual(
+        expect.objectContaining({ path: ['capabilities'] }),
+      );
     },
   );
+
+  it('still fails each space of a check across contract spaces, which strips the undeclared table', () => {
+    const contractSpace = createAggregateContractSpace({
+      spaceId: 'app',
+      packages: [],
+      refs: {},
+      headRef: null,
+      refsDir: 'refs',
+      migrationsDir: 'migrations',
+      resolveContract: () => contract,
+      deserializeContract: () => contract,
+    });
+    const verified = verifyMigration({
+      aggregate: createContractSpaceAggregate({
+        targetId: 'postgres',
+        app: contractSpace,
+        extensions: [],
+        checkIntegrity: () => [],
+      }),
+      markersBySpaceId: new Map(),
+      schemaIntrospection: database,
+      mode: 'strict',
+      verifySchemaForSpace: () =>
+        verifyWith({ control: 'managed', strict: true, diffSchema: withUndeclaredTable }),
+    });
+
+    expect(verified.assertOk().schemaCheck.perSpace.get('app')).toMatchObject({
+      ok: false,
+      code: VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+      summary: notProvided,
+      schema: { issues: [expect.objectContaining({ path: ['capabilities'] })] },
+    });
+  });
+
+  it('is not checked for a target without the hook', () => {
+    const result = verifySqlSchemaByDiff({
+      contract,
+      schema: database,
+      strict: false,
+      frameworkComponents: [],
+      diffSchema: stubDiff('observed'),
+      granularityOf: relationalNodeGranularity,
+      databaseCapabilitiesNotProvided: undefined,
+    });
+
+    expect(result.code).toBeUndefined();
+  });
 });

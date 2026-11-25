@@ -79,7 +79,7 @@ function liveDatabase(
         }),
     ),
     existingSchemas: ['public', 'extensions'],
-    serverVersionNumber: 180000,
+    serverVersionNumber: undefined,
   });
 }
 
@@ -94,6 +94,7 @@ function verify(contract: Contract<SqlStorage>, schema: PostgresDatabaseSchemaNo
     frameworkComponents: postgresTypeComponents,
     diffSchema: diffPostgresSchema,
     granularityOf: postgresDiffSubjectGranularity,
+    databaseCapabilitiesNotProvided: undefined,
   });
 }
 

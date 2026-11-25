@@ -33,12 +33,13 @@ import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { extractCodecControlHooks } from '../assembly';
-import {
-  type SqlCapabilityShortfall,
-  type SqlSchemaDiffFn,
-  VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
-} from '../migrations/schema-differ';
+import type { SqlSchemaDiffFn } from '../migrations/schema-differ';
 import type { CodecControlHooks } from '../migrations/types';
+import {
+  databaseCapabilitiesNotProvidedIssue,
+  type SqlDatabaseCapabilitiesNotProvidedFn,
+  VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+} from './database-capabilities-not-provided';
 import { verifierDisposition } from './verifier-disposition';
 
 // ============================================================================
@@ -267,17 +268,16 @@ export interface VerifySqlSchemaByDiffInput {
   readonly diffSchema: SqlSchemaDiffFn;
   /** The target's classifier: a diff issue node's `nodeKind` → its subject granularity. */
   readonly granularityOf: (nodeKind: string) => DiffSubjectGranularity;
+  /** The target's check of the database's capabilities (`databaseCapabilitiesNotProvided` descriptor hook), when it has one. */
+  readonly databaseCapabilitiesNotProvided: SqlDatabaseCapabilitiesNotProvidedFn | undefined;
 }
 
 function verdictOf(
   failCount: number,
-  shortfall: SqlCapabilityShortfall | undefined,
+  notProvided: string | undefined,
 ): { readonly code?: string; readonly summary: string } {
-  if (shortfall !== undefined) {
-    return {
-      code: VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
-      summary: shortfall.explanation.text,
-    };
+  if (notProvided !== undefined) {
+    return { code: VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED, summary: notProvided };
   }
   if (failCount === 0) return { summary: 'Database schema satisfies contract' };
   return {
@@ -314,9 +314,12 @@ export function verifySqlSchemaByDiff(
     namespacePairs: verdictDiff.namespacePairs,
     codecHooks: extractCodecControlHooks(input.frameworkComponents),
   });
-  const shortfall = verdictDiff.capabilityShortfall;
+  const notProvided = input.databaseCapabilitiesNotProvided?.({
+    contract: input.contract,
+    schema: input.schema,
+  });
   const failures = [
-    ...(shortfall === undefined ? [] : [shortfall]),
+    ...(notProvided === undefined ? [] : [databaseCapabilitiesNotProvidedIssue(notProvided)]),
     ...diffVerdict.failures,
     ...storageTypeVerdict.failures,
   ];
@@ -328,7 +331,7 @@ export function verifySqlSchemaByDiff(
       : undefined;
   return {
     ok,
-    ...verdictOf(failCount, shortfall),
+    ...verdictOf(failCount, notProvided),
     contract: {
       storageHash: input.contract.storage.storageHash,
       ...ifDefined('profileHash', profileHash),
