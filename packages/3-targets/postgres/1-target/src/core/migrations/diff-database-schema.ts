@@ -1,5 +1,5 @@
 import type { Contract, ControlPolicy } from '@internal/contract/types';
-import type { SqlSchemaDiffResult } from '@internal/family-sql/control';
+import type { SqlCapabilityShortfall, SqlSchemaDiffResult } from '@internal/family-sql/control';
 import { sqlTypeLookupsOf } from '@internal/family-sql/control';
 import { classifyDiffSubjectGranularity } from '@internal/family-sql/diff';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -9,6 +9,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
+import { postgresDatabaseShortfall, postgresDatabaseShortfallMessage } from '../database-shortfall';
 import { postgresResolveDefault } from '../default-normalizer';
 import { ownEntry } from '../own-entry';
 import type { PostgresContract } from '../postgres-schema';
@@ -19,6 +20,7 @@ import {
   postgresDiffSubjectGranularity,
   type SqlSchemaDiffNode,
 } from '../schema-ir/schema-node-kinds';
+import { postgresCapabilitiesByVersion } from '../server-version';
 import { contractToPostgresDatabaseSchemaNode } from './contract-to-postgres-database-schema-node';
 import { resolvePostgresNodeIssueControlPolicySubject } from './control-policy';
 
@@ -88,7 +90,7 @@ function pruneTableLessNamespaces(
     roles: [...expected.roles],
     extensions: [...expected.extensions],
     existingSchemas: expected.existingSchemas.filter((s) => ownEntry(namespaces, s) !== undefined),
-    pgVersion: expected.pgVersion,
+    serverVersionNumber: expected.serverVersionNumber,
   });
 }
 
@@ -115,6 +117,31 @@ function resolveControlPolicy(
   >(issue);
   return resolvePostgresNodeIssueControlPolicySubject(nodeIssue, contract)
     ?.explicitNodeControlPolicy;
+}
+
+/**
+ * What `actual` lacks of the capabilities `contract` requires of the database, as an issue on the database node that says why in versions.
+ */
+function capabilityShortfallOf(
+  contract: Contract<SqlStorage>,
+  expected: PostgresDatabaseSchemaNode,
+  actual: PostgresDatabaseSchemaNode,
+): SqlCapabilityShortfall | undefined {
+  const shortfall = postgresDatabaseShortfall({
+    capabilities: contract.capabilities,
+    table: postgresCapabilitiesByVersion,
+    serverVersionNumber: actual.serverVersionNumber,
+  });
+  if (shortfall === undefined) return undefined;
+  return {
+    path: [actual.id],
+    expected,
+    actual,
+    explanation: {
+      text: postgresDatabaseShortfallMessage(shortfall, postgresCapabilitiesByVersion),
+      cause: 'differs',
+    },
+  };
 }
 
 /**
@@ -172,6 +199,7 @@ export function diffPostgresSchema(input: {
     issues,
     resolveControlPolicy: (issue) => resolveControlPolicy(issue, postgresContract),
     namespacePairs,
+    capabilityShortfall: capabilityShortfallOf(postgresContract, fullExpected, actual),
   };
 }
 
@@ -207,7 +235,7 @@ function padActualNamespaces(
     roles: [...actual.roles],
     extensions: [...actual.extensions],
     existingSchemas: [...actual.existingSchemas],
-    pgVersion: actual.pgVersion,
+    serverVersionNumber: actual.serverVersionNumber,
   });
 }
 

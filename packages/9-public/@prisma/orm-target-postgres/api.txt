@@ -2147,6 +2147,7 @@
 ./target/server-version: const postgresCapabilitiesByVersion: { readonly 15: { readonly postgres: { readonly distinctOn: true; readonly forNoKeyUpdate: true; readonly forKeyShare: true; }; readonly sql: { readonly returning: true; readonly defaultInInsert: true; readonly lateral: true; readonly scalarList: true; readonly checkConstraint: true; readonly insertOnConflictSkip: true; readonly insertOnConflictWithoutTarget: true; readonly insertOnConflictTarget: true; readonly forUpdate: true; readonly forShare: true; readonly lockOf: true; readonly lockNowait: true; readonly lockSkipLocked: true; readonly jsonAgg: true; readonly outerReferencesInDerivedTables: true; readonly jsonAggWithoutTruncation: true; }; }; readonly 16: { readonly postgres: { readonly distinctOn: true; readonly forNoKeyUpdate: true; readonly forKeyShare: true; }; readonly sql: { readonly returning: true; readonly defaultInInsert: true; readonly lateral: true; readonly scalarList: true; readonly checkConstraint: true; readonly insertOnConflictSkip: true; readonly insertOnConflictWithoutTarget: true; readonly insertOnConflictTarget: true; readonly forUpdate: true; readonly forShare: true; readonly lockOf: true; readonly lockNowait: true; readonly lockSkipLocked: true; readonly jsonAgg: true; readonly outerReferencesInDerivedTables: true; readonly jsonAggWithoutTruncation: true; }; }; readonly 17: { readonly postgres: { readonly distinctOn: true; readonly forNoKeyUpdate: true; readonly forKeyShare: true; }; readonly sql: { readonly returning: true; readonly defaultInInsert: true; readonly lateral: true; readonly scalarList: true; readonly checkConstraint: true; readonly insertOnConflictSkip: true; readonly insertOnConflictWithoutTarget: true; readonly insertOnConflictTarget: true; readonly forUpdate: true; readonly forShare: true; readonly lockOf: true; readonly lockNowait: true; readonly lockSkipLocked: true; readonly jsonAgg: true; readonly outerReferencesInDerivedTables: true; readonly jsonAggWithoutTruncation: true; }; }; readonly 18: { readonly postgres: { readonly distinctOn: true; readonly forNoKeyUpdate: true; readonly forKeyShare: true; }; readonly sql: { readonly returning: true; readonly defaultInInsert: true; readonly lateral: true; readonly scalarList: true; readonly checkConstraint: true; readonly insertOnConflictSkip: true; readonly insertOnConflictWithoutTarget: true; readonly insertOnConflictTarget: true; readonly forUpdate: true; readonly forShare: true; readonly lockOf: true; readonly lockNowait: true; readonly lockSkipLocked: true; readonly jsonAgg: true; readonly outerReferencesInDerivedTables: true; readonly jsonAggWithoutTruncation: true; }; }; }
 ./target/server-version: function postgresCapabilitiesForVersion<const Version extends PostgresVersion>(version: Version): (typeof postgresCapabilitiesByVersion)[Version]
 ./target/server-version: function postgresCapabilitiesForVersionIn<const Table extends CapabilitiesByVersion, const Version extends keyof Table & number>(table: Table, version: Version): Table[Version]
+./target/server-version: function readPostgresServerVersionNumber(driver: SqlControlDriverInstance<string>): Promise<number | undefined>
 ./target/server-version: type CapabilitiesByVersion = Readonly<Record<number, Readonly<Record<string, Readonly<Record<string, boolean>>>>>>
 ./target/server-version: type PostgresVersion = (typeof postgresVersions)[number]
 ./target/sql-utils: const CONTROL_PLANE_LC_MONETARY = "C"
@@ -2165,8 +2166,8 @@
 ./target/types: class PostgresDatabaseSchemaNode, readonly required property get id(): string
 ./target/types: class PostgresDatabaseSchemaNode, readonly required property namespaces: Readonly<Record<string, PostgresNamespaceSchemaNode>>
 ./target/types: class PostgresDatabaseSchemaNode, readonly required property nodeKind: "postgres-database"
-./target/types: class PostgresDatabaseSchemaNode, readonly required property pgVersion: string
 ./target/types: class PostgresDatabaseSchemaNode, readonly required property roles: readonly PostgresRoleSchemaNode[]
+./target/types: class PostgresDatabaseSchemaNode, readonly required property serverVersionNumber: number | undefined
 ./target/types: class PostgresDatabaseSchemaNode, required method children(): readonly DiffableNode[]
 ./target/types: class PostgresDatabaseSchemaNode, required method isEqualTo(other: DiffableNode): boolean
 ./target/types: class PostgresDatabaseSchemaNode, static required method assert(node: SqlSchemaIRNode): asserts node is PostgresDatabaseSchemaNode
@@ -2325,8 +2326,8 @@
 ./target/types: interface PostgresDatabaseSchemaNodeInput, readonly required property existingSchemas: readonly string[]
 ./target/types: interface PostgresDatabaseSchemaNodeInput, readonly required property extensions: readonly PostgresExtensionSchemaNode[] | undefined
 ./target/types: interface PostgresDatabaseSchemaNodeInput, readonly required property namespaces: Readonly<Record<string, PostgresNamespaceSchemaNode>>
-./target/types: interface PostgresDatabaseSchemaNodeInput, readonly required property pgVersion: string
 ./target/types: interface PostgresDatabaseSchemaNodeInput, readonly required property roles: readonly PostgresRoleSchemaNode[]
+./target/types: interface PostgresDatabaseSchemaNodeInput, readonly required property serverVersionNumber: number | undefined
 ./target/types: interface PostgresExtensionInput
 ./target/types: interface PostgresExtensionInput, readonly optional property control?: ControlPolicy
 ./target/types: interface PostgresExtensionInput, readonly required property name: string
@@ -3186,8 +3187,8 @@
 ./target: class PostgresDatabaseSchemaNode, readonly required property get id(): string
 ./target: class PostgresDatabaseSchemaNode, readonly required property namespaces: Readonly<Record<string, PostgresNamespaceSchemaNode>>
 ./target: class PostgresDatabaseSchemaNode, readonly required property nodeKind: "postgres-database"
-./target: class PostgresDatabaseSchemaNode, readonly required property pgVersion: string
 ./target: class PostgresDatabaseSchemaNode, readonly required property roles: readonly PostgresRoleSchemaNode[]
+./target: class PostgresDatabaseSchemaNode, readonly required property serverVersionNumber: number | undefined
 ./target: class PostgresDatabaseSchemaNode, required method children(): readonly DiffableNode[]
 ./target: class PostgresDatabaseSchemaNode, required method isEqualTo(other: DiffableNode): boolean
 ./target: class PostgresDatabaseSchemaNode, static required method assert(node: SqlSchemaIRNode): asserts node is PostgresDatabaseSchemaNode
@@ -3831,6 +3832,7 @@
 ./target: function quoteQualifiedName(name: string): string
 ./target: function rawSql(op: Op): Op
 ./target: function readPostgresDefault(rawDefault: string, many: boolean): PostgresReportedDefault
+./target: function readPostgresServerVersionNumber(driver: SqlControlDriverInstance<string>): Promise<number | undefined>
 ./target: function renderCallsToTypeScript(calls: ReadonlyArray<OpFactoryCall>, meta: RenderMigrationMeta): string
 ./target: function renderFullTextIndexDocument(definition: FullTextIndexDefinition): string
 ./target: function renderOps(calls: readonly OpFactoryCall[], lowerer?: ExecuteRequestLowerer): (Op | Promise<Op>)[]
@@ -3940,8 +3942,8 @@
 ./target: interface PostgresDatabaseSchemaNodeInput, readonly required property existingSchemas: readonly string[]
 ./target: interface PostgresDatabaseSchemaNodeInput, readonly required property extensions: readonly PostgresExtensionSchemaNode[] | undefined
 ./target: interface PostgresDatabaseSchemaNodeInput, readonly required property namespaces: Readonly<Record<string, PostgresNamespaceSchemaNode>>
-./target: interface PostgresDatabaseSchemaNodeInput, readonly required property pgVersion: string
 ./target: interface PostgresDatabaseSchemaNodeInput, readonly required property roles: readonly PostgresRoleSchemaNode[]
+./target: interface PostgresDatabaseSchemaNodeInput, readonly required property serverVersionNumber: number | undefined
 ./target: interface PostgresDdlVisitor, required method alterIndexRename(node: PostgresAlterIndexRename): R
 ./target: interface PostgresDdlVisitor, required method alterPolicyRename(node: PostgresAlterPolicyRename): R
 ./target: interface PostgresDdlVisitor, required method alterSchemaRename(node: PostgresAlterSchemaRename): R

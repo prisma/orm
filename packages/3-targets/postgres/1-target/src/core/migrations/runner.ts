@@ -48,7 +48,10 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Result } from '@internal/utils/result';
 import { notOk, ok, okVoid } from '@internal/utils/result';
+import { postgresDatabaseShortfall, postgresDatabaseShortfallMessage } from '../database-shortfall';
 import { postgresError } from '../errors';
+import { postgresCapabilitiesByVersion } from '../server-version';
+import { readPostgresServerVersionNumber } from '../server-version-number';
 import { CONTROL_PLANE_LC_MONETARY, quoteIdentifier } from '../sql-utils';
 import {
   DEPENDENT_OBJECTS_STILL_EXIST,
@@ -190,6 +193,12 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
 
     const policyCheck = this.enforcePolicyCompatibility(options.policy, planOps);
     if (!policyCheck.ok) return policyCheck;
+
+    const capabilitiesCheck = await this.ensureDatabaseProvidesCapabilities(
+      driver,
+      options.destinationContract,
+    );
+    if (!capabilitiesCheck.ok) return capabilitiesCheck;
 
     await this.readMoneyLiteralsInCents(driver);
     await this.acquireLock(driver);
@@ -764,6 +773,23 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
       }
     }
     return okVoid();
+  }
+
+  /** Refuses, before anything is applied, a database that does not provide a capability `contract` requires of it; verification after apply would refuse it too. */
+  private async ensureDatabaseProvidesCapabilities(
+    driver: SqlControlDriverInstance<string>,
+    contract: Contract<SqlStorage>,
+  ): Promise<Result<void, SqlMigrationRunnerFailure>> {
+    const shortfall = postgresDatabaseShortfall({
+      capabilities: contract.capabilities,
+      table: postgresCapabilitiesByVersion,
+      serverVersionNumber: await readPostgresServerVersionNumber(driver),
+    });
+    if (shortfall === undefined) return okVoid();
+    return runnerFailure(
+      'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED',
+      postgresDatabaseShortfallMessage(shortfall, postgresCapabilitiesByVersion),
+    );
   }
 
   private ensureMarkerCompatibility(
