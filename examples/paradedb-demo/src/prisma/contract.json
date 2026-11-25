@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
+  "profileHash": "41ae1f43582f73dd2b99d2bc15948e81c9b07f55956e22bfc57e222974940e84",
   "roots": {
     "item": {
       "model": "Item",

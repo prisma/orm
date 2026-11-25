@@ -26,7 +26,7 @@ export type StorageHash =
   StorageHashBase<'0b9d23238b60d4cc22403da8f4ba0fe53638b9c3cf125f8e07313fd0494a0520'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632'>;
+  ProfileHashBase<'e2405a89956ec126f943d6f407865e58297711d231a76e0b85ba1743293a4e04'>;
 
 export type CodecTypes = PgTypes;
 export type LaneCodecTypes = CodecTypes;

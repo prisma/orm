@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
+  "profileHash": "938fab5c7a37bc2946e954cfdb49086001e2d4f18c5373779c9f45e424c55cfc",
   "roots": {
     "users": {
       "model": "User",

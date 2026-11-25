@@ -22,7 +22,7 @@ export type StorageHash =
   StorageHashBase<'80adf21b93f914ac642ac9894d480c41403cca7d5e38c9dc2379796c918d1467'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'97920f06f044001f3cb49cdd902a192e2b7e48ecbf2e7a0987f075ece0281a32'>;
+  ProfileHashBase<'5357ace3b1fe5d1696fba2698020cce29534f8dc560d9ad9b52fe767ee1e64ac'>;
 
 export type CodecTypes = MariadbTypes;
 export type LaneCodecTypes = CodecTypes;

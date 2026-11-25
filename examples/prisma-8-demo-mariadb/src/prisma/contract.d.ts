@@ -19,7 +19,7 @@ export type StorageHash =
   StorageHashBase<'8f0d2d7e5896ac1ae8e7e479af606f0e1b04b22f2776169d7306c95ba1b9e25c'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'97920f06f044001f3cb49cdd902a192e2b7e48ecbf2e7a0987f075ece0281a32'>;
+  ProfileHashBase<'c467a4c53127c1ddb3272d03cff89ac3a4ccd64d2924465e168c3b235930b02a'>;
 
 export type CodecTypes = MariadbTypes;
 export type LaneCodecTypes = CodecTypes;

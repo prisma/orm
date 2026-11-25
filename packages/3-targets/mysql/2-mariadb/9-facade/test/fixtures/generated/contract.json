@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "mariadb",
-  "profileHash": "97920f06f044001f3cb49cdd902a192e2b7e48ecbf2e7a0987f075ece0281a32",
+  "profileHash": "c467a4c53127c1ddb3272d03cff89ac3a4ccd64d2924465e168c3b235930b02a",
   "roots": {
     "Event": {
       "model": "Event",

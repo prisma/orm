@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
+  "profileHash": "833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174",
   "roots": {
     "reading": {
       "model": "Reading",
