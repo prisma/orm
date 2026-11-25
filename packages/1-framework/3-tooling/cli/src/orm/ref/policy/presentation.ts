@@ -1,24 +1,18 @@
-import {
-  DEFAULT_DATABASE_POLICIES,
-  databasePolicyValueText,
-} from '@internal/framework-components/control';
+import { databasePolicyValueText } from '@internal/framework-components/control';
 import type { Block, Presentations, Span, Text, Tone } from '@prisma/cli-engine';
 import { relative } from 'pathe';
 import type {
-  RefPolicies,
   RefPoliciesOutcome,
   RefPolicyChange,
-  RefPolicyValue,
 } from '../../../control-api/operations/ref-policies';
+import {
+  DEFAULT_SETTINGS,
+  declaredEntries,
+  POLICY_SETTINGS,
+  type PolicySetting,
+  type PolicySettingValue,
+} from '../../../utils/policy-settings';
 import { fieldLines } from '../../data-lines';
-
-type Setting = RefPolicyChange['setting'];
-
-const DEFAULTS: Readonly<Record<Setting, RefPolicyValue>> = {
-  change: DEFAULT_DATABASE_POLICIES.change,
-  'dataProtection.dataLoss': DEFAULT_DATABASE_POLICIES.dataProtection.dataLoss,
-  'dataProtection.accessWidening': DEFAULT_DATABASE_POLICIES.dataProtection.accessWidening,
-};
 
 const EFFECT_TONE: Readonly<Record<RefPolicyChange['effect'], Tone>> = {
   tightens: 'ok',
@@ -26,26 +20,18 @@ const EFFECT_TONE: Readonly<Record<RefPolicyChange['effect'], Tone>> = {
   unchanged: 'muted',
 };
 
-function declared(policies: RefPolicies): readonly (readonly [Setting, RefPolicyValue | null])[] {
-  return [
-    ['change', policies.change],
-    ['dataProtection.dataLoss', policies.dataProtection.dataLoss],
-    ['dataProtection.accessWidening', policies.dataProtection.accessWidening],
-  ];
-}
-
-function dataLines(policies: RefPolicies): readonly string[] {
+function dataLines(outcome: RefPoliciesOutcome): readonly string[] {
   return fieldLines(
-    declared(policies).map(([setting, value]) => [
+    declaredEntries(outcome.declared).map(([setting, value]) => [
       setting,
-      value === null ? null : typeof value === 'string' ? value : value.join(','),
+      typeof value === 'string' ? value : value.join(','),
     ]),
   );
 }
 
-function valueText(setting: Setting, value: RefPolicyValue | null): Text {
+function valueText(setting: PolicySetting, value: PolicySettingValue | null): Text {
   return value === null
-    ? [{ text: `${databasePolicyValueText(DEFAULTS[setting])} (default)`, tone: 'muted' }]
+    ? [{ text: `${databasePolicyValueText(DEFAULT_SETTINGS[setting])} (default)`, tone: 'muted' }]
     : databasePolicyValueText(value);
 }
 
@@ -61,7 +47,7 @@ function refHeading(text: string, outcome: RefPoliciesOutcome, cwd: string): Tex
 
 function presentations(outcome: RefPoliciesOutcome, human: () => readonly Block[]): Presentations {
   return {
-    stdout: () => dataLines(outcome.result.policies),
+    stdout: () => dataLines(outcome),
     next: () => [],
     human,
     json: () => outcome.result,
@@ -69,18 +55,21 @@ function presentations(outcome: RefPoliciesOutcome, human: () => readonly Block[
 }
 
 export function showPresentations(outcome: RefPoliciesOutcome, cwd: string): Presentations {
-  const { ref, policies } = outcome.result;
+  const { ref } = outcome.result;
   return presentations(outcome, () => [
     { kind: 'summary', status: 'info', text: refHeading('Policies ref ', outcome, cwd) },
     {
       kind: 'fields',
-      rows: declared(policies).map(([setting, value]) => ({
-        label: setting,
-        value:
-          value === null
-            ? [{ text: 'not declared', tone: 'muted' }]
-            : databasePolicyValueText(value),
-      })),
+      rows: POLICY_SETTINGS.map((setting) => {
+        const value = outcome.declared[setting];
+        return {
+          label: setting,
+          value:
+            value === undefined
+              ? [{ text: 'not declared', tone: 'muted' }]
+              : databasePolicyValueText(value),
+        };
+      }),
     },
     {
       kind: 'summary',

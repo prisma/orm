@@ -11,20 +11,13 @@ import { editPresentations } from './presentation';
 import {
   andList,
   DO_NOT_LOOSEN_TO_GET_PAST_A_REFUSAL,
-  isForbiddenLevel,
+  planCheckSentence,
   refPositional,
 } from './text';
 
 function closing(ref: string, changes: readonly RefPolicyChange[]): string {
   const removed = andList(changes.map(({ setting }) => setting));
-  const forbidding = changes.flatMap(({ setting, before }) =>
-    before !== null && isForbiddenLevel(before) ? [setting] : [],
-  );
-  const planChecks =
-    forbidding.length === 0
-      ? ''
-      : `, and {bin} migration plan --to ${ref} no longer checks plans against ${andList(forbidding)}`;
-  return `No database was changed. Deploys to ${ref} no longer compare ${removed} with the database${planChecks}.`;
+  return `No database was changed. Deploys to ${ref} no longer compare ${removed} with the database.${planCheckSentence(ref, changes)}`;
 }
 
 export function createRefPolicyDeleteCommand(

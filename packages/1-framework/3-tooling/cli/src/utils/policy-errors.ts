@@ -9,16 +9,18 @@ import {
 import type { MigrationPlanArguments } from '../control-api/operations/plan-arguments';
 import { shellQuoted } from '../control-api/statements/statement-flag';
 import { ActionableCliError } from './cli-errors';
-import { type DataProtectionSetting, FORBIDDEN_LEVEL } from './data-protection-settings';
 import { chooseAction, runCommandAction } from './next-actions';
-import { policyMoveEffect, refToDatabaseMove } from './policy-settings';
+import {
+  type DataProtectionKey,
+  FORBIDDEN_LEVEL,
+  policyValueEffect,
+  settingsText,
+} from './policy-settings';
 import { type CliInvocation, cliCommand, printedWayToTarget, quotedPlan } from './printed-command';
 
 /** `change: migrate; dataProtection.dataLoss: data-loss-forbidden`: the declared side of each difference. */
 export function declaredSettingsText(differences: readonly DatabasePolicyDifference[]): string {
-  return differences
-    .map(({ setting, declared }) => `${setting}: ${databasePolicyValueText(declared)}`)
-    .join('; ');
+  return settingsText(differences.map(({ setting, declared }) => [setting, declared] as const));
 }
 
 /** `MIGRATION.POLICY_MISMATCH`: the ref declares policies that differ from those the database's marker records. */
@@ -56,7 +58,7 @@ const APPLY_THE_REF = "Have whoever owns the database apply the ref's policies i
  */
 function mismatchRecoveries(differences: readonly DatabasePolicyDifference[]): readonly string[] {
   const refLooser = differences.filter(
-    (difference) => policyMoveEffect(refToDatabaseMove(difference)) === 'tightens',
+    ({ declared, inForce }) => policyValueEffect(declared, inForce) === 'tightens',
   );
   const others = differences.filter((difference) => !refLooser.includes(difference));
   if (others.length === 0) return [DECLARE_WHAT_THE_DATABASE_HAS];
@@ -167,7 +169,7 @@ export interface DataProtectionRefusedOperation {
 
 /** A data protection setting at its `forbidden` level, where it is recorded, and the operations it refuses. */
 export interface DataProtectionRefusal {
-  readonly setting: DataProtectionSetting;
+  readonly setting: DataProtectionKey;
   readonly source: PolicySource;
   readonly operations: readonly DataProtectionRefusedOperation[];
 }
@@ -175,7 +177,7 @@ export interface DataProtectionRefusal {
 const FORBIDDEN_CHANGE = {
   dataLoss: 'data loss',
   accessWidening: 'changing who can read or write data',
-} as const satisfies { readonly [S in DataProtectionSetting]: string };
+} as const satisfies { readonly [S in DataProtectionKey]: string };
 
 /** Who refuses the change: the database's own policy, or the one a ref declares for its database. */
 function refusingPolicy(source: PolicySource, forbids: string): string {
@@ -209,7 +211,7 @@ function extensionsOwnMigrations(spaceIds: readonly string[]): string {
 
 /** What a user can do about refused operations in the application's contract space, for the command that refused them. */
 function keepAppProtected(
-  setting: DataProtectionSetting,
+  setting: DataProtectionKey,
   command: DataProtectionCheckedCommand,
   operations: readonly DataProtectionRefusedOperation[],
   alongsideExtensions: boolean,

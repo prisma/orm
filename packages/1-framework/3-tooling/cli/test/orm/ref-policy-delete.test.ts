@@ -163,7 +163,26 @@ describe('ref policy delete', () => {
     expect(run.presented?.presentation.human.at(-1)).toEqual({
       kind: 'summary',
       status: 'info',
-      text: 'No database was changed. Deploys to staging no longer compare dataProtection.dataLoss and dataProtection.accessWidening with the database, and prisma-test migration plan --to staging no longer checks plans against dataProtection.dataLoss.',
+      text: 'No database was changed. Deploys to staging no longer compare dataProtection.dataLoss and dataProtection.accessWidening with the database. prisma-test migration plan --to staging no longer checks plans against dataProtection.dataLoss.',
+    });
+  });
+
+  it('says why it refuses an empty delete', async () => {
+    const { dir } = await projectWithRef('production', FULL);
+
+    const run = await runPolicy(dir, ['delete', 'production', '--json']);
+
+    expect(run.json.at(-1)).toMatchObject({
+      envelope: {
+        error: { summary: 'No setting to delete', why: 'No setting was named to remove.' },
+        nextActions: [
+          {
+            kind: 'user-choice',
+            label:
+              'Name at least one setting after the ref name: change, dataProtection.dataLoss, dataProtection.accessWidening, data-loss or access-widening.',
+          },
+        ],
+      },
     });
   });
 

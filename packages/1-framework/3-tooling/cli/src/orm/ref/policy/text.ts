@@ -1,5 +1,5 @@
-import type { RefPolicyValue } from '../../../control-api/operations/ref-policies';
-import { FORBIDDEN_LEVEL } from '../../../utils/data-protection-settings';
+import type { RefPolicyChange } from '../../../control-api/operations/ref-policies';
+import { isForbiddenLevel } from '../../../utils/policy-settings';
 
 export const refPositional = {
   brief: 'Ref name (e.g. staging, production)',
@@ -11,16 +11,26 @@ export const DO_NOT_LOOSEN_TO_GET_PAST_A_REFUSAL =
   'them only when the team means to change how that database may change, and\n' +
   'have the change reviewed like code.';
 
-const FORBIDDEN_LEVELS: readonly RefPolicyValue[] = Object.values(FORBIDDEN_LEVEL);
-
-/** A data protection level at which `migration plan --to <ref>` refuses the plans it forbids. */
-export function isForbiddenLevel(value: RefPolicyValue): boolean {
-  return FORBIDDEN_LEVELS.includes(value);
-}
-
 /** `a`, `a and b`, `a, b and c`. */
 export function andList(values: readonly string[]): string {
   return values.length <= 1
     ? values.join('')
     : `${values.slice(0, -1).join(', ')} and ${values[values.length - 1]}`;
+}
+
+/**
+ * What the changes do to `migration plan --to <ref>`, which refuses only what a forbidden level forbids: it starts checking a setting that became forbidden and stops checking one that was. Empty when neither happened.
+ */
+export function planCheckSentence(ref: string, changes: readonly RefPolicyChange[]): string {
+  const starts = changes.flatMap(({ setting, after }) =>
+    after !== null && isForbiddenLevel(after) ? [setting] : [],
+  );
+  const stops = changes.flatMap(({ setting, before }) =>
+    before !== null && isForbiddenLevel(before) ? [setting] : [],
+  );
+  const clauses = [
+    ...(starts.length === 0 ? [] : [`now checks plans against ${andList(starts)}`]),
+    ...(stops.length === 0 ? [] : [`no longer checks plans against ${andList(stops)}`]),
+  ];
+  return clauses.length === 0 ? '' : ` {bin} migration plan --to ${ref} ${clauses.join(' and ')}.`;
 }

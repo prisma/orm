@@ -315,7 +315,20 @@ describe('ref policy set', () => {
 
       expect(run.exitCode).toBe(2);
       expect(run.json.at(-1)).toMatchObject({
-        envelope: { ok: false, error: { code: 'CLI.INVALID_ARGUMENTS' } },
+        envelope: {
+          ok: false,
+          error: {
+            code: 'CLI.INVALID_ARGUMENTS',
+            summary: 'The head ref cannot declare policies',
+            why: 'head is the ref the CLI keeps at the newest contract; a team does not declare policies for it.',
+          },
+          nextActions: [
+            {
+              kind: 'user-choice',
+              label: 'Name a ref your team keeps for a database, such as staging or production.',
+            },
+          ],
+        },
       });
       expect(await readText(path)).toBe(before);
     });
@@ -360,8 +373,26 @@ describe('ref policy set', () => {
       '✔ Updated the policies ref production declares (migrations/app/refs/production.json)',
       'change:                   migrate, reconcile (default)  →  migrate  tightens',
       'dataProtection.dataLoss:  data-loss-with-consent (default)  →  data-loss-forbidden  tightens',
-      "ℹ No database was changed. A database takes on these policies only when its owner applies them in a deploy to production; until then, deploys to production refuse while the database's policies differ. prisma-test migration plan --to production checks plans against dataProtection.dataLoss at once.",
+      "ℹ No database was changed. A database takes on these policies only when its owner applies them in a deploy to production; until then, deploys to production refuse while the database's policies differ. prisma-test migration plan --to production now checks plans against dataProtection.dataLoss.",
     ]);
+  });
+
+  it('says migration plan stops checking a setting moved away from forbidden', async () => {
+    const { dir } = await projectWithRef('production', {
+      ...PLAIN_REF,
+      policies: { dataProtection: { dataLoss: 'data-loss-forbidden' } },
+    });
+
+    const run = await harness().run(
+      ['migration', 'ref', 'policy', 'set', 'production', '--data-loss', 'with-consent'],
+      { cwd: dir },
+    );
+
+    expect(run.presented?.presentation.human.at(-1)).toEqual({
+      kind: 'summary',
+      status: 'info',
+      text: "No database was changed. A database takes on these policies only when its owner applies them in a deploy to production; until then, deploys to production refuse while the database's policies differ. prisma-test migration plan --to production no longer checks plans against dataProtection.dataLoss.",
+    });
   });
 
   it('names migration plan only for a setting it now checks', async () => {

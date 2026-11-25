@@ -1,13 +1,11 @@
 import { ormConfigSection } from '@internal/config-loader';
-import {
-  type DeclaredDatabasePolicies,
-  databasePolicyValueText,
-} from '@internal/framework-components/control';
+import type { DeclaredDatabasePolicies } from '@internal/framework-components/control';
 import type { Refs } from '@internal/migration-tools/refs';
 import type { Block, Presentations, Text } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import type { RefListResult } from '../../control-api/operations/ref';
 import { executeRefListCommand } from '../../control-api/operations/ref';
+import { declaredEntries, declaredSettings, settingsText } from '../../utils/policy-settings';
 import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
@@ -19,19 +17,8 @@ const HEADING_POLICIES = 'Policies';
 
 const EMPTY_MESSAGE = 'No refs defined';
 
-/** `change: migrate; dataProtection.dataLoss: data-loss-forbidden`: each setting the ref declares. */
 function declaredPoliciesText(policies: DeclaredDatabasePolicies | undefined): string {
-  const settings: (readonly [string, Parameters<typeof databasePolicyValueText>[0] | undefined])[] =
-    [
-      ['change', policies?.change],
-      ['dataProtection.dataLoss', policies?.dataProtection?.dataLoss],
-      ['dataProtection.accessWidening', policies?.dataProtection?.accessWidening],
-    ];
-  return settings
-    .flatMap(([setting, value]) =>
-      value === undefined ? [] : [`${setting}: ${databasePolicyValueText(value)}`],
-    )
-    .join('; ');
+  return settingsText(declaredEntries(declaredSettings(policies)));
 }
 
 /**

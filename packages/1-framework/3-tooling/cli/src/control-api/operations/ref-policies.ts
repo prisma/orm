@@ -4,8 +4,7 @@ import {
   CHANGE_STRATEGIES,
   type ChangeStrategy,
   type DataLossLevel,
-  DEFAULT_DATABASE_POLICIES,
-  type DeclaredDatabasePolicies,
+  databasePolicyValueText,
 } from '@internal/framework-components/control';
 import { HEAD_REF_NAME, type RefEntry, readRef, writeRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
@@ -13,23 +12,27 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
 import { ActionableCliError, type CliStructuredError } from '../../utils/cli-errors';
 import { resolveMigrationPaths } from '../../utils/command-helpers';
-import { chooseAction, runCommandAction } from '../../utils/next-actions';
+import { chooseAction } from '../../utils/next-actions';
 import {
   canonicalChange,
-  DATA_PROTECTION_FLAGS,
-  type DataProtectionFlag,
-  levelFromFlag,
+  DATA_PROTECTION_SETTINGS,
+  type DataProtectionSettingSpec,
+  DEFAULT_SETTINGS,
+  type DeclaredSettings,
+  declaredPolicies,
+  declaredSettings,
+  levelFromInput,
   POLICY_SETTINGS,
   type PolicyEffect,
-  type PolicyMove,
   type PolicySetting,
-  policyMoveEffect,
+  type PolicySettingValue,
+  policyValueEffect,
   shortLevels,
 } from '../../utils/policy-settings';
 import { errorFromCaught } from './caught-errors';
 
-/** What a ref declares for each setting, `null` where it declares nothing. */
-export interface RefPolicies {
+/** What a ref declares, as the commands report it: every setting present, `null` where the ref declares nothing. */
+export interface DeclaredPoliciesReport {
   readonly change: readonly ChangeStrategy[] | null;
   readonly dataProtection: {
     readonly dataLoss: DataLossLevel | null;
@@ -37,25 +40,25 @@ export interface RefPolicies {
   };
 }
 
-export type RefPolicyValue = readonly ChangeStrategy[] | DataLossLevel | AccessWideningLevel;
-
 /** A setting whose declared value a command changed, and what that does to the policy in effect. */
 export interface RefPolicyChange {
   readonly setting: PolicySetting;
-  readonly before: RefPolicyValue | null;
-  readonly after: RefPolicyValue | null;
+  readonly before: PolicySettingValue | null;
+  readonly after: PolicySettingValue | null;
   readonly effect: PolicyEffect;
 }
 
 export interface RefPoliciesResult {
   readonly ok: true;
   readonly ref: string;
-  readonly policies: RefPolicies;
+  readonly policies: DeclaredPoliciesReport;
   readonly changes: readonly RefPolicyChange[];
 }
 
 export interface RefPoliciesOutcome {
   readonly result: RefPoliciesResult;
+  /** The settings the ref declares after the command. */
+  readonly declared: DeclaredSettings;
   readonly refFile: string;
 }
 
@@ -71,13 +74,7 @@ export interface RefPoliciesOperationOptions {
   readonly cwd: string;
 }
 
-type Settings = {
-  readonly change: readonly ChangeStrategy[] | undefined;
-  readonly dataLoss: DataLossLevel | undefined;
-  readonly accessWidening: AccessWideningLevel | undefined;
-};
-
-type Edit = (declared: Settings) => Settings;
+type Edit = (declared: DeclaredSettings) => DeclaredSettings;
 
 function invalidArguments(
   summary: string,
@@ -94,13 +91,12 @@ function invalidArguments(
 }
 
 function errorHeadRef(): ActionableCliError {
-  const fix = 'Name a ref your team keeps, such as staging or production.';
-  return new ActionableCliError('CLI.INVALID_ARGUMENTS', 'The head ref declares no policies', {
-    why: 'head is the ref the CLI keeps at the newest contract; a team does not declare policies for it.',
-    fix,
-    nextActions: [chooseAction(fix), runCommandAction('List the refs', '{bin} migration ref list')],
-    meta: { refName: HEAD_REF_NAME },
-  });
+  return invalidArguments(
+    'The head ref cannot declare policies',
+    'head is the ref the CLI keeps at the newest contract; a team does not declare policies for it.',
+    'Name a ref your team keeps for a database, such as staging or production.',
+    { refName: HEAD_REF_NAME },
+  );
 }
 
 function orList(values: readonly string[]): string {
@@ -129,17 +125,17 @@ function parseChange(values: readonly string[]): Result<ChangeStrategy[], Action
 }
 
 function parseLevel<L extends string>(
-  spec: DataProtectionFlag<L>,
+  spec: DataProtectionSettingSpec<L>,
   value: string | undefined,
 ): Result<L | undefined, ActionableCliError> {
   if (value === undefined) return ok(undefined);
-  const level = levelFromFlag(spec, value);
+  const level = levelFromInput(spec, value);
   if (level !== undefined) return ok(level);
   const allowed = shortLevels(spec);
   return notOk(
     invalidArguments(
       `--${spec.flag} does not accept "${value}"`,
-      `--${spec.flag} takes ${orList(allowed)}, or the same with ${spec.flag}- in front.`,
+      `--${spec.flag} takes ${orList(allowed)}, or the same with ${spec.levelPrefix} in front.`,
       `Pass --${spec.flag} ${orList(allowed)}.`,
       { flag: `--${spec.flag}`, value, allowed },
     ),
@@ -150,16 +146,16 @@ function parseSetEdit(input: RefPolicySetInput): Result<Edit, ActionableCliError
   const changeValues = input.change ?? [];
   const change = parseChange(changeValues);
   if (!change.ok) return change;
-  const dataLoss = parseLevel(DATA_PROTECTION_FLAGS.dataLoss, input.dataLoss);
+  const dataLoss = parseLevel(DATA_PROTECTION_SETTINGS.dataLoss, input.dataLoss);
   if (!dataLoss.ok) return dataLoss;
-  const accessWidening = parseLevel(DATA_PROTECTION_FLAGS.accessWidening, input.accessWidening);
+  const accessWidening = parseLevel(DATA_PROTECTION_SETTINGS.accessWidening, input.accessWidening);
   if (!accessWidening.ok) return accessWidening;
-  const given = {
-    change: changeValues.length === 0 ? undefined : change.value,
-    dataLoss: dataLoss.value,
-    accessWidening: accessWidening.value,
+  const given: DeclaredSettings = {
+    ...ifDefined('change', changeValues.length === 0 ? undefined : change.value),
+    ...ifDefined('dataProtection.dataLoss', dataLoss.value),
+    ...ifDefined('dataProtection.accessWidening', accessWidening.value),
   };
-  if (Object.values(given).every((value) => value === undefined)) {
+  if (Object.keys(given).length === 0) {
     return notOk(
       invalidArguments(
         'Nothing to set',
@@ -169,27 +165,23 @@ function parseSetEdit(input: RefPolicySetInput): Result<Edit, ActionableCliError
       ),
     );
   }
-  return ok((declared) => ({
-    change: given.change ?? declared.change,
-    dataLoss: given.dataLoss ?? declared.dataLoss,
-    accessWidening: given.accessWidening ?? declared.accessWidening,
-  }));
+  return ok((declared) => ({ ...declared, ...given }));
 }
 
 const SETTING_NAMES: Readonly<Record<string, PolicySetting>> = {
   ...Object.fromEntries(POLICY_SETTINGS.map((setting) => [setting, setting])),
-  [DATA_PROTECTION_FLAGS.dataLoss.flag]: DATA_PROTECTION_FLAGS.dataLoss.setting,
-  [DATA_PROTECTION_FLAGS.accessWidening.flag]: DATA_PROTECTION_FLAGS.accessWidening.setting,
+  [DATA_PROTECTION_SETTINGS.dataLoss.flag]: DATA_PROTECTION_SETTINGS.dataLoss.setting,
+  [DATA_PROTECTION_SETTINGS.accessWidening.flag]: DATA_PROTECTION_SETTINGS.accessWidening.setting,
 };
 
 function parseDeleteEdit(names: readonly string[]): Result<Edit, ActionableCliError> {
-  const settingList = `${orList(POLICY_SETTINGS)}, or by its flag name: ${DATA_PROTECTION_FLAGS.dataLoss.flag} or ${DATA_PROTECTION_FLAGS.accessWidening.flag}`;
+  const settingList = `${orList(POLICY_SETTINGS)}, or by its flag name: ${DATA_PROTECTION_SETTINGS.dataLoss.flag} or ${DATA_PROTECTION_SETTINGS.accessWidening.flag}`;
   if (names.length === 0) {
     return notOk(
       invalidArguments(
         'No setting to delete',
-        'Name the settings to remove after the ref name.',
-        `Name at least one setting: ${settingList}.`,
+        'No setting was named to remove.',
+        `Name at least one setting after the ref name: ${orList(Object.keys(SETTING_NAMES))}.`,
         { allowed: Object.keys(SETTING_NAMES) },
       ),
     );
@@ -209,111 +201,53 @@ function parseDeleteEdit(names: readonly string[]): Result<Edit, ActionableCliEr
     }
     removed.add(setting);
   }
-  return ok((declared) => ({
-    change: removed.has('change') ? undefined : declared.change,
-    dataLoss: removed.has('dataProtection.dataLoss') ? undefined : declared.dataLoss,
-    accessWidening: removed.has('dataProtection.accessWidening')
-      ? undefined
-      : declared.accessWidening,
-  }));
+  return ok((declared) => {
+    const kept: { -readonly [S in PolicySetting]?: PolicySettingValue<S> | undefined } = {
+      ...declared,
+    };
+    for (const setting of removed) kept[setting] = undefined;
+    return kept;
+  });
 }
 
-function settingsOf(policies: DeclaredDatabasePolicies | undefined): Settings {
-  return {
-    change: policies?.change === undefined ? undefined : canonicalChange(policies.change),
-    dataLoss: policies?.dataProtection?.dataLoss,
-    accessWidening: policies?.dataProtection?.accessWidening,
-  };
-}
-
-/** The settings in the order the ref file format stores them, with an empty object left out. */
-function declaredPolicies(settings: Settings): DeclaredDatabasePolicies | undefined {
-  const dataProtection =
-    settings.dataLoss === undefined && settings.accessWidening === undefined
-      ? undefined
-      : {
-          ...ifDefined('dataLoss', settings.dataLoss),
-          ...ifDefined('accessWidening', settings.accessWidening),
-        };
-  if (settings.change === undefined && dataProtection === undefined) return undefined;
-  return {
-    ...ifDefined('change', settings.change),
-    ...ifDefined('dataProtection', dataProtection),
-  };
-}
-
-function refPolicies(settings: Settings): RefPolicies {
+function report(settings: DeclaredSettings): DeclaredPoliciesReport {
   return {
     change: settings.change ?? null,
     dataProtection: {
-      dataLoss: settings.dataLoss ?? null,
-      accessWidening: settings.accessWidening ?? null,
+      dataLoss: settings['dataProtection.dataLoss'] ?? null,
+      accessWidening: settings['dataProtection.accessWidening'] ?? null,
     },
   };
 }
 
-/** A removed setting stops being checked, so a delete never tightens a policy. */
-function effectOf(move: PolicyMove, removed: boolean): PolicyEffect {
-  const effect = policyMoveEffect(move);
-  return removed && effect === 'tightens' ? 'unchanged' : effect;
+function sameValue(a: PolicySettingValue | undefined, b: PolicySettingValue | undefined): boolean {
+  return a === undefined || b === undefined
+    ? a === b
+    : databasePolicyValueText(a) === databasePolicyValueText(b);
 }
 
-function sameChange(
-  a: readonly ChangeStrategy[] | undefined,
-  b: readonly ChangeStrategy[] | undefined,
-): boolean {
-  return a === undefined || b === undefined ? a === b : a.join(',') === b.join(',');
-}
-
-function settingChanges(before: Settings, after: Settings): readonly RefPolicyChange[] {
-  const defaults = DEFAULT_DATABASE_POLICIES;
-  const changes: RefPolicyChange[] = [];
-  if (!sameChange(before.change, after.change)) {
-    changes.push({
-      setting: 'change',
-      before: before.change ?? null,
-      after: after.change ?? null,
-      effect: effectOf(
-        {
-          setting: 'change',
-          from: before.change ?? defaults.change,
-          to: after.change ?? defaults.change,
-        },
-        after.change === undefined,
-      ),
-    });
-  }
-  if (before.dataLoss !== after.dataLoss) {
-    changes.push({
-      setting: 'dataProtection.dataLoss',
-      before: before.dataLoss ?? null,
-      after: after.dataLoss ?? null,
-      effect: effectOf(
-        {
-          setting: 'dataProtection.dataLoss',
-          from: before.dataLoss ?? defaults.dataProtection.dataLoss,
-          to: after.dataLoss ?? defaults.dataProtection.dataLoss,
-        },
-        after.dataLoss === undefined,
-      ),
-    });
-  }
-  if (before.accessWidening !== after.accessWidening) {
-    changes.push({
-      setting: 'dataProtection.accessWidening',
-      before: before.accessWidening ?? null,
-      after: after.accessWidening ?? null,
-      effect: effectOf(
-        {
-          setting: 'dataProtection.accessWidening',
-          from: before.accessWidening ?? defaults.dataProtection.accessWidening,
-          to: after.accessWidening ?? defaults.dataProtection.accessWidening,
-        },
-        after.accessWidening === undefined,
-      ),
-    });
-  }
-  return changes;
+/** Each setting whose declared value differs. A removed setting stops being checked, so removing one never tightens a policy. */
+function settingChanges(
+  before: DeclaredSettings,
+  after: DeclaredSettings,
+): readonly RefPolicyChange[] {
+  return POLICY_SETTINGS.flatMap((setting) => {
+    const from = before[setting];
+    const to = after[setting];
+    if (sameValue(from, to)) return [];
+    const effect = policyValueEffect(
+      from ?? DEFAULT_SETTINGS[setting],
+      to ?? DEFAULT_SETTINGS[setting],
+    );
+    return [
+      {
+        setting,
+        before: from ?? null,
+        after: to ?? null,
+        effect: to === undefined && effect === 'tightens' ? 'unchanged' : effect,
+      },
+    ];
+  });
 }
 
 async function applyEdit(
@@ -326,7 +260,7 @@ async function applyEdit(
   try {
     const { refsDir } = resolveMigrationPaths(options.config, options.cwd);
     const entry = await readRef(refsDir, name);
-    const before = settingsOf(entry.policies);
+    const before = declaredSettings(entry.policies);
     const after = edit === undefined ? before : edit.value(before);
     const changes = settingChanges(before, after);
     if (changes.length > 0) {
@@ -338,7 +272,8 @@ async function applyEdit(
       await writeRef(refsDir, name, written);
     }
     return ok({
-      result: { ok: true as const, ref: name, policies: refPolicies(after), changes },
+      result: { ok: true as const, ref: name, policies: report(after), changes },
+      declared: after,
       refFile: join(refsDir, `${name}.json`),
     });
   } catch (error) {

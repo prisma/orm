@@ -8,22 +8,10 @@ import {
 import { defineOrmCommand } from '../../define-command';
 import { normalizeError } from '../../normalize-error';
 import { editPresentations } from './presentation';
-import {
-  andList,
-  DO_NOT_LOOSEN_TO_GET_PAST_A_REFUSAL,
-  isForbiddenLevel,
-  refPositional,
-} from './text';
+import { DO_NOT_LOOSEN_TO_GET_PAST_A_REFUSAL, planCheckSentence, refPositional } from './text';
 
 function closing(ref: string, changes: readonly RefPolicyChange[]): string {
-  const forbidding = changes.flatMap(({ setting, after }) =>
-    after !== null && isForbiddenLevel(after) ? [setting] : [],
-  );
-  const planChecks =
-    forbidding.length === 0
-      ? ''
-      : ` {bin} migration plan --to ${ref} checks plans against ${andList(forbidding)} at once.`;
-  return `No database was changed. A database takes on these policies only when its owner applies them in a deploy to ${ref}; until then, deploys to ${ref} refuse while the database's policies differ.${planChecks}`;
+  return `No database was changed. A database takes on these policies only when its owner applies them in a deploy to ${ref}; until then, deploys to ${ref} refuse while the database's policies differ.${planCheckSentence(ref, changes)}`;
 }
 
 export function createRefPolicySetCommand(

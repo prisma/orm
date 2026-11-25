@@ -15,7 +15,7 @@ $ prisma migration ref policy set production --change migrate --data-loss forbid
 change:                   migrate, reconcile (default)  →  migrate  tightens
 dataProtection.dataLoss:  data-loss-with-consent (default)  →  data-loss-forbidden  tightens
 
-ℹ No database was changed. A database takes on these policies only when its owner applies them in a deploy to production; until then, deploys to production refuse while the database's policies differ. prisma migration plan --to production checks plans against dataProtection.dataLoss at once.
+ℹ No database was changed. A database takes on these policies only when its owner applies them in a deploy to production; until then, deploys to production refuse while the database's policies differ. prisma migration plan --to production now checks plans against dataProtection.dataLoss.
 ```
 
 The command rewrites only `migrations/app/refs/production.json`. The database takes on the policies when its owner deploys to production with `--permit-policy-change`, as [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) describes. `migration ref policy show` prints what a ref declares, and `migration ref policy delete` removes a setting so the ref declares nothing about it.
@@ -26,7 +26,7 @@ ADR 320 said that only a person editing the file changes a ref's policies. This 
 
 ADR 320 also said that every command that rewrites a ref keeps the fields it does not change. This record narrows it to: **every ref writer keeps the fields the ref format defines** (`hash`, `invariants`, `policies`). A top-level key the format does not define is dropped on rewrite, which is what every ref writer already does.
 
-**No advice points to these commands.** No error, next action, command output or skill text tells the reader to loosen a ref's policies, either by naming the commands or by describing what they do, and no output of the commands names `--permit-policy-change`. The help of `set` and `delete` says that a refused deploy or plan is not a reason to loosen a ref's policies.
+**No advice points to these commands.** No error, next action or command output, and no advice in the `prisma-8` skill, tells the reader to loosen a ref's policies or points to these commands as a way past a refusal, whether it names them or describes what they do. No output of the commands names `--permit-policy-change`. The help of `set` and `delete` says that a refused deploy or plan is not a reason to loosen a ref's policies. Reference documentation may name the commands: the skill's description of the ref file and its commands, the CLI's README and help, and these design documents.
 
 ## Why the commands are acceptable
 
@@ -40,7 +40,8 @@ An agent that has just been refused acts on whatever the error offers it. An err
 
 - The operations behind the commands are not part of the control API. A pipeline only deploys, so a program has no reason to rewrite a ref's policies.
 - The ref file format does not change, and editing the file by hand keeps working.
-- A source check in the CLI's tests fails if any source file other than the commands and the place the CLI mounts them names the commands.
+- The `prisma-8` skill documents the commands as reference, beside the ref file format, and names them in its guidance only to say they are not a way past a refusal. A later agent that finds them in the skill should keep that documentation, not remove it: what is ruled out is advice that sends a refused reader to them.
+- A source check in the CLI's tests fails if any file under a package's `src` other than the commands and the place the CLI mounts them names the commands. It covers the code that produces errors, next actions and output; the skill and the docs, which may name the commands as reference, are outside it, and their advice is checked by review.
 
 ## Alternatives considered
 
