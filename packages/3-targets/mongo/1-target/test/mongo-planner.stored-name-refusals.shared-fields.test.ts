@@ -105,6 +105,17 @@ describe('MongoMigrationPlanner, field renames onto a stored name another model 
       { tasks: {} },
     );
 
+  it('offers no temporary stored name a variant of the model already holds', () => {
+    const [conflict] = refused(
+      plan({
+        from: tasks('from', { p: 'a', q: 'b' }, { sev: 'prisma_swap_b' }),
+        to: tasks('to', { p: 'b', q: 'a' }, { sev: 'prisma_swap_b' }),
+        schema: [schemaCollection('tasks')],
+      }),
+    );
+    expect(conflict?.why).toContain('"prisma_swap_b_"');
+  });
+
   it('refuses a rename onto the stored name another root model of the collection keeps', () => {
     expect(
       refused(plan({ from: shared('from', 'x'), to: shared('to', 'y'), schema: usersSchema })),

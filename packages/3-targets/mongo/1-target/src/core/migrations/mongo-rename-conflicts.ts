@@ -486,16 +486,28 @@ function storedNamesOf(contract: ContractWithDomain, model: ModelCoordinate): re
   );
 }
 
+/** The stored names a temporary name for a rename of `rename.from` to `rename.to` must avoid: those of every model the rename reaches, in both contracts. */
+function usedStoredNames(
+  contracts: Contracts,
+  rename: { readonly from: FieldCoordinate; readonly to: FieldCoordinate },
+): readonly string[] {
+  const namesReached = (contract: ContractWithDomain, field: FieldCoordinate) =>
+    modelsReached(contract, field).flatMap((model) =>
+      storedNamesOf(contract, { namespaceId: field.namespaceId, model }),
+    );
+  return [
+    ...namesReached(contracts.fromContract, rename.from),
+    ...namesReached(contracts.contract, rename.to),
+  ];
+}
+
 function fieldRoute(
   pair: readonly [FieldChange, FieldChange],
   changes: readonly FieldChange[],
   contracts: Contracts,
 ): string {
   const linked = linkedChanges(pair, changes, (taker, freer) => taker.to === freer.from);
-  const used = [
-    ...storedNamesOf(contracts.fromContract, pair[0].rename.from),
-    ...storedNamesOf(contracts.contract, pair[0].rename.to),
-  ];
+  const used = usedStoredNames(contracts, pair[0].rename);
   const reserved: string[] = [];
   const moves = linked.map((moving) => {
     const through = unused([...used, ...reserved], moving.to);
@@ -555,8 +567,7 @@ function fieldRenameConflict(
       );
     }
     const used = [
-      ...storedNamesOf(contracts.fromContract, change.rename.from),
-      ...storedNamesOf(contracts.contract, change.rename.to),
+      ...usedStoredNames(contracts, change.rename),
       ...holders.flatMap((holder) => storedNamesOf(contracts.fromContract, holder.coordinate)),
     ];
     return renameRefused(
