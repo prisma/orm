@@ -91,11 +91,11 @@ One of the packages extension authors build against: `@prisma/orm-framework`, `@
 
 ### Maturity level
 
-How finished a package or an API is: Early Access, Preview, Release Candidate or Generally Available (GA). "Below GA" means any of the first three, and only what is GA is kept compatible within a major version. A package's level is written in its version number (`8.3.0-ea.0`, `8.3.0-preview.0`, `8.3.0-rc.0`, or a plain `8.3.0` for GA), and an API below its package's level carries the word at the start of its name (`ea_foo`, `preview_foo`, `rc_foo`). Nothing else has a level, and there is no other word for what is not finished. A version published before `8.0.0` says nothing about a package's level. See [Versioning](oss/versioning.md#maturity-levels) and [ADR 330](architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md).
+How finished a package or an API is: Early Access, Preview, Release Candidate or Generally Available (GA). "Below GA" means any of the first three, and only what is GA is kept compatible within a major version. A package's level is written in its version number (`8.3.0-ea.0`, `8.3.0-preview.0`, `8.3.0-rc.0`, or a plain `8.3.0` for GA), and an API below its package's level carries the word at the start of its name (`ea_foo`, `preview_foo`, `rc_foo`). Nothing else has a level, and there is no other word for what is not finished. A version published before release 8.0 says nothing about a package's level. See [Versioning](oss/versioning.md#maturity-levels) and [ADR 330](architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md).
 
 ### Release number
 
-The major and minor that every package of one release shares: release `8.3` publishes every package at `8.3`, except `@prisma/orm-extension-paradedb`, which has its own version. The rest of a version is each package's own: a GA package's patch number, or a level suffix and its counter for a package below GA. From `8.0.0`, the root `package.json` `version` is the release number with a zero patch, `8.3.0`. See [Versioning](oss/versioning.md#version-numbers).
+The major and minor that every package of one release shares: release `8.3` publishes every package at `8.3`, except `@prisma/orm-extension-paradedb`, which has its own version. The rest of a version is each package's own: a GA package's patch number, or a level suffix and its counter for a package below GA. From release 8.0, the root `package.json` `version` is the release number with a zero patch, such as `8.3.0`, except at release 8.0, where it is `8.0.1`. See [Versioning](oss/versioning.md#version-numbers).
 
 ### Init contribution
 
