@@ -41,7 +41,11 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
 import { collectionPlanOf, collectionPlanSchemasOf, renameInSchema } from './mongo-collection-plan';
-import { collectionControlPolicy, managedOnBothSides } from './mongo-control-policy';
+import {
+  collectionControlOf,
+  collectionControlPolicy,
+  managedOnBothSides,
+} from './mongo-control-policy';
 import { documentMoveOf, type MovingModel } from './mongo-document-moves';
 import {
   documentCollectionOf,
@@ -859,7 +863,13 @@ function sharedRouteOf(input: {
     plan?.renamedCollections.get(sourceOf(group)) ?? sourceOf(group);
   const dropsSource = (group: RefusedGroup, plan: StatementPlan | undefined) => {
     if (group.shared.kind !== 'split') return false;
-    if (plan === undefined) return !hasCollection(contract, sourceOf(group));
+    if (plan === undefined) {
+      const source = sourceOf(group);
+      return (
+        !hasCollection(contract, source) &&
+        collectionControlOf(contract, fromContract, source).policy === 'managed'
+      );
+    }
     const planned = collectionPlanOf(
       sourceAfter(group, plan),
       collectionPlanSchemasOf(plan.schema, contract),

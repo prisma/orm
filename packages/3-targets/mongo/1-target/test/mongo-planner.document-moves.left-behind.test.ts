@@ -50,6 +50,23 @@ describe('MongoMigrationPlanner, a route over models leaving a source when the p
       'Leave out --rename User:Member, --rename Admin:Boss and --rename Clerk:Teller to plan the change without moving them. The plan then asks about the data of models "User", "Admin" and "Clerk", which it drops. Its question offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change and deletes the data.',
     );
   });
+
+  it('says the models are removed with no question when the destination leaves out an external source, which the plan does not drop', () => {
+    const fromExternal = contract(
+      'from',
+      {
+        User: { collection: 'users', fields: ['_id', 'user'] },
+        Admin: { collection: 'users', fields: ['_id', 'admin'] },
+        Guest: { collection: 'guests', fields: ['_id', 'age'], types: { age: STR } },
+        Clerk: { collection: 'clerks', fields: ['_id', 'age'], types: { age: INT } },
+      },
+      { users: { control: 'external' }, guests: {}, clerks: {} },
+    );
+    const why = routeOf(plan({ from: fromExternal, to: to(false), schema, statements }));
+    expect(why.split('\n\n')[1]).toBe(
+      'Leave out --rename User:Member, --rename Admin:Boss and --rename Clerk:Teller to plan the change without moving them. Models "User" and "Admin" are then removed and nothing is asked, since nothing is deleted. Their documents stay in collection "users", where no model reads them. Model "Member" starts with no documents. Model "Boss" starts with no documents. If the new validator of collection "users" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there. The plan then asks about the data of model "Clerk", which it drops. Its question offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change and deletes the data.',
+    );
+  });
 });
 
 describe('MongoMigrationPlanner, a route over a model leaving a kept source whose other model moves by its own @@map change', () => {
