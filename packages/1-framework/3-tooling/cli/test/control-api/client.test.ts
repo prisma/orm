@@ -1113,7 +1113,7 @@ describe('ControlClient progress emission', () => {
 
   describe('renderContractDts()', () => {
     it(
-      'renders the same declarations emit() produces for the contract',
+      'renders from the contract.json emit() wrote the same declarations emit() wrote',
       async () => {
         const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
         const client = createControlClient({
@@ -1129,15 +1129,17 @@ describe('ControlClient progress emission', () => {
             typesModule: TYPES_MODULE,
           },
         });
-        const rendered = await client.renderContractDts({
-          contract: emittableContract(),
-          typesModule: TYPES_MODULE,
-        });
+        const rendered = emitted.ok
+          ? await client.renderContractDts({
+              contract: JSON.parse(emitted.value.contractJson),
+              typesModule: TYPES_MODULE,
+            })
+          : undefined;
         await client.close();
 
         expect(emitted.ok).toBe(true);
-        expect(rendered.ok).toBe(true);
-        if (emitted.ok && rendered.ok) {
+        expect(rendered?.ok).toBe(true);
+        if (emitted.ok && rendered?.ok) {
           expect(rendered.value.contractDts).toContain('export type Contract');
           expect(rendered.value.contractDts).toBe(emitted.value.contractDts);
         }
