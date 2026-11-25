@@ -151,6 +151,29 @@ describe('the report', () => {
     );
   });
 
+  it('names what is not compared across the package, such as a unique symbol', () => {
+    const text = reportText({
+      version: '8.0.0',
+      results: [
+        result({
+          notCompared: [
+            {
+              path: '*',
+              name: 'unique symbol @prisma/orm-a:brand',
+              test: 'unique symbol',
+              reason: 'two of them',
+            },
+          ],
+        }),
+      ],
+      notReleased: [],
+    });
+    match(
+      text,
+      /\n {2}not compared {2}@prisma\/orm-a: unique symbol @prisma\/orm-a:brand \(unique symbol\): two of them\n/,
+    );
+  });
+
   it('gives a problem with the removed-package records a heading of its own', () => {
     const text = reportText({
       version: '8.0.0',

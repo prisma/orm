@@ -223,8 +223,10 @@ async function runAll(jobs, workers) {
 export const failsRun = (result) =>
   (result.problems?.length ?? 0) > 0 || (result.breaks ?? []).some((each) => each.failsRun);
 
-const labelOf = (packageName, { path, name }) =>
-  path === '*' ? packageName : exportLabel(packageName, path, name);
+const labelOf = (packageName, { path, name }) => {
+  if (path !== '*') return exportLabel(packageName, path, name);
+  return name === '*' ? packageName : `${packageName}: ${name}`;
+};
 const describeFailure = (packageName, each, message = each.message) =>
   `${labelOf(packageName, each)} (${each.test}): ${message}`;
 const RECORDED = [
