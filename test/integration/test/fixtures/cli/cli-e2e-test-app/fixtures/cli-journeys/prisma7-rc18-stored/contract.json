@@ -1,0 +1,5088 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "roots": {
+    "Composite": {
+      "model": "Composite",
+      "namespace": "audit"
+    },
+    "CompositeChild": {
+      "model": "CompositeChild",
+      "namespace": "audit"
+    },
+    "Defaults": {
+      "model": "Defaults",
+      "namespace": "public"
+    },
+    "Label": {
+      "model": "Label",
+      "namespace": "audit"
+    },
+    "ListDefaults": {
+      "model": "ListDefaults",
+      "namespace": "public"
+    },
+    "NativeTypes": {
+      "model": "NativeTypes",
+      "namespace": "public"
+    },
+    "NumberDefaults": {
+      "model": "NumberDefaults",
+      "namespace": "public"
+    },
+    "Post": {
+      "model": "Post",
+      "namespace": "public"
+    },
+    "Profile": {
+      "model": "Profile",
+      "namespace": "public"
+    },
+    "Review": {
+      "model": "Review",
+      "namespace": "public"
+    },
+    "Scalars": {
+      "model": "Scalars",
+      "namespace": "public"
+    },
+    "Settings": {
+      "model": "Settings",
+      "namespace": "public"
+    },
+    "Tag": {
+      "model": "Tag",
+      "namespace": "public"
+    },
+    "TemporalDefaults": {
+      "model": "TemporalDefaults",
+      "namespace": "public"
+    },
+    "Timestamps": {
+      "model": "Timestamps",
+      "namespace": "public"
+    },
+    "User": {
+      "model": "User",
+      "namespace": "public"
+    },
+    "_Favorites": {
+      "model": "Favorites",
+      "namespace": "public"
+    },
+    "_Follows": {
+      "model": "Follows",
+      "namespace": "public"
+    },
+    "_LabelToPost": {
+      "model": "LabelToPost",
+      "namespace": "audit"
+    },
+    "_PostToTag": {
+      "model": "PostToTag",
+      "namespace": "public"
+    },
+    "audit_log": {
+      "model": "AuditLog",
+      "namespace": "audit"
+    },
+    "mapped_indexes": {
+      "model": "MappedIndexes",
+      "namespace": "public"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "audit": {
+        "models": {
+          "AuditLog": {
+            "fields": {
+              "action": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/enum@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "typeName": "audit.AuditAction"
+                  }
+                }
+              },
+              "at": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "action": {
+                  "column": "action"
+                },
+                "at": {
+                  "column": "at"
+                },
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "audit",
+              "table": "audit_log"
+            }
+          },
+          "Composite": {
+            "fields": {
+              "a": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "b": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "children": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "a",
+                    "b"
+                  ],
+                  "targetFields": [
+                    "compositeA",
+                    "compositeB"
+                  ]
+                },
+                "to": {
+                  "model": "CompositeChild",
+                  "namespace": "audit"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "a": {
+                  "column": "a"
+                },
+                "b": {
+                  "column": "b"
+                }
+              },
+              "namespaceId": "audit",
+              "table": "Composite"
+            }
+          },
+          "CompositeChild": {
+            "fields": {
+              "compositeA": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "compositeB": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "composite": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "compositeA",
+                    "compositeB"
+                  ],
+                  "targetFields": [
+                    "a",
+                    "b"
+                  ]
+                },
+                "to": {
+                  "model": "Composite",
+                  "namespace": "audit"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "compositeA": {
+                  "column": "compositeA"
+                },
+                "compositeB": {
+                  "column": "compositeB"
+                },
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "audit",
+              "table": "CompositeChild"
+            }
+          },
+          "Label": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "posts": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "A"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "B"
+                  ],
+                  "namespaceId": "audit",
+                  "parentColumns": [
+                    "A"
+                  ],
+                  "table": "_LabelToPost",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Post",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "name": {
+                  "column": "name"
+                }
+              },
+              "namespaceId": "audit",
+              "table": "Label"
+            }
+          },
+          "LabelToPost": {
+            "fields": {
+              "A": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "B": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "label": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "A"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Label",
+                  "namespace": "audit"
+                }
+              },
+              "post": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "B"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Post",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "A": {
+                  "column": "A"
+                },
+                "B": {
+                  "column": "B"
+                }
+              },
+              "namespaceId": "audit",
+              "table": "_LabelToPost"
+            }
+          }
+        }
+      },
+      "public": {
+        "models": {
+          "Defaults": {
+            "fields": {
+              "bigIntLiteral": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                }
+              },
+              "bigSequence": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                }
+              },
+              "booleanLiteral": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "bytesLiteral": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bytea@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "cuid1": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "cuid2": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "dateTimeLiteral": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "decimalLiteral": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                }
+              },
+              "enumList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/enum@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "typeName": "user_role"
+                  }
+                }
+              },
+              "enumMember": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/enum@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "typeName": "user_role"
+                  }
+                }
+              },
+              "floatLiteral": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                }
+              },
+              "generated": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/uuid@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "intList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "intLiteral": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "jsonLiteral": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/jsonb@1",
+                  "kind": "scalar"
+                }
+              },
+              "nanoid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "nanoidSized": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "stringList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "stringLiteral": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "ulid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "uuid4": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "uuid7": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "uuidOpt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "bigIntLiteral": {
+                  "column": "bigIntLiteral"
+                },
+                "bigSequence": {
+                  "column": "bigSequence"
+                },
+                "booleanLiteral": {
+                  "column": "booleanLiteral"
+                },
+                "bytesLiteral": {
+                  "column": "bytesLiteral"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "cuid1": {
+                  "column": "cuid1"
+                },
+                "cuid2": {
+                  "column": "cuid2"
+                },
+                "dateTimeLiteral": {
+                  "column": "dateTimeLiteral"
+                },
+                "decimalLiteral": {
+                  "column": "decimalLiteral"
+                },
+                "enumList": {
+                  "column": "enumList"
+                },
+                "enumMember": {
+                  "column": "enumMember"
+                },
+                "floatLiteral": {
+                  "column": "floatLiteral"
+                },
+                "generated": {
+                  "column": "generated"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "intList": {
+                  "column": "intList"
+                },
+                "intLiteral": {
+                  "column": "intLiteral"
+                },
+                "jsonLiteral": {
+                  "column": "jsonLiteral"
+                },
+                "nanoid": {
+                  "column": "nanoid"
+                },
+                "nanoidSized": {
+                  "column": "nanoidSized"
+                },
+                "stringList": {
+                  "column": "stringList"
+                },
+                "stringLiteral": {
+                  "column": "stringLiteral"
+                },
+                "ulid": {
+                  "column": "ulid"
+                },
+                "uuid4": {
+                  "column": "uuid4"
+                },
+                "uuid7": {
+                  "column": "uuid7"
+                },
+                "uuidOpt": {
+                  "column": "uuidOpt"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Defaults"
+            }
+          },
+          "Favorites": {
+            "fields": {
+              "A": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "B": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "post": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "A"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Post",
+                  "namespace": "public"
+                }
+              },
+              "user": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "B"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "A": {
+                  "column": "A"
+                },
+                "B": {
+                  "column": "B"
+                }
+              },
+              "namespaceId": "public",
+              "table": "_Favorites"
+            }
+          },
+          "Follows": {
+            "fields": {
+              "A": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "B": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "user": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "A"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              },
+              "userUser": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "B"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "A": {
+                  "column": "A"
+                },
+                "B": {
+                  "column": "B"
+                }
+              },
+              "namespaceId": "public",
+              "table": "_Follows"
+            }
+          },
+          "ListDefaults": {
+            "fields": {
+              "bigInts": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                }
+              },
+              "bytes": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/bytea@1",
+                  "kind": "scalar"
+                }
+              },
+              "dateTimes": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/timestamp-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "decimals": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                }
+              },
+              "emptyVarChar": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 32
+                  }
+                }
+              },
+              "floats": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "ints": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "bigInts": {
+                  "column": "bigInts"
+                },
+                "bytes": {
+                  "column": "bytes"
+                },
+                "dateTimes": {
+                  "column": "dateTimes"
+                },
+                "decimals": {
+                  "column": "decimals"
+                },
+                "emptyVarChar": {
+                  "column": "emptyVarChar"
+                },
+                "floats": {
+                  "column": "floats"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "ints": {
+                  "column": "ints"
+                }
+              },
+              "namespaceId": "public",
+              "table": "ListDefaults"
+            }
+          },
+          "MappedIndexes": {
+            "fields": {
+              "firstName": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "other": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "firstName": {
+                  "column": "first_name"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "other": {
+                  "column": "other"
+                }
+              },
+              "namespaceId": "public",
+              "table": "mapped_indexes"
+            }
+          },
+          "NativeTypes": {
+            "fields": {
+              "bigInt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                }
+              },
+              "bit": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bit@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 8
+                  }
+                }
+              },
+              "boolean": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "byteA": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bytea@1",
+                  "kind": "scalar"
+                }
+              },
+              "char": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 10
+                  }
+                }
+              },
+              "charNoLength": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 1
+                  }
+                }
+              },
+              "date": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/date-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "decimal": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                }
+              },
+              "doublePrecision": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "inet": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/inet@1",
+                  "kind": "scalar"
+                }
+              },
+              "integer": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "json": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "jsonB": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/jsonb@1",
+                  "kind": "scalar"
+                }
+              },
+              "money": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/money@1",
+                  "kind": "scalar"
+                }
+              },
+              "oid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/oid@1",
+                  "kind": "scalar"
+                }
+              },
+              "real": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float4@1",
+                  "kind": "scalar"
+                }
+              },
+              "smallInt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int2@1",
+                  "kind": "scalar"
+                }
+              },
+              "text": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "time": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/time-string@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "timestamp": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "timestamptz": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "timestamptzOpt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "timetz": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timetz@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "uuid": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/uuid@1",
+                  "kind": "scalar"
+                }
+              },
+              "varBit": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/varbit@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 8
+                  }
+                }
+              },
+              "varChar": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
+                }
+              },
+              "varCharList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 32
+                  }
+                }
+              },
+              "xml": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/xml@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "bigInt": {
+                  "column": "bigInt"
+                },
+                "bit": {
+                  "column": "bit"
+                },
+                "boolean": {
+                  "column": "boolean"
+                },
+                "byteA": {
+                  "column": "byteA"
+                },
+                "char": {
+                  "column": "char"
+                },
+                "charNoLength": {
+                  "column": "charNoLength"
+                },
+                "date": {
+                  "column": "date"
+                },
+                "decimal": {
+                  "column": "decimal"
+                },
+                "doublePrecision": {
+                  "column": "doublePrecision"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "inet": {
+                  "column": "inet"
+                },
+                "integer": {
+                  "column": "integer"
+                },
+                "json": {
+                  "column": "json"
+                },
+                "jsonB": {
+                  "column": "jsonB"
+                },
+                "money": {
+                  "column": "money"
+                },
+                "oid": {
+                  "column": "oid"
+                },
+                "real": {
+                  "column": "real"
+                },
+                "smallInt": {
+                  "column": "smallInt"
+                },
+                "text": {
+                  "column": "text"
+                },
+                "time": {
+                  "column": "time"
+                },
+                "timestamp": {
+                  "column": "timestamp"
+                },
+                "timestamptz": {
+                  "column": "timestamptz"
+                },
+                "timestamptzOpt": {
+                  "column": "timestamptzOpt"
+                },
+                "timetz": {
+                  "column": "timetz"
+                },
+                "uuid": {
+                  "column": "uuid"
+                },
+                "varBit": {
+                  "column": "varBit"
+                },
+                "varChar": {
+                  "column": "varChar"
+                },
+                "varCharList": {
+                  "column": "varCharList"
+                },
+                "xml": {
+                  "column": "xml"
+                }
+              },
+              "namespaceId": "public",
+              "table": "NativeTypes"
+            }
+          },
+          "NumberDefaults": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "longDecimal": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                }
+              },
+              "negativeBigInt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                }
+              },
+              "negativeDecimal": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                }
+              },
+              "negativeFloat": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                }
+              },
+              "negativeInt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "negativeSmallInt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int2@1",
+                  "kind": "scalar"
+                }
+              },
+              "tinyDecimal": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                }
+              },
+              "zerosBare": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar"
+                }
+              },
+              "zerosDefault": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                }
+              },
+              "zerosScaled": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "longDecimal": {
+                  "column": "longDecimal"
+                },
+                "negativeBigInt": {
+                  "column": "negativeBigInt"
+                },
+                "negativeDecimal": {
+                  "column": "negativeDecimal"
+                },
+                "negativeFloat": {
+                  "column": "negativeFloat"
+                },
+                "negativeInt": {
+                  "column": "negativeInt"
+                },
+                "negativeSmallInt": {
+                  "column": "negativeSmallInt"
+                },
+                "tinyDecimal": {
+                  "column": "tinyDecimal"
+                },
+                "zerosBare": {
+                  "column": "zerosBare"
+                },
+                "zerosDefault": {
+                  "column": "zerosDefault"
+                },
+                "zerosScaled": {
+                  "column": "zerosScaled"
+                }
+              },
+              "namespaceId": "public",
+              "table": "NumberDefaults"
+            }
+          },
+          "Post": {
+            "fields": {
+              "authorId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "category": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "editorId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "hashed": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "slug": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "author": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "authorId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              },
+              "editor": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "editorId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              },
+              "fans": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "A"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "B"
+                  ],
+                  "namespaceId": "public",
+                  "parentColumns": [
+                    "A"
+                  ],
+                  "table": "_Favorites",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              },
+              "labels": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "B"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "A"
+                  ],
+                  "namespaceId": "audit",
+                  "parentColumns": [
+                    "B"
+                  ],
+                  "table": "_LabelToPost",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Label",
+                  "namespace": "audit"
+                }
+              },
+              "tags": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "A"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "B"
+                  ],
+                  "namespaceId": "public",
+                  "parentColumns": [
+                    "A"
+                  ],
+                  "table": "_PostToTag",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Tag",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "authorId": {
+                  "column": "authorId"
+                },
+                "category": {
+                  "column": "category"
+                },
+                "editorId": {
+                  "column": "editorId"
+                },
+                "hashed": {
+                  "column": "hashed"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "slug": {
+                  "column": "slug"
+                },
+                "title": {
+                  "column": "title"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Post"
+            }
+          },
+          "PostToTag": {
+            "fields": {
+              "A": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "B": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "post": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "A"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Post",
+                  "namespace": "public"
+                }
+              },
+              "tag": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "B"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Tag",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "A": {
+                  "column": "A"
+                },
+                "B": {
+                  "column": "B"
+                }
+              },
+              "namespaceId": "public",
+              "table": "_PostToTag"
+            }
+          },
+          "Profile": {
+            "fields": {
+              "bio": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "userId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "user": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "userId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "bio": {
+                  "column": "bio"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "userId": {
+                  "column": "userId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Profile"
+            }
+          },
+          "Review": {
+            "fields": {
+              "authorId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "author": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "authorId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "authorId": {
+                  "column": "authorId"
+                },
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Review"
+            }
+          },
+          "Scalars": {
+            "fields": {
+              "bigInt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                }
+              },
+              "bigIntList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                }
+              },
+              "bigIntOpt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                }
+              },
+              "boolean": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "booleanList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "booleanOpt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "bytes": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bytea@1",
+                  "kind": "scalar"
+                }
+              },
+              "bytesList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/bytea@1",
+                  "kind": "scalar"
+                }
+              },
+              "bytesOpt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/bytea@1",
+                  "kind": "scalar"
+                }
+              },
+              "dateTime": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "dateTimeList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/timestamp-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "dateTimeOpt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/timestamp-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "decimal": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                }
+              },
+              "decimalList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                }
+              },
+              "decimalOpt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                }
+              },
+              "float": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                }
+              },
+              "floatList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                }
+              },
+              "floatOpt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "int": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "intList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "intOpt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "json": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/jsonb@1",
+                  "kind": "scalar"
+                }
+              },
+              "jsonList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/jsonb@1",
+                  "kind": "scalar"
+                }
+              },
+              "jsonOpt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/jsonb@1",
+                  "kind": "scalar"
+                }
+              },
+              "role": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/enum@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "typeName": "user_role"
+                  }
+                }
+              },
+              "roleList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/enum@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "typeName": "user_role"
+                  }
+                }
+              },
+              "roleOpt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/enum@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "typeName": "user_role"
+                  }
+                }
+              },
+              "string": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "stringList": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "stringOpt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "bigInt": {
+                  "column": "bigInt"
+                },
+                "bigIntList": {
+                  "column": "bigIntList"
+                },
+                "bigIntOpt": {
+                  "column": "bigIntOpt"
+                },
+                "boolean": {
+                  "column": "boolean"
+                },
+                "booleanList": {
+                  "column": "booleanList"
+                },
+                "booleanOpt": {
+                  "column": "booleanOpt"
+                },
+                "bytes": {
+                  "column": "bytes"
+                },
+                "bytesList": {
+                  "column": "bytesList"
+                },
+                "bytesOpt": {
+                  "column": "bytesOpt"
+                },
+                "dateTime": {
+                  "column": "dateTime"
+                },
+                "dateTimeList": {
+                  "column": "dateTimeList"
+                },
+                "dateTimeOpt": {
+                  "column": "dateTimeOpt"
+                },
+                "decimal": {
+                  "column": "decimal"
+                },
+                "decimalList": {
+                  "column": "decimalList"
+                },
+                "decimalOpt": {
+                  "column": "decimalOpt"
+                },
+                "float": {
+                  "column": "float"
+                },
+                "floatList": {
+                  "column": "floatList"
+                },
+                "floatOpt": {
+                  "column": "floatOpt"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "int": {
+                  "column": "int"
+                },
+                "intList": {
+                  "column": "intList"
+                },
+                "intOpt": {
+                  "column": "intOpt"
+                },
+                "json": {
+                  "column": "json"
+                },
+                "jsonList": {
+                  "column": "jsonList"
+                },
+                "jsonOpt": {
+                  "column": "jsonOpt"
+                },
+                "role": {
+                  "column": "role"
+                },
+                "roleList": {
+                  "column": "roleList"
+                },
+                "roleOpt": {
+                  "column": "roleOpt"
+                },
+                "string": {
+                  "column": "string"
+                },
+                "stringList": {
+                  "column": "stringList"
+                },
+                "stringOpt": {
+                  "column": "stringOpt"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Scalars"
+            }
+          },
+          "Settings": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "theme": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "userId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "user": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "userId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "theme": {
+                  "column": "theme"
+                },
+                "userId": {
+                  "column": "userId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Settings"
+            }
+          },
+          "Tag": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "posts": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "B"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "A"
+                  ],
+                  "namespaceId": "public",
+                  "parentColumns": [
+                    "B"
+                  ],
+                  "table": "_PostToTag",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Post",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "name": {
+                  "column": "name"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Tag"
+            }
+          },
+          "TemporalDefaults": {
+            "fields": {
+              "beforeYearOne": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "date": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/date-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "time": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/time-string@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "timestamptz": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "timetz": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timetz@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "beforeYearOne": {
+                  "column": "beforeYearOne"
+                },
+                "date": {
+                  "column": "date"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "time": {
+                  "column": "time"
+                },
+                "timestamptz": {
+                  "column": "timestamptz"
+                },
+                "timetz": {
+                  "column": "timetz"
+                }
+              },
+              "namespaceId": "public",
+              "table": "TemporalDefaults"
+            }
+          },
+          "Timestamps": {
+            "fields": {
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "updatedAtNow": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "updatedAtOpt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/timestamp-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "updatedAtTz": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                },
+                "updatedAtNow": {
+                  "column": "updatedAtNow"
+                },
+                "updatedAtOpt": {
+                  "column": "updatedAtOpt"
+                },
+                "updatedAtTz": {
+                  "column": "updatedAtTz"
+                }
+              },
+              "namespaceId": "public",
+              "table": "Timestamps"
+            }
+          },
+          "User": {
+            "fields": {
+              "email": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "edited": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "editorId"
+                  ]
+                },
+                "to": {
+                  "model": "Post",
+                  "namespace": "public"
+                }
+              },
+              "favorites": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "B"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "A"
+                  ],
+                  "namespaceId": "public",
+                  "parentColumns": [
+                    "B"
+                  ],
+                  "table": "_Favorites",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Post",
+                  "namespace": "public"
+                }
+              },
+              "followers": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "A"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "B"
+                  ],
+                  "namespaceId": "public",
+                  "parentColumns": [
+                    "A"
+                  ],
+                  "table": "_Follows",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              },
+              "following": {
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "B"
+                  ]
+                },
+                "through": {
+                  "childColumns": [
+                    "A"
+                  ],
+                  "namespaceId": "public",
+                  "parentColumns": [
+                    "B"
+                  ],
+                  "table": "_Follows",
+                  "targetColumns": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              },
+              "posts": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "authorId"
+                  ]
+                },
+                "to": {
+                  "model": "Post",
+                  "namespace": "public"
+                }
+              },
+              "profile": {
+                "cardinality": "1:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "userId"
+                  ]
+                },
+                "to": {
+                  "model": "Profile",
+                  "namespace": "public"
+                }
+              },
+              "reviews": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "authorId"
+                  ]
+                },
+                "to": {
+                  "model": "Review",
+                  "namespace": "public"
+                }
+              },
+              "settings": {
+                "cardinality": "1:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "userId"
+                  ]
+                },
+                "to": {
+                  "model": "Settings",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "email": {
+                  "column": "email"
+                },
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "User"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "audit": {
+        "entries": {
+          "native_enum": {
+            "AuditAction": {
+              "kind": "postgres-enum",
+              "members": [
+                "CREATE",
+                "DELETE"
+              ],
+              "typeName": "AuditAction"
+            }
+          },
+          "table": {
+            "Composite": {
+              "columns": {
+                "a": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "b": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "a",
+                  "b"
+                ]
+              },
+              "uniques": []
+            },
+            "CompositeChild": {
+              "columns": {
+                "compositeA": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": true
+                },
+                "compositeB": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "compositeA",
+                      "compositeB"
+                    ],
+                    "namespaceId": "audit",
+                    "tableName": "CompositeChild"
+                  },
+                  "target": {
+                    "columns": [
+                      "a",
+                      "b"
+                    ],
+                    "namespaceId": "audit",
+                    "tableName": "Composite"
+                  }
+                }
+              ],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Label": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "name": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "_LabelToPost": {
+              "columns": {
+                "A": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "B": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "primaryKey": true
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "A"
+                    ],
+                    "namespaceId": "audit",
+                    "tableName": "_LabelToPost"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "audit",
+                    "tableName": "Label"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "_LabelToPost_B_index"
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "B"
+                    ],
+                    "namespaceId": "audit",
+                    "tableName": "_LabelToPost"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Post"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "B"
+                  ],
+                  "name": "_LabelToPost_B_index",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "A",
+                  "B"
+                ],
+                "name": "_LabelToPost_AB_pkey"
+              },
+              "uniques": []
+            },
+            "audit_log": {
+              "columns": {
+                "action": {
+                  "codecId": "pg/enum@1",
+                  "dataType": "pg/enum",
+                  "default": {
+                    "kind": "literal",
+                    "value": "CREATE"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "typeName": "audit.AuditAction"
+                  },
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "AuditAction",
+                    "namespaceId": "audit",
+                    "plane": "storage"
+                  }
+                },
+                "at": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            }
+          },
+          "valueSet": {
+            "AuditAction": {
+              "kind": "valueSet",
+              "values": [
+                "CREATE",
+                "DELETE"
+              ]
+            }
+          }
+        },
+        "id": "audit",
+        "kind": "postgres-schema"
+      },
+      "public": {
+        "entries": {
+          "native_enum": {
+            "user_role": {
+              "kind": "postgres-enum",
+              "members": [
+                "user",
+                "ADMIN"
+              ],
+              "typeName": "user_role"
+            }
+          },
+          "table": {
+            "Defaults": {
+              "columns": {
+                "bigIntLiteral": {
+                  "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
+                  "default": {
+                    "kind": "literal",
+                    "value": "9007199254740993"
+                  },
+                  "nullable": false
+                },
+                "bigSequence": {
+                  "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "booleanLiteral": {
+                  "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
+                  "default": {
+                    "kind": "literal",
+                    "value": true
+                  },
+                  "nullable": false
+                },
+                "bytesLiteral": {
+                  "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
+                  "default": {
+                    "kind": "literal",
+                    "value": "aGVsbG8="
+                  },
+                  "nullable": false
+                },
+                "createdAt": {
+                  "codecId": "pg/timestamp-date@1",
+                  "dataType": "pg/timestamp",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "cuid1": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "cuid2": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "dateTimeLiteral": {
+                  "codecId": "pg/timestamp-date@1",
+                  "dataType": "pg/timestamp",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01T00:00:00"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "decimalLiteral": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "12.340000000000000000000000000000"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "enumList": {
+                  "codecId": "pg/enum@1",
+                  "dataType": "pg/enum",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      "ADMIN"
+                    ]
+                  },
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "typeParams": {
+                    "typeName": "user_role"
+                  },
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Role",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  },
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "enumMember": {
+                  "codecId": "pg/enum@1",
+                  "dataType": "pg/enum",
+                  "default": {
+                    "kind": "literal",
+                    "value": "user"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "typeName": "user_role"
+                  },
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Role",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "floatLiteral": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "default": {
+                    "kind": "literal",
+                    "value": 1.5
+                  },
+                  "nullable": false
+                },
+                "generated": {
+                  "codecId": "pg/uuid@1",
+                  "dataType": "pg/uuid",
+                  "default": {
+                    "expression": "gen_random_uuid()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "intList": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      1,
+                      2
+                    ]
+                  },
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "intLiteral": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "kind": "literal",
+                    "value": 42
+                  },
+                  "nullable": false
+                },
+                "jsonLiteral": {
+                  "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
+                  "default": {
+                    "kind": "literal",
+                    "value": {
+                      "a": 1
+                    }
+                  },
+                  "nullable": false
+                },
+                "nanoid": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "nanoidSized": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "stringList": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      "a",
+                      "b"
+                    ]
+                  },
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "stringLiteral": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "hello"
+                  },
+                  "nullable": false
+                },
+                "ulid": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "uuid4": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "uuid7": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "uuidOpt": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "LegacyThing": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "ListDefaults": {
+              "columns": {
+                "bigInts": {
+                  "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      "9007199254740993",
+                      "-1"
+                    ]
+                  },
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "bytes": {
+                  "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      "aGVsbG8=",
+                      "d29ybGQ="
+                    ]
+                  },
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "dateTimes": {
+                  "codecId": "pg/timestamp-date@1",
+                  "dataType": "pg/timestamp",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      "2024-01-01T00:00:00",
+                      "2024-01-02T03:04:05.123"
+                    ]
+                  },
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 3
+                  },
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "decimals": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      "1.500000000000000000000000000000",
+                      "-2.000000000000000000000000000000",
+                      "0.000000000000000001000000000000"
+                    ]
+                  },
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  },
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "emptyVarChar": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "pg/varchar",
+                  "default": {
+                    "kind": "literal",
+                    "value": []
+                  },
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "typeParams": {
+                    "length": 32
+                  },
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "floats": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      -1.5,
+                      2.25
+                    ]
+                  },
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "ints": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      -1,
+                      2
+                    ]
+                  },
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "NativeTypes": {
+              "columns": {
+                "bigInt": {
+                  "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
+                  "nullable": false
+                },
+                "bit": {
+                  "codecId": "pg/bit@1",
+                  "dataType": "pg/bit",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 8
+                  }
+                },
+                "boolean": {
+                  "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
+                  "nullable": false
+                },
+                "byteA": {
+                  "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
+                  "nullable": false
+                },
+                "char": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 10
+                  }
+                },
+                "charNoLength": {
+                  "codecId": "sql/char@1",
+                  "dataType": "pg/char",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 1
+                  }
+                },
+                "date": {
+                  "codecId": "pg/date-string@1",
+                  "dataType": "pg/date",
+                  "nullable": false
+                },
+                "decimal": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "doublePrecision": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "inet": {
+                  "codecId": "pg/inet@1",
+                  "dataType": "pg/inet",
+                  "nullable": false
+                },
+                "integer": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "json": {
+                  "codecId": "pg/json@1",
+                  "dataType": "pg/json",
+                  "nullable": false
+                },
+                "jsonB": {
+                  "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
+                  "nullable": false
+                },
+                "money": {
+                  "codecId": "pg/money@1",
+                  "dataType": "pg/money",
+                  "nullable": false
+                },
+                "oid": {
+                  "codecId": "pg/oid@1",
+                  "dataType": "pg/oid",
+                  "nullable": false
+                },
+                "real": {
+                  "codecId": "pg/float4@1",
+                  "dataType": "pg/float4",
+                  "nullable": false
+                },
+                "smallInt": {
+                  "codecId": "pg/int2@1",
+                  "dataType": "pg/int2",
+                  "nullable": false
+                },
+                "text": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "time": {
+                  "codecId": "pg/time-string@1",
+                  "dataType": "pg/time",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "timestamp": {
+                  "codecId": "pg/timestamp-date@1",
+                  "dataType": "pg/timestamp",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "timestamptz": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "timestamptzOpt": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "timetz": {
+                  "codecId": "pg/timetz@1",
+                  "dataType": "pg/timetz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "uuid": {
+                  "codecId": "pg/uuid@1",
+                  "dataType": "pg/uuid",
+                  "nullable": false
+                },
+                "varBit": {
+                  "codecId": "pg/varbit@1",
+                  "dataType": "pg/varbit",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 8
+                  }
+                },
+                "varChar": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "pg/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 255
+                  }
+                },
+                "varCharList": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "pg/varchar",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "typeParams": {
+                    "length": 32
+                  },
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "xml": {
+                  "codecId": "pg/xml@1",
+                  "dataType": "pg/xml",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "NumberDefaults": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "longDecimal": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "12345678901234567890.123456789000000000000000000000"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "negativeBigInt": {
+                  "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
+                  "default": {
+                    "kind": "literal",
+                    "value": "-9007199254740993"
+                  },
+                  "nullable": false
+                },
+                "negativeDecimal": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "-12.340000000000000000000000000000"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "negativeFloat": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "default": {
+                    "kind": "literal",
+                    "value": -1.5
+                  },
+                  "nullable": false
+                },
+                "negativeInt": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "kind": "literal",
+                    "value": -1
+                  },
+                  "nullable": false
+                },
+                "negativeSmallInt": {
+                  "codecId": "pg/int2@1",
+                  "dataType": "pg/int2",
+                  "default": {
+                    "kind": "literal",
+                    "value": -2
+                  },
+                  "nullable": false
+                },
+                "tinyDecimal": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0.000000000000000001000000000000"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "zerosBare": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "1.50"
+                  },
+                  "nullable": false
+                },
+                "zerosDefault": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "1.500000000000000000000000000000"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "zerosScaled": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "default": {
+                    "kind": "literal",
+                    "value": "1.50"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Post": {
+              "columns": {
+                "authorId": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "category": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "editorId": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": true
+                },
+                "hashed": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "legacyOwnerId": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": true
+                },
+                "search": {
+                  "codecId": "sql/raw@1",
+                  "dataType": "sql/raw",
+                  "nullable": true,
+                  "typeParams": {
+                    "sql": "tsvector"
+                  }
+                },
+                "slug": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "title": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "authorId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Post"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "User"
+                  }
+                },
+                {
+                  "onDelete": "setNull",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "editorId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Post"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "User"
+                  }
+                },
+                {
+                  "onDelete": "setNull",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "legacyOwnerId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Post"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "User"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "category"
+                  ],
+                  "name": "Post_category_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "hashed"
+                  ],
+                  "name": "Post_hashed_idx",
+                  "type": "hash",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "slug"
+                  ],
+                  "name": "Post_slug_key",
+                  "unique": true
+                },
+                {
+                  "columns": [
+                    "title",
+                    "category"
+                  ],
+                  "name": "Post_title_category_key",
+                  "unique": true
+                },
+                {
+                  "columns": [
+                    "title",
+                    "category"
+                  ],
+                  "name": "post_title_category",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Profile": {
+              "columns": {
+                "bio": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "userId": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Profile_userId_key"
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Profile"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "User"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "userId"
+                  ],
+                  "name": "Profile_userId_key",
+                  "unique": true
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Review": {
+              "columns": {
+                "authorId": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "authorId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Review"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "User"
+                  }
+                }
+              ],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Scalars": {
+              "columns": {
+                "bigInt": {
+                  "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
+                  "nullable": false
+                },
+                "bigIntList": {
+                  "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "bigIntOpt": {
+                  "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
+                  "nullable": true
+                },
+                "boolean": {
+                  "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
+                  "nullable": false
+                },
+                "booleanList": {
+                  "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "booleanOpt": {
+                  "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
+                  "nullable": true
+                },
+                "bytes": {
+                  "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
+                  "nullable": false
+                },
+                "bytesList": {
+                  "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "bytesOpt": {
+                  "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
+                  "nullable": true
+                },
+                "dateTime": {
+                  "codecId": "pg/timestamp-date@1",
+                  "dataType": "pg/timestamp",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "dateTimeList": {
+                  "codecId": "pg/timestamp-date@1",
+                  "dataType": "pg/timestamp",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 3
+                  },
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "dateTimeOpt": {
+                  "codecId": "pg/timestamp-date@1",
+                  "dataType": "pg/timestamp",
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "decimal": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "decimalList": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  },
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "decimalOpt": {
+                  "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "float": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "nullable": false
+                },
+                "floatList": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "floatOpt": {
+                  "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
+                  "nullable": true
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "int": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "intList": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "intOpt": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": true
+                },
+                "json": {
+                  "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
+                  "nullable": false
+                },
+                "jsonList": {
+                  "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "jsonOpt": {
+                  "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
+                  "nullable": true
+                },
+                "role": {
+                  "codecId": "pg/enum@1",
+                  "dataType": "pg/enum",
+                  "nullable": false,
+                  "typeParams": {
+                    "typeName": "user_role"
+                  },
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Role",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "roleList": {
+                  "codecId": "pg/enum@1",
+                  "dataType": "pg/enum",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "typeParams": {
+                    "typeName": "user_role"
+                  },
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Role",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  },
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "roleOpt": {
+                  "codecId": "pg/enum@1",
+                  "dataType": "pg/enum",
+                  "nullable": true,
+                  "typeParams": {
+                    "typeName": "user_role"
+                  },
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Role",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "string": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "stringList": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": true,
+                  "noCheck": [
+                    "elementNotNull"
+                  ]
+                },
+                "stringOpt": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Settings": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "theme": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "userId": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": true
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Settings_userId_key"
+                  },
+                  "onDelete": "setNull",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Settings"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "User"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "userId"
+                  ],
+                  "name": "Settings_userId_key",
+                  "unique": true
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Tag": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "name": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "name"
+                  ],
+                  "name": "Tag_name_key",
+                  "unique": true
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "TemporalDefaults": {
+              "columns": {
+                "beforeYearOne": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0000-12-31T23:30:00Z"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "date": {
+                  "codecId": "pg/date-string@1",
+                  "dataType": "pg/date",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-02"
+                  },
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "time": {
+                  "codecId": "pg/time-string@1",
+                  "dataType": "pg/time",
+                  "default": {
+                    "kind": "literal",
+                    "value": "12:34:56.789"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "timestamptz": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-02T01:04:05Z"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "timetz": {
+                  "codecId": "pg/timetz@1",
+                  "dataType": "pg/timetz",
+                  "default": {
+                    "kind": "literal",
+                    "value": "03:04:05+02:00"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Timestamps": {
+              "columns": {
+                "createdAt": {
+                  "codecId": "pg/timestamp-date@1",
+                  "dataType": "pg/timestamp",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "updatedAt": {
+                  "codecId": "pg/timestamp-date@1",
+                  "dataType": "pg/timestamp",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "updatedAtNow": {
+                  "codecId": "pg/timestamp-date@1",
+                  "dataType": "pg/timestamp",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "updatedAtOpt": {
+                  "codecId": "pg/timestamp-date@1",
+                  "dataType": "pg/timestamp",
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "updatedAtTz": {
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "User": {
+              "columns": {
+                "email": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "legacy": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": true
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "email"
+                  ],
+                  "name": "User_email_key",
+                  "unique": true
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "_Favorites": {
+              "columns": {
+                "A": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "B": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "primaryKey": true
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "A"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "_Favorites"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Post"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "_Favorites_B_index"
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "B"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "_Favorites"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "User"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "B"
+                  ],
+                  "name": "_Favorites_B_index",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "A",
+                  "B"
+                ],
+                "name": "_Favorites_AB_pkey"
+              },
+              "uniques": []
+            },
+            "_Follows": {
+              "columns": {
+                "A": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "B": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "primaryKey": true
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "A"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "_Follows"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "User"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "_Follows_B_index"
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "B"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "_Follows"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "User"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "B"
+                  ],
+                  "name": "_Follows_B_index",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "A",
+                  "B"
+                ],
+                "name": "_Follows_AB_pkey"
+              },
+              "uniques": []
+            },
+            "_PostToTag": {
+              "columns": {
+                "A": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "B": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "primaryKey": true
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "A"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "_PostToTag"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Post"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "_PostToTag_B_index"
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "B"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "_PostToTag"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Tag"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "B"
+                  ],
+                  "name": "_PostToTag_B_index",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "A",
+                  "B"
+                ],
+                "name": "_PostToTag_AB_pkey"
+              },
+              "uniques": []
+            },
+            "mapped_indexes": {
+              "columns": {
+                "first_name": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "other": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "first_name"
+                  ],
+                  "name": "mapped_indexes_first_name_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "first_name",
+                    "other"
+                  ],
+                  "name": "mapped_indexes_first_name_other_key",
+                  "unique": true
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            }
+          },
+          "valueSet": {
+            "Role": {
+              "kind": "valueSet",
+              "values": [
+                "user",
+                "ADMIN"
+              ]
+            }
+          }
+        },
+        "id": "public",
+        "kind": "postgres-schema"
+      }
+    },
+    "storageHash": "133c03cca3cd7024ea9084c50ae5c81064277bf6b1299d4b864fdcfa909b657e"
+  },
+  "execution": {
+    "executionHash": "d768bea8533b0227dba084b09691e1c79f0a24258190d27e9b134d6b87fb0e16",
+    "mutations": {
+      "defaults": [
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "ref": {
+            "entry": "audit_log",
+            "field": "at",
+            "namespace": "audit"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "ref": {
+            "entry": "Defaults",
+            "field": "createdAt",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "Defaults",
+            "field": "cuid1",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "Defaults",
+            "field": "cuid2",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "nanoid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "Defaults",
+            "field": "nanoid",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "nanoid",
+            "kind": "generator",
+            "params": {
+              "size": 10
+            }
+          },
+          "ref": {
+            "entry": "Defaults",
+            "field": "nanoidSized",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "ulid",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "Defaults",
+            "field": "ulid",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "Defaults",
+            "field": "uuid4",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv7",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "Defaults",
+            "field": "uuid7",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "Defaults",
+            "field": "uuidOpt",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "ref": {
+            "entry": "Timestamps",
+            "field": "createdAt",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "ref": {
+            "entry": "Timestamps",
+            "field": "updatedAt",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "ref": {
+            "entry": "Timestamps",
+            "field": "updatedAtNow",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
+          },
+          "ref": {
+            "entry": "Timestamps",
+            "field": "updatedAtOpt",
+            "namespace": "public"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 6
+            }
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator",
+            "params": {
+              "precision": 6
+            }
+          },
+          "ref": {
+            "entry": "Timestamps",
+            "field": "updatedAtTz",
+            "namespace": "public"
+          }
+        }
+      ]
+    }
+  },
+  "capabilities": {
+    "postgres": {
+      "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
+      "jsonAgg": true,
+      "lateral": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    },
+    "sql": {
+      "checkConstraint": true,
+      "defaultInInsert": true,
+      "enums": true,
+      "forShare": true,
+      "forUpdate": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
+      "insertOnConflictWithoutTarget": true,
+      "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
+      "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
+      "outerReferencesInDerivedTables": true,
+      "returning": true,
+      "scalarList": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}
