@@ -15,9 +15,12 @@ export type SqlDatabaseCapabilitiesNotProvidedFn = (input: {
   readonly schema: SqlSchemaIRNode;
 }) => string | undefined;
 
+/** The node kind of the issue's subject. The family classifies it itself, so no target's classifier needs to know it. */
+export const DATABASE_CAPABILITIES_NODE_KIND = 'database-capabilities';
+
 /** The capabilities the contract requires of the database, as the subject of the issue that reports them not provided. */
 class DatabaseCapabilitiesNode implements DiffableNode {
-  readonly nodeKind = 'database-capabilities';
+  readonly nodeKind = DATABASE_CAPABILITIES_NODE_KIND;
   readonly id = 'capabilities';
 
   constructor() {

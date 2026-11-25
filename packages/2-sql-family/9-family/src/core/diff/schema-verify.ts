@@ -17,6 +17,7 @@ import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { effectiveControlPolicy } from '@internal/contract/types';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
+  DiffableNode,
   DiffSubjectGranularity,
   SchemaDiffIssue,
   VerifierIssueCategory,
@@ -30,12 +31,12 @@ import {
 } from '@internal/framework-components/control';
 import { isStorageTypeInstance, type SqlStorage } from '@internal/sql-contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
-import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { extractCodecControlHooks } from '../assembly';
 import type { SqlSchemaDiffFn } from '../migrations/schema-differ';
 import type { CodecControlHooks } from '../migrations/types';
 import {
+  DATABASE_CAPABILITIES_NODE_KIND,
   databaseCapabilitiesNotProvidedIssue,
   type SqlDatabaseCapabilitiesNotProvidedFn,
   VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
@@ -46,13 +47,8 @@ import { verifierDisposition } from './verifier-disposition';
 // Subject-granularity classification — nodeKind → framework-neutral granularity
 // ============================================================================
 
-function issueNode(issue: SchemaDiffIssue): SqlSchemaIRNode | undefined {
-  const node = issue.expected ?? issue.actual;
-  if (node === undefined) return undefined;
-  return blindCast<
-    SqlSchemaIRNode,
-    'every node in a SQL schema diff tree is a SqlSchemaIRNode; nodeKind is its identity'
-  >(node);
+function issueNode(issue: SchemaDiffIssue): DiffableNode | undefined {
+  return issue.expected ?? issue.actual;
 }
 
 /**
@@ -70,7 +66,9 @@ export function classifyDiffSubjectGranularity(
   granularityOf: (nodeKind: string) => DiffSubjectGranularity,
 ): DiffSubjectGranularity | undefined {
   const node = issueNode(issue);
-  return node === undefined ? undefined : granularityOf(node.nodeKind);
+  if (node === undefined) return undefined;
+  if (node.nodeKind === DATABASE_CAPABILITIES_NODE_KIND) return 'structural';
+  return granularityOf(node.nodeKind);
 }
 
 /**
@@ -87,7 +85,8 @@ export function classifyDiffEntityKind(
   entityKindOf: (nodeKind: string) => string | undefined,
 ): string | undefined {
   const node = issueNode(issue);
-  return node === undefined ? undefined : entityKindOf(node.nodeKind);
+  if (node === undefined || node.nodeKind === DATABASE_CAPABILITIES_NODE_KIND) return undefined;
+  return entityKindOf(node.nodeKind);
 }
 
 // ============================================================================
