@@ -74,11 +74,11 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     });
   });
 
-  it('says in plain words what a re-run does when no delete follows the copy', async () => {
+  it('says in plain words what a re-run does when no delete follows the copy, even one before it', async () => {
     const harness = makeHarness();
     harness.driver.failUpdateManyWith(badValue);
 
-    const result = await execute(harness, [unionCopy, failingUpdate]);
+    const result = await execute(harness, [deletion, unionCopy, failingUpdate]);
 
     expect(failureFields(result.assertNotOk()).why).toContain(
       'Operation data_transform.move Measurement to measurements copied documents into collection measurements with an $out stage, and it has no check, so it runs again. If the documents it copied are still in collection events and are meant to leave it, delete them there before you run the command again: otherwise the copy adds them to collection measurements a second time. The operations that ran before the failure stay applied.',
