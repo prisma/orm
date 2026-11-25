@@ -84,6 +84,11 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, okVoid, type Result } from '@internal/utils/result';
+import {
+  isStructuredError,
+  type StructuredError,
+  structuredError,
+} from '@internal/utils/structured-error';
 import { type MongoMigrationRunnerErrorCode, mongoTargetError } from '../mongo-target-errors';
 import { FilterEvaluator } from './filter-evaluator';
 import {
@@ -220,17 +225,57 @@ function withAdvice(
   advice: string | undefined,
 ): MongoMigrationRunnerFailure {
   if (advice === undefined) return failure;
-  const why =
-    failure.why === undefined
-      ? advice
-      : `${/[.!?]$/.test(failure.why) ? failure.why : `${failure.why}.`} ${advice}`;
   const advised = migrationRunnerFailure(failure.code, failure.message, {
-    why,
+    why: withSentence(failure.why, advice),
     meta: failure.meta,
     ...ifDefined('cause', failure.cause),
   });
   if (failure.stack !== undefined) advised.stack = failure.stack;
   return advised;
+}
+
+function withSentence(why: string | undefined, sentence: string): string {
+  if (why === undefined) return sentence;
+  return `${/[.!?]$/.test(why) ? why : `${why}.`} ${sentence}`;
+}
+
+/** The same thrown error, with `advice` at the end of its why. */
+function withStructuredAdvice(error: StructuredError, advice: string): StructuredError {
+  const advised = structuredError(error.code, error.message, {
+    why: withSentence(error.why, advice),
+    ...ifDefined('fix', error.fix),
+    ...ifDefined('nextActions', error.nextActions),
+    ...ifDefined('where', error.where),
+    ...ifDefined('severity', error.severity),
+    ...ifDefined('meta', error.meta),
+    ...ifDefined('docsUrl', error.docsUrl),
+    ...ifDefined('cause', error.cause),
+  });
+  if (error.stack !== undefined) advised.stack = error.stack;
+  return advised;
+}
+
+/** The failure for an error an operation threw, such as a dropped connection, so the re-run text reaches the user. */
+function thrownFailure(
+  operation: AnyMongoMigrationOperation,
+  error: unknown,
+  before: Ran,
+): MongoMigrationRunnerFailure {
+  const reason = error instanceof Error ? error.message : String(error);
+  return migrationRunnerFailure(
+    'MIGRATION.EXECUTION_FAILED',
+    `Operation ${operation.id} failed: ${reason}`,
+    {
+      why: rerunText('Fix what the error names, then run the command again', before),
+      meta: { operationId: operation.id },
+      cause: error,
+    },
+  );
+}
+
+/** Whether a run skips an operation whose check shows it already ran. */
+function runSkips(checks: MigrationRunnerExecutionChecks | undefined): boolean {
+  return checks?.postchecks !== false && checks?.idempotencyChecks !== false;
 }
 
 function runnerFailure(
@@ -1598,18 +1643,33 @@ export class MongoMigrationRunner {
   async execute(options: MongoMigrationRunnerExecuteOptions): Promise<MongoMigrationRunnerResult> {
     let changedDatabase = false;
     const progress: ApplyProgress = { operations: [], stoppedAt: 0 };
-    const result = await this.apply(
-      options,
-      () => {
-        changedDatabase = true;
-      },
-      progress,
-    );
+    const advice = () => outCopyRerunText(progress.operations, progress.stoppedAt);
+    let result: Result<MigrationRunnerPerSpaceSuccessValue, MongoMigrationRunnerFailure>;
+    try {
+      result = await this.apply(
+        options,
+        () => {
+          changedDatabase = true;
+        },
+        progress,
+      );
+    } catch (error) {
+      const text = advice();
+      const stopped = progress.operations[progress.stoppedAt];
+      if (text === undefined || stopped === undefined) throw error;
+      if (isStructuredError(error)) throw withStructuredAdvice(error, text);
+      result = notOk(
+        thrownFailure(stopped, error, {
+          operations: progress.operations.slice(0, progress.stoppedAt),
+          skips: runSkips(options.executionChecks),
+        }),
+      );
+    }
     return result.ok
       ? ok({ ...result.value, changedDatabase })
       : notOk(
           withDatabaseUnchanged(
-            withAdvice(result.failure, outCopyRerunText(progress.operations, progress.stoppedAt)),
+            withAdvice(result.failure, advice()),
             options.databaseChangedBefore !== true && !changedDatabase,
           ),
         );
@@ -1646,7 +1706,7 @@ export class MongoMigrationRunner {
     const runPrechecks = checks?.prechecks !== false;
     const runPostchecks = checks?.postchecks !== false;
     const runIdempotency = checks?.idempotencyChecks !== false;
-    const skips = runPostchecks && runIdempotency;
+    const skips = runSkips(checks);
     const ran = (end: number): Ran => ({ operations: operations.slice(0, end), skips });
 
     const filterEvaluator = new FilterEvaluator();

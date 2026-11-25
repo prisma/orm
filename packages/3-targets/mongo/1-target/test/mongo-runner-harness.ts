@@ -231,7 +231,9 @@ export interface Harness {
   readonly ddlCalls: string[];
 }
 
-export function makeHarness(options: { readonly ddlError?: unknown } = {}): Harness {
+export function makeHarness(
+  options: { readonly ddlError?: unknown; readonly markerOps?: MarkerOperations } = {},
+): Harness {
   const log = new EventLog();
   const driver = new StubMongoDriver(log);
   const adapter = new StubMongoAdapter();
@@ -246,7 +248,7 @@ export function makeHarness(options: { readonly ddlError?: unknown } = {}): Harn
       log.record(`ddl:${command.kind}:${command.collection}`);
       if (options.ddlError !== undefined) throw options.ddlError;
     },
-    markerOps: NOOP_MARKER_OPS,
+    markerOps: options.markerOps ?? NOOP_MARKER_OPS,
     introspectSchema: async () => new MongoSchemaIR([], { fromDatabase: false }),
   };
   return {
