@@ -53,9 +53,7 @@
                             "bsonType": "string"
                           }
                         },
-                        "required": [
-                          "url"
-                        ]
+                        "required": ["url"]
                       },
                       "name": {
                         "bsonType": "string"
@@ -71,34 +69,20 @@
                             "bsonType": "string"
                           }
                         },
-                        "required": [
-                          "amount",
-                          "currency"
-                        ]
+                        "required": ["amount", "currency"]
                       },
                       "productId": {
                         "bsonType": "string"
                       }
                     },
-                    "required": [
-                      "amount",
-                      "brand",
-                      "image",
-                      "name",
-                      "price",
-                      "productId"
-                    ]
+                    "required": ["amount", "brand", "image", "name", "price", "productId"]
                   }
                 },
                 "userId": {
                   "bsonType": "objectId"
                 }
               },
-              "required": [
-                "_id",
-                "items",
-                "userId"
-              ]
+              "required": ["_id", "items", "userId"]
             }
           },
           "validationLevel": "strict",
@@ -159,9 +143,7 @@
                                 "bsonType": "string"
                               }
                             },
-                            "required": [
-                              "url"
-                            ]
+                            "required": ["url"]
                           },
                           "name": {
                             "bsonType": "string"
@@ -177,34 +159,20 @@
                                 "bsonType": "string"
                               }
                             },
-                            "required": [
-                              "amount",
-                              "currency"
-                            ]
+                            "required": ["amount", "currency"]
                           },
                           "productId": {
                             "bsonType": "string"
                           }
                         },
-                        "required": [
-                          "amount",
-                          "brand",
-                          "image",
-                          "name",
-                          "price",
-                          "productId"
-                        ]
+                        "required": ["amount", "brand", "image", "name", "price", "productId"]
                       }
                     },
                     "userId": {
                       "bsonType": "objectId"
                     }
                   },
-                  "required": [
-                    "_id",
-                    "items",
-                    "userId"
-                  ]
+                  "required": ["_id", "items", "userId"]
                 }
               }
             },
@@ -332,10 +300,7 @@
                       "bsonType": "string"
                     },
                     "exitMethod": {
-                      "bsonType": [
-                        "null",
-                        "string"
-                      ]
+                      "bsonType": ["null", "string"]
                     },
                     "productId": {
                       "bsonType": "string"
@@ -350,20 +315,13 @@
                       "bsonType": "date"
                     },
                     "type": {
-                      "enum": [
-                        "view-product"
-                      ]
+                      "enum": ["view-product"]
                     },
                     "userId": {
                       "bsonType": "string"
                     }
                   },
-                  "required": [
-                    "brand",
-                    "productId",
-                    "subCategory",
-                    "type"
-                  ]
+                  "required": ["brand", "productId", "subCategory", "type"]
                 },
                 {
                   "additionalProperties": false,
@@ -381,18 +339,13 @@
                       "bsonType": "date"
                     },
                     "type": {
-                      "enum": [
-                        "search"
-                      ]
+                      "enum": ["search"]
                     },
                     "userId": {
                       "bsonType": "string"
                     }
                   },
-                  "required": [
-                    "query",
-                    "type"
-                  ]
+                  "required": ["query", "type"]
                 },
                 {
                   "additionalProperties": false,
@@ -413,19 +366,13 @@
                       "bsonType": "date"
                     },
                     "type": {
-                      "enum": [
-                        "add-to-cart"
-                      ]
+                      "enum": ["add-to-cart"]
                     },
                     "userId": {
                       "bsonType": "string"
                     }
                   },
-                  "required": [
-                    "brand",
-                    "productId",
-                    "type"
-                  ]
+                  "required": ["brand", "productId", "type"]
                 }
               ],
               "properties": {
@@ -445,13 +392,7 @@
                   "bsonType": "string"
                 }
               },
-              "required": [
-                "_id",
-                "sessionId",
-                "timestamp",
-                "type",
-                "userId"
-              ]
+              "required": ["_id", "sessionId", "timestamp", "type", "userId"]
             }
           },
           "validationLevel": "strict",
@@ -498,10 +439,7 @@
                           "bsonType": "string"
                         },
                         "exitMethod": {
-                          "bsonType": [
-                            "null",
-                            "string"
-                          ]
+                          "bsonType": ["null", "string"]
                         },
                         "productId": {
                           "bsonType": "string"
@@ -516,20 +454,13 @@
                           "bsonType": "date"
                         },
                         "type": {
-                          "enum": [
-                            "view-product"
-                          ]
+                          "enum": ["view-product"]
                         },
                         "userId": {
                           "bsonType": "string"
                         }
                       },
-                      "required": [
-                        "brand",
-                        "productId",
-                        "subCategory",
-                        "type"
-                      ]
+                      "required": ["brand", "productId", "subCategory", "type"]
                     },
                     {
                       "additionalProperties": false,
@@ -547,18 +478,13 @@
                           "bsonType": "date"
                         },
                         "type": {
-                          "enum": [
-                            "search"
-                          ]
+                          "enum": ["search"]
                         },
                         "userId": {
                           "bsonType": "string"
                         }
                       },
-                      "required": [
-                        "query",
-                        "type"
-                      ]
+                      "required": ["query", "type"]
                     },
                     {
                       "additionalProperties": false,
@@ -579,19 +505,13 @@
                           "bsonType": "date"
                         },
                         "type": {
-                          "enum": [
-                            "add-to-cart"
-                          ]
+                          "enum": ["add-to-cart"]
                         },
                         "userId": {
                           "bsonType": "string"
                         }
                       },
-                      "required": [
-                        "brand",
-                        "productId",
-                        "type"
-                      ]
+                      "required": ["brand", "productId", "type"]
                     }
                   ],
                   "properties": {
@@ -611,13 +531,7 @@
                       "bsonType": "string"
                     }
                   },
-                  "required": [
-                    "_id",
-                    "sessionId",
-                    "timestamp",
-                    "type",
-                    "userId"
-                  ]
+                  "required": ["_id", "sessionId", "timestamp", "type", "userId"]
                 }
               }
             },
@@ -761,12 +675,7 @@
                         "bsonType": "double"
                       }
                     },
-                    "required": [
-                      "amount",
-                      "lineTotal",
-                      "name",
-                      "unitPrice"
-                    ]
+                    "required": ["amount", "lineTotal", "name", "unitPrice"]
                   }
                 },
                 "orderId": {
@@ -782,15 +691,7 @@
                   "bsonType": "double"
                 }
               },
-              "required": [
-                "_id",
-                "issuedAt",
-                "items",
-                "orderId",
-                "subtotal",
-                "tax",
-                "total"
-              ]
+              "required": ["_id", "issuedAt", "items", "orderId", "subtotal", "tax", "total"]
             }
           },
           "validationLevel": "strict",
@@ -853,12 +754,7 @@
                             "bsonType": "double"
                           }
                         },
-                        "required": [
-                          "amount",
-                          "lineTotal",
-                          "name",
-                          "unitPrice"
-                        ]
+                        "required": ["amount", "lineTotal", "name", "unitPrice"]
                       }
                     },
                     "orderId": {
@@ -874,15 +770,7 @@
                       "bsonType": "double"
                     }
                   },
-                  "required": [
-                    "_id",
-                    "issuedAt",
-                    "items",
-                    "orderId",
-                    "subtotal",
-                    "tax",
-                    "total"
-                  ]
+                  "required": ["_id", "issuedAt", "items", "orderId", "subtotal", "tax", "total"]
                 }
               }
             },
@@ -1020,14 +908,7 @@
                   "bsonType": "string"
                 }
               },
-              "required": [
-                "_id",
-                "city",
-                "country",
-                "name",
-                "postalCode",
-                "streetAndNumber"
-              ]
+              "required": ["_id", "city", "country", "name", "postalCode", "streetAndNumber"]
             }
           },
           "validationLevel": "strict",
@@ -1084,14 +965,7 @@
                       "bsonType": "string"
                     }
                   },
-                  "required": [
-                    "_id",
-                    "city",
-                    "country",
-                    "name",
-                    "postalCode",
-                    "streetAndNumber"
-                  ]
+                  "required": ["_id", "city", "country", "name", "postalCode", "streetAndNumber"]
                 }
               }
             },
@@ -1233,9 +1107,7 @@
                             "bsonType": "string"
                           }
                         },
-                        "required": [
-                          "url"
-                        ]
+                        "required": ["url"]
                       },
                       "name": {
                         "bsonType": "string"
@@ -1251,23 +1123,13 @@
                             "bsonType": "string"
                           }
                         },
-                        "required": [
-                          "amount",
-                          "currency"
-                        ]
+                        "required": ["amount", "currency"]
                       },
                       "productId": {
                         "bsonType": "string"
                       }
                     },
-                    "required": [
-                      "amount",
-                      "brand",
-                      "image",
-                      "name",
-                      "price",
-                      "productId"
-                    ]
+                    "required": ["amount", "brand", "image", "name", "price", "productId"]
                   }
                 },
                 "shippingAddress": {
@@ -1286,10 +1148,7 @@
                         "bsonType": "date"
                       }
                     },
-                    "required": [
-                      "status",
-                      "timestamp"
-                    ]
+                    "required": ["status", "timestamp"]
                   }
                 },
                 "type": {
@@ -1299,14 +1158,7 @@
                   "bsonType": "objectId"
                 }
               },
-              "required": [
-                "_id",
-                "items",
-                "shippingAddress",
-                "statusHistory",
-                "type",
-                "userId"
-              ]
+              "required": ["_id", "items", "shippingAddress", "statusHistory", "type", "userId"]
             }
           },
           "validationLevel": "strict",
@@ -1367,9 +1219,7 @@
                                 "bsonType": "string"
                               }
                             },
-                            "required": [
-                              "url"
-                            ]
+                            "required": ["url"]
                           },
                           "name": {
                             "bsonType": "string"
@@ -1385,23 +1235,13 @@
                                 "bsonType": "string"
                               }
                             },
-                            "required": [
-                              "amount",
-                              "currency"
-                            ]
+                            "required": ["amount", "currency"]
                           },
                           "productId": {
                             "bsonType": "string"
                           }
                         },
-                        "required": [
-                          "amount",
-                          "brand",
-                          "image",
-                          "name",
-                          "price",
-                          "productId"
-                        ]
+                        "required": ["amount", "brand", "image", "name", "price", "productId"]
                       }
                     },
                     "shippingAddress": {
@@ -1420,10 +1260,7 @@
                             "bsonType": "date"
                           }
                         },
-                        "required": [
-                          "status",
-                          "timestamp"
-                        ]
+                        "required": ["status", "timestamp"]
                       }
                     },
                     "type": {
@@ -1433,14 +1270,7 @@
                       "bsonType": "objectId"
                     }
                   },
-                  "required": [
-                    "_id",
-                    "items",
-                    "shippingAddress",
-                    "statusHistory",
-                    "type",
-                    "userId"
-                  ]
+                  "required": ["_id", "items", "shippingAddress", "statusHistory", "type", "userId"]
                 }
               }
             },
@@ -1582,9 +1412,7 @@
                       "bsonType": "string"
                     }
                   },
-                  "required": [
-                    "url"
-                  ]
+                  "required": ["url"]
                 },
                 "name": {
                   "bsonType": "string"
@@ -1600,10 +1428,7 @@
                       "bsonType": "string"
                     }
                   },
-                  "required": [
-                    "amount",
-                    "currency"
-                  ]
+                  "required": ["amount", "currency"]
                 },
                 "primaryCategory": {
                   "bsonType": "string"
@@ -1684,9 +1509,7 @@
                           "bsonType": "string"
                         }
                       },
-                      "required": [
-                        "url"
-                      ]
+                      "required": ["url"]
                     },
                     "name": {
                       "bsonType": "string"
@@ -1702,10 +1525,7 @@
                           "bsonType": "string"
                         }
                       },
-                      "required": [
-                        "amount",
-                        "currency"
-                      ]
+                      "required": ["amount", "currency"]
                     },
                     "primaryCategory": {
                       "bsonType": "string"
@@ -1869,12 +1689,7 @@
                           "bsonType": "string"
                         }
                       },
-                      "required": [
-                        "city",
-                        "country",
-                        "postalCode",
-                        "streetAndNumber"
-                      ]
+                      "required": ["city", "country", "postalCode", "streetAndNumber"]
                     }
                   ]
                 },
@@ -1885,11 +1700,7 @@
                   "bsonType": "string"
                 }
               },
-              "required": [
-                "_id",
-                "email",
-                "name"
-              ]
+              "required": ["_id", "email", "name"]
             }
           },
           "validationLevel": "strict",
@@ -1952,12 +1763,7 @@
                               "bsonType": "string"
                             }
                           },
-                          "required": [
-                            "city",
-                            "country",
-                            "postalCode",
-                            "streetAndNumber"
-                          ]
+                          "required": ["city", "country", "postalCode", "streetAndNumber"]
                         }
                       ]
                     },
@@ -1968,11 +1774,7 @@
                       "bsonType": "string"
                     }
                   },
-                  "required": [
-                    "_id",
-                    "email",
-                    "name"
-                  ]
+                  "required": ["_id", "email", "name"]
                 }
               }
             },
