@@ -38,7 +38,7 @@ Some lines change without an API change:
 
 ## The description must name each change
 
-When a pull request changes an `api.txt`, a comment lists, per package, the lines it adds and removes, and offers a section to copy. The check fails until the description has a section headed `## API changes` in which each changed export is named in backticks, on a line that says why:
+When a pull request changes an `api.txt`, or a record of a break (`api-breaks.json`, `packages/9-public/removed-packages.json` or `examples/last-release-errors.json`), a comment lists, per package, the lines and records it adds and removes, and offers a section to copy. The check fails until the description has a section headed `## API changes` in which each changed export is named in backticks, on a line that says why:
 
 ```markdown
 ## API changes
@@ -74,10 +74,10 @@ If the break is not intended, change the code. If it is, record it.
 A break in a generally available export is an exception to the compatibility policy, and the release notes must name it. Record it in the package's `api-breaks.json`, beside its `api.txt`:
 
 ```json
-[{ "path": "./builder", "export": "Db", "test": "type", "lastRelease": "8.1.0", "message": "<the message, as the job reports it>", "reason": "Join scopes merge by name; see the release notes" }]
+[{ "path": "./builder", "export": "Db", "test": "type", "kind": "break", "lastRelease": "8.1.0", "api": "41dd4b16945a80ce", "reason": "Join scopes merge by name; see the release notes" }]
 ```
 
-`test` is the kind of test that broke, as the job reports it: `type`, `value`, `constructor`, `abstract`, `exists`, `path` or `augments`. `lastRelease` is the release the break is measured against. `message` is the failure's message, copied from the job's report: a record matches exactly one failure, so a second, different break of the same export is still reported. A deleted package is recorded in `packages/9-public/removed-packages.json` as `{ "package", "lastRelease", "reason" }`. The reason is one line. Once the break is undone, the record fails, so it cannot go stale silently. When the next release is published, records for the earlier one are skipped and listed as removable; delete them.
+Do not write the record by hand: the job prints one, ready to paste, under each break it reports, and the job summary has one block per package. `test` is the kind of test that broke: `type`, `value`, `constructor`, `abstract`, `exists`, `path` or `augments`. `kind` is `break` for a deliberate break, which the release notes must name, or `allowed` for a change the policy allows that the check reports anyway, such as widening the return type of a method on an interface users only implement. `lastRelease` is the release the break is measured against. `api` is a fingerprint of the export's lines in the package's `api.txt`: when the export changes again, the fingerprint no longer matches and the break is reported again, to be judged afresh. A deleted package is recorded in `packages/9-public/removed-packages.json` as `{ "package", "lastRelease", "reason" }`.
 
 ## The last release's example apps fail
 

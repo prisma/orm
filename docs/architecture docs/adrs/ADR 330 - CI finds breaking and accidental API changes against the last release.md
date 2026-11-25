@@ -47,7 +47,7 @@ Every pull request is checked in three ways: the first two against the last rele
 
 Two assumptions hold the design together, and neither is checked by CI: every package is released at one version, and a generally available package depends only on generally available packages. Checking a re-exported name only in the package that declares it relies on both. When packages get versions of their own, the lookup and the rule for re-exports become per package.
 
-**A deliberate break** is recorded with the last release it is measured against, the kind of test that broke (the export's type, its value, its constructor), the failure's message, and its reason. A record matches exactly one failure, so it covers that break and not a later, different change to the same export. Once the export no longer breaks, the record fails, so it cannot outlive its break. A record for an earlier release is skipped and listed as removable in the job's report. A change to a record file counts as an API change: the description check requires it to be named, like a changed `api.txt` line.
+**A deliberate break** is recorded with the kind of test that broke (the export's type, its value, its constructor), whether it is a real break or a change the policy allows that the check reports anyway, the last release it is measured against, a fingerprint of the export's lines in its package's `api.txt`, and the reason. The record covers that test only while the fingerprint matches: any further change to the export changes its `api.txt` lines, and the export is judged again, so a record cannot hide a later, different break. The fingerprint is printed with each unrecorded break, in a record ready to paste. Once the export no longer breaks, the record fails, so it cannot outlive its break. A record for an earlier release is skipped and listed as removable in the job's report. A change to a record file counts as an API change: the description check requires it to be named, like a changed `api.txt` line.
 
 ## Why
 
@@ -63,17 +63,17 @@ Each needs its own check. The first is judged best by the compiler, against decl
 
 The method adapts Microsoft's Fluid Framework, which generates one compile-time test per export of its previous release. We keep its structure: install the previous release, generate a test per export, record deliberate breaks. We change how two types are compared, as below.
 
-**The test.** For each export the release declares, the generator writes one line. For `createCacheMiddleware` it is:
+**The test.** For each export the release declares, the generator writes a line or two. For `createCacheMiddleware` it writes:
 
 ```ts
 import type * as r0 from 'release-orm-extension-middleware-cache';
 import type * as c0 from 'current-orm-extension-middleware-cache'; import * as cv0 from 'current-orm-extension-middleware-cache';
 
-type t4 = [requireAssignableTo<typeof c0.createCacheMiddleware, typeof r0.createCacheMiddleware>];
 cv0.createCacheMiddleware;
+type t18 = [requireAssignableTo<typeof c0.createCacheMiddleware, typeof r0.createCacheMiddleware>, requireAssignableTo<IsNeverOrAny<typeof r0.createCacheMiddleware>, false>];
 ```
 
-`release-…` is the last release, installed under that alias; `current-…` links to the current build. `requireAssignableTo<A, B>` compiles only when `A` is assignable to `B`. Each test is a type named after its line in the generated file, so an error maps back to its export. A type export gets the same test without `typeof`, and a class also gets one for its constructor's parameters, which TypeScript otherwise compares loosely. The last line uses the export as a value through an ordinary import, because `typeof` also accepts a name exported with `export type`, and a value turned type-only would otherwise pass. A published package that is deleted is a break as well, recorded in `packages/9-public/removed-packages.json` when it is deliberate.
+`release-…` is the last release, installed under that alias; `current-…` links to the current build. `requireAssignableTo<A, B>` compiles only when `A` is assignable to `B`; the second assertion in the tuple fails when the release's side is `never` or `any`, which would compare nothing. Each test is a type named after its line in the generated file, so an error maps back to its export. A type export gets the same test without `typeof`, and a class also gets one for its constructor's parameters, which TypeScript otherwise compares loosely. The line before it uses the export as a value through an ordinary import, because `typeof` also accepts a name exported with `export type`, and a value turned type-only would otherwise pass. A published package that is deleted is a break as well, recorded in `packages/9-public/removed-packages.json` when it is deliberate.
 
 **Only one direction.** Fluid asks in both directions and needs every interface tagged as one users implement or one they only receive, because a new member breaks the first kind and not the second. We ask only whether the current export is assignable to the last release's, and the tags become unnecessary. A new required member on `CacheStore`, which users implement, fails through the exported function that accepts a `CacheStore`: the current `createCacheMiddleware` no longer accepts an old store, so it is not assignable to the old `createCacheMiddleware`. A new member on `CacheMiddleware`, which users only receive, passes, because a type with more members is still assignable to the old one. This relies on an exported function or type accepting the interface; one that nothing accepts cannot be implemented in any useful way.
 
@@ -89,7 +89,7 @@ The rule is stricter than the policy in one direction, on purpose. Any type an e
   ```
 
 - Private and `#private` members, which users cannot reach and which make TypeScript treat two copies of a class as unrelated, are replaced by one marker property naming the class, so two copies of one class still match and one class swapped for another does not. Protected members stay, under a key of their own, and are compared like public ones, because extensions subclass our base classes and use them; each abstract member of a class is also checked to accept what the last release's accepted, since a subclass users write overrides it.
-- Each `unique symbol` constant becomes a string literal named after its package and name, because two copies of a unique symbol are different symbols. Keys made from it are still compared, and moving the constant to another file changes nothing.
+- Each `unique symbol` constant becomes a string literal named after its package and name, because two copies of a unique symbol are different symbols. Keys made from it are still compared, and moving the constant to another file changes nothing. Two constants with one name in one package would share a literal, so keys made from them are reported as not compared.
 
 In third-party declarations, private and protected members are replaced the same way and methods are left as they are: rewriting their methods would change how TypeScript compares arrays and other built-in types.
 
@@ -148,6 +148,7 @@ Review agents are told what to look for, in `packages/9-public/AGENTS.md` and in
 - **Methods users override.** A subclass users write may override a method that is not abstract. Narrowing that method's return type, or widening a parameter's type, breaks their override, but the check compares the class only as code that calls it, so it passes.
 - **Members of a namespace that holds only types.**
 - **Third-party types.** Both sides use the same third-party versions, so a dependency upgrade that changes our API, including types we re-export from a package such as `mongodb`, is not seen.
+- **Changes behind a recorded export's own lines.** A record's fingerprint covers the export's own lines in `api.txt`. A later change to a type it uses that is listed separately, such as a non-exported helper type, does not change the fingerprint; that type's own changed lines still show in the pull request and must be named in its description.
 - **Undecided comparisons.** A break inside a comparison TypeScript cannot decide is not seen. In November 2026 that was about one comparison in a hundred: generic builders and clients that TypeScript cannot relate between two copies, among them the SQL family's `orm` and `Collection`, and the Mongo query builder, which overflows the compiler's stack. The example apps cover their result types as far as the apps use them.
 - **Result types the example apps do not exercise.** Coverage grows with the apps' type tests.
 - **The `exports` field.** The build writes each package's `exports` on a developer's machine and not in CI, so a committed `exports` that is out of date is not seen.
