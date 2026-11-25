@@ -1,19 +1,24 @@
 name: Notify Slack of outside contributions
 
-# Posts each new issue and pull request opened by someone outside the Prisma
-# organisation to the Slack webhook in the
-# EXTERNAL_CONTRIBUTIONS_SLACK_WEBHOOK_URL repository secret.
+# Posts each new issue and pull request from someone outside the maintainer
+# team (docs/oss/pr-triage.md#who-counts-as-external) to the Slack webhook in
+# the EXTERNAL_CONTRIBUTIONS_SLACK_WEBHOOK_URL repository secret.
 #
 # It runs on a schedule and reads the API, rather than reacting to the opened
 # events, because a workflow triggered by a pull request from a fork gets no
 # secrets, and the trigger that would get them is banned here
-# (.agents/rules/no-pull-request-target.mdc). Each run covers the time since
-# the last successful run started, so a failed run is retried by the next one.
+# (.agents/rules/no-pull-request-target.mdc). Each scheduled run covers the
+# time since the last successful scheduled run started, so a failed run is
+# retried by the next one. A manual run only prints what it would post.
 on:
   schedule:
     # Offset from the top of the hour, where GitHub delays or drops scheduled runs.
     - cron: '3-59/10 * * * *'
   workflow_dispatch:
+    inputs:
+      hours:
+        description: Print what would be posted for items created in this many past hours
+        default: '24'
 
 concurrency:
   group: notify-external-contributions
@@ -40,7 +45,15 @@ jobs:
           node-version-file: .tool-versions
 
       - name: Post new outside issues and pull requests to Slack
+        if: github.event_name == 'schedule'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.EXTERNAL_CONTRIBUTIONS_SLACK_WEBHOOK_URL }}
         run: node ./.github/workflows/scripts/notify-external-contributions.mjs
+
+      - name: Print what would be posted
+        if: github.event_name != 'schedule'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOURS: ${{ inputs.hours || '24' }}
+        run: node ./.github/workflows/scripts/notify-external-contributions.mjs --dry-run --hours "$HOURS"

@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -5,24 +6,39 @@ const GITHUB_API = 'https://api.github.com';
 const REQUEST_TIMEOUT_MS = 30_000;
 const FIRST_RUN_LOOKBACK_MS = 15 * 60 * 1000;
 const MAX_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+const SLACK_ATTEMPTS = 3;
+const SLACK_SPACING_MS = 1000;
 
-const INSIDE_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
-const INSIDE_PERMISSIONS = new Set(['admin', 'maintain', 'write']);
+// docs/oss/pr-triage.md#who-counts-as-external: an agent account that belongs to a team member is team.
+const TEAM_AGENT_ACCOUNTS = new Map([['StevenMcClankerton', 'SevInf']]);
+const TEAM_PERMISSIONS = new Set(['admin', 'write']);
 const ASSOCIATION_NOTES = {
   FIRST_TIME_CONTRIBUTOR: 'first contribution to this repository',
   FIRST_TIMER: 'first contribution on GitHub',
 };
 
-export function isOutsideAuthor(item, permission) {
-  if (item.user.type === 'Bot') return false;
-  if (INSIDE_ASSOCIATIONS.has(item.author_association)) return false;
-  return !INSIDE_PERMISSIONS.has(permission);
+const sleepFor = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export function isTeamAccount(user) {
+  return user.type === 'Bot' || TEAM_AGENT_ACCOUNTS.has(user.login);
 }
 
-export function windowStart(lastSuccessfulRunStart, until) {
+export function lastScheduledRunStart(successfulRuns, until) {
+  const starts = successfulRuns
+    .map((run) => new Date(run.created_at))
+    .filter((start) => start < until);
+  return starts.length ? new Date(Math.max(...starts)) : undefined;
+}
+
+export function resolveWindow(lastRunStart, until) {
   const earliest = new Date(until.getTime() - MAX_LOOKBACK_MS);
-  if (!lastSuccessfulRunStart) return new Date(until.getTime() - FIRST_RUN_LOOKBACK_MS);
-  return lastSuccessfulRunStart < earliest ? earliest : lastSuccessfulRunStart;
+  if (!lastRunStart) {
+    return { since: new Date(until.getTime() - FIRST_RUN_LOOKBACK_MS), until, skipped: undefined };
+  }
+  if (lastRunStart < earliest) {
+    return { since: earliest, until, skipped: { from: lastRunStart, to: earliest } };
+  }
+  return { since: lastRunStart, until, skipped: undefined };
 }
 
 export function itemsCreatedInWindow(newestFirstPage, since, until) {
@@ -46,9 +62,9 @@ export function formatSlackMessage(item, baseBranch) {
   return `New ${kind}${into} from ${author}${note ? ` (${note})` : ''}\n${link}`;
 }
 
-function createGitHubClient(token, repository) {
-  const request = async (path) => {
-    const response = await fetch(`${GITHUB_API}${path}`, {
+export function createGitHubClient({ token, repository, fetch = globalThis.fetch }) {
+  const request = (path) =>
+    fetch(`${GITHUB_API}${path}`, {
       headers: {
         accept: 'application/vnd.github+json',
         authorization: `Bearer ${token}`,
@@ -56,27 +72,25 @@ function createGitHubClient(token, repository) {
       },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    return response;
-  };
+  const failure = async (path, response) =>
+    new Error(`GitHub ${path} responded ${response.status}: ${await response.text()}`);
   const getJson = async (path) => {
     const response = await request(path);
-    if (!response.ok) {
-      throw new Error(`GitHub ${path} responded ${response.status}: ${await response.text()}`);
-    }
+    if (!response.ok) throw await failure(path, response);
     return response.json();
   };
 
   return {
-    async runWindowEnd(runId) {
+    async currentRun(runId) {
       const run = await getJson(`/repos/${repository}/actions/runs/${runId}`);
-      return { until: new Date(run.created_at), workflowId: run.workflow_id };
+      return { createdAt: new Date(run.created_at), workflowId: run.workflow_id };
     },
 
-    async lastSuccessfulRunStart(workflowId) {
+    async successfulScheduledRuns(workflowId) {
       const { workflow_runs: runs } = await getJson(
-        `/repos/${repository}/actions/workflows/${workflowId}/runs?status=success&per_page=1`,
+        `/repos/${repository}/actions/workflows/${workflowId}/runs?event=schedule&status=success&per_page=20`,
       );
-      return runs[0] ? new Date(runs[0].created_at) : undefined;
+      return runs;
     },
 
     async itemsCreatedBetween(since, until) {
@@ -92,15 +106,10 @@ function createGitHubClient(token, repository) {
     },
 
     async permissionOf(login) {
-      const response = await request(
-        `/repos/${repository}/collaborators/${encodeURIComponent(login)}/permission`,
-      );
+      const path = `/repos/${repository}/collaborators/${encodeURIComponent(login)}/permission`;
+      const response = await request(path);
       if (response.status === 404) return 'none';
-      if (!response.ok) {
-        throw new Error(
-          `GitHub permission of ${login} responded ${response.status}: ${await response.text()}`,
-        );
-      }
+      if (!response.ok) throw await failure(path, response);
       return (await response.json()).permission;
     },
 
@@ -110,15 +119,40 @@ function createGitHubClient(token, repository) {
   };
 }
 
-async function postToSlack(webhookUrl, text) {
-  const response = await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text, unfurl_links: false }),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (!response.ok) {
-    throw new Error(`Slack responded ${response.status}: ${await response.text()}`);
+export async function collectOutsideContributions(github, since, until) {
+  const permissions = new Map();
+  const permissionOf = async (login) => {
+    if (!permissions.has(login)) permissions.set(login, await github.permissionOf(login));
+    return permissions.get(login);
+  };
+
+  const messages = [];
+  for (const item of await github.itemsCreatedBetween(since, until)) {
+    if (isTeamAccount(item.user)) continue;
+    if (TEAM_PERMISSIONS.has(await permissionOf(item.user.login))) continue;
+    const baseBranch = item.pull_request ? await github.baseBranchOf(item.number) : undefined;
+    messages.push({ number: item.number, text: formatSlackMessage(item, baseBranch) });
+  }
+  return messages;
+}
+
+export async function postToSlack(
+  webhookUrl,
+  text,
+  { fetch = globalThis.fetch, sleep = sleepFor } = {},
+) {
+  for (let attempt = 1; ; attempt++) {
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text, unfurl_links: false }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (response.ok) return;
+    if (response.status !== 429 || attempt === SLACK_ATTEMPTS) {
+      throw new Error(`Slack responded ${response.status}: ${await response.text()}`);
+    }
+    await sleep(Number(response.headers.get('retry-after') ?? 1) * 1000);
   }
 }
 
@@ -128,46 +162,61 @@ function requireEnv(name) {
   return value;
 }
 
-async function resolveWindow(github, options) {
-  if (options.since) {
-    return { since: new Date(options.since), until: new Date() };
+function parseOptions() {
+  const { values } = parseArgs({
+    options: { 'dry-run': { type: 'boolean', default: false }, hours: { type: 'string' } },
+  });
+  if (!values['dry-run']) {
+    if (values.hours !== undefined) throw new Error('--hours is only for a dry run.');
+    return { dryRun: false };
   }
-  const { until, workflowId } = await github.runWindowEnd(requireEnv('GITHUB_RUN_ID'));
-  const since = windowStart(await github.lastSuccessfulRunStart(workflowId), until);
-  return { since, until };
+  const hours = Number(values.hours ?? 24);
+  if (!(hours > 0)) throw new Error(`--hours must be a positive number, not ${values.hours}.`);
+  return { dryRun: true, hours };
+}
+
+async function scheduledWindow(github) {
+  const { createdAt, workflowId } = await github.currentRun(requireEnv('GITHUB_RUN_ID'));
+  const runs = await github.successfulScheduledRuns(workflowId);
+  return resolveWindow(lastScheduledRunStart(runs, createdAt), createdAt);
 }
 
 async function main() {
-  const { values: options } = parseArgs({
-    options: { since: { type: 'string' }, 'dry-run': { type: 'boolean', default: false } },
+  const options = parseOptions();
+  const github = createGitHubClient({
+    token: requireEnv('GITHUB_TOKEN'),
+    repository: requireEnv('GITHUB_REPOSITORY'),
   });
-  const dryRun = options['dry-run'];
-  const github = createGitHubClient(requireEnv('GITHUB_TOKEN'), requireEnv('GITHUB_REPOSITORY'));
-  const webhookUrl = dryRun ? undefined : requireEnv('SLACK_WEBHOOK_URL');
+  const webhookUrl = options.dryRun ? undefined : requireEnv('SLACK_WEBHOOK_URL');
 
-  const { since, until } = await resolveWindow(github, options);
+  const now = new Date();
+  const { since, until, skipped } = options.dryRun
+    ? { since: new Date(now.getTime() - options.hours * 3_600_000), until: now, skipped: undefined }
+    : await scheduledWindow(github);
+  if (skipped) {
+    console.log(
+      `::warning::No scheduled run succeeded from ${skipped.from.toISOString()} to ${skipped.to.toISOString()}. Items created then were not posted.`,
+    );
+  }
   console.log(
     `Looking for issues and pull requests created from ${since.toISOString()} to ${until.toISOString()}.`,
   );
 
-  const permissions = new Map();
-  for (const item of await github.itemsCreatedBetween(since, until)) {
-    const login = item.user.login;
-    if (!permissions.has(login)) permissions.set(login, await github.permissionOf(login));
-    if (!isOutsideAuthor(item, permissions.get(login))) continue;
-
-    const baseBranch = item.pull_request ? await github.baseBranchOf(item.number) : undefined;
-    const message = formatSlackMessage(item, baseBranch);
-    if (dryRun) {
-      console.log(`${message}\n`);
-    } else {
-      await postToSlack(webhookUrl, message);
-      console.log(`Posted #${item.number} by ${login}.`);
+  const messages = await collectOutsideContributions(github, since, until);
+  for (const [index, { number, text }] of messages.entries()) {
+    if (options.dryRun) {
+      console.log(`${text}\n`);
+      continue;
     }
+    if (index > 0) await sleepFor(SLACK_SPACING_MS);
+    await postToSlack(webhookUrl, text);
+    console.log(`Posted #${number}.`);
   }
+  console.log(`${messages.length} outside contributions ${options.dryRun ? 'found' : 'posted'}.`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+const invokedPath = process.argv[1] && realpathSync(process.argv[1]);
+if (invokedPath && import.meta.url === pathToFileURL(invokedPath).href) {
   main().catch((error) => {
     console.error(error);
     process.exit(1);
