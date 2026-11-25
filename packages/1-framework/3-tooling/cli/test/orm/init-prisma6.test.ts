@@ -178,7 +178,12 @@ describe(
             return {
               facade: `${packageName}@8.1.0`,
               packages: [
-                { name: '@prisma/orm-framework', version: '8.1.0', outcome: 'to-install' },
+                {
+                  name: '@prisma/orm-framework',
+                  version: '8.1.0',
+                  requirement: '8.1.0',
+                  outcome: 'to-install',
+                },
               ],
               unread: [],
               warnings: [],

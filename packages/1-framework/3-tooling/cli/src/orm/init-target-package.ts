@@ -298,10 +298,10 @@ function refuseRequiredPeersAtAnotherVersion(
   const declared = declaredPackages(ctx.cwd);
   const wrong = peers.flatMap((peer) => {
     const found = installedVersion(peer.name);
-    const required = exactVersionOf(peer.version) ?? peer.version;
+    const required = exactVersionOf(peer.requirement) ?? peer.requirement;
     const checked =
-      exactVersionOf(peer.version) !== undefined || peer.name.startsWith('@prisma/orm-');
-    return found === undefined || !checked || requirementAdmits(peer.version, found) !== false
+      exactVersionOf(peer.requirement) !== undefined || peer.name.startsWith('@prisma/orm-');
+    return found === undefined || !checked || requirementAdmits(peer.requirement, found) !== false
       ? []
       : [{ peer, found, required }];
   });
@@ -318,7 +318,10 @@ function refuseRequiredPeersAtAnotherVersion(
     installCommand:
       toAdd.length === 0
         ? undefined
-        : installCommand(ctx.packageManager, toAdd.map(requiredPeerSpecifier)),
+        : installCommand(
+            ctx.packageManager,
+            toAdd.map((peer) => `${peer.name}@${peer.requirement}`),
+          ),
     listedAtRequired: wrong
       .filter(({ peer }) => peer.outcome === 'already-listed')
       .map(({ peer }) => peer.name),

@@ -316,11 +316,31 @@ describe('init lists the packages the facade names as peers', () => {
             'pg',
           ],
           requiredPeers: [
-            { name: '@prisma/orm-family-sql', version: VERSION, outcome: 'installed' },
-            { name: '@prisma/orm-framework', version: VERSION, outcome: 'left-at-another-version' },
-            { name: '@prisma/orm-target-postgres', version: VERSION, outcome: 'installed' },
-            { name: '@prisma/orm-toolchain', version: VERSION, outcome: 'installed' },
-            { name: 'pg', version: '^8.22.0', outcome: 'already-listed' },
+            {
+              name: '@prisma/orm-family-sql',
+              version: VERSION,
+              requirement: VERSION,
+              outcome: 'installed',
+            },
+            {
+              name: '@prisma/orm-framework',
+              version: VERSION,
+              requirement: VERSION,
+              outcome: 'left-at-another-version',
+            },
+            {
+              name: '@prisma/orm-target-postgres',
+              version: VERSION,
+              requirement: VERSION,
+              outcome: 'installed',
+            },
+            {
+              name: '@prisma/orm-toolchain',
+              version: VERSION,
+              requirement: VERSION,
+              outcome: 'installed',
+            },
+            { name: 'pg', version: '^8.22.0', requirement: '^8.22.0', outcome: 'already-listed' },
           ],
         },
       });
@@ -442,7 +462,12 @@ describe('init lists the packages the facade names as peers', () => {
         warnings: expect.not.arrayContaining([expect.stringContaining('package.json lists')]),
         packagesInstalled: {
           requiredPeers: expect.arrayContaining([
-            { name: '@prisma/orm-framework', version: VERSION, outcome: 'already-listed' },
+            {
+              name: '@prisma/orm-framework',
+              version: VERSION,
+              requirement: VERSION,
+              outcome: 'already-listed',
+            },
           ]),
         },
       });

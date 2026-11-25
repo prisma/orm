@@ -142,10 +142,25 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
       expect(run.presented?.data).toMatchObject({
         packagesInstalled: {
           requiredPeers: [
-            { name: '@prisma/orm-framework', version: VERSION, outcome: 'installed' },
-            { name: '@prisma/orm-toolchain', version: VERSION, outcome: 'installed' },
-            { name: 'pg', version: '^8.22.0', outcome: 'already-listed' },
-            { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
+            {
+              name: '@prisma/orm-framework',
+              version: VERSION,
+              requirement: VERSION,
+              outcome: 'installed',
+            },
+            {
+              name: '@prisma/orm-toolchain',
+              version: VERSION,
+              requirement: VERSION,
+              outcome: 'installed',
+            },
+            { name: 'pg', version: '^8.22.0', requirement: '^8.22.0', outcome: 'already-listed' },
+            {
+              name: 'temporal-polyfill',
+              version: '^1.0.8',
+              requirement: '^1.0.8',
+              outcome: 'installed',
+            },
           ],
         },
       });
@@ -166,7 +181,12 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
         warnings: expect.not.arrayContaining([expect.stringContaining('temporal-polyfill')]),
         packagesInstalled: {
           requiredPeers: expect.arrayContaining([
-            { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'already-listed' },
+            {
+              name: 'temporal-polyfill',
+              version: '^1.0.8',
+              requirement: '^1.0.8',
+              outcome: 'already-listed',
+            },
           ]),
         },
       });
@@ -498,7 +518,10 @@ describe('init --skip-install on a facade that names its peers with ranges', () 
     );
   }
 
-  async function skipInstallWithFrameworkAt(frameworkVersion: string) {
+  async function skipInstallWithFrameworkAt(
+    frameworkVersion: string,
+    { listsFacade }: { readonly listsFacade: boolean } = { listsFacade: true },
+  ) {
     manifestAt('@prisma/orm-postgres', '8.1.2', {
       '@prisma/orm-framework': '~8.1.0',
       '@prisma/orm-toolchain': '~8.1.0',
@@ -510,7 +533,7 @@ describe('init --skip-install on a facade that names its peers with ranges', () 
     installed('pg');
     installed('temporal-polyfill');
     writeManifest({
-      '@prisma/orm-postgres': '^8.1.0',
+      ...(listsFacade ? { '@prisma/orm-postgres': '^8.1.0' } : {}),
       '@prisma/orm-toolchain': '^8.1.0',
       'temporal-polyfill': '^1.0.8',
       pg: '^8.22.0',
@@ -531,6 +554,26 @@ describe('init --skip-install on a facade that names its peers with ranges', () 
           meta: {
             packages: [{ name: '@prisma/orm-framework', found: '8.0.4', required: '~8.1.0' }],
             installCommand: 'pnpm add "@prisma/orm-framework@~8.1.0"',
+          },
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'checks the installed peer against the range the facade declares when the project does not list the facade',
+    async () => {
+      const { run, wrote } = await skipInstallWithFrameworkAt('8.2.0', {
+        listsFacade: false,
+      });
+
+      expect(wrote).toBe(false);
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
+          meta: {
+            packages: [{ name: '@prisma/orm-framework', found: '8.2.0', required: '~8.1.0' }],
           },
         },
       });
