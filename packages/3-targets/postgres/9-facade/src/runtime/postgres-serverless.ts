@@ -13,6 +13,7 @@ import {
   toRuntimeOptions,
 } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
+import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { redactDatabaseUrl } from '@internal/utils/redact-db-url';
 import { postgresError } from '../errors';
@@ -25,6 +26,8 @@ import {
   type PostgresQueryMembers,
   type PostgresRuntimeBoundMembers,
   type PostgresStaticMembers,
+  type PostgresTransactionMember,
+  type PostgresTransactionMemberFor,
 } from './postgres-members';
 import {
   DEFAULT_CONNECT_TIMEOUT_MILLIS,
@@ -35,14 +38,22 @@ import {
 } from './postgres-options';
 import { PostgresRuntimeImpl } from './postgres-runtime';
 import type { PostgresTargetId } from './postgres-target-id';
+import { type PostgresStackProvides, warnWhenStackLacksCapabilities } from './stack-capabilities';
 
-export interface PostgresServerlessConnection<
+export interface PostgresServerlessConnectionMembers<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
 > extends PostgresQueryMembers<TContract, TCollections>,
     PostgresStaticMembers<TContract>,
     PostgresRuntimeBoundMembers<TContract, TCollections>,
     PostgresLifecycleMembers {}
+
+/** A serverless connection. It has `transaction()` when its contract lists interactive transactions. */
+export type PostgresServerlessConnection<
+  TContract extends Contract<SqlStorage>,
+  TCollections extends CollectionClasses = NoCollectionClasses,
+> = PostgresServerlessConnectionMembers<TContract, TCollections> &
+  PostgresTransactionMemberFor<TContract, TCollections>;
 
 export interface PostgresServerlessClient<
   TContract extends Contract<SqlStorage>,
@@ -110,7 +121,7 @@ export default function postgresServerless<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
 >(
-  options: PostgresServerlessOptions<TContract, TCollections>,
+  options: PostgresServerlessOptions<TContract, TCollections> & PostgresStackProvides<TContract>,
 ): PostgresServerlessClient<TContract, TCollections> {
   const cursor = validateCursorOptions(options.cursor, 'postgresServerless');
   const transactionOptions = validateTransactionOptions(options.transactionOptions);
@@ -126,6 +137,7 @@ export default function postgresServerless<
     contract,
     stack,
   });
+  warnWhenStackLacksCapabilities(contract, stack, options);
   const { sql, raw, enums, nativeEnums, toSql } = buildPostgresStaticContext<TContract>(
     contract,
     context,
@@ -171,7 +183,8 @@ export default function postgresServerless<
       () => runtime,
     );
 
-    return {
+    const connection: PostgresServerlessConnectionMembers<TContract, TCollections> &
+      PostgresTransactionMember<TContract, TCollections> = {
       sql,
       raw,
       enums,
@@ -184,6 +197,10 @@ export default function postgresServerless<
       close,
       [Symbol.asyncDispose]: close,
     };
+    return blindCast<
+      PostgresServerlessConnection<TContract, TCollections>,
+      'transaction() is present at run time; its type follows the contract, which a generic TContract leaves undecided'
+    >(connection);
   };
 
   return {

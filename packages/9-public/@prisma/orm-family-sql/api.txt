@@ -6367,8 +6367,9 @@
 ./runtime: export type TransactionActivity from @prisma/orm-framework/components/runtime
 ./runtime: export type TransactionEnded from @prisma/orm-framework/components/runtime
 ./runtime: function budgets(options?: BudgetsOptions): SqlMiddleware
+./runtime: function capabilitiesTheStackDoesNotProvide(contract: Contract<SqlStorage>, stack: SqlExecutionStackWithDriver): readonly string[]
 ./runtime: function createAstCodecRegistry(descriptors: CodecDescriptorRegistry): ContractCodecRegistry
-./runtime: function createExecutionContext<TContract extends Contract<SqlStorage> = Contract<SqlStorage>, TTargetId extends string = string>(options: { readonly contract: TContract; readonly stack: SqlExecutionStack<TTargetId>; readonly driver?: RuntimeDriverDescriptor<'sql', TTargetId, unknown, SqlRuntimeDriverInstance<TTargetId>>; }): ExecutionContext<TContract>
+./runtime: function createExecutionContext<TContract extends Contract<SqlStorage> = Contract<SqlStorage>, TTargetId extends string = string>(options: { readonly contract: TContract; readonly stack: SqlExecutionStack<TTargetId>; }): ExecutionContext<TContract>
 ./runtime: function createSqlExecutionStack<TTargetId extends string>(options: SqlExecutionStackOptions<TTargetId> & { readonly driver: SqlExecutionStackWithDriver<TTargetId>['driver']; }): SqlExecutionStackWithDriver<TTargetId>
 ./runtime: function createSqlExecutionStack<TTargetId extends string>(options: SqlExecutionStackOptions<TTargetId>): SqlExecutionStack<TTargetId>
 ./runtime: function createToSql<TTargetId extends string>(stack: SqlExecutionStack<TTargetId>, contract: Contract<SqlStorage>): ToSqlMember['toSql']
@@ -6519,6 +6520,7 @@
 ./runtime: interface SqlRuntimeExtensionDescriptor, required method create(): SqlRuntimeExtensionInstance<TTargetId>
 ./runtime: interface SqlRuntimeExtensionDescriptor<TTargetId extends string = string> extends RuntimeExtensionDescriptor<'sql', TTargetId, SqlRuntimeExtensionInstance<TTargetId>>, SqlStaticContributions
 ./runtime: interface SqlRuntimeExtensionInstance<TTargetId extends string> extends RuntimeExtensionInstance<'sql', TTargetId>
+./runtime: interface SqlRuntimeTargetDescriptor, readonly optional property databaseCapabilities?: CapabilityMatrix
 ./runtime: interface SqlRuntimeTargetDescriptor<TTargetId extends string = string, TTargetInstance extends RuntimeTargetInstance<'sql', TTargetId> = RuntimeTargetInstance<'sql', TTargetId>> extends RuntimeTargetDescriptor<'sql', TTargetId, TTargetInstance>, SqlStaticContributions
 ./runtime: interface SqlStaticContributions extends Pick<MutationDefaultGeneratorContributor, 'mutationDefaultGenerators'>
 ./runtime: interface SqlStaticContributions, readonly optional property collectionMethods?: () => ReadonlyArray<CollectionMethodContribution>

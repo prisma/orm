@@ -52,10 +52,14 @@ vi.mock('pg', () => {
 });
 
 import { Client, Pool } from 'pg';
+import type { InteractiveTransactionsCapability } from '../src/exports/runtime';
 import { buildNativeEnumsMapForNamespace } from '../src/runtime/native-enums';
 import postgres from '../src/runtime/postgres';
 
 const contract = createContract<SqlStorage>();
+const transactionalContract: Contract<SqlStorage> & {
+  readonly capabilities: InteractiveTransactionsCapability;
+} = { ...contract, capabilities: { sql: { interactiveTransactions: true } } };
 
 function poolEndSpy() {
   return (Pool as unknown as { _endSpy: ReturnType<typeof vi.fn> })._endSpy;
@@ -239,7 +243,7 @@ describe('postgres', () => {
     };
     (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
 
-    const db = postgres({ contract, pg: pool });
+    const db = postgres({ contract: transactionalContract, pg: pool });
     await db.connect();
 
     const result = await db.transaction(async () => 'tx-value');
@@ -258,7 +262,7 @@ describe('postgres', () => {
     };
     (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
 
-    const db = postgres({ contract, pg: pool });
+    const db = postgres({ contract: transactionalContract, pg: pool });
     await db.connect();
 
     let receivedTx: { sql?: unknown } | undefined;
@@ -279,7 +283,7 @@ describe('postgres', () => {
     };
     (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
 
-    const db = postgres({ contract, pg: pool });
+    const db = postgres({ contract: transactionalContract, pg: pool });
     await db.connect();
 
     let receivedTx: { orm?: unknown } | undefined;
@@ -300,7 +304,7 @@ describe('postgres', () => {
     };
     (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
 
-    const db = postgres({ contract, pg: pool });
+    const db = postgres({ contract: transactionalContract, pg: pool });
 
     // No runtime yet
     let runtimeBefore: Runtime | undefined;

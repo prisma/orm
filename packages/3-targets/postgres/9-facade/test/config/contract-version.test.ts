@@ -125,7 +125,7 @@ describe('contract emit', () => {
 });
 
 describe('the control client', () => {
-  it('emits the row a Prisma schema contract states, which its source carries', async () => {
+  it('emits the row a Prisma schema contract states and the default connection list, which its source carries', async () => {
     const { dir, schemaPath } = await schemaDir();
     const { contract } = defineConfig({ contract: { path: schemaPath, version: 17 } });
     if (contract?.typesModule === undefined) throw new Error('defineConfig set no contract');
@@ -140,9 +140,10 @@ describe('the control client', () => {
         },
       });
       if (!emitted.ok) throw new Error(emitted.failure.summary);
-      expect(JSON.parse(emitted.value.contractJson).capabilities).toEqual(
-        postgresCapabilitiesByVersion[17],
-      );
+      expect(JSON.parse(emitted.value.contractJson).capabilities).toEqual({
+        ...postgresCapabilitiesByVersion[17],
+        sql: { ...postgresCapabilitiesByVersion[17].sql, interactiveTransactions: true },
+      });
     } finally {
       await client.close();
     }

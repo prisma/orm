@@ -1,3 +1,5 @@
+import postgresAdapter from '@internal/adapter-postgres/runtime';
+import postgresDriver from '@internal/driver-postgres/runtime';
 import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { describe, expect, it } from 'vitest';
 import { defineContractFor } from '../../src/contract/define-contract';
@@ -16,19 +18,27 @@ const removedFlags = {
 
 const defineContractWithALaterFeature = defineContractFor(versionsWithALaterFeature);
 
+// The default capabilities list is the client's adapter's and driver's: the driver provides interactive transactions.
+function withTheDefaultConnection<Row extends { readonly sql: object }>(row: Row) {
+  return { ...row, sql: { ...row.sql, interactiveTransactions: true } };
+}
+
 describe('the version a TypeScript contract states', () => {
   it('selects its own row of the table', () => {
     expect([
       defineContractWithALaterFeature({ version: 16 }).capabilities,
       defineContractWithALaterFeature({ version: 17 }).capabilities,
-    ]).toEqual([version16Capabilities, version17Capabilities]);
+    ]).toEqual([
+      withTheDefaultConnection(version16Capabilities),
+      withTheDefaultConnection(version17Capabilities),
+    ]);
   });
 
   it.each([15, 16, 17, 18] as const)(
     'makes version %i require its row of the shipped table',
     (version) => {
       expect(defineContract({ version }).capabilities).toEqual(
-        postgresCapabilitiesByVersion[version],
+        withTheDefaultConnection(postgresCapabilitiesByVersion[version]),
       );
     },
   );
@@ -71,7 +81,7 @@ describe('the version a TypeScript contract states', () => {
     } as const;
 
     expect(defineContract({ version: 18, extensions: { example } }).capabilities).toEqual({
-      ...postgresCapabilitiesByVersion[18],
+      ...withTheDefaultConnection(postgresCapabilitiesByVersion[18]),
       example: { search: true },
     });
   });
@@ -106,9 +116,16 @@ describe('the capabilities list of a TypeScript contract', () => {
     );
   });
 
-  it('defaults to the adapter and driver the client runs with, which add nothing yet', () => {
+  it('defaults to the adapter and driver the client runs with, whose driver provides interactive transactions', () => {
     expect(defineContract({ version: 17 }).capabilities).toEqual(
-      defineContract({ version: 17, capabilities: [] }).capabilities,
+      defineContract({
+        version: 17,
+        capabilities: [postgresAdapter.capabilities, postgresDriver.capabilities],
+      }).capabilities,
+    );
+    expect(defineContract({ version: 17 }).capabilities.sql.interactiveTransactions).toBe(true);
+    expect(defineContract({ version: 17, capabilities: [] }).capabilities.sql).not.toHaveProperty(
+      'interactiveTransactions',
     );
   });
 

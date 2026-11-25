@@ -10,6 +10,7 @@ import {
   toRuntimeOptions,
 } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
+import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Client, Pool } from 'pg';
 import { postgresError } from '../errors';
@@ -29,6 +30,8 @@ import {
   type PostgresQueryMembers,
   type PostgresRuntimeBoundMembers,
   type PostgresStaticMembers,
+  type PostgresTransactionMember,
+  type PostgresTransactionMemberFor,
 } from './postgres-members';
 import {
   type PostgresExecutionOptions,
@@ -39,8 +42,9 @@ import {
 } from './postgres-options';
 import { PostgresRuntimeImpl } from './postgres-runtime';
 import type { PostgresTargetId } from './postgres-target-id';
+import { type PostgresStackProvides, warnWhenStackLacksCapabilities } from './stack-capabilities';
 
-export interface PostgresClient<
+export interface PostgresClientMembers<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
 > extends PostgresQueryMembers<TContract, TCollections>,
@@ -49,6 +53,13 @@ export interface PostgresClient<
     PostgresLifecycleMembers {
   connect(bindingInput?: PostgresBindingInput): Promise<Runtime>;
 }
+
+/** A Postgres client. It has `transaction()` when its contract lists interactive transactions. */
+export type PostgresClient<
+  TContract extends Contract<SqlStorage>,
+  TCollections extends CollectionClasses = NoCollectionClasses,
+> = PostgresClientMembers<TContract, TCollections> &
+  PostgresTransactionMemberFor<TContract, TCollections>;
 
 export interface PostgresOptionsBase extends PostgresExecutionOptions {
   readonly poolOptions?: PostgresPoolOptions;
@@ -89,7 +100,9 @@ export type PostgresOptions<
 export default function postgres<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
->(options: PostgresOptions<TContract, TCollections>): PostgresClient<TContract, TCollections> {
+>(
+  options: PostgresOptions<TContract, TCollections> & PostgresStackProvides<TContract>,
+): PostgresClient<TContract, TCollections> {
   const cursor = validateCursorOptions(options.cursor, 'postgres');
   const transactionOptions = validateTransactionOptions(options.transactionOptions);
   const contract = validatePostgresContract(options.contract);
@@ -106,6 +119,7 @@ export default function postgres<
     contract,
     stack,
   });
+  warnWhenStackLacksCapabilities(contract, stack, options);
   const {
     sql,
     raw: rawSqlTag,
@@ -203,7 +217,8 @@ export default function postgres<
     transactionOptions,
   });
 
-  return {
+  const client: PostgresClientMembers<TContract, TCollections> &
+    PostgresTransactionMember<TContract, TCollections> = {
     sql,
     ...runtimeBoundMembers,
     enums,
@@ -264,4 +279,8 @@ export default function postgres<
       return this.close();
     },
   };
+  return blindCast<
+    PostgresClient<TContract, TCollections>,
+    'transaction() is present at run time; its type follows the contract, which a generic TContract leaves undecided'
+  >(client);
 }

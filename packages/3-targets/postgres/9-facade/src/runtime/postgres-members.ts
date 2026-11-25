@@ -122,11 +122,30 @@ export interface PostgresRuntimeBoundMembers<
 > extends PrepareMember<TContract> {
   readonly orm: OrmClient<TContract, TCollections>;
   runtime(): Runtime;
+}
+
+export interface PostgresTransactionMember<
+  TContract extends Contract<SqlStorage>,
+  TCollections extends CollectionClasses = NoCollectionClasses,
+> {
   transaction<R>(
     fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
     options?: PostgresTransactionOptions,
   ): Promise<R>;
 }
+
+/** The capability a contract lists when the application runs transactions whose statements it sends one at a time. */
+export interface InteractiveTransactionsCapability {
+  readonly sql: { readonly interactiveTransactions: true };
+}
+
+/** `transaction()`, offered only to a contract that lists interactive transactions. */
+export type PostgresTransactionMemberFor<
+  TContract extends Contract<SqlStorage>,
+  TCollections extends CollectionClasses = NoCollectionClasses,
+> = TContract['capabilities'] extends InteractiveTransactionsCapability
+  ? PostgresTransactionMember<TContract, TCollections>
+  : unknown;
 
 export interface PostgresLifecycleMembers {
   close(): Promise<void>;
@@ -155,7 +174,9 @@ export function buildPostgresRuntimeBoundMembers<
   TCollections extends CollectionClasses,
 >(
   options: PostgresRuntimeBoundMembersOptions<TContract, TCollections>,
-): PostgresRuntimeBoundMembers<TContract, TCollections> & RuntimeScope {
+): PostgresRuntimeBoundMembers<TContract, TCollections> &
+  PostgresTransactionMember<TContract, TCollections> &
+  RuntimeScope {
   const {
     context,
     collections,
