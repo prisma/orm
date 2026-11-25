@@ -8,6 +8,10 @@ A facade names its database driver twice: as a required peer dependency in its `
 
 Removing the field changes an interface that facades outside this repository implement. That is a decision for the operator, not a clean-up. Raised when slice 1 was handed over.
 
+## "Target package" where the facade is meant, outside this project's changes
+
+The facade is the package an application installs, such as `@prisma/orm-postgres`; a target package is `@prisma/orm-target-*`. Earlier work called the facade a "target package", and about 300 uses remain on `main` outside the files this project changes: the command-line tool's internal names (`target-packages.ts`, `TargetPackage`, `KNOWN_TARGET_PACKAGES`) and comments, the error reference, the versioning and CLI docs, the released upgrade guides in the `prisma-8` skill, and two published names, the subpath `@prisma/orm-framework/target-package-config` and the error codes `CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED` and `_NOT_VERIFIED`. Text users read says "the package for your database", never "facade". The `--target` flag keeps its name. To be fixed in a pull request of its own, after slice 1.
+
 ## `prisma orm init` under Yarn Plug'n'Play
 
 `init` looks for installed packages in `node_modules` folders, so it cannot find anything under Yarn's default install mode. Older than this project. Linear: TML-3940.
