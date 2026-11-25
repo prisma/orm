@@ -103,7 +103,7 @@ Decomposing means dropping the facade from the application's declarations; the p
 
 ## Why entrypoints, not bundles: module identity
 
-The runtime recognises some of its values by which copy of a module made them, through private fields and `instanceof` checks, so those checks only work when a given module exists **once** in an application's module graph. For the same reason, every published package names the platform packages it uses as peer dependencies ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)). This yields the core packaging rule:
+The runtime recognises some of its values by which copy of a module made them, such as the private field a data-type value carries, so those checks only work when a given module exists **once** in an application's module graph. For the same reason, every published package names the platform packages it uses as peer dependencies ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)). This yields the core packaging rule:
 
 > Every internal module is published from exactly one package. Consolidation happens by re-exporting internal packages as subpath entrypoints of a single published shell — never by bundling the same code into multiple packages.
 
@@ -209,7 +209,7 @@ The zero-effort option: keep publishing each internal package under its own name
 
 ### Bundling internals into each facade
 
-Compile each facade with its internal dependencies inlined (the classic esbuild approach), publishing only the facades. Rejected on correctness: two published packages that both inline the same internal module ship two copies, breaking the values each copy recognises as its own, `instanceof`, and extension peer-dependencies. It also forecloses decomposition — a user could not replace the adapter if the adapter were sealed inside the facade.
+Compile each facade with its internal dependencies inlined (the classic esbuild approach), publishing only the facades. Rejected on correctness: two published packages that both inline the same internal module ship two copies, breaking the values each copy recognises as its own and extension peer-dependencies. It also forecloses decomposition — a user could not replace the adapter if the adapter were sealed inside the facade.
 
 ### One framework package instead of framework + toolchain
 
