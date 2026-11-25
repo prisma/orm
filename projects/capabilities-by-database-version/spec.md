@@ -80,6 +80,18 @@ This replaces the recorded position that capabilities are reported by the adapte
 
 The thirteen scenarios in [design-notes.md](design-notes.md) are the acceptance cases. The project is done when each is handled as the design says, shown by a test or by manual QA against a real database.
 
+### 5.1 Proof that a contract without its version is enough
+
+The contract stores capability keys and not the version its author stated. That holds only if every message a user gets about a database that is too old can still be written in versions. The project is not done until this is shown, for each place a user can meet the problem:
+
+- signing and the commands that change a database;
+- starting the application against a database that was never checked, or was checked for another contract;
+- a contract whose capabilities the installed PostgreSQL package's table does not know, such as one emitted by a newer release.
+
+For each, the evidence is the real message, produced by a test or by manual QA, and a judgement of whether a user can act on it without knowing what a capability is. Today this is shown only for signing, where the version is worked out from the capabilities as the oldest version that provides them all.
+
+If any of these can only say which capabilities are missing, the contract must store the stated version. That changes the structure of `contract.json`, so it must be decided and built before `8.0`, not after.
+
 ## 6. Out of scope
 
 - How an extension's operation depends on the installed version of a database extension. That belongs to the extension system.
