@@ -55,8 +55,11 @@ import {
   dataTransform,
   rawAggregate,
   rawUpdateMany,
+  removeStoredValue,
   renameCollection,
   renameField,
+  renameStoredKey,
+  replaceStoredValue,
   setValidation,
   unsetField,
 } from '../src/core/migrations/migration-factories';
@@ -250,7 +253,7 @@ interface Harness {
   readonly ddlCalls: string[];
 }
 
-function makeHarness(): Harness {
+function makeHarness(options: { readonly ddlError?: unknown } = {}): Harness {
   const log = new EventLog();
   const driver = new StubMongoDriver(log);
   const adapter = new StubMongoAdapter();
@@ -263,6 +266,7 @@ function makeHarness(): Harness {
     executeDdl: async (command) => {
       ddlCalls.push(`ddl:${command.kind}:${command.collection}`);
       log.record(`ddl:${command.kind}:${command.collection}`);
+      if (options.ddlError !== undefined) throw options.ddlError;
     },
     markerOps: NOOP_MARKER_OPS,
     introspectSchema: async () => new MongoSchemaIR([], { fromDatabase: false }),
@@ -938,7 +942,7 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
       code: 'MIGRATION.EXECUTION_FAILED',
       message:
         'Operation field.users.nickname.unset failed: the database user may not skip document validation',
-      why: 'Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again. The failed apply changed nothing.',
+      why: 'Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role. Then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
       meta: {
         operationId: 'field.users.nickname.unset',
         mongoCode: 13,
@@ -1043,7 +1047,7 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
     expect(failureFields(result.assertNotOk())).toMatchObject({
       message:
         'Operation data_transform.move User to members failed: the database user may not skip document validation',
-      why: 'Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again. The failed apply changed nothing.',
+      why: 'Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role. Then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
     });
   });
 
@@ -1301,6 +1305,120 @@ describe('MongoMigrationRunner, a stop after a copy, which has no check', () => 
       'If occasions holds nothing you need, drop it, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again. If an earlier operation',
     );
   });
+
+  const mongoError = (code: number, codeName: string, extra: Record<string, unknown> = {}) =>
+    new MongoServerError({ ok: 0, code, codeName, errmsg: `${codeName} error`, ...extra });
+  const runsAgain =
+    'An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again.';
+  const stillMatching = [[{ _id: 1 }], [], [{ _id: 1 }], [{ documents: 1, documentId: 3 }]];
+
+  it.each<{
+    readonly stop: string;
+    readonly harness?: Parameters<typeof makeHarness>[0];
+    readonly setUp?: (harness: Harness) => void;
+    readonly responses?: readonly Row[][];
+    readonly operation: AnyMongoMigrationOperation;
+    readonly says: string;
+  }>([
+    {
+      stop: 'a key rename collision',
+      responses: [[{ _id: 1 }], [{ _id: 2 }]],
+      operation: renameStoredKey({
+        collection: 'orders',
+        field: 'lines',
+        path: '$[*].sku',
+        to: 'code',
+      }),
+      says: 'Once the documents are fixed, run the command again.',
+    },
+    {
+      stop: 'a rewrite that would duplicate a unique key',
+      responses: [[{ _id: 1 }]],
+      setUp: (harness) =>
+        harness.driver.failUpdateManyWith(
+          mongoError(11000, 'DuplicateKey', {
+            errmsg: 'E11000 index: code_1 dup key: { code: 1 }',
+          }),
+        ),
+      operation: castField({ collection: 'users', field: 'code', from: ['string'], to: 'int' }),
+      says: 'Change or remove the documents that would collide, then run the command again.',
+    },
+    {
+      stop: 'a unique index that cannot be built',
+      harness: { ddlError: mongoError(11000, 'DuplicateKey', { keyValue: { email: 'a' } }) },
+      operation: createIndex('orders', [{ field: 'email', direction: 1 }], { name: 'email_1' }),
+      says: 'Give each document its own value of the indexed fields, or remove the duplicates, then run the command again.',
+    },
+    {
+      stop: 'a removed value that documents still hold',
+      responses: [[{ _id: 1 }], [{ _id: 2 }], [{ documents: 2, documentId: 5 }]],
+      operation: removeStoredValue({
+        collection: 'users',
+        field: 'status',
+        value: 'archived',
+        required: true,
+      }),
+      says: 'Once the documents are fixed, run the command again.',
+    },
+    {
+      stop: "documents a planner rewrite's update did not change",
+      responses: stillMatching,
+      operation: replaceStoredValue({
+        collection: 'users',
+        field: 'status',
+        from: 'old',
+        to: 'new',
+      }),
+      says: 'Run the command again.',
+    },
+    {
+      stop: "documents a data transform's update did not change",
+      responses: [[{ _id: 1 }], ...stillMatching],
+      operation: dataTransform('fix status', {
+        check: { source: () => rawAggregate('users', [{ $match: { status: 'old' } }]) },
+        run: () => makeRunPlan(),
+      }),
+      says: "Change the update in the migration's migration.ts so it changes them too, run the file with node, then run the command again.",
+    },
+    {
+      stop: 'a user who may not skip document validation',
+      responses: [[{ _id: 1 }]],
+      setUp: (harness) => harness.driver.failUpdateManyWith(mongoError(13, 'Unauthorized')),
+      operation: unsetField('users', 'nickname'),
+      says: 'Then run the command again.',
+    },
+    {
+      stop: 'a create onto an existing collection',
+      setUp: (harness) => {
+        harness.inspectionExecutor.collections = [{ name: 'orders' }];
+      },
+      operation: createCollection('orders'),
+      says: 'If orders holds nothing you need, drop it, then run the command again.',
+    },
+    {
+      stop: "a data transform's update that meets a value it cannot convert",
+      setUp: (harness) => harness.driver.failUpdateManyWith(mongoError(241, 'ConversionFailure')),
+      operation: dataTransform('backfill-status', { run: () => makeRunPlan() }),
+      says: "Fix the update in the migration's migration.ts, run the file with node, then run the command again.",
+    },
+    {
+      stop: "any other failure of a data transform's update",
+      setUp: (harness) => harness.driver.failUpdateManyWith(mongoError(2, 'BadValue')),
+      operation: dataTransform('backfill-status', { run: () => makeRunPlan() }),
+      says: 'Then run the command again.',
+    },
+  ])(
+    'says at $stop that the copy runs again',
+    async ({ harness: options, setUp, responses = [], operation, says }) => {
+      const harness = makeHarness(options);
+      setUp?.(harness);
+      for (const rows of [[], ...responses]) harness.driver.queueResponse(rows);
+
+      const result = await execute(harness, [copy, operation]);
+
+      expect(failureFields(result.assertNotOk()).why).toContain(`${says} ${runsAgain}`);
+    },
+  );
 });
 
 describe('MongoMigrationRunner, a collection rename stopped because the new collection exists', () => {
@@ -1365,7 +1483,7 @@ describe('MongoMigrationRunner, a create whose collection already exists', () =>
       code: 'MIGRATION.PRECHECK_FAILED',
       message:
         'Operation collection.orders.create stopped: collection orders already exists without the options this migration creates it with',
-      why: "If orders holds nothing you need, drop it, then run the command again. Otherwise give it the options the createCollection call of this migration's migration.ts sets, its validator among them, and run the command again: the creation is then skipped. The failed apply changed nothing.",
+      why: "If orders holds nothing you need, drop it, then run the command again; operations that already ran are skipped. Otherwise give it the options the createCollection call of this migration's migration.ts sets, its validator among them, and run the command again: the creation is then skipped. The failed apply changed nothing.",
       meta: { operationId: 'collection.orders.create', databaseUnchanged: true },
     });
   });

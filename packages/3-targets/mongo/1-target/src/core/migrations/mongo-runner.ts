@@ -346,6 +346,7 @@ function renameTargetExistsRefusal(
 function createTargetExistsRefusal(
   op: MongoMigrationPlanOperation,
   failed: MongoMigrationCheck,
+  before: readonly AnyMongoMigrationOperation[],
 ): MongoMigrationRunnerResult | undefined {
   const create = op.execute.find(
     (step) => step.command instanceof CreateCollectionCommand,
@@ -358,7 +359,7 @@ function createTargetExistsRefusal(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: collection ${name} already exists without the options this migration creates it with`,
     {
-      why: `If ${name} holds nothing you need, drop it, then run the command again. Otherwise give it the options the createCollection call of this migration's migration.ts sets, its validator among them, and run the command again: the creation is then skipped.`,
+      why: `${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} Otherwise give it the options the createCollection call of this migration's migration.ts sets, its validator among them, and run the command again: the creation is then skipped.`,
       meta: { operationId: op.id },
     },
   );
@@ -977,6 +978,7 @@ function bypassValidationRefusal(
   op: MongoDmlOperation,
   plan: MongoQueryPlan,
   error: unknown,
+  before: readonly AnyMongoMigrationOperation[],
 ): MongoMigrationRunnerResult | undefined {
   const skipsValidation =
     (plan.command instanceof RawUpdateManyCommand || plan.command instanceof RawAggregateCommand) &&
@@ -989,7 +991,7 @@ function bypassValidationRefusal(
     'MIGRATION.EXECUTION_FAILED',
     `Operation ${op.id} failed: the database user may not skip document validation`,
     {
-      why: `Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error ${MONGO_UNAUTHORIZED} (${String(codeName)}). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again.`,
+      why: `Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error ${MONGO_UNAUTHORIZED} (${String(codeName)}). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role. ${rerunText('Then run the command again', before)}`,
       meta: {
         operationId: op.id,
         mongoCode: MONGO_UNAUTHORIZED,
@@ -1312,7 +1314,7 @@ function rewriteFailure(
           'MIGRATION.EXECUTION_FAILED',
           `Operation ${op.id} failed: its update met a value MongoDB cannot convert`,
           {
-            why: `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. Fix the update in the migration's migration.ts, run the file with node, then run the command again.`,
+            why: `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. ${rerunText("Fix the update in the migration's migration.ts, run the file with node, then run the command again", position.plan.slice(0, position.operationIndex + 1))}`,
             meta: { operationId: op.id, mongoCode },
           },
         )
@@ -1320,7 +1322,7 @@ function rewriteFailure(
           'MIGRATION.EXECUTION_FAILED',
           `Operation ${op.id} failed: MongoDB error ${mongoError}: ${reason}`,
           {
-            why: "Documents the update changed before the error stay changed. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. Fix what MongoDB names; when it comes from the update, change the update in the migration's migration.ts so its filter and update work on a re-run, and run the file with node. Then run the command again.",
+            why: `Documents the update changed before the error stay changed. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. Fix what MongoDB names; when it comes from the update, change the update in the migration's migration.ts so its filter and update work on a re-run, and run the file with node. ${rerunText('Then run the command again', position.plan.slice(0, position.operationIndex + 1))}`,
             meta: {
               operationId: op.id,
               mongoCode,
@@ -1474,7 +1476,7 @@ export class MongoMigrationRunner {
             const failedCheck = failedCheckOf(operation.id, 'precheck', failing);
             return (
               renameTargetExistsRefusal(operation, failing, operations.slice(0, operationIndex)) ??
-              createTargetExistsRefusal(operation, failing) ??
+              createTargetExistsRefusal(operation, failing, operations.slice(0, operationIndex)) ??
               (await this.documentsFailingValidatorRefusal(
                 operation,
                 failing,
@@ -1727,7 +1729,7 @@ export class MongoMigrationRunner {
         }
         if (reportedChange || !reportedNoChange) wrote();
       } catch (error) {
-        const refusal = bypassValidationRefusal(op, plan, error);
+        const refusal = bypassValidationRefusal(op, plan, error, before);
         if (refusal !== undefined) return { executed: false, failure: refusal };
         const failure = rewriteFailure(op, plan, error, position);
         if (failure === undefined) throw error;
