@@ -4,7 +4,7 @@
 import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads';
 import { checkPackage } from './compat.mjs';
 
-const HEAP_MB = 8192;
+const HEAP_MB = 6144;
 const STACK_MB = 64;
 
 const describe = (name, error) =>

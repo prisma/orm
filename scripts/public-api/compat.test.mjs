@@ -115,6 +115,12 @@ describe('checkPackage, with the release treated as GA', () => {
     match(result.breaks[0].message, /^pick: /);
   });
 
+  it('fails on a change the structural comparison of the whole type sees, before comparing its members', () => {
+    deepStrictEqual(brokenExports(check('callable-changed', { release: 'callable-release' })), [
+      { path: '.', name: 'Format', test: 'type', failsRun: true },
+    ]);
+  });
+
   it('reports a type with a member TypeScript cannot relate between two copies as undecided at the structural stage', () => {
     const result = check('members-release', { release: 'members-release' });
     deepStrictEqual(brokenExports(result), []);

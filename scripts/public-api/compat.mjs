@@ -810,20 +810,40 @@ export function checkPackage({
   };
   failed = confirm(failed);
 
-  // What TypeScript cannot compare between two copies is compared again member by member, each
-  // member with the same twin rule; a member that still cannot be compared, and an export with no
-  // members to compare, go to the structural mapping, whose pass decides nothing.
+  // What TypeScript cannot compare between two copies goes to the structural mapping, whose failure
+  // is a break and whose pass decides nothing; then it is compared member by member, each member
+  // with the same twin rule, and a member that still cannot be compared goes to the structural
+  // mapping in its turn.
+  const structuralVerdicts = (list) => {
+    const result = outOfTime() ? undefined : run('structural', asEntries(list));
+    return list.map((each) => {
+      const outcome = result?.outcomes.get(each.segment.id);
+      const verdict =
+        result === undefined || outcome?.message === OUT_OF_TIME
+          ? STRUCTURAL_LATE
+          : outcome === undefined
+            ? STRUCTURAL_ONLY
+            : deepOnly(outcome)
+              ? STRUCTURAL_DEEP
+              : undefined;
+      return { ...each, verdict, structural: outcome };
+    });
+  };
+  const unrelated = [];
+  for (const each of failed.length > 0 ? structuralVerdicts(failed) : []) {
+    if (each.verdict === undefined) broke(each.entry, each.segment, each.structural);
+    else unrelated.push(each);
+  }
   let nextId = generated.nextId;
   const split = [];
-  const whole = [];
-  for (const each of failed) {
+  for (const each of unrelated) {
     const { entry, segment } = each;
     const members =
       segment.test === 'type' || segment.test === 'value'
         ? membersOf(generated.checker, entry.symbol, segment.test)
         : undefined;
     if (members === undefined || members.keys.length === 0) {
-      whole.push(each);
+      notDecided(entry, segment, 'structural', each.verdict);
       continue;
     }
     const args = segment.test === 'type' ? typeArguments(entry.symbol) : '';
@@ -840,7 +860,7 @@ export function checkPackage({
     }));
     split.push({ ...each, members: memberSegments, partial: members.partial });
   }
-  const structural = [...whole];
+  const structural = [];
   const memberFailures = [];
   if (split.length > 0) {
     if (outOfTime()) {
@@ -862,22 +882,9 @@ export function checkPackage({
     }
   }
 
-  if (structural.length > 0) {
-    const result = outOfTime() ? undefined : run('structural', asEntries(structural));
-    for (const each of structural) {
-      const outcome = result?.outcomes.get(each.segment.id);
-      const verdict =
-        result === undefined || outcome?.message === OUT_OF_TIME
-          ? STRUCTURAL_LATE
-          : outcome === undefined
-            ? STRUCTURAL_ONLY
-            : deepOnly(outcome)
-              ? STRUCTURAL_DEEP
-              : undefined;
-      if (verdict === undefined) broke(each.entry, each.segment, outcome);
-      else if (each.parent) memberFailures.push({ ...each, stage: 'structural', message: verdict });
-      else notDecided(each.entry, each.segment, 'structural', verdict);
-    }
+  for (const each of structural.length > 0 ? structuralVerdicts(structural) : []) {
+    if (each.verdict === undefined) broke(each.entry, each.segment, each.structural);
+    else memberFailures.push({ ...each, stage: 'structural', message: each.verdict });
   }
   for (const each of split) {
     const key = (list) => list.filter((failure) => failure.parent === each);
