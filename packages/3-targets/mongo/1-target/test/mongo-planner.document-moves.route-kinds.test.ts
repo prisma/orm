@@ -402,4 +402,37 @@ describe('MongoMigrationPlanner, a route when the plan without the statements ke
       moves: 2,
     });
   });
+
+  it('says a model that moves into a collection others keep is removed with no question when the source stays declared', () => {
+    const from = contract(
+      'from',
+      {
+        User: { collection: 'users', fields: ['_id', 'user'] },
+        Guest: { collection: 'members', fields: ['_id', 'guest'] },
+      },
+      { users: {}, members: {} },
+    );
+    const to = contract(
+      'to',
+      {
+        Member: { collection: 'members', fields: ['_id', 'user'] },
+        Guest: { collection: 'members', fields: ['_id', 'guest'] },
+      },
+      { users: {}, members: {} },
+    );
+    const schema = [schemaCollection('users'), schemaCollection('members')];
+    const why = routeOf(plan({ from, to, schema, statements: [renameModel('User', 'Member')] }));
+    expect({
+      followedLoss: planned(plan({ from, to, schema })).dataLoss,
+      consequences: why.split('\n\n')[1],
+      asksForDelete: why.includes('--delete'),
+      handWritten: why.includes('write this change as a hand-written migration instead'),
+    }).toEqual({
+      followedLoss: [],
+      consequences:
+        'Leave out --rename User:Member to plan the change without moving them. Model "User" is then removed and nothing is asked, since nothing is deleted. Its documents stay in collection "users", where no model reads them. Model "Member" reads the documents of model "Guest" already stored in its collection, since no discriminator tells them apart. If the new validator of collection "users" does not accept them, its change stops the apply in every database that holds them, until they are deleted or moved there.',
+      asksForDelete: false,
+      handWritten: true,
+    });
+  });
 });

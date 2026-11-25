@@ -859,24 +859,32 @@ function sharedRouteOf(input: {
     return leftOutResult.value;
   };
   const sourceOf = (group: RefusedGroup) => group.changes[0]?.from ?? '';
+  const collectionAfter = (collection: string, plan: StatementPlan | undefined) =>
+    plan?.renamedCollections.get(collection) ?? collection;
   const sourceAfter = (group: RefusedGroup, plan: StatementPlan | undefined) =>
-    plan?.renamedCollections.get(sourceOf(group)) ?? sourceOf(group);
-  const dropsSource = (group: RefusedGroup, plan: StatementPlan | undefined) => {
-    if (group.shared.kind !== 'split') return false;
+    collectionAfter(sourceOf(group), plan);
+  /** Whether the plan without the statements drops `source`; without that plan, whether the destination leaves out a collection it manages. */
+  const drops = (source: string, plan: StatementPlan | undefined) => {
     if (plan === undefined) {
-      const source = sourceOf(group);
       return (
         !hasCollection(contract, source) &&
         collectionControlOf(contract, fromContract, source).policy === 'managed'
       );
     }
     const planned = collectionPlanOf(
-      sourceAfter(group, plan),
+      collectionAfter(source, plan),
       collectionPlanSchemasOf(plan.schema, contract),
       { contract, fromContract },
     );
     return planned.kind === 'planned' && planned.diff.collDrops.length > 0;
   };
+  const dropsSource = (group: RefusedGroup, plan: StatementPlan | undefined) =>
+    group.shared.kind === 'split' && drops(sourceOf(group), plan);
+  /** The changes of a merge whose source the plan without the statements keeps, so their models are removed and nothing is asked. */
+  const keptMergeChanges = (group: RefusedGroup, plan: StatementPlan | undefined) =>
+    group.shared.kind === 'merged'
+      ? group.changes.filter((change) => !drops(change.from, plan))
+      : [];
   /** The changes that move documents out of a group's source: every one from it when the plan without the statements drops it. */
   const leavingChanges = (group: RefusedGroup, plan: StatementPlan | undefined) =>
     dropsSource(group, plan)
@@ -886,6 +894,12 @@ function sharedRouteOf(input: {
     leavingChanges(group, plan).flatMap((change) => change.renames.map((rename) => rename.from));
   /** The models the plan without the statements asks about: every model its drop of the source loses, or the models that leave. */
   const askedModels = (group: RefusedGroup, plan: StatementPlan | undefined) => {
+    if (group.shared.kind === 'merged') {
+      const kept = keptMergeChanges(group, plan);
+      return group.changes
+        .filter((change) => !kept.includes(change))
+        .flatMap((change) => change.renames.map((rename) => rename.from));
+    }
     const leaving = leavingModels(group, plan);
     if (!dropsSource(group, plan)) return leaving;
     const lost = modelsADropLoses(fromContract, sourceOf(group));
@@ -913,30 +927,41 @@ function sharedRouteOf(input: {
   const opening = `Leave out ${statementsText} to plan the change without moving them.`;
   const leftBehindGroup = (group: RefusedGroup, plan: StatementPlan | undefined) =>
     leavesBehind(group, plan) && !dropsSource(group, plan);
-  const readersOfSource = (group: RefusedGroup, plan: StatementPlan | undefined) =>
+  const readersOf = (collection: string) =>
     modelCoordinates(contract).filter(
       (model) =>
-        documentCollectionOf(contract, model) === sourceAfter(group, plan) &&
-        isRootModel(contract, model),
+        documentCollectionOf(contract, model) === collection && isRootModel(contract, model),
     );
+  /** Whether the plan without the statements asks about some of a group's models. */
+  const asks = (group: RefusedGroup, plan: StatementPlan | undefined) =>
+    !leftBehindGroup(group, plan) &&
+    (group.shared.kind === 'split' || keptMergeChanges(group, plan).length < group.changes.length);
 
   /** What the plan without the statements does to each group's models; `kept` when the route then keeps the data it asks about. */
   const consequences = (plan: StatementPlan | undefined, kept: boolean): string => {
-    const left = groups.filter((group) => leftBehindGroup(group, plan));
-    const asked = groups.filter((group) => !leftBehindGroup(group, plan));
+    const left = groups.flatMap((group) =>
+      leftBehindGroup(group, plan)
+        ? [{ group, from: sourceOf(group), changes: group.changes }]
+        : keptMergeChanges(group, plan).map((change) => ({
+            group,
+            from: change.from,
+            changes: [change],
+          })),
+    );
+    const asked = groups.filter((group) => asks(group, plan));
     const removed =
       left.length === 0
         ? []
         : [
             removedText(
-              left.map((group) => ({
-                moving: movingModelsOf(group),
-                staying: readersOfSource(group, plan),
-                from: sourceAfter(group, plan),
+              left.map(({ from, changes }) => ({
+                moving: changes.flatMap((change) => change.renames.map((rename) => rename.from)),
+                staying: readersOf(collectionAfter(from, plan)),
+                from: collectionAfter(from, plan),
               })),
               byCollection(
-                left.flatMap((group) =>
-                  group.changes.map((change) => ({
+                left.flatMap(({ group, changes }) =>
+                  changes.map((change) => ({
                     collection: change.to,
                     renamedTo: change.renames.map((renamed) => renamed.to),
                     readers: readersIn(change.to, group),
