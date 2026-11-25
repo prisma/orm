@@ -91,8 +91,9 @@ export interface ShellDefinition {
   /**
    * Surfaces of *other* shells republished under this shell's own
    * entrypoints. Nothing is copied: each generated entry re-exports the
-   * sibling shell's published entrypoint, which the shell declares as an
-   * exact peer dependency, like every sibling it reaches. Facades carry the
+   * sibling shell's published entrypoint, which the shell declares as a peer
+   * dependency at the range the release plan gives it, like every sibling it
+   * reaches. Facades carry the
    * contract surfaces this way so that code generated for an application
    * imports them from the facade (ADR 242).
    */

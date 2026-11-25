@@ -516,7 +516,7 @@ function plannedRanges(
 }
 
 /**
- * The bundled internals' third-party dependencies and peers, plus one exact peer per sibling shell the shell reaches. A sibling is never a dependency: the application lists every sibling, so one copy of each is shared by everything that uses it, and a version skew fails the install instead of resolving to a second copy.
+ * The bundled internals' third-party dependencies and peers, plus one peer per sibling shell the shell reaches, at the range the release plan gives it. A sibling is never a dependency: the application lists every sibling, so one copy of each is shared by everything that uses it, and a version skew fails the install instead of resolving to a second copy.
  */
 function checkShellManifest(
   shellName: ShellName,
