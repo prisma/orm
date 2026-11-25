@@ -147,8 +147,8 @@ Then run \`prisma contract emit\` and update your database.`);
     expect(message).not.toContain('SetDefault');
     expect(message).toContain(`Notes:
 
-  Grant.ownerId: Better Auth asks for onDelete set null, which needs an optional field; NoAction is printed instead
-  Grant.editorId: Better Auth asks for onDelete set default, which needs a default; NoAction is printed instead
+  Grant.ownerId: Better Auth asks for onDelete set null, which needs an optional field; NoAction is used instead
+  Grant.editorId: Better Auth asks for onDelete set default, which needs a default; NoAction is used instead
 
 Then run`);
   });
