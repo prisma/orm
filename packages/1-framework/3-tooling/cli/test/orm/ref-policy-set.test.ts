@@ -373,7 +373,7 @@ describe('ref policy set', () => {
       '✔ Updated the policies ref production declares (migrations/app/refs/production.json)',
       'change:                   migrate, reconcile (default)  →  migrate  tightens',
       'dataProtection.dataLoss:  data-loss-with-consent (default)  →  data-loss-forbidden  tightens',
-      "ℹ No database was changed. A database takes on these policies only when its owner applies them in a deploy to production; until then, deploys to production refuse while the database's policies differ. prisma-test migration plan --to production now checks plans against dataProtection.dataLoss.",
+      "ℹ No database was changed. Deploys to production refuse while the database's policies differ from these. prisma-test migration plan --to production now checks plans against dataProtection.dataLoss.",
     ]);
   });
 
@@ -391,7 +391,7 @@ describe('ref policy set', () => {
     expect(run.presented?.presentation.human.at(-1)).toEqual({
       kind: 'summary',
       status: 'info',
-      text: "No database was changed. A database takes on these policies only when its owner applies them in a deploy to production; until then, deploys to production refuse while the database's policies differ. prisma-test migration plan --to production no longer checks plans against dataProtection.dataLoss.",
+      text: "No database was changed. Deploys to production refuse while the database's policies differ from these. prisma-test migration plan --to production no longer checks plans against dataProtection.dataLoss.",
     });
   });
 
@@ -403,7 +403,7 @@ describe('ref policy set', () => {
     expect(run.presented?.presentation.human.at(-1)).toEqual({
       kind: 'summary',
       status: 'info',
-      text: "No database was changed. A database takes on these policies only when its owner applies them in a deploy to production; until then, deploys to production refuse while the database's policies differ.",
+      text: "No database was changed. Deploys to production refuse while the database's policies differ from these.",
     });
   });
 

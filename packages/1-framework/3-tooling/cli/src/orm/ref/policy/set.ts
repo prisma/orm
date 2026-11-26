@@ -11,7 +11,7 @@ import { editPresentations } from './presentation';
 import { NOT_A_REASON_TO_CHANGE, planCheckSentence, refPositional } from './text';
 
 function closing(ref: string, changes: readonly RefPolicyChange[]): string {
-  return `No database was changed. A database takes on these policies only when its owner applies them in a deploy to ${ref}; until then, deploys to ${ref} refuse while the database's policies differ.${planCheckSentence(ref, changes)}`;
+  return `No database was changed. Deploys to ${ref} refuse while the database's policies differ from these.${planCheckSentence(ref, changes)}`;
 }
 
 export function createRefPolicySetCommand(
@@ -28,8 +28,7 @@ export function createRefPolicySetCommand(
         'forbidden refuses such a change; with-consent runs it only with consent:\n' +
         'db update asks first (--delete, --allow), and db migrate runs a migration\n' +
         'because the consent was given when it was planned; permitted runs it\n' +
-        'without asking. It never connects to a database: a database takes on the\n' +
-        'policies only in a deploy its owner gives consent to.\n\n' +
+        'without asking. It never connects to a database.\n\n' +
         NOT_A_REASON_TO_CHANGE,
       examples: [
         'migration ref policy set production --change migrate',

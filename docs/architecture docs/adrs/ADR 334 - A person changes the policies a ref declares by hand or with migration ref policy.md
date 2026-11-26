@@ -15,7 +15,7 @@ $ prisma migration ref policy set production --change migrate --data-loss forbid
 change:                   migrate, reconcile (default)  →  migrate  tightens
 dataProtection.dataLoss:  data-loss-with-consent (default)  →  data-loss-forbidden  tightens
 
-ℹ No database was changed. A database takes on these policies only when its owner applies them in a deploy to production; until then, deploys to production refuse while the database's policies differ. prisma migration plan --to production now checks plans against dataProtection.dataLoss.
+ℹ No database was changed. Deploys to production refuse while the database's policies differ from these. prisma migration plan --to production now checks plans against dataProtection.dataLoss.
 ```
 
 The command rewrites only `migrations/app/refs/production.json`. The database takes on the policies when its owner deploys to production with `--permit-policy-change`, as [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) describes. `migration ref policy show` prints what a ref declares, and `migration ref policy delete` removes a setting so the ref declares nothing about it.
@@ -26,7 +26,7 @@ ADR 320 said that only a person editing the file changes a ref's policies. This 
 
 ADR 320 also said that every command that rewrites a ref keeps the fields it does not change. This record narrows it to: **every ref writer keeps the fields the ref format defines** (`hash`, `invariants`, `policies`). A top-level key the format does not define is dropped on rewrite, which is what every ref writer already does.
 
-**No advice suggests a policy change.** No error, next action, command output or skill advice suggests changing a database's or a ref's policies, in either direction and by anyone, the owner included, whether it names these commands or describes what they do. A refusal says what was refused and how to fix the refused work; a mismatch states the difference and says to report it to the user. No output of the commands names `--permit-policy-change`. The help of `set` and `delete` says that a refused deploy or plan is not a reason to change a ref's policies. Reference documentation may describe, as facts, how policies are changed and may name the commands: the skill's description of the ref file and its commands, the CLI's README and help, and these design documents. It never does so as a response to a refusal or a mismatch.
+**No advice suggests a policy change.** No error, next action, command output or skill advice suggests changing a database's or a ref's policies, in either direction and by anyone, the owner included, whether it names these commands or describes what they do. A refusal says what was refused and how to fix the refused work; a mismatch states the difference and says to report it to whoever owns the database. No output of the commands names `--permit-policy-change`. The help of `set` and `delete` says that a refused deploy or plan is not a reason to change a ref's policies. Reference documentation may describe, as facts, how policies are changed and may name the commands: the skill's description of the ref file and its commands, the CLI's README and help, and these design documents. It never does so as a response to a refusal or a mismatch.
 
 ## Why the commands are acceptable
 
@@ -34,7 +34,7 @@ The commands write the working copy of the ref file, which a deploy then reads. 
 
 ## Why no advice suggests a policy change
 
-The policies stop changes the team did not intend. An agent that has just been refused acts on whatever the error offers it, so any suggestion to change a policy, even to tighten it or to have the owner change it, becomes a way forward that agent takes. A policy changes because the team decides to, never because an error suggested it. So the advice for a refusal fixes the refused work, and `MIGRATION.POLICY_MISMATCH` states the differences and says nothing runs while they remain: "Nothing runs while production declares policies that differ from the database's. Tell the user, or whoever owns the database, about the difference."
+The policies stop changes the team did not intend. An agent that has just been refused acts on whatever the error offers it, so any suggestion to change a policy, even to tighten it or to have the owner change it, becomes a way forward that agent takes. A policy changes because the team decides to, never because an error suggested it. So the advice for a refusal fixes the refused work, and `MIGRATION.POLICY_MISMATCH` states the differences and says nothing runs while they remain: "Nothing runs while production declares policies that differ from the database's. Report the difference to whoever owns the database."
 
 ## Consequences
 

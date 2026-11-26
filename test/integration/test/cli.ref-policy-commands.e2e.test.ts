@@ -73,7 +73,7 @@ withTempDir(({ createTempDir }) => {
               {
                 kind: 'user-choice',
                 label:
-                  "Nothing runs while production declares policies that differ from the database's. Tell the user, or whoever owns the database, about the difference.",
+                  "Nothing runs while production declares policies that differ from the database's. Report the difference to whoever owns the database.",
               },
             ],
           });

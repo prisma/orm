@@ -119,37 +119,116 @@ function everyPolicyError(): readonly (readonly [string, CliStructuredError])[] 
   ];
 }
 
-/** Advice to change or apply a policy, or to make a ref match the database, in any wording these errors have used. */
-const SUGGESTS_A_POLICY_CHANGE =
-  /\b(change|changes|changing|apply|applies|applying|loosen|tighten)\b[^.]*\bpolic|declare what the database has|\banyway\b/i;
+/** A sentence that talks about a policy, a level or what may change, a ref, the policy commands or the consent flag. */
+const ABOUT_POLICIES =
+  /polic|forbid|consent|permit|declare|level|loosen|tighten|relax|strict|\bref\b|refs\/|\.json/i;
 
-/**
- * A command the advice repeats keeps the `--permit-policy-change` the user gave (ADR 320), which is the user's own
- * consent, not a suggestion; the flag's name is left out before the advice is read.
- */
-function suggestsAPolicyChange(advice: string): boolean {
-  return SUGGESTS_A_POLICY_CHANGE.test(advice.replaceAll('--permit-policy-change', ''));
+const SETTING =
+  '(change|dataProtection\\.dataLoss|dataProtection\\.accessWidening|dataLoss|accessWidening)';
+const FORBIDS = '(losing data|data loss|changing who can read or write data)';
+
+/** Every sentence about policies that a policy error may say, and nothing else. */
+const ALLOWED_SENTENCES: readonly RegExp[] = [
+  /^The ref's policies differ from the database's$/,
+  new RegExp(`^\\S+ declares ${SETTING}: [^;]+; the database has ${SETTING}: .+\\.$`),
+  /^Nothing runs while \S+ declares policies that differ from the database's\.$/,
+  /^Report the difference to whoever owns the database\.$/,
+  /^(\S+ declares a change policy that|This database's change policy) permits only (db update|migrations)$/,
+  /^(\S+ declares|The marker records) change: [a-z, ]+, so (db update|db sign|db migrate) may not (move|sign) it\.$/,
+  new RegExp(
+    `^(\\S+ declares a data protection policy that|This database's data protection policy) forbids ${FORBIDS}( and ${FORBIDS})?$`,
+  ),
+  new RegExp(
+    `^(\\S+ declares|The marker records) ${SETTING}: (data-loss|access-widening)-forbidden\\.$`,
+  ),
+  new RegExp(
+    `^\\S+ declares a data protection policy that forbids ${FORBIDS}, so these operations cannot run on the database it describes\\.$`,
+  ),
+  new RegExp(
+    `^This database's data protection policy forbids ${FORBIDS}, so these operations cannot run on it\\.$`,
+  ),
+  /^--permit-policy-change needs --to <ref>$/,
+  /^No ref was given, so there are no policies to write\.$/,
+  /^\S+ is not a ref, so it declares no policies to write\.$/,
+  /^Name the ref whose policies to write with --to <ref>, or leave out --permit-policy-change\.$/,
+  /^permitPolicyChange needs (a ref|a target of kind ref)$/,
+  /^Pass (the ref|a target of kind ref) whose policies to write, or leave out permitPolicyChange\.$/,
+  /^The database's policies changed while db sign ran$/,
+  /^The database's policies changed after db sign checked them: .+\.$/,
+  /^Sign again, which checks the policies anew: .+$/,
+];
+
+/** The `--to <ref> --permit-policy-change` a ref-sourced change-policy refusal repeats from the user's own command. */
+const USERS_CONSENT = /(--to \S+) --permit-policy-change/g;
+
+function sentencesOf(text: string): readonly string[] {
+  return text.split(/(?<=\.)\s+/).filter((sentence) => sentence.length > 0);
+}
+
+/** The sentences about policies that no policy error is known to say. */
+function unknownPolicySentences(
+  texts: readonly string[],
+  options: { readonly repeatsTheUsersConsent: boolean },
+): readonly string[] {
+  return texts.flatMap(sentencesOf).filter((sentence) => {
+    const read = options.repeatsTheUsersConsent ? sentence.replace(USERS_CONSENT, '$1') : sentence;
+    return ABOUT_POLICIES.test(read) && !ALLOWED_SENTENCES.some((allowed) => allowed.test(read));
+  });
+}
+
+function textsOf(error: CliStructuredError): readonly string[] {
+  const envelope = error.toEnvelope();
+  return [
+    envelope.summary,
+    envelope.why ?? '',
+    envelope.fix ?? '',
+    ...envelope.nextActions.flatMap((action) => [action.label, action.command ?? '']),
+  ];
 }
 
 describe('policy errors', () => {
-  it('never suggest changing or applying a database or ref policy', () => {
-    const suggesting = everyPolicyError().flatMap(([name, error]) => {
-      const envelope = error.toEnvelope();
-      return [envelope.fix ?? '', ...envelope.nextActions.map(({ label }) => label)]
-        .filter(suggestsAPolicyChange)
-        .map((advice) => `${name}: ${advice}`);
-    });
+  it('say about policies only the sentences they are known to say', () => {
+    const errors = everyPolicyError();
+    const unknown = errors.flatMap(([name, error]) =>
+      unknownPolicySentences(textsOf(error), {
+        repeatsTheUsersConsent: name.startsWith('change policy:') && name.endsWith(', ref'),
+      }).map((sentence) => `${name}: ${sentence}`),
+    );
 
-    expect(everyPolicyError().length).toBeGreaterThan(50);
-    expect(suggesting).toEqual([]);
+    expect(errors.length).toBeGreaterThan(50);
+    expect(unknown).toEqual([]);
   });
 
   it.each([
     'To do it anyway, whoever owns the database must first change its data protection policy.',
     "Have whoever owns the database apply the ref's policies in a deploy.",
     'Make the ref declare what the database has, and have the change reviewed.',
-    "Ask the database's owner to loosen the policy.",
-  ])('recognises the advice %s as suggesting a policy change', (advice) => {
-    expect(suggestsAPolicyChange(advice)).toBe(true);
+    'Ask the owner to relax the policy.',
+    'Or update the ref so it declares what the database has.',
+    "To record the ref's settings, rerun with --permit-policy-change.",
+    'Edit the ref file migrations/app/refs/production.json and deploy again.',
+    'Run prisma migration ref policy set production --data-loss permitted.',
+    'Ask the owner to permit data loss.',
+    'Lower the data protection level.',
+  ])('rejects the sentence %s', (sentence) => {
+    const mismatch = errorPolicyMismatch({
+      spaceId: 'app',
+      refName: 'production',
+      differences: [
+        { setting: 'change', declared: ['migrate'], inForce: ['migrate', 'reconcile'] },
+      ],
+    }).toEnvelope();
+
+    expect(
+      unknownPolicySentences([mismatch.fix ?? '', sentence], { repeatsTheUsersConsent: false }),
+    ).toEqual([sentence]);
+  });
+
+  it('rejects --permit-policy-change outside the command a ref refusal repeats', () => {
+    expect(
+      unknownPolicySentences(['Run `{bin} db update --to production --permit-policy-change`.'], {
+        repeatsTheUsersConsent: false,
+      }),
+    ).toHaveLength(1);
   });
 });

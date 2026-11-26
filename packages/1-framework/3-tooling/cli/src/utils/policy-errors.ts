@@ -31,7 +31,7 @@ export function errorPolicyMismatch(args: {
         `${refName} declares ${setting}: ${databasePolicyValueText(declared)}; the database has ${setting}: ${databasePolicyValueText(inForce)}.`,
     )
     .join(' ');
-  const report = `Nothing runs while ${refName} declares policies that differ from the database's. Tell the user, or whoever owns the database, about the difference.`;
+  const report = `Nothing runs while ${refName} declares policies that differ from the database's. Report the difference to whoever owns the database.`;
   return new ActionableCliError(
     'MIGRATION.POLICY_MISMATCH',
     "The ref's policies differ from the database's",

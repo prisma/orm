@@ -56,6 +56,26 @@ describe('advice about ref policies', () => {
     },
   );
 
+  it('describes the group as changing only the ref file, with no pointer to applying the policies', async () => {
+    const { dir } = await projectWithRef('production', PLAIN_REF);
+
+    const helps = await Promise.all(
+      [[], ['set'], ['delete'], ['show']].map(async (command) => {
+        const run = await harness().run(['migration', 'ref', 'policy', ...command, '--help'], {
+          cwd: dir,
+        });
+        return run.stdout.replace(/│/g, '').replace(/\s+/g, ' ');
+      }),
+    );
+
+    expect(helps[0]).toContain(
+      'These commands change only the ref file and never connect to a database.',
+    );
+    expect(helps.filter((help) => /takes on|gives consent|help of db migrate/.test(help))).toEqual(
+      [],
+    );
+  });
+
   it('says in the help of set what each level does', async () => {
     const { dir } = await projectWithRef('production', PLAIN_REF);
 

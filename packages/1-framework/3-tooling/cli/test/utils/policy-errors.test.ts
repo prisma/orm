@@ -8,7 +8,7 @@ const invocation: CliInvocation = { cwd: '/work/app', configPath: undefined, dbG
 
 describe('errorPolicyMismatch', () => {
   const REPORT =
-    "Nothing runs while production declares policies that differ from the database's. Tell the user, or whoever owns the database, about the difference.";
+    "Nothing runs while production declares policies that differ from the database's. Report the difference to whoever owns the database.";
 
   it('names each differing setting, and says to report the difference whichever side is stricter', () => {
     const differences = [

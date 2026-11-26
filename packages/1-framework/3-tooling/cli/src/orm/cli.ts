@@ -74,9 +74,7 @@ export const BIN_GROUPS = {
       'both. The data protection policy says whether a change may lose data, and\n' +
       'whether it may widen who can read or write data. These are not the control\n' +
       'policy of a database object.\n\n' +
-      'These commands change only the ref file and never connect to a database. A\n' +
-      "database takes on a ref's policies only in a deploy its owner gives consent\n" +
-      'to; the help of db migrate says how.',
+      'These commands change only the ref file and never connect to a database.',
   },
   ...telemetry.groups,
 } as const;
