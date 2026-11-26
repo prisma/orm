@@ -42,7 +42,7 @@ A level is written in two places, both visible in the user's own code. The same 
 | Level | In a package's version number | At the start of an API's name |
 | --- | --- | --- |
 | Generally Available | Plain version: `8.1.0` | Nothing: `foo` |
-| Release Candidate | `8.1.0-rc.1` | Not decided (section 6) |
+| Release Candidate | `8.1.0-rc.1` | `rc_foo` |
 | Preview | `8.1.0-preview.3` | `preview_foo` |
 | Early Access | `8.1.0-ea.1` | `ea_foo` |
 
@@ -62,6 +62,8 @@ An extension author tells what they can depend on in the same two ways as an app
 - Which levels the reference documentation covers is in the [spec](spec.md), section 8.
 
 ## 6. Not yet decided
+
+Decided since, on 2026-11-26: every point below is settled in the versioning page that project 6 ships, `docs/oss/versioning.md`, and in its decision records (prisma/orm#31212). That page is the authority; the list is kept for the questions it records. In particular, an API inside a GA package can be a Release Candidate, written `rc_foo`, and it may still change before it is GA.
 
 - **The full definition of each level.** The table in section 2 is a working version. Unanswered: what level the framework package has when it has no database of its own; which release a failing test blocks while all packages are released together; who decides what a Preview package supports. The [plan](plan.md) has a task for this, and for a page that explains the levels to users.
 - **Version numbers while packages are at different levels.** Today every package has the same version and they are released together. Once one package is GA and another is Preview, their versions differ. Unanswered: what the Preview package's version is at each release; that a range on a pre-release, such as `^8.1.0-preview.3`, does not select the pre-releases of the next minor, so a user edits it by hand; which tag a package gets that has never had a GA release; and which package carries a database's level (the facade, the target package or both).
