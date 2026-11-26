@@ -824,7 +824,7 @@
 (not exported) type NestedRequiredCreateFieldNames<TContract extends Contract<SqlStorage>, ModelName extends string, NsId extends string = never> = Exclude<CreateFieldNames<TContract, ModelName, NsId>, NestedOptionalCreateFieldNames<TContract, ModelName, NsId>>
 (not exported) type NestedVariantConflictRowCreateInput<TContract extends Contract<SqlStorage>, BaseModelName extends string, VariantValue extends string, NsId extends string = never> = Omit<ConflictRowCreateInput<TContract, BaseModelName, NsId>, DiscriminatorFieldName<TContract, BaseModelName, NsId>> & RowCreateFields<TContract, VariantModelName<TContract, BaseModelName, VariantValue, NsId>, VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>> & ConflictRowRelationFields<TContract, VariantModelName<TContract, BaseModelName, VariantValue, NsId>, VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>>
 (not exported) type NestedVariantCreateInput<TContract extends Contract<SqlStorage>, BaseModelName extends string, VariantValue extends string, NsId extends string = never> = Omit<MutationCreateInput<TContract, BaseModelName, NsId>, DiscriminatorFieldName<TContract, BaseModelName, NsId>> & CreateInput<TContract, VariantModelName<TContract, BaseModelName, VariantValue, NsId>, VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>>
-(not exported) type NoneMissing<Missing extends string, Prefix extends string, Suffix extends string = ''> = [NamesSomething<Missing>] extends [true] ? { readonly [Name in Missing as `${Prefix} ${Name}${Suffix}`]: never; } : unknown
+(not exported) type NoneMissing<Missing extends string, Prefix extends string, Suffix extends string = ''> = [NamesSomething<Missing>] extends [true] ? { readonly [Name in Missing as `${Prefix}${Name}${Suffix}`]: never; } : unknown
 (not exported) type NullElementOf<State> = State extends { readonly many: { readonly elementNullable: true; }; } ? null : never
 (not exported) type NullSuffix<N> = N extends true ? null : never
 (not exported) type NullableColumnOperand<CodecId extends string> = Expression<{ codecId: CodecId; nullable: boolean; many?: never; }> & HasComparisonMethods
@@ -6561,7 +6561,7 @@
 ./runtime: type DeclaredNullable<S> = S extends { readonly nullable: true; } ? true : false
 ./runtime: type DelegatingRuntime = Pick<Runtime, 'connection' | 'execute' | 'prepare' | 'query'> & ActivitySourceTarget
 ./runtime: type HashablePlan = BoundPreparedStatement | SqlExecutionPlan | SqlQueryPlan
-./runtime: type InteractiveTransactionsListed<TContract extends Contract<SqlStorage>> = NoneMissing<InteractiveTransactionsNotListed<TContract['capabilities']>, 'the contract does not list'>
+./runtime: type InteractiveTransactionsListed<TContract extends Contract<SqlStorage>> = NoneMissing<InteractiveTransactionsNotListed<TContract['capabilities']>, 'the contract does not list '>
 ./runtime: type MarkerReadResult = { readonly kind: 'absent'; } | { readonly kind: 'no-table'; } | { readonly kind: 'present'; readonly record: ContractMarkerRecord; }
 ./runtime: type ParamSpec<CT extends CodecTypesBase = CodecTypesBase> = (keyof CT & string) | { readonly codecId: keyof CT & string; readonly typeParams?: JsonValue; readonly nullable?: boolean; }
 ./runtime: type ParamsFromDeclaration<D, CT extends CodecTypesBase> = { readonly [K in keyof D]: CodecValue<DeclaredCodecId<D[K]>, DeclaredNullable<D[K]>, CT>; }
@@ -6571,7 +6571,7 @@
 ./runtime: type SqlExecutionStackWithDriver<TTargetId extends string = string> = SqlExecutionStack<TTargetId> & { readonly driver: RuntimeDriverDescriptor<'sql', TTargetId, unknown, SqlRuntimeDriverInstance<TTargetId>>; }
 ./runtime: type SqlRuntimeAdapterInstance<TTargetId extends string = string> = RuntimeAdapterInstance<'sql', TTargetId> & Adapter<AnyQueryAst, Contract<SqlStorage>, LoweredStatement>
 ./runtime: type SqlRuntimeDriverInstance<TTargetId extends string = string> = RuntimeDriverInstance<'sql', TTargetId> & SqlDriver<unknown>
-./runtime: type StackProvides<TContract extends Contract<SqlStorage>, Stack extends StackDescriptors> = NoneMissing<CapabilitiesNotProvided<TContract['capabilities'], Stack['target']['databaseCapabilities'], Stack['adapter']['capabilities'], Stack['driver']['capabilities']>, 'the adapter and driver do not provide', ': emit the contract again, and if it still requires it, state the capabilities of the driver the application runs with'>
+./runtime: type StackProvides<TContract extends Contract<SqlStorage>, Stack extends StackDescriptors> = NoneMissing<CapabilitiesNotProvided<TContract['capabilities'], Stack['target']['databaseCapabilities'], Stack['adapter']['capabilities'], Stack['driver']['capabilities']>, '', ' is required by the contract but not provided by its database version, adapter, driver or extensions'>
 ./runtime: type TelemetryOutcome = 'runtime-error' | 'success'
 ./runtime: type VerifyMarkerOption = 'onFirstUse' | false
 ./schema-ir/naming: const CHECK_KINDS: readonly CheckKind[]

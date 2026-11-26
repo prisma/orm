@@ -7,7 +7,7 @@ test('creating the client is a type error when its adapter and driver lack a cap
     databaseVersion: 18,
     capabilities: [{ http: { batch: true } }],
   });
-  // @ts-expect-error the adapter and driver do not provide http.batch
+  // @ts-expect-error http.batch is required by the contract but not provided by its database version, adapter, driver or extensions
   void supabase({ contract, jwtSecret: 'secret' });
   void supabase({ contract: defineContract({ databaseVersion: 18 }), jwtSecret: 'secret' });
 });

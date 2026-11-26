@@ -53,7 +53,7 @@ export function warnOfCapabilitiesNotProvided(
     code: 'CONTRACT.CAPABILITIES_NOT_PROVIDED',
     scope: 'stack-verification',
     missing,
-    message: `The contract requires ${missing.join(', ')}, which the client's adapter and driver do not provide. A contract emitted by an earlier Prisma version is emitted again. Otherwise state the capabilities of the driver the application runs with where the contract is written, emit the contract, and sign the database again.`,
+    message: `Your contract requires capabilities that no supported version of your database provides, and neither do your adapter, driver or extensions (${missing.join(', ')}). Either remove the capabilities from your contract, or install a component that provides them.`,
   });
 }
 
@@ -103,7 +103,7 @@ export type CapabilitiesNotProvided<
 type NamesSomething<Missing> = [Missing] extends [1 & Missing] ? false : true;
 
 /**
- * Nothing when `Missing` is empty; otherwise a property no value has, named `${Prefix} ${name}${Suffix}` for each missing name, so the value given there is a type error that names it.
+ * Nothing when `Missing` is empty; otherwise a property no value has, named `${Prefix}${name}${Suffix}` for each missing name, so the value given there is a type error that names it.
  *
  * The verdict is the false branch when nothing is missing. For a contract type that is still a type parameter, TypeScript checks only that branch, so a function generic over contracts compiles, and its callers are checked only at run time; the check applies where the contract type is known.
  */
@@ -112,7 +112,7 @@ export type NoneMissing<
   Prefix extends string,
   Suffix extends string = '',
 > = [NamesSomething<Missing>] extends [true]
-  ? { readonly [Name in Missing as `${Prefix} ${Name}${Suffix}`]: never }
+  ? { readonly [Name in Missing as `${Prefix}${Name}${Suffix}`]: never }
   : unknown;
 
 interface StackDescriptors {
@@ -122,7 +122,7 @@ interface StackDescriptors {
 }
 
 /**
- * Creating a client from `Stack` for `TContract` is a type error naming each capability the contract requires that its adapter and driver do not provide. A function generic over contracts is checked only when the client is created (see `NoneMissing`).
+ * Creating a client from `Stack` for `TContract` is a type error naming each capability the contract requires that is not the database's and that its adapter and driver do not provide. A function generic over contracts is checked only when the client is created (see `NoneMissing`).
  */
 export type StackProvides<
   TContract extends Contract<SqlStorage>,
@@ -134,8 +134,8 @@ export type StackProvides<
     Stack['adapter']['capabilities'],
     Stack['driver']['capabilities']
   >,
-  'the adapter and driver do not provide',
-  ': emit the contract again, and if it still requires it, state the capabilities of the driver the application runs with'
+  '',
+  ' is required by the contract but not provided by its database version, adapter, driver or extensions'
 >;
 
 /** The capability a contract lists when the application runs transactions whose statements it sends one at a time. */
@@ -153,7 +153,7 @@ type InteractiveTransactionsNotListed<Capabilities> =
 /** What a `transaction()` callback must also be: nothing for a contract that lists interactive transactions; for one that does not, a type no callback is, whose error names the capability. */
 export type InteractiveTransactionsListed<TContract extends Contract<SqlStorage>> = NoneMissing<
   InteractiveTransactionsNotListed<TContract['capabilities']>,
-  'the contract does not list'
+  'the contract does not list '
 >;
 
 /** Refuses `transaction()` for a contract that does not list interactive transactions. */

@@ -134,7 +134,7 @@ describe('warnOfCapabilitiesNotProvided', () => {
   }
   const contract = contractRequiring({ sql: { interactiveTransactions: true } });
 
-  it('warns once with the code, the missing capabilities and what to do', () => {
+  it('warns once with the code, the missing capabilities and what to do, for a connection capability the driver lacks', () => {
     const log = spyLog();
     warnOfCapabilitiesNotProvided(contract, stackDeclaring({}), { log });
     expect(log.warn.mock.calls).toEqual([
@@ -144,7 +144,27 @@ describe('warnOfCapabilitiesNotProvided', () => {
           scope: 'stack-verification',
           missing: ['sql.interactiveTransactions'],
           message:
-            "The contract requires sql.interactiveTransactions, which the client's adapter and driver do not provide. A contract emitted by an earlier Prisma version is emitted again. Otherwise state the capabilities of the driver the application runs with where the contract is written, emit the contract, and sign the database again.",
+            'Your contract requires capabilities that no supported version of your database provides, and neither do your adapter, driver or extensions (sql.interactiveTransactions). Either remove the capabilities from your contract, or install a component that provides them.',
+        },
+      ],
+    ]);
+  });
+
+  it('warns the same for a capability no version of the database provides, which signing leaves to the client', () => {
+    const log = spyLog();
+    warnOfCapabilitiesNotProvided(
+      contractRequiring({ sql: { returning: true, someNewThing: true } }),
+      stackDeclaring({ database: { sql: { returning: true } } }),
+      { log },
+    );
+    expect(log.warn.mock.calls).toEqual([
+      [
+        {
+          code: 'CONTRACT.CAPABILITIES_NOT_PROVIDED',
+          scope: 'stack-verification',
+          missing: ['sql.someNewThing'],
+          message:
+            'Your contract requires capabilities that no supported version of your database provides, and neither do your adapter, driver or extensions (sql.someNewThing). Either remove the capabilities from your contract, or install a component that provides them.',
         },
       ],
     ]);

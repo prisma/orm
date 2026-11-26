@@ -42,9 +42,9 @@ test('creating a client from a known contract is a type error when its adapter a
     databaseVersion: 18,
     capabilities: [{ http: { batch: true } }],
   });
-  // @ts-expect-error the adapter and driver do not provide http.batch
+  // @ts-expect-error http.batch is required by the contract but not provided by its database version, adapter, driver or extensions
   postgres({ contract, url });
-  // @ts-expect-error the adapter and driver do not provide http.batch
+  // @ts-expect-error http.batch is required by the contract but not provided by its database version, adapter, driver or extensions
   postgresServerless({ contract });
 });
 
@@ -55,13 +55,13 @@ interface StackOverHttp {
   readonly driver: { readonly capabilities: Record<never, never> };
 }
 
-const emitAgain =
-  ': emit the contract again, and if it still requires it, state the capabilities of the driver the application runs with';
+const notProvidedByTheStack =
+  ' is required by the contract but not provided by its database version, adapter, driver or extensions';
 
 test('with a driver that lacks interactive transactions, a contract that requires them is a type error that names them', () => {
   expectTypeOf<
     keyof StackProvides<typeof withTheDefaultList, StackOverHttp>
-  >().toEqualTypeOf<`the adapter and driver do not provide sql.interactiveTransactions${typeof emitAgain}`>();
+  >().toEqualTypeOf<`sql.interactiveTransactions${typeof notProvidedByTheStack}`>();
   expectTypeOf<
     StackProvides<typeof withoutInteractiveTransactions, StackOverHttp>
   >().toEqualTypeOf<unknown>();

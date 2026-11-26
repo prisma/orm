@@ -203,10 +203,10 @@ A `contract.json` and `contract.d.ts` emitted by an earlier release list flags t
 
 Until you emit the contract again:
 
-- `postgres(...)`, `postgresServerless(...)` and `supabase(...)` are type errors. The error names a missing property that starts with `the adapter and driver do not provide`, followed by the flag.
+- `postgres(...)`, `postgresServerless(...)` and `supabase(...)` are type errors. The error names a missing property that starts with the flag, followed by `is required by the contract but not provided by its database version, adapter, driver or extensions`.
 - Creating the client logs one warning with the code `CONTRACT.CAPABILITIES_NOT_PROVIDED`, through the client's `log`. For a contract without extensions it reads:
 
-  > The contract requires postgres.jsonAgg, postgres.lateral, postgres.limit, postgres.orderBy, postgres.returning, sql.enums, which the client's adapter and driver do not provide. A contract emitted by an earlier Prisma version is emitted again. Otherwise state the capabilities of the driver the application runs with where the contract is written, emit the contract, and sign the database again.
+  > Your contract requires capabilities that no supported version of your database provides, and neither do your adapter, driver or extensions (postgres.jsonAgg, postgres.lateral, postgres.limit, postgres.orderBy, postgres.returning, sql.enums). Either remove the capabilities from your contract, or install a component that provides them.
 
 - The contract lacks `sql.interactiveTransactions`, so `db.transaction(...)` is a type error and throws.
 
