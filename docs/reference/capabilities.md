@@ -96,7 +96,7 @@ Extensions listed in `extensions` add their own flags. The contract stores the f
 | `db verify`, `db sign` | The database's flags against the server's version (`server_version_num`) | `CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED`; nothing is signed |
 | `db migrate`, `db update`, `db init` | The same, for every contract space, before anything runs | `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED`; nothing is changed |
 
-Only the flags in the target's table are checked against the database. A server older than PostgreSQL 15 is always refused. A server newer than the last row is treated as the last row. The refusal says which version the contract requires, and which version to state instead. [Error reference](./error-reference.md) has each code.
+Only the flags in the target's table are checked against the database. A server older than PostgreSQL 15 is always refused. A server newer than the last row is treated as the last row. The refusal names the first version that provides each missing capability, and the version to state instead. The CLI offers no `db update` for it, since that cannot upgrade a server. [Error reference](./error-reference.md) has each code.
 
 ## MySQL, MariaDB, SQLite and MongoDB
 
