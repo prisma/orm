@@ -180,7 +180,7 @@
 (not exported) type ConsentVerb = 'allow' | 'delete'
 (not exported) type ContractEmitDependencies = { readonly emit: typeof emit; }
 (not exported) type CreateControlClient = (options: ControlClientOptions) => ControlClient
-(not exported) type DataProtectionSetting = keyof DatabasePolicies['dataProtection']
+(not exported) type DataProtectionKey = keyof DatabasePolicies['dataProtection']
 (not exported) type DatabasePosition = { readonly kind: 'contract'; readonly hash: string; } | { readonly kind: 'unknown'; readonly reason: string; } | { readonly kind: 'unmarked'; }
 (not exported) type FindPathOutcome = { readonly kind: 'ok'; readonly decision: PathDecision; } | { readonly kind: 'unreachable'; } | { readonly kind: 'unsatisfiable'; readonly structuralPath: readonly MigrationEdge[]; readonly missing: readonly string[]; }
 (not exported) type MigrateResult = Result<MigrateSuccess, CliStructuredError>
@@ -502,7 +502,7 @@
 ./cli/control-api: interface DbUpdateSuccess, readonly optional property migrationPlan?: MigrationPlanArguments
 ./cli/control-api: interface DbUpdateSuccess, readonly optional property namespaces?: MigrationPlanNamespaces
 ./cli/control-api: interface DbUpdateSuccess, readonly optional property perSpace?: ReadonlyArray<PerSpaceExecutionEntry>
-./cli/control-api: interface DbUpdateSuccess, readonly optional property permitted?: readonly DataProtectionSetting[]
+./cli/control-api: interface DbUpdateSuccess, readonly optional property permitted?: readonly DataProtectionKey[]
 ./cli/control-api: interface DbUpdateSuccess, readonly required property appliedStatements: readonly AppliedStatementReport[]
 ./cli/control-api: interface DbUpdateSuccess, readonly required property destination: { readonly storageHash: string; readonly profileHash?: string; }
 ./cli/control-api: interface DbUpdateSuccess, readonly required property mode: 'apply' | 'plan'

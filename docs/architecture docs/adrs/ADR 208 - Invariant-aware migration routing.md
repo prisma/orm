@@ -138,21 +138,67 @@ The **ledger** is an *audit artifact* — an append-only log of what happened, w
 
 Framework decisions about applicability and routing must never depend on the audit log. "These invariants have been applied" is a guarantee the framework provides about the database, so it belongs on the guarantee record. Reading it from a log the user is free to truncate would tie routing correctness to ledger retention policy — a category error.
 
-## Performance
+## Which route runs when several qualify
 
-`findPathWithInvariants`'s worst case is `O((V + E) · 2^k)` where `k` is the number of required invariants — each node can be reached once per distinct covered subset. The covered subset is a `Set<string>` of invariant ids; the BFS dedup key is `${node}\0${[...covered].sort().join('\0')}`.
+This section describes how the planner behaves today. It is not a decision of this ADR.
 
-In practice, `effectiveRequired` collapses `k` toward zero in steady state. The dominant case is a stick-shaped or mostly-stick migration graph with `k = 0` (ref unchanged → short-circuits to `findPath`) or `k = 1` (one new invariant per change). Measured wall times on a developer laptop:
+Several routes can be equally short and cover the same invariants. The planner picks one with the neighbour order that [ADR 039](./ADR%20039%20-%20Migration%20graph%20path%20resolution%20&%20integrity.md) § Deterministic tie-breaking describes, as implemented by `compareTieBreak`: migrations that cover a still-needed invariant first, then by `createdAt`, then `to`, then `migrationHash`. The same graph, start, target and required set give the same route on machines with the same locale. The comparison uses `localeCompare` today, so machines with locales that sort letters differently can choose different routes among equal ones; comparing by character code is a separate fix, because it can change routes for users on those locales.
 
-| Case | k | Wall time |
-|---|---:|---:|
-| `stick(n=1000)` | 1 | 0.50 ms |
-| `mostly-stick(spine=1000, 5% branch rate)` | 1 | 0.55 ms |
-| `mostly-stick(spine=1000, 5% branch rate)` | 2 | 1.20 ms |
+### Open question: the run order of data-only migrations on one contract
 
-Pathological inputs (high feature-branch density with many required invariants) follow the `2^k` curve — `branchy(spine=1000, density=0.05)` reaches ~80 ms at `k = 8` and ~8.7 s at `k = 16`. Materialising those inputs requires either a fresh database catching up to a long-applied ref or a ref edited extensively without ever being applied; neither is typical.
+When a route runs several self-edges (data-only migrations from a contract to itself) on one contract, they run in `createdAt` order. That is inherited from the tie-break. It is not a rule anyone decided for data-only migrations: a later one may depend on an earlier one, and nothing checks for that. A database that is kept up to date applies them in the order they were deployed, one `migrate --to` at a time, while a fresh database applies them together in `createdAt` order, and the two orders can differ when branches merge out of timestamp order. Changing the order, or making it a declared rule, changes which order data migrations run in for existing histories, so it is a design decision, not a planner fix.
 
-The algorithm has no refusal threshold and the encoding has no length cap. If real usage pushes routine `k > 20`, a different approach — heuristic A*, dominance pruning, or precomputed reach sets per invariant — would replace the current BFS.
+## How the search works, and what it costs
+
+### The search
+
+`findPathWithInvariants` searches breadth-first. A state is a contract, the set of required invariants covered so far, and the rank of the last self-edge taken since arriving at that contract, or `-1` if none. A self-edge's rank is its position among its contract's self-edges in the tie-break order. The dedup key is `JSON.stringify([node, [...covered].sort(), lastSelfEdgeRank])`.
+
+A naive search over contracts and covered sets doubles its work for every self-edge that provides a required invariant, because each one can be taken or skipped. A fresh database catching up to a ref that lists many invariants hits this every time, and that is the normal case for CI and every new environment. The search avoids it with two rules.
+
+The first rule: at a contract, the search takes self-edges only in ascending rank, and only a self-edge that covers a still-needed invariant. Leaving the contract resets the rank. Taking a contract's self-edges in a different order ends at the same contract with the same invariants covered, so the search tries only one order: rank order, which is also the order they run in (see § Which route runs when several qualify).
+
+The second rule: the search never enqueues a state that provably cannot reach the goal. That is a state whose contract does not reach the target, or that lacks an invariant it can no longer obtain on a route to the target. Because of the first rule, a self-edge the state has passed over is out of reach until the search leaves the contract, so a state that passed over the only remaining provider of an invariant is dropped at once. To answer this quickly, the function computes two things for each required invariant before it searches: which contracts can still reach a provider after moving on to another contract, and, at each contract, the highest rank of a self-edge there that provides it.
+
+### Routes stay valid and shortest
+
+The search finds a route whenever one exists, and the route is a shortest one that covers every required invariant. This holds for any fixed order of each contract's self-edges, so it does not depend on the tie-break. In a shortest covering route, every self-edge covers an invariant that no other migration on the route covers, or the route without it would be shorter. So the self-edges in any run at one contract can be put in rank order without losing coverage or length, and the first rule never removes every shortest route. The second rule drops only states with no satisfying continuation.
+
+### Routes stay identical to what earlier releases chose
+
+The search also returns exactly the route the search without these rules returns. This depends on the tie-break, in two ways.
+
+The argument: breadth-first search with a fixed neighbour order returns the first shortest route in that order. Every route the new search can take is one the old search could take, and both sort neighbours by the same keys, so the new search returns the old answer as long as that answer is one of its routes. The old answer never takes a self-edge that covers nothing new, because that edge leads back to a state already visited. If it took a self-edge before a lower-ranked one at the same contract, the lower-ranked one would be useful at the earlier point too, so swapping them gives a route that is no longer and comes earlier in the neighbour order. So the old answer obeys the first rule, and no state on it is pruned, because the rest of the old answer is a satisfying continuation.
+
+What it depends on: the rank order must be the order in which the search explores useful self-edges at a contract, and that order must be fixed per contract, not depend on the search's progress (for example on which invariants are still needed). The code ranks self-edges and sorts neighbours with the same comparator, `compareTieBreak`; the "covers a still-needed invariant" key, which does depend on the search's progress, is applied separately and only decides between useful and useless migrations. If the two orders came apart, routes would stay valid and shortest, but a fresh database could run different data-only migrations, or the same ones in a different order, than before. A test pins the run order of self-edges whose `createdAt` order differs from their names and the order they were added, and a seeded test compares the search with a copy of the old one on thousands of random graphs. Comparing old and new on several million random graphs found no difference.
+
+### Cost
+
+The precomputation is one reverse breadth-first search per required invariant plus a pass over the edges, `O(k · (V + E))` for `k` required invariants. Checking a state costs `O(k)`. In steady state `effectiveRequired` is empty or holds one new invariant, and routing costs a few breadth-first searches of the graph, about 1 ms on a 1000-migration chain. Measured on a developer laptop for a fresh database:
+
+| Shape | k | Before | After |
+|---|---:|---:|---:|
+| `k` schema migrations, each followed by one self-edge providing an invariant | 16 | 0.37 s, 310 MB | 3 ms, 110 MB |
+| | 32 | did not finish | 2 ms, 106 MB |
+| | 64 | — | 4 ms, 110 MB |
+| One schema migration, then `k` self-edges on its contract, each providing an invariant | 16 | 1.1 s | 6 ms, 108 MB |
+| | 18 | 5.2 s, 490 MB | — |
+| | 32 | did not finish | 7 ms, 112 MB |
+| | 64 | — | 9 ms, 112 MB |
+| Schema migrations each followed by four self-edges providing an invariant | 64 | did not finish | 8 ms, 110 MB |
+
+The reporter of the bug saw planning exceed 12 GB of memory on their own history with 32 such invariants. After the change, memory at these sizes is the Node process baseline. Cost still grows faster than the graph when `k` grows with it, with `k²` on the chain shape and `k³` when many self-edges share one contract.
+
+### Shapes that stay exponential
+
+The rules drop a state only when an invariant it lacks has become impossible to obtain. When each missing invariant can still be obtained some other way, every combination stays alive, and finding the shortest route that covers a set of labels is NP-hard in general. That happens in two shapes:
+
+- Alternative routes that each provide a different subset of the required invariants. Measured before this change, `branchy(spine=1000, density=0.05)` took about 80 ms at `k = 8` and 8.7 s at `k = 16`. A shape built so that pruning removes nothing (`k` optional branches off a 1000-contract spine, each providing one invariant, plus a final migration providing all of them) took 9.0 s before and 10.3 s after at `k = 14`.
+- An invariant with a second provider the search can still reach: for example `k` self-edges on one contract whose invariants a later migration on the route also provides, so each self-edge is optional. With that migration at the end of a route as long as the run of self-edges, this takes 1.9 s and 630 MB at `k = 16`, about as long as before.
+
+### Very large histories
+
+The planner is not meant to plan arbitrarily large histories faster. A history with hundreds of required invariants, or with many alternative routes that each provide some of them, should be squashed or pruned instead. The [squash-first policy](./ADR%20102%20-%20Squash-first%20policy%20&%20squash%20advisor.md) describes baselines and a squash advisor for this, but no squash or prune command ships today; the guidance and tools are planned, not available. The algorithm has no refusal threshold.
 
 ## Alternatives considered
 

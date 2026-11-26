@@ -4,6 +4,7 @@
 
 **Status:** Accepted
 **Date:** 2026-10-30
+**Amended by:** [ADR 334 — A person changes the policies a ref declares, by hand or with `migration ref policy`](ADR%20334%20-%20A%20person%20changes%20the%20policies%20a%20ref%20declares%20by%20hand%20or%20with%20migration%20ref%20policy.md)
 
 ## Example
 
@@ -24,7 +25,7 @@ The database does not yet record that rule, so a deploy to the ref stops before 
 $ prisma db migrate --to production --db $PROD
 ✘ [MIGRATION.POLICY_MISMATCH] The ref's policies differ from the database's
   why: production declares change: migrate; the database has change: migrate, reconcile.
-→ Make the ref match the database, or have whoever owns the database apply the ref's policies.
+→ Nothing runs while production declares policies that differ from the database's. Report the difference to whoever owns the database.
 ```
 
 Whoever owns production applies the rule with explicit consent, and from then on the database itself refuses `db update`:

@@ -48,7 +48,7 @@ The CLI is namespaced by the *subject* of the command, not by whether it touches
 | **`db <verb>`** | A live database. | `db update`, `db verify`, `db sign`, `db init` |
 | **`migration <verb>`** | The migration artifacts and graph. | `migration plan`, `migration new`, `migration show`, `migration list`, `migration graph`, `migration check`, `migration status`, `migration log` |
 | **`contract <verb>`** | Contracts. | `contract emit` |
-| **`ref <verb>`** | Refs. | `ref set`, `ref list`, `ref delete` |
+| **`ref <verb>`** | Refs. | `ref set`, `ref list`, `ref delete`, `ref policy show`, `ref policy set`, `ref policy delete` |
 
 ### Read-only vs mutating, not offline vs live
 
