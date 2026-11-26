@@ -32,7 +32,7 @@ Missing capabilities, one sentence per highest first version:
 
 Unrecognized capabilities:
 
-> Your contract requires unrecognized database capabilities (sql.someNewThing). No supported PostgreSQL version provides them, and neither do your adapter, driver or extensions. Either remove the capabilities from your contract, or add a component that provides them.
+> Your contract requires unrecognized database capabilities (sql.someNewThing). No supported PostgreSQL version provides them, and neither do your adapter, driver or extensions. Either remove the capabilities from your contract, or install a component that provides them.
 
 Older than supported, and version not read: keep today's text, rendered from the data.
 

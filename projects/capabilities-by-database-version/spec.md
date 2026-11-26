@@ -92,7 +92,7 @@ For each, the evidence is the real message, produced by a test or by manual QA, 
 
 If any of these can only say which capabilities are missing, the contract must store the stated version. That changes the structure of `contract.json`, so it must be decided and built before `8.0`, not after.
 
-**Settled on 2026-11-26: the message needs no stated version.** It says only what the table shows: "Your contract requires database capabilities first available in PostgreSQL 17 (…), but this database runs PostgreSQL 15.4." A capability that no version in the installed table provides, and that the adapter, driver and extensions do not declare, is reported as unrecognized, with the remedy to remove it or add a component that provides it. The refusal reaches the CLI as data, and the CLI renders it ([slice-refusal-as-data.md](slice-refusal-as-data.md)). The remaining evidence is the message at client start against a database that was never checked, or was checked for another contract.
+**Settled on 2026-11-26: the message needs no stated version.** It says only what the table shows: "Your contract requires database capabilities first available in PostgreSQL 17 (…), but this database runs PostgreSQL 15.4." A capability that no version in the installed table provides, and that the adapter, driver and extensions do not declare, is reported as unrecognized, with the remedy to remove it or install a component that provides it. The refusal reaches the CLI as data, and the CLI renders it ([slice-refusal-as-data.md](slice-refusal-as-data.md)). The remaining evidence is the message at client start against a database that was never checked, or was checked for another contract.
 
 ## 6. Out of scope
 
