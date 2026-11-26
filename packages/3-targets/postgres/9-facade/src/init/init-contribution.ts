@@ -4,7 +4,7 @@ import type {
   QuickReferenceInput,
   ReadmeInput,
 } from '@internal/cli/init-contribution';
-import { POSTGRES_MIN_SERVER_VERSION } from '@internal/target-postgres/server-version';
+import { POSTGRES_MIN_SERVER_VERSION } from '@internal/target-postgres/server-version-range';
 import { dirname, isAbsolute } from 'pathe';
 import { moduleBase } from '../config/module-base';
 import { probePostgres } from './probe';

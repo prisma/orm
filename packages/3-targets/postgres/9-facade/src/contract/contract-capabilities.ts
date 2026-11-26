@@ -7,10 +7,10 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import {
   type CapabilitiesByVersion,
-  type PostgresVersion,
   postgresCapabilitiesByVersion,
   postgresCapabilitiesForVersionIn,
 } from '@internal/target-postgres/server-version';
+import type { PostgresVersion } from '@internal/target-postgres/server-version-range';
 import { blindCast } from '@internal/utils/casts';
 import { postgresError } from '../errors';
 

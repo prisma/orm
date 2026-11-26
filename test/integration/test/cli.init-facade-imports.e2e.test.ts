@@ -308,7 +308,7 @@ describe('the init entrypoints import no framework code that runs', () => {
       );
 
       expect(specifiers).toContain('pathe');
-      expect(specifiers.some((specifier) => specifier.endsWith('/server-version'))).toBe(
+      expect(specifiers.some((specifier) => /\/server-version(-range)?$/.test(specifier))).toBe(
         statesServerVersion,
       );
       expect(

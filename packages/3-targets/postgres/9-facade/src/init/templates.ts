@@ -3,7 +3,7 @@ import type { ContractSourceFormat } from '@internal/config/config-types';
 import {
   POSTGRES_MIN_SERVER_VERSION,
   POSTGRES_NEWEST_VERSION,
-} from '@internal/target-postgres/server-version';
+} from '@internal/target-postgres/server-version-range';
 import type { JsonValue } from '@internal/utils/json';
 import { moduleBase } from '../config/module-base';
 

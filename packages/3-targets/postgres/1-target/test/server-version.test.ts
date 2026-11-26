@@ -1,12 +1,14 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
-  POSTGRES_MIN_SERVER_VERSION,
-  POSTGRES_NEWEST_VERSION,
-  type PostgresVersion,
   postgresCapabilitiesByVersion,
   postgresCapabilitiesForVersion,
   postgresCapabilitiesForVersionIn,
 } from '../src/exports/server-version';
+import {
+  POSTGRES_MIN_SERVER_VERSION,
+  POSTGRES_NEWEST_VERSION,
+  type PostgresVersion,
+} from '../src/exports/server-version-range';
 
 function refusalOf(version: unknown): unknown {
   try {
@@ -30,6 +32,14 @@ describe('the capabilities by PostgreSQL version', () => {
   it('takes the minimum server version from its first row, typed as the literal', () => {
     expect(POSTGRES_MIN_SERVER_VERSION).toBe('15');
     expectTypeOf(POSTGRES_MIN_SERVER_VERSION).toEqualTypeOf<'15'>();
+  });
+
+  it('agrees with the table: the oldest and newest versions are its first and last rows', () => {
+    const versions = Object.keys(postgresCapabilitiesByVersion);
+    expect([versions[0], versions.at(-1)]).toEqual([
+      POSTGRES_MIN_SERVER_VERSION,
+      String(POSTGRES_NEWEST_VERSION),
+    ]);
   });
 
   it.each([15, 16, 17, 18] as const)('resolves version %i to its row', (version) => {

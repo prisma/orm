@@ -1,5 +1,6 @@
 import { blindCast } from '@internal/utils/casts';
 import { postgresError } from './errors';
+import type { PostgresVersion } from './server-version-range';
 
 /**
  * For each PostgreSQL version, the capabilities that version provides.
@@ -35,12 +36,6 @@ const postgres15Capabilities = {
     jsonAggWithoutTruncation: true,
   },
 } as const;
-
-/** The PostgreSQL versions Prisma 8 supports, oldest first. */
-const postgresVersions = [15, 16, 17, 18] as const;
-
-/** A PostgreSQL version a contract can state. */
-export type PostgresVersion = (typeof postgresVersions)[number];
 
 /** The capabilities each supported PostgreSQL version provides. */
 export const postgresCapabilitiesByVersion = {
@@ -84,9 +79,6 @@ export function databaseCapabilitiesOf<const Table extends CapabilitiesByVersion
 /** The capabilities that are facts about a PostgreSQL database, in any supported version. Signing checks the database for them. */
 export const postgresDatabaseCapabilities = databaseCapabilitiesOf(postgresCapabilitiesByVersion);
 
-/** The oldest PostgreSQL version Prisma 8 supports: the first row of the table. */
-export const POSTGRES_MIN_SERVER_VERSION = `${postgresVersions[0]}` as const;
-
 function versionsOf(table: CapabilitiesByVersion): string {
   return Object.keys(table).join(', ');
 }
@@ -128,11 +120,3 @@ export function postgresCapabilitiesForVersion<const Version extends PostgresVer
 ): (typeof postgresCapabilitiesByVersion)[Version] {
   return postgresCapabilitiesForVersionIn(postgresCapabilitiesByVersion, version);
 }
-
-/** The newest PostgreSQL version Prisma 8 supports: the last row of the table. */
-type LastOf<Items> = Items extends readonly [...unknown[], infer Last] ? Last : never;
-
-export const POSTGRES_NEWEST_VERSION = blindCast<
-  LastOf<typeof postgresVersions>,
-  'the last entry of a non-empty tuple'
->(postgresVersions[postgresVersions.length - 1]);

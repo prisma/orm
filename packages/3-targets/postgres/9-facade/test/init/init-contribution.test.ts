@@ -4,7 +4,7 @@ import type { ContractSourceFormat } from '@internal/config/config-types';
 import {
   POSTGRES_MIN_SERVER_VERSION,
   POSTGRES_NEWEST_VERSION,
-} from '@internal/target-postgres/server-version';
+} from '@internal/target-postgres/server-version-range';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import contribution from '../../src/exports/init';

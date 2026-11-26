@@ -102,6 +102,7 @@
     "./target/runtime": "./dist/target__runtime.mjs",
     "./target/schema-ir-annotations": "./dist/target__schema-ir-annotations.mjs",
     "./target/server-version": "./dist/target__server-version.mjs",
+    "./target/server-version-range": "./dist/target__server-version-range.mjs",
     "./target/sql-utils": "./dist/target__sql-utils.mjs",
     "./target/types": "./dist/target__types.mjs",
     "./package.json": "./package.json"
