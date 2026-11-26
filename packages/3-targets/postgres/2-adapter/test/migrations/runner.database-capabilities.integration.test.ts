@@ -100,13 +100,13 @@ describe('PostgresMigrationRunner - database capabilities', { concurrent: false 
       code: failure.code,
       message: failure.message,
       databaseUnchanged: failure.meta.databaseUnchanged,
-      databaseNotProvided: failure.meta.databaseNotProvided,
+      databaseCapabilitiesNotProvided: failure.meta.databaseCapabilitiesNotProvided,
     }).toEqual({
       code: 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED',
       message:
         'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 14.10. Upgrade the database to PostgreSQL 15 or later.',
       databaseUnchanged: true,
-      databaseNotProvided: {
+      databaseCapabilitiesNotProvided: {
         database: 'PostgreSQL',
         findings: [{ kind: 'older-than-supported', databaseVersion: '14.10', oldestSupported: 15 }],
       },

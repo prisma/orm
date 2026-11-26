@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { postgresDatabaseNotProvided } from '../src/core/database-capabilities-not-provided';
+import { postgresDatabaseCapabilitiesNotProvided } from '../src/core/database-capabilities-not-provided';
 import {
   type CapabilitiesByVersion,
   postgresCapabilitiesByVersion,
@@ -20,7 +20,7 @@ function notProvidedOn(
   serverVersionNumber: number | undefined,
   capabilities: Record<string, Record<string, boolean>> = forVersion17,
 ) {
-  return postgresDatabaseNotProvided({ capabilities, table, serverVersionNumber });
+  return postgresDatabaseCapabilitiesNotProvided({ capabilities, table, serverVersionNumber });
 }
 
 describe('what a PostgreSQL database does not provide of what a contract requires', () => {
@@ -39,7 +39,7 @@ describe('what a PostgreSQL database does not provide of what a contract require
         {
           kind: 'missing-capabilities',
           databaseVersion: '15.4',
-          versionToState: 15,
+          matchingVersion: 15,
           capabilities: [
             { capability: 'sql.jsonTable', firstVersion: 16 },
             { capability: 'sql.mergeReturning', firstVersion: 17 },
@@ -79,7 +79,7 @@ describe('what a PostgreSQL database does not provide of what a contract require
         {
           kind: 'missing-capabilities',
           databaseVersion: '16.4',
-          versionToState: 16,
+          matchingVersion: 16,
           capabilities: [{ capability: 'sql.mergeReturning', firstVersion: 17 }],
         },
       ],
@@ -116,6 +116,31 @@ describe('what a PostgreSQL database does not provide of what a contract require
     ).toBeUndefined();
   });
 
+  it('names the row before the server for a server whose major version has no row', () => {
+    const tableWithAGap = {
+      15: { sql: { returning: true } },
+      17: { sql: { returning: true, mergeReturning: true } },
+    } as const;
+
+    expect(
+      postgresDatabaseCapabilitiesNotProvided({
+        capabilities: { sql: { returning: true, mergeReturning: true } },
+        table: tableWithAGap,
+        serverVersionNumber: 160004,
+      }),
+    ).toEqual({
+      database: 'PostgreSQL',
+      findings: [
+        {
+          kind: 'missing-capabilities',
+          databaseVersion: '16.4',
+          matchingVersion: 15,
+          capabilities: [{ capability: 'sql.mergeReturning', firstVersion: 17 }],
+        },
+      ],
+    });
+  });
+
   it('is a version that could not be read, with the statement that reports it', () => {
     expect(notProvidedOn(undefined)).toEqual({
       database: 'PostgreSQL',
@@ -123,6 +148,26 @@ describe('what a PostgreSQL database does not provide of what a contract require
     });
   });
 });
+
+/** The flags the table names that no row turns on. */
+function flagsOnInNoRow(capabilitiesByVersion: CapabilitiesByVersion): readonly string[] {
+  const rows = Object.values(capabilitiesByVersion);
+  const named = new Set(
+    rows.flatMap((row) =>
+      Object.entries(row).flatMap(([namespace, flags]) =>
+        Object.keys(flags).map((flag) => `${namespace}.${flag}`),
+      ),
+    ),
+  );
+  const on = new Set(
+    rows.flatMap((row) =>
+      Object.entries(row).flatMap(([namespace, flags]) =>
+        Object.entries(flags).flatMap(([flag, value]) => (value ? [`${namespace}.${flag}`] : [])),
+      ),
+    ),
+  );
+  return [...named].filter((flag) => !on.has(flag));
+}
 
 /** The pairs of a version and the one before it whose flags that are on the later version does not keep on. */
 function versionsDroppingAFlag(capabilitiesByVersion: CapabilitiesByVersion) {
@@ -141,6 +186,16 @@ function versionsDroppingAFlag(capabilitiesByVersion: CapabilitiesByVersion) {
 describe("PostgreSQL's table of versions", () => {
   it('gives each version every flag that is on in the version before it, which "first available in PostgreSQL N" depends on: a version that drops a flag needs its own wording', () => {
     expect(versionsDroppingAFlag(postgresCapabilitiesByVersion)).toEqual([]);
+  });
+
+  it('turns on every flag it names in some row: the client leaves a flag the table names to signing, and signing checks only a flag some row turns on, so a flag on in no row would be checked by neither', () => {
+    expect(flagsOnInNoRow(postgresCapabilitiesByVersion)).toEqual([]);
+    expect(
+      flagsOnInNoRow({
+        15: { sql: { returning: true, never: false } },
+        16: { sql: { never: false } },
+      }),
+    ).toEqual(['sql.never']);
   });
 
   it('counts a flag written off and then turned on as gained, and one turned off as dropped', () => {

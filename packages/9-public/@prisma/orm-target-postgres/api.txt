@@ -2186,7 +2186,7 @@
 ./target/types: class PostgresExtensionSchemaNode, readonly required property name: string
 ./target/types: class PostgresExtensionSchemaNode, readonly required property nodeKind: "postgres-extension"
 ./target/types: class PostgresExtensionSchemaNode, required method children(): readonly DiffableNode[]
-./target/types: class PostgresExtensionSchemaNode, required method explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./target/types: class PostgresExtensionSchemaNode, required method explainMismatch(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./target/types: class PostgresExtensionSchemaNode, required method isEqualTo(other: DiffableNode): boolean
 ./target/types: class PostgresExtensionSchemaNode, static required method assert(node: SqlSchemaIRNode): asserts node is PostgresExtensionSchemaNode
 ./target/types: class PostgresExtensionSchemaNode, static required method is(node: SqlSchemaIRNode): node is PostgresExtensionSchemaNode
@@ -3238,7 +3238,7 @@
 ./target: class PostgresExtensionSchemaNode, readonly required property name: string
 ./target: class PostgresExtensionSchemaNode, readonly required property nodeKind: "postgres-extension"
 ./target: class PostgresExtensionSchemaNode, required method children(): readonly DiffableNode[]
-./target: class PostgresExtensionSchemaNode, required method explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./target: class PostgresExtensionSchemaNode, required method explainMismatch(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./target: class PostgresExtensionSchemaNode, required method isEqualTo(other: DiffableNode): boolean
 ./target: class PostgresExtensionSchemaNode, static required method assert(node: SqlSchemaIRNode): asserts node is PostgresExtensionSchemaNode
 ./target: class PostgresExtensionSchemaNode, static required method is(node: SqlSchemaIRNode): node is PostgresExtensionSchemaNode

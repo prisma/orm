@@ -98,7 +98,7 @@ export interface SqlControlTargetDescriptor<
    */
   readonly diffSchema: SqlSchemaDiffFn;
   /**
-   * What the introspected database does not provide of what the contract requires of it, as data the CLI renders. The family's `verifySchema` fails on it with `CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED`, and no control policy or strictness relaxes it. Optional: a target that declares none of its database's capabilities omits it.
+   * What the introspected database does not provide of what the contract requires of it, as data. The family renders it into the issue and the summary with the framework's text function, and the CLI prints that text. The family's `verifySchema` fails on it with `CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED`, and no control policy or strictness relaxes it. Optional: a target that declares none of its database's capabilities omits it.
    */
   readonly databaseCapabilitiesNotProvided?: SqlDatabaseCapabilitiesNotProvidedFn;
   /**

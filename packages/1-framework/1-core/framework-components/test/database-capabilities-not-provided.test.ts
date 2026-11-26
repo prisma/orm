@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  type DatabaseNotProvided,
-  databaseNotProvidedText,
-} from '../src/control/database-not-provided';
+  capabilitiesNotProvidedIssue,
+  type DatabaseCapabilitiesNotProvided,
+  databaseCapabilitiesNotProvidedText,
+} from '../src/control/database-capabilities-not-provided';
 
-function textOf(findings: DatabaseNotProvided['findings']): string {
-  return databaseNotProvidedText({ database: 'PostgreSQL', findings });
+function textOf(findings: DatabaseCapabilitiesNotProvided['findings']): string {
+  return databaseCapabilitiesNotProvidedText({ database: 'PostgreSQL', findings });
 }
 
 describe('the text for a database that does not provide what a contract requires', () => {
@@ -15,7 +16,7 @@ describe('the text for a database that does not provide what a contract requires
         {
           kind: 'missing-capabilities',
           databaseVersion: '15.4',
-          versionToState: 15,
+          matchingVersion: 15,
           capabilities: [{ capability: 'sql.mergeReturning', firstVersion: 17 }],
         },
       ]),
@@ -30,7 +31,7 @@ describe('the text for a database that does not provide what a contract requires
         {
           kind: 'missing-capabilities',
           databaseVersion: '15.4',
-          versionToState: 15,
+          matchingVersion: 15,
           capabilities: [
             { capability: 'sql.jsonTable', firstVersion: 16 },
             { capability: 'sql.mergeReturning', firstVersion: 17 },
@@ -40,6 +41,25 @@ describe('the text for a database that does not provide what a contract requires
       ]),
     ).toBe(
       'Your contract requires database capabilities first available in PostgreSQL 16 (sql.jsonTable) and PostgreSQL 17 (sql.mergeReturning, sql.uuidv7), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove the capabilities from your contract: state version 15, and take them out of its capabilities list if it lists them.',
+    );
+  });
+
+  it('lists three first versions with commas and a final "and"', () => {
+    expect(
+      textOf([
+        {
+          kind: 'missing-capabilities',
+          databaseVersion: '15.4',
+          matchingVersion: 15,
+          capabilities: [
+            { capability: 'sql.a', firstVersion: 16 },
+            { capability: 'sql.b', firstVersion: 17 },
+            { capability: 'sql.c', firstVersion: 18 },
+          ],
+        },
+      ]),
+    ).toBe(
+      'Your contract requires database capabilities first available in PostgreSQL 16 (sql.a), PostgreSQL 17 (sql.b) and PostgreSQL 18 (sql.c), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove the capabilities from your contract: state version 15, and take them out of its capabilities list if it lists them.',
     );
   });
 
@@ -59,7 +79,7 @@ describe('the text for a database that does not provide what a contract requires
 
   it('names the database the target names', () => {
     expect(
-      databaseNotProvidedText({
+      databaseCapabilitiesNotProvidedText({
         database: 'MariaDB',
         findings: [
           { kind: 'older-than-supported', databaseVersion: '10.4.1', oldestSupported: '10.6' },
@@ -67,6 +87,33 @@ describe('the text for a database that does not provide what a contract requires
       }),
     ).toBe(
       'This release of Prisma requires MariaDB 10.6 or later. This database runs MariaDB 10.4.1. Upgrade the database to MariaDB 10.6 or later.',
+    );
+  });
+});
+
+describe('the issue for a database that does not provide what a contract requires', () => {
+  it('carries the data and the text rendered from it, with the expected node as its subject', () => {
+    const notProvided: DatabaseCapabilitiesNotProvided = {
+      database: 'PostgreSQL',
+      findings: [{ kind: 'older-than-supported', databaseVersion: '14.10', oldestSupported: 15 }],
+    };
+    const expected = {
+      id: 'capabilities',
+      nodeKind: 'database-capabilities',
+      isEqualTo: () => true,
+      children: () => [],
+    };
+
+    expect(capabilitiesNotProvidedIssue({ path: ['capabilities'], expected, notProvided })).toEqual(
+      {
+        path: ['capabilities'],
+        expected,
+        explanation: {
+          text: 'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 14.10. Upgrade the database to PostgreSQL 15 or later.',
+          cause: 'capabilities-not-provided',
+          notProvided,
+        },
+      },
     );
   });
 });

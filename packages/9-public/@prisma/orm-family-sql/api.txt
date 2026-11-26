@@ -3253,7 +3253,7 @@
 ./family/control: type ReportedBody = Uint8Array | number | string
 ./family/control: type ReportedLiteralDefault = { readonly kind: 'list'; readonly elements: readonly (ReportedBody | null)[]; } | { readonly kind: 'value'; readonly body: ReportedBody; }
 ./family/control: type SameName = (left: string, right: string) => boolean
-./family/control: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => DatabaseNotProvided | undefined
+./family/control: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => DatabaseCapabilitiesNotProvided | undefined
 ./family/control: type SqlDefaultFunctionName = 'autoincrement' | 'now'
 ./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
 ./family/control: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
@@ -4074,7 +4074,7 @@
 ./family: type ReportedBody = Uint8Array | number | string
 ./family: type ReportedLiteralDefault = { readonly kind: 'list'; readonly elements: readonly (ReportedBody | null)[]; } | { readonly kind: 'value'; readonly body: ReportedBody; }
 ./family: type SameName = (left: string, right: string) => boolean
-./family: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => DatabaseNotProvided | undefined
+./family: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => DatabaseCapabilitiesNotProvided | undefined
 ./family: type SqlDefaultFunctionName = 'autoincrement' | 'now'
 ./family: type SqlEntityHydrationFactory = (entry: unknown) => unknown
 ./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
@@ -6641,7 +6641,7 @@
 ./schema-ir/types: class SqlColumnDefaultIR, readonly required property get id(): string
 ./schema-ir/types: class SqlColumnDefaultIR, readonly required property nodeKind: "sql-column-default"
 ./schema-ir/types: class SqlColumnDefaultIR, required method children(): readonly DiffableNode[]
-./schema-ir/types: class SqlColumnDefaultIR, required method explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./schema-ir/types: class SqlColumnDefaultIR, required method explainMismatch(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./schema-ir/types: class SqlColumnDefaultIR, required method isEqualTo(other: DiffableNode): boolean
 ./schema-ir/types: class SqlColumnDefaultIR, static required method is(node: SqlSchemaIRNode): node is SqlColumnDefaultIR
 ./schema-ir/types: class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode
@@ -6666,7 +6666,7 @@
 ./schema-ir/types: class SqlColumnIR, readonly required property nullable: boolean
 ./schema-ir/types: class SqlColumnIR, readonly required property typeText: string
 ./schema-ir/types: class SqlColumnIR, required method children(): readonly DiffableNode[]
-./schema-ir/types: class SqlColumnIR, required method explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./schema-ir/types: class SqlColumnIR, required method explainMismatch(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./schema-ir/types: class SqlColumnIR, required method isEqualTo(other: DiffableNode): boolean
 ./schema-ir/types: class SqlColumnIR, required method withName(name: string): SqlColumnIR
 ./schema-ir/types: class SqlColumnIR, static required method is(node: SqlSchemaIRNode): node is SqlColumnIR
@@ -6864,7 +6864,7 @@
 ./schema-ir: class SqlColumnDefaultIR, readonly required property get id(): string
 ./schema-ir: class SqlColumnDefaultIR, readonly required property nodeKind: "sql-column-default"
 ./schema-ir: class SqlColumnDefaultIR, required method children(): readonly DiffableNode[]
-./schema-ir: class SqlColumnDefaultIR, required method explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./schema-ir: class SqlColumnDefaultIR, required method explainMismatch(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./schema-ir: class SqlColumnDefaultIR, required method isEqualTo(other: DiffableNode): boolean
 ./schema-ir: class SqlColumnDefaultIR, static required method is(node: SqlSchemaIRNode): node is SqlColumnDefaultIR
 ./schema-ir: class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode
@@ -6889,7 +6889,7 @@
 ./schema-ir: class SqlColumnIR, readonly required property nullable: boolean
 ./schema-ir: class SqlColumnIR, readonly required property typeText: string
 ./schema-ir: class SqlColumnIR, required method children(): readonly DiffableNode[]
-./schema-ir: class SqlColumnIR, required method explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./schema-ir: class SqlColumnIR, required method explainMismatch(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./schema-ir: class SqlColumnIR, required method isEqualTo(other: DiffableNode): boolean
 ./schema-ir: class SqlColumnIR, required method withName(name: string): SqlColumnIR
 ./schema-ir: class SqlColumnIR, static required method is(node: SqlSchemaIRNode): node is SqlColumnIR

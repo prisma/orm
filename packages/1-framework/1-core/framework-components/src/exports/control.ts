@@ -145,11 +145,14 @@ export {
 } from '../control/control-stack';
 export type {
   CapabilityFirstAvailable,
-  DatabaseNotProvided,
-  DatabaseNotProvidedFinding,
+  DatabaseCapabilitiesNotProvided,
+  DatabaseCapabilitiesNotProvidedFinding,
   DatabaseVersion,
-} from '../control/database-not-provided';
-export { databaseNotProvidedText } from '../control/database-not-provided';
+} from '../control/database-capabilities-not-provided';
+export {
+  capabilitiesNotProvidedIssue,
+  databaseCapabilitiesNotProvidedText,
+} from '../control/database-capabilities-not-provided';
 export {
   ACCESS_WIDENING_LEVELS,
   type AccessWideningLevel,
@@ -233,10 +236,12 @@ export {
   schemaIssuesWhy,
 } from '../control/runner-failure-why';
 export type {
+  CapabilitiesNotProvidedExplanation,
   DiffableNode,
   ExpectationFailureReason,
   MismatchCause,
   MismatchExplanation,
+  NodeMismatchExplanation,
   SchemaDiffIssue,
   SchemaNodeRef,
 } from '../control/schema-diff';

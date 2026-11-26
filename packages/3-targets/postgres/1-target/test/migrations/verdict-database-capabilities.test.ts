@@ -89,7 +89,7 @@ describe('PostgreSQL verification checks the database provides what the contract
         path: ['capabilities'],
         explanation: {
           text: message,
-          cause: 'database-not-provided',
+          cause: 'capabilities-not-provided',
           notProvided: {
             database: 'PostgreSQL',
             findings: [

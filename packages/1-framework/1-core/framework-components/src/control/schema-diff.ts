@@ -1,6 +1,6 @@
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
-import type { DatabaseNotProvided } from './database-not-provided';
+import type { DatabaseCapabilitiesNotProvided } from './database-capabilities-not-provided';
 
 /**
  * A root-anchored chain of `(nodeKind, id)` steps identifying a node in a
@@ -34,23 +34,27 @@ export interface SchemaDiffIssue<TNode extends DiffableNode = DiffableNode> {
  * The cause of a mismatch the expected node can name: the two sides hold different values
  * (`differs`), the database may hold the expected value in a form of its own, so the two may
  * mean the same (`possibly-equivalent`), or the database does not provide what the contract
- * requires of it, which no change to its schema fixes (`database-not-provided`). A tool that
+ * requires of it, which no change to its schema fixes (`capabilities-not-provided`). A tool that
  * chooses actions from the cause maps every value.
  */
 export type MismatchCause = MismatchExplanation['cause'];
 
-export type MismatchExplanation =
-  | {
-      /** The explanation as text for people. */
-      readonly text: string;
-      readonly cause: 'differs' | 'possibly-equivalent';
-    }
-  | {
-      /** The explanation as text for people: `databaseNotProvidedText(notProvided)`. */
-      readonly text: string;
-      readonly cause: 'database-not-provided';
-      readonly notProvided: DatabaseNotProvided;
-    };
+/** Why an actual node is not equal to the expected one, as the expected node explains it. */
+export interface NodeMismatchExplanation {
+  /** The explanation as text for people. */
+  readonly text: string;
+  readonly cause: 'differs' | 'possibly-equivalent';
+}
+
+/** A database that does not provide what the contract requires; built only by `capabilitiesNotProvidedIssue`, so `text` is always rendered from `notProvided`. */
+export interface CapabilitiesNotProvidedExplanation {
+  /** `databaseCapabilitiesNotProvidedText(notProvided)`. */
+  readonly text: string;
+  readonly cause: 'capabilities-not-provided';
+  readonly notProvided: DatabaseCapabilitiesNotProvided;
+}
+
+export type MismatchExplanation = NodeMismatchExplanation | CapabilitiesNotProvidedExplanation;
 
 /**
  * The three ways an actual state can fail an expectation: it lacks a node that
@@ -115,7 +119,7 @@ export interface DiffableNode {
    * the two values, such as an expected value the node's type refuses. Called after `isEqualTo`
    * returned false, and with `undefined` when the actual side has no such node.
    */
-  explainMismatch?(actual: DiffableNode | undefined): MismatchExplanation | undefined;
+  explainMismatch?(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined;
   children(): readonly DiffableNode[];
 }
 

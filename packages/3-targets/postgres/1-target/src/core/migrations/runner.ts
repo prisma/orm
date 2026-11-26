@@ -34,7 +34,7 @@ import type {
 import {
   APP_SPACE_ID,
   type DatabasePolicies,
-  databaseNotProvidedText,
+  databaseCapabilitiesNotProvidedText,
   failedPostcheckWhy,
   failedPrecheckWhy,
   schemaCheckWhy,
@@ -49,7 +49,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Result } from '@internal/utils/result';
 import { notOk, ok, okVoid } from '@internal/utils/result';
-import { postgresDatabaseNotProvided } from '../database-capabilities-not-provided';
+import { postgresDatabaseCapabilitiesNotProvided } from '../database-capabilities-not-provided';
 import { postgresError } from '../errors';
 import { type CapabilitiesByVersion, postgresCapabilitiesByVersion } from '../server-version';
 import { readPostgresServerVersionNumber } from '../server-version-number';
@@ -791,7 +791,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
   ): Promise<Result<void, SqlMigrationRunnerFailure>> {
     const serverVersionNumber = await readPostgresServerVersionNumber(driver);
     for (const spaceOptions of perSpaceOptions) {
-      const notProvided = postgresDatabaseNotProvided({
+      const notProvided = postgresDatabaseCapabilitiesNotProvided({
         capabilities: spaceOptions.destinationContract.capabilities,
         table: this.capabilitiesByVersion,
         serverVersionNumber,
@@ -799,8 +799,8 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
       if (notProvided === undefined) continue;
       const failure = runnerFailure(
         'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED',
-        databaseNotProvidedText(notProvided),
-        { meta: { databaseNotProvided: notProvided } },
+        databaseCapabilitiesNotProvidedText(notProvided),
+        { meta: { databaseCapabilitiesNotProvided: notProvided } },
       );
       return notOk(
         withFailingSpace(failure.failure, spaceOptions.space ?? spaceOptions.plan.spaceId),

@@ -7,7 +7,7 @@ import type {
 import { setFallbackTemporal } from '@internal/type-implementations/temporal';
 import { blindCast } from '@internal/utils/casts';
 import { Temporal as fallbackTemporal } from 'temporal-polyfill/full/implementation';
-import { postgresDatabaseNotProvidedByTable } from '../core/database-capabilities-not-provided';
+import { postgresDatabaseCapabilitiesNotProvidedByTable } from '../core/database-capabilities-not-provided';
 import { postgresTargetDescriptorMeta } from '../core/descriptor-meta';
 import { recordedAccessChangesOf } from '../core/migrations/access-changes';
 import { diffPostgresSchema } from '../core/migrations/diff-database-schema';
@@ -46,7 +46,10 @@ function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
     },
     databaseCapabilitiesNotProvided({ contract, schema }) {
       PostgresDatabaseSchemaNode.assert(schema);
-      return postgresDatabaseNotProvidedByTable(contract.capabilities, schema.serverVersionNumber);
+      return postgresDatabaseCapabilitiesNotProvidedByTable(
+        contract.capabilities,
+        schema.serverVersionNumber,
+      );
     },
     classifySubjectGranularity: postgresDiffSubjectGranularity,
     classifyEntityKind: postgresDiffSubjectEntityKind,

@@ -139,7 +139,7 @@ describe('verifySqlSchemaByDiff refuses a database that does not provide capabil
       expect(JSON.parse(JSON.stringify(result.schema.issues[0]))).toEqual({
         path: ['capabilities'],
         expected: { nodeKind: 'database-capabilities', id: 'capabilities' },
-        explanation: { text, cause: 'database-not-provided', notProvided },
+        explanation: { text, cause: 'capabilities-not-provided', notProvided },
       });
       expect(result.schema.warnings?.issues ?? []).not.toContainEqual(
         expect.objectContaining({ path: ['capabilities'] }),

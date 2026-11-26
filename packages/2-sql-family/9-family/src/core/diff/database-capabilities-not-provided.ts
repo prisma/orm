@@ -1,8 +1,8 @@
 import type { Contract } from '@internal/contract/types';
 import {
-  type DatabaseNotProvided,
+  capabilitiesNotProvidedIssue,
+  type DatabaseCapabilitiesNotProvided,
   type DiffableNode,
-  databaseNotProvidedText,
   type SchemaDiffIssue,
 } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -18,7 +18,7 @@ export const VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED =
 export type SqlDatabaseCapabilitiesNotProvidedFn = (input: {
   readonly contract: Contract<SqlStorage>;
   readonly schema: SqlSchemaIRNode;
-}) => DatabaseNotProvided | undefined;
+}) => DatabaseCapabilitiesNotProvided | undefined;
 
 /** The node kind of the issue's subject. The family classifies it itself, so no target's classifier needs to know it. */
 export const DATABASE_CAPABILITIES_NODE_KIND = 'database-capabilities';
@@ -45,15 +45,11 @@ class DatabaseCapabilitiesNode implements DiffableNode {
  * The issue for capabilities the database does not provide. It holds only the expected side: an issue with no expected node is an extra, which a check across contract spaces drops from each space's result as an element some other space may own.
  */
 export function databaseCapabilitiesNotProvidedIssue(
-  notProvided: DatabaseNotProvided,
+  notProvided: DatabaseCapabilitiesNotProvided,
 ): SchemaDiffIssue {
-  return {
+  return capabilitiesNotProvidedIssue({
     path: ['capabilities'],
     expected: new DatabaseCapabilitiesNode(),
-    explanation: {
-      text: databaseNotProvidedText(notProvided),
-      cause: 'database-not-provided',
-      notProvided,
-    },
-  };
+    notProvided,
+  });
 }

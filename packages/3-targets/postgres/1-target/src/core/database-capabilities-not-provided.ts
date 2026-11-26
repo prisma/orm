@@ -1,6 +1,6 @@
 import type {
-  DatabaseNotProvided,
-  DatabaseNotProvidedFinding,
+  DatabaseCapabilitiesNotProvided,
+  DatabaseCapabilitiesNotProvidedFinding,
 } from '@internal/framework-components/control';
 import { InternalError } from '@internal/utils/internal-error';
 import { ownEntry } from './own-entry';
@@ -69,7 +69,7 @@ function versionFinding(
   required: readonly CapabilityFlag[],
   table: CapabilitiesByVersion,
   serverVersionNumber: number | undefined,
-): DatabaseNotProvidedFinding | undefined {
+): DatabaseCapabilitiesNotProvidedFinding | undefined {
   if (serverVersionNumber === undefined) {
     return { kind: 'version-not-read', versionQuery: POSTGRES_VERSION_QUERY };
   }
@@ -95,19 +95,19 @@ function versionFinding(
     : {
         kind: 'missing-capabilities',
         databaseVersion,
-        versionToState: rowVersion,
+        matchingVersion: rowVersion,
         capabilities: missing,
       };
 }
 
 /**
- * What a PostgreSQL server at `serverVersionNumber` does not provide of the capabilities a contract requires, by `table`, or `undefined` when it provides them all. Only the capabilities some row of `table` names are checked: the others are the connection's, or unknown to this release, and the client reports those its adapter and driver do not declare. "First available in" holds because each row of the table holds every flag of the row before it.
+ * What a PostgreSQL server at `serverVersionNumber` does not provide of the capabilities a contract requires, by `table`, or `undefined` when it provides them all. Only the capabilities some row of `table` turns on are checked: the others are the connection's, or unknown to this release, and the client reports those its adapter and driver do not declare. Every flag the table names is on in some row, which a test pins, so this agrees with the client's rule that a flag the table names is the database's. "First available in" holds because each row of the table holds every flag of the row before it.
  */
-export function postgresDatabaseNotProvided(input: {
+export function postgresDatabaseCapabilitiesNotProvided(input: {
   readonly capabilities: CapabilityMatrix;
   readonly table: CapabilitiesByVersion;
   readonly serverVersionNumber: number | undefined;
-}): DatabaseNotProvided | undefined {
+}): DatabaseCapabilitiesNotProvided | undefined {
   const finding = versionFinding(
     flagsRequired(input.capabilities),
     input.table,
@@ -117,11 +117,11 @@ export function postgresDatabaseNotProvided(input: {
 }
 
 /** What a PostgreSQL server at `serverVersionNumber` does not provide of `capabilities`, by PostgreSQL's table. */
-export function postgresDatabaseNotProvidedByTable(
+export function postgresDatabaseCapabilitiesNotProvidedByTable(
   capabilities: CapabilityMatrix,
   serverVersionNumber: number | undefined,
-): DatabaseNotProvided | undefined {
-  return postgresDatabaseNotProvided({
+): DatabaseCapabilitiesNotProvided | undefined {
+  return postgresDatabaseCapabilitiesNotProvided({
     capabilities,
     table: postgresCapabilitiesByVersion,
     serverVersionNumber,

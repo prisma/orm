@@ -217,7 +217,7 @@ A contract the extension builds by hand, for example in a test, must list every 
 
 Extension code that runs transactions through an application's client should check the flag in `contract.capabilities.sql.interactiveTransactions` before it calls `transaction()`, as `@prisma/orm-better-auth` does for its `transaction` option.
 
-A package that adds a SQL target can declare its database's flags as `databaseCapabilities` on its runtime target descriptor (`SqlRuntimeTargetDescriptor`), and answer what a database lacks through `databaseCapabilitiesNotProvided` on its control target descriptor (`SqlControlTargetDescriptor`), which returns a `DatabaseNotProvided` value from `@prisma/orm-framework/components/control`: the database's name and a list of findings, which the CLI renders. Both are optional, and the PostgreSQL target is the model.
+A package that adds a SQL target can declare its database's flags as `databaseCapabilities` on its runtime target descriptor (`SqlRuntimeTargetDescriptor`), and answer what a database lacks through `databaseCapabilitiesNotProvided` on its control target descriptor (`SqlControlTargetDescriptor`), which returns a `DatabaseCapabilitiesNotProvided` value from `@prisma/orm-framework/components/control`: the database's name and at least one finding. The SQL family renders it with the framework's text function, and the CLI prints that text. Both are optional, and the PostgreSQL target is the model.
 
 ## `extension-capability-exports-moved`
 
