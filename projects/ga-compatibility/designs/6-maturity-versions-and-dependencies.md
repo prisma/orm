@@ -94,10 +94,10 @@ The policy says an application depends on one facade, on the extension packages 
 
 - **It runs independently.** It may be run outside a project, so it carries its own copy of the packages it needs.
 - **It accepts anything that satisfies its interfaces.** Its copy and the project's copy meet when it loads the project's config file. What crosses there is accepted by its shape, not by which copy made it. The repository's guidance against `instanceof` and identity checks exists for this reason.
-- **It has the same major and minor as the library in the project.** When they differ, it stops and says which version to install. The policy said only the same major. The reason for the minor: the tool's own copy emits the contract and its types, which the project's library then reads, and the tool reads what the project's config produces. If the tool is newer, the library reads what a later release wrote. If the tool is older, the tool does. Neither direction is promised. With the same major and minor, every direction is covered. The patch may differ.
+- **The toolchain it carries is on the same minor as the ORM packages in the project.** The `prisma` package keeps its own version numbers and never takes the ORM's release number, because it brings several tools together. So the check is on what it carries: when the tool runs an ORM command, it compares the version of its own copy of `@prisma/orm-toolchain` with the ORM packages installed in the project, and stops with a message that names both when they are on different minors. The reason for the minor: the tool's copy emits the contract and its types, which the project's library then reads, and the tool reads what the project's config produces. If the tool's copy is newer, the library reads what a later release wrote. If it is older, the tool does. Neither direction is promised. The patch may differ.
 - **It reports newer versions.** It checks whether newer versions of any Prisma package exist within the ranges the user has written, and says so.
 
-A consequence: the `prisma` package, which is released from another repository on its own numbers today, takes the release number's major and minor.
+An open problem follows, which project 13 has to answer: when a user updates `prisma`, the toolchain it carries moves to a newer ORM release than the application's packages, and the check stops them. They are then between a tool they cannot use and ORM packages they may not be able to move at once, for example an application on a database below GA.
 
 ## 5. Details
 

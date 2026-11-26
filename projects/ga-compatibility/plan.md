@@ -254,6 +254,8 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 
 **Survey.** Every command of the three repositories is surveyed in [research/2026-11-25-prisma-cli-surface-survey.md](research/2026-11-25-prisma-cli-surface-survey.md): 91 commands, their outputs, and 21 issues for the design to settle.
 
+**A problem it must answer: updating `prisma` can lock a user out of their own project.** `prisma` keeps its own version numbers and carries a copy of `@prisma/orm-toolchain`. When it runs an ORM command it stops if that copy and the project's ORM packages are on different minors (project 6). So a user who updates `prisma` gets a toolchain newer than their application's packages and a tool that refuses to run, and they may not be able to move the ORM packages at once: an application on a database below GA stays on its release until its dependency lines are edited by hand. Manual QA in project 6 hit this with a SQLite application. Candidates: inside a project the tool runs the project's own copy of the toolchain, which the application already lists, and uses its own copy only outside a project; or there is a stated way to install the `prisma` version that carries a given ORM release. GA waits for an answer.
+
 **To decide when it starts.** Its design discussion has not been held. One question for it: project 6 puts a level in a flag's name (`--preview-foo`), while a command states its level only in its help text. Whether flags should follow commands, for one form across the tool.
 
 ## Moved out of this stream
