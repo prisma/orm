@@ -17,10 +17,12 @@ describe('the PostgreSQL family instance and a database that does not provide wh
     frameworkComponents,
   });
 
-  it('fails verification with its own code', () => {
+  it('fails verification with its own code and the rendered text', () => {
     expect(result).toMatchObject({
       ok: false,
       code: VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+      summary:
+        'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 14.10. Upgrade the database to PostgreSQL 15 or later.',
     });
   });
 
