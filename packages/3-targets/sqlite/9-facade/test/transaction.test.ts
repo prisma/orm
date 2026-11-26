@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { Contract } from '@internal/contract/types';
 import { coreHash, profileHash } from '@internal/contract/types';
 import { SqlStorage } from '@internal/sql-contract/types';
@@ -264,5 +267,98 @@ describe('sqlite transaction()', () => {
     await db.close();
 
     await expect(db.transaction(async () => 'value')).rejects.toThrow('SQLite client is closed');
+  });
+
+  it('serializes 20 concurrent transaction() calls without overlapping callbacks (#29870)', async () => {
+    const db = sqlite({ contract, path: ':memory:' });
+    const transactionCount = 20;
+    const order: number[] = [];
+    let activeTransactions = 0;
+    let maxActiveTransactions = 0;
+
+    try {
+      const results = await Promise.allSettled(
+        Array.from({ length: transactionCount }, (_, i) =>
+          db.transaction(async () => {
+            activeTransactions += 1;
+            maxActiveTransactions = Math.max(maxActiveTransactions, activeTransactions);
+            try {
+              await Promise.resolve();
+              order.push(i);
+              return i * 2;
+            } finally {
+              activeTransactions -= 1;
+            }
+          }),
+        ),
+      );
+
+      const fulfilled = results.filter((r) => r.status === 'fulfilled');
+      expect(fulfilled).toHaveLength(transactionCount);
+      expect(order).toHaveLength(transactionCount);
+      expect(maxActiveTransactions).toBe(1);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('continues processing queued transactions after a rejected transaction', async () => {
+    const db = sqlite({ contract, path: ':memory:' });
+    try {
+      const first = db.transaction(async () => {
+        throw new Error('boom');
+      });
+      const second = db.transaction(async () => 'ok');
+
+      await expect(first).rejects.toThrow('boom');
+      await expect(second).resolves.toBe('ok');
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('serializes concurrent transactions across separate clients targeting the same SQLite file', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'prisma-sqlite-queue-'));
+    const dbPath = join(tempDir, 'shared.db');
+    const db1 = sqlite({ contract, path: dbPath });
+    const db2 = sqlite({ contract, path: dbPath });
+    let activeTransactions = 0;
+    let maxActiveTransactions = 0;
+
+    try {
+      const results = await Promise.all([
+        ...Array.from({ length: 5 }, (_, i) =>
+          db1.transaction(async () => {
+            activeTransactions += 1;
+            maxActiveTransactions = Math.max(maxActiveTransactions, activeTransactions);
+            try {
+              await new Promise((resolve) => setTimeout(resolve, 5));
+              return `db1-${i}`;
+            } finally {
+              activeTransactions -= 1;
+            }
+          }),
+        ),
+        ...Array.from({ length: 5 }, (_, i) =>
+          db2.transaction(async () => {
+            activeTransactions += 1;
+            maxActiveTransactions = Math.max(maxActiveTransactions, activeTransactions);
+            try {
+              await new Promise((resolve) => setTimeout(resolve, 5));
+              return `db2-${i}`;
+            } finally {
+              activeTransactions -= 1;
+            }
+          }),
+        ),
+      ]);
+
+      expect(results).toHaveLength(10);
+      expect(maxActiveTransactions).toBe(1);
+    } finally {
+      await db1.close();
+      await db2.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
