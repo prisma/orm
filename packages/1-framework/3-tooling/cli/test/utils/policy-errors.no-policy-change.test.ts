@@ -133,6 +133,7 @@ const ALLOWED_SENTENCES: readonly RegExp[] = [
   new RegExp(`^\\S+ declares ${SETTING}: [^;]+; the database has ${SETTING}: .+\\.$`),
   /^Nothing runs while \S+ declares policies that differ from the database's\.$/,
   /^Report the difference to whoever owns the database\.$/,
+  /^If another database has already applied a migration listed here, keep it as it is: this database cannot run it, so report that to whoever owns the database\.$/,
   /^(\S+ declares a change policy that|This database's change policy) permits only (db update|migrations)$/,
   /^(\S+ declares|The marker records) change: [a-z, ]+, so (db update|db sign|db migrate) may not (move|sign) it\.$/,
   new RegExp(

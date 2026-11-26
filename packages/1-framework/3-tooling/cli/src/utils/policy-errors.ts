@@ -160,7 +160,7 @@ function refusingPolicy(source: PolicySource, forbids: string): string {
 }
 
 const KEEP_APPLIED_MIGRATION =
-  'If another database has already applied a migration listed here, keep it as it is.';
+  'If another database has already applied a migration listed here, keep it as it is: this database cannot run it, so report that to whoever owns the database.';
 
 function quotedList(names: readonly string[]): string {
   const quoted = names.map((name) => `"${name}"`);
