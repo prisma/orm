@@ -132,7 +132,7 @@ Every release's notes list each change to behaviour.
 
 ## What an application writes
 
-`prisma orm init` writes the Prisma lines in your `package.json`. You do not have to work them out. It writes one line for the package you import from, one for each platform package that one is built from, and one for the `prisma` command-line tool. The platform packages are listed so that your application has exactly one copy of each; with two copies, Prisma fails with an error that is hard to trace ([ADR 329](../architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)). You never import them.
+`prisma orm init` writes the Prisma lines in your `package.json`. You do not have to work them out. It writes one line for the package you import from, and one for each platform package that one is built from. The platform packages are listed so that your application has exactly one copy of each; with two copies, Prisma fails with an error that is hard to trace ([ADR 329](../architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)). You never import them.
 
 The number in each line is a range. `^8.3.0`, with a caret, accepts `8.3.0` and any later 8.x version. `~8.3.0`, with a tilde, accepts `8.3.0` and later fixes within 8.3, and nothing from 8.4.
 
@@ -146,8 +146,7 @@ What you do at a new release depends on the level of your database's package.
 "@prisma/orm-framework":       "^8.3.0",
 "@prisma/orm-family-sql":      "^8.3.0",
 "@prisma/orm-target-postgres": "^8.3.0",
-"@prisma/orm-toolchain":       "^8.3.0",
-"prisma":                      "^8.3.0"
+"@prisma/orm-toolchain":       "^8.3.0"
 ```
 
 Every line has a caret. When release 8.4 is published, run your package manager's update command. Every line moves to 8.4 together, and you change nothing.
@@ -160,8 +159,7 @@ Every line has a caret. When release 8.4 is published, run your package manager'
 "@prisma/orm-target-sqlite": "~8.3.0-ea.0",
 "@prisma/orm-framework":     "~8.3.0",
 "@prisma/orm-family-sql":    "~8.3.0",
-"@prisma/orm-toolchain":     "~8.3.0",
-"prisma":                    "~8.3.0"
+"@prisma/orm-toolchain":     "~8.3.0"
 ```
 
 Every line has a tilde, so the whole application stays on 8.3 until you move it.
@@ -173,8 +171,7 @@ To move to release 8.4, edit every line to the new release and install:
 "@prisma/orm-target-sqlite": "~8.4.0-ea.0",
 "@prisma/orm-framework":     "~8.4.0",
 "@prisma/orm-family-sql":    "~8.4.0",
-"@prisma/orm-toolchain":     "~8.4.0",
-"prisma":                    "~8.4.0"
+"@prisma/orm-toolchain":     "~8.4.0"
 ```
 
 Then read the release notes, because a package below GA may have changed.
@@ -198,7 +195,9 @@ Your other lines keep their carets, and you update as usual. This works where th
 
 ### The `prisma` command-line tool
 
-The `prisma` tool must be on the same release as your application's Prisma packages. `init` installs it and writes its line: with a caret beside a GA database, so that it moves with the other lines, and with a tilde beside a database below GA, so that an update does not move the tool to the next release while your application stays behind.
+The `prisma` tool has version numbers of its own, because it brings together several tools and the ORM is only one of them. `init` installs it, and its line in `package.json` is not one of the lines above.
+
+The tool carries its own copy of the ORM's commands, from one ORM release. When you run an ORM command, that release must match your application's: the tool compares the two and stops, naming both versions, if they are on different releases. If that happens after you update `prisma`, either move your application's Prisma lines to the release the tool names, or install the `prisma` version you had before.
 
 ## Installing a version that is not the newest stable one
 

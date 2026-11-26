@@ -189,9 +189,9 @@ The tool is published from another repository. It is installed with its own copy
 
 The decision for the tool:
 
-- `prisma` is published with the same major and minor version as the release.
-- It compares that with the facade installed in the application. If the facade is on another minor, it stops with a message that gives both versions.
-- The tool's copy and the application's copy can be two copies even when both are on the same minor. So the tool reads the values it receives from the config file by their shape, and does not apply the private-field check to them. The check on the minor exists because the shape of those values can change from one release to the next.
+- **`prisma` keeps its own version numbers.** It brings together several tools, of which the ORM is one, so its version does not follow the ORM's release number.
+- **It checks the ORM release when it runs an ORM command.** It compares the version of the toolchain it carries with the ORM packages installed in the application. If they are on different minors, it stops with a message that gives both versions. The reason is that the tool's toolchain writes files that the application's packages read, and reads what the application's config produces, and neither direction is promised across releases.
+- **It reads config values by their shape.** The tool's copy and the application's copy can be two copies even when both are on the same minor. So the tool does not apply the private-field check to the values it receives from the config file.
 
 ## Consequences
 

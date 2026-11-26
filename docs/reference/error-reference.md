@@ -1486,7 +1486,7 @@ Two copies still do not work together. The framework does not accept a value tha
 - List the database package, such as `@prisma/orm-postgres`, and every `@prisma/orm-*` package it requires, in the application's `package.json`. `prisma orm init` writes these lines.
 - Keep them on one release: one exact `8.0.0-rc.N` until release 8.0, and from release 8.0 the lines that [Versions and support](../oss/versioning.md#what-an-application-writes) shows.
 - When you add an extension, also add any package it requires that `package.json` does not list yet.
-- Use a `prisma` CLI of the same release.
+- Use a `prisma` CLI whose ORM commands come from the same ORM release. The CLI has version numbers of its own, and it tells you when the release it carries differs from your application's.
 
 A monorepo whose applications are on different Prisma releases can still get two copies under npm workspaces and under Bun's hoisted linker. Keep its applications on one release, or use pnpm, Yarn or Bun's isolated linker.
 
