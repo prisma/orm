@@ -83,7 +83,11 @@ The npm package that provides a target, such as `@prisma/orm-target-postgres`. I
 
 ### Facade
 
-The package an application's code imports Prisma from, named after the facade design pattern. There is one for each database, such as `@prisma/orm-postgres` for PostgreSQL. One function in it, `defineConfig`, glues together the framework, family, target, adapter and driver so that an application starts in one call, and the facade re-exports everything application code imports. A facade is not a target package. An application lists it together with the platform packages it names as peer dependencies ([ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)).
+The package an application's code imports Prisma from, named after the facade design pattern. There is one for each database, such as `@prisma/orm-postgres` for PostgreSQL.
+
+A facade puts the framework, the family, the target, the adapter and the driver together, so that an application starts with one call, and it re-exports everything application code imports. It is not a [target package](#target-package).
+
+An application's `package.json` lists the facade and, beside it, the [platform packages](#platform-package) the facade is built from ([ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)).
 
 ### Platform package
 
@@ -91,15 +95,27 @@ One of the packages extension authors build against: `@prisma/orm-framework`, `@
 
 ### Maturity level
 
-How finished a package or an API is: Early Access, Preview, Release Candidate or Generally Available (GA). "Below GA" means any of the first three, and only what is GA is kept compatible within a major version. A package's level is written in its version number (`8.3.0-ea.0`, `8.3.0-preview.0`, `8.3.0-rc.0`, or a plain `8.3.0` for GA), and an API below its package's level carries the word at the start of its name (`ea_foo`, `preview_foo`, `rc_foo`). Nothing else has a level, and there is no other word for what is not finished. A `0.x` or `8.0.0-rc.N` version says nothing about a package's level. See [Versioning](oss/versioning.md#maturity-levels) and [ADR 330](architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md).
+How finished a package or a function is. There are four levels: Early Access, Preview, Release Candidate and Generally Available (GA). "Below GA" means any of the first three. Only what is GA is kept compatible within a major version.
+
+A package's level shows in its version. `8.3.0` is GA. `8.3.0-ea.0`, `8.3.0-preview.0` and `8.3.0-rc.0` are below GA.
+
+A function that is below its package's level has the level at the start of its name: `ea_search`, `preview_search`, `rc_search`.
+
+No other word, such as "experimental" or "unstable", is used for something that is not finished. See [Versions and support](oss/versioning.md#maturity-levels) and [ADR 330](architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md).
 
 ### Release number
 
-The major and minor that every package of one release shares: release `8.3` publishes every package at `8.3`, except `@prisma/orm-extension-paradedb`, which has its own version. The rest of a version is each package's own: a GA package's patch number, or a level suffix and its counter for a package below GA. The root `package.json` holds the [root version](#root-version), not the release number. See [Versioning](oss/versioning.md#version-numbers).
+The first two parts of a version, which every package of one release shares. Release `8.3` publishes every package at `8.3`, and the last part of the version belongs to each package: `8.3.1` for one, `8.3.0-ea.2` for another. `@prisma/orm-extension-paradedb` is the one package with version numbers of its own. See [Versions and support](oss/versioning.md#version-numbers).
 
 ### Root version
 
-The `version` field of the root `package.json`, which names the release this commit belongs to. On the release candidates it is `8.0.0-rc.N`. From release 8.0 it is the release number with patch 0, such as `8.3.0`, except at release 8.0, where it is `8.0.1`. The private `@internal/*` packages, the examples and the apps carry it too. It is not every published package's version: those come from the release plan. See [Versioning](oss/versioning.md#version-numbers).
+The `version` in the repository's root `package.json`. It names the release a commit belongs to, and it decides what the publish workflow publishes.
+
+- Until release 8.0 it is `8.0.0-rc.N`.
+- For release 8.0 it is `8.0.1`.
+- After that it is the [release number](#release-number) with patch 0, such as `8.3.0`.
+
+It is not the version of every published package. Those come from the release plan. See [Releasing](oss/releasing.md#the-root-version-decides-what-is-published).
 
 ### Init contribution
 
