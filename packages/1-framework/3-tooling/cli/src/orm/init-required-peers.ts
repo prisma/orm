@@ -46,6 +46,8 @@ export interface RequiredPeers {
   /** Packages whose own manifest could not be read, so their peers are missing from `packages`. */
   readonly unread: readonly string[];
   readonly warnings: readonly string[];
+  /** Whether every line takes a tilde, as beside a facade below GA, so the `prisma` line does too. */
+  readonly everyLineTilde: boolean;
 }
 
 export function requiredPeerSpecifier(peer: RequiredPeer): string {
@@ -191,7 +193,13 @@ export function requiredPeersForSetup(ctx: {
       clearTimeout(timer);
     }
     return resolved instanceof Error
-      ? { facade: packageName, packages: [], unread: [packageName], warnings: [] }
+      ? {
+          facade: packageName,
+          packages: [],
+          unread: [packageName],
+          warnings: [],
+          everyLineTilde: false,
+        }
       : resolved;
   };
 }
@@ -239,6 +247,7 @@ export async function resolveRequiredPeers(ctx: {
       packages: [],
       unread: facade === undefined ? [ctx.packageName] : [],
       warnings: [],
+      everyLineTilde: false,
     };
   }
   const lines = versionLines(
@@ -360,6 +369,7 @@ export async function resolveRequiredPeers(ctx: {
     })),
     unread,
     warnings,
+    everyLineTilde: lines.everyLineTilde,
   };
 }
 

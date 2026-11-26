@@ -16,25 +16,42 @@ export const ENGINE_PACKAGE = '@prisma/cli-engine';
  * the `next` tag, the release train the CLI itself publishes under.
  */
 export function engineDevDependencySpec(cwd: string): string {
+  const manifest = installedCliManifest(cwd);
+  if (manifest !== undefined) {
+    for (const field of ['dependencies', 'peerDependencies'] as const) {
+      const block = Reflect.get(manifest, field);
+      if (typeof block === 'object' && block !== null) {
+        const engine = Reflect.get(block, ENGINE_PACKAGE);
+        if (typeof engine === 'string' && engine.length > 0) {
+          return `${ENGINE_PACKAGE}@${engine}`;
+        }
+      }
+    }
+  }
+  return `${ENGINE_PACKAGE}@latest`;
+}
+
+/**
+ * The `prisma` line on a tilde of the version installed, for a project whose lines all take a
+ * tilde, so an ordinary update does not move the command-line tool, and the toolchain it names, to
+ * another minor than the database package; `undefined` when the installed version cannot be read.
+ */
+export function cliTildeSpec(cwd: string): string | undefined {
+  const version = installedCliManifest(cwd)?.['version'];
+  return typeof version === 'string' && version.length > 0 ? `prisma@~${version}` : undefined;
+}
+
+function installedCliManifest(cwd: string): Record<string, unknown> | undefined {
   try {
     const manifest: unknown = JSON.parse(
       readFileSync(join(cwd, 'node_modules', 'prisma', 'package.json'), 'utf-8'),
     );
-    if (typeof manifest === 'object' && manifest !== null) {
-      for (const field of ['dependencies', 'peerDependencies'] as const) {
-        const block = Reflect.get(manifest, field);
-        if (typeof block === 'object' && block !== null) {
-          const engine = Reflect.get(block, ENGINE_PACKAGE);
-          if (typeof engine === 'string' && engine.length > 0) {
-            return `${ENGINE_PACKAGE}@${engine}`;
-          }
-        }
-      }
-    }
+    return typeof manifest === 'object' && manifest !== null && !Array.isArray(manifest)
+      ? Object.fromEntries(Object.entries(manifest))
+      : undefined;
   } catch {
-    // The fallback below covers an unreadable or unparseable manifest.
+    return undefined;
   }
-  return `${ENGINE_PACKAGE}@latest`;
 }
 
 /**

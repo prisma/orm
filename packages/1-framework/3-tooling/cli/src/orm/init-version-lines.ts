@@ -6,6 +6,8 @@ export interface VersionLines {
   readonly facade: string;
   /** The line for a `@prisma/orm-*` package a manifest names at `range`. */
   readonly ormPackage: (range: string) => string;
+  /** Whether every line takes a tilde, as beside a facade below GA, so the `prisma` line does too. */
+  readonly everyLineTilde: boolean;
 }
 
 const EXACT_VERSION = /^[v=]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/;
@@ -46,10 +48,14 @@ export function versionLines(
   options: { readonly addsFacade: boolean },
 ): VersionLines {
   if (ormPeerRanges.every((range) => EXACT_VERSION.test(withoutWorkspaceProtocol(range)))) {
-    return { facade: facadeVersion, ormPackage: (range) => range };
+    return { facade: facadeVersion, ormPackage: (range) => range, everyLineTilde: false };
   }
   if (!options.addsFacade || facadeVersion.includes('-')) {
-    return { facade: `~${facadeVersion}`, ormPackage: (range) => range };
+    return {
+      facade: `~${facadeVersion}`,
+      ormPackage: (range) => range,
+      everyLineTilde: facadeVersion.includes('-'),
+    };
   }
   const peerVersion = ormPeerRanges
     .map((range) => RANGE.exec(withoutWorkspaceProtocol(range)))
@@ -57,6 +63,7 @@ export function versionLines(
   return {
     facade: `^${peerVersion !== undefined && isFloorOf(peerVersion, facadeVersion) ? peerVersion : facadeVersion}`,
     ormPackage: (range) => (range.trim().startsWith('~') ? `^${range.trim().slice(1)}` : range),
+    everyLineTilde: false,
   };
 }
 

@@ -95,6 +95,7 @@ describe('the list the printed Prisma 6 setup names', () => {
         ],
         unread: [],
         warnings: [],
+        everyLineTilde: false,
       },
       asked: [
         '@prisma/orm-mongo@latest',
@@ -159,6 +160,7 @@ describe('the list the printed Prisma 6 setup names', () => {
       packages: [],
       unread: ['@prisma/orm-mongo'],
       warnings: [],
+      everyLineTilde: false,
     });
   });
 
@@ -310,6 +312,7 @@ describe('whether a package the project lists is at the version asked for', () =
         },
       ],
       warnings: [],
+      everyLineTilde: false,
     });
   });
 });
@@ -387,6 +390,7 @@ describe('a package installed at a version other than the one asked for', () => 
         ],
         unread: [],
         warnings: [],
+        everyLineTilde: false,
       },
       installs: [[`@prisma/orm-framework@${VERSION}`], ['temporal-polyfill@^1.0.8']],
     });
@@ -488,6 +492,7 @@ describe('the lines init writes for each line of releases', () => {
         ],
         unread: [],
         warnings: [],
+        everyLineTilde: false,
       },
       installs: [
         [
@@ -639,6 +644,7 @@ describe('a required version written with a v prefix', () => {
     expect(resolved).toMatchObject({
       packages: [{ name: '@prisma/orm-framework', outcome: 'already-listed' }],
       warnings: [],
+      everyLineTilde: false,
     });
   });
 });
@@ -673,6 +679,7 @@ describe('a required peer that is not a Prisma ORM package, listed at another ex
       warnings: [
         'package.json lists left-pad at 1.2.0, installed at 1.2.0, but @prisma/orm-postgres needs 1.3.0; init left it as it is. Change the line to 1.3.0 and install.',
       ],
+      everyLineTilde: false,
     });
   });
 });

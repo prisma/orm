@@ -83,6 +83,53 @@ function skillCalls(): readonly RunnerCall[] {
 }
 
 describe('init installs', () => {
+  function installedAt(name: string, version: string, extra: Record<string, unknown> = {}): void {
+    const dir = join(projectDir, 'node_modules', ...name.split('/'));
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version, ...extra }), 'utf-8');
+  }
+
+  function cliAndFacadeAt(facadeVersion: string, peerRange: string): void {
+    installedAt('prisma', '8.1.2', { dependencies: { '@prisma/cli-engine': '0.1.1' } });
+    installedAt('@prisma/orm-postgres', facadeVersion, {
+      peerDependencies: { '@prisma/orm-framework': peerRange, pg: '^8.22.0' },
+    });
+    installedAt('@prisma/orm-framework', '8.1.0');
+  }
+
+  const engineCall = () =>
+    calls.find((call) => call.args.some((arg) => arg.startsWith('@prisma/cli-engine')));
+
+  it(
+    'writes the prisma line with a tilde on the installed version beside a database package below GA',
+    async () => {
+      cliAndFacadeAt('8.1.0-ea.0', '~8.1.0');
+
+      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+
+      expect({ exitCode: run.exitCode, engine: engineCall()?.args }).toEqual({
+        exitCode: 0,
+        engine: ['add', '-D', '@prisma/cli-engine@0.1.1', 'prisma@~8.1.2'],
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'leaves the prisma line as prisma@latest wrote it beside a GA database package',
+    async () => {
+      cliAndFacadeAt('8.1.0', '~8.1.0');
+
+      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+
+      expect({ exitCode: run.exitCode, engine: engineCall()?.args }).toEqual({
+        exitCode: 0,
+        engine: ['add', '-D', '@prisma/cli-engine@0.1.1'],
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
   it(
     'pins the engine to the exact version the installed prisma package declares',
     async () => {

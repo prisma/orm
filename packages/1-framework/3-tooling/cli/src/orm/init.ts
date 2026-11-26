@@ -32,6 +32,7 @@ import {
   resolveInitInputs,
 } from './init-inputs';
 import {
+  cliTildeSpec,
   ENGINE_PACKAGE,
   engineDevDependencySpec,
   installProjectDependencies,
@@ -404,9 +405,13 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             warn(warning);
           }
         }
-        const engineSpec = engineDevDependencySpec(ctx.cwd);
+        const cliTilde = inputs.requiredPeers.everyLineTilde ? cliTildeSpec(ctx.cwd) : undefined;
+        const secondDevDeps = [
+          engineDevDependencySpec(ctx.cwd),
+          ...(cliTilde === undefined ? [] : [cliTilde]),
+        ];
         const engineInstall = await ctx.packages.install({
-          packages: [engineSpec],
+          packages: secondDevDeps,
           dev: true,
           cwd: ctx.cwd,
         });
@@ -415,7 +420,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           findings.push(installFailedFinding(engineInstall.failure, scaffold.filesWritten));
           return settle(4);
         }
-        devDeps.push(engineSpec);
+        devDeps.push(...secondDevDeps);
         packagesInstalled = 'installed';
 
         const emitStep = 'Emit the contract';

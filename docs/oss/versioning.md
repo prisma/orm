@@ -87,6 +87,7 @@ The packages of one release are tested together, so among themselves they accept
 
 - On a GA facade: a caret on every line for a GA package, `^8.3.0`. An update moves all of them to the next release together. A package below GA the application adds, such as the Early Access `@prisma/orm-extension-supabase`, is at a tilde on its first version of the minor, `~8.3.0-ea.0`, since a caret on a plain version never selects a pre-release; that line is edited at each new minor.
 - On a facade below GA: a tilde on every line, `~8.3.0-ea.0` on the packages below GA and `~8.3.0` on the GA ones, and the facade at a tilde on its own version, such as `~8.3.0-ea.1`. A caret on a pre-release never selects the next minor's pre-release, so at each new minor the user edits the lines; see [below](#a-new-minor-below-ga).
+- The `prisma` command-line tool follows the same rule. `init` adds it as `prisma@latest`, which every package manager saves with a caret; beside a facade below GA, `init` then writes it at a tilde on the version installed, such as `~8.3.0`. With a caret, an ordinary update would move `prisma` to the next minor while the other lines stay, and `prisma` would bring a toolchain of that other minor beside the application's own.
 
 These lines are for the packages that share the release number; `@prisma/orm-extension-paradedb` is written at a range on its own version, such as `^0.18.0`.
 
@@ -100,7 +101,7 @@ Under pnpm a line on a package below GA is exact: pnpm writes `8.1.0-ea.0` even 
 
 ### A new minor below GA
 
-At each new minor, an application on a facade below GA edits by hand every line for a package that shares the release number to the new minor, `~X.Y.0-<level>.0` for the packages below GA and `~X.Y.0` for the GA ones, then runs its package manager's install. For SQLite going from `8.1` to `8.2`:
+At each new minor, an application on a facade below GA edits by hand every line for a package that shares the release number to the new minor, `~X.Y.0-<level>.0` for the packages below GA and `~X.Y.0` for the GA ones, and the `prisma` line to a tilde on that minor's `prisma` version, then runs its package manager's install. For SQLite going from `8.1` to `8.2`:
 
 ```jsonc
 // before
@@ -108,13 +109,15 @@ At each new minor, an application on a facade below GA edits by hand every line 
 "@prisma/orm-target-sqlite": "~8.1.0-ea.0",
 "@prisma/orm-framework": "~8.1.0",
 "@prisma/orm-family-sql": "~8.1.0",
-"@prisma/orm-toolchain": "~8.1.0"
+"@prisma/orm-toolchain": "~8.1.0",
+"prisma": "~8.1.0"
 // after
 "@prisma/orm-sqlite": "~8.2.0-ea.0",
 "@prisma/orm-target-sqlite": "~8.2.0-ea.0",
 "@prisma/orm-framework": "~8.2.0",
 "@prisma/orm-family-sql": "~8.2.0",
-"@prisma/orm-toolchain": "~8.2.0"
+"@prisma/orm-toolchain": "~8.2.0",
+"prisma": "~8.2.0"
 ```
 
 The package managers' update commands are not a substitute: pnpm's `update` rewrites a tilde on a pre-release as an exact version, which never moves again, and Yarn's update to the latest version writes a caret, so the next ordinary update moves the GA lines to the following minor without the facade, which does not accept it.

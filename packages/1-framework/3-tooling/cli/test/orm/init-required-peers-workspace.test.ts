@@ -129,6 +129,7 @@ describe("the required peers of this repository's facades", () => {
         ],
         unread: [],
         warnings: [],
+        everyLineTilde: false,
       });
     },
   );
