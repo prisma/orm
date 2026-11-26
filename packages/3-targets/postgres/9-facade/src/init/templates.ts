@@ -1,3 +1,4 @@
+import type { ConfigExpression, ContractEntryInput } from '@internal/cli/init-contribution';
 import type { ContractSourceFormat } from '@internal/config/config-types';
 import {
   POSTGRES_MIN_SERVER_VERSION,
@@ -7,6 +8,23 @@ import { moduleBase } from '../config/module-base';
 
 export const configModule = `${moduleBase}/config`;
 const builder = `${moduleBase}/contract-builder`;
+
+/** The config's `contract:` entry, stating the newest PostgreSQL version the target knows; a TypeScript contract states it in `defineContract`. */
+export function contractEntry(input: ContractEntryInput): ConfigExpression {
+  const path = JSON.stringify(input.path);
+  if (input.kind === 'prisma7-schema') {
+    return {
+      renderTypeScript: () =>
+        `prisma7Schema(${path}, { databaseVersion: ${POSTGRES_NEWEST_VERSION} })`,
+      importRequirements: () => [{ moduleSpecifier: configModule, symbol: 'prisma7Schema' }],
+    };
+  }
+  const source =
+    input.mode === 'typescript'
+      ? path
+      : `{ path: ${path}, databaseVersion: ${POSTGRES_NEWEST_VERSION} }`;
+  return { renderTypeScript: () => source, importRequirements: () => [] };
+}
 
 export function starterContract(mode: ContractSourceFormat): string {
   return mode === 'typescript' ? starterContractTs() : starterContractPsl();

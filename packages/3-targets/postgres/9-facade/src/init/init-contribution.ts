@@ -11,6 +11,7 @@ import { probePostgres } from './probe';
 import { renderTemplate } from './render';
 import {
   configModule,
+  contractEntry,
   contractSample,
   databaseFile,
   envExample,
@@ -82,6 +83,7 @@ const contribution: InitContribution = {
   serverRequirement: { minVersion: POSTGRES_MIN_SERVER_VERSION, checkCommand: 'SELECT version()' },
   probe: (databaseUrl, signal) => probePostgres(databaseUrl, signal),
   prisma7QuickReference,
+  contractEntry,
 };
 
 export default contribution;

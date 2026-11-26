@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import type { ReadmeInput } from '@internal/cli/init-contribution';
+import type { ContractEntryInput, ReadmeInput } from '@internal/cli/init-contribution';
 import type { ContractSourceFormat } from '@internal/config/config-types';
 import {
   POSTGRES_MIN_SERVER_VERSION,
@@ -57,6 +57,39 @@ describe('templates', () => {
 
   it('imports defineConfig from its own config entrypoint', () => {
     expect(contribution.configModule).toBe('@internal/postgres/config');
+  });
+
+  describe('contractEntry', () => {
+    function entry(input: ContractEntryInput) {
+      const expression = contribution.contractEntry?.(input);
+      return {
+        source: expression?.renderTypeScript(),
+        imports: expression?.importRequirements(),
+      };
+    }
+
+    it('states the newest PostgreSQL version beside a Prisma schema contract', () => {
+      expect(entry({ kind: 'contract', mode: 'psl', path: './prisma/contract.prisma' })).toEqual({
+        source: `{ path: "./prisma/contract.prisma", databaseVersion: ${POSTGRES_NEWEST_VERSION} }`,
+        imports: [],
+      });
+    });
+
+    it('is the path of a TypeScript contract, which states its version in defineContract', () => {
+      expect(entry({ kind: 'contract', mode: 'typescript', path: './prisma/contract.ts' })).toEqual(
+        { source: '"./prisma/contract.ts"', imports: [] },
+      );
+      expect(contribution.starterContract('typescript')).toContain(
+        `defineContract({ databaseVersion: ${POSTGRES_NEWEST_VERSION} }`,
+      );
+    });
+
+    it('passes the newest PostgreSQL version to prisma7Schema', () => {
+      expect(entry({ kind: 'prisma7-schema', path: 'prisma/schema.prisma' })).toEqual({
+        source: `prisma7Schema("prisma/schema.prisma", { databaseVersion: ${POSTGRES_NEWEST_VERSION} })`,
+        imports: [{ moduleSpecifier: '@internal/postgres/config', symbol: 'prisma7Schema' }],
+      });
+    });
   });
 
   describe('starterContract', () => {

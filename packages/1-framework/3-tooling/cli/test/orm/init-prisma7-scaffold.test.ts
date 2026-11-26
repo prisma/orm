@@ -168,8 +168,8 @@ describe('the Prisma 7 scaffold', () => {
       expect(readProjectFile('prisma.config.ts')).toContain(
         "import { defineConfig as ormConfig, prisma7Schema } from '@internal/postgres/config';",
       );
-      expect(readProjectFile('prisma.config.ts')).toContain(
-        'contract: prisma7Schema("prisma/schema.prisma"),\n    output: "src/prisma",',
+      expect(readProjectFile('prisma.config.ts')).toMatch(
+        /\n {4}contract: prisma7Schema\("prisma\/schema\.prisma", \{ databaseVersion: \d+ \}\),\n {4}output: "src\/prisma",\n/,
       );
       expect(readProjectFile('src/prisma/db.ts')).toContain(
         "import type { Contract } from './contract.d.js';",
