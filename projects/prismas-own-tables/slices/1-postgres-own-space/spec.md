@@ -39,6 +39,8 @@ PostgreSQL's tables have not changed since `rc.1`; confirm this from `git log` o
 - **Lock names stay.**
 - Two pull requests in flight touch the same files: [prisma/orm#31203](https://github.com/prisma/orm/pull/31203) (`db sign` and the control client) and [prisma/orm#31218](https://github.com/prisma/orm/pull/31218) (the PostgreSQL runner and control adapter). Merge `main` in when either lands; do not regenerate fixtures they also regenerate without agreeing an order with their sessions.
 
+- Two more changes will alter the space's own files once they merge: [prisma/orm#31200](https://github.com/prisma/orm/pull/31200) requires `formatVersion: 1` in every stored contract, snapshot, `migration.json` and ref file, and #31203 changes every contract hash once. After each merges, merge `main` and emit the target's contract, head ref and migration files again. Whichever of these pull requests merges last carries the files in their final form; a `_prisma` hash must not change after `8.0.0`.
+
 ## Docs this slice writes
 
 Written by the orchestrator, in this pull request: the decision record "each target has a contract space for Prisma's own tables" and the one on the `_prisma` prefix (context in design.md section 7); updates in place to the decision records on contract spaces and on marker storage, the Migration System subsystem doc, the upgrade instructions for this release, and the places in the skill and examples that name `prisma_contract`.
