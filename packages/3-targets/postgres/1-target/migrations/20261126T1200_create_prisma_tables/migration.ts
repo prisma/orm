@@ -2,7 +2,7 @@
 /**
  * The first migration of the `_prisma` contract space: Prisma's own tables in the `_prisma` schema.
  *
- * Written by hand, because the planner cannot produce a conditional rename or column checks. Every step is skipped when its result already holds, so it also brings up to date a database a release candidate set up, whose tables are in the schema `prisma_contract`. Each table's columns are checked, so a database from before the release candidates, whose tables are in an older form, stops here unchanged.
+ * Written by hand, because the planner cannot produce a conditional rename or column checks. Every step is skipped when its result already holds, so it also brings up to date a database a release candidate set up, whose tables are in the schema `prisma_contract`. Each table's columns are checked, in the old schema before the rename and in `_prisma` after it, so a database whose tables are in another form, such as one from before the release candidates, stops here unchanged.
  *
  * Re-emit `ops.json` and `migration.json` after editing, from `packages/3-targets/postgres/2-adapter`: `pnpm exec tsx ../1-target/migrations/20261126T1200_create_prisma_tables/migration.ts --config prisma-tables.config.ts`.
  */
@@ -93,18 +93,39 @@ const tables: ReadonlyArray<{
 const schemaExists = 'SELECT to_regnamespace($1) IS NOT NULL AS "result"';
 const schemaAbsent = 'SELECT to_regnamespace($1) IS NULL AS "result"';
 const tableExists = 'SELECT to_regclass($1) IS NOT NULL AS "result"';
-const columnHasForm = `SELECT EXISTS (
+const absentOrColumnHasForm = `SELECT to_regclass($1) IS NULL OR EXISTS (
   SELECT 1 FROM pg_attribute
   WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped
     AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4
 ) AS "result"`;
+/** `ALTER SCHEMA … RENAME` needs the privileges of the schema's owner and CREATE on the database. */
+const mayRenameSchema = `SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user)
+  OR (pg_has_role(current_user, nspowner, 'USAGE')
+    AND has_database_privilege(current_database(), 'CREATE')) AS "result"
+FROM pg_namespace WHERE nspname = $1`;
 
-function qualified(table: string): string {
-  return `"${SCHEMA}"."${table}"`;
+function qualified(table: string, schema: string = SCHEMA): string {
+  return `"${schema}"."${table}"`;
 }
 
 function nullability(column: ExpectedColumn): string {
   return column.notNull ? 'NOT NULL' : 'nullable';
+}
+
+function checkColumns(table: (typeof tables)[number], schema: string, id: string, origin: string) {
+  return rawSql({
+    id,
+    label: `Check the columns of table ${qualified(table.name, schema)}`,
+    operationClass: 'additive',
+    target: { id: 'postgres', details: { schema, objectType: 'table', name: table.name } },
+    precheck: table.columns.map((column) => ({
+      description: `ensure table ${qualified(table.name, schema)}${origin} has column "${column.name}" ${column.type} ${nullability(column)}: it has no such column, or the column has another type or nullability. Prisma cannot bring a table of another form up to date: the upgrade instructions of Prisma 8 say what to do`,
+      sql: absentOrColumnHasForm,
+      params: [qualified(table.name, schema), column.name, column.type, column.notNull],
+    })),
+    execute: [],
+    postcheck: [],
+  });
 }
 
 export default class M extends Migration {
@@ -117,6 +138,14 @@ export default class M extends Migration {
 
   override get operations() {
     return [
+      ...tables.map((table) =>
+        checkColumns(
+          table,
+          RELEASE_CANDIDATE_SCHEMA,
+          `_prisma.check-release-candidate-columns.${table.name}`,
+          ', which the release candidates of Prisma 8 created,',
+        ),
+      ),
       rawSql({
         id: '_prisma.rename-release-candidate-schema',
         label: `Rename schema "${RELEASE_CANDIDATE_SCHEMA}" to "${SCHEMA}"`,
@@ -127,6 +156,11 @@ export default class M extends Migration {
             description: `ensure schemas "${RELEASE_CANDIDATE_SCHEMA}" and "${SCHEMA}" do not both exist: Prisma keeps its tables in one of them, and cannot tell which holds the tables to keep`,
             sql: schemaAbsent,
             params: [SCHEMA],
+          },
+          {
+            description: `ensure the current role may rename schema "${RELEASE_CANDIDATE_SCHEMA}": renaming a schema needs the privileges of the role that owns it and the CREATE privilege on the database. Run the command as the role that owns "${RELEASE_CANDIDATE_SCHEMA}" (SELECT nspowner::regrole FROM pg_namespace WHERE nspname = '${RELEASE_CANDIDATE_SCHEMA}' names it), or give the schema to the role that runs it with ALTER SCHEMA "${RELEASE_CANDIDATE_SCHEMA}" OWNER TO <role>`,
+            sql: mayRenameSchema,
+            params: [RELEASE_CANDIDATE_SCHEMA],
           },
         ],
         execute: [
@@ -184,22 +218,7 @@ export default class M extends Migration {
         }),
       ),
       ...tables.map((table) =>
-        rawSql({
-          id: `_prisma.check-columns.${table.name}`,
-          label: `Check the columns of table ${qualified(table.name)}`,
-          operationClass: 'additive',
-          target: {
-            id: 'postgres',
-            details: { schema: SCHEMA, objectType: 'table', name: table.name },
-          },
-          precheck: table.columns.map((column) => ({
-            description: `ensure table ${qualified(table.name)} has column "${column.name}" ${column.type} ${nullability(column)}. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do`,
-            sql: columnHasForm,
-            params: [qualified(table.name), column.name, column.type, column.notNull],
-          })),
-          execute: [],
-          postcheck: [],
-        }),
+        checkColumns(table, SCHEMA, `_prisma.check-columns.${table.name}`, ''),
       ),
     ];
   }

@@ -1,4 +1,4 @@
-import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
+import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import type {
   ContractSpace,
   ControlDriverInstance,
@@ -58,16 +58,34 @@ function marker(storageHash: string, invariants: readonly string[] = []): Contra
   };
 }
 
+function ledgerEntry(to: string): LedgerEntryRecord {
+  return {
+    space: SPACE,
+    migrationName: `to-${to}`,
+    migrationHash: `migration-${to}`,
+    from: null,
+    to,
+    appliedAt: new Date(0),
+    operationCount: 1,
+  };
+}
+
 function setup(options: {
   readonly marker: ContractMarkerRecord | null;
+  readonly ledger?: readonly LedgerEntryRecord[];
   readonly failure?: MigrationRunnerFailure;
 }) {
+  const ledgerReads: (string | undefined)[] = [];
   const executions: MigrationRunnerPerSpaceOptions<'sql', 'postgres'>[][] = [];
   const markerReads: string[] = [];
   const familyInstance = {
     readMarker: async ({ space: read }: { readonly space: string }) => {
       markerReads.push(read);
       return options.marker;
+    },
+    readLedger: async ({ space: read }: { readonly space?: string }) => {
+      ledgerReads.push(read);
+      return options.ledger ?? [];
     },
     deserializeContract: (json: unknown) => json as Contract,
     storageNameOf: () => 'object',
@@ -93,7 +111,7 @@ function setup(options: {
     'postgres',
     ControlFamilyInstance<'sql', unknown>
   >;
-  return { executions, markerReads, familyInstance, migrations };
+  return { executions, markerReads, ledgerReads, familyInstance, migrations };
 }
 
 describe('applyInstalledContractSpace', () => {
@@ -111,12 +129,12 @@ describe('applyInstalledContractSpace', () => {
       frameworkComponents: [],
     });
 
-    expect(result).toEqual(ok({ applied: false, operationsExecuted: 0 }));
+    expect(result).toEqual(ok({ outcome: 'atHead', operationsExecuted: 0 }));
     expect(markerReads).toEqual([SPACE]);
     expect(executions).toEqual([]);
   });
 
-  it('applies the space when its row lacks an invariant of the head', async () => {
+  it('throws, running nothing, when no path provides an invariant the head requires', async () => {
     const { executions, familyInstance, migrations } = setup({ marker: marker('hash-1') });
     const withInvariant: ContractSpace = {
       ...space('hash-1', [first]),
@@ -148,7 +166,7 @@ describe('applyInstalledContractSpace', () => {
       frameworkComponents: [],
     });
 
-    expect(result).toEqual(ok({ applied: true, operationsExecuted: 2 }));
+    expect(result).toEqual(ok({ outcome: 'applied', operationsExecuted: 2 }));
     expect(executions).toHaveLength(1);
     const [only] = executions;
     expect(only).toHaveLength(1);
@@ -227,8 +245,47 @@ describe('applyInstalledContractSpace', () => {
     expect(executions).toEqual([]);
   });
 
-  it('refuses a row at a contract the installed migrations do not reach', async () => {
-    const { executions, familyInstance, migrations } = setup({ marker: marker('hash-newer') });
+  it('applies nothing when the row is at a later contract and the ledger shows the database passed the head', async () => {
+    const { executions, ledgerReads, familyInstance, migrations } = setup({
+      marker: marker('hash-newer'),
+      ledger: [ledgerEntry('hash-1'), ledgerEntry('hash-2'), ledgerEntry('hash-newer')],
+    });
+
+    const result = await applyInstalledContractSpace({
+      spaceId: SPACE,
+      contractSpace: space('hash-2', [first, second]),
+      driver,
+      familyInstance,
+      migrations,
+      frameworkComponents: [],
+    });
+
+    expect(result).toEqual(ok({ outcome: 'ahead', operationsExecuted: 0 }));
+    expect(ledgerReads).toEqual([SPACE]);
+    expect(executions).toEqual([]);
+  });
+
+  it('throws an internal error when the migrations do not reach the head from an empty database', async () => {
+    const { executions, familyInstance, migrations } = setup({ marker: null });
+
+    await expect(
+      applyInstalledContractSpace({
+        spaceId: SPACE,
+        contractSpace: space('hash-unreached', [first, second]),
+        driver,
+        familyInstance,
+        migrations,
+        frameworkComponents: [],
+      }),
+    ).rejects.toThrow(/does not lead from the empty contract/);
+    expect(executions).toEqual([]);
+  });
+
+  it('refuses a row at a contract the installed migrations do not reach, when the ledger never reached the head', async () => {
+    const { executions, familyInstance, migrations } = setup({
+      marker: marker('hash-newer'),
+      ledger: [ledgerEntry('hash-1'), ledgerEntry('hash-newer')],
+    });
 
     await expect(
       applyInstalledContractSpace({

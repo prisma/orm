@@ -222,8 +222,8 @@ export function errorInstalledSpaceUnreachable(args: {
     'MIGRATION.INSTALLED_SPACE_UNREACHABLE',
     `The database's contract space "${spaceId}" is at a contract the installed Prisma does not know`,
     {
-      why: `The database records contract space "${spaceId}" at ${markerHash}, and the migrations in the installed Prisma packages lead from the empty database to ${headRefHash} without passing through it. A later Prisma release probably brought these tables up to date.`,
-      fix: 'Install the Prisma release that last changed this database, or a later one, and run the command again.',
+      why: `The database records contract space "${spaceId}" at ${markerHash}. The migrations in the installed Prisma packages lead from the empty database to ${headRefHash} without passing through it, and the space's ledger never recorded ${headRefHash}, so no release of this major version brought the database there from this release's tables. A release of another major version, or a change by hand, did.`,
+      fix: 'Install the Prisma release that last changed this database, or a later one of the same major version, and run the command again.',
       meta: { spaceId, markerHash, headRefHash },
     },
   );
