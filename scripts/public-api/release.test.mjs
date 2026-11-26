@@ -189,13 +189,10 @@ describe('the version rules', () => {
     );
   });
 
-  it('exempts rc_, preview_ and ea_ exports', () => {
-    deepStrictEqual(['rc_x', 'preview_x', 'ea_x', 'x', 'rcx'].map(isExemptExport), [
-      true,
-      true,
-      true,
-      false,
-      false,
-    ]);
+  it('exempts rc_, preview_ and ea_ exports, capitalised for a type or class', () => {
+    const exempt = ['rc_x', 'preview_x', 'ea_x', 'Rc_X', 'Preview_X', 'Ea_X'];
+    const held = ['x', 'rcx', 'Early', 'EA_X'];
+    deepStrictEqual(exempt.filter(isExemptExport), exempt);
+    deepStrictEqual(held.filter(isExemptExport), []);
   });
 });

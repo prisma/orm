@@ -15,7 +15,7 @@ const IDENTIFIERS = '[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*';
 const VERSION = new RegExp(
   `^(\\d+)\\.(\\d+)\\.(\\d+)(?:-(${IDENTIFIERS}))?(?:\\+${IDENTIFIERS})?$`,
 );
-const EXEMPT_PREFIXES = ['rc_', 'preview_', 'ea_'];
+const EXEMPT_PREFIXES = ['rc_', 'preview_', 'ea_', 'Rc_', 'Preview_', 'Ea_'];
 const NETWORK_ATTEMPTS = 3;
 
 export class LastReleaseError extends Error {}
