@@ -18,7 +18,7 @@ A minimal React Router v7 Framework Mode example that proves Prisma 8's Vite plu
 ```bash
 cp .env.example .env   # edit DATABASE_URL
 pnpm install
-pnpm db:init           # creates the prisma_contract.marker table + your model tables
+pnpm db:init           # creates Prisma's own tables in the _prisma schema + your model tables
 pnpm dev
 ```
 
@@ -69,7 +69,7 @@ That is enough for this validation app, but it is still example-local and depend
 | `pnpm build` | Production build |
 | `pnpm start` | Serve the production build |
 | `pnpm emit` | Explicit contract emit (normally unnecessary in dev) |
-| `pnpm db:init` | Create the `prisma_contract.marker` table and your model tables |
+| `pnpm db:init` | Create Prisma's own tables in the `_prisma` schema, and your model tables |
 | `pnpm test` | Run the smoke test |
 | `pnpm typecheck` | `react-router typegen` + `tsc --noEmit` |
 | `pnpm lint` | Biome |

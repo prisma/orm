@@ -14,7 +14,7 @@ export async function resetTelemetrySchema(connectionString: string): Promise<vo
   try {
     await withClient(connectionString, async (pg) => {
       await pg.query('drop schema if exists public cascade');
-      await pg.query('drop schema if exists prisma_contract cascade');
+      await pg.query('drop schema if exists _prisma cascade');
       await pg.query('create schema public');
     });
 
