@@ -212,7 +212,7 @@ describe('PostgresMigrationRunner.execute', { concurrent: false }, () => {
     expect(result.ok).toBe(true);
 
     const markerRow = await driver!.query<{ space: string; core_hash: string }>(
-      'select space, core_hash from _prisma.marker order by space',
+      "select space, core_hash from _prisma.marker where space <> '_prisma' order by space",
     );
     expect(markerRow.rows).toEqual([
       {

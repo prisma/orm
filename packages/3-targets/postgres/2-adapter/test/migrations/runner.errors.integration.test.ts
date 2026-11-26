@@ -183,7 +183,7 @@ describe('PostgresMigrationRunner - Error Scenarios', { concurrent: false }, () 
       });
 
       const ledgerCount = await driver!.query<{ count: string }>(
-        'select count(*)::text as count from _prisma.ledger',
+        "select count(*)::text as count from _prisma.ledger where space <> '_prisma'",
       );
       expect(ledgerCount.rows[0]?.count).toBe('0');
 

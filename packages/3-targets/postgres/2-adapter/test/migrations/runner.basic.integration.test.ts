@@ -184,7 +184,7 @@ describe('PostgresMigrationRunner - Basic Execution', { concurrent: false }, () 
       );
       expect(markerCount.rows[0]?.count).toBe('1');
       const ledgerCount = await driver!.query<{ count: string }>(
-        'select count(*)::text as count from _prisma.ledger',
+        "select count(*)::text as count from _prisma.ledger where space <> '_prisma'",
       );
       expect(ledgerCount.rows[0]?.count).toBe('2');
     });

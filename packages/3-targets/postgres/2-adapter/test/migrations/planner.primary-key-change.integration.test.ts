@@ -458,7 +458,7 @@ describe('a primary key that moves', { concurrent: false }, () => {
       await introspect(blog(true, 'external')),
     );
     const marker = await driver!.query<{ core_hash: string }>(
-      'SELECT core_hash FROM _prisma.marker',
+      "SELECT core_hash FROM _prisma.marker WHERE space <> '_prisma'",
     );
     expect(marker.rows).toEqual([{ core_hash: blog(true, 'external').storage.storageHash }]);
     await expectSettled(blog(true, 'external'));

@@ -6,6 +6,7 @@
  *
  * Re-emit `ops.json` and `migration.json` after editing, from `packages/3-targets/postgres/2-adapter`: `pnpm exec tsx ../1-target/migrations/20261126T1200_create_prisma_tables/migration.ts --config prisma-tables.config.ts`.
  */
+import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { Migration, MigrationCLI, rawSql } from '../../src/exports/migration';
 
 const SCHEMA = '_prisma';
@@ -25,7 +26,7 @@ const tables: ReadonlyArray<{
   {
     name: 'marker',
     create: `CREATE TABLE IF NOT EXISTS "_prisma"."marker" (
-  "space" text DEFAULT 'app' NOT NULL PRIMARY KEY,
+  "space" text DEFAULT '${APP_SPACE_ID}' NOT NULL PRIMARY KEY,
   "core_hash" text NOT NULL,
   "profile_hash" text NOT NULL,
   "contract_json" jsonb,

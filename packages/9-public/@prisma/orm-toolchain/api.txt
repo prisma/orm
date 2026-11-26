@@ -871,7 +871,7 @@
 ./migration-tools/aggregate: function loadContractSpaceAggregate(input: LoadAggregateInput): Promise<ContractSpaceAggregate>
 ./migration-tools/aggregate: function loadProblemToViolation(spaceId: string, problem: PackageLoadProblem): IntegrityViolation
 ./migration-tools/aggregate: function planMigration<TFamilyId extends string, TTargetId extends string>(input: PlannerInput<TFamilyId, TTargetId>): Promise<PlannerOutput>
-./migration-tools/aggregate: function requireHeadRef(space: AggregateContractSpace): ContractSpaceHeadRecord
+./migration-tools/aggregate: function requireHeadRef(space: Pick<AggregateContractSpace, 'headRef' | 'spaceId'>): ContractSpaceHeadRecord
 ./migration-tools/aggregate: function resolveRecordedPath(input: ResolveRecordedPathInputs): ResolveRecordedPathOutcome
 ./migration-tools/aggregate: function spacesInApplyOrder(aggregate: ContractSpaceAggregate): readonly AggregateContractSpace[]
 ./migration-tools/aggregate: function verifyMigration(input: VerifierInput): VerifierOutput
@@ -962,12 +962,14 @@
 ./migration-tools/aggregate: interface PlannerSuccess
 ./migration-tools/aggregate: interface PlannerSuccess, readonly required property applyOrder: readonly string[]
 ./migration-tools/aggregate: interface PlannerSuccess, readonly required property perSpace: ReadonlyMap<string, PerSpacePlan>
+./migration-tools/aggregate: interface RecordedPathSpace extends Pick<AggregateContractSpace, 'contract' | 'graph' | 'headRef' | 'spaceId'>
+./migration-tools/aggregate: interface RecordedPathSpace, readonly required property packages: readonly MigrationPackage[]
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly optional property refName?: string
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property aggregateTargetId: string
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property currentMarker: ContractMarkerRecordLike | null
-./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property space: AggregateContractSpace
+./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property space: RecordedPathSpace
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property storageNameOf: (operation: MigrationPlanOperation) => string
 ./migration-tools/aggregate: interface SchemaCheckSection
 ./migration-tools/aggregate: interface SchemaCheckSection, readonly required property perSpace: ReadonlyMap<string, VerifyDatabaseSchemaResult>
@@ -1049,7 +1051,7 @@
 ./migration-tools/graph: interface MigrationGraph, readonly required property nodes: ReadonlySet<string>
 ./migration-tools/graph: interface MigrationGraph, readonly required property reverseChain: ReadonlyMap<string, readonly MigrationEdge[]>
 ./migration-tools/hash: function computeMigrationHash(metadata: Omit<MigrationMetadata, 'migrationHash'> & { readonly migrationHash?: string; }, ops: MigrationOps): string
-./migration-tools/hash: function verifyMigrationHash(pkg: OnDiskMigrationPackage): VerifyResult
+./migration-tools/hash: function verifyMigrationHash(pkg: MigrationPackage): VerifyResult
 ./migration-tools/hash: interface VerifyResult
 ./migration-tools/hash: interface VerifyResult, readonly optional property reason?: 'mismatch'
 ./migration-tools/hash: interface VerifyResult, readonly required property computedHash: string
@@ -1081,7 +1083,7 @@
 ./migration-tools/migration-graph: function historyEndsFrom(graph: MigrationGraph, hash: string): readonly string[]
 ./migration-tools/migration-graph: function isGraphNode(hash: string, graph: MigrationGraph): boolean
 ./migration-tools/migration-graph: function isInSpaceHistory(hash: string, space: { readonly graph: MigrationGraph; readonly headHash: string | undefined; }): boolean
-./migration-tools/migration-graph: function reconstructGraph(packages: readonly OnDiskMigrationPackage[]): MigrationGraph
+./migration-tools/migration-graph: function reconstructGraph(packages: readonly MigrationPackage[]): MigrationGraph
 ./migration-tools/migration-graph: interface PathDecision
 ./migration-tools/migration-graph: interface PathDecision, readonly optional property refName?: string
 ./migration-tools/migration-graph: interface PathDecision, readonly required property alternativeCount: number
@@ -1191,6 +1193,7 @@
 ./migration-tools/spaces: const SPACE_REFS_DIRNAME = "refs"
 ./migration-tools/spaces: export APP_SPACE_ID from @prisma/orm-framework/components/control
 ./migration-tools/spaces: export type ContractSpaceHeadRef from @prisma/orm-framework/components/control
+./migration-tools/spaces: function applyInstalledContractSpace<TFamilyId extends string, TTargetId extends string>(inputs: ApplyInstalledContractSpaceInputs<TFamilyId, TTargetId>): Promise<Result<InstalledContractSpaceApplied, MigrationRunnerFailure>>
 ./migration-tools/spaces: function assertDescriptorSelfConsistency(inputs: DescriptorSelfConsistencyInputs): void
 ./migration-tools/spaces: function assertValidSpaceId(spaceId: string): asserts spaceId is ValidSpaceId
 ./migration-tools/spaces: function computeExtensionSpaceApplyPath(inputs: ComputeExtensionSpaceApplyPathInputs): Promise<ExtensionSpaceApplyPathOutcome>
@@ -1204,6 +1207,13 @@
 ./migration-tools/spaces: function spaceMigrationDirectory(projectMigrationsDir: string, spaceId: string): string
 ./migration-tools/spaces: function spaceRefsDirectory(spaceMigrationsDir: string): string
 ./migration-tools/spaces: function verifyContractSpaces(inputs: VerifyContractSpacesInputs): VerifyContractSpacesResult
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs, readonly required property contractSpace: ContractSpace
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs, readonly required property driver: ControlDriverInstance<TFamilyId, TTargetId>
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs, readonly required property familyInstance: ControlFamilyInstance<TFamilyId, unknown>
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs, readonly required property migrations: TargetMigrationsCapability<TFamilyId, TTargetId, ControlFamilyInstance<TFamilyId, unknown>>
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs, readonly required property spaceId: string
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs<TFamilyId extends string, TTargetId extends string>
 ./migration-tools/spaces: interface ComputeExtensionSpaceApplyPathInputs
 ./migration-tools/spaces: interface ComputeExtensionSpaceApplyPathInputs, readonly required property currentMarkerHash: null | string
 ./migration-tools/spaces: interface ComputeExtensionSpaceApplyPathInputs, readonly required property currentMarkerInvariants: readonly string[]
@@ -1227,6 +1237,9 @@
 ./migration-tools/spaces: interface DiskContractSpaceState
 ./migration-tools/spaces: interface DiskContractSpaceState, readonly required property headRefsBySpace: ReadonlyMap<string, ContractSpaceHeadRecord>
 ./migration-tools/spaces: interface DiskContractSpaceState, readonly required property spaceDirsOnDisk: readonly string[]
+./migration-tools/spaces: interface InstalledContractSpaceApplied
+./migration-tools/spaces: interface InstalledContractSpaceApplied, readonly required property applied: boolean
+./migration-tools/spaces: interface InstalledContractSpaceApplied, readonly required property operationsExecuted: number
 ./migration-tools/spaces: interface SpaceApplyInput, readonly required property currentMarkerHash: null | string
 ./migration-tools/spaces: interface SpaceApplyInput, readonly required property currentMarkerInvariants: readonly string[]
 ./migration-tools/spaces: interface SpaceApplyInput, readonly required property migrationDirectory: string
@@ -1290,6 +1303,7 @@
 ./migration-tools: export type MigrationPackage from @prisma/orm-framework/components/control
 ./migration-tools: function advanceRef(refsDir: string, name: string, hash: string): Promise<RefEntry>
 ./migration-tools: function allStorageElementsExternal(contract: Contract): boolean
+./migration-tools: function applyInstalledContractSpace<TFamilyId extends string, TTargetId extends string>(inputs: ApplyInstalledContractSpaceInputs<TFamilyId, TTargetId>): Promise<Result<InstalledContractSpaceApplied, MigrationRunnerFailure>>
 ./migration-tools: function assertDescriptorSelfConsistency(inputs: DescriptorSelfConsistencyInputs): void
 ./migration-tools: function assertHashIsGraphNode(hash: string, graph: MigrationGraph): asserts hash is string
 ./migration-tools: function assertValidSpaceId(spaceId: string): asserts spaceId is ValidSpaceId
@@ -1355,9 +1369,9 @@
 ./migration-tools: function readMigrationsDir(migrationsRoot: string, options: ReadMigrationPackageOptions): Promise<ReadMigrationsDirResult>
 ./migration-tools: function readRef(refsDir: string, name: string): Promise<RefEntry>
 ./migration-tools: function readRefs(refsDir: string): Promise<Refs>
-./migration-tools: function reconstructGraph(packages: readonly OnDiskMigrationPackage[]): MigrationGraph
+./migration-tools: function reconstructGraph(packages: readonly MigrationPackage[]): MigrationGraph
 ./migration-tools: function refsByContractHash(refs: Refs): ReadonlyMap<string, readonly string[]>
-./migration-tools: function requireHeadRef(space: AggregateContractSpace): ContractSpaceHeadRecord
+./migration-tools: function requireHeadRef(space: Pick<AggregateContractSpace, 'headRef' | 'spaceId'>): ContractSpaceHeadRecord
 ./migration-tools: function resolveRecordedPath(input: ResolveRecordedPathInputs): ResolveRecordedPathOutcome
 ./migration-tools: function resolveRef(refs: Refs, name: string): RefEntry
 ./migration-tools: function resolveRefsByContractHash(refsDir: string): Promise<ReadonlyMap<string, readonly string[]>>
@@ -1372,7 +1386,7 @@
 ./migration-tools: function validateRefValue(value: string): boolean
 ./migration-tools: function verifyContractSpaces(inputs: VerifyContractSpacesInputs): VerifyContractSpacesResult
 ./migration-tools: function verifyMigration(input: VerifierInput): VerifierOutput
-./migration-tools: function verifyMigrationHash(pkg: OnDiskMigrationPackage): VerifyResult
+./migration-tools: function verifyMigrationHash(pkg: MigrationPackage): VerifyResult
 ./migration-tools: function writeContractSnapshot(migrationsDir: string, storageHash: string, input: ContractSnapshotInput): Promise<{ readonly written: boolean; readonly dir: string; }>
 ./migration-tools: function writeMigrationMetadata(dir: string, metadata: MigrationMetadata): Promise<void>
 ./migration-tools: function writeMigrationOps(dir: string, ops: MigrationOps): Promise<void>
@@ -1400,6 +1414,13 @@
 ./migration-tools: interface AppSpacePlanningInputs
 ./migration-tools: interface AppSpacePlanningInputs, readonly required property fromContract: Contract | null
 ./migration-tools: interface AppSpacePlanningInputs, readonly required property statements: readonly ResolvedMigrationStatement[]
+./migration-tools: interface ApplyInstalledContractSpaceInputs, readonly required property contractSpace: ContractSpace
+./migration-tools: interface ApplyInstalledContractSpaceInputs, readonly required property driver: ControlDriverInstance<TFamilyId, TTargetId>
+./migration-tools: interface ApplyInstalledContractSpaceInputs, readonly required property familyInstance: ControlFamilyInstance<TFamilyId, unknown>
+./migration-tools: interface ApplyInstalledContractSpaceInputs, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>
+./migration-tools: interface ApplyInstalledContractSpaceInputs, readonly required property migrations: TargetMigrationsCapability<TFamilyId, TTargetId, ControlFamilyInstance<TFamilyId, unknown>>
+./migration-tools: interface ApplyInstalledContractSpaceInputs, readonly required property spaceId: string
+./migration-tools: interface ApplyInstalledContractSpaceInputs<TFamilyId extends string, TTargetId extends string>
 ./migration-tools: interface CallerPolicy
 ./migration-tools: interface CallerPolicy, readonly required property ignoreGraphFor: ReadonlySet<string>
 ./migration-tools: interface ComputeExtensionSpaceApplyPathInputs
@@ -1451,6 +1472,9 @@
 ./migration-tools: interface DiskContractSpaceState
 ./migration-tools: interface DiskContractSpaceState, readonly required property headRefsBySpace: ReadonlyMap<string, ContractSpaceHeadRecord>
 ./migration-tools: interface DiskContractSpaceState, readonly required property spaceDirsOnDisk: readonly string[]
+./migration-tools: interface InstalledContractSpaceApplied
+./migration-tools: interface InstalledContractSpaceApplied, readonly required property applied: boolean
+./migration-tools: interface InstalledContractSpaceApplied, readonly required property operationsExecuted: number
 ./migration-tools: interface IntegrityComputationInput
 ./migration-tools: interface IntegrityComputationInput, readonly required property spaces: readonly IntegritySpaceState[]
 ./migration-tools: interface IntegrityComputationInput, readonly required property targetId: string
@@ -1545,6 +1569,8 @@
 ./migration-tools: interface ReadMigrationsDirResult
 ./migration-tools: interface ReadMigrationsDirResult, readonly required property packages: readonly OnDiskMigrationPackage[]
 ./migration-tools: interface ReadMigrationsDirResult, readonly required property problems: readonly PackageLoadProblem[]
+./migration-tools: interface RecordedPathSpace extends Pick<AggregateContractSpace, 'contract' | 'graph' | 'headRef' | 'spaceId'>
+./migration-tools: interface RecordedPathSpace, readonly required property packages: readonly MigrationPackage[]
 ./migration-tools: interface RefEntry
 ./migration-tools: interface RefEntry, readonly optional property policies?: DeclaredDatabasePolicies
 ./migration-tools: interface RefEntry, readonly required property hash: string
@@ -1577,7 +1603,7 @@
 ./migration-tools: interface ResolveRecordedPathInputs, readonly required property accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]
 ./migration-tools: interface ResolveRecordedPathInputs, readonly required property aggregateTargetId: string
 ./migration-tools: interface ResolveRecordedPathInputs, readonly required property currentMarker: ContractMarkerRecordLike | null
-./migration-tools: interface ResolveRecordedPathInputs, readonly required property space: AggregateContractSpace
+./migration-tools: interface ResolveRecordedPathInputs, readonly required property space: RecordedPathSpace
 ./migration-tools: interface ResolveRecordedPathInputs, readonly required property storageNameOf: (operation: MigrationPlanOperation) => string
 ./migration-tools: interface SchemaCheckSection
 ./migration-tools: interface SchemaCheckSection, readonly required property perSpace: ReadonlyMap<string, VerifyDatabaseSchemaResult>

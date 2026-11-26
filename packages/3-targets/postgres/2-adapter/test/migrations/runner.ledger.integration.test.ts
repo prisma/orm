@@ -65,6 +65,7 @@ async function readLedgerRows(driver: PostgresControlDriver): Promise<LedgerRow[
      from _prisma.ledger l
      left join _prisma.contract ca on ca.core_hash = l.destination_core_hash
      left join _prisma.contract cb on cb.core_hash = l.origin_core_hash
+     where l.space <> '_prisma'
      order by l.id`,
   );
   return result.rows;

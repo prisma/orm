@@ -503,7 +503,7 @@
 ./adapter/control: class PostgresControlAdapter implements SqlControlAdapter<'postgres'>
 ./adapter/control: class PostgresControlAdapter, constructor(codecRegistry: PostgresCodecRegistry, dataTypeLookup: DataTypeLookup, declaredDataTypes: readonly DataType[])
 ./adapter/control: class PostgresControlAdapter, readonly required property familyId: "sql"
-./adapter/control: class PostgresControlAdapter, readonly required property markerLocation = "prisma_contract.marker"
+./adapter/control: class PostgresControlAdapter, readonly required property markerLocation = "_prisma.marker"
 ./adapter/control: class PostgresControlAdapter, readonly required property targetId: "postgres"
 ./adapter/control: class PostgresControlAdapter, required method bootstrapControlTableQueries(): readonly DdlNode[]
 ./adapter/control: class PostgresControlAdapter, required method bootstrapSignMarkerQueries(): readonly DdlNode[]
@@ -551,7 +551,7 @@
 ./adapter: class PostgresControlAdapter implements SqlControlAdapter<'postgres'>
 ./adapter: class PostgresControlAdapter, constructor(codecRegistry: PostgresCodecRegistry, dataTypeLookup: DataTypeLookup, declaredDataTypes: readonly DataType[])
 ./adapter: class PostgresControlAdapter, readonly required property familyId: "sql"
-./adapter: class PostgresControlAdapter, readonly required property markerLocation = "prisma_contract.marker"
+./adapter: class PostgresControlAdapter, readonly required property markerLocation = "_prisma.marker"
 ./adapter: class PostgresControlAdapter, readonly required property targetId: "postgres"
 ./adapter: class PostgresControlAdapter, required method bootstrapControlTableQueries(): readonly DdlNode[]
 ./adapter: class PostgresControlAdapter, required method bootstrapSignMarkerQueries(): readonly DdlNode[]
@@ -1102,8 +1102,6 @@
 ./target/contract-free: function addConstraintAction(constraint: DdlTableConstraint): AddConstraintAction
 ./target/contract-free: function alterColumnTypeAction(options: { readonly columnName: string; readonly type: string; readonly using?: string; }): AlterColumnTypeAction
 ./target/contract-free: function alterTable(options: { readonly table: string; readonly schema?: string; readonly actions: readonly AnyAlterTableAction[]; }): PostgresAlterTable
-./target/contract-free: function buildControlTableBootstrapQueries(): readonly DdlNode[]
-./target/contract-free: function buildSignMarkerBootstrapQueries(): readonly DdlNode[]
 ./target/contract-free: function columnDefaultAst(options: { readonly schema: string; readonly table: string; readonly column: string; }): ColumnDefaultCheckBuilder
 ./target/contract-free: function columnDefaultSequenceAst(options: { readonly schema: string; readonly table: string; readonly column: string; }): SelectAst
 ./target/contract-free: function columnExistsAst(options: { readonly schema: string; readonly table: string; readonly column: string; }): ColumnExistsCheckBuilder
@@ -3749,11 +3747,9 @@
 ./target: function assemblePostgresCodecRegistryWithBuiltins(extensions: ReadonlyArray<CodecContributor>, dataTypeLookup: Pick<DataTypeLookup, 'has'>): PostgresCodecRegistry
 ./target: function buildBuiltinIdentityValue(dataType: string, typeParams?: Record<string, unknown>): null | string
 ./target: function buildColumnTypeSql(column: Pick<StorageColumn, 'codecId' | 'default' | 'many' | 'typeParams'>, types: TypeLookups, allowPseudoTypes?: boolean): string
-./target: function buildControlTableBootstrapQueries(): readonly DdlNode[]
 ./target: function buildPostgresCodecDescriptorRegistry(descriptors: ReadonlyArray<unknown>): PostgresCodecDescriptorRegistry
 ./target: function buildPostgresPlanDiff(input: { readonly contract: Contract<SqlStorage>; readonly actualSchema: SqlSchemaIRNode; readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>; readonly originSchemas?: readonly string[]; readonly originExtensions?: readonly string[]; }): PostgresPlanDiff
 ./target: function buildSchemaLookupMap(schema: SqlSchemaIR): ReadonlyMap<string, SchemaTableLookup>
-./target: function buildSignMarkerBootstrapQueries(): readonly DdlNode[]
 ./target: function coalesceSubtreeIssues<TNode extends DiffableNode = DiffableNode>(issues: readonly SchemaDiffIssue<TNode>[]): readonly SchemaDiffIssue<TNode>[]
 ./target: function columnDefaultAst(options: { readonly schema: string; readonly table: string; readonly column: string; }): ColumnDefaultCheckBuilder
 ./target: function columnDefaultSequenceAst(options: { readonly schema: string; readonly table: string; readonly column: string; }): SelectAst

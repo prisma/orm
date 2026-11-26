@@ -18,6 +18,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   createDriver,
   createMigrationPlan,
+  createPrismaTables,
   createTestDatabase,
   familyInstance,
   formatRunnerFailure,
@@ -140,6 +141,7 @@ describe('migration apply runner independence from the contract snapshot store -
   beforeAll(async () => {
     database = await createTestDatabase();
     driver = await createDriver(database.connectionString);
+    await createPrismaTables(driver);
     tmpRoot = await mkdtemp(join(tmpdir(), 'prisma-pg-runner-independence-'));
     migrationsDir = join(tmpRoot, 'migrations');
     appMigrationsDir = join(migrationsDir, 'app');
