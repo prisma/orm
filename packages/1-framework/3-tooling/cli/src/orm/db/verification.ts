@@ -146,6 +146,16 @@ export function verificationThrow(inputs: {
   );
 }
 
+/** Whether an issue says the database does not provide what the contract requires, which no change to its schema fixes. */
+export function isDatabaseNotProvided(issue: SchemaDiffIssue): boolean {
+  return issue.explanation?.cause === 'database-not-provided';
+}
+
+/** The issues a change to the database's schema or to the contract source can fix. */
+export function driftIssues(issues: readonly SchemaDiffIssue[]): readonly SchemaDiffIssue[] {
+  return issues.filter((issue) => !isDatabaseNotProvided(issue));
+}
+
 export function issueNodes(
   issues: readonly SchemaDiffIssue[],
   status: 'error' | 'warn',
@@ -156,7 +166,8 @@ export function issueNodes(
 /**
  * The drift, laid out as a tree the engine draws: one root per finding family,
  * one child per element. The engine owns the connectors and the status glyphs,
- * so nothing here carries an escape sequence.
+ * so nothing here carries an escape sequence. A database that does not provide
+ * what the contract requires is no drift: the verdict's summary says it.
  */
 export function schemaFindingBlocks(inputs: {
   readonly result: VerifyDatabaseSchemaResult;
@@ -164,7 +175,7 @@ export function schemaFindingBlocks(inputs: {
   readonly strict: boolean;
 }): readonly Block[] {
   const roots: TreeNode[] = [];
-  const issues = inputs.result.schema.issues;
+  const issues = driftIssues(inputs.result.schema.issues);
   if (issues.length > 0) {
     roots.push({ label: 'Schema issues', status: 'error', children: issueNodes(issues, 'error') });
   }
@@ -201,11 +212,12 @@ export function schemaVerdictDiagnostic(inputs: {
   const code = inputs.result.code;
   const dotted = code !== undefined && isStructuredErrorCode(code);
   const { issues } = inputs.result.schema;
+  const drift = driftIssues(issues);
   return {
     code: dotted ? code : 'CONTRACT.VERIFY_FAILED',
     severity: 'error',
     summary: inputs.result.summary,
-    ...(issues.length === 0 ? {} : { why: schemaIssuesWhy('The live schema differs', issues) }),
+    ...(drift.length === 0 ? {} : { why: schemaIssuesWhy('The live schema differs', drift) }),
     nextActions: inputs.nextActions,
     meta: {
       ...(inputs.space === undefined ? {} : { space: inputs.space }),
@@ -220,13 +232,17 @@ export function schemaVerdictDiagnostic(inputs: {
  * form of its own is fixed in the contract when the two mean the same, and by `db update` when they
  * do not. `db update` is always offered; changing the contract to describe the database is offered
  * when some issue is not one the database may only have stored in its own form, or there is none.
+ * A database that does not provide what the contract requires is no drift, and its text says what
+ * to do, so issues of that kind alone get no action.
  */
 export function schemaDriftNextActions(inputs: {
   readonly verb: 'sign' | 'verify';
   readonly contractRef: string | undefined;
   readonly issues: readonly SchemaDiffIssue[];
 }): readonly NextAction[] {
-  const { verb, contractRef, issues } = inputs;
+  const { verb, contractRef } = inputs;
+  const issues = driftIssues(inputs.issues);
+  if (issues.length === 0 && inputs.issues.length > 0) return [];
   const retryAfterEmit =
     contractRef === undefined
       ? `${verb} again`

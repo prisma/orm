@@ -1,5 +1,10 @@
 import type { Contract } from '@internal/contract/types';
-import type { DiffableNode, SchemaDiffIssue } from '@internal/framework-components/control';
+import {
+  type DatabaseNotProvided,
+  type DiffableNode,
+  databaseNotProvidedText,
+  type SchemaDiffIssue,
+} from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 
@@ -8,12 +13,12 @@ export const VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED =
   'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED';
 
 /**
- * Says, in the user's terms, which capabilities `contract` requires of the database that the introspected `schema` shows it does not provide, or `undefined` when it provides them all.
+ * What the introspected `schema` shows the database does not provide of what `contract` requires of it, or `undefined` when it provides it all.
  */
 export type SqlDatabaseCapabilitiesNotProvidedFn = (input: {
   readonly contract: Contract<SqlStorage>;
   readonly schema: SqlSchemaIRNode;
-}) => string | undefined;
+}) => DatabaseNotProvided | undefined;
 
 /** The node kind of the issue's subject. The family classifies it itself, so no target's classifier needs to know it. */
 export const DATABASE_CAPABILITIES_NODE_KIND = 'database-capabilities';
@@ -39,10 +44,16 @@ class DatabaseCapabilitiesNode implements DiffableNode {
 /**
  * The issue for capabilities the database does not provide. It holds only the expected side: an issue with no expected node is an extra, which a check across contract spaces drops from each space's result as an element some other space may own.
  */
-export function databaseCapabilitiesNotProvidedIssue(text: string): SchemaDiffIssue {
+export function databaseCapabilitiesNotProvidedIssue(
+  notProvided: DatabaseNotProvided,
+): SchemaDiffIssue {
   return {
     path: ['capabilities'],
     expected: new DatabaseCapabilitiesNode(),
-    explanation: { text, cause: 'differs' },
+    explanation: {
+      text: databaseNotProvidedText(notProvided),
+      cause: 'database-not-provided',
+      notProvided,
+    },
   };
 }

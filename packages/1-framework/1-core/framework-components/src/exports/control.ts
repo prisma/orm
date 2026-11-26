@@ -143,6 +143,13 @@ export {
   extractParameterizedOutputTypeImports,
   extractQueryOperationTypeImports,
 } from '../control/control-stack';
+export type {
+  CapabilityFirstAvailable,
+  DatabaseNotProvided,
+  DatabaseNotProvidedFinding,
+  DatabaseVersion,
+} from '../control/database-not-provided';
+export { databaseNotProvidedText } from '../control/database-not-provided';
 export {
   ACCESS_WIDENING_LEVELS,
   type AccessWideningLevel,

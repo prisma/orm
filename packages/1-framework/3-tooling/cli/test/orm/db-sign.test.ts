@@ -8,6 +8,8 @@ import type { CliInvocation } from '../../src/utils/printed-command';
 import {
   CONNECTION,
   cleanupProjectDirs,
+  DATABASE_NOT_PROVIDED,
+  DRIFTED,
   diagnosticsOf,
   envelopeOf,
   failedSpace,
@@ -18,6 +20,8 @@ import {
   MASKED_CONNECTION,
   MISSING_COLUMN,
   mocks,
+  NOT_PROVIDED,
+  OLDER_THAN_SUPPORTED,
   ormConfig,
   PROFILE_HASH,
   projectDir,
@@ -323,6 +327,78 @@ describe('db sign', () => {
           status: 'error',
           text: 'Database schema does not satisfy contract for space "app"; signed "pgvector"',
         },
+      ]);
+    });
+  });
+
+  describe('the database does not provide what the contract requires', () => {
+    it('says so in the text the result carries, and offers no drift advice', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(ok({ spaces: [failedSpace('app', HASH_A, NOT_PROVIDED)] }));
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(run.exitCode).toBe(4);
+      expect(diagnosticsOf(run)).toEqual([
+        {
+          code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
+          severity: 'error',
+          summary: OLDER_THAN_SUPPORTED,
+          nextActions: [],
+          meta: { space: 'app', schemaIssues: [DATABASE_NOT_PROVIDED] },
+        },
+      ]);
+    });
+
+    it('draws the text under the failed space, with no db update line', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(ok({ spaces: [failedSpace('app', HASH_A, NOT_PROVIDED)] }));
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--no-advance-ref'], {
+        cwd: dir,
+        isTty: { stdout: true, stderr: true },
+      });
+
+      expect(run.presented?.presentation.human[1]).toEqual({
+        kind: 'tree',
+        roots: [
+          {
+            label: 'app: not signed, the database does not provide what its contract requires',
+            status: 'error',
+            children: [{ label: OLDER_THAN_SUPPORTED, status: 'error' }],
+          },
+        ],
+      });
+      expect(`${run.stdout}${run.stderr}`).not.toContain('db update');
+    });
+
+    it('keeps the drift advice for the drift of another space', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(
+        ok({
+          spaces: [
+            failedSpace('app', HASH_A, NOT_PROVIDED),
+            failedSpace('pgvector', HASH_EXT, DRIFTED),
+          ],
+        }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(diagnosticsOf(run).map((entry) => entry.nextActions)).toEqual([
+        [],
+        [
+          {
+            kind: 'run-command',
+            label: 'Change the database to match the contract, then sign again',
+            command: 'prisma-test db update',
+          },
+          {
+            kind: 'user-choice',
+            label:
+              'Or change the contract source to describe the database as it is, re-run contract emit, then sign again',
+          },
+        ],
       ]);
     });
   });

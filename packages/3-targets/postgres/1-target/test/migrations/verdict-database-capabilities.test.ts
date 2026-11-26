@@ -72,7 +72,16 @@ describe('PostgreSQL verification checks the database provides what the contract
     expect(result.schema.issues).toEqual([
       expect.objectContaining({
         path: ['capabilities'],
-        explanation: { text: message, cause: 'differs' },
+        explanation: {
+          text: message,
+          cause: 'database-not-provided',
+          notProvided: {
+            database: 'PostgreSQL',
+            findings: [
+              { kind: 'older-than-supported', databaseVersion: '14.10', oldestSupported: 15 },
+            ],
+          },
+        },
       }),
     ]);
     expect(result.schema.warnings?.issues).toEqual([]);

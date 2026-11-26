@@ -17,6 +17,7 @@ import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { effectiveControlPolicy } from '@internal/contract/types';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
+  DatabaseNotProvided,
   DiffableNode,
   DiffSubjectGranularity,
   SchemaDiffIssue,
@@ -25,6 +26,7 @@ import type {
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import {
+  databaseNotProvidedText,
   dispositionForCategory,
   issueOutcome,
   VERIFY_CODE_SCHEMA_FAILURE,
@@ -273,10 +275,13 @@ export interface VerifySqlSchemaByDiffInput {
 
 function verdictOf(
   failCount: number,
-  notProvided: string | undefined,
+  notProvided: DatabaseNotProvided | undefined,
 ): { readonly code?: string; readonly summary: string } {
   if (notProvided !== undefined) {
-    return { code: VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED, summary: notProvided };
+    return {
+      code: VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+      summary: databaseNotProvidedText(notProvided),
+    };
   }
   if (failCount === 0) return { summary: 'Database schema satisfies contract' };
   return {

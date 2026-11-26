@@ -44,6 +44,7 @@ import { appRefsDirFor, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
+  driftIssues,
   issueNodes,
   readEmittedContract,
   requireVerifyConnection,
@@ -162,7 +163,11 @@ function spaceNode(outcome: DbSignSpaceOutcome): TreeNode {
       };
     case 'failed':
       return {
-        label: `${outcome.space}: not signed, the schema does not satisfy its contract`,
+        label:
+          driftIssues(outcome.schema.schema.issues).length === 0 &&
+          outcome.schema.schema.issues.length > 0
+            ? `${outcome.space}: not signed, the database does not provide what its contract requires`
+            : `${outcome.space}: not signed, the schema does not satisfy its contract`,
         status: 'error',
         children: issueNodes(outcome.schema.schema.issues, 'error'),
       };

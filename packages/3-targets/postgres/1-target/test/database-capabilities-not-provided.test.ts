@@ -1,33 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import {
-  postgresDatabaseCapabilitiesNotProvided,
-  postgresDatabaseCapabilitiesNotProvidedMessage,
-} from '../src/core/database-capabilities-not-provided';
+import { postgresDatabaseNotProvided } from '../src/core/database-capabilities-not-provided';
 import {
   type CapabilitiesByVersion,
   postgresCapabilitiesByVersion,
 } from '../src/core/server-version';
 
-// Every row of the shipped table is the same, since no PostgreSQL feature Prisma supports needs a version above 15. This table has a flag only from 17.
+// Every row of the shipped table is the same, since no PostgreSQL feature Prisma supports needs a version above 15. This table has rows that differ.
 const table = {
   15: { sql: { returning: true } },
-  16: { sql: { returning: true } },
-  17: { sql: { returning: true, mergeReturning: true } },
+  16: { sql: { returning: true, jsonTable: true } },
+  17: { sql: { returning: true, jsonTable: true, mergeReturning: true } },
 } as const;
 
+const connection = { sql: { interactiveTransactions: true } };
+
 const forVersion17 = {
-  sql: { returning: true, mergeReturning: true, interactiveTransactions: true },
+  sql: { returning: true, jsonTable: true, mergeReturning: true, interactiveTransactions: true },
 };
 
 function notProvidedOn(
   serverVersionNumber: number | undefined,
   capabilities: Record<string, Record<string, boolean>> = forVersion17,
 ) {
-  return postgresDatabaseCapabilitiesNotProvided({ capabilities, table, serverVersionNumber });
+  return postgresDatabaseNotProvided({
+    capabilities,
+    table,
+    serverVersionNumber,
+    declaredCapabilities: connection,
+  });
 }
 
-describe('what a PostgreSQL database lacks of what a contract requires', () => {
-  it('is nothing on a server whose row has every database flag the contract requires', () => {
+describe('what a PostgreSQL database does not provide of what a contract requires', () => {
+  it('is nothing on a server whose row has every database capability the contract requires', () => {
     expect(notProvidedOn(170002)).toBeUndefined();
   });
 
@@ -35,174 +39,119 @@ describe('what a PostgreSQL database lacks of what a contract requires', () => {
     expect(notProvidedOn(180001)).toBeUndefined();
   });
 
-  it("is the database flags a server's row lacks, when the server is older than the contract requires", () => {
-    expect(notProvidedOn(160004)).toEqual({
-      kind: 'capabilities-missing',
-      serverVersionNumber: 160004,
-      missing: [{ namespace: 'sql', flag: 'mergeReturning' }],
-    });
-  });
-
-  it('skips the flags the table does not hold, which the connection provides', () => {
-    expect(
-      notProvidedOn(160004, { sql: { returning: true, interactiveTransactions: true } }),
-    ).toBeUndefined();
-  });
-
-  it('skips the flags the contract turns off', () => {
-    expect(
-      notProvidedOn(160004, { sql: { returning: true, mergeReturning: false } }),
-    ).toBeUndefined();
-  });
-
-  it("is every database flag the contract requires on a server older than the table's first version", () => {
-    expect(notProvidedOn(140010)).toEqual({
-      kind: 'older-than-supported',
-      serverVersionNumber: 140010,
-      missing: [
-        { namespace: 'sql', flag: 'returning' },
-        { namespace: 'sql', flag: 'mergeReturning' },
+  it("is the capabilities a server's row lacks, each with the first version that provides it, and the version to state", () => {
+    expect(notProvidedOn(150004)).toEqual({
+      database: 'PostgreSQL',
+      findings: [
+        {
+          kind: 'missing-capabilities',
+          databaseVersion: '15.4',
+          versionToState: 15,
+          capabilities: [
+            { capability: 'sql.jsonTable', firstVersion: 16 },
+            { capability: 'sql.mergeReturning', firstVersion: 17 },
+          ],
+        },
       ],
     });
   });
 
-  it("is a server older than the table's first version even when the contract requires no database flag", () => {
-    expect(notProvidedOn(140010, { sql: { interactiveTransactions: true } })).toEqual({
-      kind: 'older-than-supported',
-      serverVersionNumber: 140010,
-      missing: [],
+  it('orders the missing capabilities by the first version that provides them', () => {
+    expect(
+      notProvidedOn(150004, { sql: { mergeReturning: true, returning: true, jsonTable: true } })
+        ?.findings[0],
+    ).toMatchObject({
+      capabilities: [
+        { capability: 'sql.jsonTable', firstVersion: 16 },
+        { capability: 'sql.mergeReturning', firstVersion: 17 },
+      ],
     });
   });
 
-  it('skips a namespace or flag the table holds only by inheritance, such as constructor', () => {
+  it('is the capabilities no row provides and no component declares, as unrecognized', () => {
+    expect(
+      notProvidedOn(170002, { sql: { returning: true, someNewThing: true }, other: { x: true } }),
+    ).toEqual({
+      database: 'PostgreSQL',
+      findings: [
+        { kind: 'unrecognized-capabilities', capabilities: ['sql.someNewThing', 'other.x'] },
+      ],
+    });
+  });
+
+  it('is both, missing first, when the contract requires missing and unrecognized capabilities', () => {
+    expect(
+      notProvidedOn(160004, { sql: { returning: true, mergeReturning: true, someNewThing: true } }),
+    ).toEqual({
+      database: 'PostgreSQL',
+      findings: [
+        {
+          kind: 'missing-capabilities',
+          databaseVersion: '16.4',
+          versionToState: 16,
+          capabilities: [{ capability: 'sql.mergeReturning', firstVersion: 17 }],
+        },
+        { kind: 'unrecognized-capabilities', capabilities: ['sql.someNewThing'] },
+      ],
+    });
+  });
+
+  it('skips the capabilities a component declares', () => {
+    expect(
+      postgresDatabaseNotProvided({
+        capabilities: {
+          sql: { returning: true, interactiveTransactions: true, viaExtension: true },
+        },
+        table,
+        serverVersionNumber: 160004,
+        declaredCapabilities: { sql: { interactiveTransactions: true, viaExtension: true } },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('skips the capabilities the contract turns off', () => {
+    expect(
+      notProvidedOn(150004, { sql: { returning: true, mergeReturning: false, unknown: false } }),
+    ).toBeUndefined();
+  });
+
+  it("is a server older than the table's first version, whatever the contract requires", () => {
+    expect(notProvidedOn(140010, { sql: { interactiveTransactions: true } })).toEqual({
+      database: 'PostgreSQL',
+      findings: [{ kind: 'older-than-supported', databaseVersion: '14.10', oldestSupported: 15 }],
+    });
+  });
+
+  it('writes a version before PostgreSQL 10 with its two-part major version', () => {
+    expect(notProvidedOn(90624)?.findings[0]).toEqual({
+      kind: 'older-than-supported',
+      databaseVersion: '9.6',
+      oldestSupported: 15,
+    });
+  });
+
+  it('skips a namespace or flag the table holds only by inheritance, such as constructor, as none it recognizes', () => {
     expect(
       notProvidedOn(160004, {
         sql: { returning: true, constructor: true },
         constructor: { name: true },
       }),
-    ).toBeUndefined();
-  });
-
-  it('is a version that could not be read', () => {
-    expect(notProvidedOn(undefined)).toEqual({ kind: 'version-unread' });
-  });
-});
-
-describe('the message for what a PostgreSQL database lacks', () => {
-  it('names the version the contract requires, the version the database runs, and the version to state', () => {
-    expect(
-      postgresDatabaseCapabilitiesNotProvidedMessage(
+    ).toEqual({
+      database: 'PostgreSQL',
+      findings: [
         {
-          kind: 'capabilities-missing',
-          serverVersionNumber: 160004,
-          missing: [{ namespace: 'sql', flag: 'mergeReturning' }],
+          kind: 'unrecognized-capabilities',
+          capabilities: ['sql.constructor', 'constructor.name'],
         },
-        table,
-      ),
-    ).toBe(
-      'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 16.4. Either upgrade the database, or state version 16 for your contract, which turns off the features that need 17. If its capabilities list turns one of them on (sql.mergeReturning), remove it there.',
-    );
+      ],
+    });
   });
 
-  it('names the capabilities no version provides beside those a later version provides', () => {
-    expect(
-      postgresDatabaseCapabilitiesNotProvidedMessage(
-        {
-          kind: 'capabilities-missing',
-          serverVersionNumber: 160004,
-          missing: [
-            { namespace: 'sql', flag: 'mergeReturning' },
-            { namespace: 'postgres', flag: 'elsewhere' },
-          ],
-        },
-        table,
-      ),
-    ).toBe(
-      'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 16.4. Either upgrade the database, or state version 16 for your contract, which turns off the features that need 17. If its capabilities list turns one of them on (sql.mergeReturning), remove it there. Your contract also requires postgres.elsewhere, which no PostgreSQL version Prisma supports provides: remove it from its capabilities list.',
-    );
-  });
-
-  it('says to remove them from the list when the list may turn on several flags a later version provides', () => {
-    const tableWithTwoLaterFlags = {
-      15: { sql: { returning: true } },
-      16: { sql: { returning: true } },
-      17: { sql: { returning: true, mergeReturning: true, jsonTable: true } },
-    } as const;
-
-    expect(
-      postgresDatabaseCapabilitiesNotProvidedMessage(
-        {
-          kind: 'capabilities-missing',
-          serverVersionNumber: 160004,
-          missing: [
-            { namespace: 'sql', flag: 'mergeReturning' },
-            { namespace: 'sql', flag: 'jsonTable' },
-          ],
-        },
-        tableWithTwoLaterFlags,
-      ),
-    ).toBe(
-      'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 16.4. Either upgrade the database, or state version 16 for your contract, which turns off the features that need 17. If its capabilities list turns any of them on (sql.mergeReturning and sql.jsonTable), remove them there.',
-    );
-  });
-
-  it('says to remove from the capabilities list what no version provides', () => {
-    expect(
-      postgresDatabaseCapabilitiesNotProvidedMessage(
-        {
-          kind: 'capabilities-missing',
-          serverVersionNumber: 160004,
-          missing: [
-            { namespace: 'postgres', flag: 'elsewhere' },
-            { namespace: 'postgres', flag: 'nowhere' },
-          ],
-        },
-        table,
-      ),
-    ).toBe(
-      "Your contract requires postgres.elsewhere and postgres.nowhere, which no PostgreSQL version Prisma supports provides. This database runs PostgreSQL 16.4. Remove them from your contract's capabilities list.",
-    );
-  });
-
-  it("says only that this release needs the first version on a server older than the table's first version", () => {
-    expect(
-      postgresDatabaseCapabilitiesNotProvidedMessage(
-        { kind: 'older-than-supported', serverVersionNumber: 140010, missing: [] },
-        table,
-      ),
-    ).toBe(
-      'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 14.10. Upgrade the database to PostgreSQL 15 or later.',
-    );
-  });
-
-  it('writes a version before PostgreSQL 10 with its two-part major version', () => {
-    expect(
-      postgresDatabaseCapabilitiesNotProvidedMessage(
-        { kind: 'older-than-supported', serverVersionNumber: 90624, missing: [] },
-        table,
-      ),
-    ).toBe(
-      'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 9.6. Upgrade the database to PostgreSQL 15 or later.',
-    );
-  });
-
-  it('says the version could not be read, and what to check', () => {
-    expect(postgresDatabaseCapabilitiesNotProvidedMessage({ kind: 'version-unread' }, table)).toBe(
-      "Prisma could not read this database's PostgreSQL version, so it cannot check that the database provides what your contract requires. Check that the connection reaches a PostgreSQL server, and that SHOW server_version_num returns its version there.",
-    );
-  });
-});
-
-describe('the message for a flag the capabilities list turned on', () => {
-  it('names no version to state, since the contract may already state the version the database runs', () => {
-    const forVersion16WithMergeReturningTurnedOn = {
-      sql: { returning: true, mergeReturning: true },
-    };
-    const notProvided = notProvidedOn(160004, forVersion16WithMergeReturningTurnedOn);
-
-    expect(notProvided && postgresDatabaseCapabilitiesNotProvidedMessage(notProvided, table)).toBe(
-      'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 16.4. Either upgrade the database, or state version 16 for your contract, which turns off the features that need 17. If its capabilities list turns one of them on (sql.mergeReturning), remove it there.',
-    );
+  it('is a version that could not be read, with the statement that reports it', () => {
+    expect(notProvidedOn(undefined)).toEqual({
+      database: 'PostgreSQL',
+      findings: [{ kind: 'version-not-read', versionQuery: 'SHOW server_version_num' }],
+    });
   });
 });
 
@@ -221,7 +170,7 @@ function versionsDroppingAFlag(capabilitiesByVersion: CapabilitiesByVersion) {
 }
 
 describe("PostgreSQL's table of versions", () => {
-  it('gives each version every flag that is on in the version before it, which the message\'s "PostgreSQL N or later" depends on: a version that drops a flag needs its own wording', () => {
+  it('gives each version every flag that is on in the version before it, which "first available in PostgreSQL N" depends on: a version that drops a flag needs its own wording', () => {
     expect(versionsDroppingAFlag(postgresCapabilitiesByVersion)).toEqual([]);
   });
 

@@ -1,5 +1,6 @@
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
+import type { DatabaseNotProvided } from './database-not-provided';
 
 /**
  * A root-anchored chain of `(nodeKind, id)` steps identifying a node in a
@@ -31,16 +32,25 @@ export interface SchemaDiffIssue<TNode extends DiffableNode = DiffableNode> {
 
 /**
  * The cause of a mismatch the expected node can name: the two sides hold different values
- * (`differs`), or the database may hold the expected value in a form of its own, so the two may
- * mean the same (`possibly-equivalent`). A tool that chooses actions from the cause maps every value.
+ * (`differs`), the database may hold the expected value in a form of its own, so the two may
+ * mean the same (`possibly-equivalent`), or the database does not provide what the contract
+ * requires of it, which no change to its schema fixes (`database-not-provided`). A tool that
+ * chooses actions from the cause maps every value.
  */
-export type MismatchCause = 'differs' | 'possibly-equivalent';
+export type MismatchCause = MismatchExplanation['cause'];
 
-export interface MismatchExplanation {
-  /** The explanation as text for people. */
-  readonly text: string;
-  readonly cause: MismatchCause;
-}
+export type MismatchExplanation =
+  | {
+      /** The explanation as text for people. */
+      readonly text: string;
+      readonly cause: 'differs' | 'possibly-equivalent';
+    }
+  | {
+      /** The explanation as text for people: `databaseNotProvidedText(notProvided)`. */
+      readonly text: string;
+      readonly cause: 'database-not-provided';
+      readonly notProvided: DatabaseNotProvided;
+    };
 
 /**
  * The three ways an actual state can fail an expectation: it lacks a node that

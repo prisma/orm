@@ -7,8 +7,9 @@ const OUTCOME_LABEL: Record<ExpectationFailureReason, string> = {
   'not-equal': 'mismatch',
 };
 
-/** What a diff issue says: its outcome, its path, and its explanation when it has one. */
+/** What a diff issue says: its outcome, its path, and its explanation when it has one; for a database that does not provide what the contract requires, the explanation alone. */
 export function issueLabel(issue: SchemaDiffIssue): string {
+  if (issue.explanation?.cause === 'database-not-provided') return issue.explanation.text;
   const label = `${OUTCOME_LABEL[issueOutcome(issue)]}: ${issue.path.join('/')}`;
   return issue.explanation === undefined ? label : `${label}. ${issue.explanation.text}`;
 }

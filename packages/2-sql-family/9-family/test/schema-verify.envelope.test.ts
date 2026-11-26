@@ -83,8 +83,12 @@ describe('verifySqlSchemaByDiff surfaces warnings without failing', () => {
 
 describe('verifySqlSchemaByDiff refuses a database that does not provide capabilities the contract requires', () => {
   const database = new SqlSchemaIR({ tables: {} });
-  const notProvided =
-    'Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 15.4.';
+  const notProvided = {
+    database: 'PostgreSQL',
+    findings: [{ kind: 'older-than-supported', databaseVersion: '14.10', oldestSupported: 15 }],
+  } as const;
+  const text =
+    'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 14.10. Upgrade the database to PostgreSQL 15 or later.';
 
   /** The live database also holds a table no contract declares, which a check across contract spaces strips from each space's result. */
   const withUndeclaredTable: SqlSchemaDiffFn = (input) => ({
@@ -130,12 +134,12 @@ describe('verifySqlSchemaByDiff refuses a database that does not provide capabil
       expect(result).toMatchObject({
         ok: false,
         code: VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
-        summary: notProvided,
+        summary: text,
       });
       expect(JSON.parse(JSON.stringify(result.schema.issues[0]))).toEqual({
         path: ['capabilities'],
         expected: { nodeKind: 'database-capabilities', id: 'capabilities' },
-        explanation: { text: notProvided, cause: 'differs' },
+        explanation: { text, cause: 'database-not-provided', notProvided },
       });
       expect(result.schema.warnings?.issues ?? []).not.toContainEqual(
         expect.objectContaining({ path: ['capabilities'] }),
@@ -171,7 +175,7 @@ describe('verifySqlSchemaByDiff refuses a database that does not provide capabil
     expect(verified.assertOk().schemaCheck.perSpace.get('app')).toMatchObject({
       ok: false,
       code: VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
-      summary: notProvided,
+      summary: text,
       schema: { issues: [expect.objectContaining({ path: ['capabilities'] })] },
     });
   });
