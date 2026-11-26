@@ -65,7 +65,21 @@ What is a break and what is not:
 - Adding an optional parameter or property: not a break.
 - A new member on an interface users implement: a break unless it is optional. A new member on a type users only receive: not a break.
 
-An entry listed as **undecided** is a comparison the check could not settle: TypeScript gave up on it ("type instantiation is excessively deep", or the compiler ran out of stack), or it could not relate two copies of a generic type. The report says at which step it stopped. It is neither a pass nor a break; if your change touches that export, look at it yourself.
+An entry listed as **undecided** is a comparison the check could not settle. The report says at which step it stopped:
+
+- `native`: TypeScript gave up on it ("type instantiation is excessively deep", or the compiler ran out of stack).
+- `structural` or `member`: TypeScript could not relate two copies of a generic type, and comparing it member by member did not settle it either. A comparison that passed member by member is also undecided when the type has call or index signatures, which that comparison leaves out, or when the package's time ran out.
+- `shared marker`: the export reaches one of two classes with private members, or two unique symbols, that share a name in one package. The check cannot tell the two apart, so a pass proves nothing. Renaming one of the two restores the comparison.
+
+An undecided entry is neither a pass nor a break; if your change touches that export, look at it yourself.
+
+An entry listed as **not compared** is one the check did not try to compare, because:
+
+- the last release's side is `never` or `any`, so there is nothing to compare;
+- the export is neither a type nor a value that can be compared;
+- it adds members to a third-party module with `declare module`, and both sides read that module from one copy;
+- it is an abstract class with a member keyed by a symbol the check cannot write, so it gets no subclass check;
+- or it is one of two same-named classes with private members, or unique symbols, listed by the package that declares them; the exports that reach it are undecided, as above.
 
 Some breaks are reported for changes the policy allows. The check treats any type an exported function accepts as one users may supply, so widening the return type of a method on an interface users only implement, for example, is reported. Record it with that reason.
 
@@ -95,4 +109,4 @@ A record matches one error by app, file, line, code and message, including the m
 
 ## What the checks do not see
 
-The decision record lists them in its section "What the checks do not see". In short: swapping one branded type for another, changes inside generic functions or between overloads, a property made `readonly`, breaks inside undecided comparisons, a change to another package's type behind a recorded export, third-party type changes, result types the example apps do not exercise, and behaviour. A reviewer is the only check for these.
+The decision record lists them in its section "What the checks do not see". In short: generic types compared only with `never` for their type parameters, a property made `readonly`, some abstract classes, methods users override, breaks inside undecided comparisons, including those of exports that reach a same-named class or unique symbol, a change to another package's type behind a recorded export, third-party type changes, result types the example apps do not exercise, and behaviour. A reviewer is the only check for these.

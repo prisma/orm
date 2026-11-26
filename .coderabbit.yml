@@ -48,10 +48,10 @@ reviews:
         accept and a mention in the release notes.
     - path: "examples/last-release-errors.json"
       instructions: >-
-        These files record changes that CI would otherwise report as breaking code written against the last
-        release. A new record lets one through, so follow the criteria in packages/9-public/AGENTS.md ("What to
-        check in a record of a break"): a record of kind break needs a reason a user would accept and a mention
-        in the release notes; a record of kind allowed claims the compatibility policy allows the change, so
-        check that claim, because calling a real break allowed hides it from users. A record replaced with a new
-        fingerprint covers whatever the export's test reports now, not only the break it first covered: check the
-        current break the job reports, not only the reason.
+        This file records errors that the last release's example apps get against the current build, which CI
+        would otherwise report. A new record lets one through, so follow the criteria in
+        packages/9-public/AGENTS.md ("What to check in a record of a break"): a record of kind break needs a
+        reason a user would accept and a mention in the release notes; a record of kind allowed claims the
+        compatibility policy allows the change, so check that claim, because calling a real break allowed hides
+        it from users. A record replaced with a new message covers the error the job reports now: compare the
+        new message with the old one, and check that the reason still fits it.
