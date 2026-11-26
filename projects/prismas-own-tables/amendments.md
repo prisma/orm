@@ -31,7 +31,7 @@ Two further facts rule out putting the space in the list:
 
 Only then does the command read the other rows, the policies, and plan as it does today.
 
-The space is never part of the list built from the user's `migrations/` folder. So the list-builder, the apply order, the check on space names and nearly all displays are unchanged. The framework changes are: the `contractSpace` field on the target descriptor and the reserved name (both in the design), the phase and its calls, two functions that find a path widened to take migration packages held in memory, and the two checks for rows of undeclared spaces.
+The space is never part of the list built from the user's `migrations/` folder. So the list-builder, the apply order, the check on space names and nearly all displays are unchanged. The framework changes are: the `contractSpace` field on the target descriptor and the reserved name (both in the design); the function that applies the space (`applyInstalledContractSpace` in the migration tools) and its calls from the commands; four path-finding and hashing functions widened to take migration packages held in memory (`reconstructGraph`, `resolveRecordedPath`, `verifyMigrationHash`, `requireHeadRef`), with one new exported type for the widened input; one new error code, `MIGRATION.INSTALLED_SPACE_UNREACHABLE`; and the two checks for rows of undeclared spaces.
 
 **What follows from it.**
 
@@ -50,3 +50,11 @@ The first slice renames PostgreSQL's schema and keeps the tables `marker`, `ledg
 ## 4. The contract table has a reader
 
 Nothing in this repository reads PostgreSQL's `contract` table, but Prisma Studio does: `data/migrations.ts` in prisma/studio joins it to the ledger for the Migrations view. This is evidence for the last slice's decision, not a change to the design.
+
+## 5. An earlier release in the same major keeps working on a database a later one has brought further
+
+The design says the space's row records the hash of its contract and that within a major its migrations only add, so that an earlier release keeps reading the tables during a deploy. It does not say what an earlier release does when it finds a row at a hash it does not know. Refusing would break a rollback and a rolling deploy that migrates at start. So: when the row's hash is not in the installed package's migrations, and the installed package's newest contract appears in the space's ledger, the database has already passed through this release's form, and the release carries on without applying anything. Only a row the ledger cannot explain is an error.
+
+## 6. Renaming the schema needs its owner
+
+`ALTER SCHEMA … RENAME` needs ownership of the schema, which creating tables if absent never needed. A database whose `prisma_contract` schema was created by an administrator role, with a migrating role that only has grants, cannot be renamed by that role. The first migration checks this before it renames and says which role must run the command. This is the one case where a release-candidate database needs a person, and the upgrade instructions say so.
