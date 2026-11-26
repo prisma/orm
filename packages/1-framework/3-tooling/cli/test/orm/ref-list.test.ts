@@ -101,6 +101,46 @@ describe('ref list', () => {
     ]);
   });
 
+  it('adds the policies column only when a ref declares policies, leaving data lines and JSON as they were', async () => {
+    const { dir } = await seedRefProject();
+    const policies = {
+      change: ['migrate'],
+      dataProtection: { dataLoss: 'data-loss-forbidden' },
+    } as const;
+    await writeRef(refsDirIn(dir), 'production', { hash: HASH_B, invariants: [], policies });
+    await writeRef(refsDirIn(dir), 'staging', { hash: HASH_A, invariants: [] });
+
+    const run = await harness().run(['migration', 'ref', 'list'], {
+      cwd: dir,
+      isTty: { stdout: true },
+    });
+
+    expect(run.presented?.presentation.human).toEqual([
+      {
+        kind: 'table',
+        columns: ['Ref', 'Contract', 'Policies'],
+        rows: [
+          [
+            [{ text: 'production', tone: 'ref' }],
+            [{ text: HASH_B, tone: 'identifier' }],
+            'change: migrate; dataProtection.dataLoss: data-loss-forbidden',
+          ],
+          [[{ text: 'staging', tone: 'ref' }], [{ text: HASH_A, tone: 'identifier' }], ''],
+        ],
+      },
+    ]);
+    expect(run.presented?.data).toEqual({
+      ok: true,
+      refs: {
+        production: { hash: HASH_B, invariants: [], policies },
+        staging: { hash: HASH_A, invariants: [] },
+      },
+    });
+    expect((await harness().run(['migration', 'ref', 'list'], { cwd: dir })).stdout).toBe(
+      `production\t${HASH_B}\t\nstaging\t${HASH_A}\t\n`,
+    );
+  });
+
   it('says so when the project has no refs', async () => {
     const { dir } = await seedRefProject();
 

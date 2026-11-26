@@ -9,15 +9,13 @@ import {
 import type { MigrationPlanArguments } from '../control-api/operations/plan-arguments';
 import { shellQuoted } from '../control-api/statements/statement-flag';
 import { ActionableCliError } from './cli-errors';
-import { type DataProtectionSetting, FORBIDDEN_LEVEL } from './data-protection-settings';
 import { chooseAction, runCommandAction } from './next-actions';
+import { type DataProtectionKey, FORBIDDEN_LEVEL, settingsText } from './policy-settings';
 import { type CliInvocation, cliCommand, printedWayToTarget, quotedPlan } from './printed-command';
 
 /** `change: migrate; dataProtection.dataLoss: data-loss-forbidden`: the declared side of each difference. */
 export function declaredSettingsText(differences: readonly DatabasePolicyDifference[]): string {
-  return differences
-    .map(({ setting, declared }) => `${setting}: ${databasePolicyValueText(declared)}`)
-    .join('; ');
+  return settingsText(differences.map(({ setting, declared }) => [setting, declared] as const));
 }
 
 /** `MIGRATION.POLICY_MISMATCH`: the ref declares policies that differ from those the database's marker records. */
@@ -33,15 +31,14 @@ export function errorPolicyMismatch(args: {
         `${refName} declares ${setting}: ${databasePolicyValueText(declared)}; the database has ${setting}: ${databasePolicyValueText(inForce)}.`,
     )
     .join(' ');
-  const recovery =
-    "Make the ref match the database, or have whoever owns the database apply the ref's policies.";
+  const report = `Nothing runs while ${refName} declares policies that differ from the database's. Report the difference to whoever owns the database.`;
   return new ActionableCliError(
     'MIGRATION.POLICY_MISMATCH',
     "The ref's policies differ from the database's",
     {
       why,
-      fix: recovery,
-      nextActions: [chooseAction(recovery)],
+      fix: report,
+      nextActions: [chooseAction(report)],
       meta: { spaceId, refName, differences },
     },
   );
@@ -145,7 +142,7 @@ export interface DataProtectionRefusedOperation {
 
 /** A data protection setting at its `forbidden` level, where it is recorded, and the operations it refuses. */
 export interface DataProtectionRefusal {
-  readonly setting: DataProtectionSetting;
+  readonly setting: DataProtectionKey;
   readonly source: PolicySource;
   readonly operations: readonly DataProtectionRefusedOperation[];
 }
@@ -153,7 +150,7 @@ export interface DataProtectionRefusal {
 const FORBIDDEN_CHANGE = {
   dataLoss: 'data loss',
   accessWidening: 'changing who can read or write data',
-} as const satisfies { readonly [S in DataProtectionSetting]: string };
+} as const satisfies { readonly [S in DataProtectionKey]: string };
 
 /** Who refuses the change: the database's own policy, or the one a ref declares for its database. */
 function refusingPolicy(source: PolicySource, forbids: string): string {
@@ -163,13 +160,7 @@ function refusingPolicy(source: PolicySource, forbids: string): string {
 }
 
 const KEEP_APPLIED_MIGRATION =
-  'If another database has already applied a migration listed here, keep it as it is.';
-
-function doItAnyway(source: PolicySource): string {
-  return source.kind === 'ref'
-    ? `To do it anyway, whoever owns that database must first change the data protection policy ${source.refName} declares.`
-    : 'To do it anyway, whoever owns the database must first change its data protection policy.';
-}
+  'If another database has already applied a migration listed here, keep it as it is: this database cannot run it, so report that to whoever owns the database.';
 
 function quotedList(names: readonly string[]): string {
   const quoted = names.map((name) => `"${name}"`);
@@ -187,7 +178,7 @@ function extensionsOwnMigrations(spaceIds: readonly string[]): string {
 
 /** What a user can do about refused operations in the application's contract space, for the command that refused them. */
 function keepAppProtected(
-  setting: DataProtectionSetting,
+  setting: DataProtectionKey,
   command: DataProtectionCheckedCommand,
   operations: readonly DataProtectionRefusedOperation[],
   alongsideExtensions: boolean,
@@ -270,7 +261,6 @@ function keepProtected(
           migrationPlan,
         )),
     ...(extensionSpaces.length === 0 ? [] : [extensionsOwnMigrations(extensionSpaces)]),
-    doItAnyway(refusal.source),
   ].join(' ');
 }
 

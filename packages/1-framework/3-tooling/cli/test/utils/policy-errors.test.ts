@@ -7,7 +7,10 @@ const TARGET = 'b'.repeat(64);
 const invocation: CliInvocation = { cwd: '/work/app', configPath: undefined, dbGiven: true };
 
 describe('errorPolicyMismatch', () => {
-  it('names each differing setting the ref declares, and the two ways to make them agree', () => {
+  const REPORT =
+    "Nothing runs while production declares policies that differ from the database's. Report the difference to whoever owns the database.";
+
+  it('names each differing setting, and says to report the difference whichever side is stricter', () => {
     const differences = [
       {
         setting: 'change',
@@ -16,12 +19,10 @@ describe('errorPolicyMismatch', () => {
       },
       {
         setting: 'dataProtection.dataLoss',
-        declared: 'data-loss-forbidden',
+        declared: 'data-loss-permitted',
         inForce: 'data-loss-with-consent',
       },
     ] as const;
-    const recovery =
-      "Make the ref match the database, or have whoever owns the database apply the ref's policies.";
 
     expect(
       errorPolicyMismatch({ spaceId: 'app', refName: 'production', differences }).toEnvelope(),
@@ -30,9 +31,9 @@ describe('errorPolicyMismatch', () => {
       code: 'MIGRATION.POLICY_MISMATCH',
       severity: 'error',
       summary: "The ref's policies differ from the database's",
-      why: 'production declares change: migrate; the database has change: migrate, reconcile. production declares dataProtection.dataLoss: data-loss-forbidden; the database has dataProtection.dataLoss: data-loss-with-consent.',
-      fix: recovery,
-      nextActions: [{ kind: 'user-choice', label: recovery }],
+      why: 'production declares change: migrate; the database has change: migrate, reconcile. production declares dataProtection.dataLoss: data-loss-permitted; the database has dataProtection.dataLoss: data-loss-with-consent.',
+      fix: REPORT,
+      nextActions: [{ kind: 'user-choice', label: REPORT }],
       meta: { spaceId: 'app', refName: 'production', differences },
     });
   });
