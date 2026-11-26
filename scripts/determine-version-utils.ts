@@ -5,6 +5,7 @@
 
 import {
   formatVersion,
+  isPublishedReleaseCandidate,
   type ParsedVersion,
   parseVersion,
   releaseOfRootVersion,
@@ -137,14 +138,7 @@ export function composeDevVersion(
  * release candidates.
  */
 function counterLine(version: ParsedVersion): string {
-  if (
-    version.level?.name === 'rc' &&
-    version.major === 8 &&
-    version.minor === 0 &&
-    version.patch === 0
-  ) {
-    return formatVersion({ ...version, dev: undefined });
-  }
+  if (isPublishedReleaseCandidate(version)) return formatVersion({ ...version, dev: undefined });
   return version.major < 8 ? `${version.major}.${version.minor}` : 'levels';
 }
 
