@@ -132,7 +132,7 @@ function prisma7Inputs(overrides: Partial<ResolvedInitInputs> = {}): ResolvedIni
       packages: [],
       unread: [],
       warnings: [],
-      everyLineTilde: false,
+      facadeBelowGa: false,
     },
     preinstalled: [],
     writeEnv: false,

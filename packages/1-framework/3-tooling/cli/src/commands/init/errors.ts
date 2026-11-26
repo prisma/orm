@@ -749,20 +749,16 @@ export function errorInitRequiredPeersAtAnotherVersion(options: {
   /** Those `package.json` lists at the required version, which the package manager's install puts in place. */
   readonly listedAtRequired: readonly string[];
   /**
-   * Those of `listedAtRequired` whose installed copy the listed line does not admit, held there by
-   * an entry of `package.json` that pins it, so an install alone changes nothing.
+   * Those of `listedAtRequired` whose installed copy the listed line does not admit. An install may
+   * put the listed version in place, or an override, a resolution or the lockfile may keep the copy.
    */
-  readonly pinned: readonly {
-    readonly name: string;
-    readonly found: string;
-    readonly field: string;
-  }[];
+  readonly outsideListedLine: readonly { readonly name: string; readonly found: string }[];
   /** The package manager's own install command. */
   readonly restoreCommand: string;
 }): CliStructuredError {
-  const { packageName, packages, pinned } = options;
+  const { packageName, packages, outsideListedLine } = options;
   const listedAtRequired = options.listedAtRequired.filter(
-    (name) => !pinned.some((pin) => pin.name === name),
+    (name) => !outsideListedLine.some((outside) => outside.name === name),
   );
   const relisted = packages.filter((pkg) => pkg.listed !== undefined);
   const steps: string[] = relisted.map((pkg) =>
@@ -770,9 +766,9 @@ export function errorInitRequiredPeersAtAnotherVersion(options: {
       ? `Make the line for ${pkg.name} in package.json resolve to ${pkg.required} (it is \`${pkg.listed}\` now, so change the version where it points, such as the catalog entry or the workspace package) and run \`${options.restoreCommand}\``
       : `Change the line for ${pkg.name} in package.json from ${pkg.listed} to ${pkg.required} and run \`${options.restoreCommand}\``,
   );
-  for (const pin of pinned) {
+  for (const outside of outsideListedLine) {
     steps.push(
-      `package.json already lists ${pin.name} at a version ${packageName} accepts, but its \`${pin.field}\` entry keeps the installed copy at ${pin.found}: remove that entry and run \`${options.restoreCommand}\``,
+      `package.json already lists ${outside.name} at a version ${packageName} accepts, but ${outside.found} is installed: run \`${options.restoreCommand}\`, and if ${outside.name} is still at another version, an override, a resolution or the lockfile pins it, so remove that and run \`${options.restoreCommand}\` again`,
     );
   }
   if (listedAtRequired.length > 0) {

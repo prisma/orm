@@ -405,7 +405,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             warn(warning);
           }
         }
-        const cliTilde = inputs.requiredPeers.everyLineTilde ? cliTildeSpec(ctx.cwd) : undefined;
+        const cliTilde = inputs.requiredPeers.facadeBelowGa ? cliTildeSpec(ctx.cwd) : undefined;
         const secondDevDeps = [
           engineDevDependencySpec(ctx.cwd),
           ...(cliTilde === undefined ? [] : [cliTilde]),

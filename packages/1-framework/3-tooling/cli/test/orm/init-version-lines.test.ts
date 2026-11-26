@@ -103,7 +103,7 @@ describe('the lines init writes, read from how the facade names its peers', () =
   });
 });
 
-describe('whether every line takes a tilde, so the prisma line does too', () => {
+describe('whether the facade is below GA', () => {
   it.each([
     ['a facade below GA that init adds', '8.1.0-ea.1', ['~8.1.0'], true, true],
     ['a facade below GA the project lists', '8.1.0-ea.1', ['~8.1.0'], false, true],
@@ -111,7 +111,7 @@ describe('whether every line takes a tilde, so the prisma line does too', () => 
     ['a GA facade the project lists', '8.1.2', ['~8.1.0'], false, false],
     ['the release candidates', '8.0.0-rc.27', ['8.0.0-rc.27'], true, false],
   ])('decides %s', (_case, version, peers, addsFacade, tilde) => {
-    expect(versionLines(version, peers, { addsFacade }).everyLineTilde).toBe(tilde);
+    expect(versionLines(version, peers, { addsFacade }).facadeBelowGa).toBe(tilde);
   });
 });
 

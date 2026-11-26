@@ -368,6 +368,9 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
   );
 });
 
+const OUTSIDE_LISTED_LINE =
+  'package.json already lists @prisma/orm-framework at a version @prisma/orm-postgres accepts, but 8.0.0 is installed: run `pnpm install`, and if @prisma/orm-framework is still at another version, an override, a resolution or the lockfile pins it, so remove that and run `pnpm install` again, then run `prisma orm init` again.';
+
 describe('init --skip-install with a required peer installed at another version', () => {
   function frameworkInstalledAt(version: string): void {
     writeProjectFile(
@@ -436,8 +439,7 @@ describe('init --skip-install with a required peer installed at another version'
           meta: { restoreCommand: 'pnpm install' },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label:
-                'Run `pnpm install` to install @prisma/orm-framework at the version package.json lists, then run `prisma orm init` again.',
+              label: OUTSIDE_LISTED_LINE,
             }),
           ]),
         },
@@ -446,13 +448,9 @@ describe('init --skip-install with a required peer installed at another version'
     timeouts.coldTransformImport,
   );
 
-  it.each([
-    ['resolutions', { resolutions: { '@prisma/orm-framework': '8.0.0' } }],
-    ['overrides', { overrides: { '@prisma/orm-framework': '8.0.0' } }],
-    ['pnpm.overrides', { pnpm: { overrides: { '@prisma/orm-framework': '8.0.0' } } }],
-  ])(
-    'says to remove the %s entry that keeps a package the project lists at the required version at another one',
-    async (field, pin) => {
+  it(
+    'gives the same advice when a resolution pins a package the project lists at the required version',
+    async () => {
       writeProjectFile(
         'package.json',
         JSON.stringify({
@@ -465,7 +463,7 @@ describe('init --skip-install with a required peer installed at another version'
             'temporal-polyfill': '^1.0.8',
             pg: '^8.22.0',
           },
-          ...pin,
+          resolutions: { '@prisma/orm-framework': '8.0.0' },
         }),
       );
 
@@ -476,9 +474,7 @@ describe('init --skip-install with a required peer installed at another version'
         error: {
           code: 'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
           nextActions: expect.arrayContaining([
-            expect.objectContaining({
-              label: `package.json already lists @prisma/orm-framework at a version @prisma/orm-postgres accepts, but its \`${field}\` entry keeps the installed copy at 8.0.0: remove that entry and run \`pnpm install\`, then run \`prisma orm init\` again.`,
-            }),
+            expect.objectContaining({ label: OUTSIDE_LISTED_LINE }),
           ]),
         },
       });
