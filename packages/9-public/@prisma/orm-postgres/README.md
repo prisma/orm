@@ -23,7 +23,13 @@ pnpm add -D @types/pg
 └── @prisma/orm-toolchain       ORM command family for the `prisma` CLI, emitter, config loader
 ```
 
-The application lists the platform packages because it must hold exactly one copy of each: the platform packages recognise a data-type value by which copy made it. A data-type value made by a second copy is refused with an error that does not name the cause, and TypeScript reports errors where the two copies' types meet. A package manager never gives a package its own copy of a peer dependency; it uses the one the application lists, and it reports a version that does not match. When the packages that disagree are ones the application lists itself, npm refuses the install, and pnpm, Yarn and Bun install and print a peer dependency warning. A successful install does not prove the versions match, so read the peer warnings it prints. Application code still imports only from `@prisma/orm-postgres` and from the extensions, never from a platform package. The decision record explains this in full: [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md).
+**Why your application lists the platform packages.** It must have exactly one copy of each. With two copies, Prisma fails with an error that does not say why, because one copy does not accept a value that the other created.
+
+- **Listing them is what gives you one copy.** This package requires them as peer dependencies, and a package manager installs a peer dependency only where your application lists it.
+- **A version that does not fit is reported when you install.** npm refuses the install. pnpm, Yarn and Bun install and print a peer dependency warning, so read the warnings: a successful install does not prove that the versions fit.
+- **You never import them.** Your code imports only from `@prisma/orm-postgres` and from extensions.
+
+[ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) explains this in full.
 
 In a repository with several applications on different Prisma versions, npm workspaces and Bun with its hoisted linker can give one application two copies of a platform package without a warning. Keep the applications on one Prisma version, or use pnpm, Yarn, or Bun with its isolated linker.
 

@@ -51,3 +51,9 @@ When a project already lists a GA facade, `init` leaves that line and writes eac
 ## The development-build counter reads one package's `dev` tag
 
 `scripts/determine-version.ts` takes the next `-dev.N` counter from `@prisma/orm-toolchain`'s `dev` dist-tag alone. If a development publish fails part-way, some packages can hold `X-dev.10` while the toolchain's tag still says `X-dev.9`. The next push then computes `dev.10` again, and the publish script treats a version already on the registry as a successful no-op, so those packages do not get the new commit's code until the counter passes them. The run that failed part-way exits with an error, and only the `dev` channel is affected. This was so before levels, when every package shared one version. The fix is to take the counter above the highest development build any package has on the current counter line, which reads every package's versions from the registry; it belongs with the publish workflow's later steps, the next slice.
+
+## Extension authors have no published tool that checks their Prisma dependency lines
+
+`@internal/extension-author-tools` holds one tool, `prisma-8-check-pins`, which checks that an extension lists its Prisma peer dependencies at exact versions. The package is private, so no extension outside this repository can install it, and nothing inside this repository runs it. It also checks `@internal/*` names, which no extension lists any more, and exact versions, which ranges replace from release 8.0. Its README used to tell extension authors to install it; it now says the package is private.
+
+To decide: publish a check that an extension author can run, which knows the rules from release 8.0 (a caret on a GA package, a tilde on one below GA or when a function below GA is used, never `8.0.0`), or remove the package. Whether extension authors get such a tool as part of the published surface was reported to the compatibility stream.
