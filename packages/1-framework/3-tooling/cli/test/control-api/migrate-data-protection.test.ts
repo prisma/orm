@@ -17,7 +17,7 @@ import {
 } from './migrate-data-protection.fixtures';
 
 const KEEP_DATA =
-  "This database's data protection policy forbids losing data, so these operations cannot run on it. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied, delete the migration and any later ones no database has applied, and plan again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting back in the contract what the migration removes. To do it anyway, whoever owns the database must first change its data protection policy.";
+  "This database's data protection policy forbids losing data, so these operations cannot run on it. If another database has already applied a migration listed here, keep it as it is: this database cannot run it, so report that to whoever owns the database. For a migration no database has applied, delete the migration and any later ones no database has applied, and plan again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting back in the contract what the migration removes.";
 
 afterEach(removeProjectDirs);
 

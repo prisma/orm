@@ -49,7 +49,6 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
 import { withEditsAsWritten } from '../../utils/calls-as-written';
 import { CliStructuredError, errorStatementNeedsMigrationFile } from '../../utils/cli-errors';
-import type { DataProtectionSetting } from '../../utils/data-protection-settings';
 import { dbInitPlanningFailedError, dbInitRunnerFailureError } from '../../utils/db-init-failure';
 import { dbUpdateRunnerFailureError } from '../../utils/db-update-failure';
 import {
@@ -63,6 +62,7 @@ import {
   type DataProtectionRefusedOperation,
   declaredSettingsText,
 } from '../../utils/policy-errors';
+import type { DataProtectionKey } from '../../utils/policy-settings';
 import type { CliInvocation } from '../../utils/printed-command';
 import {
   type AnswerPlanQuestions,
@@ -948,7 +948,7 @@ function wrapPlanResult(args: {
   readonly databaseStorageHash: string | undefined;
   /** `undefined` for `db init`. */
   readonly migrationPlan: MigrationPlanArguments | undefined;
-  readonly permitted: readonly DataProtectionSetting[];
+  readonly permitted: readonly DataProtectionKey[];
 }): DbInitResult | DbUpdateResult {
   const success: DbInitSuccess | DbUpdateSuccess = {
     mode: 'plan',
@@ -991,7 +991,7 @@ function wrapApplyResult(args: {
   /** Set when `db update` signed the database with a changed contract and ran no operation. */
   readonly changedStorageEntities: readonly ChangedStorageEntity[] | undefined;
   readonly databasePoliciesUpdated: readonly DatabasePolicyDifference[] | undefined;
-  readonly permitted: readonly DataProtectionSetting[];
+  readonly permitted: readonly DataProtectionKey[];
 }): DbInitResult | DbUpdateResult {
   const success: DbInitSuccess | DbUpdateSuccess = {
     mode: 'apply',
