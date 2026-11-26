@@ -318,7 +318,7 @@ describe('errorContractDeserializationFailed', () => {
 describe('errorInvalidRefFile', () => {
   it('describes the ref file when no policy is at fault', () => {
     expect(errorInvalidRefFile('/m/app/refs/prod.json', 'bad').fix).toBe(
-      'Make the ref file valid JSON of the form { "hash": "<64 hex chars>", "invariants": ["..."] }, with an optional "policies" object.',
+      'Make the ref file valid JSON of the form { "formatVersion": 1, "hash": "<64 hex chars>", "invariants": ["..."] }, with an optional "policies" object.',
     );
   });
 

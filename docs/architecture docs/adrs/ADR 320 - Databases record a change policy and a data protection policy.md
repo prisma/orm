@@ -13,6 +13,7 @@ A team wants its production database to change only through reviewed migrations.
 ```json
 // migrations/app/refs/production.json
 {
+  "formatVersion": 1,
   "hash": "4b1c…e09a",
   "invariants": [],
   "policies": { "change": ["migrate"] }

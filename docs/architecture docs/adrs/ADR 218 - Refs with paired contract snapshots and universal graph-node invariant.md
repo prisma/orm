@@ -31,7 +31,7 @@ Each on-disk ref `<name>` is a **pointer file** plus a **paired contract snapsho
 
 ```text
 migrations/app/refs/
-├── db.json                 # { "hash": "…", "invariants": [] }
+├── db.json                 # { "formatVersion": 1, "hash": "…", "invariants": [] }
 ├── db.contract.json        # full contract IR at that hash
 └── db.contract.d.ts        # TypeScript handle for the snapshot
 ```

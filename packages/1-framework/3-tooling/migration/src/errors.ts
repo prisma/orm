@@ -256,7 +256,7 @@ function alternatives(values: readonly string[], conjunction: 'or' | 'and' = 'or
 }
 
 const REF_FILE_SHAPE =
-  'Make the ref file valid JSON of the form { "hash": "<64 hex chars>", "invariants": ["..."] }, with an optional "policies" object.';
+  'Make the ref file valid JSON of the form { "formatVersion": 1, "hash": "<64 hex chars>", "invariants": ["..."] }, with an optional "policies" object.';
 
 type DatabasePoliciesKey = (typeof DATABASE_POLICIES_KEYS)[number];
 type DataProtectionKey = (typeof DATA_PROTECTION_KEYS)[number];

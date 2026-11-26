@@ -271,7 +271,19 @@ describe('ref policy delete', () => {
 
       expect(run.exitCode).toBe(2);
       expect(run.json.at(-1)).toMatchObject({
-        envelope: { ok: false, error: { code: 'MIGRATION.INVALID_REF_FILE' } },
+        envelope: {
+          ok: false,
+          error: {
+            code: 'MIGRATION.INVALID_REF_FILE',
+            why: expect.stringContaining('extra must be removed'),
+          },
+          nextActions: [
+            {
+              kind: 'user-choice',
+              label: expect.stringContaining('{ "formatVersion": 1, "hash"'),
+            },
+          ],
+        },
       });
       expect(await readText(path)).toBe(unknownField);
     });

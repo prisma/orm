@@ -42,7 +42,7 @@ Production declares which data invariants it requires by listing them on the ref
 
 ```json
 // migrations/refs/prod.json
-{ "hash": "…", "invariants": ["backfill-user-phone"] }
+{ "formatVersion": 1, "hash": "…", "invariants": ["backfill-user-phone"] }
 ```
 
 `migrate --to prod` then routes through a path that provides the named invariant — applying the schema change *and* the backfill — and records `backfill-user-phone` on the marker on success. A second `migrate --to prod` against the same database short-circuits to a structural BFS, because marker subtraction empties the effective required set.

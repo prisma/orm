@@ -56,6 +56,7 @@ The defaults are today's behaviour, so existing databases behave exactly as befo
 ```json
 // migrations/app/refs/production.json
 {
+  "formatVersion": 1,
   "hash": "4b1c…e09a",
   "invariants": [],
   "policies": {
