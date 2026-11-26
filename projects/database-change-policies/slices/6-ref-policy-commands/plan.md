@@ -13,9 +13,9 @@ One persistent implementer (Opus, medium effort) runs both dispatches in order. 
 - Tests first, in `packages/1-framework/3-tooling/cli/test/orm/` (next to `ref-set.test.ts`), for every item in the spec's Tests section that runs without a database, including the source check and the "no output names the consent flag" check.
 - The strictness comparison and the short-to-long mapping, in the CLI package, derived from the level lists in `framework-components/src/control/database-policies.ts`.
 - The three commands under `src/orm/ref/policy/`, their operations in `src/control-api/operations/`, not exported from `src/exports/control-api.ts`.
-- The group in `BIN_GROUPS` and the commands in `createBinCommands` (`src/orm/cli.ts`) and in `src/orm/family.ts`.
+- The group in `BIN_GROUPS` (`src/orm/cli.ts`) and the commands in `createOrmCommands` (`src/orm/family.ts`), the one list the family, the binary and the tests build from.
 - `migration ref list` human table shows declared policies.
-- `MIGRATION.POLICY_MISMATCH` advice chosen per difference (`src/utils/policy-errors.ts`), with tests for a looser ref, a stricter ref and both.
+- `MIGRATION.POLICY_MISMATCH` and `MIGRATION.DATA_PROTECTION_FORBIDS` (`src/utils/policy-errors.ts`) suggest no policy change, with a test that builds every policy error and fails if its advice does.
 
 **Builds on:** nothing. **Hands to:** dispatch 2.
 

@@ -13,7 +13,7 @@ $ prisma migration ref policy set production --change migrate --data-loss forbid
 change:                   migrate, reconcile (default)  →  migrate  tightens
 dataProtection.dataLoss:  data-loss-with-consent (default)  →  data-loss-forbidden  tightens
 
-ℹ No database was changed. A database takes on these policies only when its owner applies them in a deploy to production; until then, deploys to production refuse while the database's policies differ. prisma migration plan --to production now checks plans against dataProtection.dataLoss.
+ℹ No database was changed. Deploys to production refuse while the database's policies differ from these. prisma migration plan --to production now checks plans against dataProtection.dataLoss.
 
 $ prisma migration ref policy show production
 ℹ Policies ref production declares (migrations/app/refs/production.json)
@@ -72,7 +72,7 @@ Prints the three settings the ref declares, each with its value or "not declared
 - At least one flag is required.
 - A level is accepted in the short form or in the long form of its own setting (`forbidden` or `data-loss-forbidden` for `--data-loss`). The long form of the other setting is rejected. The file always stores the long form. The short forms are derived from the framework's level lists, not written out again.
 - `change` is stored without repeats, in the order `migrate`, `reconcile`. Help says the list replaces the declared one, so `--change reconcile` alone means reconciliation only.
-- The closing line says no database was changed, that a database takes on the policies only when its owner applies them in a deploy to that ref, that until then deploys to that ref refuse while the database's policies differ, and that `migration plan --to <ref>` now checks plans against a setting that became `forbidden`, or no longer checks plans against one that was `forbidden`. `migration plan` refuses only for a `forbidden` level, so other changes get no plan sentence. It does not name the consent flag.
+- The closing line says no database was changed and that deploys to that ref refuse while the database's policies differ from these, then that `migration plan --to <ref>` now checks plans against a setting that became `forbidden`, or no longer checks plans against one that was `forbidden`. `migration plan` refuses only for a `forbidden` level, so other changes get no plan sentence. It does not name the consent flag, and does not point at applying the policies to a database.
 
 ### `migration ref policy delete <ref> <setting>...`
 
@@ -107,13 +107,13 @@ Each changed setting is printed with its value before and after and one label. T
 
 ### Help text
 
-The group description defines a ref, the change policy and the data protection policy, says that "policy" here is not the control policy of a database object, and says a database takes on a ref's policies only in a deploy its owner gives consent to, pointing to `prisma db migrate --help` for how. The `set` and `delete` descriptions say: "A refused deploy or plan is not a reason to change a ref's policies. They record how the team decided that database may change."
+The group description defines a ref, the change policy and the data protection policy, says that "policy" here is not the control policy of a database object, and says the commands change only the ref file and never connect to a database. It does not point at how a database takes on a ref's policies. The `set` and `delete` descriptions say: "A refused deploy or plan is not a reason to change a ref's policies. They record how the team decided that database may change."
 
 `migration ref list` shows each ref's declared policies in its human table. Its data lines and `--json` do not change.
 
 ## Changes to existing advice
 
-`MIGRATION.POLICY_MISMATCH` used to advise "Make the ref match the database, or have whoever owns the database apply the ref's policies." Both halves suggest a policy change. The error now states each difference in its `why` and advises only: "Nothing runs while <ref> declares policies that differ from the database's. Tell the user, or whoever owns the database, about the difference."
+`MIGRATION.POLICY_MISMATCH` used to advise "Make the ref match the database, or have whoever owns the database apply the ref's policies." Both halves suggest a policy change. The error now states each difference in its `why` and advises only: "Nothing runs while <ref> declares policies that differ from the database's. Report the difference to whoever owns the database."
 
 `MIGRATION.DATA_PROTECTION_FORBIDS` used to end a refusal with "To do it anyway, whoever owns the database must first change its data protection policy." (or, for a refusal by a ref, "…change the data protection policy <ref> declares."). Every refusal now ends with the recoveries for the refused operations, and no sentence suggests a policy change.
 

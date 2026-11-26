@@ -131,7 +131,7 @@ The next actions depend on the database's change policy:
 |---|---|---|
 | `MIGRATION.CHANGE_POLICY_FORBIDS` | A command needs a strategy the database's change policy does not include | When `reconcile` is refused: author a migration with `prisma migration plan` and deploy it. When `migrate` is refused: run `prisma db update`. |
 | `MIGRATION.DATA_PROTECTION_FORBIDS` | A run or plan contains an operation the data protection policy forbids. `meta` lists each operation and its subject. | Change the contract or the migration so it does not lose data or widen access: state a rename, convert a type change, or keep the data. No advice suggests changing a policy (ADR 334). |
-| `MIGRATION.POLICY_MISMATCH` | A ref declares a policy that differs from the database's. `why` lists each differing setting with both values. | "Nothing runs while <ref> declares policies that differ from the database's. Tell the user, or whoever owns the database, about the difference." No advice suggests changing either policy (ADR 334). |
+| `MIGRATION.POLICY_MISMATCH` | A ref declares a policy that differs from the database's. `why` lists each differing setting with both values. | "Nothing runs while <ref> declares policies that differ from the database's. Report the difference to whoever owns the database." No advice suggests changing either policy (ADR 334). |
 
 ### Composer
 
