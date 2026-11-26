@@ -37,7 +37,7 @@ db.orm.users.preview_search(...)       // Preview: the name says so
 
 ## The packages in these examples
 
-- **Facade**, such as `@prisma/orm-postgres`: the one package an application picks for its database. A database's level is its facade's level.
+- **Facade**, such as `@prisma/orm-postgres`: the package an application installs to use a database. A database's level is its facade's level.
 - **Platform packages**: `@prisma/orm-framework` (the core every database shares), `@prisma/orm-family-sql` (what SQL databases share), `@prisma/orm-target-postgres` (what is specific to PostgreSQL) and `@prisma/orm-toolchain` (the `prisma orm` commands). The facade is built on them, and the application lists them too ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)).
 - **Extension**, such as `@prisma/orm-extension-pgvector`: adds data types or operations, built on the platform packages.
 - **Library integration**, such as `@prisma/orm-better-auth`: connects an outside library to an application's Prisma client. It follows the same version rules as an extension.
@@ -55,8 +55,8 @@ A feature flag would hide both: it is set in a config file, while the code that 
 ## Decision
 
 1. **One scale of maturity, with four levels:** Early Access, Preview, Release Candidate and GA. "Below GA" means any of the first three.
-2. **A user sees a level in two places only:** a package's version, and the start of an API's name. The maintainers set each package's level in one file of the release scripts, `packages/0-shared/publish-surface/src/levels.ts`, and the version is computed from it. Docs may repeat a level, but they do not decide it.
-3. **All our packages share a release number,** which is the major and the minor: release `8.3` publishes every package at `8.3`. A fix to one package raises only that package's patch number, or its level's counter below GA.
+2. **A user sees a level in two places only:** a package's version, and the start of an API's name. The maintainers set each package's level in one file of the release scripts, `packages/0-shared/publish-surface/src/levels.ts`, and the version is computed from it. Docs may repeat a level, and a check keeps each package's README in step with the level it declares, but docs do not decide it.
+3. **Our packages share a release number,** which is the major and the minor: release `8.3` publishes every package at `8.3`, except one with [its own version](#packages-with-their-own-version). A fix to one package raises only that package's patch number, or its level's counter below GA.
 4. **The ranges between our packages, and the npm dist-tag each package is published under, are computed** by the release scripts from the release number and the levels.
 5. **No feature flags.** Functionality that is not ready ships in a package below GA, or as an API whose name carries its level.
 
@@ -73,7 +73,7 @@ A level is defined by the least we do for a package or an API at that level.
 
 **A failing test blocks every package.** Our packages are released together, so a failing test of a package at Preview or above blocks the release for all of them. Early Access is the one level that may be released with a failing test; that is allowed, not required.
 
-**A level moves up within a minor, and down only at a new minor.** A version can only move forward, and the levels' words sort upward in the order of the levels: `ea`, `preview`, `rc`, then the plain version. So a package can move up in any release. A package that has never been GA can move down at a new minor. A package that has been GA does not go below GA again: the release scripts refuse it, because GA promises compatibility until the next major version, and whether a later minor may withdraw that promise has not been agreed.
+**A level moves up within a minor, and down only at a new minor.** A version can only move forward, and the levels' words sort upward in the order of the levels: `ea`, `preview`, `rc`, then the plain version. So a package can move up in any release. A package that has never been GA can move down at a new minor. The release scripts refuse to take a GA package below GA, at any later release. This is not settled: GA promises compatibility until the next major version, and whether a later minor or a new major may take a package below GA has not been agreed.
 
 **This is not the support scale.** The public issue [Priorities & Operating Contexts](https://github.com/prisma/orm/issues/25843) sorts databases, runtimes and frameworks into First-Class, Supported and Unofficial. That says where the maintainers spend effort and how they answer issues. A maturity level says how finished one package is. A First-Class database can have an Early Access facade while that facade is being built.
 
@@ -97,13 +97,15 @@ Nothing else has a level of its own. An entrypoint (a path inside a package that
 | Preview | `8.3.0-preview.0` | `preview_search` |
 | Early Access | `8.3.0-ea.0` | `ea_search` |
 
-The word and the name are joined by an underscore, so that the level cannot be read as part of the name: `previewImage` could be a GA API about image previews, while `preview_image` can only be an `image` API at Preview. A reader and the check that compares each package's exports with the last release can both tell the level from the name alone. Every name in TypeScript, including a config option, takes this form. A command-line flag, which is written in kebab case, is `--preview-search`.
+The word and the name are joined by an underscore, so that the level cannot be read as part of the name: `previewImage` could be a GA API about image previews, while `preview_image` can only be an `image` API at Preview. A reader, and any tool that reads names, can then tell the level from the name alone. Every name in TypeScript, including a config option, takes this form.
+
+A name outside TypeScript uses the same word with that kind of name's own separator: a command-line flag is `--preview-search`, and a contract-language attribute or an environment variable follows its own convention the same way. In those forms the level cannot be told from an ordinary word by its form alone, so their reference documentation says which names carry a level.
 
 **When an API moves up a level, it gets the name for the new level.** Below GA, the old name may be removed in the same release, since nothing below GA is kept compatible. When an API reaches GA, the plain name is added and the old name keeps working until the next major version, so that a user's code does not break on the day the API becomes stable.
 
 ## Version numbers
 
-- **The major and minor are the release number.** Release `8.3` publishes every package at `8.3`, changed or not.
+- **The major and minor are the release number.** Release `8.3` publishes every package at `8.3`, changed or not, except one with [its own version](#packages-with-their-own-version).
 - **A GA package has its own patch number.** A fix to one GA package raises that package's patch number, to `8.3.1`, and no other package's.
 - **A package below GA has a suffix with its level and a counter.** A fix to it raises the counter, from `8.3.0-preview.0` to `8.3.0-preview.1`, and not the patch number.
 
@@ -132,7 +134,7 @@ The packages of one release are tested together, so among themselves they accept
 - A GA release is published under the `latest` dist-tag.
 - A release below GA is published under `latest` if the package has never had a GA release in any major version, so that a plain install works and the version shows the level. Otherwise it is published under a tag named after its level: `ea`, `preview` or `rc`.
 
-A `0.x` version, which Semantic Versioning reserves for initial development, does not count as a GA release, and neither does an `8.0.0-rc.N` version.
+A version published before release `8.0` says nothing about a package's level: the `0.x` versions are what Semantic Versioning calls initial development, and the `8.0.0-rc.N` versions were published before levels existed. Neither counts as a GA release.
 
 ## What an application writes
 
@@ -154,13 +156,13 @@ Every package of release `8.0` that shares the release number starts at patch 1:
 | Preview | `8.0.1-preview.0` | `8.3.0-preview.0` |
 | Early Access | `8.0.1-ea.0` | `8.3.0-ea.0` |
 
-The registry already holds `8.0.0-rc.1` to `8.0.0-rc.N` for every package, published before levels existed. A version below GA at patch 0 would sort below them: `8.0.0-ea.0` comes before `8.0.0-rc.26`, because `ea` sorts before `rc`. A user's `~8.0.0-ea.0` would then admit an old release candidate, and in a test on a local registry some package managers installed one. Patch 1 sorts above all of them.
+The registry already holds `8.0.0-rc.1` to `8.0.0-rc.N` for every package, published before levels existed. A version below GA at patch 0 would sort below them: `8.0.0-ea.0` comes before `8.0.0-rc.26`, because `ea` sorts before `rc`. A user's `~8.0.0-ea.0` would then admit an old release candidate. In a test on a local registry, Bun always installed one, Yarn did unless the release candidates were marked deprecated, and npm and pnpm did once `latest` pointed at a later minor. Patch 1 sorts above all of them.
 
 GA packages start at `8.0.1` too, so that one rule covers the release. The repository's version, the git tag and the GitHub release are `8.0.1` as well, so the number announced is the number installed. No package is ever `8.0.0`. Within release `8.0` a package is numbered as at any release, keeping patch 1 when it moves up (`8.0.1-ea.1` to `8.0.1-rc.0`, then to `8.0.1`). The next release is `8.1.0`.
 
 ## Packages with their own version
 
-**A package of ours that is released on its own schedule, outside the shared release, has its own version and no level.** It names our packages at the ranges an extension uses. `@prisma/orm-extension-paradedb` is one. Its versions start at `0.18.0`, above every version it was published at before, so that a user's existing range on it cannot pick up one of those.
+**A package in this repository that another team maintains has its own version and no level,** because that team, not the shared release, decides when it changes and how finished it is. It names our packages at the ranges an extension uses. `@prisma/orm-extension-paradedb` is one. Its versions start at `0.18.0`, above the `0.16.0` and `0.17.0` it was published at before, so that a range spanning several `0.x` minors, such as `0.x`, picks a new version and not an old one.
 
 ### Packages maintained outside this repository
 
@@ -173,6 +175,7 @@ Two costs follow for such a maintainer: a feature of theirs that needs no newer 
 - **A user learns what is kept compatible from their own project:** the versions in their `package.json` and the names in their code. Docs may describe a level, but they do not decide one.
 - **Two of our packages in one release can have different versions,** such as `8.3.1` and `8.3.0-ea.2`; they share only the release number. A contributor reads the release number from the repository's root `package.json`, and the release scripts print every package's version.
 - **A user of a facade below GA edits their version lines at each new release.**
+- **There is no second word**, such as "experimental", "unstable" or "proof of concept", for what is not finished.
 - **Promoting an API to GA adds a new name.** The old name keeps working until the next major version.
 
 ## Alternatives considered

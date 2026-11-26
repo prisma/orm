@@ -66,7 +66,7 @@ Each package's level is declared in [`packages/0-shared/publish-surface/src/leve
 
 ## Ranges between our packages
 
-`scripts/set-version.ts` writes the ranges into the manifests from the release plan, and the build refuses a manifest that disagrees. Nobody writes one by hand.
+`scripts/set-version.ts` writes the ranges into the manifests from the release plan, and the publish checks refuse a manifest that disagrees. Nobody writes one by hand.
 
 | From | To | Range |
 | --- | --- | --- |
