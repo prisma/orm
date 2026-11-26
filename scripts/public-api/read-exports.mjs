@@ -388,6 +388,96 @@ function readPath(checker, program, file, packageDir) {
   return info;
 }
 
+const resolveAlias = (checker, symbol) =>
+  symbol && symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+
+const passesItsParameters = (alias) => {
+  const parameters = alias.typeParameters ?? [];
+  const passed = alias.type.typeArguments ?? [];
+  return (
+    passed.length === parameters.length &&
+    passed.every(
+      (argument, index) =>
+        ts.isTypeReferenceNode(argument) &&
+        argument.typeArguments === undefined &&
+        ts.isIdentifier(argument.typeName) &&
+        argument.typeName.text === parameters[index].name.text,
+    )
+  );
+};
+
+// What a declaration declares itself to be another name for: `const a: typeof b`, or
+// `type A<T> = B<T>`, which is how TypeScript emits `const a = b` and how a type is renamed.
+function otherNameOf(checker, declaration) {
+  if (
+    ts.isVariableDeclaration(declaration) &&
+    declaration.type &&
+    ts.isTypeQueryNode(declaration.type)
+  ) {
+    if (declaration.type.typeArguments) return undefined;
+    return resolveAlias(checker, checker.getSymbolAtLocation(declaration.type.exprName));
+  }
+  if (
+    ts.isTypeAliasDeclaration(declaration) &&
+    ts.isTypeReferenceNode(declaration.type) &&
+    passesItsParameters(declaration)
+  ) {
+    return resolveAlias(checker, checker.getSymbolAtLocation(declaration.type.typeName));
+  }
+  return undefined;
+}
+
+// The exports, as `path\0name`, whose names mark them below GA but which name the same thing as
+// an export of the package without such a name, which is held to GA. `isExempt` is the name test.
+export function heldByAnotherName(checker, paths, isExempt) {
+  const namesOf = new Map();
+  for (const [path, info] of paths) {
+    const add = (symbol, name) =>
+      namesOf.set(symbol, [...(namesOf.get(symbol) ?? []), { path, name }]);
+    for (const group of info.groups.values()) {
+      for (const name of group.names) add(group.symbol, name);
+    }
+    for (const [name, kinds] of info.forwardKinds) add(kinds.target, name);
+  }
+  const linked = new Map();
+  const link = (from, to) => linked.set(from, [...(linked.get(from) ?? []), to]);
+  const pending = [...namesOf.keys()];
+  const seen = new Set(pending);
+  while (pending.length > 0) {
+    const symbol = pending.pop();
+    for (const declaration of symbol.declarations ?? []) {
+      const other = otherNameOf(checker, declaration);
+      if (other === undefined) continue;
+      link(symbol, other);
+      link(other, symbol);
+      if (!seen.has(other)) {
+        seen.add(other);
+        pending.push(other);
+      }
+    }
+  }
+  const reached = new Set(
+    [...namesOf]
+      .filter(([, names]) => names.some(({ name }) => !isExempt(name)))
+      .map(([symbol]) => symbol),
+  );
+  const queue = [...reached];
+  while (queue.length > 0) {
+    for (const next of linked.get(queue.pop()) ?? []) {
+      if (reached.has(next)) continue;
+      reached.add(next);
+      queue.push(next);
+    }
+  }
+  return new Set(
+    [...reached].flatMap((symbol) =>
+      (namesOf.get(symbol) ?? [])
+        .filter(({ name }) => isExempt(name))
+        .map(({ path, name }) => `${path}\0${name}`),
+    ),
+  );
+}
+
 // Returns, for each path, its export names, the package's own exported declarations grouped by
 // symbol, its forwards and its augmentations, plus the checker that resolves names in them.
 export function readExports(packageDir, entryPoints) {

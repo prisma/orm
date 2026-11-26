@@ -11,7 +11,13 @@ import { createCompareHost, exportsReaching, nameText } from './compat-declarati
 import { COMPILER_OPTIONS } from './compiler-options.mjs';
 import { apiFingerprint } from './fingerprint.mjs';
 import { entryPointsOf } from './read-api.mjs';
-import { packageOf, readExports, TYPE_FLAGS, VALUE_FLAGS } from './read-exports.mjs';
+import {
+  heldByAnotherName,
+  packageOf,
+  readExports,
+  TYPE_FLAGS,
+  VALUE_FLAGS,
+} from './read-exports.mjs';
 import { BREAKS_FILE, byLastRelease, exportLabel, normaliseMessage } from './records.mjs';
 import { isExemptExport } from './release.mjs';
 
@@ -526,6 +532,7 @@ export function generateTests({
     checker,
     program,
     entryPoints,
+    heldToGa: heldByAnotherName(checker, paths, isExemptExport),
     nextId: id,
   };
 }
@@ -824,7 +831,8 @@ function currentProgram(dir) {
 }
 
 // Generates and compiles the tests for one package. `strict` is whether a break fails the run;
-// exports named preview_* or ea_* never do. `twinSpecifier` imports a second copy of the release;
+// exports named preview_* or ea_* do not, unless the release also exports them under a name without
+// such a prefix. `twinSpecifier` imports a second copy of the release;
 // `budgetMs` is the time for the whole package.
 //
 // Each comparison is first TypeScript's own, on declarations rewritten as compat-declarations.mjs
@@ -1237,7 +1245,12 @@ export function checkPackage({
     version,
     strict,
     counts: { ...generated.counts, notCompared: allNotCompared.length },
-    breaks: unrecorded.map((each) => ({ ...each, failsRun: strict && !isExemptExport(each.name) })),
+    breaks: unrecorded.map((each) => ({
+      ...each,
+      failsRun:
+        strict &&
+        (!isExemptExport(each.name) || generated.heldToGa.has(`${each.path}\0${each.name}`)),
+    })),
     undecided,
     notCompared: allNotCompared,
     recorded,

@@ -355,6 +355,60 @@ describe('checkPackage, with the release treated as GA', () => {
   });
 });
 
+describe('checkPackage on a prefixed name the release also exports under an unprefixed one', () => {
+  let result;
+  const removed = (name) => {
+    result ??= check('promoted-removed', { release: 'promoted-release' });
+    return brokenExports(result).filter((each) => each.name === name);
+  };
+
+  it('fails the run when a renamed export is removed', () => {
+    deepStrictEqual(removed('ea_renamed'), [
+      { path: '.', name: 'ea_renamed', test: 'value', failsRun: true },
+    ]);
+  });
+
+  it('fails the run when a constant typed as the unprefixed value is removed', () => {
+    deepStrictEqual(removed('ea_assigned'), [
+      { path: '.', name: 'ea_assigned', test: 'value', failsRun: true },
+    ]);
+  });
+
+  it('fails the run when a type alias of the unprefixed type is removed', () => {
+    deepStrictEqual(
+      [...removed('ea_Box'), ...removed('ea_Shape')],
+      [
+        { path: '.', name: 'ea_Box', test: 'type', failsRun: true },
+        { path: '.', name: 'ea_Shape', test: 'type', failsRun: true },
+      ],
+    );
+  });
+
+  it('fails the run through a chain of prefixed names', () => {
+    deepStrictEqual(removed('ea_chained'), [
+      { path: '.', name: 'ea_chained', test: 'value', failsRun: true },
+    ]);
+  });
+
+  it('reports only a prefixed name whose group has no unprefixed name', () => {
+    deepStrictEqual(removed('ea_early'), [
+      { path: '.', name: 'ea_early', test: 'value', failsRun: false },
+    ]);
+  });
+
+  it('reports only a prefixed declaration of its own beside an unprefixed one of that name', () => {
+    deepStrictEqual(removed('ea_createClient'), [
+      { path: '.', name: 'ea_createClient', test: 'value', failsRun: false },
+    ]);
+  });
+
+  it('reports only a type alias that does not pass its type arguments through', () => {
+    deepStrictEqual(removed('ea_Fixed'), [
+      { path: '.', name: 'ea_Fixed', test: 'type', failsRun: false },
+    ]);
+  });
+});
+
 describe('checkPackage on names a path forwards from another package', () => {
   it('checks only that they still exist', () => {
     const result = check('forward-release', {
