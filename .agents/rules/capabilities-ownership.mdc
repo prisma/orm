@@ -1,19 +1,20 @@
 ---
-description: Each capability is declared by the component that knows the fact; contracts declare requirements
+description: Capabilities are dependencies; a database version or connection provides them, a contract requires them
 globs: ["docs/**"]
 alwaysApply: false
 ---
 
 # Capability Ownership
 
-**A capability is declared by the component that knows the fact:** the target (what a database version provides), the driver (what the connection provides), the adapter (what it can write as a query). The contract only lists required capabilities in `contract.capabilities`. See ADR 335.
+**Capabilities are dependencies.** A database version or a connection *provides* a capability, declared by the component that knows the fact: the target (by version) or the driver. A contract *requires* capabilities, in the list its author writes (`requiredCapabilities`). See ADR 335.
 
 ## Do
 
-- Say the target declares the database's capabilities by version
-- Frame contract capabilities as requirements; signing checks the database, the client checks its stack
+- Write "provides" for a database version or a connection, and "requires" for a contract
+- Say a feature is unavailable when the contract declares no dependency on its capability, and that adding it to the required capabilities enables it
 
 ## Avoid
 
-- Wording that implies the contract defines capabilities, or that the client reads them from the database at connect time
+- "The contract's capabilities", which reads as what the contract can do; and "does not require", which reads as nothing being wrong
+- Wording that implies a default or implied list, or that the client reads capabilities from the database at connect time
 - Treating `sql.*` as a separate “SQL family” capability set rather than keys shared across targets

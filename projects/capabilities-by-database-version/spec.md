@@ -6,15 +6,17 @@ The reasoning, the scenarios and the prior art behind this spec are in [design-n
 
 An application states in its contract which capabilities it requires, and three things are then true:
 
-1. **The requirements describe the user's real environment.** The user states the database version and the connection the application runs over, and the contract's required capabilities follow from them. A feature that needs PostgreSQL 17 is available to a project on 17 and absent, at type-check, from a project on 16.
+1. **The requirements describe the user's real environment.** The author writes the list of capabilities the contract requires, from the set a database version provides and the set a connection provides. A feature that needs PostgreSQL 17 is available to a project that requires 17's set and absent, at type-check, from a project that requires 16's.
 2. **A signed database provides them.** Signing checks the database against the contract's requirements before it writes the signature. The signature is then the database's promise to satisfy the contract, for every capability the installed table knows, and it is the only check of the database the client makes. A capability the table does not know is reported by the client's check of its stack (point 3).
 3. **The assembled stack provides them.** The target, adapter and driver given to the client are checked against the contract at compile time and when the client starts.
 
-Most of this is already what the subsystem docs describe ([Data Contract](../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md), [Adapters & Targets](../../docs/architecture%20docs/subsystems/5.%20Adapters%20%26%20Targets.md), [Runtime & Middleware Framework](../../docs/architecture%20docs/subsystems/4.%20Runtime%20%26%20Middleware%20Framework.md)). The code does not do it. Stating the version is the new part.
+Capabilities are dependencies, and the words follow dependency managers: a database version or a connection **provides** a capability, and a contract **requires** it.
+
+Most of this is already what the subsystem docs describe ([Data Contract](../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md), [Adapters & Targets](../../docs/architecture%20docs/subsystems/5.%20Adapters%20%26%20Targets.md), [Runtime & Middleware Framework](../../docs/architecture%20docs/subsystems/4.%20Runtime%20%26%20Middleware%20Framework.md)). The code does not do it. Writing the list from a version's set is the new part.
 
 ## 2. Why before GA
 
-The change is not an addition. Contracts gain or lose capability flags, so profile hashes change and signed databases are signed again. The runtime stops turning on capabilities the contract does not list. The config gains a required option. After `8.0` each of these would need a major version.
+The change is not an addition. Contracts gain or lose capability flags, so profile hashes change and signed databases are signed again. The runtime stops turning on capabilities the contract does not list. The contract's source gains a required list. After `8.0` each of these would need a major version.
 
 It also blocks other GA work: the stored-format work on contract hashes, and the decision on the facade's exported names.
 
@@ -28,7 +30,8 @@ Each flag is declared by the component that knows the fact:
 | --- | --- | --- |
 | What the database provides, by version | Target | `MERGE … RETURNING` from PostgreSQL 17 |
 | What the connection provides | Driver | Interactive transactions |
-| What the adapter can write as a query | Adapter | Whether it can render a lateral join |
+
+A connection capability is a fact about the whole path to the database, not only the driver: behind a pooler in transaction mode, the driver can hold a connection and the pooler cannot. The driver's exported set is its usual source. No target has a capability that is a fact about its adapter.
 
 This replaces the recorded position that capabilities are reported by the adapter and not defined by the target.
 
@@ -36,18 +39,17 @@ This replaces the recorded position that capabilities are reported by the adapte
 
 ### 4.1 The contract
 
-- The contract lists capability keys, as today. It never stores a database version.
-- The target holds a table of which database version provides which capability. A version value selects the target's capabilities for that version.
-- The version is required where the contract is written, and has no default. It is a value the target resolves, such as `17` or `'8.0.19'`.
-- Capabilities the connection provides are stated beside the version. When they are omitted, the facade supplies those of the adapter and driver its client uses by default. A project on another driver passes that driver's declared capabilities, which replace the default.
-- A contract written in TypeScript states both in `defineContract`.
-- A contract written in the Prisma schema language takes both in the config's contract entry, beside the file path. The interpreter receives one capability list and never a version.
-- Syntax in the Prisma schema language for both is designed before the project closes, and preferably built. When it exists, the config options keep working until the next major version.
+- The author writes one list, `requiredCapabilities`, and everything the contract requires is in it. Nothing is implied and there is no default. The list must be present and not empty; that is the only check.
+- The target holds a table of which database version provides which capability, and exports each version's set. The driver exports the set its connection provides. The author composes the list from them: `requiredCapabilities: [...postgres17, ...postgresDriver]`. A capability is removed by leaving it out.
+- The contract stores capability keys. It never stores a database version.
+- The destination is the contract's own source. A contract written in TypeScript states the list in `defineContract`. A contract written in the Prisma schema language states it in the config's contract entry, beside the file path, until the schema language has syntax for it; that entry is a stopgap. The interpreter receives one capability list.
+- Syntax in the Prisma schema language is designed before the project closes, and preferably built. When it exists, the config option keeps working until the next major version.
 - The flags that extensions declare and nothing reads (`pgvector.cosine`, `postgis.geometry`, `paradedb/bm25`) are removed.
+- Before `8.0`, in the pull request after the one that builds the list: the stored field is renamed `requiredCapabilities`, and each key is prefixed by its expected provider, `db.` or `conn.`.
 
 ### 4.2 `orm init`
 
-- When it can read the database's version, it writes that version. Otherwise it writes the newest version in the target's table.
+- It writes the whole list, from the newest version's set and the driver's, so a new project's requirements are visible in its own file.
 
 ### 4.3 Signing
 
@@ -55,15 +57,21 @@ This replaces the recorded position that capabilities are reported by the adapte
 - The adapter reads what it needs from the database: the server version, and settings that change behaviour, such as MySQL's `sql_mode`.
 - A failure states the cause in the user's terms, with both remedies. The failure reaches the CLI as data, and the CLI gives no drift advice for it:
 
-  > Your contract requires database capabilities first available in PostgreSQL 17 (sql.mergeReturning), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove the capabilities from your contract: state version 15, and take them out of its capabilities list if it lists them.
+  > Your contract requires database capabilities first available in PostgreSQL 17 (sql.mergeReturning), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove them from your contract's required capabilities.
 
 - A database older than the first row of the target's table fails the same check. The separate minimum server version constants go away or become that first row.
 
 ### 4.4 The client
 
-- The client takes no version. It offers what the contract lists. It stops merging the capabilities of its stack over the contract's.
+- The client takes no version and no capability list. It offers what the contract requires. It stops merging the capabilities of its stack over the contract's.
 - A stack that does not provide what the contract requires fails to type-check where the client is created.
-- When the client starts, it compares the requirements in `contract.json` with what the stack's components declare, and reports a mismatch the way it reports a signature that does not match, under the same setting.
+- When the client starts, it compares the requirements in `contract.json` with what the stack's components declare, and reports a mismatch the way it reports a signature that does not match, under the same setting:
+
+  > Your contract requires `sql.interactiveTransactions`, which this client's connection does not provide. Remove it from your contract's required capabilities, or connect with a driver that provides it.
+
+- A feature whose capability the contract does not require is unavailable, at type-check and at run time, and every such refusal has one form:
+
+  > `upsert()` is unavailable: your contract declares no dependency on `sql.insertOnConflictTarget`. To enable it, add `sql.insertOnConflictTarget` to your contract's required capabilities.
 - The client does not read the database's capabilities at connect time. It compares the signature, as today.
 
 ### 4.5 Targets
@@ -74,7 +82,7 @@ This replaces the recorded position that capabilities are reported by the adapte
 ### 4.6 Records
 
 - The subsystem docs, the rule on capability ownership, and the decision records on the profile hash and on adapter capabilities are updated in place to describe the result.
-- The upgrade instructions and the upgrade skill say what a project changes: state the version, emit, and sign again.
+- The upgrade instructions and the upgrade skill say what a project changes: write the list, emit, and sign again.
 
 ## 5. Scenarios
 

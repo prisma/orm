@@ -225,7 +225,7 @@ Each plane has its own stack type:
 
 ### Capability
 
-A specific feature that a database may or may not support (e.g., `RETURNING` clauses, vector indexes). Your contract declares which capabilities it needs; on PostgreSQL they follow from the database version you state for it, and signing a database checks that it provides them; other databases' contracts take a fixed list from their adapter. Creating a client checks that its adapter and driver provide every capability the contract requires that is not the database's, including one the installed table does not know, so you find out about missing features before any query runs. A database that lacks a capability is not drift: no change to its tables can add it, so it is reported as its own failure, with no advice to update the database.
+A specific feature that a database version or a connection **provides** and a contract **requires** (e.g., `RETURNING` clauses, interactive transactions). Capabilities are your contract's dependencies. You write the list where you write the contract, from the sets Prisma exports: `requiredCapabilities: [...postgres17, ...postgresDriver]` on PostgreSQL; other databases' contracts take a fixed list from their adapter. Signing a database checks that it provides the database capabilities the contract requires, and creating a client checks that its connection provides the rest, so you find out about a missing capability before any query runs. A feature whose capability your contract does not require is unavailable until you add it to the list. A database that lacks a capability is not drift: no change to its tables can add it, so it is reported as its own failure, with no advice to update the database.
 
 ### Codec
 
