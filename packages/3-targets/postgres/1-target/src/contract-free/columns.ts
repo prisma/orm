@@ -41,7 +41,7 @@ export const timestamptzJsDate = (opts?: ColOpts): ColumnDescriptor =>
  *
  * ```ts
  * const marker = pgTable(
- *   { name: 'marker', schema: 'prisma_contract' },
+ *   { name: 'marker', schema: '_prisma' },
  *   { space: text(), core_hash: text(), updated_at: timestamptz() },
  * );
  * ```

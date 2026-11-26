@@ -335,6 +335,7 @@ async function resetDatabase(connStr: string): Promise<void> {
   await testUtils.withClient(connStr, async (client) => {
     await client.query('DROP SCHEMA IF EXISTS public CASCADE');
     await client.query('CREATE SCHEMA public');
+    await client.query('DROP SCHEMA IF EXISTS _prisma CASCADE');
     await client.query('DROP SCHEMA IF EXISTS prisma_contract CASCADE');
   });
 }

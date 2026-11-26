@@ -19,9 +19,10 @@ async function dropDatabase() {
     await client.query('CREATE SCHEMA public');
     console.log('✔ Dropped and recreated public schema');
 
-    // Also drop the prisma_contract schema if it exists
+    // Prisma's own tables, and the schema a release candidate kept them in
+    await client.query('DROP SCHEMA IF EXISTS _prisma CASCADE');
     await client.query('DROP SCHEMA IF EXISTS prisma_contract CASCADE');
-    console.log('✔ Dropped prisma_contract schema');
+    console.log('✔ Dropped the _prisma and prisma_contract schemas');
 
     console.log('\nDatabase reset complete');
   } catch (error) {

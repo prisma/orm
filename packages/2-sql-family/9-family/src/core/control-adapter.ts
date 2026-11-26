@@ -53,7 +53,7 @@ export interface ExecuteRequestLowerer extends Lowerer {
 export interface SqlControlAdapter<TTarget extends string = string>
   extends ControlAdapterInstance<'sql', TTarget>,
     ExecuteRequestLowerer {
-  /** Where the database keeps the contract markers, as messages name it to the user, such as `prisma_contract.marker`. */
+  /** Where the database keeps the contract markers, as messages name it to the user, such as `_prisma.marker` on PostgreSQL. */
   readonly markerLocation: string;
 
   /**
@@ -77,7 +77,7 @@ export interface SqlControlAdapter<TTarget extends string = string>
   ): Promise<ContractMarkerRecord | null>;
 
   /**
-   * Reads every marker row from `prisma_contract.marker` (one per
+   * Reads every marker row from `_prisma.marker` on PostgreSQL (one per
    * contract space) and returns them keyed by `space`. Used by the
    * per-space verifier to detect marker-vs-on-disk drift and orphan
    * marker rows. Returns an empty map when the marker table does not

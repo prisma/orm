@@ -13,7 +13,7 @@ import { APP_SPACE_ID } from './space-layout';
  *   space — `<projectRoot>/migrations/<space-id>` (uniform; the app
  *   subspaces under its own `<APP_SPACE_ID>/` directory).
  * - `currentMarkerHash` and `currentMarkerInvariants` are the values
- *   read from the `prisma_contract.marker` row keyed by `space = <space-id>`
+ *   read from the `_prisma.marker` on PostgreSQL row keyed by `space = <space-id>`
  *   (T1.1). `null` hash = no marker row yet.
  * - `path` is the per-space operation list resolved from
  *   `findPathWithDecision(currentMarker, ref.hash, effectiveRequired)`
