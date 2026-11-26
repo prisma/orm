@@ -80,7 +80,7 @@ A level is defined by the least we do for a package or an API at that level.
 ## What has a level
 
 - **A package.** Every published package of ours has a level, except one with [its own version](#packages-with-their-own-version). Each database reaches GA on its own date, when its facade does.
-- **An API.** An API is an export, or a member of one, such as a method, a property or an option. It has its package's level unless its name starts with the word for a lower level. A member of an API below GA is at that API's level or lower.
+- **An API.** An API is an export, or a member of one, such as a method, a property or an option. It has its package's level unless its name starts with the word for a lower level. Such a word gives the least the API is promised: after a promotion, the old name stays as a deprecated name for an API now at a higher level, and is kept until the next major version, as the API is. A member of an API below GA is at that API's level or lower.
 
 A name can only lower a level. A GA API cannot exist inside a package below GA, because the package's version already says that nothing in it is kept compatible.
 
@@ -97,11 +97,11 @@ Nothing else has a level of its own. An entrypoint (a path inside a package that
 | Preview | `8.3.0-preview.0` | `preview_search` |
 | Early Access | `8.3.0-ea.0` | `ea_search` |
 
-The word and the name are joined by an underscore, so that the level cannot be read as part of the name: `previewImage` could be a GA API about image previews, while `preview_image` can only be an `image` API at Preview. A reader, and any tool that reads names, can then tell the level from the name alone. Every name in TypeScript, including a config option, takes this form.
+The word and the name are joined by an underscore, so that the level cannot be read as part of the name: `previewImage` could be a GA API about image previews, while `preview_image` can only be an `image` API at Preview. A reader, and any tool that reads names, can then tell from the name alone the least an API is promised. Every name in TypeScript, including a config option, takes this form.
 
 A name outside TypeScript uses the same word with that kind of name's own separator: a command-line flag is `--preview-search`, and a contract-language attribute or an environment variable follows its own convention the same way. In those forms the level cannot be told from an ordinary word by its form alone.
 
-**A promotion adds a name and removes none.** When an API moves up a level, such as from Early Access to Preview or from Preview to GA, the release adds the name for the new level. The old name stays as another name for the same API, marked deprecated, and is removed at the next major version. Otherwise every application and extension that calls `ea_search` would break when it becomes `preview_search`, and again when it becomes `search`: the API would stop working at the moment it became more reliable. For a while a name can then say less than is true (`ea_search` may be GA), which errs on the safe side.
+**A promotion adds a name and keeps the old one.** When an API moves up a level, such as from Early Access to Preview or from Preview to GA, the release adds the name for the new level. The old name stays as another name for the same API, marked deprecated, and is removed at the next major version. Otherwise every application and extension that calls `ea_search` would break when it becomes `preview_search`, and again when it becomes `search`: the API would stop working at the moment it became more reliable. For a while a name can then say less than is true (`ea_search` may be GA), which errs on the safe side.
 
 A promotion that also changes the API's form is a change like any other below GA: the new name has the new form, and the old name is removed in that release, since one API cannot have both forms.
 
@@ -185,7 +185,7 @@ Two costs follow for such a maintainer: a feature of theirs that needs no newer 
 - **One version for every package.** A user cannot tell a finished package from an unfinished one, no database can be GA before all are, and a fix to one package needs a release of every package.
 - **Each package numbered on its own, with no shared release number.** A user could not tell from two versions whether two packages belong together. AWS CDK numbers its experimental packages by the first release of the main library they work with, and the SQL Server adapter for Rails takes Rails's major and minor, for the same reason.
 - **A separate word, such as `unstable_`, for an API that may change.** It gives users two scales that say almost the same thing, and "unstable" suggests the behaviour is unreliable when we mean only that the API may change. React marks APIs with `unstable_` and `experimental_` on top of its release channels, and users have to learn both.
-- **Rename an API at each promotion, removing the old name.** Code that calls it breaks at each step, although each step makes it more reliable. Rust keeps accepting the opt-in to a feature after it is stabilised, with a warning; React removes `unstable_` names only at a major version; Kubernetes serves a beta API version beside its successor for a stated period.
+- **Rename an API at each promotion, removing the old name.** Code that calls it breaks at each step, although each step makes it more reliable. Rust keeps accepting the opt-in to a feature after it is stabilised, with a warning, and Kubernetes serves a beta API version beside its successor for a stated period.
 - **A level on an entrypoint, written in the import path,** such as `@prisma/orm-toolchain/preview/config-loader`. An entrypoint's exports already get their level from the package's version and their own names. A third place to write a level is a third thing to learn, and every import would change when the entrypoint reached GA.
 - **A support table in the docs as the place a user learns what is kept compatible.** It is one more thing to keep up to date, and the user does not see it in their project.
 - **Feature flags for functionality that is not ready.** A flag is set in a config file; a package below GA and an API whose name carries its level are visible in the user's own code.
