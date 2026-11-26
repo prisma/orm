@@ -123,7 +123,7 @@ describe('releaseTagsFor', () => {
     const versions = { '@prisma/orm-mongo': ['0.17.0', '8.0.0-rc.26', '8.4.0'] };
     const tags = releaseTagsFor({
       rootDir,
-      rootVersion: '8.1.0',
+      rootVersion: '8.0.1',
       names: NAMES,
       publishedVersions: (name) => versions[name] ?? ['0.17.0'],
     });
@@ -136,7 +136,7 @@ describe('releaseTagsFor', () => {
   it('keeps latest for a package below GA whose only plain versions are 0.x', () => {
     const tags = releaseTagsFor({
       rootDir,
-      rootVersion: '8.1.0',
+      rootVersion: '8.0.1',
       names: NAMES,
       publishedVersions: () => ['0.16.0', '0.17.0', '8.0.0-rc.26'],
     });

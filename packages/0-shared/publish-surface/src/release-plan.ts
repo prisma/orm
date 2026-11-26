@@ -245,7 +245,7 @@ function parseCurrent(input: ReleasePlanInput, name: string): ParsedVersion {
 }
 
 /** One of the `8.0.0-rc.N` versions every package was published as before the levels. */
-function isPublishedReleaseCandidate(version: ParsedVersion): boolean {
+export function isPublishedReleaseCandidate(version: ParsedVersion): boolean {
   return (
     version.level?.name === 'rc' &&
     version.major === 8 &&
@@ -312,9 +312,9 @@ function levelVersions(input: ReleasePlanInput, names: readonly string[]): Recor
       continue;
     }
     if (level === undefined) throw new ReleasePlanError(`${name} has no declared level`);
-    if (!first && isPublishedReleaseCandidate(current) && major === 8 && minor === 0) {
+    if (!first && isPublishedReleaseCandidate(current)) {
       throw new ReleasePlanError(
-        `${name}: "${text}" is a release candidate, but not every package is still at one; release 8.0 moves every package off the release candidates together`,
+        `${name}: "${text}" is a release candidate; packages leave the release candidates only at release 8.0, all together, so release ${major}.${minor} cannot be planned from it`,
       );
     }
     versions[name] = first

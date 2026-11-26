@@ -351,6 +351,13 @@ describe('planRelease', () => {
         'mongo: "8.0.0-rc.26"',
       ],
       [
+        'a release other than 8.0 planned from the release candidates, which would skip release 8.0',
+        input({
+          current: Object.fromEntries(Object.keys(graph).map((name) => [name, '8.0.0-rc.26'])),
+        }),
+        'leave the release candidates only at release 8.0',
+      ],
+      [
         'a platform package still at a release candidate of 8.0 when its facade has left them',
         input({
           release: { major: 8, minor: 0 },
