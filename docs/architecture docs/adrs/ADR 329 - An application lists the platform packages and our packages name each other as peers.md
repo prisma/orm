@@ -12,6 +12,7 @@ An application on release `8.4` of PostgreSQL adds the pgvector extension, which
 node_modules/
 ├── @prisma/orm-postgres                8.4.0
 ├── @prisma/orm-framework               8.4.0   ← the client's copy
+├── @prisma/orm-family-sql              8.4.0   ← uses the client's copy
 └── @prisma/orm-extension-pgvector      8.3.0
     └── node_modules/
         └── @prisma/orm-framework       8.3.0   ← pgvector's own copy
@@ -108,7 +109,7 @@ The application builds its client from the facade and passes it the extensions' 
 
 The framework recognises a data-type value by the copy that made it. The value carries a private field that only the copy that constructed it can read, so a check in the other copy refuses it with the error shown above. TypeScript treats a class with a private field as its own type, so the two copies' classes are different types, and code that passes one where the other is expected does not compile.
 
-Two copies are harmless when they never exchange values. Prisma Composer (Prisma's deployment tool) loads a second copy of the ORM beside the application, for its own work, and the two never pass values to each other.
+Two copies are harmless when they never exchange values. Prisma Composer (Prisma's deployment tool) loads a second copy of the ORM beside the application on purpose, for its own work, and those applications work.
 
 The `prisma` command-line tool is a harder case. It installs `@prisma/orm-toolchain` as its own dependency, at its own version, and Composer does the same. Some values from the application's config file do reach that copy, and some of them are recognised by the copy that made them. How the tool works with an application whose packages are at another version is decided separately.
 
@@ -136,7 +137,7 @@ Two benefits follow:
 ## Consequences
 
 - **An application's `package.json` is longer:** five lines of ours for PostgreSQL, where one would do if the facade brought the rest. `init` writes them.
-- **A missed warning leads to the unclear error.** Three of the four package managers install a mismatched set with only a warning, so an install that succeeds does not prove the versions fit. A user who misses the warning gets two copies and sees the error at the top, which does not name the cause. Reading the package manager's peer warnings is how they find it.
+- **A warning is easy to miss.** Three of the four package managers install a mismatched set with only a warning, so an install that succeeds does not prove the versions fit. The application then runs one copy of each platform package, but at a version some package of ours was not released with, and the warning is the only sign of it. The user reads the peer warnings and corrects their lines.
 - **A program that carries its own toolchain lists the framework too.** The toolchain names the framework as a peer, so the `prisma` command-line tool and Prisma Composer each list `@prisma/orm-framework` beside their own toolchain.
 - **Generated files import from the facade and the extensions,** as application code does: `contract.d.ts` names the same packages the user's own code imports.
 - **The database driver is a peer too.** [ADR 219](ADR%20219%20-%20Database%20driver%20coupling%20-%20framework%20owns%20user-facing%20types%20and%20driver%20is%20a%20single-major%20peer%20dependency.md) made it a peer of the package that uses it, for the same reasons: the user sees it in their own list, and a conflict shows at install.
@@ -154,7 +155,7 @@ Two benefits follow:
   └── @prisma/orm-framework              8.4.0   ← app-b's client's copy
   ```
 
-  In `app-b`, pgvector's data type and codec come from different copies, as in the tree at the top. pnpm, Yarn and Bun's isolated mode keep each workspace's packages apart and do not have this problem. A monorepo keeps its applications on one release of Prisma, or uses one of those package managers. No arrangement of dependencies changes where a package manager puts a package.
+  In `app-b`, pgvector and the client use different copies of the framework, as in the tree at the top. pnpm, Yarn and Bun's isolated mode keep each workspace's packages apart and do not have this problem. A monorepo keeps its applications on one release of Prisma, or uses one of those package managers. No arrangement of dependencies changes where a package manager puts a package.
 
 ## Alternatives considered
 

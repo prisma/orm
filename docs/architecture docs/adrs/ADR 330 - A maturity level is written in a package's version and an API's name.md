@@ -99,7 +99,7 @@ Nothing else has a level of its own. An entrypoint (a path inside a package that
 
 The word and the name are joined by an underscore, so that the level cannot be read as part of the name: `previewImage` could be a GA API about image previews, while `preview_image` can only be an `image` API at Preview. A reader, and any tool that reads names, can then tell the level from the name alone. Every name in TypeScript, including a config option, takes this form.
 
-A name outside TypeScript uses the same word with that kind of name's own separator: a command-line flag is `--preview-search`, and a contract-language attribute or an environment variable follows its own convention the same way. In those forms the level cannot be told from an ordinary word by its form alone, so their reference documentation says which names carry a level.
+A name outside TypeScript uses the same word with that kind of name's own separator: a command-line flag is `--preview-search`, and a contract-language attribute or an environment variable follows its own convention the same way. In those forms the level cannot be told from an ordinary word by its form alone.
 
 **When an API moves up a level, it gets the name for the new level.** Below GA, the old name may be removed in the same release, since nothing below GA is kept compatible. When an API reaches GA, the plain name is added and the old name keeps working until the next major version, so that a user's code does not break on the day the API becomes stable.
 
@@ -134,7 +134,7 @@ The packages of one release are tested together, so among themselves they accept
 - A GA release is published under the `latest` dist-tag.
 - A release below GA is published under `latest` if the package has never had a GA release in any major version, so that a plain install works and the version shows the level. Otherwise it is published under a tag named after its level: `ea`, `preview` or `rc`.
 
-A version published before release `8.0` says nothing about a package's level: the `0.x` versions are what Semantic Versioning calls initial development, and the `8.0.0-rc.N` versions were published before levels existed. Neither counts as a GA release.
+Two kinds of version say nothing about a package's level and do not count as a GA release: a `0.x` version, which Semantic Versioning calls initial development, and an `8.0.0-rc.N` version, published before levels existed.
 
 ## What an application writes
 
@@ -187,4 +187,4 @@ Two costs follow for such a maintainer: a feature of theirs that needs no newer 
 - **A support table in the docs as the place a user learns what is kept compatible.** It is one more thing to keep up to date, and the user does not see it in their project.
 - **Feature flags for functionality that is not ready.** A flag is set in a config file; a package below GA and an API whose name carries its level are visible in the user's own code.
 - **Release `8.0` at patch 0, with the old release candidates marked deprecated.** Deprecation stops Yarn choosing an old release candidate, but not pnpm or Bun, and only npm and pnpm print the message.
-- **Patch 1 at release `8.0` only for packages below Release Candidate,** with GA packages at `8.0.0` and Release Candidate packages carrying on the old `8.0.0-rc.N` counter. It keeps the number `8.0.0`, but needs a rule for each of the three groups and a special case for a package that moves up within the release.
+- **Patch 1 at release `8.0` only for packages below Release Candidate,** with GA packages at `8.0.0` and Release Candidate packages carrying on the old `8.0.0-rc.N` counter. It keeps the number `8.0.0`, but needs a rule for each of the three groups, the last release candidate's counter as an input, and a special case for a package that moves up within the release.
