@@ -55,7 +55,7 @@ The difference between the two kinds of dependency is the whole mechanism:
 "peerDependencies": { "@prisma/orm-framework": "..." }   // peer: pgvector uses the copy the application installed
 ```
 
-With both rules in place, the application's own list is where every copy comes from. If the copy there has a version that pgvector does not accept, npm refuses to install, and pnpm, Yarn and Bun print a warning. None of them installs a second copy for one application. Several applications in one monorepo are a different matter; see [Consequences](#consequences).
+With both rules in place, the application's own list is where every copy comes from. If the copy there has a version that pgvector does not accept, then on install npm refuses, and pnpm, Yarn and Bun go ahead and print a warning. None of them installs a second copy for one application. Several applications in one monorepo are a different matter; see [Consequences](#consequences).
 
 ## The kinds of package
 

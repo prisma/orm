@@ -196,7 +196,7 @@ The release scripts refuse a change that breaks these rules.
 
 ## Which versions of each other our packages accept
 
-Our packages do not bring each other along. Each one says which other packages of ours it needs, and at which versions, and the application installs them. In `package.json` terms, each lists the others as peer dependencies, each with a range ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) explains why). When the application installs a version that some package does not accept, npm refuses to install, and pnpm, Yarn and Bun install it and print a warning.
+Our packages do not bring each other along. Each one says which other packages of ours it needs, and at which versions, and the application installs them. In `package.json` terms, each lists the others as peer dependencies, each with a range ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) explains why). When the application has a version that some package does not accept, then on install npm refuses, and pnpm, Yarn and Bun go ahead and print a warning.
 
 The release scripts compute these ranges, and a check before publishing refuses a `package.json` that disagrees.
 
@@ -270,7 +270,7 @@ An npm tag is a label that points at one version of a package. A user who runs `
 - A version below GA is published under `latest` too, if the package has never had a GA version. Otherwise nobody could install a new package without knowing its exact version. The version still shows its level.
 - A version below GA of a package that has had a GA version is published under a tag named after its level: `ea`, `preview` or `rc`. A plain install keeps giving the last GA version.
 
-Every version published before release `8.0` was published under `latest`, whatever state the package was in. None of them counts as a GA version for the rule above: not the `0.x` versions, and not the `8.0.0-rc.N` versions described next.
+Every release published before release `8.0` went under `latest`, whatever state the package was in. None of them counts as a GA version for the rule above: not the `0.x` versions, and not the `8.0.0-rc.N` versions described next.
 
 ## Release 8.0 starts at patch 1
 

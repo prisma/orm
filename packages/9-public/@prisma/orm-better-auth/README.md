@@ -18,7 +18,12 @@ export const auth = betterAuth({
 
 ## Install
 
-Install the adapter of the release your Prisma 8 packages are on, together with Better Auth 1.7.22 or a later 1.7 release. Until release 8.0 that is the same `8.0.0-rc.N` as your database package. From release 8.0 the adapter is Generally Available, so its version is the plain release number even when your database package is below GA, and its line takes the operator your other lines take: a caret beside `@prisma/orm-postgres`, which is GA, and a tilde beside `@prisma/orm-sqlite`, which is below GA, so that the adapter does not move to a later release than the database package can follow. For release 8.0:
+Install the adapter from the same release as your Prisma 8 packages, together with Better Auth 1.7.22 or a later 1.7 release.
+
+- **Until release 8.0,** use the same exact `8.0.0-rc.N` as your database package.
+- **From release 8.0,** the adapter is Generally Available, so its version has no level suffix, even when your database package is below GA. Write its line the way your other Prisma lines are written: with a caret beside `@prisma/orm-postgres`, which is GA, and with a tilde beside `@prisma/orm-sqlite`, which is not. With a tilde, an update cannot move the adapter to a release that your database package cannot follow.
+
+For release 8.0:
 
 ```sh
 # beside @prisma/orm-postgres
@@ -27,7 +32,7 @@ pnpm add "@prisma/orm-better-auth@^8.0.1" "better-auth@~1.7.22"
 pnpm add "@prisma/orm-better-auth@~8.0.1" "better-auth@~1.7.22"
 ```
 
-For a later release `X.Y`, write `X.Y.0` in place of `8.0.1`.
+For a later release, such as 8.3, write `8.3.0` in place of `8.0.1`.
 
 The adapter uses the Prisma packages your database package already installs: `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`. If the adapter needs a later release of them than you have, your package manager warns you, or refuses to install when it checks peer dependencies strictly. Do not install it from a later release than those packages, or the adapter loads a second copy of Prisma's code.
 
@@ -276,7 +281,7 @@ Model and field names: the adapter matches Better Auth's model names to your con
 
 ## Dependencies
 
-- `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`, as peers at the release your database package is on, which already depends on all three. The adapter loads `@prisma/orm-toolchain` only while `auth generate` runs, to read `prisma.config.ts`. Reading it also needs `@prisma/cli-engine`, which your `prisma.config.ts` already imports.
+- `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`, as peer dependencies. Your database package already requires all three, at the same release. The adapter loads `@prisma/orm-toolchain` only while `auth generate` runs, to read `prisma.config.ts`. Reading it also needs `@prisma/cli-engine`, which your `prisma.config.ts` already imports.
 - `@better-auth/core` 1.7.22 or a later 1.7 release, below 1.8, as a peer.
 
 The package imports only published entrypoints, so it works outside the Prisma repository. [DEVELOPING.md](DEVELOPING.md) has notes for people who change it.

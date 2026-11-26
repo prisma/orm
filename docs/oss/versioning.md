@@ -10,7 +10,7 @@ This page is for people who use Prisma ORM, and for people who publish extension
 | Prisma 7 | Fixes for bugs and security issues, and no new features from the maintainers | Until 18 months after release 8.0 is published |
 
 - **Prisma 8** is where development happens. It has not reached release 8.0 yet. Until it does, read [Until release 8.0](#until-release-80) first.
-- **Prisma 7** is in maintenance. Its source is on the [`v7` branch](https://github.com/prisma/orm/tree/v7), and pull requests for it target that branch. The maintainers build no new features for it. A feature contributed by the community can still be accepted if it fits Prisma 7's design. [ADR 295](../architecture%20docs/adrs/ADR%20295%20-%20New%20features%20do%20not%20land%20on%20Prisma%207.md) has the details.
+- **Prisma 7** is in maintenance. Its source is on the [`v7` branch](https://github.com/prisma/orm/tree/v7), and pull requests for it target that branch. The maintainers build no new features for it. A feature contributed by the community can still be accepted if it fits Prisma 7's design, and so can work on the tooling that builds, tests and releases it. A maintainer decides. [ADR 295](../architecture%20docs/adrs/ADR%20295%20-%20New%20features%20do%20not%20land%20on%20Prisma%207.md) has the details.
 
 From Prisma 8 on, these rules apply to every major version:
 
