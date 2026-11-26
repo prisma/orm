@@ -26,8 +26,11 @@ import {
 } from '@internal/target-postgres/contract-free';
 import { encodeControlQueryParams } from './control-codecs';
 
+/** The schema the Postgres target keeps Prisma's own tables in, which the first migration of its `_prisma` contract space creates. */
+export const PRISMA_TABLES_SCHEMA = '_prisma';
+
 export const marker = pgTable(
-  { name: 'marker', schema: 'prisma_contract' },
+  { name: 'marker', schema: PRISMA_TABLES_SCHEMA },
   {
     space: text(),
     core_hash: text(),
@@ -42,12 +45,12 @@ export const marker = pgTable(
 );
 
 /**
- * Writeable subset of the `prisma_contract.ledger` table. Omits the
+ * Writeable subset of the `_prisma.ledger` table. Omits the
  * DB-generated `id` (bigserial) and `created_at` (default `now()`) so the
  * insert path doesn't have to pass them.
  */
 export const ledger = pgTable(
-  { name: 'ledger', schema: 'prisma_contract' },
+  { name: 'ledger', schema: PRISMA_TABLES_SCHEMA },
   {
     space: text(),
     migration_name: text(),
@@ -66,7 +69,7 @@ export const ledger = pgTable(
  * a rollback cycle is stored exactly once (upsert DO NOTHING).
  */
 export const ledgerContract = pgTable(
-  { name: 'contract', schema: 'prisma_contract' },
+  { name: 'contract', schema: PRISMA_TABLES_SCHEMA },
   {
     core_hash: text(),
     contract_json: jsonb(),
@@ -74,11 +77,11 @@ export const ledgerContract = pgTable(
 );
 
 /**
- * Read-side handle covering every column of `prisma_contract.ledger`,
+ * Read-side handle covering every column of `_prisma.ledger`,
  * including the DB-generated `id` (for ORDER BY) and `created_at`.
  */
 export const ledgerReadShape = pgTable(
-  { name: 'ledger', schema: 'prisma_contract' },
+  { name: 'ledger', schema: PRISMA_TABLES_SCHEMA },
   {
     id: int8(),
     space: text(),

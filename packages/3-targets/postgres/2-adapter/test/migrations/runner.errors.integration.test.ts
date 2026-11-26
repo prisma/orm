@@ -4,11 +4,11 @@ import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planne
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { expectNoMarkerOrLedgerWrites } from '../utils/dbAssertions';
 import {
-  bootstrapPostgresControlTables,
   contract,
   createDriver,
   createFailingPlan,
   createMigrationPlan,
+  createPrismaTables,
   createTestDatabase,
   familyInstance,
   frameworkComponents,
@@ -128,7 +128,7 @@ describe('PostgresMigrationRunner - Error Scenarios', { concurrent: false }, () 
     it('fails with MARKER_ORIGIN_MISMATCH error and does not modify marker or append ledger', {
       timeout: testTimeout,
     }, async () => {
-      await bootstrapPostgresControlTables(driver!);
+      await createPrismaTables(driver!);
 
       await familyInstance.initMarker({
         driver: driver!,
@@ -174,7 +174,7 @@ describe('PostgresMigrationRunner - Error Scenarios', { concurrent: false }, () 
       expect(failure.message).toMatch(/does not match plan origin/i);
 
       const markerRow = await driver!.query<{ core_hash: string; profile_hash: string }>(
-        'select core_hash, profile_hash from prisma_contract.marker where space = $1',
+        'select core_hash, profile_hash from _prisma.marker where space = $1',
         ['app'],
       );
       expect(markerRow.rows[0]).toMatchObject({
@@ -183,7 +183,7 @@ describe('PostgresMigrationRunner - Error Scenarios', { concurrent: false }, () 
       });
 
       const ledgerCount = await driver!.query<{ count: string }>(
-        'select count(*)::text as count from prisma_contract.ledger',
+        'select count(*)::text as count from _prisma.ledger',
       );
       expect(ledgerCount.rows[0]?.count).toBe('0');
 

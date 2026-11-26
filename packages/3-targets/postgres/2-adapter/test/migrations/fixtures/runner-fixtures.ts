@@ -9,28 +9,24 @@ import {
   createControlStack,
   type MigrationPlan,
   type MigrationRunnerFailure,
+  PRISMA_TABLES_SPACE_ID,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   type AggregateMigrationEdgeRef,
   buildFabricatedMigrationEdge,
 } from '@internal/migration-tools/aggregate';
+import { applyInstalledContractSpace } from '@internal/migration-tools/spaces';
 import { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlExecuteRequest } from '@internal/sql-relational-core/ast';
-import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
-import { buildControlTableBootstrapQueries } from '@internal/target-postgres/contract-free';
 import postgresTargetDescriptor from '@internal/target-postgres/control';
-import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
-import type { PostgresDdlNode } from '@internal/target-postgres/ddl';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
 import {
   PostgresDatabaseSchemaNode,
   postgresCreateNamespace,
 } from '@internal/target-postgres/types';
 import { applicationDomainOf, createDevDatabase, timeouts } from '@repo/test-utils';
-import type { PostgresContract } from '../../../src/core/types';
 import postgresAdapterDescriptor from '../../../src/exports/control';
-import { createTestPostgresControlAdapter } from '../../helpers/test-control-adapter';
 
 export const contract: Contract<SqlStorage> = {
   target: 'postgres',
@@ -102,7 +98,28 @@ export type PostgresControlDriver = Awaited<ReturnType<typeof postgresDriverDesc
 export async function resetDatabase(driver: PostgresControlDriver): Promise<void> {
   await driver.query('drop schema if exists public cascade');
   await driver.query('drop schema if exists prisma_contract cascade');
+  await driver.query('drop schema if exists _prisma cascade');
   await driver.query('create schema public');
+  await createPrismaTables(driver);
+}
+
+/** Creates Prisma's own tables as the commands do: by applying the target's `_prisma` contract space. */
+export async function createPrismaTables(driver: PostgresControlDriver): Promise<void> {
+  const contractSpace = postgresTargetDescriptor.contractSpace;
+  if (contractSpace === undefined) {
+    throw new Error('the Postgres target descriptor carries no contract space');
+  }
+  const result = await applyInstalledContractSpace({
+    spaceId: PRISMA_TABLES_SPACE_ID,
+    contractSpace,
+    driver,
+    familyInstance,
+    migrations: postgresTargetDescriptor.migrations,
+    frameworkComponents,
+  });
+  if (!result.ok) {
+    throw new Error(formatRunnerFailure(result.failure));
+  }
 }
 
 export function createFailingPlan() {
@@ -168,25 +185,6 @@ export function createLedgerTestPlan<TDetails extends PostgresPlanTargetDetails>
     operations: options.operations,
     providedInvariants: [],
   });
-}
-
-const postgresControlAdapter = createTestPostgresControlAdapter(
-  createPostgresBuiltinCodecLookup(),
-  createPostgresBuiltinDataTypeLookup(),
-);
-const postgresControlLowererContext = { contract: {} as PostgresContract };
-
-export async function bootstrapPostgresControlTables(driver: PostgresControlDriver): Promise<void> {
-  for (const query of buildControlTableBootstrapQueries()) {
-    const postgresQuery = query as unknown as PostgresDdlNode;
-    await executeStatement(
-      driver,
-      await postgresControlAdapter.lowerToExecuteRequest(
-        postgresQuery,
-        postgresControlLowererContext,
-      ),
-    );
-  }
 }
 
 export async function executeStatement(

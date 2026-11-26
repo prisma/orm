@@ -28,13 +28,6 @@ const MIGRATE_ONLY: DatabasePolicies = {
   },
 };
 
-async function bootstrap(driver: PostgresControlDriver): Promise<void> {
-  for (const ddl of adapter.bootstrapControlTableQueries()) {
-    const lowered = await adapter.lowerToExecuteRequest(ddl, { contract: undefined });
-    await driver.query(lowered.sql);
-  }
-}
-
 describe('PostgresControlAdapter marker/ledger writes (end-to-end)', { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createTestDatabase>>;
   let driver: PostgresControlDriver | undefined;
@@ -52,7 +45,6 @@ describe('PostgresControlAdapter marker/ledger writes (end-to-end)', { concurren
   beforeEach(async () => {
     driver = await createDriver(database.connectionString);
     await resetDatabase(driver);
-    await bootstrap(driver);
   }, testTimeout);
 
   afterEach(async () => {
@@ -92,7 +84,7 @@ describe('PostgresControlAdapter marker/ledger writes (end-to-end)', { concurren
     });
 
     const all = await adapter.readAllMarkers(driver!);
-    expect(all.size).toBe(1);
+    expect([...all.keys()].sort()).toEqual(['_prisma', 'app']);
     const marker = all.get('app')!;
     expect(marker.storageHash).toBe('core2');
     expect(marker.invariants).toEqual(['inv-x']);
@@ -214,7 +206,7 @@ describe('PostgresControlAdapter marker/ledger writes (end-to-end)', { concurren
   }, async () => {
     await adapter.initMarker(driver!, 'app', { storageHash: 'core', profileHash: 'prof' });
     await driver!.query(
-      `update prisma_contract.marker set meta = '{"note": "kept"}'::jsonb where space = 'app'`,
+      `update _prisma.marker set meta = '{"note": "kept"}'::jsonb where space = 'app'`,
     );
 
     await adapter.updateMarker(driver!, 'app', 'core', {

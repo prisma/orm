@@ -43,9 +43,16 @@ This package spans multiple planes:
 This package provides the Postgres implementation of the SQL migration planner/runner used by `prisma db init`:
 
 - **Planner** (`src/core/migrations/planner.ts`): produces an additive-only `MigrationPlan` to bring the database schema in line with a destination contract. Extra unrelated schema is tolerated; non-additive mismatches (type/nullability/constraint incompatibilities) surface as structured conflicts. Storage type operations (from codec-owned hooks) are emitted before table operations when `storage.types` are present. A foreign key's backing index is an ordinary entry of the table's `indexes`, created like any other; a foreign key the source declares with `constraint: false` has no `foreignKeys` entry, so no constraint is created. See [ADR 161](../../../../docs/architecture%20docs/adrs/ADR%20161%20-%20Explicit%20foreign%20key%20constraint%20and%20index%20configuration.md). The planner also emits `ON DELETE` and `ON UPDATE` referential action clauses when specified on foreign keys (see [ADR 166](../../../../docs/architecture%20docs/adrs/ADR%20166%20-%20Referential%20actions%20for%20foreign%20keys.md)).
-- **Runner** (`src/core/migrations/runner.ts`): executes a plan under an advisory lock, verifies the post-state schema, then writes the contract marker and appends a ledger entry in the `prisma_contract` schema.
+- **Runner** (`src/core/migrations/runner.ts`): executes a plan under an advisory lock, verifies the post-state schema, then writes the contract marker and appends a ledger entry in the `_prisma` schema. It creates no tables: the `_prisma` contract space below does.
 
 For the CLI orchestration, see `packages/1-framework/3-tooling/cli/src/commands/db-init.ts`.
+
+## Prisma's own tables: the `_prisma` contract space
+
+The tables Prisma keeps in a user's database (`_prisma.marker`, `_prisma.ledger`, `_prisma.contract`) are a contract space that the control descriptor carries in `contractSpace`, in the contract-space package layout of [ADR 212](../../../../docs/architecture%20docs/adrs/ADR%20212%20-%20Contract%20spaces.md). `applyInstalledContractSpace` from `@internal/migration-tools/spaces` brings a database up to date from it.
+
+- The contract source is `src/contract.prisma`. After editing it, run `pnpm emit:prisma-tables` in `packages/3-targets/postgres/2-adapter`, which writes `src/contract.json` and `src/contract.d.ts` here. The authoring config, `prisma-tables.config.ts`, lives in the adapter package because a config names an adapter, and the adapter depends on this package.
+- Migrations are under `migrations/`, with the head ref in `migrations/refs/head.json`. Write a new one as a `migration.ts` (the first is written by hand), emit its `ops.json` and `migration.json` from the adapter package with `pnpm exec tsx ../1-target/migrations/<dir>/migration.ts --config prisma-tables.config.ts`, set the head ref to the new contract's hash, and add the migration to the descriptor's `contractSpace` in `src/exports/control.ts`. Within a major version a migration may only add.
 
 ## Usage
 

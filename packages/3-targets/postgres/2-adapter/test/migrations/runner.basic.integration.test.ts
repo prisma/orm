@@ -97,7 +97,7 @@ describe('PostgresMigrationRunner - Basic Execution', { concurrent: false }, () 
       const markerRow = await driver!.query<{
         core_hash: string;
         profile_hash: string;
-      }>('select core_hash, profile_hash from prisma_contract.marker where space = $1', ['app']);
+      }>('select core_hash, profile_hash from _prisma.marker where space = $1', ['app']);
       expect(markerRow.rows[0]).toMatchObject({
         core_hash: contract.storage.storageHash,
         profile_hash: contract.profileHash,
@@ -106,9 +106,7 @@ describe('PostgresMigrationRunner - Basic Execution', { concurrent: false }, () 
       const ledgerRow = await driver!.query<{
         destination_core_hash: string;
         operations: unknown;
-      }>(
-        'select destination_core_hash, operations from prisma_contract.ledger order by id desc limit 1',
-      );
+      }>('select destination_core_hash, operations from _prisma.ledger order by id desc limit 1');
       expect(ledgerRow.rows[0]).toMatchObject({
         destination_core_hash: contract.storage.storageHash,
       });
@@ -181,12 +179,12 @@ describe('PostgresMigrationRunner - Basic Execution', { concurrent: false }, () 
       }
 
       const markerCount = await driver!.query<{ count: string }>(
-        'select count(*)::text as count from prisma_contract.marker where space = $1',
+        'select count(*)::text as count from _prisma.marker where space = $1',
         ['app'],
       );
       expect(markerCount.rows[0]?.count).toBe('1');
       const ledgerCount = await driver!.query<{ count: string }>(
-        'select count(*)::text as count from prisma_contract.ledger',
+        'select count(*)::text as count from _prisma.ledger',
       );
       expect(ledgerCount.rows[0]?.count).toBe('2');
     });

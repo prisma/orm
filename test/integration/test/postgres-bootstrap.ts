@@ -1,20 +1,23 @@
-import { createPostgresBuiltinCodecLookup } from '@internal/adapter-postgres/control';
-import type { PostgresContract } from '@internal/adapter-postgres/types';
+import postgresAdapterDescriptor from '@internal/adapter-postgres/control';
+import postgresDriverDescriptor, {
+  type PostgresControlDriver,
+} from '@internal/driver-postgres/control';
+import sqlFamilyDescriptor from '@internal/family-sql/control';
+import { createControlStack, PRISMA_TABLES_SPACE_ID } from '@internal/framework-components/control';
+import { applyInstalledContractSpace } from '@internal/migration-tools/spaces';
 import type { SqlExecuteRequest } from '@internal/sql-relational-core/ast';
-import {
-  buildControlTableBootstrapQueries,
-  buildSignMarkerBootstrapQueries,
-} from '@internal/target-postgres/contract-free';
-import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
-import type { PostgresDdlNode } from '@internal/target-postgres/ddl';
+import postgresTargetDescriptor from '@internal/target-postgres/control';
 import type { Client } from 'pg';
-import { createTestPostgresControlAdapter } from '../../../packages/3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 
-const postgresControlAdapter = createTestPostgresControlAdapter(
-  createPostgresBuiltinCodecLookup(),
-  createPostgresBuiltinDataTypeLookup(),
+const familyInstance = sqlFamilyDescriptor.create(
+  createControlStack({
+    family: sqlFamilyDescriptor,
+    target: postgresTargetDescriptor,
+    adapter: postgresAdapterDescriptor,
+    driver: postgresDriverDescriptor,
+    extensions: [],
+  }),
 );
-const postgresControlLowererContext = { contract: {} as PostgresContract };
 
 export async function executeLoweredStatement(
   client: Client,
@@ -27,40 +30,31 @@ export async function executeLoweredStatement(
   await client.query(statement.sql);
 }
 
+function clientDriver(client: Client): PostgresControlDriver {
+  return {
+    familyId: 'sql',
+    targetId: 'postgres',
+    query: async (sql: string, params?: readonly unknown[]) =>
+      client.query(sql, params === undefined ? undefined : [...params]),
+    close: async () => {},
+  } as unknown as PostgresControlDriver;
+}
+
+/** Creates Prisma's own tables as the commands do: by applying the Postgres target's `_prisma` contract space. */
 export async function bootstrapPostgresSignMarkerTables(client: Client): Promise<void> {
-  for (const query of buildSignMarkerBootstrapQueries()) {
-    await executeLoweredStatement(
-      client,
-      await postgresControlAdapter.lowerToExecuteRequest(
-        query as PostgresDdlNode,
-        postgresControlLowererContext,
-      ),
-    );
+  const contractSpace = postgresTargetDescriptor.contractSpace;
+  if (contractSpace === undefined) {
+    throw new Error('the Postgres target descriptor carries no contract space');
   }
-}
-
-export async function bootstrapPostgresControlSchema(client: Client): Promise<void> {
-  const schemaQuery = buildControlTableBootstrapQueries()[0];
-  if (!schemaQuery) {
-    throw new Error('expected prisma_contract schema bootstrap query');
-  }
-  await executeLoweredStatement(
-    client,
-    await postgresControlAdapter.lowerToExecuteRequest(
-      schemaQuery as PostgresDdlNode,
-      postgresControlLowererContext,
-    ),
-  );
-}
-
-export async function bootstrapPostgresControlTables(client: Client): Promise<void> {
-  for (const query of buildControlTableBootstrapQueries()) {
-    await executeLoweredStatement(
-      client,
-      await postgresControlAdapter.lowerToExecuteRequest(
-        query as PostgresDdlNode,
-        postgresControlLowererContext,
-      ),
-    );
+  const result = await applyInstalledContractSpace({
+    spaceId: PRISMA_TABLES_SPACE_ID,
+    contractSpace,
+    driver: clientDriver(client),
+    familyInstance,
+    migrations: postgresTargetDescriptor.migrations,
+    frameworkComponents: [postgresTargetDescriptor, postgresAdapterDescriptor],
+  });
+  if (!result.ok) {
+    throw new Error(`${result.failure.code}: ${result.failure.message}`);
   }
 }

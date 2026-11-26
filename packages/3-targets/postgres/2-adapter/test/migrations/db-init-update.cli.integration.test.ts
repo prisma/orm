@@ -301,7 +301,7 @@ describe('db init / db update aggregate pipeline (CLI) - postgres', { concurrent
       expect(result.ok).toBe(true);
 
       const markers = await drv.query<{ space: string; core_hash: string }>(
-        'select space, core_hash from prisma_contract.marker order by space',
+        'select space, core_hash from _prisma.marker order by space',
       );
       expect(markers.rows.map((r) => r.space).sort()).toEqual(['app', EXT_SPACE_ID].sort());
       expect(markers.rows.find((r) => r.space === 'app')!.core_hash).toBe(
@@ -406,7 +406,7 @@ describe('db init / db update aggregate pipeline (CLI) - postgres', { concurrent
       expect(updateResult.ok).toBe(true);
 
       const markers = await drv.query<{ space: string; core_hash: string }>(
-        'select space, core_hash from prisma_contract.marker order by space',
+        'select space, core_hash from _prisma.marker order by space',
       );
       expect(markers.rows.find((r) => r.space === 'app')!.core_hash).toBe(
         appContract.storage.storageHash,
@@ -451,7 +451,7 @@ describe('db init / db update aggregate pipeline (CLI) - postgres', { concurrent
       expect(initResult.ok).toBe(true);
 
       const markersBefore = await drv.query<{ space: string; core_hash: string }>(
-        'select space, core_hash from prisma_contract.marker order by space',
+        'select space, core_hash from _prisma.marker order by space',
       );
       const appHashBefore = markersBefore.rows.find((r) => r.space === 'app')!.core_hash;
       const extHashBefore = markersBefore.rows.find((r) => r.space === EXT_SPACE_ID)!.core_hash;
@@ -508,7 +508,7 @@ describe('db init / db update aggregate pipeline (CLI) - postgres', { concurrent
       expect(updateResult.failure.meta).toMatchObject({ failingSpace: EXT_SPACE_ID });
 
       const markersAfter = await drv.query<{ space: string; core_hash: string }>(
-        'select space, core_hash from prisma_contract.marker order by space',
+        'select space, core_hash from _prisma.marker order by space',
       );
       expect(markersAfter.rows.find((r) => r.space === 'app')!.core_hash).toBe(appHashBefore);
       expect(markersAfter.rows.find((r) => r.space === EXT_SPACE_ID)!.core_hash).toBe(

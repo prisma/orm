@@ -62,9 +62,9 @@ async function readLedgerRows(driver: PostgresControlDriver): Promise<LedgerRow[
     `select l.space, l.migration_name, l.migration_hash, l.origin_core_hash,
       l.destination_core_hash, l.operations,
       ca.contract_json, cb.contract_json as origin_contract_json
-     from prisma_contract.ledger l
-     left join prisma_contract.contract ca on ca.core_hash = l.destination_core_hash
-     left join prisma_contract.contract cb on cb.core_hash = l.origin_core_hash
+     from _prisma.ledger l
+     left join _prisma.contract ca on ca.core_hash = l.destination_core_hash
+     left join _prisma.contract cb on cb.core_hash = l.origin_core_hash
      order by l.id`,
   );
   return result.rows;
@@ -72,7 +72,7 @@ async function readLedgerRows(driver: PostgresControlDriver): Promise<LedgerRow[
 
 async function countContractRows(driver: PostgresControlDriver): Promise<number> {
   const result = await driver.query<{ n: string | number }>(
-    'select count(*)::int as n from prisma_contract.contract',
+    'select count(*)::int as n from _prisma.contract',
   );
   return Number(result.rows[0]?.n ?? 0);
 }
@@ -275,7 +275,7 @@ describe('PostgresMigrationRunner - per-edge ledger', { concurrent: false }, () 
     // Content-addressed store: one row per distinct contract, keyed by hash.
     expect(await countContractRows(driver!)).toBe(2);
     const stored = await driver!.query<{ core_hash: string }>(
-      'select core_hash from prisma_contract.contract order by core_hash',
+      'select core_hash from _prisma.contract order by core_hash',
     );
     expect(stored.rows.map((row) => row.core_hash).sort()).toEqual([midHash, destHash].sort());
   });

@@ -120,13 +120,13 @@ describe('PostgresMigrationRunner - Idempotency', { concurrent: false }, () => {
       }
 
       const markerCount = await driver!.query<{ count: string }>(
-        'select count(*)::text as count from prisma_contract.marker where space = $1',
+        'select count(*)::text as count from _prisma.marker where space = $1',
         ['app'],
       );
       expect(markerCount.rows[0]?.count).toBe('1');
 
       const ledgerRow = await driver!.query<{ operations: unknown }>(
-        'select operations from prisma_contract.ledger order by id desc limit 1',
+        'select operations from _prisma.ledger order by id desc limit 1',
       );
       expect(ledgerRow.rows[0]?.operations).toMatchObject([{ id: 'table.user', execute: [] }]);
     });
@@ -216,7 +216,7 @@ describe('PostgresMigrationRunner - Idempotency', { concurrent: false }, () => {
 
       // Query ledger and verify stored operations JSON did not change
       const ledgerRow = await driver!.query<{ operations: unknown }>(
-        'select operations from prisma_contract.ledger order by id desc limit 1',
+        'select operations from _prisma.ledger order by id desc limit 1',
       );
       const storedOperations = ledgerRow.rows[0]?.operations as Array<{
         id: string;
@@ -285,10 +285,10 @@ describe('PostgresMigrationRunner - Idempotency', { concurrent: false }, () => {
 
       // Snapshot ledger count after the init apply.
       const initialLedgerCount = await driver!.query<{ count: string }>(
-        'select count(*)::text as count from prisma_contract.ledger',
+        'select count(*)::text as count from _prisma.ledger',
       );
       const initialUpdatedAt = await driver!.query<{ updated_at: Date }>(
-        `select updated_at from prisma_contract.marker where space = 'app'`,
+        `select updated_at from _prisma.marker where space = 'app'`,
       );
 
       // Self-edge plan with no operations and no new invariants. This is a
@@ -326,13 +326,13 @@ describe('PostgresMigrationRunner - Idempotency', { concurrent: false }, () => {
 
       // Ledger count unchanged: no spurious entry for the no-op self-edge.
       const ledgerCountAfter = await driver!.query<{ count: string }>(
-        'select count(*)::text as count from prisma_contract.ledger',
+        'select count(*)::text as count from _prisma.ledger',
       );
       expect(ledgerCountAfter.rows[0]?.count).toBe(initialLedgerCount.rows[0]?.count);
 
       // Marker updated_at unchanged: no churn from the no-op.
       const updatedAtAfter = await driver!.query<{ updated_at: Date }>(
-        `select updated_at from prisma_contract.marker where space = 'app'`,
+        `select updated_at from _prisma.marker where space = 'app'`,
       );
       expect(updatedAtAfter.rows[0]?.updated_at?.toISOString()).toBe(
         initialUpdatedAt.rows[0]?.updated_at?.toISOString(),

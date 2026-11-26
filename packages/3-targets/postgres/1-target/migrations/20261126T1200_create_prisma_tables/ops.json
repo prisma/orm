@@ -10,9 +10,7 @@
       {
         "description": "ensure schemas \"prisma_contract\" and \"_prisma\" do not both exist: Prisma keeps its tables in one of them, and cannot tell which holds the tables to keep",
         "sql": "SELECT to_regnamespace($1) IS NULL AS \"result\"",
-        "params": [
-          "_prisma"
-        ]
+        "params": ["_prisma"]
       }
     ],
     "execute": [
@@ -25,9 +23,7 @@
       {
         "description": "verify schema \"prisma_contract\" does not exist",
         "sql": "SELECT to_regnamespace($1) IS NULL AS \"result\"",
-        "params": [
-          "prisma_contract"
-        ]
+        "params": ["prisma_contract"]
       }
     ]
   },
@@ -49,9 +45,7 @@
       {
         "description": "verify schema \"_prisma\" exists",
         "sql": "SELECT to_regnamespace($1) IS NOT NULL AS \"result\"",
-        "params": [
-          "_prisma"
-        ]
+        "params": ["_prisma"]
       }
     ]
   },
@@ -78,9 +72,7 @@
       {
         "description": "verify table \"_prisma\".\"marker\" exists",
         "sql": "SELECT to_regclass($1) IS NOT NULL AS \"result\"",
-        "params": [
-          "\"_prisma\".\"marker\""
-        ]
+        "params": ["\"_prisma\".\"marker\""]
       }
     ]
   },
@@ -107,9 +99,7 @@
       {
         "description": "verify table \"_prisma\".\"ledger\" exists",
         "sql": "SELECT to_regclass($1) IS NOT NULL AS \"result\"",
-        "params": [
-          "\"_prisma\".\"ledger\""
-        ]
+        "params": ["\"_prisma\".\"ledger\""]
       }
     ]
   },
@@ -136,9 +126,7 @@
       {
         "description": "verify table \"_prisma\".\"contract\" exists",
         "sql": "SELECT to_regclass($1) IS NOT NULL AS \"result\"",
-        "params": [
-          "\"_prisma\".\"contract\""
-        ]
+        "params": ["\"_prisma\".\"contract\""]
       }
     ]
   },
@@ -158,92 +146,47 @@
       {
         "description": "ensure table \"_prisma\".\"marker\" has column \"space\" text NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"marker\"",
-          "space",
-          "text",
-          true
-        ]
+        "params": ["\"_prisma\".\"marker\"", "space", "text", true]
       },
       {
         "description": "ensure table \"_prisma\".\"marker\" has column \"core_hash\" text NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"marker\"",
-          "core_hash",
-          "text",
-          true
-        ]
+        "params": ["\"_prisma\".\"marker\"", "core_hash", "text", true]
       },
       {
         "description": "ensure table \"_prisma\".\"marker\" has column \"profile_hash\" text NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"marker\"",
-          "profile_hash",
-          "text",
-          true
-        ]
+        "params": ["\"_prisma\".\"marker\"", "profile_hash", "text", true]
       },
       {
         "description": "ensure table \"_prisma\".\"marker\" has column \"contract_json\" jsonb nullable. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"marker\"",
-          "contract_json",
-          "jsonb",
-          false
-        ]
+        "params": ["\"_prisma\".\"marker\"", "contract_json", "jsonb", false]
       },
       {
         "description": "ensure table \"_prisma\".\"marker\" has column \"canonical_version\" integer nullable. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"marker\"",
-          "canonical_version",
-          "integer",
-          false
-        ]
+        "params": ["\"_prisma\".\"marker\"", "canonical_version", "integer", false]
       },
       {
         "description": "ensure table \"_prisma\".\"marker\" has column \"updated_at\" timestamp with time zone NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"marker\"",
-          "updated_at",
-          "timestamp with time zone",
-          true
-        ]
+        "params": ["\"_prisma\".\"marker\"", "updated_at", "timestamp with time zone", true]
       },
       {
         "description": "ensure table \"_prisma\".\"marker\" has column \"app_tag\" text nullable. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"marker\"",
-          "app_tag",
-          "text",
-          false
-        ]
+        "params": ["\"_prisma\".\"marker\"", "app_tag", "text", false]
       },
       {
         "description": "ensure table \"_prisma\".\"marker\" has column \"meta\" jsonb NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"marker\"",
-          "meta",
-          "jsonb",
-          true
-        ]
+        "params": ["\"_prisma\".\"marker\"", "meta", "jsonb", true]
       },
       {
         "description": "ensure table \"_prisma\".\"marker\" has column \"invariants\" text[] NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"marker\"",
-          "invariants",
-          "text[]",
-          true
-        ]
+        "params": ["\"_prisma\".\"marker\"", "invariants", "text[]", true]
       }
     ],
     "execute": [],
@@ -265,102 +208,52 @@
       {
         "description": "ensure table \"_prisma\".\"ledger\" has column \"id\" bigint NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"ledger\"",
-          "id",
-          "bigint",
-          true
-        ]
+        "params": ["\"_prisma\".\"ledger\"", "id", "bigint", true]
       },
       {
         "description": "ensure table \"_prisma\".\"ledger\" has column \"created_at\" timestamp with time zone NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"ledger\"",
-          "created_at",
-          "timestamp with time zone",
-          true
-        ]
+        "params": ["\"_prisma\".\"ledger\"", "created_at", "timestamp with time zone", true]
       },
       {
         "description": "ensure table \"_prisma\".\"ledger\" has column \"space\" text NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"ledger\"",
-          "space",
-          "text",
-          true
-        ]
+        "params": ["\"_prisma\".\"ledger\"", "space", "text", true]
       },
       {
         "description": "ensure table \"_prisma\".\"ledger\" has column \"migration_name\" text NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"ledger\"",
-          "migration_name",
-          "text",
-          true
-        ]
+        "params": ["\"_prisma\".\"ledger\"", "migration_name", "text", true]
       },
       {
         "description": "ensure table \"_prisma\".\"ledger\" has column \"migration_hash\" text NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"ledger\"",
-          "migration_hash",
-          "text",
-          true
-        ]
+        "params": ["\"_prisma\".\"ledger\"", "migration_hash", "text", true]
       },
       {
         "description": "ensure table \"_prisma\".\"ledger\" has column \"origin_core_hash\" text nullable. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"ledger\"",
-          "origin_core_hash",
-          "text",
-          false
-        ]
+        "params": ["\"_prisma\".\"ledger\"", "origin_core_hash", "text", false]
       },
       {
         "description": "ensure table \"_prisma\".\"ledger\" has column \"origin_profile_hash\" text nullable. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"ledger\"",
-          "origin_profile_hash",
-          "text",
-          false
-        ]
+        "params": ["\"_prisma\".\"ledger\"", "origin_profile_hash", "text", false]
       },
       {
         "description": "ensure table \"_prisma\".\"ledger\" has column \"destination_core_hash\" text NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"ledger\"",
-          "destination_core_hash",
-          "text",
-          true
-        ]
+        "params": ["\"_prisma\".\"ledger\"", "destination_core_hash", "text", true]
       },
       {
         "description": "ensure table \"_prisma\".\"ledger\" has column \"destination_profile_hash\" text nullable. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"ledger\"",
-          "destination_profile_hash",
-          "text",
-          false
-        ]
+        "params": ["\"_prisma\".\"ledger\"", "destination_profile_hash", "text", false]
       },
       {
         "description": "ensure table \"_prisma\".\"ledger\" has column \"operations\" jsonb NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"ledger\"",
-          "operations",
-          "jsonb",
-          true
-        ]
+        "params": ["\"_prisma\".\"ledger\"", "operations", "jsonb", true]
       }
     ],
     "execute": [],
@@ -382,32 +275,17 @@
       {
         "description": "ensure table \"_prisma\".\"contract\" has column \"core_hash\" text NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"contract\"",
-          "core_hash",
-          "text",
-          true
-        ]
+        "params": ["\"_prisma\".\"contract\"", "core_hash", "text", true]
       },
       {
         "description": "ensure table \"_prisma\".\"contract\" has column \"created_at\" timestamp with time zone NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"contract\"",
-          "created_at",
-          "timestamp with time zone",
-          true
-        ]
+        "params": ["\"_prisma\".\"contract\"", "created_at", "timestamp with time zone", true]
       },
       {
         "description": "ensure table \"_prisma\".\"contract\" has column \"contract_json\" jsonb NOT NULL. A table without it was written by a Prisma release before the release candidates of Prisma 8, and is not brought up to date: the upgrade instructions of Prisma 8 say what to do",
         "sql": "SELECT EXISTS (\n  SELECT 1 FROM pg_attribute\n  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped\n    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4\n) AS \"result\"",
-        "params": [
-          "\"_prisma\".\"contract\"",
-          "contract_json",
-          "jsonb",
-          true
-        ]
+        "params": ["\"_prisma\".\"contract\"", "contract_json", "jsonb", true]
       }
     ],
     "execute": [],

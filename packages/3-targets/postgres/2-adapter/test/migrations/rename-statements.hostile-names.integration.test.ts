@@ -142,7 +142,7 @@ describe('rename statements with hostile identifiers on Postgres', { concurrent:
   async function userTables(): Promise<readonly { schema: string; name: string }[]> {
     const tables = await driver!.query<{ schema: string; name: string }>(
       `select table_schema as schema, table_name as name from information_schema.tables
-       where table_schema not in ('pg_catalog', 'information_schema', 'prisma_contract')
+       where table_schema not in ('pg_catalog', 'information_schema', '_prisma')
        order by 1, 2`,
     );
     return tables.rows;

@@ -7,6 +7,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsdown",
+    "emit:prisma-tables": "prisma contract emit --config prisma-tables.config.ts",
     "test": "vitest run",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "lint": "biome check . --error-on-warnings",
@@ -34,11 +35,12 @@
     "arktype": "^2.2.9"
   },
   "devDependencies": {
-    "@internal/psl-parser": "workspace:8.0.0-rc.25",
     "@internal/cli": "workspace:8.0.0-rc.25",
     "@internal/driver-postgres": "workspace:8.0.0-rc.25",
     "@internal/migration-tools": "workspace:8.0.0-rc.25",
+    "@internal/psl-parser": "workspace:8.0.0-rc.25",
     "@internal/sql-errors": "workspace:8.0.0-rc.25",
+    "@prisma/cli-engine": "0.10.4",
     "@repo/test-utils": "workspace:8.0.0-rc.25",
     "@repo/tsconfig": "workspace:8.0.0-rc.25",
     "@repo/tsdown": "workspace:8.0.0-rc.25",

@@ -37,7 +37,7 @@ describe('PostgresControlAdapter marker/ledger write lowering', () => {
 
     const { sql, params } = driver.calls[0]!;
     expect(sql).toContain(
-      'INSERT INTO "prisma_contract"."marker" ("space", "core_hash", "profile_hash", ' +
+      'INSERT INTO "_prisma"."marker" ("space", "core_hash", "profile_hash", ' +
         '"contract_json", "canonical_version", "updated_at", "app_tag", "meta", "invariants")',
     );
     expect(sql).toContain('VALUES ($1, $2, $3, $4::jsonb, $5, now(), $6, $7::jsonb, $8::text[])');
@@ -57,7 +57,7 @@ describe('PostgresControlAdapter marker/ledger write lowering', () => {
 
     const { sql, params } = driver.calls[0]!;
     expect(sql).toContain(
-      'INSERT INTO "prisma_contract"."marker" ("space", "core_hash", "profile_hash", ' +
+      'INSERT INTO "_prisma"."marker" ("space", "core_hash", "profile_hash", ' +
         '"contract_json", "canonical_version", "updated_at", "app_tag", "meta", "invariants")',
     );
     expect(sql).toContain('VALUES ($1, $2, $3, $4::jsonb, $5, now(), $6, $7::jsonb, $8::text[])');
@@ -85,7 +85,7 @@ describe('PostgresControlAdapter marker/ledger write lowering', () => {
 
     const update = driver.calls.at(-1)!;
     expect(update.sql).toBe(
-      'UPDATE "prisma_contract"."marker" SET "core_hash" = $1, "profile_hash" = $2, ' +
+      'UPDATE "_prisma"."marker" SET "core_hash" = $1, "profile_hash" = $2, ' +
         '"updated_at" = now(), "invariants" = $3::text[] ' +
         'WHERE ("marker"."space" = $4 AND "marker"."core_hash" = $5) RETURNING "marker"."space"',
     );
@@ -103,7 +103,7 @@ describe('PostgresControlAdapter marker/ledger write lowering', () => {
 
     const { sql, params } = driver.calls[0]!;
     expect(sql).toBe(
-      'UPDATE "prisma_contract"."marker" SET "core_hash" = $1, "profile_hash" = $2, ' +
+      'UPDATE "_prisma"."marker" SET "core_hash" = $1, "profile_hash" = $2, ' +
         '"updated_at" = now() ' +
         'WHERE ("marker"."space" = $3 AND "marker"."core_hash" = $4) RETURNING "marker"."space"',
     );
@@ -125,7 +125,7 @@ describe('PostgresControlAdapter marker/ledger write lowering', () => {
     expect(driver.calls).toHaveLength(1);
     const { sql, params } = driver.calls[0]!;
     expect(sql).toBe(
-      'INSERT INTO "prisma_contract"."ledger" ("space", "migration_name", "migration_hash", ' +
+      'INSERT INTO "_prisma"."ledger" ("space", "migration_name", "migration_hash", ' +
         '"origin_core_hash", "destination_core_hash", "operations") ' +
         'VALUES ($1, $2, $3, $4, $5, $6::jsonb)',
     );
@@ -149,14 +149,14 @@ describe('PostgresControlAdapter marker/ledger write lowering', () => {
     // a rollback cycle revisiting the same contract a no-op.
     const contractUpsert = driver.calls[0]!;
     expect(contractUpsert.sql).toBe(
-      'INSERT INTO "prisma_contract"."contract" ("core_hash", "contract_json") ' +
+      'INSERT INTO "_prisma"."contract" ("core_hash", "contract_json") ' +
         'VALUES ($1, $2::jsonb) ON CONFLICT ("core_hash") DO NOTHING',
     );
     expect(contractUpsert.params[0]).toBe('to');
     expect(contractUpsert.params[1]).toBe(JSON.stringify({ models: ['user', 'post'] }));
 
     const ledgerInsert = driver.calls[1]!;
-    expect(ledgerInsert.sql).toContain('INSERT INTO "prisma_contract"."ledger"');
+    expect(ledgerInsert.sql).toContain('INSERT INTO "_prisma"."ledger"');
     expect(ledgerInsert.sql).not.toContain('RETURNING');
   });
 });

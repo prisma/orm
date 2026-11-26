@@ -77,10 +77,6 @@ import {
   type PostgresCodecRegistry,
   parsePostgresListText,
 } from '@internal/target-postgres/codecs';
-import {
-  buildControlTableBootstrapQueries,
-  buildSignMarkerBootstrapQueries,
-} from '@internal/target-postgres/contract-free';
 import type {
   AddColumnAction,
   AddConstraintAction,
@@ -142,13 +138,14 @@ import {
   mergeInvariants,
   metaRecordingPolicies,
   NOW,
+  PRISMA_TABLES_SCHEMA,
 } from './marker-ledger';
 import { reportedSqlType } from './reported-sql-type';
 import { renderLoweredSql } from './sql-renderer';
 import type { PostgresContract } from './types';
 
-const POSTGRES_MARKER_TABLE = 'prisma_contract.marker';
-const POSTGRES_LEDGER_TABLE = 'prisma_contract.ledger';
+const POSTGRES_MARKER_TABLE = `${PRISMA_TABLES_SCHEMA}.marker`;
+const POSTGRES_LEDGER_TABLE = `${PRISMA_TABLES_SCHEMA}.ledger`;
 
 /**
  * Tables another migration tool, not Prisma 8, keeps in an application schema: Prisma 7's ledger. `introspect` leaves them out unless the contract declares a table of that name in the same namespace.
@@ -225,12 +222,14 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     private readonly declaredDataTypes: readonly DataType[],
   ) {}
 
+  /** None: the first migration of the target's `_prisma` contract space creates the tables. */
   bootstrapControlTableQueries(): readonly DdlNode[] {
-    return buildControlTableBootstrapQueries();
+    return [];
   }
 
+  /** None: the first migration of the target's `_prisma` contract space creates the tables. */
   bootstrapSignMarkerQueries(): readonly DdlNode[] {
-    return buildSignMarkerBootstrapQueries();
+    return [];
   }
 
   /**
@@ -310,9 +309,9 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   }
 
   /**
-   * Reads the contract marker from `prisma_contract.marker`. Probes
+   * Reads the contract marker from `_prisma.marker`. Probes
    * `information_schema.tables` first so a fresh database (where the
-   * `prisma_contract` schema doesn't yet exist) returns `null` instead of a
+   * `_prisma` schema doesn't yet exist) returns `null` instead of a
    * "relation does not exist" error — some Postgres wire-protocol clients
    * (e.g. PGlite's TCP proxy) don't fully recover from extended-protocol
    * parse errors, so we probe before reading.
@@ -334,9 +333,9 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   }
 
   /**
-   * Reads every row from `prisma_contract.marker` and returns them keyed
+   * Reads every row from `_prisma.marker` and returns them keyed
    * by `space`. Mirrors the existence probe in {@link readMarker}: a
-   * fresh database without the `prisma_contract` schema returns an empty
+   * fresh database without the `_prisma` schema returns an empty
    * map rather than raising "relation does not exist".
    */
   async readAllMarkers(
@@ -354,7 +353,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       .select(infoSchemaTables.table_schema)
       .where(
         infoSchemaTables.table_schema
-          .eq('prisma_contract')
+          .eq(PRISMA_TABLES_SCHEMA)
           .and(infoSchemaTables.table_name.eq('marker')),
       )
       .build();
@@ -398,7 +397,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   }
 
   /**
-   * Reads per-migration ledger rows from `prisma_contract.ledger` in apply
+   * Reads per-migration ledger rows from `_prisma.ledger` in apply
    * order. Probes `information_schema.tables` first so a fresh database
    * without the ledger table returns `[]` instead of raising "relation does
    * not exist".
@@ -420,7 +419,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       .select(infoSchemaTables.table_schema)
       .where(
         infoSchemaTables.table_schema
-          .eq('prisma_contract')
+          .eq(PRISMA_TABLES_SCHEMA)
           .and(infoSchemaTables.table_name.eq('ledger')),
       )
       .build();
@@ -593,7 +592,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   }
 
   /**
-   * Appends a ledger entry for `space`. When the edge carries a destination contract snapshot, the content-addressed `prisma_contract.contract` store is populated first (keyed by the destination hash, DO NOTHING on revisit) so a reader never sees a ledger row whose stored destination contract is missing. See the `SqlControlAdapter.writeLedgerEntry` contract.
+   * Appends a ledger entry for `space`. When the edge carries a destination contract snapshot, the content-addressed `_prisma.contract` store is populated first (keyed by the destination hash, DO NOTHING on revisit) so a reader never sees a ledger row whose stored destination contract is missing. See the `SqlControlAdapter.writeLedgerEntry` contract.
    */
   async writeLedgerEntry(
     driver: SqlControlDriverInstance<'postgres'>,
@@ -642,7 +641,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       .select(infoSchemaTables.table_schema)
       .where(
         infoSchemaTables.table_schema
-          .eq('prisma_contract')
+          .eq(PRISMA_TABLES_SCHEMA)
           .and(infoSchemaTables.table_name.eq('marker')),
       )
       .build();

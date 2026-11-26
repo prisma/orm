@@ -300,7 +300,7 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
   }, async () => {
     await applyContract();
     await driver.query(
-      `UPDATE prisma_contract.marker SET meta = '{"policies": "strict"}'::jsonb WHERE space = $1`,
+      `UPDATE _prisma.marker SET meta = '{"policies": "strict"}'::jsonb WHERE space = $1`,
       [APP_SPACE_ID],
     );
 

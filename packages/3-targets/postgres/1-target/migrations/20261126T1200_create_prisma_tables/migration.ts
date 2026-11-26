@@ -4,7 +4,7 @@
  *
  * Written by hand, because the planner cannot produce a conditional rename or column checks. Every step is skipped when its result already holds, so it also brings up to date a database a release candidate set up, whose tables are in the schema `prisma_contract`. Each table's columns are checked, so a database from before the release candidates, whose tables are in an older form, stops here unchanged.
  *
- * Re-emit `ops.json` and `migration.json` after editing: `node migration.ts --config <a config for the Postgres target>`.
+ * Re-emit `ops.json` and `migration.json` after editing, from `packages/3-targets/postgres/2-adapter`: `pnpm exec tsx ../1-target/migrations/20261126T1200_create_prisma_tables/migration.ts --config prisma-tables.config.ts`.
  */
 import { Migration, MigrationCLI, rawSql } from '../../src/exports/migration';
 

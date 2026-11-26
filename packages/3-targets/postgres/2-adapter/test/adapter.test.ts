@@ -728,7 +728,7 @@ describe('Postgres adapter', () => {
     expect(result).toEqual({ kind: 'no-table' });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.sql).toContain('"information_schema"."tables"');
-    expect(calls[0]?.params).toEqual(['prisma_contract', 'marker']);
+    expect(calls[0]?.params).toEqual(['_prisma', 'marker']);
   });
 
   it('readMarker returns absent when the table exists but holds no row for this space', async () => {

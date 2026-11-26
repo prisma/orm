@@ -42,7 +42,6 @@ import {
 } from '@internal/framework-components/control';
 import type { SqlControlDriverInstance, SqlStorage } from '@internal/sql-contract/types';
 import { SqlConnectionError, SqlQueryError } from '@internal/sql-errors';
-import type { SqlExecuteRequest } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -193,8 +192,6 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
 
     await this.readMoneyLiteralsInCents(driver);
     await this.acquireLock(driver);
-    const ensureResult = await this.ensureControlTables(driver, options.destinationContract);
-    if (!ensureResult.ok) return ensureResult;
     const existingMarker = await this.family.readMarker({ driver, space });
 
     const markerCheck = this.ensureMarkerCompatibility(existingMarker, options.plan);
@@ -412,23 +409,6 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
       }
     }
     return ok({ operationsExecuted, executedOperations });
-  }
-
-  private async ensureControlTables(
-    driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
-    contract: Contract<SqlStorage>,
-  ): Promise<Result<void, SqlMigrationRunnerFailure>> {
-    const lowererContext = { contract };
-    const bootstrapQueries = this.family.bootstrapControlTableQueries();
-    const [schemaQuery, ...tableQueries] = bootstrapQueries;
-    if (schemaQuery === undefined) {
-      throw new InternalError('Postgres control-table bootstrap must include CREATE SCHEMA');
-    }
-    await this.executeStatement(driver, await this.family.lowerAst(schemaQuery, lowererContext));
-    for (const query of tableQueries) {
-      await this.executeStatement(driver, await this.family.lowerAst(query, lowererContext));
-    }
-    return okVoid();
   }
 
   private async runExpectationSteps(
@@ -962,12 +942,5 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
   ): Promise<void> {
     await driver.query('ROLLBACK');
-  }
-
-  private async executeStatement(
-    driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
-    statement: SqlExecuteRequest,
-  ): Promise<void> {
-    await driver.query(statement.sql, statement.params);
   }
 }

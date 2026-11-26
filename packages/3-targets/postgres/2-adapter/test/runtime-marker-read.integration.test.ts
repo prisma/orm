@@ -1,13 +1,8 @@
 import postgresRuntimeDriverDescriptor from '@internal/driver-postgres/runtime';
-import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
-import { buildSignMarkerBootstrapQueries } from '@internal/target-postgres/contract-free';
-import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
-import type { PostgresDdlNode } from '@internal/target-postgres/ddl';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createPostgresAdapter } from '../src/core/adapter';
-import type { PostgresContract } from '../src/core/types';
-import { createTestPostgresControlAdapter } from './helpers/test-control-adapter';
+import { createDriver, createPrismaTables } from './migrations/fixtures/runner-fixtures';
 
 describe('runtime readMarker through the Postgres runtime driver', () => {
   const cleanups: Array<() => Promise<void>> = [];
@@ -27,19 +22,14 @@ describe('runtime readMarker through the Postgres runtime driver', () => {
     });
     await driver.connect({ kind: 'url', url: database.connectionString });
 
-    const controlAdapter = createTestPostgresControlAdapter(
-      createPostgresBuiltinCodecLookup(),
-      createPostgresBuiltinDataTypeLookup(),
-    );
-    for (const query of buildSignMarkerBootstrapQueries()) {
-      await driver.execute(
-        await controlAdapter.lowerToExecuteRequest(query as PostgresDdlNode, {
-          contract: {} as PostgresContract,
-        }),
-      );
+    const controlDriver = await createDriver(database.connectionString);
+    try {
+      await createPrismaTables(controlDriver);
+    } finally {
+      await controlDriver.close();
     }
     await driver.execute({
-      sql: `insert into prisma_contract.marker
+      sql: `insert into _prisma.marker
          (space, core_hash, profile_hash, contract_json, canonical_version, invariants, updated_at)
        values ('app', 'core', 'profile', null, $1, '{inv-1}'::text[], now())`,
       params: [canonicalVersion],
