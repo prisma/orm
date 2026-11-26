@@ -146,8 +146,10 @@ function classMembers(node, packageName, rewriteMethods) {
 const className = (node) => node.name?.text ?? 'default';
 
 // What a declaration's marker is named after: a class with private members, a unique symbol
-// constant, or a static unique symbol, as `Class.name`.
-export function markedName(node) {
+// constant, or a static unique symbol, as `Class.name`. A node the rewrite built is named after the
+// declaration it came from, which has a parent and its own name.
+export function markedName(rewritten) {
+  const node = ts.getOriginalNode(rewritten);
   if (ts.isClassDeclaration(node)) {
     return node.members.some(isPrivate) ? { kind: 'class', name: className(node) } : undefined;
   }
