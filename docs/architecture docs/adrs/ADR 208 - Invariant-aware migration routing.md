@@ -84,12 +84,6 @@ The aggregate is part of the manifest's content-addressed hash ([ADR 169](./ADR%
 
 The pathfinder owns the structural-fallback BFS for the unsatisfiable case. Callers consume `outcome.missing` and `outcome.structuralPath` directly when surfacing `MIGRATION.NO_INVARIANT_PATH` — they don't run a second BFS.
 
-### Which route runs when several qualify
-
-Several routes can be equally short and cover the same invariants. The planner picks one with the neighbour order that [ADR 039](./ADR%20039%20-%20Migration%20graph%20path%20resolution%20&%20integrity.md) § Deterministic tie-breaking defines: migrations that cover a still-needed invariant first, then by `createdAt`, then `to`, then `migrationHash`. The same graph, start, target and required set always give the same route, in every environment.
-
-One consequence is easy to miss. When a route runs several self-edges (data-only migrations from a contract to itself) on one contract, they run in `createdAt` order. That is how the planner behaves today, inherited from the tie-break. It is not a rule anyone decided for data-only migrations, and nothing guarantees that a later one does not depend on an earlier one. A database that is kept up to date applies them in the order they were deployed, one `migrate --to` at a time, while a fresh database applies them together in `createdAt` order, and the two orders can differ when branches merge out of timestamp order. Changing the order, or making it a declared rule, changes which order data migrations run in for existing histories, so it is a design decision, not a planner fix.
-
 ### Marker: applied-at-least-once, not currently true
 
 `prisma_contract.marker` carries an `invariants` field — a set of ids that records which invariants have been successfully applied to this database at least once in its history.
@@ -144,6 +138,16 @@ The **ledger** is an *audit artifact* — an append-only log of what happened, w
 
 Framework decisions about applicability and routing must never depend on the audit log. "These invariants have been applied" is a guarantee the framework provides about the database, so it belongs on the guarantee record. Reading it from a log the user is free to truncate would tie routing correctness to ledger retention policy — a category error.
 
+## Which route runs when several qualify
+
+This section describes how the planner behaves today. It is not a decision of this ADR.
+
+Several routes can be equally short and cover the same invariants. The planner picks one with the neighbour order that [ADR 039](./ADR%20039%20-%20Migration%20graph%20path%20resolution%20&%20integrity.md) § Deterministic tie-breaking describes, as implemented by `compareTieBreak`: migrations that cover a still-needed invariant first, then by `createdAt`, then `to`, then `migrationHash`. The same graph, start, target and required set give the same route on machines with the same locale. The comparison uses `localeCompare` today, so machines with locales that sort letters differently can choose different routes among equal ones; comparing by character code is a separate fix, because it can change routes for users on those locales.
+
+### Open question: the run order of data-only migrations on one contract
+
+When a route runs several self-edges (data-only migrations from a contract to itself) on one contract, they run in `createdAt` order. That is inherited from the tie-break. It is not a rule anyone decided for data-only migrations: a later one may depend on an earlier one, and nothing checks for that. A database that is kept up to date applies them in the order they were deployed, one `migrate --to` at a time, while a fresh database applies them together in `createdAt` order, and the two orders can differ when branches merge out of timestamp order. Changing the order, or making it a declared rule, changes which order data migrations run in for existing histories, so it is a design decision, not a planner fix.
+
 ## How the search works, and what it costs
 
 ### The search
@@ -152,7 +156,7 @@ Framework decisions about applicability and routing must never depend on the aud
 
 A naive search over contracts and covered sets doubles its work for every self-edge that provides a required invariant, because each one can be taken or skipped. A fresh database catching up to a ref that lists many invariants hits this every time, and that is the normal case for CI and every new environment. The search avoids it with two rules.
 
-The first rule: at a contract, the search takes self-edges only in ascending rank, and only a self-edge that covers a still-needed invariant. Leaving the contract resets the rank. Self-edges at one contract can be run in any order without changing where the route goes, so the search only tries one order of each set instead of every order.
+The first rule: at a contract, the search takes self-edges only in ascending rank, and only a self-edge that covers a still-needed invariant. Leaving the contract resets the rank. Taking a contract's self-edges in a different order ends at the same contract with the same invariants covered, so the search tries only one order: rank order, which is also the order they run in (see § Which route runs when several qualify).
 
 The second rule: the search never enqueues a state that provably cannot reach the goal. That is a state whose contract does not reach the target, or that lacks an invariant it can no longer obtain on a route to the target. Because of the first rule, a self-edge the state has passed over is out of reach until the search leaves the contract, so a state that passed over the only remaining provider of an invariant is dropped at once. To answer this quickly, the function computes two things for each required invariant before it searches: which contracts can still reach a provider after moving on to another contract, and, at each contract, the highest rank of a self-edge there that provides it.
 
@@ -194,7 +198,7 @@ The rules drop a state only when an invariant it lacks has become impossible to 
 
 ### Very large histories
 
-The planner is not meant to plan arbitrarily large histories faster. A history with hundreds of required invariants, or with many alternative routes that each provide some of them, should be pruned or squashed instead, with guidance and tools for doing so. The algorithm has no refusal threshold.
+The planner is not meant to plan arbitrarily large histories faster. A history with hundreds of required invariants, or with many alternative routes that each provide some of them, should be squashed or pruned instead. The [squash-first policy](./ADR%20102%20-%20Squash-first%20policy%20&%20squash%20advisor.md) describes baselines and a squash advisor for this, but no squash or prune command ships today; the guidance and tools are planned, not available. The algorithm has no refusal threshold.
 
 ## Alternatives considered
 

@@ -186,7 +186,7 @@ export function findPathWithInvariants(
   const start: InvState = { node: fromHash, covered: new Set(), lastSelfEdgeRank: -1 };
   if (cannotReachGoal(start)) return null;
 
-  const takesSelfEdgesInOrder = (s: InvState, edge: MigrationEdge, useful: boolean): boolean =>
+  const respectsSelfEdgeOrder = (s: InvState, edge: MigrationEdge, useful: boolean): boolean =>
     edge.from !== edge.to || (useful && (selfEdgeRankOf.get(edge) ?? -1) > s.lastSelfEdgeRank);
 
   const neighbours = (s: InvState): Iterable<{ next: InvState; edge: MigrationEdge }> => {
@@ -212,7 +212,7 @@ export function findPathWithInvariants(
       })
       .filter(
         ({ edge, useful, nextState }) =>
-          takesSelfEdgesInOrder(s, edge, useful) && !cannotReachGoal(nextState),
+          respectsSelfEdgeOrder(s, edge, useful) && !cannotReachGoal(nextState),
       )
       .sort((a, b) => compareUsefulFirst(a, b) || compareTieBreak(a.edge, b.edge))
       .map(({ edge, nextState }) => ({ next: nextState, edge }));
