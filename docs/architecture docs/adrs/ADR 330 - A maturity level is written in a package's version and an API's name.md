@@ -97,7 +97,7 @@ Nothing else has a level of its own. An entrypoint (a path inside a package that
 | Preview | `8.3.0-preview.0` | `preview_search` |
 | Early Access | `8.3.0-ea.0` | `ea_search` |
 
-Whether a single API inside a GA package can be at Release Candidate, and how its name would say so, is not decided. Until it is, no name starts with `rc_`.
+Whether a single API inside a GA package can be at Release Candidate, and how its name would say so, is not decided.
 
 The word and the name are joined by an underscore, so that the level cannot be read as part of the name: `previewImage` could be a GA API about image previews, while `preview_image` can only be an `image` API at Preview or above. A reader, and any tool that reads names, can then tell from the name alone the least an API is promised. Every name in TypeScript, including a config option, takes this form.
 
