@@ -1,0 +1,54 @@
+# Prisma's own database tables: plan
+
+The design is in [design.md](design.md), with what building it has changed in [amendments.md](amendments.md). Linear: [TML-3978](https://linear.app/prisma-company/issue/TML-3978).
+
+**Purpose.** After this project no upgrade within Prisma 8 fails because of the tables Prisma keeps for itself in a user's database, and every name Prisma owns there is one we can keep for all of Prisma 8. It must merge before `8.0.0`.
+
+**Done means.** A database created by the last release candidate is brought to the new tables with no manual step, shown by a test against a real PostgreSQL database. A fresh database gets the new names. No "marker" remains where a user or a tool can see it. Each other target is done or has a ticket that stands alone. Prisma Studio reads the new names.
+
+Six slices, one pull request each, in this order. PostgreSQL comes first because it is the only target that is generally available at `8.0.0`.
+
+| Slice | State |
+| --- | --- |
+| 1. PostgreSQL: the `_prisma` contract space, applied first, and the schema rename | Spec written; waiting on one decision ([amendments.md](amendments.md) section 1) |
+| 2. PostgreSQL: split the marker into signatures and configuration | Not started |
+| 3. Rename the concept from "marker" to "signature" | Not started |
+| 4. SQLite, MySQL, MariaDB and MongoDB | Not started |
+| 5. Prisma Studio reads the new names | Not started |
+| 6. Decide whether PostgreSQL's contract table becomes a documented feature | Not started |
+
+## Slice 1. PostgreSQL: the `_prisma` contract space, applied first, and the schema rename
+
+**Outcome.** The PostgreSQL target package carries a contract space named `_prisma`: a contract for Prisma's own tables and a first migration, authored the way pgvector's are. Commands that change a database bring this space up to date before they read anything else. The schema is named `_prisma`; a database with `prisma_contract` has it renamed. The statements that created the tables with `CREATE … IF NOT EXISTS` are gone on PostgreSQL. The tables keep the names `marker`, `ledger` and `contract` in this slice.
+
+**Files.** [slices/1-postgres-own-space/spec.md](slices/1-postgres-own-space/spec.md).
+
+**Writes** the decision record "each target has a contract space for Prisma's own tables" and the one on the `_prisma` prefix, and updates the decision records on contract spaces and marker storage in place.
+
+## Slice 2. PostgreSQL: split the marker into signatures and configuration
+
+**Outcome.** `_prisma.signatures` has one row per contract space: the hashes, when it was signed, the invariants. `_prisma.config` has one row per database: the change policy and the data protection policy. The columns nothing writes are gone. The decision record that says the marker may hold the contract's JSON is corrected in place. Policies are read from and written to `config` by every command that reads or writes them today.
+
+**Builds on** slice 1's phase, which is what makes moving the policies safe: the tables are in their new form before any command reads a policy.
+
+## Slice 3. Rename the concept from "marker" to "signature"
+
+**Outcome.** `verifySignature`, `db verify --signature-only`, `CONTRACT.SIGNATURE_MISSING` and the other nine codes, the error fields, the `signature` object in `--json` output, every message, the glossary, the reference docs, the upgrade instructions with a step that rewrites user code, and the shipped skill. The types extension authors import are renamed with them. In prose the term is "contract signature".
+
+**Order.** After slices 1 and 2, and after the two pull requests that touch signing ([prisma/orm#31203](https://github.com/prisma/orm/pull/31203), the one-time hash change, and [prisma/orm#31218](https://github.com/prisma/orm/pull/31218), capabilities by database version) have merged or their sessions have agreed an order, because this slice touches about 200 source files and 500 test files.
+
+**Rides along.** The temporary names `prisma_swap…` become `_prisma_swap…`, and the query aliases `__prisma_…` move to one underscore. Nothing stored changes.
+
+## Slice 4. SQLite, MySQL, MariaDB and MongoDB
+
+**Outcome.** Each target carries its own `_prisma` space and uses `_prisma_signatures`, `_prisma_config` and `_prisma_ledger`. MongoDB's `_prisma_migrations` collection is no longer used; its documents are moved. The decision record on MongoDB's migration state is updated in place.
+
+**Known before starting.** MySQL's and MongoDB's runners check every space's schema, and their introspection hides Prisma's own tables by name, so the `_prisma` contract would fail its own check until that filter changes. SQLite changed a column default at `rc.15`, so its first migration accepts both. These targets are at Early Access; one that cannot be finished before `8.0.0` gets a ticket that stands alone.
+
+## Slice 5. Prisma Studio reads the new names
+
+**Outcome.** Studio's Migrations view reads `_prisma.ledger` and `_prisma.contract`, and falls back to `prisma_contract` for a database not yet brought up to date. Its queries are in `data/migrations.ts` in prisma/studio. A pull request there, merged in step with the release that contains slice 1.
+
+## Slice 6. Decide whether PostgreSQL's contract table becomes a documented feature
+
+**Outcome.** A recommendation to the operator, with evidence: who reads the table (Studio does; nothing in this repository), what it costs in a database with many migrations, and what a framework interface and a setting that controls storage would look like. Until then the table stays an undocumented PostgreSQL feature inside the `_prisma` schema.
