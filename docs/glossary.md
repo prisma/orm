@@ -83,7 +83,7 @@ The npm package that provides a target, such as `@prisma/orm-target-postgres`. I
 
 ### Facade
 
-The package an application installs to use a database, such as `@prisma/orm-postgres`, named after the facade design pattern. One function in it, `defineConfig`, glues together the framework, family, target, adapter and driver so that an application starts in one call, and the facade re-exports everything application code imports. A facade is not a target package. An application lists it together with the platform packages it names as peer dependencies ([ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)).
+The package an application's code imports Prisma from, named after the facade design pattern. There is one for each database, such as `@prisma/orm-postgres` for PostgreSQL. One function in it, `defineConfig`, glues together the framework, family, target, adapter and driver so that an application starts in one call, and the facade re-exports everything application code imports. A facade is not a target package. An application lists it together with the platform packages it names as peer dependencies ([ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)).
 
 ### Platform package
 
