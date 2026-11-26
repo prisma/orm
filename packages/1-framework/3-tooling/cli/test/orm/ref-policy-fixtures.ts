@@ -33,4 +33,4 @@ export function runPolicy(dir: string, args: readonly string[]) {
   return harness().run(['migration', 'ref', 'policy', ...args], { cwd: dir });
 }
 
-export const PLAIN_REF = { hash: HASH_A, invariants: [] } as const;
+export const PLAIN_REF = { formatVersion: 1, hash: HASH_A, invariants: [] } as const;
