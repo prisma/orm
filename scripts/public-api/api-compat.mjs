@@ -14,7 +14,8 @@
 // One direction is enough: a new required member on a type users implement fails through the
 // exported function that accepts it, and a new member on a type users only receive passes.
 //
-// A class also gets a test that each abstract member a subclass implements still accepts what the
+// An abstract class also gets a subclass, written against the release, that must still compile
+// against the current class, and a test that each abstract member still accepts what the
 // release's did.
 //
 // The comparison is TypeScript's own, on declarations rewritten so that it compares what a user
@@ -30,7 +31,12 @@
 // instantiates generic signatures with their constraints. What that does not decide is compared
 // member by member, each member with the twin rule and then the structural mapping. What is not
 // decided is reported as undecided, with the stage it ended at: native (too deep, or a stack
-// overflow), member, or structural.
+// overflow), member (no time, or call or index signatures left out), structural, or shared marker.
+//
+// Two classes with private members, or two unique symbols, with one name in one package get one
+// marker, so one can stand in for the other. The package lists each such name as not compared, and
+// every export that reaches one, in the release or the current build, has its passing comparisons
+// reported as undecided at the stage shared marker.
 //
 // An accepted break is recorded in api-breaks.json beside the package's api.txt, and a released
 // package the repository no longer has in packages/9-public/removed-packages.json; records.mjs

@@ -1200,7 +1200,8 @@ export function checkPackage({
   }
 
   // Two classes or unique symbols with one name share one marker, so a comparison that reaches one
-  // can pass where the other was swapped in. Such a pass decides nothing, on either side.
+  // can pass where the other was swapped in. Such a pass decides nothing, on either side. A test
+  // that only checks a name is still exported compares nothing, so it stands.
   const ambiguous = [
     ...[...host.mergedClasses].map((each) => ({ key: each, label: `private class ${each}` })),
     ...[...host.mergedSymbols].map((each) => ({ key: each, label: `unique symbol ${each}` })),
@@ -1220,12 +1221,14 @@ export function checkPackage({
       );
     for (const entry of exported) {
       if (!reaching.has(`${entry.path}\0${entry.name}`)) continue;
-      for (const segment of entry.segments.filter((each) => !each.probe && !each.use)) {
+      const compares = (segment) =>
+        !segment.probe && !segment.use && segment.test !== 'exists' && segment.test !== 'path';
+      for (const segment of entry.segments.filter(compares)) {
         if (settled(breaks, entry, segment) || settled(undecided, entry, segment)) continue;
         if (settled(notCompared, entry, segment)) continue;
         undecided.push({
           ...testOf(entry, segment),
-          stage: 'native',
+          stage: 'shared marker',
           message: `not decided: it uses one of ${labels}, which share one marker with another of that name, so a pass cannot tell them apart`,
         });
         const index = decidedByMembers.findIndex(
@@ -1307,7 +1310,8 @@ export function checkPackage({
           }
         : {}),
     }));
-  for (const className of host.mergedClasses) {
+  const declaredHere = (marker) => marker.startsWith(`${name}:`);
+  for (const className of [...host.mergedClasses].filter(declaredHere)) {
     notCompared.push({
       path: '*',
       name: `private class ${className}`,
@@ -1316,7 +1320,7 @@ export function checkPackage({
         'the package declares two classes with private members and this name, which nothing stable tells apart, so both have one marker and one can stand in for the other',
     });
   }
-  for (const symbol of host.mergedSymbols) {
+  for (const symbol of [...host.mergedSymbols].filter(declaredHere)) {
     notCompared.push({
       path: '*',
       name: `unique symbol ${symbol}`,

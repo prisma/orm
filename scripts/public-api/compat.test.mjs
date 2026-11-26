@@ -113,6 +113,7 @@ describe('checkPackage, with the release treated as GA', () => {
       ['make value', 'use value'],
     );
     match(result.undecided[0].message, /private class fixture-compat:Token/);
+    strictEqual(result.undecided[0].stage, 'shared marker');
   });
 
   it('subclasses an abstract class with a protected member keyed by a well-known symbol', () => {
@@ -155,6 +156,19 @@ describe('checkPackage, with the release treated as GA', () => {
         ],
       );
     }
+  });
+
+  it('leaves the existence test of a forwarded name decided, and lists a shared marker only in the package that declares it', () => {
+    const result = check('marker-forward', {
+      release: 'marker-forward',
+      dependencies: [{ folder: 'marker-dep', name: 'fixture-marker-dep' }],
+      own: ['fixture-marker-dep'],
+    });
+    deepStrictEqual(
+      result.undecided.map(({ name, test }) => `${name} ${test}`),
+      ['hold value'],
+    );
+    deepStrictEqual(result.notCompared, []);
   });
 
   it('fails when the release imports a file of its own that is missing', () => {
