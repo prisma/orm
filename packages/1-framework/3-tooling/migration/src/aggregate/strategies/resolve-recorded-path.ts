@@ -1,12 +1,13 @@
 import type {
   MigrationAccessChange,
+  MigrationPackage,
   MigrationPlan,
   MigrationPlanOperation,
 } from '@internal/framework-components/control';
 import { InternalError } from '@internal/utils/internal-error';
 import { EMPTY_CONTRACT_HASH } from '../../constants';
 import { findPathWithDecision } from '../../migration-graph';
-import type { MigrationOps, OnDiskMigrationPackage } from '../../package';
+import type { MigrationOps } from '../../package';
 import { requireHeadRef } from '../aggregate';
 import type { ContractMarkerRecordLike } from '../marker-types';
 import type { AggregateMigrationEdgeRef, PerSpacePlan } from '../planner-types';
@@ -26,9 +27,15 @@ export type ResolveRecordedPathOutcome =
   | { readonly kind: 'unreachable' }
   | { readonly kind: 'unsatisfiable'; readonly missing: readonly string[] };
 
+/** What a path is resolved over: a space's migration packages, held in memory or read from disk, with its head ref, graph and contract. */
+export interface RecordedPathSpace
+  extends Pick<AggregateContractSpace, 'spaceId' | 'headRef' | 'graph' | 'contract'> {
+  readonly packages: readonly MigrationPackage[];
+}
+
 export interface ResolveRecordedPathInputs {
   readonly aggregateTargetId: string;
-  readonly space: AggregateContractSpace;
+  readonly space: RecordedPathSpace;
   readonly currentMarker: ContractMarkerRecordLike | null;
   /**
    * Optional ref name to decorate the resulting `PathDecision`. Used by
@@ -64,7 +71,7 @@ export function resolveRecordedPath(input: ResolveRecordedPathInputs): ResolveRe
   const { aggregateTargetId, space, currentMarker, refName } = input;
   const headRef = requireHeadRef(space);
   const graph = space.graph();
-  const packagesByMigrationHash = new Map<string, OnDiskMigrationPackage>(
+  const packagesByMigrationHash = new Map<string, MigrationPackage>(
     space.packages.map((pkg) => [pkg.metadata.migrationHash, pkg]),
   );
 

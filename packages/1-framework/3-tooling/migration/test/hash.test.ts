@@ -111,7 +111,6 @@ describe('verifyMigrationHash', () => {
 
     const result = verifyMigrationHash({
       dirName: '20260225T1430_tampered',
-      dirPath: '/tmp/tampered',
       metadata: { ...baseMetadata, migrationHash: storedHash },
       ops: tamperedOps,
     });

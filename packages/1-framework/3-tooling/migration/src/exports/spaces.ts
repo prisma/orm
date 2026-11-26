@@ -1,4 +1,9 @@
 export {
+  type ApplyInstalledContractSpaceInputs,
+  applyInstalledContractSpace,
+  type InstalledContractSpaceApplied,
+} from '../apply-installed-contract-space';
+export {
   assertDescriptorSelfConsistency,
   type DescriptorSelfConsistencyInputs,
 } from '../assert-descriptor-self-consistency';

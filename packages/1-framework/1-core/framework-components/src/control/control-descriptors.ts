@@ -58,6 +58,8 @@ export interface ControlTargetDescriptor<
    */
   readonly contractSerializer: ContractSerializer<TContract>;
   readonly defaultNamespaceId: string;
+  /** The contract space of the tables this target keeps for Prisma in a user's database, read from the installed package rather than the user's repository. */
+  readonly contractSpace?: ContractSpace;
   create(): TTargetInstance;
 }
 

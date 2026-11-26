@@ -212,6 +212,23 @@ export function errorDescriptorHeadHashMismatch(args: {
   );
 }
 
+export function errorInstalledSpaceUnreachable(args: {
+  readonly spaceId: string;
+  readonly markerHash: string;
+  readonly headRefHash: string;
+}): MigrationToolsError {
+  const { spaceId, markerHash, headRefHash } = args;
+  return new MigrationToolsError(
+    'MIGRATION.INSTALLED_SPACE_UNREACHABLE',
+    `The database's contract space "${spaceId}" is at a contract the installed Prisma does not know`,
+    {
+      why: `The database records contract space "${spaceId}" at ${markerHash}, and the migrations in the installed Prisma packages lead from the empty database to ${headRefHash} without passing through it. A later Prisma release probably brought these tables up to date.`,
+      fix: 'Install the Prisma release that last changed this database, or a later one, and run the command again.',
+      meta: { spaceId, markerHash, headRefHash },
+    },
+  );
+}
+
 export function errorDuplicateSpaceId(spaceId: string): MigrationToolsError {
   return new MigrationToolsError(
     'MIGRATION.DUPLICATE_SPACE_ID',
