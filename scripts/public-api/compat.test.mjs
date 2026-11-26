@@ -138,6 +138,25 @@ describe('checkPackage, with the release treated as GA', () => {
     );
   });
 
+  it('fails when a value whose comparison is undecided is made type-only', () => {
+    for (const [current, release] of [
+      ['generic-typeonly', 'generic'],
+      ['shape-value-typeonly', 'shape-value-release'],
+    ]) {
+      deepStrictEqual(
+        brokenExports(check(current, { release })).filter((each) => each.test === 'value'),
+        [
+          {
+            path: '.',
+            name: current === 'generic-typeonly' ? 'required' : 'shape',
+            test: 'value',
+            failsRun: true,
+          },
+        ],
+      );
+    }
+  });
+
   it('fails when the release imports a file of its own that is missing', () => {
     const { problems } = check('relative-release', { release: 'relative-missing' });
     strictEqual(problems.length, 1);

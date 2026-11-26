@@ -1039,6 +1039,9 @@ export function checkPackage({
     });
 
   let failed = [];
+  // A value removed outright fails its comparison too, so a failed use waits for that comparison's
+  // verdict and is reported only when the comparison is not a break.
+  const heldUses = [];
   for (const entry of exported) {
     for (const segment of entry.segments.filter((each) => !each.probe)) {
       const outcome = native.outcomes.get(segment.id);
@@ -1046,11 +1049,11 @@ export function checkPackage({
       const probeOutcome = probe && native.outcomes.get(probe.id);
       if (outcome && deepOnly(outcome)) notDecided(entry, segment, 'native', outcome.message);
       else if (outcome && (segment.test === 'exists' || segment.use)) {
-        // A value removed outright fails its comparison too; the use is reported only alone.
         const compared = entry.segments.find(
           (other) => other !== segment && !other.probe && !other.use && other.test === segment.test,
         );
         if (!compared || !native.outcomes.has(compared.id)) broke(entry, segment, outcome);
+        else heldUses.push({ entry, segment, outcome });
       } else if (outcome) failed.push({ entry, segment, outcome });
       else if (probeOutcome && deepOnly(probeOutcome)) {
         notDecided(entry, segment, 'native', probeOutcome.message);
@@ -1187,6 +1190,13 @@ export function checkPackage({
       );
     } else if (each.partial) notDecided(each.entry, each.segment, 'member', PARTIAL);
     else decidedByMembers.push(testOf(each.entry, each.segment));
+  }
+
+  for (const { entry, segment, outcome } of heldUses) {
+    const isBroken = breaks.some(
+      (each) => each.path === entry.path && each.name === entry.name && each.test === segment.test,
+    );
+    if (!isBroken) broke(entry, segment, outcome);
   }
 
   // Two classes or unique symbols with one name share one marker, so a comparison that reaches one
