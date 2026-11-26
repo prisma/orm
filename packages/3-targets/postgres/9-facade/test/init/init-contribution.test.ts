@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import type { ContractEntryInput, ReadmeInput } from '@internal/cli/init-contribution';
+import type { ReadmeInput } from '@internal/cli/init-contribution';
 import type { ContractSourceFormat } from '@internal/config/config-types';
 import {
   POSTGRES_MIN_SERVER_VERSION,
@@ -60,34 +60,40 @@ describe('templates', () => {
   });
 
   describe('contractEntry', () => {
-    function entry(input: ContractEntryInput) {
-      const expression = contribution.contractEntry?.(input);
-      return {
-        source: expression?.renderTypeScript(),
-        imports: expression?.importRequirements(),
-      };
-    }
-
     it('states the newest PostgreSQL version beside a Prisma schema contract', () => {
-      expect(entry({ kind: 'contract', mode: 'psl', path: './prisma/contract.prisma' })).toEqual({
-        source: `{ path: "./prisma/contract.prisma", databaseVersion: ${POSTGRES_NEWEST_VERSION} }`,
-        imports: [],
+      expect(
+        contribution.contractEntry?.({
+          kind: 'contract',
+          mode: 'psl',
+          path: './prisma/contract.prisma',
+        }),
+      ).toEqual({
+        value: { path: './prisma/contract.prisma', databaseVersion: POSTGRES_NEWEST_VERSION },
       });
     });
 
     it('is the path of a TypeScript contract, which states its version in defineContract', () => {
-      expect(entry({ kind: 'contract', mode: 'typescript', path: './prisma/contract.ts' })).toEqual(
-        { source: '"./prisma/contract.ts"', imports: [] },
-      );
+      expect(
+        contribution.contractEntry?.({
+          kind: 'contract',
+          mode: 'typescript',
+          path: './prisma/contract.ts',
+        }),
+      ).toEqual({ value: './prisma/contract.ts' });
       expect(contribution.starterContract('typescript')).toContain(
         `defineContract({ databaseVersion: ${POSTGRES_NEWEST_VERSION} }`,
       );
     });
 
-    it('passes the newest PostgreSQL version to prisma7Schema', () => {
-      expect(entry({ kind: 'prisma7-schema', path: 'prisma/schema.prisma' })).toEqual({
-        source: `prisma7Schema("prisma/schema.prisma", { databaseVersion: ${POSTGRES_NEWEST_VERSION} })`,
-        imports: [{ moduleSpecifier: '@internal/postgres/config', symbol: 'prisma7Schema' }],
+    it('calls prisma7Schema from its config module with the newest PostgreSQL version', () => {
+      expect(
+        contribution.contractEntry?.({ kind: 'prisma7-schema', path: 'prisma/schema.prisma' }),
+      ).toEqual({
+        call: {
+          module: '@internal/postgres/config',
+          export: 'prisma7Schema',
+          args: ['prisma/schema.prisma', { databaseVersion: POSTGRES_NEWEST_VERSION }],
+        },
       });
     });
   });
