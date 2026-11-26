@@ -25,8 +25,8 @@ export type RequiredPeerOutcome =
 
 export interface RequiredPeer {
   readonly name: string;
-  /** The version or range the application lists it at, from the range the package that names it asks for. */
-  readonly version: string;
+  /** The line init writes for it in the application's `package.json`, from the range the package that names it asks for. */
+  readonly line: string;
   /** The range the package that names it asks for, which an installed copy has to satisfy. */
   readonly requirement: string;
   readonly outcome: RequiredPeerOutcome;
@@ -49,7 +49,12 @@ export interface RequiredPeers {
 }
 
 export function requiredPeerSpecifier(peer: RequiredPeer): string {
-  return `${peer.name}@${peer.version}`;
+  return `${peer.name}@${peer.line}`;
+}
+
+/** The peer at the range the package that names it asks for, for advice to add it by hand. */
+export function requirementSpecifier(peer: RequiredPeer): string {
+  return `${peer.name}@${peer.requirement}`;
 }
 
 interface ReadManifest {
@@ -349,7 +354,7 @@ export async function resolveRequiredPeers(ctx: {
     facade: facadeSpecifier,
     packages: byName(wanted).map(([name, { range }]) => ({
       name,
-      version: lineOf(name, range),
+      line: lineOf(name, range),
       requirement: range,
       outcome: outcomes.get(name) ?? 'to-install',
     })),

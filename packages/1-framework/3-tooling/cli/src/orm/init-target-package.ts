@@ -35,6 +35,7 @@ import {
   type RequiredPeer,
   type RequiredPeers,
   requiredPeerSpecifier,
+  requirementSpecifier,
   resolveRequiredPeers,
 } from './init-required-peers';
 import { exactVersionOf, requirementAdmits } from './init-version-lines';
@@ -259,7 +260,7 @@ export function createTargetPackagePreparation(ctx: {
         installCommand:
           toAdd.length === 0
             ? undefined
-            : installCommand(ctx.packageManager, toAdd.map(requiredPeerSpecifier)),
+            : installCommand(ctx.packageManager, toAdd.map(requirementSpecifier)),
         listedMissing: missing.filter((peer) => declared.has(peer.name)).map((peer) => peer.name),
         restoreCommand: formatInstallCommand(ctx.packageManager),
       });
@@ -318,10 +319,7 @@ function refuseRequiredPeersAtAnotherVersion(
     installCommand:
       toAdd.length === 0
         ? undefined
-        : installCommand(
-            ctx.packageManager,
-            toAdd.map((peer) => `${peer.name}@${peer.requirement}`),
-          ),
+        : installCommand(ctx.packageManager, toAdd.map(requirementSpecifier)),
     listedAtRequired: wrong
       .filter(({ peer }) => peer.outcome === 'already-listed')
       .map(({ peer }) => peer.name),
@@ -461,7 +459,7 @@ async function loadContribution(
         missingPeersCommand:
           missing.length === 0
             ? undefined
-            : installCommand(ctx.packageManager, missing.map(requiredPeerSpecifier)),
+            : installCommand(ctx.packageManager, missing.map(requirementSpecifier)),
       });
     case 'loaded':
       break;

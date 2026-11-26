@@ -81,17 +81,17 @@ describe('the list the printed Prisma 6 setup names', () => {
         packages: [
           {
             name: '@prisma/orm-family-mongo',
-            version: VERSION,
+            line: VERSION,
             requirement: VERSION,
             outcome: 'to-install',
           },
           {
             name: '@prisma/orm-framework',
-            version: VERSION,
+            line: VERSION,
             requirement: VERSION,
             outcome: 'to-install',
           },
-          { name: 'mongodb', version: '^7', requirement: '^7', outcome: 'to-install' },
+          { name: 'mongodb', line: '^7', requirement: '^7', outcome: 'to-install' },
         ],
         unread: [],
         warnings: [],
@@ -123,13 +123,13 @@ describe('the list the printed Prisma 6 setup names', () => {
     expect(list.packages).toEqual([
       {
         name: '@prisma/orm-framework',
-        version: VERSION,
+        line: VERSION,
         requirement: VERSION,
         outcome: 'to-install',
       },
       {
         name: 'temporal-polyfill',
-        version: '^1.0.8',
+        line: '^1.0.8',
         requirement: '^1.0.8',
         outcome: 'to-install',
       },
@@ -282,7 +282,7 @@ describe('whether a package the project lists is at the version asked for', () =
     ['a dist-tag with the version installed', 'latest', VERSION, 'already-listed'],
   ])('decides %s', async (_case, line, installed, outcome) => {
     expect(await outcomeFor(line, installed)).toMatchObject({
-      packages: [{ name: '@prisma/orm-framework', version: VERSION, outcome }],
+      packages: [{ name: '@prisma/orm-framework', line: VERSION, outcome }],
     });
   });
 
@@ -304,7 +304,7 @@ describe('whether a package the project lists is at the version asked for', () =
       packages: [
         {
           name: '@prisma/orm-framework',
-          version: '8.0.0-rc.27',
+          line: '8.0.0-rc.27',
           requirement: '8.0.0-rc.27',
           outcome: 'already-listed',
         },
@@ -374,13 +374,13 @@ describe('a package installed at a version other than the one asked for', () => 
         packages: [
           {
             name: '@prisma/orm-framework',
-            version: VERSION,
+            line: VERSION,
             requirement: VERSION,
             outcome: 'installed',
           },
           {
             name: 'temporal-polyfill',
-            version: '^1.0.8',
+            line: '^1.0.8',
             requirement: '^1.0.8',
             outcome: 'installed',
           },
@@ -421,13 +421,13 @@ describe('the packages init installs in a round', () => {
       packages: [
         {
           name: '@prisma/orm-framework',
-          version: '^8.1.0',
+          line: '^8.1.0',
           requirement: '~8.1.0',
           outcome: 'installed',
         },
         {
           name: 'temporal-polyfill',
-          version: '^1.0.8',
+          line: '^1.0.8',
           requirement: '^1.0.8',
           outcome: 'installed',
         },
@@ -475,13 +475,13 @@ describe('the lines init writes for each line of releases', () => {
         packages: [
           {
             name: '@prisma/orm-framework',
-            version: '8.0.0-rc.27',
+            line: '8.0.0-rc.27',
             requirement: '8.0.0-rc.27',
             outcome: 'installed',
           },
           {
             name: 'temporal-polyfill',
-            version: '^1.0.8',
+            line: '^1.0.8',
             requirement: '^1.0.8',
             outcome: 'installed',
           },
@@ -521,13 +521,13 @@ describe('the lines init writes for each line of releases', () => {
         packages: [
           {
             name: '@prisma/orm-framework',
-            version: '^8.1.0',
+            line: '^8.1.0',
             requirement: '~8.1.0',
             outcome: 'installed',
           },
           {
             name: 'temporal-polyfill',
-            version: '^1.0.8',
+            line: '^1.0.8',
             requirement: '^1.0.8',
             outcome: 'installed',
           },
@@ -553,7 +553,7 @@ describe('the lines init writes for each line of releases', () => {
         packages: [
           {
             name: '@prisma/orm-framework',
-            version: '~8.1.0',
+            line: '~8.1.0',
             requirement: '~8.1.0',
             outcome: 'installed',
           },
@@ -575,13 +575,13 @@ describe('the lines init writes for each line of releases', () => {
         packages: [
           {
             name: '@prisma/orm-framework',
-            version: '~8.1.0',
+            line: '~8.1.0',
             requirement: '~8.1.0',
             outcome: 'installed',
           },
           {
             name: '@prisma/orm-target-mysql',
-            version: '~8.1.0-ea.0',
+            line: '~8.1.0-ea.0',
             requirement: '~8.1.0-ea.0',
             outcome: 'installed',
           },
@@ -609,7 +609,7 @@ describe('the lines init writes for each line of releases', () => {
         packages: [
           {
             name: '@prisma/orm-framework',
-            version: '^8.1.0',
+            line: '^8.1.0',
             requirement: '~8.1.0',
             outcome: 'already-listed',
           },
@@ -665,7 +665,7 @@ describe('a required peer that is not a Prisma ORM package, listed at another ex
       packages: expect.arrayContaining([
         {
           name: 'left-pad',
-          version: '1.3.0',
+          line: '1.3.0',
           requirement: '1.3.0',
           outcome: 'left-at-another-version',
         },

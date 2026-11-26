@@ -180,7 +180,7 @@ describe(
               packages: [
                 {
                   name: '@prisma/orm-framework',
-                  version: '8.1.0',
+                  line: '8.1.0',
                   requirement: '8.1.0',
                   outcome: 'to-install',
                 },

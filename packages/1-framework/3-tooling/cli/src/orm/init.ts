@@ -327,7 +327,11 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             status: packagesInstalled,
             deps: installed ? deps : [...inputs.preinstalled],
             devDeps: installed ? devDeps : [],
-            requiredPeers: [...inputs.requiredPeers.packages],
+            requiredPeers: inputs.requiredPeers.packages.map(({ name, line, outcome }) => ({
+              name,
+              version: line,
+              outcome,
+            })),
           },
           contractEmitted,
           prisma7: adoptsPrisma7

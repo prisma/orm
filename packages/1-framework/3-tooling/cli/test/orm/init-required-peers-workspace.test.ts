@@ -116,13 +116,13 @@ describe("the required peers of this repository's facades", () => {
         packages: [
           ...platform.map((name) => ({
             name,
-            version: `workspace:${version}`,
+            line: `workspace:${version}`,
             requirement: `workspace:${version}`,
             outcome: 'to-install',
           })),
           ...Object.entries(others).map(([name, range]) => ({
             name,
-            version: range,
+            line: range,
             requirement: range,
             outcome: 'to-install',
           })),

@@ -145,20 +145,17 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
             {
               name: '@prisma/orm-framework',
               version: VERSION,
-              requirement: VERSION,
               outcome: 'installed',
             },
             {
               name: '@prisma/orm-toolchain',
               version: VERSION,
-              requirement: VERSION,
               outcome: 'installed',
             },
-            { name: 'pg', version: '^8.22.0', requirement: '^8.22.0', outcome: 'already-listed' },
+            { name: 'pg', version: '^8.22.0', outcome: 'already-listed' },
             {
               name: 'temporal-polyfill',
               version: '^1.0.8',
-              requirement: '^1.0.8',
               outcome: 'installed',
             },
           ],
@@ -184,7 +181,6 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
             {
               name: 'temporal-polyfill',
               version: '^1.0.8',
-              requirement: '^1.0.8',
               outcome: 'already-listed',
             },
           ]),
