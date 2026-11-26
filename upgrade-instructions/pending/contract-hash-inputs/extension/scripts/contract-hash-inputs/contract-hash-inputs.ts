@@ -512,10 +512,15 @@ function classify(
     files.refs.push(stored);
   } else if (isContract(value)) {
     if (value['formatVersion'] === undefined && value['schemaVersion'] === undefined) {
-      if (name === 'contract.json')
+      if (name === 'contract.json') {
+        const remedy =
+          snapshotDirectoryHash(path) === undefined
+            ? 'Emit it again with `prisma contract emit`, or restore it from version control'
+            : 'Restore it from version control';
         files.unversioned.push(
-          `${shown}: has neither "formatVersion" nor "schemaVersion", so no release of Prisma wrote it; the script leaves it alone. Emit it again with \`prisma contract emit\`, or restore it from version control`,
+          `${shown}: has neither "formatVersion" nor "schemaVersion", so no release of Prisma wrote it; the script leaves it alone. ${remedy}`,
         );
+      }
       return;
     }
     files.contracts.push(stored);
@@ -764,7 +769,7 @@ function planContract(
       );
     else
       checks.stops.push(
-        `${shown}: ${problems.join('; ')}. The file was edited by hand or comes from another release: restore it from version control, or emit it again, and run the script again`,
+        `${shown}: ${problems.join('; ')}. The file was edited by hand or comes from another release: restore it from version control${snapshotHash === undefined ? ', or emit it again,' : ''} and run the script again`,
       );
     return undefined;
   }

@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { computeStorageHash } from '@internal/contract/hashing';
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
-import { join } from 'pathe';
+import { dirname, join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
   copyFixture,
@@ -142,6 +142,9 @@ describe('a project the script refuses, changing no file', () => {
     expect(run.stderr).toContain(
       `its snapshot directory is named ${SQL_SNAPSHOT_HASH}, which is not the storage hash its content gives,`,
     );
+    expect(run.stderr).toMatch(
+      /\. The file was edited by hand or comes from another release: restore it from version control and run the script again\n$/,
+    );
   });
 
   it('names a MongoDB snapshot whose stored storage hash is neither its directory name nor a hash of its content', () => {
@@ -262,6 +265,19 @@ describe('a contract.json with no format version of either kind', () => {
         'Left unchanged:\n  test/contract.json: has neither "formatVersion" nor "schemaVersion", so no release of Prisma wrote it; the script leaves it alone. Emit it again with `prisma contract emit`, or restore it from version control\n',
       upgraded: true,
     });
+  });
+
+  it('is reported with advice to restore it when it is a snapshot, which contract emit does not rewrite', () => {
+    const root = copyFixture('before', 'extension');
+    const snapshot = `migrations/snapshots/${'0'.repeat(64)}/contract.json`;
+    mkdirSync(join(root, dirname(snapshot)));
+    writeFileSync(
+      join(root, snapshot),
+      '{ "storage": {}, "target": "postgres", "targetFamily": "sql" }\n',
+    );
+    expect(runScript(root, 'extension').stderr).toBe(
+      `Left unchanged:\n  ${snapshot}: has neither "formatVersion" nor "schemaVersion", so no release of Prisma wrote it; the script leaves it alone. Restore it from version control\n`,
+    );
   });
 });
 
