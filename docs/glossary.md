@@ -225,7 +225,7 @@ Each plane has its own stack type:
 
 ### Capability
 
-A specific feature that a database may or may not support (e.g., `RETURNING` clauses, vector indexes). Your contract declares which capabilities it needs; on PostgreSQL they follow from the database version you state for it, and signing a database checks that it provides them; other databases' contracts take a fixed list from their adapter. Creating a client checks that its adapter and driver provide what the contract requires of the connection, so you find out about missing features before any query runs.
+A specific feature that a database may or may not support (e.g., `RETURNING` clauses, vector indexes). Your contract declares which capabilities it needs; on PostgreSQL they follow from the database version you state for it, and signing a database checks that it provides them; other databases' contracts take a fixed list from their adapter. Creating a client checks that its adapter and driver provide what the contract requires of the connection, so you find out about missing features before any query runs. A database that lacks a capability is not drift: no change to its tables can add it, so it is reported as its own failure, with no advice to update the database.
 
 ### Codec
 
@@ -305,7 +305,7 @@ An append-only audit log of executed migrations, per database. The ledger record
 
 ### Drift
 
-Divergence between contract and database. Taxonomy includes marker-level (missing, corrupt, stale, hash mismatch), schema-level (manual DDL, partial execution, concurrent execution), graph-level (orphan database, no path, path breakage, cycle), capability (missing, downgrade, profile mismatch), transactional, cache/replica freshness, and canonicalization drift.
+Divergence between contract and database. Taxonomy includes marker-level (missing, corrupt, stale, hash mismatch), schema-level (manual DDL, partial execution, concurrent execution), graph-level (orphan database, no path, path breakage, cycle), transactional, cache/replica freshness, and canonicalization drift.
 
 ### Storage Hash
 

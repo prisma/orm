@@ -10,7 +10,7 @@ Today the PostgreSQL package writes the refusal as finished prose, with branches
 
 - A database that does not provide what the contract requires is reported as its own kind of failure, carried to the CLI as data, not prose.
 - The CLI renders it, the same way for every database, and prints no `db update` line or other drift advice for it.
-- A capability that neither the target's table nor the adapter, driver or extensions declare is reported, not dropped.
+- A capability that neither the target's table nor the client's adapter and driver declare is reported by the client, not dropped.
 - The contract keeps storing capability keys only. The message never needs the version its author stated.
 
 ## The data
@@ -18,7 +18,6 @@ Today the PostgreSQL package writes the refusal as finished prose, with branches
 One failure holds a list of findings. Each finding is one of:
 
 - **Missing capabilities:** the database's version as it reports it (`15.4`), and the capabilities it lacks, each with the first version of the target's table that provides it.
-- **Unrecognized capabilities:** capabilities that no row of the table provides and that the adapter, driver and extensions do not declare.
 - **Older than supported:** the database's version and the oldest version the target supports.
 - **Version not read:** the database's version could not be read.
 
@@ -30,9 +29,7 @@ Missing capabilities, one sentence per highest first version:
 
 > Your contract requires database capabilities first available in PostgreSQL 17 (sql.mergeReturning), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove the capabilities from your contract: state version 15, and take them out of its capabilities list if it lists them.
 
-Unrecognized capabilities:
-
-> Your contract requires unrecognized database capabilities (sql.someNewThing). No supported PostgreSQL version provides them, and neither do your adapter, driver or extensions. Either remove the capabilities from your contract, or install a component that provides them.
+**Built differently:** capabilities nothing in the table knows are not a signing finding. Signing cannot tell them from capabilities the application's driver provides, because every PostgreSQL control descriptor declares none and the stack that migrates is not the application's. The client's check, which knows its adapter and driver, reports them at compile time and at start.
 
 Older than supported, and version not read: keep today's text, rendered from the data.
 
@@ -46,9 +43,9 @@ The general drift advice for other mismatches (`db update` or "change the contra
 
 ## Tests
 
-- The target turns a contract's capabilities, its table and a server version into the findings, for each kind, including a contract with both missing and unrecognized capabilities. A test with a table whose rows differ.
+- The target turns a contract's capabilities, its table and a server version into the findings, for each kind, including several first versions and a server between two rows. A test with a table whose rows differ.
 - The CLI renders each kind exactly as worded above, and prints no `db update` line when the only failure is this one; when other drift issues are present, theirs still print.
-- A capability no row and no component declares is reported at signing (it was silently dropped).
+- A capability no row names is not a signing finding; the client reports it. Every flag the table names is on in some row, so no database capability is checked nowhere.
 - `db sign`, `db verify` and the runner's refusal each produce the rendered text.
 
 ## Records

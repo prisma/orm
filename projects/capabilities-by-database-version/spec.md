@@ -51,11 +51,11 @@ This replaces the recorded position that capabilities are reported by the adapte
 
 ### 4.3 Signing
 
-- The verification shared by `db verify`, `db sign` and the signing in `db migrate` checks that the connected database provides every capability the contract requires that depends on the database or its configuration. It signs only if it does.
+- The verification shared by `db verify`, `db sign` and the signing in `db migrate` checks that the connected database provides every capability the contract requires that the target's table knows. It signs only if it does. A capability the installed table does not know is checked by the client instead, because signing cannot tell it from one the application's driver provides.
 - The adapter reads what it needs from the database: the server version, and settings that change behaviour, such as MySQL's `sql_mode`.
-- A failure states the cause in the user's terms, with both remedies. The last sentence is always printed, because the check cannot tell whether the version or the `capabilities` list turned a capability on:
+- A failure states the cause in the user's terms, with both remedies. The failure reaches the CLI as data, and the CLI gives no drift advice for it:
 
-  > Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 15.4. Either upgrade the database, or state version 15 for your contract, which turns off the features that need 17. If its capabilities list turns one of them on (sql.mergeReturning), remove it there.
+  > Your contract requires database capabilities first available in PostgreSQL 17 (sql.mergeReturning), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove the capabilities from your contract: state version 15, and take them out of its capabilities list if it lists them.
 
 - A database older than the first row of the target's table fails the same check. The separate minimum server version constants go away or become that first row.
 
@@ -92,7 +92,7 @@ For each, the evidence is the real message, produced by a test or by manual QA, 
 
 If any of these can only say which capabilities are missing, the contract must store the stated version. That changes the structure of `contract.json`, so it must be decided and built before `8.0`, not after.
 
-**Settled on 2026-11-26: the message needs no stated version.** It says only what the table shows: "Your contract requires database capabilities first available in PostgreSQL 17 (…), but this database runs PostgreSQL 15.4." A capability that no version in the installed table provides, and that the adapter, driver and extensions do not declare, is reported as unrecognized, with the remedy to remove it or install a component that provides it. The refusal reaches the CLI as data, and the CLI renders it ([slice-refusal-as-data.md](slice-refusal-as-data.md)). The remaining evidence is the message at client start against a database that was never checked, or was checked for another contract.
+**Settled on 2026-11-26: the message needs no stated version.** It says only what the table shows: "Your contract requires database capabilities first available in PostgreSQL 17 (…), but this database runs PostgreSQL 15.4." Signing checks only the capabilities the installed table knows, because the stack that migrates is not the one the application runs on, so it cannot tell an unknown capability from one the application's driver provides. A capability that neither the table nor the client's adapter and driver provides is reported by the client, at compile time and when it starts. The refusal reaches the CLI as data, rendered by the framework ([slice-refusal-as-data.md](slice-refusal-as-data.md)). The remaining evidence is the message at client start against a database that was never checked, or was checked for another contract.
 
 ## 6. Out of scope
 
