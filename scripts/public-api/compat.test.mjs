@@ -207,6 +207,15 @@ describe('checkPackage, with the release treated as GA', () => {
     deepStrictEqual([brokenExports(result), result.undecided, result.problems], [[], [], []]);
   });
 
+  it('leaves undecided an export that reaches a class whose static unique symbols share a marker, whatever their name form', () => {
+    const result = check('keys-class-swapped', { release: 'keys-class-release' });
+    deepStrictEqual(brokenExports(result), []);
+    deepStrictEqual(
+      result.undecided.map(({ name, test }) => `${name} ${test}`),
+      ['computed value', 'keys value', 'numbered value'],
+    );
+  });
+
   it('fails when the release imports a file of its own that is missing', () => {
     const { problems } = check('relative-release', { release: 'relative-missing' });
     strictEqual(problems.length, 1);

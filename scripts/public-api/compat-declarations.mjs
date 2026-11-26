@@ -386,8 +386,8 @@ export function createCompareHost(options, { packageOf, isOwn }) {
 // The exports of a package, as `path\0name`, whose declarations reach, through the names they
 // use, a declaration whose marker is in `targets`: `package:name`, with the name `markedName`
 // gives, in `classes` or `symbols`. `packageOf` gives a file's package. The compiler's own library
-// files are not followed. One walk records which declarations each one names; those that reach a
-// target are then found backwards from the targets.
+// files are not followed. One walk records which declarations each one names, and a class its
+// members; those that reach a target are then found backwards from the targets.
 export function exportsReaching(program, entryPoints, { classes, symbols }, packageOf) {
   const checker = program.getTypeChecker();
   const isTarget = (declaration) => {
@@ -445,13 +445,14 @@ export function exportsReaching(program, entryPoints, { classes, symbols }, pack
     const named = new Set();
     namedBy.set(declaration, named);
     if (declaration.getSourceFile().hasNoDefaultLib) continue;
+    const reach = (each) => {
+      named.add(each);
+      if (!namedBy.has(each)) pending.push(each);
+    };
     const visit = (node) => {
-      for (const found of namesAt(node)) {
-        for (const each of declarationsOf(found)) {
-          named.add(each);
-          if (!namedBy.has(each)) pending.push(each);
-        }
-      }
+      for (const found of namesAt(node)) declarationsOf(found).forEach(reach);
+      // A class holds its members, whatever form their names take.
+      if (ts.isClassLike(node)) node.members.forEach(reach);
       ts.forEachChild(node, visit);
     };
     visit(declaration);
