@@ -103,18 +103,6 @@ describe('the lines init writes, read from how the facade names its peers', () =
   });
 });
 
-describe('whether the facade is below GA', () => {
-  it.each([
-    ['a facade below GA that init adds', '8.1.0-ea.1', ['~8.1.0'], true, true],
-    ['a facade below GA the project lists', '8.1.0-ea.1', ['~8.1.0'], false, true],
-    ['a GA facade', '8.1.2', ['~8.1.0'], true, false],
-    ['a GA facade the project lists', '8.1.2', ['~8.1.0'], false, false],
-    ['the release candidates', '8.0.0-rc.27', ['8.0.0-rc.27'], true, false],
-  ])('decides %s', (_case, version, peers, addsFacade, tilde) => {
-    expect(versionLines(version, peers, { addsFacade }).facadeBelowGa).toBe(tilde);
-  });
-});
-
 describe('whether a line the project lists stands for the line init writes', () => {
   it.each([
     ['the exact version', '8.0.0-rc.27', undefined, true],

@@ -100,25 +100,13 @@ describe('init installs', () => {
   const engineCall = () =>
     calls.find((call) => call.args.some((arg) => arg.startsWith('@prisma/cli-engine')));
 
-  it(
-    'writes the prisma line with a tilde on the installed version beside a database package below GA',
-    async () => {
-      cliAndFacadeAt('8.1.0-ea.0', '~8.1.0');
-
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
-
-      expect({ exitCode: run.exitCode, engine: engineCall()?.args }).toEqual({
-        exitCode: 0,
-        engine: ['add', '-D', '@prisma/cli-engine@0.1.1', 'prisma@~8.1.2'],
-      });
-    },
-    timeouts.coldTransformImport,
-  );
-
-  it(
-    'leaves the prisma line as prisma@latest wrote it beside a GA database package',
-    async () => {
-      cliAndFacadeAt('8.1.0', '~8.1.0');
+  it.each([
+    ['below GA', '8.1.0-ea.0'],
+    ['at GA', '8.1.0'],
+  ])(
+    'leaves the prisma line as prisma@latest wrote it beside a database package %s',
+    async (_level, facadeVersion) => {
+      cliAndFacadeAt(facadeVersion, '~8.1.0');
 
       const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
 

@@ -187,7 +187,6 @@ describe(
               ],
               unread: [],
               warnings: [],
-              facadeBelowGa: false,
             };
           },
         }),
@@ -222,7 +221,6 @@ describe(
             packages: [],
             unread: [packageName],
             warnings: [],
-            facadeBelowGa: false,
           }),
         }),
       );
@@ -256,7 +254,6 @@ describe(
             packages: [],
             unread: [],
             warnings: ['@prisma/orm-framework is installed at 8.0.0'],
-            facadeBelowGa: false,
           }),
         }),
       );

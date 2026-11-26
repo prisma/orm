@@ -131,7 +131,6 @@ export function preparedTarget(
       packages: [],
       unread: [],
       warnings: [],
-      facadeBelowGa: false,
     },
     installed: [],
     added: undefined,
@@ -194,7 +193,6 @@ export function resolveInputs(
       packages: [],
       unread: [],
       warnings: [],
-      facadeBelowGa: false,
     }),
     ...ctx,
   });

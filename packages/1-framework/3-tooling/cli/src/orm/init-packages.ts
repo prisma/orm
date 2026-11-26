@@ -31,16 +31,6 @@ export function engineDevDependencySpec(cwd: string): string {
   return `${ENGINE_PACKAGE}@latest`;
 }
 
-/**
- * The `prisma` line on a tilde of the version installed, for a project whose lines all take a
- * tilde, so an ordinary update does not move the command-line tool, and the toolchain it names, to
- * another minor than the database package; `undefined` when the installed version cannot be read.
- */
-export function cliTildeSpec(cwd: string): string | undefined {
-  const version = installedCliManifest(cwd)?.['version'];
-  return typeof version === 'string' && version.length > 0 ? `prisma@~${version}` : undefined;
-}
-
 function installedCliManifest(cwd: string): Record<string, unknown> | undefined {
   try {
     const manifest: unknown = JSON.parse(

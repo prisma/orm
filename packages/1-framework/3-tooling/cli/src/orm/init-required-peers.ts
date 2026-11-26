@@ -46,8 +46,6 @@ export interface RequiredPeers {
   /** Packages whose own manifest could not be read, so their peers are missing from `packages`. */
   readonly unread: readonly string[];
   readonly warnings: readonly string[];
-  /** Whether the facade's version has a pre-release part and it names its peers with ranges; false when it names them at exact versions. */
-  readonly facadeBelowGa: boolean;
 }
 
 export function requiredPeerSpecifier(peer: RequiredPeer): string {
@@ -198,7 +196,6 @@ export function requiredPeersForSetup(ctx: {
           packages: [],
           unread: [packageName],
           warnings: [],
-          facadeBelowGa: false,
         }
       : resolved;
   };
@@ -247,7 +244,6 @@ export async function resolveRequiredPeers(ctx: {
       packages: [],
       unread: facade === undefined ? [ctx.packageName] : [],
       warnings: [],
-      facadeBelowGa: false,
     };
   }
   const lines = versionLines(
@@ -369,7 +365,6 @@ export async function resolveRequiredPeers(ctx: {
     })),
     unread,
     warnings,
-    facadeBelowGa: lines.facadeBelowGa,
   };
 }
 

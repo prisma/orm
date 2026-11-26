@@ -32,7 +32,6 @@ import {
   resolveInitInputs,
 } from './init-inputs';
 import {
-  cliTildeSpec,
   ENGINE_PACKAGE,
   engineDevDependencySpec,
   installProjectDependencies,
@@ -405,11 +404,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             warn(warning);
           }
         }
-        const cliTilde = inputs.requiredPeers.facadeBelowGa ? cliTildeSpec(ctx.cwd) : undefined;
-        const secondDevDeps = [
-          engineDevDependencySpec(ctx.cwd),
-          ...(cliTilde === undefined ? [] : [cliTilde]),
-        ];
+        const secondDevDeps = [engineDevDependencySpec(ctx.cwd)];
         const engineInstall = await ctx.packages.install({
           packages: secondDevDeps,
           dev: true,
