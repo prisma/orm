@@ -1,41 +1,44 @@
 # Published packages: reviewing API changes
 
-Every package in this folder is published, and each has a generated `api.txt` beside its `package.json` that lists everything a user can import from it, one line per import path, export and member. A pull request that changes what users can import changes these files. The contributor guide is `docs/Public API Compatibility.md`.
+Every package in this folder is published. Each has a generated `api.txt` beside its `package.json`, which lists everything a user can import from it: one line per import path, export and member. A pull request that changes what users can import changes these files. How the checks work, and how a contributor fixes a failure, is in `docs/Public API Compatibility.md`.
 
-## Why a reviewer looks closely
+## Why you look closely
 
-From release 8.0, Prisma 8 promises that an application upgrades to any later `8.x` release with no code changes. Two kinds of change undo that promise without anyone meaning to:
+Once Prisma 8 is generally available (GA), an application must be able to upgrade to any later `8.x` release without changing its code. A pull request can undo that in two ways without anyone meaning to:
 
-- **An accidental addition.** Once a GA release has exported something, we must keep it, unchanged in any way that breaks its users, until Prisma 9. So every new line in an `api.txt` is a commitment, not a detail.
-- **A break.** A removed export, a narrower parameter, a wider return type, or a new required member on an interface that users implement stops existing code compiling. CI finds most of these against the last release, but only for what is GA, and only for declarations it can see.
+- **An accidental addition.** Once a GA release exports something, we must keep it, without breaking its users, until the next major version. Every new line in an `api.txt` is that commitment.
+- **A break.** A removed export, a narrower parameter, a wider return type, or a new required member on an interface that users implement stops existing code compiling.
 
-CI already makes sure the lists match the code and that the pull request description names each changed export. What it cannot judge is whether the change is one we want. That is the review.
+CI already checks that the lists match the code, that the description names each changed export, and that code written against the last release still compiles. CI lists every break it finds, and fails the job only for what is GA. What CI cannot judge is whether a change is one we want. That is your review.
 
-## What to check in an `api.txt` change
+An API below GA has its level at the start of its name: `ea_`, `preview_` or `rc_`, capitalised on a type or class, as in `Ea_Search`. A package below GA has a pre-release version.
+
+## An `api.txt` change
 
 For each added export or member:
 
-- Is it meant for users, to be supported until the next major release? If it exists only so that another of our packages can reach it, it should not be exported from a package users depend on; say so.
-- Is its maturity right? Something not ready to be covered belongs in a package below GA, or under a name starting with `rc_`, `preview_` or `ea_`.
-- Does a GA package now depend on something below GA? It cannot be more reliable than its dependencies, so that is a defect.
+- Is it meant for users, to be kept until the next major version? If it exists only so another of our packages can reach it, it should not be exported from a package users depend on. Say so.
+- Is its level right? Something not ready to be kept belongs in a package below GA, or under a name that starts with a level.
+- Does a GA package now depend on something below GA? A package cannot be more reliable than what it depends on, so that is a defect.
 - Is a new member on an interface that users implement optional, with the old behaviour when it is missing? A required one breaks every implementation.
 
 For each removed or changed line:
 
 - Is the package or the export below GA? Then the change is allowed. Say which.
-- If it is GA, is the break recorded, with its reason, in the package's record of deliberate breaks, and will the release notes name it? Breaking GA code within a major is an exception that needs a reason a user would accept.
-- Is it a line that changed only because a non-exported type was renumbered (`Options_2`) or an outside type gained its package prefix? Those are not API changes; say so, so nobody spends time on them.
+- Is it an old name left by a promotion, such as a deprecated `ea_search` beside `search`? That name is GA until the next major version, and removing it is a break.
+- If it is GA, is the break recorded with a reason in the package's `api-breaks.json`, and will the release notes name it?
+- Did the line change only because a `(not exported)` type was renumbered (`Options_2`), or a third-party type gained its package prefix? That is not an API change. Say so, so nobody spends time on it.
 
-The pull request description's `## API changes` section must name each changed export and say why. If the reason given does not match the change, say so.
+The description's `## API changes` section must name each changed export and say why. If a reason does not match the change, say so.
 
-## What to check in a record of a break
+## A change to a record
 
-A package's `api-breaks.json`, `packages/9-public/removed-packages.json` and `examples/last-release-errors.json` record changes that CI would otherwise report as breaks against the last release. A new record is a decision to let one through, so review it as such:
+Three files hold records: a package's `api-breaks.json`, `packages/9-public/removed-packages.json`, and `examples/last-release-errors.json`. Each record accepts one thing CI would otherwise fail on. A new record is a decision to let it through, so review it as one.
 
-- A record of kind `break` breaks users' code. Is the reason one a user would accept, and is the break also in the release notes?
-- A record of kind `allowed` claims the change is one the compatibility policy allows: for example a new optional property that fails an example app's exact type assertion, or a change to an interface that users only implement. Check that the claim is true. A record that calls a real break allowed hides it from users.
-- A record replaced with a new `fingerprint` means the export, or a type of its package that it uses, changed again. The new record covers whatever that test reports now, which may be a different break with the same message. Look at the break the job reports for the current code, not only at the reason, which is often copied unchanged.
-- A record in `examples/last-release-errors.json` replaced with a new `message` means the app's error changed. It has no fingerprint, so the message is what it matches: compare the new message with the old one, and check that the reason still fits the error the job reports now.
-- A removed record means the break it covered is gone, or the last release has moved on. Either is fine.
+- **`kind: break`** breaks users' code. Is the reason one a user would accept, and is the break in the release notes?
+- **`kind: allowed`** claims the change is safe for users. Examples: a new optional property that fails an example app's exact type assertion, or a wider return type on a method of an interface that users only implement. Check the claim. A record that calls a real break allowed hides it from users.
+- **A record replaced with a new `fingerprint`** means the export, or a type it uses, changed again. The new record covers whatever the job reports now, which may be a different break behind the same message. Look at the break the job reports for the current code, not only at the reason, which is often copied unchanged.
+- **A record in `examples/last-release-errors.json` replaced with a new `message`** means the app's error changed. Compare the new message with the old one, and check that the reason still fits.
+- **A removed record** means the break it covered is gone, or a newer release has become the last release. Both are fine.
 
-Ask, rather than guess, when you cannot tell whether a type is one users implement or only receive.
+When you cannot tell whether users implement a type or only receive it, ask. Do not guess.

@@ -1,23 +1,21 @@
 # Public API compatibility checks
 
-From release 8.0, Prisma 8 promises that an application upgrades to any later `8.x` release with no code changes. CI checks every pull request against that promise. This guide says what each check does and what to do when one fails. The decision and its reasons are in [ADR 336](architecture%20docs/adrs/ADR%20336%20-%20CI%20finds%20breaking%20and%20accidental%20API%20changes%20against%20the%20last%20release.md).
+Once Prisma 8 is generally available (GA), an application must be able to upgrade to any later `8.x` release without changing its code. CI checks every pull request against that promise. This guide says what each check does, and what to do when one fails. The reasons behind the design are in [ADR 336](architecture%20docs/adrs/ADR%20336%20-%20CI%20finds%20breaking%20and%20accidental%20API%20changes%20against%20the%20last%20release.md).
 
-## The four checks
+## The checks
 
-| Check | Where | What it does | Before release 8.0 | From release 8.0 |
-| --- | --- | --- | --- | --- |
-| The API lists are current | `Lint` job, `pnpm api:check` | Each published package's `api.txt` matches the build | Fails | Fails |
-| The description names each change | `API changes` workflow | A pull request that changes an `api.txt` or a record of a break gets a comment listing the changes, and its description must name each changed export, package or app | Fails | Fails |
-| Type tests against the last release | `api-compat` job, `pnpm api:compat` | Each export of the last release still fits the current build | Reports | Fails |
-| The last release's example apps | `api-compat` job, `pnpm api:compat:examples` | The example apps as they were at the last release compile against the current build | Reports | Fails |
+| What you see fail | Job | What it checks | Fails |
+| --- | --- | --- | --- |
+| [`api.txt` is out of date](#apitxt-is-out-of-date) | `Lint` (`pnpm api:check`) | Each published package's committed `api.txt` matches the build | Always |
+| [The description does not name a change](#the-description-does-not-name-a-change) | `API changes named` | A pull request that changes an `api.txt` names each changed export in its description, with a reason | Always |
+| [A break against the last release](#a-break-against-the-last-release) | `API compatibility` (`pnpm api:compat`) | Code written against the last release still compiles against the build | Once the last release is GA |
+| [The last release's example apps fail](#the-last-releases-example-apps-fail) | `API compatibility` (`pnpm api:compat:examples`) | The example apps, as they were at the last release, compile against the build | Once the last release is GA |
 
-"Reports" means the job lists the breaks it found in its summary and passes. A problem still fails it at any version: a check that could not compare, or a record that no longer matches a break and must be removed. The type tests and the example apps start to fail by themselves at the first release whose version has no pre-release part; nothing is switched on.
-
-Only what is generally available is checked strictly: a package whose last release has a plain version, and, for the type tests, an export whose name does not start with `rc_`, `preview_` or `ea_`, which mark a Release Candidate, Preview and Early Access API. A prefixed name is still checked strictly when the last release also exported the same thing under a name with no prefix, as a promotion leaves it: a deprecated `ea_foo` kept beside `foo` is GA until the next major version. The check recognises three ways of writing the old name: re-exporting the same declaration (`export { foo as ea_foo }`), a constant typed as the original (`export const ea_foo: typeof foo = foo`; without the annotation, TypeScript keeps the link only for a function, class or enum), and a type alias that passes its type parameters through (`export type ea_Foo<T> = Foo<T>`). Write a deprecated name in one of these forms; an `interface ea_Foo extends Foo {}` is not recognised. A member whose name has a prefix, such as `Client.preview_run`, is held to the level of its export. The example apps have no such exemption, because an app's error cannot be traced to one export: after a release with a plain version, any app error fails unless it is recorded.
+The last release is GA when its version has no pre-release part, such as `8.1.0`. Against a pre-release, such as `8.0.0-rc.25`, the last two checks list what they find in the job summary and pass, because breaking a pre-release is allowed. A check that could not compare at all, for example because the registry was unreachable, fails at any version.
 
 ## `api.txt` is out of date
 
-Each package under `packages/9-public/@prisma/` has a generated `api.txt` beside its `package.json`: one line for each export of each import path and each member.
+Each package under `packages/9-public/@prisma/` has a generated `api.txt` beside its `package.json`. It lists everything a user can import: one line for each export of each import path, and one for each member.
 
 ```text
 ./config: function defineConfig(options: PostgresConfigOptions): PrismaConfig<'sql', 'postgres'>
@@ -26,87 +24,155 @@ Each package under `packages/9-public/@prisma/` has a generated `api.txt` beside
 (not exported) interface EnumMember_2<Name extends string, Value>
 ```
 
-Run `pnpm build`, then `pnpm api:update`, and commit the changed lists. Never edit an `api.txt` by hand, and after a merge conflict in one, rebuild and run `pnpm api:update` instead of merging it. The steps are also in the [Common Tasks Playbook](onboarding/Common-Tasks-Playbook.md).
+To fix the failure, run `pnpm build`, then `pnpm api:update`, and commit the changed lists. Never edit an `api.txt` by hand. After a merge conflict in one, rebuild and run `pnpm api:update` again; do not merge the file by hand.
 
-If `pnpm api:update` writes no change on your machine and CI still fails, the scripts have a bug: download the `api-lists` artifact from the failed run and compare.
+If `pnpm api:update` changes nothing on your machine and CI still fails, the scripts have a bug. Download the `api-lists` artifact from the failed run and compare it with your files.
 
-Some lines change without an API change:
+Some lines change although the API did not:
 
-- A type that is not exported but appears in a signature is listed as `(not exported)`. When two share a name, the later ones are numbered (`_2`), so adding one can renumber the others.
+- A type that is not exported, but appears in a signature, is listed as `(not exported)`. When two such types share a name, the later ones get a number (`EnumMember_2`), so adding one can renumber others.
 - A declaration exported under several names is referred to by the name that sorts first.
-- An outside type whose name the package also exports is written with its package, such as `mongodb.MongoClient`, so adding an export can add that prefix elsewhere.
+- A third-party type whose name the package also exports is written with its package, such as `mongodb.MongoClient`. Adding an export can therefore add that prefix on other lines.
 
-Two limits of the lists are known and left as they are. An outside type imported under a local alias is written under the alias; writing API Extractor's referenced name instead made many lines worse, because that name is often not one any package exports. And types inside the members of a `declare module` augmentation are not qualified when their name clashes with one the package exports.
+## The description does not name a change
 
-## The description must name each change
+When your pull request changes an `api.txt`, a comment appears on it with the added and removed lines:
 
-When a pull request changes an `api.txt`, or a record of a break (`api-breaks.json`, `packages/9-public/removed-packages.json` or `examples/last-release-errors.json`), a comment lists, per package, the lines and records it adds and removes, and offers a section to copy. The check fails until the description has a section headed `## API changes` in which each changed export is named in backticks, on a line that says why:
+````markdown
+## Public API changes
+
+This pull request changes the `api.txt` list of 1 package. Its description needs a section headed `## API changes` that names each export below, in backticks, on a line that says why it changes. …
 
 ```markdown
 ## API changes
 
-- `@prisma/orm-postgres/config: defineConfig`: takes the database URL, so a config file can name it.
+- `@prisma/orm-extension-middleware-cache: createCacheMiddleware`:
+```
+````
+
+The `API changes named` job fails until the description has that section, with a reason after each name:
+
+```markdown
+## API changes
+
+- `@prisma/orm-extension-middleware-cache: createCacheMiddleware`: options are required, because a cache always needs a store.
 - `@prisma/orm-family-sql`: regenerated after the TypeScript upgrade; no API change.
 ```
 
-A package name in backticks covers every change in that package, which is how to describe a large change such as a tool upgrade. The failure message lists the exact names that are missing. Editing the description runs the check again.
+The second line shows the short form: a package name covers every change in that package. Use it for a change that touches many lines without changing the API, such as a tool upgrade. The failure message lists the names that are still missing. Editing the description runs the job again.
 
-Reviewers, people and agents, read the section to decide whether each addition is one we want to support until Prisma 9. Their criteria are in [`packages/9-public/AGENTS.md`](../packages/9-public/AGENTS.md).
+Reviewers read this section to decide whether each addition is one we want to keep until the next major version. Their criteria are in [`packages/9-public/AGENTS.md`](../packages/9-public/AGENTS.md).
 
 ## A break against the last release
 
-The `api-compat` job installs the last release of each package and compiles a generated test per export that asks whether the current type can stand where the last release's stood. A failure is listed as a break, with the import path, the export, the kind of test (the export's type, its value, its constructor, and so on) and TypeScript's message, followed by a record that would cover it.
+The `API compatibility` job installs the last release of each package beside your build. For each export of the last release, it asks TypeScript whether your version can be used wherever the old one could. When it cannot, the job reports a break:
 
-To run it locally: `pnpm build`, then `pnpm api:compat`. `--only <package>` checks one package, and `--ga` treats the last release as generally available, to see what will fail from release 8.0.
-
-What is a break and what is not:
-
-- Removing an export, narrowing a parameter, making an optional parameter required, widening a return type: breaks.
-- Adding an optional parameter or property: not a break.
-- A new member on an interface users implement: a break unless it is optional. A new member on a type users only receive: not a break.
-
-An entry listed as **undecided** is a comparison the check could not settle. The report says at which step it stopped:
-
-- `native`: TypeScript gave up on it ("type instantiation is excessively deep", or the compiler ran out of stack).
-- `structural` or `member`: TypeScript could not relate two copies of a generic type, and comparing it member by member did not settle it either. A comparison that passed member by member is also undecided when the type has call or index signatures, which that comparison leaves out, or when the package's time ran out.
-- `shared marker`: the export reaches one of two classes with private members, or two unique symbols, that share a name in one package. The check cannot tell the two apart, so a pass proves nothing. Renaming one of the two restores the comparison.
-
-An undecided entry is neither a pass nor a break; if your change touches that export, look at it yourself.
-
-An entry listed as **not compared** is one the check did not try to compare, because:
-
-- the last release's side is `never` or `any`, so there is nothing to compare;
-- the export is neither a type nor a value that can be compared;
-- it adds members to a third-party module with `declare module`, and both sides read that module from one copy;
-- it is an abstract class with a member keyed by a symbol the check cannot write, so it gets no subclass check;
-- or it is one of two same-named classes with private members, or unique symbols, listed by the package that declares them; the exports that reach it are undecided, as above.
-
-Some breaks are reported for changes the policy allows. The check treats any type an exported function accepts as one users may supply, so widening the return type of a method on an interface users only implement, for example, is reported. Record it with that reason.
-
-If the break is not intended, change the code. If it is, record it.
-
-## Recording an accepted failure
-
-A break in a generally available export is an exception to the compatibility policy, and the release notes must name it. Record it in the package's `api-breaks.json`, beside its `api.txt`:
-
-```json
-[{ "path": "./builder", "export": "Db", "test": "type", "kind": "break", "lastRelease": "8.1.0", "fingerprint": "34261bf6461da021", "reason": "Join scopes merge by name; see the release notes" }]
+```text
+@prisma/orm-extension-middleware-cache: 16 exports on 1 paths; 16 comparisons, …; breaks 1, undecided 0, not compared 0, recorded 0 — FAILS
+  break  @prisma/orm-extension-middleware-cache: createCacheMiddleware (value): Type 'undefined' is not assignable to type 'CacheMiddlewareOptions<TMeta>'.
+    to record it: {"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"…"}
 ```
 
-Do not write the record by hand: the job prints one, ready to paste, under each break it reports, and the job summary has one block per package. `test` is the kind of test that broke: `type`, `value`, `constructor`, `abstract`, `exists`, `path` or `augments`. `kind` is `break` for a deliberate break, which the release notes must name, or `allowed` for a change the policy allows that the check reports anyway, such as widening the return type of a method on an interface users only implement. `lastRelease` is the release the break is measured against. `fingerprint` covers the export's lines in the package's `api.txt` and the lines of every declaration there that they use as a type, followed until nothing new is named. When the export, or a type of the same package that it uses, changes again, the fingerprint no longer matches, the record stops applying, and the break is reported again with a note, to be judged afresh. Run `pnpm build` and `pnpm api:update` before copying a printed record, so its fingerprint is taken from the lists you commit. Some changes that are not API changes also change a fingerprint: a non-exported type renumbered (`Options_2`), an outside type that gains its package prefix, or an upgrade of TypeScript or API Extractor. After one of those, paste the printed records again. A deleted package is recorded in `packages/9-public/removed-packages.json` as `{ "package", "lastRelease", "reason" }`; the job prints this record too. A job summary longer than about 1 MB is cut, and the rest is in the job log.
+The line names the package and import path, the export, which comparison failed (here `value`, the function itself), and TypeScript's message. While the last release is a pre-release, the line reads `break (reported only)` and the job passes.
+
+What is a break:
+
+- Removing an export, narrowing a parameter, making an optional parameter required, or widening a return type is a break.
+- Adding an optional parameter or an optional property is not.
+- A new member on an interface that users implement is a break unless it is optional. A new member on a type users only receive is not.
+
+If you did not mean the break, change the code. If you did, [record it](#recording-a-break-you-mean).
+
+### Running it yourself
+
+Run `pnpm build`, then check the one package you changed:
+
+```bash
+pnpm api:compat --only @prisma/orm-extension-middleware-cache
+```
+
+Add `--ga` to treat the last release as GA and see what would fail. Leave the run over all packages to CI: it compares three packages at a time, and the largest need about 6 GB of memory each.
+
+### The other entries in the report
+
+Besides breaks, the report lists entries that need no action but tell you what was not checked.
+
+**`undecided`** means TypeScript could not settle the comparison, so it neither passed nor failed. The word in brackets says where it stopped:
+
+| | Why it is undecided |
+| --- | --- |
+| `undecided (native)` | The type is too deep for TypeScript to compare, or it came after such a type and there was no time to compile it again |
+| `undecided (structural)` or `undecided (member)` | TypeScript cannot relate two copies of this generic type, and comparing it member by member did not settle it either: a member was too deep, the type also has call, construct or index signatures or symbol keys, which that comparison leaves out, or the package's ten minutes ran out |
+| `undecided (shared marker)` | The export uses one of two classes or unique symbols that have the same name in one package, which the check cannot tell apart. Renaming one of the two restores the comparison |
+
+If your change touches an undecided export, check it yourself: the job has not.
+
+**`not compared`** means there was nothing to compare. Most often the last release's type is `never` or `any`, which every type satisfies.
+
+**`decided member by member`** is a pass that took the longer route.
+
+**`problem`** always fails the job. It means the check could not do its work, or a record no longer matches a break and must be removed.
+
+In the package's first line, "forwarded names" are names the package re-exports from another of our packages, such as `Collection` in `@prisma/orm-postgres`. They are only checked to still exist; their types are compared in the package that declares them.
+
+## An API below GA
+
+An API that is not ready to be kept until the next major version starts its name with its maturity level: `ea_` (Early Access), `preview_` or `rc_` (Release Candidate). On a type or class the word is capitalised, as in `Ea_Search`. A break in such an export is reported and never fails the job.
+
+When you promote an API, keep the old name as a deprecated second name for the same thing, until the next major version. Code written against the old name must keep working. From the release that has both names, the check treats the old name as GA, so removing it fails. Write the old name in one of the three forms the check recognises:
+
+```ts
+export function search(query: string): Result[] { … }
+
+/** @deprecated Use `search`. */
+export { search as ea_search };                        // the same declaration under two names
+
+/** @deprecated Use `search`. */
+export const preview_search: typeof search = search;   // a constant typed as the original
+
+/** @deprecated Use `Options`. */
+export type Ea_Options<T> = Options<T>;                // an alias that passes its type parameters through
+```
+
+Keep the `typeof` annotation on a constant. Without it, TypeScript writes out the value's type for an object or a primitive, and the check can no longer see that the two names are one thing. An `interface Ea_Options extends Options {}` is not recognised either.
+
+A level on a member, such as a method named `preview_run` on a GA class, is not read: the member is checked as GA. Record its break as `allowed`.
+
+## Recording a break you mean
+
+A break in a GA export is an exception to the promise. It needs a reason a user would accept, and the release notes must name it.
+
+1. Run `pnpm build` and `pnpm api:update`, so that the fingerprint in the printed record is taken from the lists you will commit.
+2. Copy the record the job prints under the break (`to record it: …`) into the package's `api-breaks.json`, which is a JSON array beside its `api.txt`.
+3. Replace the `…` in `reason` with one line that says why. If the change is safe for users, change `kind` to `allowed`.
+4. Name the package in your description's `## API changes` section. The `API changes named` job treats a changed record as an API change.
+
+```json
+[{"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"A cache always needs a store; see the release notes."}]
+```
+
+`kind` is `break` for a real break. It is `allowed` when the change is safe for users and the check reports it anyway. That happens because the check cannot know whether users implement a type or only receive it, so it tests both. For example, a wider return type on a method of an interface that users only implement is safe for them, and is still reported.
+
+A record covers the export only as it is now. `fingerprint` is taken from the export's lines in `api.txt` and from the types of the same package those lines use. When any of them changes, the record stops applying, and the break is reported again for you to judge afresh. Some changes that are not API changes also change a fingerprint: a renumbered `(not exported)` type, or an upgrade of TypeScript or API Extractor. After one of those, paste the printed record again.
+
+Two other things are recorded the same way, each with the record the job prints: a published package that is deleted, in `packages/9-public/removed-packages.json`, and an example app's error, described next.
 
 ## The last release's example apps fail
 
-`pnpm api:compat:examples` extracts each app under `examples/` as it was at the last release into a folder of its own (`.api-examples/`), links the app's installed `node_modules` into it, and runs the app's `typecheck` script there. Your own app folders are not touched. The apps' committed contracts are compiled as they were, because a contract must keep working without being emitted again.
+`pnpm api:compat:examples` takes each app under `examples/` as it was at the last release's git tag, puts it in a folder of its own (`.api-examples/`), and compiles it against your build. Your own app folders are not touched. An error there is one a user would see after upgrading:
 
-An error there is a change a user's code would see. The apps' type tests assert exact types, so an addition the policy allows, such as a new optional property on a result row, also fails them. Record such an error, or a deliberate break, in `examples/last-release-errors.json`:
-
-```json
-[{ "app": "prisma-8-demo", "file": "test/rows.test-d.ts", "line": 12, "code": "TS2344", "message": "<TypeScript's message, as the job reports it>", "kind": "allowed", "lastRelease": "8.1.0", "reason": "Rows gain the optional createdBy field" }]
+```text
+prisma-8-demo: 1 error in 1 file (recorded: 0 allowed, 0 breaks) — FAILS
+  test/codec-id-ergonomics.types.test-d.ts(14,55): TS2344 Type '"pg/timestamptz-temporal@1"' does not satisfy the constraint …
+    to record it: {"app":"prisma-8-demo","file":"test/codec-id-ergonomics.types.test-d.ts","line":14,"code":"TS2344","message":"…","kind":"break","lastRelease":"8.1.0","reason":"…"}
 ```
 
-A record matches one error by app, file, line, code and message, including the message's continuation lines, so copy the record the job prints. Unlike a type-test record, it has no fingerprint: it keeps matching while the error's place and text stay the same, even if the declarations behind it change again. A compiler that could not start, for example because a configuration file or an input file is missing, or a step before `tsc` that failed, is a problem that fails the run, not an error a record can cover. `kind` is `allowed` for an error that an addition the policy allows causes in an exact type assertion, and `break` for a deliberate break, which the release notes must name. A record that matches no error, or more than one, fails.
+To check one app yourself, run `pnpm api:compat:examples --only prisma-8-demo`.
+
+The apps' type tests assert exact types, so they also fail on a change that is safe for users, such as a new optional property on a result row. To accept an error, copy the printed record into `examples/last-release-errors.json`, write the reason, and set `kind` to `allowed` for a safe change or `break` for a real one. Name it in the description as `examples/<app>`.
+
+A record matches one error by app, file, line, code and message. Unlike a break record it has no fingerprint, so it keeps matching while the error's place and text stay the same. If the message changes, the record matches nothing, which fails the job, and the job prints a new record to replace it.
 
 ## What the checks do not see
 
-The decision record lists them in its section "What the checks do not see". In short: generic types compared only with `never` for their type parameters, a property made `readonly`, some abstract classes, methods users override, breaks inside undecided comparisons, including those of exports that reach a same-named class or unique symbol, a change to another package's type behind a recorded export, third-party type changes, result types the example apps do not exercise, and behaviour. A reviewer is the only check for these.
+The checks compare declarations, so a reviewer is the only check for behaviour: runtime results, error codes, command output and file formats. They also miss a break inside an undecided comparison, a result type no example app uses, and a few kinds of type change. The full list is in the decision record, under "What the checks do not see".

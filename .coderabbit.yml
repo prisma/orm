@@ -22,10 +22,11 @@ reviews:
     - path: "packages/9-public/@prisma/*/api.txt"
       instructions: >-
         This generated file lists everything users can import from a published package, one line per import
-        path, export and member. From release 8.0 an exported API must be kept, without breaking changes, until the
-        next major release, so review each added and removed line as a promise to users. Follow the review
+        path, export and member. Once a generally available (GA) release exports an API, it must be kept, without
+        breaking changes, until the next major release, so review each added and removed line as a promise to users. Follow the review
         criteria in packages/9-public/AGENTS.md: is each addition meant to be supported until the next major,
-        at the right maturity (a name starting with rc_, preview_ or ea_ is below GA); does a GA package now depend
+        at the right maturity (a name starting with ea_, preview_ or rc_, capitalised on a type or class as in
+        Ea_Search, is below GA); does a GA package now depend
         on something below GA; is a new member on an interface that users implement optional; is each removal
         or change either below GA or recorded as a deliberate break with a reason. Lines that changed only
         because a non-exported type was renumbered (such as Options_2) or an outside type gained its package

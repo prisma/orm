@@ -1,69 +1,85 @@
 # ADR 336 — CI finds breaking and accidental API changes against the last release
 
 **Status:** Accepted
-**Date:** 2026-11-26
+**Date:** 2026-11-27
 **Domain:** Guardrails & CI
-**Related:** [ADR 242 — Public npm surface](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md) (which packages are published), [Versioning](../../oss/versioning.md) (one version for every package)
+**Related:** [ADR 242 — Public npm surface](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md) (which packages are published), [Versioning](../../oss/versioning.md) (how a release is versioned and tagged), [Public API compatibility checks](../../Public%20API%20Compatibility.md) (the contributor guide)
 
 ---
 
 ## At a glance
 
-A pull request makes the options of `createCacheMiddleware`, in `@prisma/orm-extension-middleware-cache`, required:
+A pull request makes the options of `createCacheMiddleware` required:
 
 ```diff
 -export function createCacheMiddleware<TMeta = unknown>(options?: CacheMiddlewareOptions<TMeta>): CacheMiddleware<TMeta>;
 +export function createCacheMiddleware<TMeta = unknown>(options: CacheMiddlewareOptions<TMeta>): CacheMiddleware<TMeta>;
 ```
 
-An application written against the last release that calls `createCacheMiddleware()` no longer compiles: TypeScript now expects one argument. Three things in CI react to the pull request:
+Every application that calls `createCacheMiddleware()` stops compiling when it upgrades. No reviewer has to spot the missing `?`. CI compares the build with the last release and fails:
 
-| Check | The question it answers | What it says here |
-| --- | --- | --- |
-| Type tests against the last release | Does code written against the last release still compile? | A break of `createCacheMiddleware` |
-| The last release's example apps | Do the example apps, as they were at the last release, still compile? | Nothing, unless an app calls it without options |
-| The API list and the description check | What did this pull request change in the API, and does its author say why? | One changed line, which the description must name |
-
-The changed line is in the package's committed `api.txt`:
-
-```diff
--.: function createCacheMiddleware<TMeta = unknown>(options?: CacheMiddlewareOptions<TMeta>): CacheMiddleware<TMeta>
-+.: function createCacheMiddleware<TMeta = unknown>(options: CacheMiddlewareOptions<TMeta>): CacheMiddleware<TMeta>
+```text
+@prisma/orm-extension-middleware-cache: … breaks 1, undecided 0, not compared 0, recorded 0 — FAILS
+  break  @prisma/orm-extension-middleware-cache: createCacheMiddleware (value): Type 'undefined' is not assignable to type 'CacheMiddlewareOptions<TMeta>'.
 ```
 
-No reviewer had to spot the missing `?`. The compiler did.
+A second pull request exports a helper it did not mean to publish. Nothing breaks, so no comparison with the last release can find it. But each published package commits a generated list of its API, `api.txt`, and that list changes:
+
+```diff
++.: function buildJoinPlan(query: SelectAst): JoinPlan
+```
+
+CI posts the changed lines as a comment, and fails until the pull request's description names each one and says why:
+
+```markdown
+## API changes
+
+- `@prisma/orm-family-sql: buildJoinPlan`: exported for the Mongo family, which plans joins the same way.
+```
 
 ## Decision
 
-Every pull request is checked in three ways: the first two against the last release, the third against the branch it merges into.
+Once Prisma 8 is generally available (GA), an application must be able to upgrade to any later `8.x` release without changing its code. CI checks every pull request against that promise in three ways.
 
-1. **Generated type tests.** The last release of every published package is installed from the registry beside the current build. For each export of the last release, a generated test asks the TypeScript compiler whether the current export can stand where the last release's stood. A test that does not compile is a break.
-2. **The last release's example apps.** Each app under `examples/` is compiled as it was at the last release, with its type tests, against the current build. An error is a break.
-3. **A visible list of every API change.** Each published package commits a generated `api.txt` that lists everything a user can import from it. CI fails when a list does not match the code. When a pull request changes a list, a comment shows the added and removed lines, and a check fails until the pull request's description has a section headed `## API changes` that names, in backticks and with a reason, each changed export, or the whole package when its changes are many or are only renamed internal types.
+| Check | What it catches | How | When it fails |
+| --- | --- | --- | --- |
+| Type tests | A changed declaration: an export removed, a parameter narrowed, a required member added to an interface users implement | For each export of the last release, a generated test asks TypeScript whether the current export can stand where the old one stood | On a break, once the last release is GA |
+| The last release's example apps | A changed query result type, which is computed from the user's contract and can change while no declaration does | The apps under `examples/`, as they were at the last release, are compiled against the current build | On a compile error, once the last release is GA |
+| The API list and the description | A new or changed export, including one made by accident | Each package commits a generated `api.txt`. A pull request that changes one must name each changed export in its description, with a reason | Always |
 
-**When the first two fail.** They fail when the last release's version has no pre-release part (such as `8.1.0`). The type tests also exempt an export whose name starts with `rc_`, `preview_` or `ea_`, the prefixes that mark an API below general availability, unless the last release also exported the same thing under a name with no prefix. When an API is promoted, the release adds the new name and keeps the old one, deprecated, for the same thing until the next major version, so in a release that has both `foo` and `ea_foo`, `ea_foo` names a GA API. The same thing means the same declaration under two names, a constant declared as `typeof foo`, or a type alias whose whole body is `Foo` with its own type parameters passed through; chains such as `ea_foo` to `preview_foo` to `foo` count. Declaration files cannot tell `export const ea_foo = foo` from another value of the same type, so a constant typed `typeof foo` is held to GA either way; that errs on the safe side. A prefix alone is never enough, since an `ea_createClient` next to `createClient` may be a new design. The example apps have no exemption, since an app's error cannot be traced to one export. Otherwise they list the breaks they find in the job summary and pass. A problem that stops a check from comparing, such as a lookup that fails or a package that cannot be read, fails it either way, because a check that compared nothing must not pass. The third check always applies, because it blocks nothing that a description cannot fix. Each check blocks a merge only if the repository's branch rules require it; that is a setting outside this repository.
+Four rules complete the decision:
 
-**The last release** is the newest `v<version>` git tag, ignoring `-dev.` tags, at or below the version in the root `package.json` of the branch the pull request merges into. That follows the [versioning policy](../../oss/versioning.md): every package carries the root's version, and the root `package.json` of a commit, not the registry's `latest` tag, says which release it is. Taking the newest tag at or below it also covers the minutes during a release when the version is raised before its tag exists. The registry is asked only whether each package was published at that version.
+- **The last release is GA when its version has no pre-release part**, such as `8.1.0`. Against a pre-release, such as `8.0.0-rc.25`, the first two checks list what they find and pass, because breaking a pre-release is allowed.
+- **An API below GA may break.** A break in an export whose name carries a maturity level (`ea_`, `preview_` or `rc_`) is listed and never fails, with one exception described under [Names below GA](#names-below-ga).
+- **A break that is meant is recorded, with a reason,** in a file beside the package. The record stops applying when the export changes again.
+- **A check that could not compare fails, at any version.** A registry that cannot be reached, or a package that cannot be read, must not look like a pass.
 
-Two assumptions hold the design together, and neither is checked by CI: every package is released at one version, and a generally available package depends only on generally available packages. Checking a re-exported name only in the package that declares it relies on both. The first holds for every release candidate and stops holding at release 8.0, when each package gets its own version and maturity level, such as `8.3.1` or `8.3.0-ea.1`. The lookup, the rule for re-exports and the choice of which breaks fail then become per package, and the check is not ready for release 8.0 until they do (TML-3977).
+Whether a failing check blocks a merge is set in the repository's branch rules, outside the code.
 
-**An accepted failure**, a deliberate break or a change the policy allows that the check reports anyway, is recorded with the kind of test that broke (the export's type, its value, its constructor), which of the two it is, the last release it is measured against, a fingerprint, and the reason. The fingerprint covers the export's lines in its package's `api.txt` and the lines of every declaration there that they use as a type, followed until nothing new is reached. The record covers its test only while the fingerprint matches: a further change to the export, or to a type of the same package that it uses, changes the fingerprint, the record stops applying, and the export is reported again as an unrecorded break, so a record does not hide a later, different break made in that package. The fingerprint is printed with each unrecorded break, in a record ready to paste. Once the export no longer breaks, the record fails, so it cannot outlive its break. A record for an earlier release is skipped and listed as removable in the job's report. A change to a record file counts as an API change: the description check requires it to be named, like a changed `api.txt` line.
+A comparison in the type tests ends in one of four ways. The rest of this record uses these words, and so does the job's report:
+
+| Result | Meaning | Effect on the job |
+| --- | --- | --- |
+| Pass | TypeScript accepts the current export where the last release's stood | None |
+| **Break** | It does not | Fails, once the last release is GA and unless recorded |
+| **Undecided** | TypeScript cannot settle the comparison | None. It is listed, so a person can look |
+| **Not compared** | There is nothing to compare, for example because the last release's type is `any` | None. It is listed |
 
 ## Why
 
-From release 8.0, Prisma 8 promises that an application upgrades to any later `8.x` release with no code changes. Three kinds of change undo that promise without anyone meaning to:
+Three kinds of change undo the promise without anyone meaning to, and each needs a different check.
 
-- **A changed declaration.** An export removed, a parameter narrowed, a return type widened, a required member added to an interface users implement. Existing code stops compiling.
-- **A changed result type.** A query's result type is computed from the user's contract and the query, so it can change while every exported declaration stays the same.
-- **An accidental export.** Once a release that is generally available exports something, it must stay until the next major. A pull request that makes a helper importable without meaning to has made that promise.
+- **A changed declaration** stops existing code compiling. The compiler is the best judge of that, given the old declarations and the new ones.
+- **A changed result type.** The type of a query's result is computed from the user's contract and the query. It can change while every exported declaration stays the same, so only real code against a real contract shows it. The example apps are that code.
+- **An accidental export.** Once a GA release exports something, it stays until the next major version. An addition breaks nothing, so no test against the last release can find it. A person has to see it, and the list makes it visible.
 
-Each needs its own check. The first is judged best by the compiler, against declarations. The second needs real code that uses real contracts, which is what the example apps are. The third cannot be found by any test written against the last release, because an addition breaks nothing; it needs a person to see it.
+## How the type tests work
 
-## How the type tests judge compatibility
+The method adapts the one Microsoft's Fluid Framework uses: install the previous release, generate one compile-time test per export, and record deliberate breaks. How two types are compared is different, as described below.
 
-The method adapts Microsoft's Fluid Framework, which generates one compile-time test per export of its previous release. We keep its structure: install the previous release, generate a test per export, record deliberate breaks. We change how two types are compared, as below.
+### The test
 
-**The test.** For each export the release declares, the generator writes a line or two. For `createCacheMiddleware` it writes:
+The last release of each package is installed from the registry under an alias, beside the current build. For `createCacheMiddleware` the generated file contains:
 
 ```ts
 import type * as r0 from 'release-orm-extension-middleware-cache';
@@ -73,53 +89,113 @@ cv0.createCacheMiddleware;
 type t18 = [requireAssignableTo<typeof c0.createCacheMiddleware, typeof r0.createCacheMiddleware>, requireAssignableTo<IsNeverOrAny<typeof r0.createCacheMiddleware>, false>];
 ```
 
-`release-…` is the last release, installed under that alias; `current-…` links to the current build. `requireAssignableTo<A, B>` compiles only when `A` is assignable to `B`; the second assertion in the tuple fails when the release's side is `never` or `any`, which would compare nothing. Each test is a type named after its line in the generated file, so an error maps back to its export. A type export gets the same test without `typeof`, and a class also gets one for its constructor's parameters, which TypeScript otherwise compares loosely. The line before it uses the export as a value through an ordinary import, because `typeof` also accepts a name exported with `export type`, and a value turned type-only would otherwise pass. A published package that is deleted is a break as well, recorded in `packages/9-public/removed-packages.json` when it is deliberate.
+`requireAssignableTo<A, B>` compiles only when `A` is assignable to `B`. So the test compiles only when the current function can be used wherever the last release's could. The second assertion catches a release type of `never` or `any`, against which everything passes; such a test is reported as not compared. The line `cv0.createCacheMiddleware;` uses the export as a value, because an export turned into a type-only export would otherwise pass. That is the `(value)` in the report; a type export gets a `(type)` test without `typeof`.
 
-**Only one direction.** Fluid asks in both directions and needs every interface tagged as one users implement or one they only receive, because a new member breaks the first kind and not the second. We ask only whether the current export is assignable to the last release's, and the tags become unnecessary. A new required member on `CacheStore`, which users implement, fails through the exported function that accepts a `CacheStore`: the current `createCacheMiddleware` no longer accepts an old store, so it is not assignable to the old `createCacheMiddleware`. A new member on `CacheMiddleware`, which users only receive, passes, because a type with more members is still assignable to the old one. This relies on an exported function or type accepting the interface; one that nothing accepts cannot be implemented in any useful way.
+A type parameter without a default is set to `never`, as in Fluid Framework, because any other argument would be a guess at how users fill it in.
 
-The rule is stricter than the policy in one direction, on purpose. Any type an exported function accepts is treated as one users may supply, because the check cannot know otherwise. So a change that is safe for an interface users only implement, such as widening the return type of a method we call, or adding a required member to a type we build and pass to a callback, is reported as a break, and is recorded with that reason. Telling those cases apart would need a list of which interfaces users implement, which would go stale; a recorded false break costs one line, a missed break costs users.
+### One direction, which tests a type in both of its roles
 
-**TypeScript compares, on declarations rewritten as it reads them.** Fluid maps every type through a helper that replaces functions and methods with empty objects, so it checks only that a function exists. We let TypeScript compare the two exports itself, because its comparison handles recursive types, such as JSON values, that a mapping cannot. Three things would make a plain comparison wrong, so a compiler host rewrites our packages' declaration files on both sides as TypeScript reads them:
+The test asks only whether the current export is assignable to the last release's. Fluid Framework asks in both directions, and needs every interface tagged by hand as one users implement or one they only receive. One direction makes the tags unnecessary, because each type is tested in both roles by different tests:
 
-- Each method becomes a property of function type. TypeScript lets a method accept a narrower parameter than the method it replaces, so with methods left as methods, this narrowing passes:
+- **The type's own test** treats it as something users receive and use. A method that now returns a wider type fails here.
+- **The test of each exported function that accepts the type** treats it as something users supply. Suppose `CacheStore`, which users implement, gains a required `clear()`. Its own test passes, because a type with more members still fits where the old one did. But `createCacheMiddleware` accepts a `CacheStore`, and no longer accepts a store written without `clear()`, so the function's test fails.
 
-  ```ts
-  interface Last { get(key: string | number): void }
-  interface Now  { get(key: string): void }   // assignable to Last as a method, not as a property
-  ```
+The cost is that the check cannot know which role a type really has. A change that is safe in the type's real role can fail the test for the other role. A wider return type on a method of an interface that users only implement is safe for them, and fails the interface's own test. Such a report is recorded with kind `allowed`. A list of which interfaces users implement would avoid these reports, but it would go out of date without anyone noticing; a wrong report costs one recorded line, and a missed break costs users.
 
-- Private and `#private` members, which users cannot reach and which make TypeScript treat two copies of a class as unrelated, are replaced by one marker property naming the class, so two copies of one class still match and one class swapped for another does not. Two classes with private members and the same name in different files of one package that its entry points reach cannot be told apart this way, and neither can two unique symbols with one name. The package that declares them lists each such name as not compared, and every export whose declarations reach one of them, in the last release or the current build, has its passing comparisons reported as undecided, at the step "shared marker", because the shared marker could hide a swap of one for the other. This holds even when the two declarations differ in their visible members, so that a swap would also show in those members; telling those cases apart is not worth the extra rule, and renaming one of the two restores the comparisons. A test that only checks that a re-exported name still exists compares nothing, so it is not affected. Protected members stay, under a key of their own, and are compared like public ones, because extensions subclass our base classes and use them; each abstract member of a class is also checked to accept what the last release's accepted, since a subclass users write overrides it, and for an abstract class that users can extend, a subclass written against the last release is checked to still compile, so a new abstract member is a break.
-- Each `unique symbol` constant becomes a string literal named after its package and name, because two copies of a unique symbol are different symbols. Keys made from it are still compared, and moving the constant to another file changes nothing. Two constants with one name in one package would share a literal, which the rule above for same-named private classes covers.
+Two tests ask in the other direction, because in them the user's code is the one being accepted. A class's constructor parameters must accept what the last release's accepted. And for an abstract class users can extend, a subclass written against the last release must still compile, so a new abstract member is a break.
 
-In third-party declarations, private and protected members are replaced the same way and methods are left as they are: rewriting their methods would change how TypeScript compares arrays and other built-in types.
+### Comparing two copies of one package
 
-**When TypeScript cannot relate two copies.** For some generic types TypeScript cannot tell that two copies of one declaration are the same, and a comparison fails although nothing changed. So the release is installed twice, the second copy called its twin, and a failure counts as a break only when the same test passes between the release and its twin. When it fails there too, the export is compared through a helper that maps the types member by member; a failure there is a break. What that does not decide is split into one native test per member, each under the same twin rule. An export passes only when it is decided: a pass through the mapping helper is not enough, because the helper fixes type parameters at their constraints and cannot see a change that depends on them. Anything else is reported as undecided, with the step it stopped at, never as a pass.
+TypeScript compares the two exports itself. That handles recursive types, such as JSON values, which a hand-written comparison cannot. But three things make a plain comparison between two installed copies wrong, so the declaration files of our packages are rewritten, on both sides, as TypeScript reads them.
 
-**Making sure the comparison is real.**
+**Methods become properties.** TypeScript lets a method accept a narrower parameter than the one it replaces, so this break would pass:
 
-- The current build and the last release can have the same name and version, and TypeScript then treats them as one package and compares nothing. The installed release is stamped with a version of its own, and the run fails if TypeScript still merged any of our packages.
-- The release's third-party dependencies are installed at the versions in the repository's lockfile, and every import of one third-party name and version is resolved to one copy, so that a difference in, say, `pg` or its peers is not reported as ours.
+```ts
+interface Last { get(key: string | number): void }
+interface Now  { get(key: string): void }
+```
+
+Rewritten as `get: (key: string) => void`, it fails as it should.
+
+**Private members become one marker.** TypeScript treats two copies of a class with private members as unrelated, even when they are identical. Users cannot reach private members, so they are replaced by one property that names the class:
+
+```ts
+declare class Pool { #sockets: Socket[]; acquire(): Socket }
+// is read as
+declare class Pool { readonly "private @prisma/orm-target-postgres:Pool": true; acquire: () => Socket }
+```
+
+Two copies of `Pool` now match, and a different class swapped in for `Pool` does not. Protected members are kept and compared, because extensions subclass our base classes and use them.
+
+**Unique symbols become string literals** named after their package and name, because two copies of one `unique symbol` are different symbols.
+
+A marker is made from a name. So if one package declares two classes with private members, or two unique symbols, under the same name, the check cannot tell one from the other. The package's report lists that name as not compared, and every export that uses one of the two is undecided, because a pass would prove nothing. Renaming one of the two restores the comparisons.
+
+### When TypeScript cannot settle a comparison
+
+For some generic types, TypeScript cannot tell that two copies of one declaration are the same, and the test fails although nothing changed. This function is one:
+
+```ts
+declare function required<P extends Record<string, Arg<unknown>>>(
+  shape: P,
+): { [K in keyof P as P[K] extends Optional ? never : K]: OutOf<P[K]> };
+```
+
+So every failure is checked before it counts. A second copy of the last release's declarations is made, and the same test is run between the release and that copy. If it passes there, the failure is real and is a break. If it fails there too, TypeScript cannot compare this type across copies. The check then compares the two types' shapes through a mapped type, and then member by member. What none of these settles is undecided.
+
+A comparison counts as a pass only when TypeScript's own comparison passed, on the whole type or on each of its members. Anything else is reported, never passed in silence. Each package has ten minutes; a failure that could not be confirmed in that time is reported as a break, so a slow machine cannot hide one.
+
+### Making sure the tests ran
+
+A check like this can pass because it compared nothing. Four safeguards prevent that:
+
+- The installed release is given a version of its own. Without it, TypeScript treats the release and the build as one package when their name and version match, and compares a type with itself.
 - Every generated file ends with a line that must not compile. If it compiles, the compiler did not check the file, and the run fails.
-- A type from the release that cannot be resolved would be treated as `any` and pass everything; an unresolved import is reported as a failure.
-- When TypeScript stops with "type instantiation is excessively deep", it caches the failure and lets later tests of the same type pass unchecked, so every test after it is compiled again without it. A test that overflows the compiler's stack is isolated the same way. Both are reported as undecided. A failure that could not be confirmed against the twin before the package's time ran out is reported as a break, so a slow machine cannot hide one.
+- A type from the release that cannot be resolved would become `any` and pass everything, so an unresolved import fails the run.
+- Both sides use one copy of each third-party dependency, at the version in the repository's lockfile, so a difference in a dependency is not reported as ours.
 
-**Re-exports.** A database's package, such as `@prisma/orm-postgres`, re-exports most of the import paths of the database-independent packages it is built on. A name a package re-exports from another of our packages gets only a test that it still exists, as a value where it is one; its type is compared in the package that declares it. A name re-exported from a third-party package, such as `mongodb`, is only checked to exist. Members a package adds to another package's interface with `declare module` are compared as well.
+### Names a package forwards from another
 
-**Generic types.** A type parameter without a default is set to `never`, as Fluid does, because inventing arguments would mean guessing how users instantiate it. A test whose release side then resolves to `never` or `any` compares nothing and is counted as not compared.
+A database's package, such as `@prisma/orm-postgres`, forwards most of what it exports from the packages it is built on (`export … from '@prisma/orm-family-sql/orm-client'`). A forwarded name is only checked to still exist. Its type is compared once, in the package that declares it.
+
+This relies on every package being released at one version, which the [versioning policy](../../oss/versioning.md) guarantees. If `@prisma/orm-postgres` and `@prisma/orm-family-sql` were at different versions or maturity levels, a break in `Collection` would be judged by the family package's release and level, not by those of the package the user imports it from. Giving packages their own versions means making this rule, and the lookup of the last release, work per package.
+
+### Names below GA
+
+An API inside a GA package can be below GA. Its name then starts with its level: `ea_` (Early Access), `preview_` or `rc_` (Release Candidate), capitalised on a type or class, as in `Ea_Search`. A break in such an export is listed and does not fail.
+
+The exception is a name left behind by a promotion. When an API moves up to GA, the release adds the new name and keeps the old one, deprecated, until the next major version, so that code written against the old name keeps working. The old name then stands for a GA API. So a prefixed name fails like any GA export when the last release also exports the same thing under a name without a prefix. These three forms count as the same thing:
+
+```ts
+export declare function search(query: string): Result[];
+export { search as ea_search };                        // the same declaration under two names
+export declare const preview_search: typeof search;    // a constant typed as the original
+export type Ea_Options<T> = Options<T>;                // an alias that passes its type parameters through
+```
+
+A similar name does not count. An `ea_createClient` with its own declaration, beside `createClient`, may be a new design, and stays Early Access.
+
+### Recording a break that is meant
+
+Under each break, the job prints a record. The author pastes it into the package's `api-breaks.json` and writes the reason:
+
+```json
+{"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"A cache always needs a store; see the release notes."}
+```
+
+`kind` is `break` for a real break, which the release notes must name, or `allowed` for a change that is safe for users and reported anyway. The fingerprint covers the export's lines in `api.txt` and the lines of every type of the same package that they use. When any of them changes, the record stops applying and the break is reported again, so a record cannot hide a later, different break. A record whose export no longer breaks fails the job, so it cannot outlive its break either. Changing a record file is itself an API change, which the description must name.
 
 ## How the example apps cover result types
 
-The apps under `examples/` import the published packages by name, and their type tests state exact result types against real contracts (the `contract.json` and `contract.d.ts` files that `prisma contract emit` writes from the app's contract source, which each app commits).
+Each app under `examples/` imports the published packages by name, and its type tests assert exact result types against a committed contract.
 
-Compiling the apps as they are on the pull request's branch is not enough, because the same pull request can edit an app to fit its own break. So CI extracts each app's files at the last release's git tag into a folder of its own, at the same depth as in the repository, links the app's installed dependencies into it, and compiles it. The installed dependencies are links into the repository's workspace, so `@prisma/*` resolves to the current build through each package's `exports`, as it would for a user who upgraded.
+The apps are taken from the last release's git tag, not from the pull request, because a pull request could change an app to fit its own break. Each app's files are extracted into a folder of its own, linked to the current build, and compiled. The committed contract files are used as they were and never emitted again, because a contract and its generated types must keep working across releases.
 
-The committed contracts are compiled as they were at the tag and never emitted again, because the compatibility policy promises that a contract and its generated types keep working in every later release without being emitted again.
+The apps assert exact types, so they also fail on a change that is safe for users, such as a new optional property on a result row. Such an error is recorded in `examples/last-release-errors.json`, with its reason. A record matches one error by app, file, line, code and message.
 
-The apps' type tests assert exact types, so they also fail on additions the policy allows, such as a new optional property on a result row. Such an error is recorded with its reason, like a deliberate break. A record names the app, file, line, error code and the error's full message, continuation lines included, and must match exactly one error, so a later, different break on a recorded line is not hidden by it. Unlike a type-test record it has no fingerprint, because an app's error depends on declarations throughout the packages it uses, with no list a fingerprint could follow; it keeps matching while the error's place and text stay the same. A compiler that could not start, or a step before it that failed, is a problem, never an error a record covers. The records belong to one release's tag and are replaced when the next release becomes the last.
+## How an API change is made visible
 
-## How a change is made visible
-
-The packages in `packages/9-public/` are the ones we publish. Each has an `api.txt` beside its `package.json`, with one line for each export of each import path and one for each member:
+Each package in `packages/9-public/` has an `api.txt` beside its `package.json`, with one line for each export of each import path and each of its members:
 
 ```text
 ./config: function defineConfig(options: PostgresConfigOptions): PrismaConfig<'sql', 'postgres'>
@@ -127,45 +203,39 @@ The packages in `packages/9-public/` are the ones we publish. Each has an `api.t
 ./orm-client: everything from @prisma/orm-family-sql/orm-client
 ```
 
-The TypeScript compiler decides what each import path exports, and Microsoft's API Extractor writes each declaration out as text. The lists are committed, not generated per pull request, so a pull request's diff shows its API changes and every release's tag records what it exported.
+The TypeScript compiler decides what each import path exports, and Microsoft's API Extractor writes each declaration as text. The lists are committed, so a pull request's diff shows its API changes, and each release's tag records what it exported. CI fails when a list does not match the build.
 
-The description check makes the author say why each change is meant. A whole package can be named with one reason, because some changes touch many lines without changing the API: the list numbers non-exported types that share a name (`Options_2`) and qualifies an outside type with its package when the package exports a type of the same name, and adding one type can shift those for others.
+The description check makes the author say why each change is meant. A package name, with a reason, covers every change in that package. That is for a change that touches many lines without changing the API, such as a tool upgrade.
 
-Review agents are told what to look for, in `packages/9-public/AGENTS.md` and in a path instruction for `api.txt` in `.coderabbit.yml`: is each addition meant to be supported until the next major, at the right maturity; does a generally available package now depend on something that is not; is a new member on an interface users implement optional; is each removal either below general availability or recorded as a deliberate break. A person still approves every pull request.
+Reviewers, people and agents, then judge what CI cannot: whether each addition is one we want to keep until the next major version. Their criteria are in `packages/9-public/AGENTS.md`.
 
 ## Consequences
 
-- Where the checks are required, a break in a generally available export cannot merge unless someone records why, and a new export cannot merge unless the description names it. The release notes must name each recorded break; nothing checks that yet.
-- Some changed lines are not API changes, and the description must still mention them, at least by package.
-- The type tests install a release from the registry on every run, so they depend on the registry being reachable. Measured in November 2026, a run over all packages took about three minutes on a laptop with three packages at a time, and up to 6 GB of memory for the largest, so CI runs two at a time.
-- When the last release moves forward, its records stop applying and are listed as removable.
-- A record must be pasted again after a change that alters its fingerprint without changing the API: a non-exported type renumbered, an outside type that gains its package prefix, or an upgrade of TypeScript or API Extractor. A TypeScript upgrade can also reword the messages that example-app records match.
+- Where the checks are required, a break in a GA export cannot merge unless someone records why, and a new export cannot merge unless the description names it.
+- The release notes must name each record of kind `break`. No check enforces that.
+- Some reported breaks are safe for users, and someone has to record them as `allowed`.
+- Some changed lines in an `api.txt` are not API changes, and the description must still name their package.
+- The type tests install a release on every run, so they need the registry. A full run takes several minutes, and several gigabytes of memory for the largest packages.
+- When a new release becomes the last release, the records made against the earlier one stop applying, and the job lists them as removable.
 
 ## What the checks do not see
 
-- **Generic types.** A generic type is compared only with `never` for each type parameter without a default.
-- **Some modifiers.** A property made `readonly` is not seen.
-- **Some abstract classes.** A class exported only as a type gets no subclass check, and neither does one with a public abstract member keyed by a symbol that is not a well-known one such as `Symbol.iterator`, from any package; the second kind is listed as not compared. A new abstract member on either is not seen.
-- **Exports that reach a same-named class or unique symbol.** While a package declares two classes with private members, or two unique symbols, with one name, the comparisons of every export that reaches one of them are undecided, and undecided entries need no action, so the loss is easy to miss. In November 2026 this applied to some types of `@prisma/orm-family-sql`, among them `SelectQuery` and `GroupedQuery`, which reach its two `aggregateOperationsUnavailable` symbols. Renaming one of the two restores the comparisons.
-- **Methods users override.** A subclass users write may override a method that is not abstract. Narrowing that method's return type, or widening a parameter's type, breaks their override, but the check compares the class only as code that calls it, so it passes.
-- **Members of a namespace that holds only types.**
-- **Third-party types.** Both sides use the same third-party versions, so a dependency upgrade that changes our API, including types we re-export from a package such as `mongodb`, is not seen.
-- **Changes from another package behind a recorded export.** A record's fingerprint follows only the declarations in its own package's `api.txt`. A later change to a type of another of our packages that the recorded export uses does not change it; that type's own changed lines still show in the pull request, in its own package's list, and must be named in its description.
-- **Undecided comparisons.** A break inside a comparison TypeScript cannot decide is not seen. In November 2026 that was about one comparison in a hundred: generic builders and clients that TypeScript cannot relate between two copies, among them the SQL family's `orm` and `Collection`, and the Mongo query builder, which overflows the compiler's stack. The example apps cover their result types as far as the apps use them.
-- **A later change behind a recorded app error with the same text.** An example-app record keeps matching while the error's place and full message stay the same.
-- **Result types the example apps do not exercise.** Coverage grows with the apps' type tests.
-- **The `exports` field.** The build writes each package's `exports` on a developer's machine and not in CI, so a committed `exports` that is out of date is not seen.
-- **A level on a member.** Only an export's own name is read, so a member such as `Client.preview_run` is held to the level of the export it belongs to. That is stricter than the maturity levels, which give such a member its own lower level; a record with kind `allowed` accepts its break.
-- **Behaviour.** Runtime behaviour, error codes, command output and file formats are outside these checks.
+- **Behaviour.** Runtime behaviour, error codes, command output and file formats.
+- **Undecided comparisons.** A break inside a comparison TypeScript cannot settle is not seen. These are mostly generic builders and clients. The example apps cover their result types, as far as the apps use them.
+- **Result types the example apps do not use.**
+- **Some type changes:** a property made `readonly`; anything that depends on a type parameter, which is compared only as `never`; and a change to a type inside a namespace that holds only types, which is listed as not compared.
+- **A method users override.** If a class's method is not abstract, a subclass users write can still override it. A narrower return type on that method stops their override compiling, and the check does not see it, because it compares the class as code that calls it.
+- **A level on a member.** Only an export's own name is read, so a member named with a level, such as `Client.preview_run`, is treated as GA when its export is. That is stricter than needed; its break is recorded as `allowed`.
+- **Third-party types.** Both sides use the same versions of third-party packages, so a dependency upgrade that changes what our packages expose is not seen.
+- **The `exports` field.** Each package's `exports` is written by the build and committed. One that is out of date is not seen.
 
 ## Alternatives considered
 
-- **Comparing the text of the lists**, as Go compares its `api/go1.*.txt` files. Text cannot tell an added optional parameter from a removed one, so every changed line needs a person and an entry in an exceptions file. AWS CDK's grew to about 4,200 lines.
-- **Fluid Framework's method as it is.** Because its helper erases signatures, it checks only that each function exists; in a test with known signature changes on our packages it missed every one. It then needs every interface tagged by hand.
-- **Mapping every type through a structural helper and comparing the results.** It handles the cases a plain comparison gets wrong, but TypeScript gives up on deep and recursive types: on our packages it left more than four in five comparisons undecided. It stays as the last fallback.
-- **API Extractor's own reports as the committed files**, as Angular and Backstage commit them. For our packages they are about ten times the size of the lists and repeat one declaration in up to 40 files.
-- **Only type tests and example apps, with no list**, as Drizzle, Kysely, Zod and tRPC do. Nothing in that approach notices an accidental export.
-- **Compiling the example apps from the pull request's branch.** The pull request can change an app to fit its own break.
-- **Undecided only for same-named classes whose visible members are identical.** A shared marker hides a swap only when the two declarations are otherwise the same; when their visible members differ, the comparison sees the swap. The narrower rule would keep more exports compared, but it is one more rule to get right, and unique symbols would need a rule of their own.
-- **A same-named class or unique symbol in our packages as a problem**, with a message asking for one of them to be renamed. This would remove the walk that finds the exports reaching them, and leave no export undecided for this reason. The cost is that an unrelated change, or a bundler that merges two files, can surface a rename request in a pull request that did not cause it.
-- **Recording which interfaces users implement.** It would remove the false breaks described under "Only one direction", at the cost of a list that goes stale silently. The exported functions that accept an interface already decide the case that matters, a new required member.
+- **Comparing the text of the lists**, as Go compares its `api/go1.*.txt` files. A text diff shows that a line changed, not whether the change is compatible: an added optional parameter and a removed one both change a line. Every changed line would need a person to judge it and an entry in an exceptions file.
+- **Fluid Framework's method unchanged.** Its helper replaces functions with empty objects, so it checks only that each function exists. In a test with planted signature changes on our packages, it missed every one. It also needs every interface tagged by hand.
+- **A hand-written structural comparison as the main one.** TypeScript gives up on deep and recursive types: on our packages it left more than four in five comparisons undecided. It stays as a fallback.
+- **API Extractor's own reports as the committed lists**, as Angular commits them. For our packages they are about ten times the size of `api.txt`, and they too are compared as text.
+- **Type tests and example apps only, with no list**, as Drizzle, Kysely and Zod do. Nothing would notice an accidental export.
+- **Compiling the example apps from the pull request's branch.** The pull request could change an app to fit its own break.
+- **A list of which interfaces users implement.** It would remove the reports that are safe for users, at the cost of a list that goes out of date without anyone noticing.
+- **Failing when a package declares two classes or symbols with one name**, with a message asking for a rename, in place of undecided results. An unrelated change, or a bundler that merges two files, would then fail a pull request that did not cause it.

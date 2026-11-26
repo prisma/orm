@@ -1,50 +1,30 @@
 #!/usr/bin/env node
 // Usage: node scripts/public-api/api-compat.mjs [--jobs <n>] [--only <package>,…] [--ga]
 //
-// Finds the breaks in each published package since the last release (release.mjs says which that
-// is). The last release is installed beside the current build, with a second copy of it, its twin
-// (compat-install.mjs), and for each export a package declares itself on one of its import paths
-// a generated test asks whether the current build's type is assignable to the release's, for the
-// export's type, for its value and for a class's constructor parameters (compat.mjs). A value is
-// also used through a value import, which fails when the current build exports it type-only. Names
-// a path forwards from another package are checked there, and here only for existence. The members
-// a package adds with `declare module` to an interface of another of our packages are compared
-// too.
+// Reports the breaks in each published package since the last release (release.mjs says which
+// that is). The design and its reasons are in docs/architecture docs/adrs, "CI finds breaking and
+// accidental API changes against the last release"; docs/Public API Compatibility.md is the guide.
 //
-// One direction is enough: a new required member on a type users implement fails through the
-// exported function that accepts it, and a new member on a type users only receive passes.
+// The last release is installed beside the current build, with a second copy of its declarations,
+// its twin (compat-install.mjs). For each export a package declares on one of its import paths, a
+// generated test asks TypeScript whether the current build's type is assignable to the release's
+// (compat.mjs), on declarations rewritten so that two copies of one package compare
+// (compat-declarations.mjs). A name a path forwards from another of our packages is compared in
+// the package that declares it, and here only checked to exist.
 //
-// An abstract class also gets a subclass, written against the release, that must still compile
-// against the current class, and a test that each abstract member still accepts what the
-// release's did.
-//
-// The comparison is TypeScript's own, on declarations rewritten so that it compares what a user
-// relies on (compat-declarations.mjs): methods become function-typed properties, so that their
-// parameters compare contravariantly; protected members move to a string key; private members
-// become a marker naming their class; and unique symbols, which differ between two copies of a
-// declaration, are named by package and name. Each third-party version is read from one copy.
-//
-// TypeScript cannot relate some generic types between two copies of their declaration, so a
-// failure is a break when the same test passes between the release and its twin, and also when
-// there was no time left to try. When it fails there too, it goes to the structural mapping of
-// compat-structural.ts, whose failure is a break and whose pass is not a verdict, since it
-// instantiates generic signatures with their constraints. What that does not decide is compared
-// member by member, each member with the twin rule and then the structural mapping. What is not
-// decided is reported as undecided, with the stage it ended at: native (too deep, or a stack
-// overflow), member (no time, or call or index signatures left out), structural, or shared marker.
-//
-// Two classes with private members, or two unique symbols, with one name in one package get one
-// marker, so one can stand in for the other. The package lists each such name as not compared, and
-// every export that reaches one, in the release or the current build, has its passing comparisons
-// reported as undecided at the stage shared marker.
-//
-// An accepted break is recorded in api-breaks.json beside the package's api.txt, and a released
-// package the repository no longer has in packages/9-public/removed-packages.json; records.mjs
-// describes both. The report prints each unrecorded break's record, ready to paste.
+// A test that fails is a break when it passes between the release and its twin. When it fails
+// there too, TypeScript cannot relate the two copies, and the comparison falls back to the
+// structural mapping (compat-structural.ts) and then to one test per member. What is still not
+// settled is reported as undecided, with where it stopped: native, structural, member or shared
+// marker. The guide says what each means.
 //
 // A break fails the run when the last release has no pre-release part (`--ga` treats it as if it
-// had none) and the export is generally available: its name does not start with rc_, preview_ or ea_,
-// or the release also exports the same thing under a name without one. Otherwise it is reported.
+// had none) and the export is generally available: its name does not start with a level (ea_,
+// preview_, rc_, capitalised on a type or class), or the release also exports the same thing
+// under a name without one. Otherwise the break is only reported. A break that is meant is
+// recorded in the package's api-breaks.json, and a deleted package in
+// packages/9-public/removed-packages.json (records.mjs).
+//
 // Needs `pnpm build` and network access to origin and to the registry.
 
 import { fork } from 'node:child_process';

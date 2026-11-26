@@ -831,8 +831,8 @@ function currentProgram(dir) {
 }
 
 // Generates and compiles the tests for one package. `strict` is whether a break fails the run;
-// exports named rc_*, preview_* or ea_* do not, unless the release also exports them under a name without
-// such a prefix. `twinSpecifier` imports a second copy of the release;
+// exports whose name starts with a level (ea_, preview_, rc_) do not, unless the release also
+// exports them under a name without one. `twinSpecifier` imports a second copy of the release;
 // `budgetMs` is the time for the whole package.
 //
 // Each comparison is first TypeScript's own, on declarations rewritten as compat-declarations.mjs
