@@ -900,6 +900,23 @@ export function checkPackage({
   const undecided = [];
   const notCompared = [];
   const decidedByMembers = [];
+  // Each test has one result, the first of these lists to hold it: a test that lands in one leaves
+  // the lists after it. A test can break more than once, so breaks are kept side by side. A test
+  // whose release side is never or any has nothing a later step could leave undecided.
+  const verdicts = [breaks, notCompared, undecided, decidedByMembers];
+  const sameTest = (one, other) =>
+    one.path === other.path && one.name === other.name && one.test === other.test;
+  const settle = (list, result) => {
+    const rank = verdicts.indexOf(list);
+    const held = verdicts.slice(0, list === breaks ? 0 : rank + 1);
+    if (held.some((each) => each.some((other) => sameTest(other, result)))) return;
+    list.push(result);
+    for (const lower of verdicts.slice(rank + 1)) {
+      for (let index = lower.length - 1; index >= 0; index--) {
+        if (sameTest(lower[index], result)) lower.splice(index, 1);
+      }
+    }
+  };
   const currentExports =
     JSON.parse(readFileSync(join(currentDir, 'package.json'), 'utf8')).exports ?? {};
   const failedImports = new Set();
@@ -915,7 +932,7 @@ export function checkPackage({
         `${entry.path}: the current build cannot be imported (TS${code} ${message}). Run \`pnpm build\`.`,
       );
     } else {
-      breaks.push({
+      settle(breaks, {
         path: entry.path,
         name: '*',
         test: 'path',
@@ -927,13 +944,13 @@ export function checkPackage({
 
   const testOf = (entry, segment) => ({ path: entry.path, name: entry.name, test: segment.test });
   const broke = (entry, segment, outcome, note = '') =>
-    breaks.push({
+    settle(breaks, {
       ...testOf(entry, segment),
       code: [...outcome.codes][0],
       message: `${segment.member === undefined ? '' : `${segment.member}: `}${normaliseMessage(outcome.message)}${note}`,
     });
   const notDecided = (entry, segment, stage, message) =>
-    undecided.push({
+    settle(undecided, {
       ...testOf(entry, segment),
       stage,
       code: EXCESSIVELY_DEEP,
@@ -960,7 +977,7 @@ export function checkPackage({
       else if (probeOutcome && deepOnly(probeOutcome)) {
         notDecided(entry, segment, 'native', probeOutcome.message);
       } else if (probeOutcome) {
-        notCompared.push({
+        settle(notCompared, {
           ...testOf(entry, segment),
           reason: 'the last release has it as never or any',
         });
@@ -1071,15 +1088,7 @@ export function checkPackage({
     else memberFailures.push({ ...each, stage: 'structural', message: each.verdict });
   }
   for (const each of split) {
-    const key = (list) => list.filter((failure) => failure.parent === each);
-    const broken = breaks.some(
-      (failure) =>
-        failure.path === each.entry.path &&
-        failure.name === each.entry.name &&
-        failure.test === each.segment.test,
-    );
-    const open = key(memberFailures);
-    if (broken) continue;
+    const open = memberFailures.filter((failure) => failure.parent === each);
     if (open.length > 0) {
       const stage = open.some((failure) => failure.stage === 'structural')
         ? 'structural'
@@ -1091,22 +1100,12 @@ export function checkPackage({
         `not decided for ${open.map((failure) => failure.segment.member).join(', ')}: ${open[0].message.replace(/^not decided: /, '')}`,
       );
     } else if (each.partial) notDecided(each.entry, each.segment, 'member', PARTIAL);
-    else decidedByMembers.push(testOf(each.entry, each.segment));
+    else settle(decidedByMembers, testOf(each.entry, each.segment));
   }
 
   for (const { entry, segment, outcome } of heldUses) {
-    const isBroken = breaks.some(
-      (each) => each.path === entry.path && each.name === entry.name && each.test === segment.test,
-    );
-    if (isBroken) continue;
+    if (breaks.some((each) => sameTest(each, testOf(entry, segment)))) continue;
     broke(entry, segment, outcome);
-    const sameTest = (each) =>
-      each.path === entry.path && each.name === entry.name && each.test === segment.test;
-    for (const list of [undecided, decidedByMembers]) {
-      for (let index = list.length - 1; index >= 0; index--) {
-        if (sameTest(list[index])) list.splice(index, 1);
-      }
-    }
   }
 
   // Two classes or unique symbols with one name share one marker, so a comparison that reaches one
@@ -1124,28 +1123,16 @@ export function checkPackage({
       ...exportsReaching(current.program, current.entryPoints, targets, packageOf),
     ]);
     const labels = ambiguous.map(({ label }) => label).join(', ');
-    const settled = (list, entry, segment) =>
-      list.some(
-        (each) =>
-          each.path === entry.path && each.name === entry.name && each.test === segment.test,
-      );
     for (const entry of exported) {
       if (!reaching.has(`${entry.path}\0${entry.name}`)) continue;
       const compares = (segment) =>
         !segment.probe && !segment.use && segment.test !== 'exists' && segment.test !== 'path';
       for (const segment of entry.segments.filter(compares)) {
-        if (settled(breaks, entry, segment) || settled(undecided, entry, segment)) continue;
-        if (settled(notCompared, entry, segment)) continue;
-        undecided.push({
+        settle(undecided, {
           ...testOf(entry, segment),
           stage: 'shared marker',
           message: `not decided: it uses one of ${labels}, which share one marker with another of that name, so a pass cannot tell them apart`,
         });
-        const index = decidedByMembers.findIndex(
-          (each) =>
-            each.path === entry.path && each.name === entry.name && each.test === segment.test,
-        );
-        if (index !== -1) decidedByMembers.splice(index, 1);
       }
     }
   }
@@ -1163,8 +1150,8 @@ export function checkPackage({
     if (!fingerprints.has(key)) fingerprints.set(key, apiFingerprint(apiText, path, exported));
     return fingerprints.get(key);
   };
-  const sameTest = (record) => (each) =>
-    each.path === record.path && each.name === record.export && each.test === record.test;
+  const recordedTest = (record) => (each) =>
+    sameTest(each, { path: record.path, name: record.export, test: record.test });
   // Without api.txt every export has the fingerprint of nothing, which a record would match
   // whatever the export becomes.
   const hasApi =
@@ -1180,10 +1167,10 @@ export function checkPackage({
   const outdated = new Set();
   const recorded = [];
   for (const record of applied) {
-    const found = breaks.filter(sameTest(record));
+    const found = breaks.filter(recordedTest(record));
     const label = `${exportLabel(name, record.path, record.export)} (${record.test})`;
     if (found.length === 0) {
-      if (!undecided.some(sameTest(record))) {
+      if (!undecided.some(recordedTest(record))) {
         problems.add(
           `${label}: the recorded break is no longer a break. Remove the record from packages/9-public/${name}/${BREAKS_FILE}.`,
         );

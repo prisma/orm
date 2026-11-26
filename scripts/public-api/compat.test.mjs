@@ -266,6 +266,11 @@ describe('checkPackage, with the release treated as GA', () => {
     }
   });
 
+  it('finds no two classes or unique symbols with one name in a declaration file no entry point reaches', () => {
+    const result = check('orphan-chunk', { release: 'orphan-chunk' });
+    deepStrictEqual([brokenExports(result), result.undecided, result.notCompared], [[], [], []]);
+  });
+
   it('reports a generic signature TypeScript cannot relate between two copies as undecided, not as a break', () => {
     const result = check('generic', { release: 'generic' });
     deepStrictEqual(brokenExports(result), []);
@@ -622,6 +627,21 @@ describe('checkPackage on what it cannot compare', () => {
     const result = check('paths-release', { release: 'paths-release' });
     deepStrictEqual(names(result.notCompared), ['. OnlyStrings type']);
     strictEqual(result.counts.notCompared, 1);
+  });
+
+  it('lists a value typed any once as not compared, though both its comparison and its use are', () => {
+    const result = check('any-value-release', { release: 'any-value-release' });
+    deepStrictEqual(names(result.notCompared), ['. x value']);
+    deepStrictEqual(result.breaks, []);
+  });
+
+  it('reports a value typed any that is made type-only as a break, and not also as not compared', () => {
+    const result = check('any-value-typeonly', { release: 'any-value-release' });
+    deepStrictEqual(brokenExports(result), [
+      { path: '.', name: 'x', test: 'value', failsRun: true },
+    ]);
+    deepStrictEqual(result.notCompared, []);
+    strictEqual(result.counts.notCompared, 0);
   });
 });
 

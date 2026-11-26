@@ -3,9 +3,10 @@
 // two copies of a package the way a user of it relies on, and it reads each third-party package
 // from one physical copy.
 
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, realpathSync } from 'node:fs';
+import { sep } from 'node:path';
 import ts from 'typescript';
+import { entryPointsOf } from './read-api.mjs';
 
 const f = ts.factory;
 
@@ -148,16 +149,20 @@ const className = (node) => node.name?.text ?? 'default';
 // What a declaration's marker is named after: a class with private members, a unique symbol
 // constant, or a static unique symbol, as `Class.name`. A node the rewrite built is named after the
 // declaration it came from, which has a parent and its own name.
-export function markedName(rewritten) {
-  const node = ts.getOriginalNode(rewritten);
-  if (ts.isClassDeclaration(node)) {
-    return node.members.some(isPrivate) ? { kind: 'class', name: className(node) } : undefined;
+export function markedName(node) {
+  const original = ts.getOriginalNode(node);
+  if (ts.isClassDeclaration(original)) {
+    return original.members.some(isPrivate)
+      ? { kind: 'class', name: className(original) }
+      : undefined;
   }
-  if (!isUniqueSymbol(node.type)) return undefined;
-  if (ts.isVariableDeclaration(node)) return { kind: 'symbol', name: nameText(node.name) };
-  if (ts.isPropertyDeclaration(node)) {
-    const owner = ts.isClassDeclaration(node.parent) ? `${className(node.parent)}.` : '';
-    return { kind: 'symbol', name: `${owner}${nameText(node.name)}` };
+  if (!isUniqueSymbol(original.type)) return undefined;
+  if (ts.isVariableDeclaration(original)) {
+    return { kind: 'symbol', name: nameText(original.name) };
+  }
+  if (ts.isPropertyDeclaration(original)) {
+    const owner = ts.isClassDeclaration(original.parent) ? `${className(original.parent)}.` : '';
+    return { kind: 'symbol', name: `${owner}${nameText(original.name)}` };
   }
   return undefined;
 }
@@ -243,20 +248,32 @@ function print(source, rewrite) {
   return text;
 }
 
-function declarationFiles(dir) {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    if (entry.name === 'node_modules') return [];
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) return declarationFiles(path);
-    return DECLARATION_FILE.test(entry.name) ? [path] : [];
-  });
+// The declaration files of a package that its entry points reach, by their real paths. A local
+// build can leave files no entry point refers to, which a user never reads. Files outside the
+// package are read as empty, so that the walk stops at its edge.
+function reachedDeclarationFiles(packageRoot, options) {
+  const realRoot = realpathSync(packageRoot);
+  const inside = (fileName) => ts.sys.realpath(fileName).startsWith(`${realRoot}${sep}`);
+  const host = ts.createCompilerHost(options);
+  const readSourceFile = host.getSourceFile.bind(host);
+  host.getSourceFile = (fileName, languageVersion, ...rest) =>
+    inside(fileName)
+      ? readSourceFile(fileName, languageVersion, ...rest)
+      : ts.createSourceFile(fileName, '', languageVersion);
+  const entryFiles = entryPointsOf(realRoot).map(({ declarationFile }) => declarationFile);
+  const program = ts.createProgram(entryFiles, { ...options, noLib: true, types: [] }, host);
+  return program
+    .getSourceFiles()
+    .map(({ fileName }) => fileName)
+    .filter((fileName) => DECLARATION_FILE.test(fileName) && inside(fileName))
+    .map((fileName) => ts.sys.realpath(fileName));
 }
 
 // The names of the markers a package's declarations make, as `markedName` gives them, each with the
 // files that declare it.
-function markedNamesOf(packageRoot) {
+function markedNamesOf(packageRoot, options) {
   const found = { class: new Map(), symbol: new Map() };
-  for (const file of declarationFiles(packageRoot)) {
+  for (const file of reachedDeclarationFiles(packageRoot, options)) {
     const source = ts.createSourceFile(
       file,
       readFileSync(file, 'utf8'),
@@ -299,7 +316,7 @@ export function createCompareHost(options, { packageOf, isOwn }) {
   host.mergedClasses = new Set();
   const symbolNameIn = ({ name, root }) => {
     if (!symbolsByRoot.has(root)) {
-      symbolsByRoot.set(root, markedNamesOf(root));
+      symbolsByRoot.set(root, markedNamesOf(root, options));
       for (const [className, files] of symbolsByRoot.get(root).class) {
         if (files.length > 1) host.mergedClasses.add(`${name}:${className}`);
       }
