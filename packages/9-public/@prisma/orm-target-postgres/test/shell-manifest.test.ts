@@ -154,12 +154,12 @@ describe('the shell build checks a shell manifest against its bundle', () => {
     };
 
     expect(() =>
-      validateShellManifest('@prisma/orm-postgres', atRange('~8.1.0'), repoRoot, '8.1.0'),
+      validateShellManifest('@prisma/orm-postgres', atRange('~8.0.1'), repoRoot, '8.0.1'),
     ).not.toThrow();
     expect(() =>
-      validateShellManifest('@prisma/orm-postgres', atRange('8.1.0'), repoRoot, '8.1.0'),
+      validateShellManifest('@prisma/orm-postgres', atRange('8.0.1'), repoRoot, '8.0.1'),
     ).toThrow(
-      'peerDependencies["@prisma/orm-framework"] should be "workspace:~8.1.0", got "workspace:8.1.0"',
+      'peerDependencies["@prisma/orm-framework"] should be "workspace:~8.0.1", got "workspace:8.0.1"',
     );
   });
 
@@ -187,7 +187,7 @@ describe('the shell build checks a shell manifest against its bundle', () => {
       writeFileSync(postgres, JSON.stringify(manifest));
 
       expect(() =>
-        validateShellManifest('@prisma/orm-postgres', facadeManifest(), scratch, '8.1.0'),
+        validateShellManifest('@prisma/orm-postgres', facadeManifest(), scratch, '8.0.1'),
       ).toThrow('@prisma/orm-postgres (ga) names @prisma/orm-mongo (ea)');
     } finally {
       rmSync(scratch, { recursive: true, force: true });
