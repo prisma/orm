@@ -1,6 +1,6 @@
-export type { ImportRequirement } from '@internal/ts-render';
+export type { JsonValue } from '@internal/ts-render';
 export type {
-  ConfigExpression,
+  ContractEntry,
   ContractEntryInput,
   InitContribution,
   InitProbeResult,

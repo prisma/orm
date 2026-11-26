@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ConfigExpression } from '../../../src/commands/init/init-contribution';
+import type { ContractEntry } from '../../../src/commands/init/init-contribution';
 import {
   configFile,
   defaultContractEntry,
@@ -57,25 +57,20 @@ describe('templates', () => {
       expect(importLines).toHaveLength(1);
     });
 
-    it('writes the expression a contribution gives and merges its imports with its own', () => {
-      const contract: ConfigExpression = {
-        renderTypeScript: () => "acmeContract('./prisma/contract.acme', { level: 3 })",
-        importRequirements: () => [
-          { moduleSpecifier: 'acme-db/config', symbol: 'acmeContract' },
-          { moduleSpecifier: 'acme-db/levels', symbol: 'LEVELS' },
-        ],
+    it('writes a value entry as a literal and adds no import', () => {
+      const contract: ContractEntry = {
+        value: { path: './prisma/contract.acme', level: 3, tags: ['a'], strict: true },
       };
 
       expect(configFile({ configModule: 'acme-db/config', contract, output: undefined })).toBe(
         [
           "import 'dotenv/config';",
           "import { definePrismaConfig } from '@prisma/cli-engine';",
-          "import { acmeContract, defineConfig as ormConfig } from 'acme-db/config';",
-          "import { LEVELS } from 'acme-db/levels';",
+          "import { defineConfig as ormConfig } from 'acme-db/config';",
           '',
           'export default definePrismaConfig({',
           '  orm: ormConfig({',
-          "    contract: acmeContract('./prisma/contract.acme', { level: 3 }),",
+          '    contract: { path: "./prisma/contract.acme", level: 3, tags: ["a"], strict: true },',
           '    db: {',
           "      connection: process.env['DATABASE_URL']!,",
           '    },',
@@ -84,6 +79,49 @@ describe('templates', () => {
           '',
         ].join('\n'),
       );
+    });
+
+    it('writes a call entry and merges its import with its own', () => {
+      const sameModule: ContractEntry = {
+        call: {
+          module: 'acme-db/config',
+          export: 'acmeContract',
+          args: ['./prisma/contract.acme', { level: 3 }],
+        },
+      };
+      const otherModule: ContractEntry = {
+        call: { module: 'acme-db/levels', export: 'levelled', args: [] },
+      };
+
+      expect(
+        configFile({ configModule: 'acme-db/config', contract: sameModule, output: 'src/acme' }),
+      ).toBe(
+        [
+          "import 'dotenv/config';",
+          "import { definePrismaConfig } from '@prisma/cli-engine';",
+          "import { acmeContract, defineConfig as ormConfig } from 'acme-db/config';",
+          '',
+          'export default definePrismaConfig({',
+          '  orm: ormConfig({',
+          '    contract: acmeContract("./prisma/contract.acme", { level: 3 }),',
+          '    output: "src/acme",',
+          '    db: {',
+          "      connection: process.env['DATABASE_URL']!,",
+          '    },',
+          '  }),',
+          '});',
+          '',
+        ].join('\n'),
+      );
+      const other = configFile({
+        configModule: 'acme-db/config',
+        contract: otherModule,
+        output: undefined,
+      });
+      expect(other).toContain(
+        "import { defineConfig as ormConfig } from 'acme-db/config';\nimport { levelled } from 'acme-db/levels';\n",
+      );
+      expect(other).toContain('    contract: levelled(),\n');
     });
   });
 

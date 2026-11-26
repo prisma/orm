@@ -1,95 +1,74 @@
 import { describe, expect, it } from 'vitest';
 import { contractEntryFor } from '../../../src/commands/init/contract-entry';
 import type { InitContribution } from '../../../src/commands/init/init-contribution';
-import { unlistedTargetPackage } from '../../../src/commands/init/target-packages';
 import { STUB_CONTRIBUTION, STUB_PACKAGE } from '../../orm/init-prisma7-fixtures';
 
-const target = unlistedTargetPackage(STUB_PACKAGE);
+const owner = { packageName: STUB_PACKAGE, unlisted: true };
+const PSL_CONTRACT = { kind: 'contract', mode: 'psl', path: './prisma/contract.prisma' } as const;
 
-function rendered(contribution: InitContribution, input: Parameters<typeof contractEntryFor>[1]) {
-  const expression = contractEntryFor(contribution, input, target);
-  return {
-    source: expression.renderTypeScript(),
-    imports: expression.importRequirements(),
-  };
-}
-
-function withEntry(contractEntry: () => unknown): InitContribution {
+function withEntry(contractEntry: (...args: unknown[]) => unknown): InitContribution {
   return Object.assign({}, STUB_CONTRIBUTION, { contractEntry });
 }
 
 describe('contractEntryFor', () => {
   describe('a contribution without contractEntry', () => {
-    it('gets the contract path as a string', () => {
-      expect(
-        rendered(STUB_CONTRIBUTION, {
-          kind: 'contract',
-          mode: 'psl',
-          path: './prisma/contract.prisma',
-        }),
-      ).toEqual({ source: '"./prisma/contract.prisma"', imports: [] });
+    it('gets the contract path as a value', () => {
+      expect(contractEntryFor(STUB_CONTRIBUTION, PSL_CONTRACT, owner)).toEqual({
+        value: './prisma/contract.prisma',
+      });
     });
 
-    it('gets prisma7Schema(<path>) imported from its config module', () => {
+    it('gets a call of prisma7Schema from its config module with the schema path', () => {
       expect(
-        rendered(STUB_CONTRIBUTION, { kind: 'prisma7-schema', path: 'prisma/schema.prisma' }),
+        contractEntryFor(
+          STUB_CONTRIBUTION,
+          { kind: 'prisma7-schema', path: 'prisma/schema.prisma' },
+          owner,
+        ),
       ).toEqual({
-        source: 'prisma7Schema("prisma/schema.prisma")',
-        imports: [{ moduleSpecifier: `${STUB_PACKAGE}/config`, symbol: 'prisma7Schema' }],
+        call: {
+          module: `${STUB_PACKAGE}/config`,
+          export: 'prisma7Schema',
+          args: ['prisma/schema.prisma'],
+        },
       });
     });
   });
 
   it('passes the contract source to the contribution and keeps what it returns', () => {
     const inputs: unknown[] = [];
-    const contribution = withEntry((...args: unknown[]) => {
+    const entry = {
+      call: { module: 'stub/config', export: 'stubContract', args: ['./x', { level: 3 }, null] },
+    };
+    const contribution = withEntry((...args) => {
       inputs.push(...args);
-      return {
-        renderTypeScript: () => "stubContract('./prisma/contract.prisma')",
-        importRequirements: () => [{ moduleSpecifier: 'stub/config', symbol: 'stubContract' }],
-      };
+      return entry;
     });
 
-    expect(
-      rendered(contribution, { kind: 'contract', mode: 'psl', path: './prisma/contract.prisma' }),
-    ).toEqual({
-      source: "stubContract('./prisma/contract.prisma')",
-      imports: [{ moduleSpecifier: 'stub/config', symbol: 'stubContract' }],
-    });
-    expect(inputs).toEqual([{ kind: 'contract', mode: 'psl', path: './prisma/contract.prisma' }]);
+    expect(contractEntryFor(contribution, PSL_CONTRACT, owner)).toEqual(entry);
+    expect(inputs).toEqual([PSL_CONTRACT]);
   });
 
   it.each<[string, unknown]>([
     ['nothing', undefined],
-    ['a string', '"./prisma/contract.prisma"'],
-    ['an object without importRequirements', { renderTypeScript: () => '"x"' }],
+    ['a bare string', './prisma/contract.prisma'],
+    ['both a value and a call', { value: 'x', call: { module: 'm', export: 'f', args: [] } }],
+    ['a value that is not JSON', { value: { path: './x', at: new Date(0) } }],
+    ['a value that is undefined', { value: undefined }],
+    ['a value holding a number that is not finite', { value: Number.NaN }],
+    ['a call without a module', { call: { export: 'f', args: [] } }],
     [
-      'a renderTypeScript that returns no text',
-      {
-        renderTypeScript: () => '',
-        importRequirements: () => [],
-      },
+      'a call of a name that is not an identifier',
+      { call: { module: 'm', export: 'a-b', args: [] } },
     ],
-    [
-      'importRequirements that are not a list',
-      {
-        renderTypeScript: () => '"x"',
-        importRequirements: () => 'stub/config',
-      },
-    ],
-    [
-      'an import requirement without a symbol',
-      {
-        renderTypeScript: () => '"x"',
-        importRequirements: () => [{ moduleSpecifier: 'stub/config' }],
-      },
-    ],
+    ['a call whose arguments are not a list', { call: { module: 'm', export: 'f', args: 'x' } }],
+    ['a call with a function argument', { call: { module: 'm', export: 'f', args: [() => 1] } }],
   ])('refuses a contractEntry that returns %s', (_case, returned) => {
     expect(() =>
       contractEntryFor(
         withEntry(() => returned),
-        { kind: 'contract', mode: 'psl', path: './prisma/contract.prisma' },
-        target,
+        PSL_CONTRACT,
+        owner,
       ),
     ).toThrow(
       expect.objectContaining({

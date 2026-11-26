@@ -219,6 +219,10 @@ function planScaffold(ctx: {
     contribution.probe !== undefined,
   );
 
+  const contributionOwner = {
+    packageName: inputs.target.packageName,
+    unlisted: inputs.target.listed === undefined,
+  };
   const renames = planConfigRename(cwd, inputs, warnings);
 
   const files: FileEntry[] = [];
@@ -232,7 +236,7 @@ function planScaffold(ctx: {
           contract: contractEntryFor(
             contribution,
             { kind: 'contract', mode: source.authoring, path: configContractPath },
-            inputs.target,
+            contributionOwner,
           ),
           output: undefined,
         }),
@@ -257,7 +261,7 @@ function planScaffold(ctx: {
           contract: contractEntryFor(
             contribution,
             { kind: 'prisma7-schema', path: source.schemaPath },
-            inputs.target,
+            contributionOwner,
           ),
           output: outputDir,
         }),

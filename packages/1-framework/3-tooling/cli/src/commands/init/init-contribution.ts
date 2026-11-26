@@ -1,16 +1,24 @@
 import type { ContractSourceFormat } from '@internal/config/config-types';
-import type { ImportRequirement } from '@internal/ts-render';
+import type { JsonValue } from '@internal/ts-render';
 
 /** What the config's `contract:` entry points at: a contract file `init` wrote, or the project's Prisma 7 schema. */
 export type ContractEntryInput =
   | { readonly kind: 'contract'; readonly mode: ContractSourceFormat; readonly path: string }
   | { readonly kind: 'prisma7-schema'; readonly path: string };
 
-/** A TypeScript expression for `prisma.config.ts`, with the imports it needs. */
-export interface ConfigExpression {
-  renderTypeScript(): string;
-  importRequirements(): readonly ImportRequirement[];
-}
+/**
+ * The config's `contract:` entry as data, so `init` can both write it and run it: a JSON value, or
+ * a call of a function a module exports, with JSON arguments.
+ */
+export type ContractEntry =
+  | { readonly value: JsonValue }
+  | {
+      readonly call: {
+        readonly module: string;
+        readonly export: string;
+        readonly args: readonly JsonValue[];
+      };
+    };
 
 export interface QuickReferenceInput {
   readonly mode: ContractSourceFormat;
@@ -99,9 +107,9 @@ export interface InitContribution {
   /** The quick reference for a project that keeps its Prisma 7 schema as the contract source. */
   readonly prisma7QuickReference?: (input: Prisma7QuickReferenceInput) => string;
   /**
-   * The value of the config's `contract:` entry. A plain object with the two methods, not a class
-   * instance. Without it, `init` writes the path as a string, or `prisma7Schema(<path>)` imported
-   * from `configModule`.
+   * The config's `contract:` entry. `init` writes it into `prisma.config.ts`, and runs it to check a
+   * Prisma 7 schema before writing. Without it, the entry is the path, or a call of `prisma7Schema`
+   * from `configModule` with the path.
    */
-  readonly contractEntry?: (input: ContractEntryInput) => ConfigExpression;
+  readonly contractEntry?: (input: ContractEntryInput) => ContractEntry;
 }
