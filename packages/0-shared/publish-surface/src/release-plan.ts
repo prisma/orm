@@ -338,13 +338,14 @@ function nextVersion(
       `${name}: release ${major}.${minor} is older than its current version "${text}"`,
     );
   }
+  const first = (): string => firstVersionOfMinor({ major, minor }, level);
+  if (major > current.major) return first();
   const currentLevel = current.level?.name ?? 'ga';
   if (currentLevel === 'ga' && level !== 'ga') {
     throw new ReleasePlanError(
-      `${name}: its level is ${level} but it is GA at "${text}"; whether a GA package may go below GA again is not decided, so the release scripts do not do it`,
+      `${name}: its level is ${level} but it is GA at "${text}"; a GA package stays GA until the next major version`,
     );
   }
-  const first = (): string => firstVersionOfMinor({ major, minor }, level);
   if (order > 0) return first();
   if (LEVEL_ORDER[level] < LEVEL_ORDER[currentLevel]) {
     throw new ReleasePlanError(

@@ -452,11 +452,20 @@ describe('planRelease', () => {
 
   it.each([
     ['at a new minor', { major: 8, minor: 2 }],
-    ['at a new major', { major: 9, minor: 0 }],
     ['within the minor', { major: 8, minor: 1 }],
-  ])('refuses to move a GA package below GA %s, saying it is not decided', (_case, release) => {
+  ])('keeps a GA package GA %s, until the next major', (_case, release) => {
     expect(() => planRelease(input({ release, levelChanges: { postgres: 'preview' } }))).toThrow(
-      /postgres.*not decided/,
+      /postgres.*stays GA until the next major version/,
+    );
+  });
+
+  it('lets a GA package start a new major below GA, tagged with its level', () => {
+    const plan = planRelease(
+      input({ release: { major: 9, minor: 0 }, levelChanges: { postgres: 'preview' } }),
+    );
+
+    expect(line(plan, 'postgres')).toBe(
+      '9.0.0-preview.0 preview family ~9.0.0 framework ~9.0.0 target ~9.0.0',
     );
   });
 
