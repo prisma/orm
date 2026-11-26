@@ -98,6 +98,8 @@ Neighbor processing order is stable by a sort key tuple:
 
 If labels are absent the order falls back to the remaining keys. Key (1) applies only inside `findPathWithInvariants`; structural `findPath` ignores it (preserving byte-for-byte routing parity for callers that don't thread invariants).
 
+`findPathWithInvariants` ranks the self-edges at each contract by keys (2) to (5) and prunes by that rank, so those keys must give a fixed order per contract that does not depend on the search's progress. When a route runs several self-edges on one contract, this order is also the order they run in. See [ADR 208](ADR%20208%20-%20Invariant-aware%20migration%20routing.md) § How the search works, and what it costs.
+
 ### Graph version and caching
 
 - `graphVersion = sha256(sorted(migrationHash, from, to, opsHash))`

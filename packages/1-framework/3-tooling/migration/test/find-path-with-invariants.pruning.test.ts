@@ -14,11 +14,12 @@ function pkg(
   to: string,
   dirName: string,
   invariants: readonly string[] = [],
+  createdAt = `2026-02-25T14:00:00.000Z-${String(migrationCounter++).padStart(4, '0')}`,
 ): OnDiskMigrationPackage {
   const metadata = createTestMetadata({
     from,
     to,
-    createdAt: `2026-02-25T14:00:00.000Z-${String(migrationCounter++).padStart(4, '0')}`,
+    createdAt,
     providedInvariants: invariants,
   });
   const ops = createTestOps();
@@ -72,6 +73,21 @@ describe('findPathWithInvariants — states that can no longer cover a required 
     },
     timeouts.vitestPackageDefault,
   );
+
+  it('runs several self-edges on one contract in createdAt order, not in the order they were added or named', () => {
+    const graph = reconstructGraph([
+      pkg(E, 'H', 'm_init'),
+      pkg('H', 'H', 'm_c', ['c'], '2026-03-02T00:00:00.000Z'),
+      pkg('H', 'H', 'm_a', ['a'], '2026-03-03T00:00:00.000Z'),
+      pkg('H', 'H', 'm_b', ['b'], '2026-03-01T00:00:00.000Z'),
+    ]);
+    expect(dirNames(findPathWithInvariants(graph, E, 'H', new Set(['a', 'b', 'c'])))).toEqual([
+      'm_init',
+      'm_b',
+      'm_c',
+      'm_a',
+    ]);
+  });
 
   it('skips a self-edge provider when a later migration on the route provides the invariant', () => {
     const graph = reconstructGraph([

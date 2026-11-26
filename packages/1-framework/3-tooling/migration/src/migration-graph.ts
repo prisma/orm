@@ -14,8 +14,10 @@ function forwardNeighbours(graph: MigrationGraph, node: string) {
  * Used by path-finding so the resulting shortest path is stable across runs.
  */
 function sortedForwardNeighbours(graph: MigrationGraph, node: string) {
-  const edges = graph.forwardChain.get(node) ?? [];
-  return [...edges].sort(compareTieBreak).map((edge) => ({ next: edge.to, edge }));
+  return sortedNeighbors(graph.forwardChain.get(node) ?? []).map((edge) => ({
+    next: edge.to,
+    edge,
+  }));
 }
 
 /** Reverse-edge neighbours: edge `e` from `n` visits `e.from` next. */
@@ -84,6 +86,13 @@ function sortedNeighbors(edges: readonly MigrationEdge[]): readonly MigrationEdg
   return [...edges].sort(compareTieBreak);
 }
 
+function compareUsefulFirst(
+  a: { readonly useful: boolean },
+  b: { readonly useful: boolean },
+): number {
+  return Number(b.useful) - Number(a.useful);
+}
+
 /**
  * Find the shortest path from `fromHash` to `toHash` using BFS over the
  * contract-hash graph. Returns the ordered list of edges, or null if no path
@@ -140,10 +149,10 @@ export function findPath(
  * over is out of reach until the search leaves the node. Neither rule changes the returned path;
  * ADR 208 gives the argument.
  *
- * Neighbour ordering when `required ≠ ∅`: edges covering ≥1 still-needed
- * invariant come first, with `createdAt → to → migrationHash` as the
- * secondary key. The heuristic steers BFS toward the satisfying path;
- * correctness (shortest, deterministic) does not depend on it.
+ * Neighbour ordering: edges covering a still-needed invariant come first, then `compareTieBreak`.
+ * Whether a route is found, and that it is shortest, does not depend on this order. Which of several
+ * equally short routes is returned does, and it stays the route earlier releases returned only
+ * while `rankSelfEdges` ranks self-edges by the same `compareTieBreak`.
  */
 export function findPathWithInvariants(
   graph: MigrationGraph,
@@ -205,10 +214,7 @@ export function findPathWithInvariants(
         ({ edge, useful, nextState }) =>
           takesSelfEdgesInOrder(s, edge, useful) && !cannotReachGoal(nextState),
       )
-      .sort((a, b) => {
-        if (a.useful !== b.useful) return a.useful ? -1 : 1;
-        return compareTieBreak(a.edge, b.edge);
-      })
+      .sort((a, b) => compareUsefulFirst(a, b) || compareTieBreak(a.edge, b.edge))
       .map(({ edge, nextState }) => ({ next: nextState, edge }));
   };
 
@@ -250,8 +256,8 @@ function collectNodesReaching(graph: MigrationGraph, seeds: Iterable<string>): S
 }
 
 /**
- * Each self-edge's position among its node's self-edges in tie-break order. This order must be the
- * order in which `findPathWithInvariants` explores useful neighbours.
+ * Each self-edge's position among its node's self-edges in `compareTieBreak` order, the order in
+ * which `findPathWithInvariants` explores useful neighbours.
  */
 function rankSelfEdges(graph: MigrationGraph): ReadonlyMap<MigrationEdge, number> {
   const ranks = new Map<MigrationEdge, number>();
