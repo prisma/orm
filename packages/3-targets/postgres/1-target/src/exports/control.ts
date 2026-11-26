@@ -1,12 +1,23 @@
+import type { Contract } from '@internal/contract/types';
 import type { SqlControlTargetDescriptor } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import type {
   ControlTargetInstance,
   MigrationRunner,
 } from '@internal/framework-components/control';
+import { contractSpaceFromJson } from '@internal/migration-tools/spaces';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import { setFallbackTemporal } from '@internal/type-implementations/temporal';
 import { blindCast } from '@internal/utils/casts';
 import { Temporal as fallbackTemporal } from 'temporal-polyfill/full/implementation';
+import createTablesMetadata from '../../migrations/20261126T1200_create_prisma_tables/migration.json' with {
+  type: 'json',
+};
+import createTablesOps from '../../migrations/20261126T1200_create_prisma_tables/ops.json' with {
+  type: 'json',
+};
+import headRef from '../../migrations/refs/head.json' with { type: 'json' };
+import contractJson from '../contract.json' with { type: 'json' };
 import { postgresTargetDescriptorMeta } from '../core/descriptor-meta';
 import { recordedAccessChangesOf } from '../core/migrations/access-changes';
 import { diffPostgresSchema } from '../core/migrations/diff-database-schema';
@@ -24,6 +35,18 @@ import {
   postgresDiffSubjectGranularity,
 } from '../core/schema-ir/schema-node-kinds';
 
+const prismaTablesSpace = contractSpaceFromJson<Contract<SqlStorage>>({
+  contractJson,
+  migrations: [
+    {
+      dirName: '20261126T1200_create_prisma_tables',
+      metadata: createTablesMetadata,
+      ops: createTablesOps,
+    },
+  ],
+  headRef,
+});
+
 function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
   'postgres',
   PostgresPlanTargetDetails
@@ -32,6 +55,7 @@ function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
   return {
     ...postgresTargetDescriptorMeta,
     contractSerializer: new PostgresContractSerializer(),
+    contractSpace: prismaTablesSpace,
     schemaVerifier: new PostgresSchemaVerifier(),
     inferPslContract(schema, context, describedContracts) {
       PostgresDatabaseSchemaNode.assert(schema);
