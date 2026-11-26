@@ -134,7 +134,7 @@ The packages of one release are tested together, so among themselves they accept
 - A GA release is published under the `latest` dist-tag.
 - A release below GA is published under `latest` if the package has never had a GA release in any major version, so that a plain install works and the version shows the level. Otherwise it is published under a tag named after its level: `ea`, `preview` or `rc`.
 
-Two kinds of version say nothing about a package's level and do not count as a GA release: a `0.x` version, which Semantic Versioning calls initial development, and an `8.0.0-rc.N` version, published before levels existed.
+A `0.x` version, which Semantic Versioning calls initial development, and an `8.0.0-rc.N` version, published before levels existed, say nothing about a package's level and do not count as a GA release.
 
 ## What an application writes
 

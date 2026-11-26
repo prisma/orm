@@ -109,7 +109,7 @@ The application builds its client from the facade and passes it the extensions' 
 
 The framework recognises a data-type value by the copy that made it. The value carries a private field that only the copy that constructed it can read, so a check in the other copy refuses it with the error shown above. TypeScript treats a class with a private field as its own type, so the two copies' classes are different types, and code that passes one where the other is expected does not compile.
 
-Two copies are harmless when they never exchange values. Prisma Composer (Prisma's deployment tool) loads a second copy of the ORM beside the application on purpose, for its own work, and those applications work.
+Two copies are harmless when they never exchange values. Prisma Composer (Prisma's deployment tool) relies on this: it loads a second copy of the ORM beside the application on purpose, for its own work.
 
 The `prisma` command-line tool is a harder case. It installs `@prisma/orm-toolchain` as its own dependency, at its own version, and Composer does the same. Some values from the application's config file do reach that copy, and some of them are recognised by the copy that made them. How the tool works with an application whose packages are at another version is decided separately.
 
