@@ -14,7 +14,7 @@ Six slices, one pull request each, in this order. PostgreSQL comes first because
 | 2. PostgreSQL: split the marker into signatures and configuration | Not started |
 | 3. Rename the concept from "marker" to "signature" | Not started |
 | 4. SQLite, MySQL, MariaDB and MongoDB | Not started |
-| 5. Prisma Studio reads the new names | Being built on a local branch of prisma/studio; not pushed |
+| 5. Prisma Studio reads the new names | [prisma/studio#1606](https://github.com/prisma/studio/pull/1606) open, reviewed twice, waiting for a Studio maintainer. Console (`prisma/pdp-control-plane`) then needs that Studio release |
 | 6. Decide whether PostgreSQL's contract table becomes a documented feature | Not started |
 
 ## Slice 1. PostgreSQL: the `_prisma` contract space, applied first, and the schema rename
@@ -47,7 +47,9 @@ Six slices, one pull request each, in this order. PostgreSQL comes first because
 
 ## Slice 5. Prisma Studio reads the new names
 
-**Outcome.** Studio's Migrations view reads `_prisma.ledger` and `_prisma.contract`, and falls back to `prisma_contract` for a database not yet brought up to date. Its queries are in `data/migrations.ts` in prisma/studio. A pull request there, merged in step with the release that contains slice 1.
+**Outcome.** Studio's Migrations view reads `_prisma.ledger` and `_prisma.contract`, and falls back to `prisma_contract` for a database not yet brought up to date. Its queries are in `data/migrations.ts` in prisma/studio. A pull request there. It is safe to release at any time, and must be released before the ORM release that renames the schema.
+
+**Also.** Console (`prisma/pdp-control-plane`) reads the same tables through Studio's `readRecordedSchema` (`packages/interactors/src/database/getRecordedDatabaseSchema.ts`), so it needs the Studio release that contains this change before that ORM release ships. The upgrade instructions' line about updating Studio names the Studio version once it is published.
 
 ## Slice 6. Decide whether PostgreSQL's contract table becomes a documented feature
 
