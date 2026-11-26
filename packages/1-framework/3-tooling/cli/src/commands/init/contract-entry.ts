@@ -6,7 +6,12 @@ import type {
   ContractEntryInput,
   InitContribution,
 } from './init-contribution';
-import { configFile, configFileImports, defaultContractEntry } from './templates/code-templates';
+import {
+  CONFIG_FILE_GLOBALS,
+  configFile,
+  configFileImports,
+  defaultContractEntry,
+} from './templates/code-templates';
 
 const ContractEntrySchema = type({ value: 'unknown', '+': 'reject' }).or({
   call: {
@@ -113,6 +118,9 @@ function unwritableCall(
   }
   if (RESERVED_WORDS.has(call.symbol)) {
     return `a call of ${call.symbol}, a reserved word that cannot be imported by name`;
+  }
+  if (CONFIG_FILE_GLOBALS.includes(call.symbol)) {
+    return `a call of ${call.symbol}, a global prisma.config.ts reads, which an import would hide`;
   }
   const bound = configFileImports(configModule).find(
     (requirement) => (requirement.alias ?? requirement.symbol) === call.symbol,

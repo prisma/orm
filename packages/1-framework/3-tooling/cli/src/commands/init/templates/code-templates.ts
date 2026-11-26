@@ -47,6 +47,9 @@ function contractImports(entry: ContractEntryExpression): readonly ImportRequire
     : [];
 }
 
+/** The globals the config reads; an import of the same name would hide them. */
+export const CONFIG_FILE_GLOBALS: readonly string[] = ['process'];
+
 /** The imports the config always has; the names they bind cannot be taken by the contract entry. */
 export function configFileImports(configModule: string): readonly ImportRequirement[] {
   return [

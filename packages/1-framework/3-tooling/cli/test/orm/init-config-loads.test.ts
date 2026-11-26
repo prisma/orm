@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { timeouts } from '@repo/test-utils';
 import { dirname, join } from 'pathe';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -66,6 +66,22 @@ function inputs(
   };
 }
 
+/** The `contract:` line of a file init wrote. */
+function contractLine(file: string): string {
+  const line = readFileSync(join(projectDir, file), 'utf-8')
+    .split('\n')
+    .find((candidate) => candidate.trimStart().startsWith('contract:'));
+  if (line === undefined) {
+    throw new Error(`${file} has no contract: line`);
+  }
+  return line.trim();
+}
+
+/** The quick references quote strings with single quotes, and the config with double quotes. */
+function singleQuoted(line: string): string {
+  return line.replaceAll('"', "'");
+}
+
 async function loadWrittenConfig(resolved: ResolvedInitInputs) {
   await scaffoldProject({ cwd: projectDir, inputs: resolved, packageManager: 'pnpm' });
   return loadOrmConfig({ cwd: projectDir });
@@ -84,6 +100,9 @@ describe.each(CASES)('the config init writes for $label', ({ target }) => {
 
       expect(loaded.diagnostics).toEqual([]);
       expect(loaded.files).toHaveLength(1);
+      expect(singleQuoted(contractLine('prisma-8.md'))).toBe(
+        singleQuoted(contractLine('prisma.config.ts')),
+      );
     },
     timeouts.coldTransformImport,
   );
@@ -115,6 +134,9 @@ describe.each(CASES.filter((entry) => entry.prisma7))(
 
         expect(loaded.diagnostics).toEqual([]);
         expect(loaded.files).toHaveLength(1);
+        expect(singleQuoted(contractLine('prisma-8.md'))).toBe(
+          singleQuoted(contractLine('prisma.config.ts')),
+        );
       },
       timeouts.coldTransformImport,
     );

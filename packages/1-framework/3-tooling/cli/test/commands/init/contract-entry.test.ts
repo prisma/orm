@@ -67,64 +67,94 @@ describe('contractEntryFor', () => {
     ).toEqual(entry);
   });
 
-  it.each<[string, unknown]>([
-    ['nothing', undefined],
-    ['a bare string', './prisma/contract.prisma'],
+  const SHAPE = 'neither { value } nor { call: { moduleSpecifier, symbol, args } }';
+  const NOT_JSON = 'a value that is not JSON';
+  const unwritableModule = (moduleSpecifier: string) =>
+    `a call from the module ${JSON.stringify(moduleSpecifier)}, which is empty or holds a line break or another control character`;
+
+  it.each<[string, unknown, string]>([
+    ['nothing', undefined, SHAPE],
+    ['a bare string', './prisma/contract.prisma', SHAPE],
     [
       'both a value and a call',
       { value: 'x', call: { moduleSpecifier: 'm', symbol: 'f', args: [] } },
+      SHAPE,
     ],
-    ['a value that is not JSON', { value: { path: './x', at: new Date(0) } }],
-    ['a value that is undefined', { value: undefined }],
-    ['a value holding a number that is not finite', { value: Number.NaN }],
-    ['a call without a module specifier', { call: { symbol: 'f', args: [] } }],
+    ['a value that is not JSON', { value: { path: './x', at: new Date(0) } }, NOT_JSON],
+    ['a value that is undefined', { value: undefined }, NOT_JSON],
+    ['a value holding a number that is not finite', { value: Number.NaN }, NOT_JSON],
+    [
+      'a value with an undefined property',
+      { value: { path: './x', databaseVersion: undefined } },
+      NOT_JSON,
+    ],
+    ['a call without a module specifier', { call: { symbol: 'f', args: [] } }, SHAPE],
     [
       'a call of a name that is not an identifier',
       { call: { moduleSpecifier: 'm', symbol: 'a-b', args: [] } },
+      SHAPE,
     ],
     [
       'a call whose arguments are not a list',
       { call: { moduleSpecifier: 'm', symbol: 'f', args: 'x' } },
+      SHAPE,
+    ],
+    [
+      'a call with an extra key',
+      { call: { moduleSpecifier: 'm', symbol: 'f', args: [], alias: 'g' } },
+      SHAPE,
     ],
     [
       'a call with a function argument',
       { call: { moduleSpecifier: 'm', symbol: 'f', args: [() => 1] } },
-    ],
-    ['a value with an undefined property', { value: { path: './x', databaseVersion: undefined } }],
-    [
-      'a call with an extra key',
-      { call: { moduleSpecifier: 'm', symbol: 'f', args: [], alias: 'g' } },
+      'a call of f with an argument that is not JSON',
     ],
     [
       'a call from an empty module specifier',
       { call: { moduleSpecifier: '', symbol: 'f', args: [] } },
+      unwritableModule(''),
     ],
     [
       'a call from a blank module specifier',
       { call: { moduleSpecifier: ' ', symbol: 'f', args: [] } },
+      unwritableModule(' '),
     ],
     [
       'a call from a module specifier with a line break',
       { call: { moduleSpecifier: 'stub/con\nfig', symbol: 'f', args: [] } },
+      unwritableModule('stub/con\nfig'),
     ],
     [
       'a call from a module specifier with a control character',
       { call: { moduleSpecifier: 'stub/\u0007config', symbol: 'f', args: [] } },
+      unwritableModule('stub/\u0007config'),
     ],
-    ['a call of a reserved word', { call: { moduleSpecifier: 'm', symbol: 'default', args: [] } }],
+    [
+      'a call of a reserved word',
+      { call: { moduleSpecifier: 'm', symbol: 'default', args: [] } },
+      'a call of default, a reserved word that cannot be imported by name',
+    ],
     [
       'a call of a strict-mode reserved word',
       { call: { moduleSpecifier: 'm', symbol: 'let', args: [] } },
+      'a call of let, a reserved word that cannot be imported by name',
+    ],
+    [
+      'a call of process, a global the config reads',
+      { call: { moduleSpecifier: 'm', symbol: 'process', args: [] } },
+      'a call of process, a global prisma.config.ts reads, which an import would hide',
     ],
     [
       'a call of ormConfig, which the config binds to defineConfig',
       { call: { moduleSpecifier: `${STUB_PACKAGE}/config`, symbol: 'ormConfig', args: [] } },
+      `a call of ormConfig from ${STUB_PACKAGE}/config, a name prisma.config.ts already imports`,
     ],
     [
       'a call of definePrismaConfig from another module',
       { call: { moduleSpecifier: 'm', symbol: 'definePrismaConfig', args: [] } },
+      'a call of definePrismaConfig from m, a name prisma.config.ts already imports',
     ],
-  ])('refuses a contractEntry that returns %s', (_case, returned) => {
+  ])('refuses a contractEntry that returns %s', (_case, returned, reason) => {
     expect(() =>
       contractEntryFor(
         withEntry(() => returned),
@@ -135,7 +165,7 @@ describe('contractEntryFor', () => {
       expect.objectContaining({
         code: 'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
         why: expect.stringContaining(
-          `The default export of \`${STUB_PACKAGE}/init\` is not an init contribution: its contractEntry returned`,
+          `The default export of \`${STUB_PACKAGE}/init\` is not an init contribution: its contractEntry returned ${reason}`,
         ),
       }),
     );

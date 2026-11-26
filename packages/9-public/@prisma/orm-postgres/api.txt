@@ -435,6 +435,7 @@
 ./target/runtime: everything from @prisma/orm-target-postgres/target/runtime
 ./target/runtime: export default from @prisma/orm-target-postgres/target/runtime
 ./target/schema-ir-annotations: everything from @prisma/orm-target-postgres/target/schema-ir-annotations
+./target/server-version-range: everything from @prisma/orm-target-postgres/target/server-version-range
 ./target/server-version: everything from @prisma/orm-target-postgres/target/server-version
 ./target/sql-utils: everything from @prisma/orm-target-postgres/target/sql-utils
 ./target/types: everything from @prisma/orm-target-postgres/target/types
