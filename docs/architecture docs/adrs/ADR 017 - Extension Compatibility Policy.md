@@ -13,7 +13,7 @@
 - Define a compatibility policy for third-party lanes and alternate runtimes
 - Conformance is measured against a small set of normative contracts:
   - Data contract JSON, Unified Plan model, Plan identity and hashing, Hook API v1
-- State which combinations are supported through the versions of the packages that publish these contracts ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md))
+- Say which combinations are supported through package versions: the version of each package that publishes one of these contracts tells a contributor what it works with ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md))
 
 ## Requirements for third-party lanes
 
@@ -93,8 +93,8 @@ We will certify third-party components at L0, L1, or L2.
 
 ## Versioning
 
-- **Data contract JSON**: the contract file carries its own format version.
-- **Plan model, hook API and adapter SPI**: they are published in the platform packages and versioned with them. All our packages share one release number, and what is GA stays compatible within a major version. A third-party lane or runtime names the platform packages it builds on at the ranges an extension uses ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
+- **`contract.json`:** the file records the version of its own format.
+- **The plan model, the hook API and the adapter SPI** are published in the platform packages and have those packages' versions. All our packages share one release number, and what is Generally Available stays compatible within a major version. A lane or a runtime written by a third party lists the platform packages it is built on as peer dependencies, at the ranges an extension uses ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
 
 ### Rules
 
@@ -147,4 +147,4 @@ We will certify third-party components at L0, L1, or L2.
 
 - Adopt a formal compatibility policy for third-party lanes and alternate runtimes
 - Require honoring the Plan contract, verifying coreHash, respecting immutability, and documenting hooks
-- State compatibility through package versions and ship a conformance kit to enable safe ecosystem growth
+- Express compatibility through package versions, and ship a conformance kit, so that the ecosystem can grow safely

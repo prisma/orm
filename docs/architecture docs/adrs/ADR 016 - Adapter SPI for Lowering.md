@@ -121,10 +121,10 @@ When capabilities are missing and no safe, single-statement equivalent exists, a
 - Plan hashing per ADR 013 operates on normalized SQL and parameter shape independent of lane
 
 ## Versioning policy
-- An adapter is released in its target package, at that package's version ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md))
-- A change to the SQL an adapter emits that breaks a user's query is a breaking change: in a GA package it waits for the next major version, or ships as a new API beside the old behaviour
-- Capability additions may ship in any release if they do not affect existing SQL
-- A bug fix that changes SQL is treated as breaking; there are no feature flags to guard it
+- An adapter is published inside its target package and has that package's version ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md))
+- A change to the SQL an adapter produces that breaks a user's query is a breaking change. In a GA package it waits for the next major version, or it ships as a new API beside the old behaviour
+- A new capability may ship in any release, as long as it does not change the SQL that existing queries produce
+- A bug fix that changes the SQL an adapter produces is treated as a breaking change, because there is no feature flag to put it behind
 
 ## Testing strategy
 - Golden SQL snapshots per adapter version

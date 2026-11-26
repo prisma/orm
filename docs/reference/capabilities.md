@@ -155,13 +155,13 @@ The following namespaces are reserved and cannot be used by extension packs:
 - Complex capabilities use descriptive names: `explainFormat`, `transactional_ddl`
 
 ### Maturity
-- A capability has no maturity level of its own: it has the level of the package that publishes it ([ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
-- There are no feature flags. A capability that is not ready ships in a package below Generally Available, or under a name that carries its level.
+- A capability has no maturity level of its own. It has the level of the package that publishes it ([ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
+- There are no feature flags. A capability that is not ready ships in a package below Generally Available, or under a name that starts with its level, such as `preview_`.
 
 ### Versioning
 - Capability keys are immutable once published
 - A new capability can be added in any release
-- A change to what a published key means requires a new capability key
+- Changing what a published key means requires a new capability key
 
 ## Capability Negotiation
 
