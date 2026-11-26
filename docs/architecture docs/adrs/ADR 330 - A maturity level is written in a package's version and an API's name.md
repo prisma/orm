@@ -80,9 +80,9 @@ A level is defined by the least we do for a package or an API at that level.
 ## What has a level
 
 - **A package.** Every published package of ours has a level, except one with [its own version](#packages-with-their-own-version). Each database reaches GA on its own date, when its facade does.
-- **An API.** An API is an export, or a member of one, such as a method, a property or an option. It has its package's level unless its name starts with the word for a lower level. Such a word gives the least the API is promised: after a promotion, the old name stays as a deprecated name for an API now at a higher level, and is kept until the next major version, as the API is. A member of an API below GA is at that API's level or lower.
+- **An API.** An API is an export, or a member of one, such as a method, a property or an option. It has its package's level unless its name starts with the word for a lower level. Such a word gives the least the API is promised: after a promotion, the old name stays as a deprecated name for an API now at a higher level, and is kept as long as the API is, and at most until the next major version. A member of an API below GA is at that API's level or lower.
 
-A name can only lower a level. A GA API cannot exist inside a package below GA, because the package's version already says that nothing in it is kept compatible.
+A name never claims more than its package's level. A GA API cannot exist inside a package below GA, because the package's version already says that nothing in it is kept compatible.
 
 Nothing else has a level of its own. An entrypoint (a path inside a package that code imports from, such as `@prisma/orm-toolchain/config-loader`) and a capability (a feature a database supports, which a package declares) take their package's level.
 
@@ -97,7 +97,7 @@ Nothing else has a level of its own. An entrypoint (a path inside a package that
 | Preview | `8.3.0-preview.0` | `preview_search` |
 | Early Access | `8.3.0-ea.0` | `ea_search` |
 
-The word and the name are joined by an underscore, so that the level cannot be read as part of the name: `previewImage` could be a GA API about image previews, while `preview_image` can only be an `image` API at Preview. A reader, and any tool that reads names, can then tell from the name alone the least an API is promised. Every name in TypeScript, including a config option, takes this form.
+The word and the name are joined by an underscore, so that the level cannot be read as part of the name: `previewImage` could be a GA API about image previews, while `preview_image` can only be an `image` API at Preview or above. A reader, and any tool that reads names, can then tell from the name alone the least an API is promised. Every name in TypeScript, including a config option, takes this form.
 
 A name outside TypeScript uses the same word with that kind of name's own separator: a command-line flag is `--preview-search`, and a contract-language attribute or an environment variable follows its own convention the same way. In those forms the level cannot be told from an ordinary word by its form alone.
 
