@@ -1,6 +1,7 @@
 import { DEFAULT_DATABASE_POLICIES } from '@internal/framework-components/control';
 import { writeRef } from '@internal/migration-tools/refs';
 import { notOk, ok } from '@internal/utils/result';
+import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CliStructuredError } from '../../src/utils/cli-errors';
 import { errorDatabasePoliciesMovedDuringSign } from '../../src/utils/policy-errors';
@@ -350,7 +351,7 @@ describe('db sign', () => {
       ]);
     });
 
-    it('draws the text under the failed space, with no db update line', async () => {
+    it('names the cause on the failed space and in the summary, prints the text once, and no db update line', async () => {
       const dir = await projectDir();
       mocks.dbSign.mockResolvedValue(ok({ spaces: [failedSpace('app', HASH_A, NOT_PROVIDED)] }));
 
@@ -358,18 +359,39 @@ describe('db sign', () => {
         cwd: dir,
         isTty: { stdout: true, stderr: true },
       });
+      const shown = stripAnsi(`${run.stderr}\n${run.stdout}`);
 
-      expect(run.presented?.presentation.human[1]).toEqual({
-        kind: 'tree',
-        roots: [
-          {
-            label: 'app: not signed, the database does not provide what its contract requires',
-            status: 'error',
-            children: [{ label: OLDER_THAN_SUPPORTED, status: 'error' }],
-          },
-        ],
+      expect(run.presented?.presentation.human.slice(1, 3)).toEqual([
+        {
+          kind: 'tree',
+          roots: [
+            {
+              label: 'app: not signed, the database does not provide what its contract requires',
+              status: 'error',
+              children: [],
+            },
+          ],
+        },
+        {
+          kind: 'summary',
+          status: 'error',
+          text: 'The database does not provide what the contract requires for space "app"; signed nothing',
+        },
+      ]);
+      expect(shown.split(OLDER_THAN_SUPPORTED).length - 1).toBe(1);
+      expect(shown).not.toContain('db update');
+    });
+
+    it('carries the same summary in --json', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(ok({ spaces: [failedSpace('app', HASH_A, NOT_PROVIDED)] }));
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(run.presented?.data).toMatchObject({
+        summary:
+          'The database does not provide what the contract requires for space "app"; signed nothing',
       });
-      expect(`${run.stdout}${run.stderr}`).not.toContain('db update');
     });
 
     it('keeps the drift advice for the drift of another space', async () => {

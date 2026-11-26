@@ -25,12 +25,12 @@ const possiblyEquivalent: SchemaDiffIssue = {
   },
 };
 const plain: SchemaDiffIssue = { path: ['public', 'event', 'id'], expected: node };
-const databaseNotProvided: SchemaDiffIssue = {
+const databaseCapabilitiesNotProvided: SchemaDiffIssue = {
   path: ['capabilities'],
   expected: node,
   explanation: {
     text: 'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 14.10. Upgrade the database to PostgreSQL 15 or later.',
-    cause: 'database-not-provided',
+    cause: 'capabilities-not-provided',
     notProvided: {
       database: 'PostgreSQL',
       findings: [{ kind: 'older-than-supported', databaseVersion: '14.10', oldestSupported: 15 }],
@@ -139,7 +139,7 @@ describe('schemaDriftNextActions', () => {
       schemaDriftNextActions({
         verb: 'sign',
         contractRef: undefined,
-        issues: [databaseNotProvided],
+        issues: [databaseCapabilitiesNotProvided],
       }),
     ).toEqual([]);
   });
@@ -149,7 +149,7 @@ describe('schemaDriftNextActions', () => {
       schemaDriftNextActions({
         verb: 'verify',
         contractRef: undefined,
-        issues: [databaseNotProvided, possiblyEquivalent],
+        issues: [databaseCapabilitiesNotProvided, possiblyEquivalent],
       }),
     ).toEqual([writeAsStored('verify again'), dbUpdate('verify')]);
   });

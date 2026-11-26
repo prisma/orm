@@ -104,7 +104,7 @@ export class ActionableCliError extends CliStructuredError {
     summary: string,
     options: {
       readonly why?: string;
-      readonly fix: string;
+      readonly fix?: string;
       readonly nextActions: readonly NextAction[];
       readonly meta?: Record<string, unknown>;
       readonly docsUrl?: string;

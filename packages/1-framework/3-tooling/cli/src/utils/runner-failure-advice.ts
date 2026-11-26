@@ -763,6 +763,13 @@ export function blockingObjectsAdvice(
 }
 
 /**
+ * Whether the runner refused the database because it does not provide what the contract requires. Its message already says what to do, and no command can change the server, so such a failure gets no advice.
+ */
+export function refusedForCapabilities(failure: MigrationRunnerFailure): boolean {
+  return failure.meta.databaseCapabilitiesNotProvided !== undefined;
+}
+
+/**
  * The way out of a failed `db migrate` apply: every path and command it prints works from where the
  * CLI ran, with the `--config` it was given.
  */
@@ -772,6 +779,7 @@ export function migrateAdvice(
   failedOnDisk: FailedMigrationOnDisk | undefined,
   invocation: CliInvocation,
 ): RunnerAdvice {
+  if (refusedForCapabilities(failure)) return [];
   const failedMigration =
     failedOnDisk === undefined ? undefined : failedMigrationText(failedOnDisk, invocation);
   const { blockingObjects } = failure.meta;

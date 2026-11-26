@@ -154,7 +154,7 @@ export const DATABASE_NOT_PROVIDED: SchemaDiffIssue = blindCast<
   expected: { id: 'capabilities', nodeKind: 'database-capabilities' },
   explanation: {
     text: OLDER_THAN_SUPPORTED,
-    cause: 'database-not-provided',
+    cause: 'capabilities-not-provided',
     notProvided: {
       database: 'PostgreSQL',
       findings: [{ kind: 'older-than-supported', databaseVersion: '14.10', oldestSupported: 15 }],

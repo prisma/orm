@@ -13,6 +13,7 @@ import {
   harness,
   MISSING_COLUMN,
   mocks,
+  NOT_PROVIDED,
   ormConfig,
   PROFILE_HASH,
   projectDir,
@@ -170,6 +171,41 @@ describe('db sign refusing a space that also fails verification', () => {
             { label: `missing invariant: ${INSTALL_VECTOR}`, status: 'error' },
             ...issueNodes([MISSING_COLUMN], 'error'),
           ],
+        },
+      ],
+    });
+  });
+});
+
+describe('db sign refusing a space whose database also does not provide what its contract requires', () => {
+  const refusedAndLacking: DbSignSpaceOutcome = { ...refused, schema: NOT_PROVIDED };
+
+  beforeEach(() => {
+    mocks.dbSign.mockResolvedValue(ok({ spaces: [signed, refusedAndLacking] }));
+  });
+
+  it('says the database does not provide what the contract requires, in the summary and the label, with no schema issue under it', async () => {
+    const dir = await projectDir();
+
+    const json = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+    const human = await harness(ormConfig()).run(['db', 'sign', '--no-advance-ref'], {
+      cwd: dir,
+      isTty: { stdout: true },
+    });
+
+    expect(json.presented?.data).toMatchObject({
+      summary:
+        'Space "pgvector" requires invariants its marker does not record; the database does not provide what the contract requires for space "pgvector"; signed "app"',
+    });
+    expect(human.presented?.presentation.human[1]).toMatchObject({
+      kind: 'tree',
+      roots: [
+        { status: 'ok' },
+        {
+          label:
+            'pgvector: not signed, its marker does not record invariants its head ref requires, and the database does not provide what its contract requires',
+          status: 'error',
+          children: [{ label: `missing invariant: ${INSTALL_VECTOR}`, status: 'error' }],
         },
       ],
     });
