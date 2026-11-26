@@ -197,7 +197,7 @@ Your other lines keep their carets, and you update as usual. This works where th
 
 The `prisma` tool has version numbers of its own, because it brings together several tools and the ORM is only one of them. `init` installs it, and its line in `package.json` is not one of the lines above.
 
-The tool carries its own copy of the ORM's commands, from one ORM release. When you run an ORM command, that release must match your application's: the tool compares the two and stops, naming both versions, if they are on different releases. If that happens after you update `prisma`, either move your application's Prisma lines to the release the tool names, or install the `prisma` version you had before.
+The tool carries its own copy of the ORM's commands, from one ORM release. When you run an ORM command, that release must match your application's. The tool is being changed to compare the two and to stop, naming both versions, when they are on different releases. Until it does, a mismatch shows up as an error that does not name the versions. If an ORM command starts failing after you update `prisma`, either move your application's Prisma lines to the release the tool carries, or install the `prisma` version you had before.
 
 ## Installing a version that is not the newest stable one
 

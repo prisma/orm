@@ -13,7 +13,7 @@ export const ENGINE_PACKAGE = '@prisma/cli-engine';
  * the spec is read from the manifest the install just placed, never guessed
  * from a dist-tag (whose `latest` has lagged that version before and broken
  * the very next command). A CLI without a readable engine entry falls back to
- * the `next` tag, the release train the CLI itself publishes under.
+ * the `latest` tag.
  */
 export function engineDevDependencySpec(cwd: string): string {
   const manifest = installedCliManifest(cwd);

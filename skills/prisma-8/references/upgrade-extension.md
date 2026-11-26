@@ -113,7 +113,7 @@ A Prisma 8 extension names every `@prisma/orm-*` package its shipped code uses, 
 
 The version is the one the application's database package (`@prisma/orm-postgres`, `@prisma/orm-mongo`, …) uses.
 
-An application must have one copy of each Prisma package, and peer dependencies are what make the package manager check that. A version that does not match is reported at install: npm refuses, and pnpm, Yarn and Bun install and print a peer dependency warning, so read the warnings. An ordinary dependency would quietly install a second copy, which fails at run time.
+An application must have one copy of each Prisma package, and peer dependencies are what make the package manager check that. A version that does not match is reported at install: npm refuses, and pnpm, Yarn and Bun install and print a peer dependency warning, so read the warnings. With an ordinary dependency, a version that does not fit would quietly become a second copy, which fails at run time.
 
 To list every copy and the package that brought it, run `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework`. [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) explains the reasons, and the one case peer dependencies do not cover, a monorepo with applications on different Prisma releases.
 
