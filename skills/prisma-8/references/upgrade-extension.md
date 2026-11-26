@@ -53,9 +53,11 @@ This flow assumes you are an **external extension author**: your extension lives
 
 For each `(from, to)` step in the chain:
 
-1. **Bump `@prisma/orm-*` deps.** From release 8.0, write the ranges that [the last section](#from-release-80-number-your-package-and-declare-ranges) gives, and skip the rest of this step's version rule. On the `8.0.0` release candidates:
-   - Rewrite every `@prisma/orm-*` entry in the extension's `package.json` to the exact `<to>` version, such as `"8.0.0-rc.11"`: no caret, no tilde, no range, and no `workspace:` specifier. The exact-pin rule below says why. All entries move to the same version.
-   - That includes another extension published from the Prisma repository, such as `@prisma/orm-extension-pgvector`. Every `@prisma/orm-*` package is published at every release, and each lists the others at that release's version.
+1. **Bump `@prisma/orm-*` deps.** What to write depends on the release:
+   - **On the `8.0.0` release candidates,** rewrite every `@prisma/orm-*` entry in the extension's `package.json` to the exact `<to>` version, such as `"8.0.0-rc.11"`: no caret, no tilde, no range, and no `workspace:` specifier. The exact-pin rule below says why. All entries move to the same version. That includes another extension published from the Prisma repository, such as `@prisma/orm-extension-pgvector`: every `@prisma/orm-*` package is published at every release, and each lists the others at that release's version.
+   - **From release 8.0,** write the ranges that [the last section](#from-release-80-number-your-package-and-declare-ranges) gives.
+
+   Where each entry goes is the same on every release:
    - A package that the extension's shipped code imports belongs under `peerDependencies`, and again under `devDependencies`, at the same version.
    - A package that only the extension's tests use, such as a database package the tests run against, belongs under `devDependencies` alone, at the same version.
    - Move any entry that is still under `dependencies` or `optionalDependencies`. An extension written for an earlier release had the framework, the family and the toolchain as ordinary dependencies.

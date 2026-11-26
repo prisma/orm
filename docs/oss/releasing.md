@@ -86,7 +86,7 @@ Before it publishes, the workflow runs four checks:
 
 The old `pr` tag is no longer used. A pull request's preview is published to [pkg.pr.new](https://pkg.pr.new) by [`preview-publish.yml`](../../.github/workflows/preview-publish.yml).
 
-The `prisma` command-line tool is not published from this repository. It comes from [prisma/prisma-cli](https://github.com/prisma/prisma-cli), which publishes Prisma 8 builds under the tag `next` and keeps `latest` on Prisma 7 until release 8.0.
+The `prisma` command-line tool is not published from this repository. It comes from [prisma/prisma-cli](https://github.com/prisma/prisma-cli), which publishes its Prisma 8 versions under `latest`.
 
 ## Procedure: cut the next release candidate
 

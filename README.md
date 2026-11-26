@@ -96,7 +96,7 @@ See [Using extensions](https://www.prisma.io/docs/orm/extensions/using-extension
 
 ## Supported databases
 
-From release 8.0, the package for each database has a [maturity level](./docs/oss/versioning.md#maturity-levels), which tells you how far you can rely on it. Until then, every package is a release candidate.
+From release 8.0, every package has a [maturity level](./docs/oss/versioning.md#maturity-levels), which tells you how far you can rely on it. Until then, every package is a release candidate.
 
 - **PostgreSQL**: Generally Available from release 8.0
 - **MongoDB**: Early Access from release 8.0

@@ -191,7 +191,7 @@ The decision for the tool:
 
 - `prisma` is published with the same major and minor version as the release.
 - It compares that with the facade installed in the application. If the facade is on another minor, it stops with a message that gives both versions.
-- The tool's copy and the application's copy are always two copies, even at the same version. So the tool reads the values it receives from the config file by their shape, and does not apply the private-field check to them. The check on the minor exists because the shape of those values can change from one release to the next.
+- The tool's copy and the application's copy can be two copies even when both are on the same minor. So the tool reads the values it receives from the config file by their shape, and does not apply the private-field check to them. The check on the minor exists because the shape of those values can change from one release to the next.
 
 ## Consequences
 

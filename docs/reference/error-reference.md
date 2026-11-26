@@ -199,7 +199,7 @@ The code was raised by the commander `orm init` (deleted in the S5 cutover), who
 
 ### CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION
 
-`prisma orm init --skip-install` found every package the database package requires, but one of them is installed at a version the database package does not accept. Init stops before it loads the database package, and changes nothing.
+`prisma orm init --skip-install` found every package the database package requires, but one of them is installed at a version that the database package, or another of those packages, does not accept. Init checks the `@prisma/orm-*` packages, and any other package that is required at one exact version. Init stops before it loads the database package, and changes nothing.
 
 How strict the requirement is depends on the release:
 
@@ -268,7 +268,7 @@ When init's install changed `package.json`, the next actions say how to undo the
 
 When the install changed nothing, there is no such action.
 
-Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `installCommand`, `takenAsPackageName: true` for a package with no short name, and `packagesAdded` when init's install changed `package.json`.
+Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `installCommand` (absent for a package with no short name under `--skip-install`), `takenAsPackageName: true` for a package with no short name, and `packagesAdded` when init's install changed `package.json`.
 
 ### CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED
 
