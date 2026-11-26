@@ -21,11 +21,11 @@ One persistent implementer (Opus, medium effort) runs both dispatches in order. 
 
 ### 2. The journey, the decision record and the docs
 
-**Outcome:** a reader of the docs, the skill or the help learns the commands exist, what they do not do, and that a refusal is not a reason to loosen a ref, such that no doc or skill text advises loosening.
+**Outcome:** a reader of the docs, the skill or the help learns the commands exist, what they do not do, and that a refusal is not a reason to change a ref's policies, such that no doc or skill text suggests changing a policy.
 
 - The PGlite journey from the spec's Tests section, beside `test/integration/test/cli.database-policies.migrate.e2e.test.ts`.
 - A new ADR amending ADR 320, as the spec says. Check the next free ADR number on `main` and in open pull requests first. A pointer from ADR 320 to it.
-- The docs and skill files the spec lists, and every place that quotes the old `POLICY_MISMATCH` advice (search `docs/`, `skills/`, `test/integration` for "Make the ref match the database").
+- The docs and skill files the spec lists, and every place that quotes the old `POLICY_MISMATCH` or `DATA_PROTECTION_FORBIDS` advice. No text may suggest changing a policy.
 
 **Builds on:** dispatch 1. **Hands to:** review.
 

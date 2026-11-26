@@ -35,7 +35,7 @@ A command group, `prisma migration ref policy`, holds three commands that read a
 
 Why the command is acceptable under ADR 320. It writes the working copy of the ref file, which a deploy then reads. It can do nothing that editing the file by hand cannot. A database still takes on a ref's policies only in a deploy its owner gives consent to, and ADR 320 already names "edit the ref, then give consent" as a deliberate workaround that the policies do not try to stop. The policies protect against mistakes, and the command makes a mistaken edit less likely: it rejects invalid values at once and marks every change that loosens a policy.
 
-Why no advice points to it. An agent that has just been refused should fix what it is doing, not loosen the rule that refused it. So no error, next action, command output or skill text tells the reader to loosen a ref's policies, by naming the command or by describing what it does, and no output of these commands names the consent flag. The help for `set` and `delete` says so in plain words.
+Why no advice points to it. An agent that has just been refused should fix what it is doing, not change the rule that refused it. A policy changes because the team decides to, never because an error suggested it. So no error, next action, command output or skill advice suggests changing a database's or a ref's policies, in either direction and by anyone, the database's owner included, and no output of these commands names the consent flag. The help for `set` and `delete` says so in plain words.
 
 ## Background
 
@@ -49,7 +49,7 @@ Today a user declares a ref's policies only by editing the file. The values are 
 2. Reject an invalid value before touching the file, naming the allowed values.
 3. Remove a setting, so the ref declares nothing about it. An absent key declares nothing, which differs from declaring the default.
 4. Change no database.
-5. No error, next action, command output or skill advice tells the reader to loosen a ref's policies or points to these commands as a way past a refusal. Reference documentation (the skill's section on the ref file, the CLI README and help, the design docs) may name the commands. A source check fails if any file under `packages/**/src` outside the command files and the group text names the command. No output of the three commands contains `--permit-policy-change`.
+5. No error, next action, command output or skill advice suggests changing a database's or a ref's policies, in either direction and by anyone. Reference documentation (the skill's section on the ref file, the CLI README and help, the design docs) may describe the commands and how policies change, as facts, never as a response to a refusal or mismatch. A test builds every policy error and fails if its advice suggests a policy change. A source check fails if any file under `packages/**/src` outside the command files and the group text names the command. No output of the three commands contains `--permit-policy-change`.
 6. Editing the file by hand keeps working, and the file format does not change.
 7. Every change that loosens a policy is labelled `loosens` in the output.
 
@@ -107,20 +107,17 @@ Each changed setting is printed with its value before and after and one label. T
 
 ### Help text
 
-The group description defines a ref, the change policy and the data protection policy, says that "policy" here is not the control policy of a database object, and says a database takes on a ref's policies only in a deploy its owner gives consent to, pointing to `prisma db migrate --help` for how. The `set` and `delete` descriptions say: a refused deploy or plan is not a reason to loosen a ref's policies; change them only when the team means to change how that database may change, and have the change reviewed like code.
+The group description defines a ref, the change policy and the data protection policy, says that "policy" here is not the control policy of a database object, and says a database takes on a ref's policies only in a deploy its owner gives consent to, pointing to `prisma db migrate --help` for how. The `set` and `delete` descriptions say: "A refused deploy or plan is not a reason to change a ref's policies. They record how the team decided that database may change."
 
 `migration ref list` shows each ref's declared policies in its human table. Its data lines and `--json` do not change.
 
 ## Changes to existing advice
 
-`MIGRATION.POLICY_MISMATCH` today advises "Make the ref match the database, or have whoever owns the database apply the ref's policies." When the database is stricter than the ref, matching it tightens the ref, which is safe. When the database is looser, matching it loosens the ref, which this design forbids advising. The advice is chosen per difference, using the same comparison as the labels:
+`MIGRATION.POLICY_MISMATCH` used to advise "Make the ref match the database, or have whoever owns the database apply the ref's policies." Both halves suggest a policy change. The error now states each difference in its `why` and advises only: "Nothing runs while <ref> declares policies that differ from the database's. Tell the user, or whoever owns the database, about the difference."
 
-- Where moving the ref to the database's value tightens the ref: "Make the ref declare what the database has, and have the change reviewed."
-- Otherwise, including two `change` lists where neither is a subset of the other: "Have whoever owns the database apply the ref's policies in a deploy."
+`MIGRATION.DATA_PROTECTION_FORBIDS` used to end a refusal with "To do it anyway, whoever owns the database must first change its data protection policy." (or, for a refusal by a ref, "…change the data protection policy <ref> declares."). Every refusal now ends with the recoveries for the refused operations, and no sentence suggests a policy change.
 
-A mismatch with differences of both kinds gives both sentences, each starting with the settings it covers ("For dataProtection.dataLoss: …").
-
-`MIGRATION.DATA_PROTECTION_FORBIDS` used to end a refusal by a ref with "To do it anyway, whoever owns that database must first change the data protection policy <ref> declares." That describes loosening the ref to get past the refusal, so a refusal by a ref now ends with the recoveries for the refused operations. A refusal by the database's own recorded policy keeps its closing sentence, because that policy changes only in a deploy its owner gives consent to.
+`MIGRATION.CHANGE_POLICY_FORBIDS` may repeat the user's own command, `--permit-policy-change` included when they gave it. That is the consent the user already gave, not a suggestion to change a policy.
 
 ## Where the code goes
 
