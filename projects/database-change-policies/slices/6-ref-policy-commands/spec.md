@@ -102,7 +102,7 @@ Each changed setting is printed with its value before and after and one label. T
 - `head` is refused with `CLI.INVALID_ARGUMENTS` ("The head ref cannot declare policies"): it is a ref the CLI maintains, not one a team declares policies for. Its next action asks for a ref the team keeps for a database, and does not point to `migration ref list`, which lists `head` too.
 - They read and write only the named ref file, with the existing `readRef` and `writeRef`. They do not load the migrations or the other refs, so an invalid other ref or an empty migrations directory does not stop them. An invalid ref file fails with `MIGRATION.INVALID_REF_FILE` and is not written.
 - A `set` or `delete` that would change nothing exits 0, says nothing changed, and does not write the file.
-- A write uses the format every ref writer uses: two-space JSON, keys in the order `hash`, `invariants`, `policies`, and inside `policies` the order `change`, `dataProtection` (`dataLoss`, `accessWidening`). Top-level keys the format does not define are dropped, as every ref writer drops them today.
+- A write uses the format every ref writer uses: two-space JSON, keys in the order `formatVersion`, `hash`, `invariants`, `policies`, and inside `policies` the order `change`, `dataProtection` (`dataLoss`, `accessWidening`). A ref file with a top-level key the format does not define is refused when it is read, as every ref reader refuses it.
 - Failure state: the file is written once, atomically, after every check has passed. A command that fails leaves the file as it was.
 
 ### Help text
@@ -139,7 +139,7 @@ The `prisma` binary in prisma/prisma-cli mounts each ORM command by name and own
 
 ## Tests
 
-- Each command: the whole file text after a write is compared, so key order and formatting are checked; other fields are kept; an unknown top-level key is dropped; a no-op does not write; bad values, a cross-setting long form, an empty `set` or `delete`, a missing ref, `head` and an invalid file each fail with the stated code and leave the file unchanged.
+- Each command: the whole file text after a write is compared, so key order and formatting are checked; other fields are kept; a ref file with an unknown top-level key is refused and left as it was; a no-op does not write; bad values, a cross-setting long form, an empty `set` or `delete`, a missing ref, `head` and an invalid file each fail with the stated code and leave the file unchanged.
 - `set` with no `--change` flag, which gives the handler no `change` value at all.
 - A command succeeds when another ref file is invalid and the migrations directory is empty.
 - The labels, for each setting: tighten, loosen and unchanged, from a declared value and from nothing declared.
@@ -155,7 +155,7 @@ The `prisma` binary in prisma/prisma-cli mounts each ORM command by name and own
 
 - Changing a database's policies. That stays a deploy given consent.
 - A programmatic API for rewriting a ref's policies.
-- Keeping unknown top-level keys or hand formatting on rewrite. Every ref writer has this behaviour today, and changing it is a change to the ref file writer. It is recorded as a follow-up in the project's design, together with the writer's temporary file name, which uses only the time and can collide between two processes.
+- Keeping hand formatting on rewrite. Every ref writer has this behaviour today, and changing it is a change to the ref file writer. It is recorded as a follow-up in the project's design, together with the writer's temporary file name, which uses only the time and can collide between two processes.
 - Composer. It refuses refs that declare policies until its own work on policies ships.
 
 ## Alternatives considered
