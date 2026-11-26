@@ -297,6 +297,7 @@ function refuseRequiredPeersAtAnotherVersion(
   installedVersion: (name: string) => string | undefined,
 ): void {
   const declared = declaredPackages(ctx.cwd);
+  const pins = pinningEntries(ctx.cwd);
   const wrong = peers.flatMap((peer) => {
     const found = installedVersion(peer.name);
     const required = exactVersionOf(peer.requirement) ?? peer.requirement;
@@ -323,6 +324,16 @@ function refuseRequiredPeersAtAnotherVersion(
     listedAtRequired: wrong
       .filter(({ peer }) => peer.outcome === 'already-listed')
       .map(({ peer }) => peer.name),
+    pinned: wrong.flatMap(({ peer, found }) => {
+      const line = declared.get(peer.name);
+      const field = pins.get(peer.name);
+      return peer.outcome === 'already-listed' &&
+        line !== undefined &&
+        field !== undefined &&
+        requirementAdmits(line, found) === false
+        ? [{ name: peer.name, found, field }]
+        : [];
+    }),
     restoreCommand: formatInstallCommand(ctx.packageManager),
   });
 }
@@ -544,6 +555,45 @@ function declaredPackages(cwd: string): ReadonlyMap<string, string> {
       : [];
   });
   return new Map(entries);
+}
+
+/**
+ * The packages an entry of `package.json` pins whatever their lines ask for, by the field that pins
+ * each: npm's and Bun's `overrides`, Yarn's `resolutions` and pnpm's `pnpm.overrides`. A key may
+ * name the package alone, under a path (`**\/name`) or with a range (`name@^8`).
+ */
+function pinningEntries(cwd: string): ReadonlyMap<string, string> {
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8'));
+  } catch {
+    return new Map();
+  }
+  if (!isRecord(manifest)) return new Map();
+  const pnpm = manifest['pnpm'];
+  const fields: [string, unknown][] = [
+    ['overrides', manifest['overrides']],
+    ['resolutions', manifest['resolutions']],
+    ['pnpm.overrides', isRecord(pnpm) ? pnpm['overrides'] : undefined],
+  ];
+  const pins = new Map<string, string>();
+  for (const [field, section] of fields) {
+    if (!isRecord(section)) continue;
+    for (const key of Object.keys(section)) {
+      const name = pinnedName(key);
+      if (!pins.has(name)) pins.set(name, field);
+    }
+  }
+  return pins;
+}
+
+function pinnedName(key: string): string {
+  const segments = key.split('/');
+  const last = segments.at(-1) ?? '';
+  const scope = segments.at(-2);
+  const name = scope?.startsWith('@') ? `${scope}/${last}` : last;
+  const at = name.indexOf('@', 1);
+  return at === -1 ? name : name.slice(0, at);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

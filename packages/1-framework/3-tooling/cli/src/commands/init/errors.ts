@@ -748,16 +748,33 @@ export function errorInitRequiredPeersAtAnotherVersion(options: {
   readonly installCommand: string | undefined;
   /** Those `package.json` lists at the required version, which the package manager's install puts in place. */
   readonly listedAtRequired: readonly string[];
+  /**
+   * Those of `listedAtRequired` whose installed copy the listed line does not admit, held there by
+   * an entry of `package.json` that pins it, so an install alone changes nothing.
+   */
+  readonly pinned: readonly {
+    readonly name: string;
+    readonly found: string;
+    readonly field: string;
+  }[];
   /** The package manager's own install command. */
   readonly restoreCommand: string;
 }): CliStructuredError {
-  const { packageName, packages, listedAtRequired } = options;
+  const { packageName, packages, pinned } = options;
+  const listedAtRequired = options.listedAtRequired.filter(
+    (name) => !pinned.some((pin) => pin.name === name),
+  );
   const relisted = packages.filter((pkg) => pkg.listed !== undefined);
   const steps: string[] = relisted.map((pkg) =>
     pkg.listed !== undefined && exactVersionOf(pkg.listed) === undefined
       ? `Make the line for ${pkg.name} in package.json resolve to ${pkg.required} (it is \`${pkg.listed}\` now, so change the version where it points, such as the catalog entry or the workspace package) and run \`${options.restoreCommand}\``
       : `Change the line for ${pkg.name} in package.json from ${pkg.listed} to ${pkg.required} and run \`${options.restoreCommand}\``,
   );
+  for (const pin of pinned) {
+    steps.push(
+      `package.json already lists ${pin.name} at a version ${packageName} accepts, but its \`${pin.field}\` entry keeps the installed copy at ${pin.found}: remove that entry and run \`${options.restoreCommand}\``,
+    );
+  }
   if (listedAtRequired.length > 0) {
     steps.push(
       `${steps.length === 0 ? 'Run' : 'run'} \`${options.restoreCommand}\` to install ${listed(listedAtRequired)} at the version package.json lists`,
@@ -786,7 +803,7 @@ export function errorInitRequiredPeersAtAnotherVersion(options: {
           required: pkg.required,
           ...ifDefined('listed', pkg.listed),
         })),
-        listedAtRequired,
+        listedAtRequired: options.listedAtRequired,
         ...ifDefined('installCommand', options.installCommand),
         restoreCommand: options.restoreCommand,
       },

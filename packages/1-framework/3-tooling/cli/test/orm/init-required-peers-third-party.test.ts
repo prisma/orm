@@ -446,6 +446,46 @@ describe('init --skip-install with a required peer installed at another version'
     timeouts.coldTransformImport,
   );
 
+  it.each([
+    ['resolutions', { resolutions: { '@prisma/orm-framework': '8.0.0' } }],
+    ['overrides', { overrides: { '@prisma/orm-framework': '8.0.0' } }],
+    ['pnpm.overrides', { pnpm: { overrides: { '@prisma/orm-framework': '8.0.0' } } }],
+  ])(
+    'says to remove the %s entry that keeps a package the project lists at the required version at another one',
+    async (field, pin) => {
+      writeProjectFile(
+        'package.json',
+        JSON.stringify({
+          name: 'app',
+          private: true,
+          type: 'module',
+          dependencies: {
+            '@prisma/orm-postgres': VERSION,
+            '@prisma/orm-framework': VERSION,
+            'temporal-polyfill': '^1.0.8',
+            pg: '^8.22.0',
+          },
+          ...pin,
+        }),
+      );
+
+      const { run, wrote } = await skipInstall();
+
+      expect(wrote).toBe(false);
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: `package.json already lists @prisma/orm-framework at a version @prisma/orm-postgres accepts, but its \`${field}\` entry keeps the installed copy at 8.0.0: remove that entry and run \`pnpm install\`, then run \`prisma orm init\` again.`,
+            }),
+          ]),
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
   it(
     'says to change the line for a package the project lists at another version',
     async () => {
