@@ -11,3 +11,6 @@ export declare function chained(value: string): string;
 export declare const preview_chained: typeof chained;
 export declare function preview_early(value: string): string;
 export declare function createClient(url: string): string;
+export declare const reversed: (value: string) => string;
+export declare function walked(value: string): string;
+export { fwdFn } from "fixture-fwd-dep";

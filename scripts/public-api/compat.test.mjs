@@ -363,7 +363,10 @@ describe('checkPackage, with the release treated as GA', () => {
 describe('checkPackage on a prefixed name the release also exports under an unprefixed one', () => {
   let result;
   const removed = (name) => {
-    result ??= check('promoted-removed', { release: 'promoted-release' });
+    result ??= check('promoted-removed', {
+      release: 'promoted-release',
+      dependencies: forwardDependency,
+    });
     return brokenExports(result).filter((each) => each.name === name);
   };
 
@@ -387,6 +390,24 @@ describe('checkPackage on a prefixed name the release also exports under an unpr
         { path: '.', name: 'ea_Shape', test: 'type', failsRun: true },
       ],
     );
+  });
+
+  it('fails the run when the unprefixed name is the one typed as the other', () => {
+    deepStrictEqual(removed('ea_reversed'), [
+      { path: '.', name: 'ea_reversed', test: 'value', failsRun: true },
+    ]);
+  });
+
+  it('fails the run through a name the package does not export', () => {
+    deepStrictEqual(removed('ea_walked'), [
+      { path: '.', name: 'ea_walked', test: 'value', failsRun: true },
+    ]);
+  });
+
+  it('fails the run when a name forwarded from another package is removed', () => {
+    deepStrictEqual(removed('ea_fwdFn'), [
+      { path: '.', name: 'ea_fwdFn', test: 'exists', failsRun: true },
+    ]);
   });
 
   it('fails the run through a chain of prefixed names', () => {
