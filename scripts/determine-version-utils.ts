@@ -23,7 +23,7 @@ export function computeNextMinor(current: string): string {
 
 /**
  * Computes the next release version from the current base
- * (see docs/oss/versioning.md):
+ * (see docs/oss/releasing.md):
  *
  * - `8.0.0-rc.N` -> `8.0.0-rc.N+1` — the RC line advances its counter.
  * - pre-8 stable (`0.17.0`) -> `8.0.0-rc.1` — the one-time transition

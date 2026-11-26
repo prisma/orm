@@ -1,213 +1,203 @@
-# Versioning
+# Versions and support
 
-This page says which versions of Prisma ORM are maintained and what each one receives, then how Prisma 8 packages are versioned, how mature each one is, and how they are published. The procedures at the end are for maintainers.
+This page is for people who use Prisma ORM, and for people who publish extensions for it. It says which versions are supported, what a version number tells you, what will not break when you upgrade, and how to upgrade. Maintainers will find the release procedures in [Releasing](./releasing.md).
 
 ## Supported versions
 
-| Version | Branch | Status | Maintained until |
-| --- | --- | --- | --- |
-| Prisma 8 | `main` | Release candidate | Not yet announced |
-| Prisma 7 | `v7` | Maintenance | 18 months after Prisma 8.0 is released |
+| Version | What it receives | Until |
+| --- | --- | --- |
+| Prisma 8 | New features and all fixes, in the newest release only | The current major |
+| Prisma 7 | Fixes for bugs and security issues, and no new features from the maintainers | 18 months after release 8.0 is published |
 
-**Prisma 8** is where all new development happens. Until release 8.0, its releases are release candidates, described [below](#release-candidates).
+- **Prisma 8** is where development happens. It has not reached release 8.0 yet; until it does, read [Until release 8.0](#until-release-80) first.
+- **Prisma 7** is in maintenance. Its source is on the [`v7` branch](https://github.com/prisma/orm/tree/v7), and pull requests for it target that branch. The maintainers build no new features for it. A feature contributed by the community can still be accepted if it fits Prisma 7's design. [ADR 295](../architecture%20docs/adrs/ADR%20295%20-%20New%20features%20do%20not%20land%20on%20Prisma%207.md) has the details.
 
-**Prisma 7** is in maintenance. The Prisma maintainers fix bugs and security issues in it, and do not build new features for it. A feature contributed by the community can still be accepted, if it fits Prisma 7's design and meets the project's quality standards. It also takes corrections to, improvements to, and maintenance of the tooling that builds, tests and releases it, such as its test runner, CI workflows, build scripts and dependencies. Prisma 7 has to stay buildable, testable and releasable for the whole support period, and every later fix is cheaper and safer to land when that tooling is healthy. This work changes nothing users run, so the design-fit question that features raise does not apply to it. A [maintainer](./governance.md#maintainer-team) decides whether a contribution does; passing the [mechanical requirements](./pr-triage.md#step-4--mechanical-requirements) in PR triage is required but is not enough on its own. Pull requests for Prisma 7 target the `v7` branch.
+From Prisma 8 on, these rules apply to every major version:
 
-[`SECURITY.md`](../../SECURITY.md#supported-versions) says which releases receive security fixes. The decision is recorded in [ADR 295](../architecture%20docs/adrs/ADR%20295%20-%20New%20features%20do%20not%20land%20on%20Prisma%207.md).
+- **Fixes go into the newest release.** To get a fix, upgrade to it. Within a major that is always safe for what is Generally Available; see [What stays compatible](#what-stays-compatible).
+- **When a new major is published, the previous one receives critical fixes and security fixes for 12 more months.**
+- **We aim for one new major a year.** That is an aim, not a promise.
 
-## Release candidates
+[`SECURITY.md`](../../SECURITY.md#supported-versions) says how to report a vulnerability and which versions receive security fixes. [Supported versions of Node.js, TypeScript and each database](../Supported%20Versions.md) are on their own page.
 
-Until release 8.0, Prisma 8 ships as release candidates: `8.0.0-rc.1`, `8.0.0-rc.2`, and so on. Every package is published at the same `8.0.0-rc.N`, whatever its real state, and each names the others at that exact version. A release candidate carries no backwards-compatibility promise. Concretely:
+## Until release 8.0
 
-- **Any release candidate may contain breaking changes:** API removals, changes to how an existing API behaves, or changes to the contract format.
-- **Releases are frequent.** A new release candidate ships whenever the next batch of work is ready, not on a fixed schedule.
-- **Only the latest release candidate is maintained.** A fix ships in the next release candidate; older ones get no patches, including security patches.
-- **Upgrade guides help you keep current.** Each release ships with an upgrade guide, which the `prisma-8` skill can apply for you. See the [upgrade instruction lifecycle](../../upgrade-instructions/README.md).
+Prisma 8 has not had its first stable release. Today every package is published as `8.0.0-rc.1`, `8.0.0-rc.2` and so on, and all of them share that one version.
 
-If your project cannot keep up with this, wait for release 8.0. Before the release candidates, Prisma 8 shipped as `0.x` minors under the same terms.
+- **Any of these versions may contain breaking changes.** Nothing on the rest of this page applies yet.
+- **Only the newest one is maintained.** A fix ships in the next one.
+- **Each one comes with an upgrade guide,** which the `prisma-8` agent skill can apply for you.
+- **List every Prisma package at the same exact version,** such as `8.0.0-rc.25`, with no `^` or `~`.
 
-The rest of this page, from [Maturity levels](#maturity-levels) to [What an application writes](#what-an-application-writes), takes effect at release 8.0. The release scripts already compute both the release candidates and the rules below from one function, and the [release plan](#printing-the-release-plan) prints either.
+The `rc` in these versions is a leftover name. It is not the Release Candidate level described below: a package published as `8.0.0-rc.25` may be far from finished.
+
+If your project cannot keep up with breaking changes, wait for release 8.0.
 
 ## Maturity levels
 
-Every published package but one has one of four maturity levels; `@prisma/orm-extension-paradedb` has its own version instead, [below](#version-numbers). A level is defined by the least the maintainers do for a package at it. [ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md) records the decision.
+From release 8.0, every Prisma package has one of four maturity levels. The level tells you how far you can rely on the package.
 
-| Level | What the maintainers do, at least |
-| --- | --- |
-| Generally Available (GA) | Its tests run on every release and a failure blocks the release. A package for a database passes the full test suite against that database. A later release in the same major version does not break its users. |
-| Release Candidate | As for GA, and no further change that breaks its users is expected. It may still change before it is GA. |
-| Preview | Its tests run and a failure blocks the release, for what it supports. Its reference documentation lists what it does not yet support. It may change in any release. |
-| Early Access | Released so that people can try it. It may be released with a failing test. It may change in any release. |
-
-"Below GA" means any of the last three. Only what is GA is kept compatible within a major version.
-
-A level is written in two places, and nowhere else: in a package's version number, and at the start of an API's name.
-
-| Level | In a package's version number | At the start of an API's name |
+| Level | Its version looks like | What you can rely on |
 | --- | --- | --- |
-| Generally Available | Plain version: `8.3.0` | Nothing: `foo` |
-| Release Candidate | `8.3.0-rc.0` | `rc_foo` |
-| Preview | `8.3.0-preview.0` | `preview_foo` |
-| Early Access | `8.3.0-ea.0` | `ea_foo` |
+| Generally Available (GA) | `8.3.0` | No later 8.x release breaks your code. Its tests pass on every release. |
+| Release Candidate | `8.3.0-rc.0` | We believe it is finished. One more breaking change is possible before it becomes GA. |
+| Preview | `8.3.0-preview.0` | It works and is tested for the features it supports, and its documentation lists what it does not support yet. Any new version may change it. |
+| Early Access | `8.3.0-ea.0` | It is published so that you can try it. It may have known failures, and any new version may change it. |
 
-A single API inside a GA package can be at any of the three levels below GA. An API has the level of its package unless its name starts with the word for a lower level, which gives the least the API is promised. When an API moves up a level, the release adds the name for the new level and keeps the old one, deprecated, until the next major version, unless the promotion also changes the API's form, in which case the old name is removed in that release. So a deprecated name such as `ea_foo` can belong to an API that is now GA, and is kept as long as the API is. A capability has the level of the package that publishes it. A GA package of ours names only GA packages of ours. There are no feature flags: functionality that is not ready ships in its own package below GA, or under a name that carries its level.
+"Below GA" means any of the last three. Only what is GA is covered by [What stays compatible](#what-stays-compatible).
 
-Each package's level is declared in [`packages/0-shared/publish-surface/src/levels.ts`](../../packages/0-shared/publish-surface/src/levels.ts). A package's level may go up at any release; within a minor it can only go up, because its version can only move forward. It may go down at a new minor only if it is not GA now. A GA package stays GA until the next major version, because going below GA within the major would break what GA promises; at a new major it may start below GA. The release scripts refuse anything else.
+### Which packages are at which level
+
+At release 8.0:
+
+| Level | Packages |
+| --- | --- |
+| Generally Available | PostgreSQL: `@prisma/orm-postgres` and the packages it is built from. The PostgreSQL extensions `@prisma/orm-extension-pgvector`, `@prisma/orm-extension-postgis`, `@prisma/orm-extension-arktype-json` and `@prisma/orm-postgres-contrib`. `@prisma/orm-extension-middleware-cache`. `@prisma/orm-better-auth`. |
+| Early Access | MongoDB (`@prisma/orm-mongo`), MySQL (`@prisma/orm-mysql`), MariaDB (`@prisma/orm-mariadb`), SQLite (`@prisma/orm-sqlite`), and the packages each is built from. `@prisma/orm-extension-supabase`. |
+
+No package is at Preview or Release Candidate yet. Each package's README states its level, and a check keeps the READMEs and this table's source, [`levels.ts`](../../packages/0-shared/publish-surface/src/levels.ts), in step.
+
+One package has no level: `@prisma/orm-extension-paradedb` is maintained by another team and has its own version numbers, starting at `0.18.0`.
+
+### A function can be below its package's level
+
+A GA package can contain a function that is not finished. Its name starts with its level, so you can see it where you call it:
+
+```ts
+db.orm.users.where({ email }).first()   // GA
+db.orm.users.preview_search('ada')      // Preview: may still change
+```
+
+The level words are `ea_`, `preview_` and `rc_`. A type or class is written `Preview_Search`.
+
+When such a function moves up a level, it gets a new name, and the old name keeps working until the next major version:
+
+```ts
+db.orm.users.ea_search('ada')        // release 8.3: Early Access
+db.orm.users.preview_search('ada')   // release 8.4: now Preview. ea_search still works.
+db.orm.users.search('ada')           // release 8.6: now GA. Both older names still work.
+```
+
+So your code does not break when a function you use becomes more reliable. Your editor shows the old names as deprecated and tells you the new one. The one exception is a promotion that also changes how the function is called: then the old name is removed in that release.
+
+## What stays compatible
+
+**From release 8.0, an application built on what is GA upgrades to any later 8.x release with no changes:** none to its code, none to the files Prisma generated for it, and none to its database. The same holds for an extension built on the GA platform packages.
+
+Within a major version, this covers:
+
+| What | The promise |
+| --- | --- |
+| The TypeScript API: types and import paths | Code that compiles against one release compiles against every later one. |
+| Behaviour and error codes | Behaviour that the reference documentation describes does not change. |
+| The contract you write, in PSL or TypeScript | A contract that one release accepts, every later release accepts. |
+| Commands, their machine-readable output, and the config file | What works on one release works on every later one. |
+| `contract.json` and the generated types | Every later release reads them. You do not have to generate them again. |
+| Migrations on disk | Every later release reads and applies them. |
+| Prisma's own records in your database | Every later release reads them. |
+
+Nothing that is GA is removed within a major. When something is replaced, the replacement arrives beside it, and the old form is marked deprecated and keeps working until the next major.
+
+A later release may still change four things. If your application depends on one of them, it may need a change after an upgrade:
+
+- **A bug.** Behaviour that contradicts the reference documentation, or a defect such as a crash, is fixed.
+- **Detail the reference documentation does not describe:** the text of the SQL Prisma sends, the order of rows when you gave no `orderBy`, the wording of an error message, output meant for people to read, and timing.
+- **A security problem.** It is fixed even when that changes described behaviour, and the fix comes with a published notice.
+- **A version of something Prisma runs on that its maker no longer supports,** such as an old Node.js version. A minor release may stop supporting it, and the release notes say so. Otherwise a minimum version rises only in a new major.
+
+Every release's notes list each change to behaviour.
 
 ## Version numbers
 
-- **The major and minor are the release number.** Release `8.3` publishes every package at `8.3`, except `@prisma/orm-extension-paradedb`. The root version, the root `package.json`'s `version`, is the release number with patch 0, such as `8.3.0`, except at release `8.0`, where it is `8.0.1`; on the release candidates it is `8.0.0-rc.N`.
-- **A GA package has its own patch number.** A fix to one GA package raises that package's patch number, to `8.3.1`, and no other package's. The commands that release such a fix are not written yet.
-- **A package below GA carries its level as a suffix, with its own counter.** A fix to it raises the counter, `8.3.0-preview.1`, and not the patch number, so that a user's range can select it.
-- **At release `8.0`, every package that shares the release number starts at patch 1.** Every package was published as `8.0.0-rc.1` to `8.0.0-rc.N`, and a version of release `8.0` that sorts below those would let a range such as `~8.0.0-ea.0` admit an old release candidate, because `ea` sorts before `rc`; some package managers then install it. So release `8.0` starts a GA package at `8.0.1`, and a package below GA at `8.0.1-rc.0`, `8.0.1-preview.0` or `8.0.1-ea.0`. The root version, the git tag and the GitHub Release are `8.0.1` too, so the number announced is the one a user installs. No package is ever `8.0.0`. Ranges at `8.0` are written on these first versions, such as `^8.0.1` and `~8.0.1-ea.0`. A fix within `8.0` raises a GA package to `8.0.2` and a package below GA to `8.0.1-ea.1`, and a level going up within `8.0` keeps patch 1: `8.0.1-ea.1`, then `8.0.1-rc.0`, then `8.0.1`. From `8.1` on, every minor starts at `X.Y.0`. One function in the release plan, `firstVersionOfMinor`, gives the first version of every minor.
-- **The suffix is what Semantic Versioning calls a pre-release.** A range such as `^8.3.0` never selects one, so a user gets a release below GA only by asking for it. The words sort in the right order: `ea`, `preview`, `rc`, then the plain version.
+A version has three parts: major, minor and patch, as in `8.3.1`.
 
-`@prisma/orm-extension-paradedb` has no level and has its own version from release `8.0`: it takes `0.18.0` at `8.0`, the first minor above the `0.16.0` and `0.17.0` it was published as before the release candidates, so that a range spanning several `0.x` minors, such as `0.x`, picks a new version and not an old one. It then keeps its version at each release until it gets a fix, which raises its patch number. Its first version is declared in `levels.ts`; after that its version is in its manifest. At a release where its version is already on the registry, the publish script skips it and says so; a dry run does not skip it, so it still goes through `pnpm publish --dry-run`. It names our packages as an extension does ([ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
+- **The major and minor are the release.** Release `8.3` publishes every package at `8.3`. Two packages belong together when their first two numbers match.
+- **The rest belongs to each package.** A fix to one GA package is published as that package's next patch, such as `8.3.1`. A package below GA has its level and a counter after the version, and a fix raises the counter: `8.3.0-ea.0`, then `8.3.0-ea.1`.
+- **Release 8.0 starts at `8.0.1`.** Its first versions are `8.0.1` for a GA package and, for example, `8.0.1-ea.0` for an Early Access one. No package is published as `8.0.0`. The reason is that the older `8.0.0-rc.N` versions stay on npm, and a range on `8.0.0-ea.0` would have installed them. From `8.1` on, every release starts at patch 0.
 
-## Ranges between our packages
-
-`scripts/set-version.ts` writes the ranges into the manifests from the release plan, and the publish checks refuse a manifest that disagrees. Nobody writes one by hand.
-
-| From | To | Range |
-| --- | --- | --- |
-| A facade, such as `@prisma/orm-postgres`, or a platform package | A GA package | Same minor, any patch: `~8.3.0` |
-| A facade or a platform package | A package below GA | The same, from that package's first version of the minor: `~8.3.0-ea.0` |
-| An extension or a library integration | A GA package | That release or any later one in the major version: `^8.3.0` |
-| An extension or a library integration | A package below GA | Within the minor, from that package's first version of it: `~8.3.0-ea.0` |
-
-The packages of one release are tested together, so among themselves they accept only that release. An extension built on release `8.1` has to work in an application on `8.4`, so it accepts any later release of a GA package. A package below GA may change in the next minor, so nothing accepts more than one minor of it.
-
-## Tags
-
-- A GA release is published under the `latest` dist-tag.
-- A release below GA is published under `latest` when the package has never had a GA release in any major version, so that a plain install works and the version shows the level. Otherwise it is published under a tag named after its level, such as `preview`. A `0.x` version does not count as a GA release: it is Semantic Versioning's initial development, and the `0.x` minors these packages had before the release candidates were not GA.
-- Every push to `main` publishes a development build under `dev`; see [Dist-tag convention](#dist-tag-convention).
+[ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md) explains each of these rules in full.
 
 ## What an application writes
 
-- On a GA facade: a caret on every line for a GA package, `^8.3.0`. An update moves all of them to the next release together. A package below GA the application adds, such as the Early Access `@prisma/orm-extension-supabase`, is at a tilde on its first version of the minor, `~8.3.0-ea.0`, since a caret on a plain version never selects a pre-release; that line is edited at each new minor.
-- On a facade below GA: a tilde on every line, `~8.3.0-ea.0` on the packages below GA and `~8.3.0` on the GA ones, and the facade at a tilde on its own version, such as `~8.3.0-ea.1`. The GA lines have a tilde too, on purpose. No range on `8.3.0-ea.0` accepts `8.4.0-ea.0`, so an update can never move the facade to the next minor. If the GA lines had a caret, the same update would move them to `8.4.0` and leave the facade on `8.3`, which accepts those packages only at `8.3`: npm refuses that, and the others install it with a warning. With a tilde everywhere, an update keeps the whole set in one minor, and at each new minor the user edits the lines; see [below](#a-new-minor-below-ga).
-- The `prisma` command-line tool: `init` adds it as `prisma@latest`, which every package manager saves with a caret. Beside a facade below GA, `init` then writes the `prisma` line with a tilde on the version it installed, so an ordinary update does not move `prisma` on while the other lines stay.
+`prisma orm init` writes the Prisma lines in your `package.json`. You do not have to work them out. It writes one line for the package you import from, such as `@prisma/orm-postgres`, and one for each package that one is built from. They are listed so that your application has exactly one copy of each ([ADR 329](../architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)). You never import the others.
 
-These lines are for the packages that share the release number; `@prisma/orm-extension-paradedb` is written at a range on its own version, such as `^0.18.0`.
+What you do at a new release depends on the level of your database's package.
 
-`prisma orm init` writes the lines this way when it adds the facade itself. When the project already lists the facade, `init` leaves that line as the user wrote it and writes each platform package at the range the installed facade declares for it, so that it never installs a platform package the user's facade does not accept.
+### A GA database: update as usual
 
-At release 8.0 the lines are written on its first versions, `^8.0.1` and `~8.0.1-ea.0`, never on `8.0.0`: `~8.0.0-ea.0` would admit an old `8.0.0-rc.N`.
+```jsonc
+// a PostgreSQL application on release 8.3
+"@prisma/orm-postgres":        "^8.3.0",
+"@prisma/orm-framework":       "^8.3.0",
+"@prisma/orm-family-sql":      "^8.3.0",
+"@prisma/orm-target-postgres": "^8.3.0",
+"@prisma/orm-toolchain":       "^8.3.0"
+```
 
-On the release candidates `init` writes the exact `8.0.0-rc.N` on every line.
+Every line has a caret (`^`), which accepts any later 8.x version. When release 8.4 is published, run your package manager's update command. Every line moves to 8.4 together, and you change nothing.
 
-Under pnpm a line on a package below GA is exact: pnpm writes `8.1.0-ea.0` even when it is given `~8.1.0-ea.0`, and `pnpm update` rewrites such a line to an exact version. That is pnpm's behaviour, which `init` does not change. To take a fix to that package, such as `8.1.0-ea.1`, change the line or add the package again.
+If you add an extension that is below GA, its line has a tilde on its own version, such as `~8.3.0-ea.0`. Your application keeps working after an update, but to get the extension's next release you edit that line yourself.
 
 ### A new minor below GA
 
-At each new minor, an application on a facade below GA edits by hand every line for a package that shares the release number to the new minor, `~X.Y.0-<level>.0` for the packages below GA and `~X.Y.0` for the GA ones, then runs its package manager's install. For SQLite going from `8.1` to `8.2`:
-
 ```jsonc
-// before
-"@prisma/orm-sqlite": "~8.1.0-ea.0",
-"@prisma/orm-target-sqlite": "~8.1.0-ea.0",
-"@prisma/orm-framework": "~8.1.0",
-"@prisma/orm-family-sql": "~8.1.0",
-"@prisma/orm-toolchain": "~8.1.0"
-// after
-"@prisma/orm-sqlite": "~8.2.0-ea.0",
-"@prisma/orm-target-sqlite": "~8.2.0-ea.0",
-"@prisma/orm-framework": "~8.2.0",
-"@prisma/orm-family-sql": "~8.2.0",
-"@prisma/orm-toolchain": "~8.2.0"
+// a SQLite application on release 8.3; SQLite is at Early Access
+"@prisma/orm-sqlite":        "~8.3.0-ea.0",
+"@prisma/orm-target-sqlite": "~8.3.0-ea.0",
+"@prisma/orm-framework":     "~8.3.0",
+"@prisma/orm-family-sql":    "~8.3.0",
+"@prisma/orm-toolchain":     "~8.3.0",
+"prisma":                    "~8.3.0"
 ```
 
-The `prisma` line, which `init` wrote with a tilde, is moved by hand too, to the `prisma` version that goes with the new minor.
+Every line has a tilde (`~`), which accepts fixes within 8.3 and nothing from 8.4. An update keeps you on 8.3.
 
-The package managers' update commands are not a substitute: pnpm's `update` rewrites a tilde on a pre-release as an exact version, which never moves again, and Yarn's update to the latest version writes a caret, so the next ordinary update moves the GA lines to the following minor without the facade, which does not accept it.
+To move to release 8.4, edit every line to the new release and install:
 
-## Printing the release plan
+```jsonc
+"@prisma/orm-sqlite":        "~8.4.0-ea.0",
+"@prisma/orm-target-sqlite": "~8.4.0-ea.0",
+"@prisma/orm-framework":     "~8.4.0",
+"@prisma/orm-family-sql":    "~8.4.0",
+"@prisma/orm-toolchain":     "~8.4.0",
+"prisma":                    "~8.4.0"
+```
 
-`node scripts/print-release-plan.ts [<root version>] [--ever-ga <name,...>]` prints, for each published package, its level, the version and tag it is published with, and the range it writes on each package of ours it names. With no version it plans the root `package.json`'s version. `--ever-ga` names the packages that have had a GA release, which decides their tag below GA. It reads the workspace and writes nothing. [`scripts/fixtures/release-plan/`](../../scripts/fixtures/release-plan/) holds the expected output for the root version, `8.0.1` and `8.1.0`, and `pnpm test:scripts` compares them.
+Then read the release notes, because a package below GA may have changed.
 
-## Versions in the workspace
+Why the tilde, even on the packages that are GA: no version range can carry a package below GA from one release into the next, so an update can never move `@prisma/orm-sqlite` to 8.4. If the other lines had a caret, the same update would move them to 8.4 and leave SQLite on 8.3, and those two halves do not work together. With a tilde on every line, everything stays on one release until you move it. [ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md#what-goes-in-an-applications-packagejson) walks through this step by step.
 
-The published packages follow the release plan. Everything else follows the root version: the private `@internal/*` packages, the examples, the apps and the root itself. A contributor reads the root version from the root `package.json`, and the release number is its major and minor; a published package's own version is in its manifest, and the release plan prints all of them.
+Two things to know about package managers:
 
-- **The `prisma-8` skill is stamped with the version it ships in.** The skill ships inside the `@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb` and `@prisma/orm-mongo` tarballs (copied in by each package's `prepack`). The copy in the source tree carries the root version in its `metadata.library_version` frontmatter, and each packed copy carries the version of the package it ships in. Getting the skill and getting the code are one install, and a consumer can compare the stamp on its synced copy against its installed packages.
-- **Extension authors name our published packages, never an `@internal/*` package**, which is never published. Until release 8.0, an extension names every `@prisma/orm-*` package it uses as a peer dependency at one exact `8.0.0-rc.N`. From release 8.0 it declares a caret on the first release it works with on a GA package, and a tilde within that minor on a package below GA, as [Ranges between our packages](#ranges-between-our-packages) gives. The [extension-upgrade skill](../../skills/prisma-8/references/upgrade-extension.md#exact-pin-rule) has the details.
+- **Do not use the update command to move a package below GA to a new release.** pnpm's `update` rewrites a tilde on such a version as an exact version, which then never moves. Yarn's update to the latest version writes a caret. Edit the lines by hand.
+- **pnpm writes an exact version** when it adds a package below GA, such as `8.3.0-ea.0` with no tilde. To take a fix such as `8.3.0-ea.1`, change the line.
 
-[`scripts/set-version.ts`](../../scripts/set-version.ts) writes the versions: each published package's from the release plan, and the root version everywhere else.
+### The `prisma` command-line tool
 
-Published code that reports a version reads it from its private `@internal/*` package, so it reports the root version, not its published package's own version:
+The `prisma` tool must be on the same release as your application's Prisma packages. `init` installs it. Beside a GA database its line has a caret, so it moves with the others. Beside a database below GA its line has a tilde, as shown above, so that an update does not move the tool to the next release while your application stays behind.
 
-- **The facades' `contractFromJson` key** (`<targetId>@<version>`) only marks a contract value as checked by that function, within one process, and is compared with nothing else.
-- **The MongoDB driver's `driverInfo`** is sent to the MongoDB server when it connects, for the server's logs, and is compared with nothing.
-- **The Supabase extension's version in `contract.json`** is written into every contract that uses it. It is the root version from release 8.0 too, not the extension's own version; changing it would change emitted contracts, which is decided outside this work.
+## Installing a version that is not the newest stable one
 
-## The `8.0.0` release candidates in detail
+Running `npm install @prisma/orm-postgres` with no version gives you the version under the npm tag `latest`.
 
-Releases are versioned `8.0.0-rc.1`, `8.0.0-rc.2`, … with the counter advancing on every release publish. The version number iterates freely. Versions are immutable on npm: a botched publish burns a counter value, which is fine; skip it and never reuse a number.
+| Tag | What it gives you |
+| --- | --- |
+| `latest` | The newest GA version of a package. For a package that has never been GA, the newest version, whatever its level. Until release 8.0, the newest `8.0.0-rc.N`. |
+| `ea`, `preview`, `rc` | The newest version at that level, for a package that has already had a GA version. A plain install of such a package keeps giving you the last GA version. |
+| `dev` | A build of the newest commit on `main`, published on every push. Use it to check whether a fix that is not released yet solves your problem. It may be removed at any time. |
 
-For every package this repository publishes, `latest` tracks the newest release candidate. These package names have no earlier stable audience to protect: a bare `npm install` of any of them is a release-candidate install, and its users are expected to keep up (see [Release candidates](#release-candidates)). Existing installs are unaffected: lockfiles pin resolved versions, and `^0.x` ranges can never resolve to a release candidate (a pre-release does not match a stable range).
+To try the change in one pull request, install its preview from [pkg.pr.new](https://pkg.pr.new). Install the preview of every Prisma package in your `package.json` together. A preview of one package installed alone runs on the released versions of the others, so it does not test the pull request.
 
-The bare `prisma` package is published from [prisma/prisma-cli](https://github.com/prisma/prisma-cli), not from this repository. That repository publishes v8 builds under `next` while `latest` stays on Prisma 7 (published from the `v7` branch's pipeline) until release 8.0.
+## For extension authors
 
-The transition onto the release candidates was a one-time bump from the last `0.x` stable to `8.0.0-rc.1`; `pnpm bump-version` encodes it (a pre-8 stable base advances to `8.0.0-rc.1`, a release-candidate base advances its counter). There are no further `0.x` minors.
+- **Depend only on published packages:** `@prisma/orm-framework`, `@prisma/orm-toolchain`, `@prisma/orm-family-*` and `@prisma/orm-target-*`. List each one you use as a peer dependency, and again as a development dependency for your own build.
+- **Until release 8.0,** list each at one exact `8.0.0-rc.N`.
+- **From release 8.0,** list a GA package with a caret on the first release your extension works with, such as `^8.1.0`. Your extension then keeps working when an application moves to a later release.
+- **If you use anything below GA,** a whole package or a single function such as `preview_search`, list that package with a tilde, such as `~8.1.0`. It may change in the next release, so you publish a new version of your extension for each release.
+- **Version your own package** as you see fit. We recommend taking the major and minor of the first Prisma release it works with, and using the same level suffixes.
 
-## Dist-tag convention
+[ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md#packages-maintained-outside-this-repository) has the full convention, and the [extension-upgrade reference](../../skills/prisma-8/references/upgrade-extension.md) has the steps.
 
-The npm registry exposes Prisma 8 under these dist-tags:
+## Reporting a regression
 
-- **`latest`**: on the release candidates, the newest `8.0.0-rc.N`, for every package. From release 8.0, each package's tag follows [Tags](#tags). New `latest` releases happen automatically when a release PR merges (see procedure below).
-- **`preview`, `ea`, `rc`**: from release 8.0, a release below GA of a package that has had a GA release.
-- **`dev`**: every push to `main` produces a `<version>-dev.N` tarball under this tag (on the release candidates: `8.0.0-rc.X-dev.N`). Release pushes publish theirs after the release itself, so `dev` always tracks a build of the current base and never falls behind `latest`. Use these to pin reproductions, install internal CI runs, or hand someone a "try `@dev` to get the bleeding edge" link. They may be yanked freely.
-- **`beta`**: reserved for hand-cut builds ahead of significant changes. Routine releases do not use this tag.
-
-The `pr` dist-tag was used historically to publish per-PR previews; PR previews now go through [`pkg.pr.new`](https://pkg.pr.new) ([`.github/workflows/preview-publish.yml`](../../.github/workflows/preview-publish.yml)) instead. The legacy `pr` tag is left as-is on the registry.
-
-A `pkg.pr.new` preview rewrites a package's dependencies on its siblings to the previews' own addresses, but not its peer dependencies, and every package of ours names its siblings as peers ([ADR 329](../architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)). So install the preview of a package together with the previews of every package it names as a peer, each by its preview address: the preview of `@prisma/orm-postgres` with those of `@prisma/orm-framework`, `@prisma/orm-family-sql`, `@prisma/orm-target-postgres` and `@prisma/orm-toolchain`. A preview installed alone gets the released versions of those packages from the registry, and tests the pull request's change on top of old code.
-
-## Who can publish
-
-Publishing requires:
-
-- **Membership in the maintainer team** (see [Governance](./governance.md)): pushing to `main` or merging a release PR is restricted to maintainers.
-- **A green run of the [`Publish to npm`](../../.github/workflows/publish.yml) workflow.** The workflow uses [npm OIDC trusted publishing](https://docs.npmjs.com/generating-provenance-statements): no long-lived `NPM_TOKEN` exists in repository secrets, so a leaked secret cannot be used to publish out-of-band. Each published tarball carries an [npm provenance attestation](https://docs.npmjs.com/generating-provenance-statements) tying it to this repository and the workflow run that produced it.
-- The workflow only publishes from `main`. Dry-runs are permitted from any branch (see "validate publish changes" below); every step that would mutate external state is independently guarded.
-
-## Mechanism: how a release is published
-
-The root version is the **`version` field of the root [`package.json`](../../package.json)**. The publish workflow ([`.github/workflows/publish.yml`](../../.github/workflows/publish.yml)) reads this value at the workflow's git ref, computes the release plan from it and the declared levels, and publishes nothing else. There is no `workflow_dispatch` input to override the version and no separate "release manifest" file. Anyone, human or agent, can answer "which release is this?" by reading a single file under git, and "what version is each package?" by printing the release plan.
-
-This is by design. Two other places a version could live cause silent problems:
-
-- **Querying the npm registry for the latest tag** (the previous behaviour) makes the next minor implicit. A yanked release, a manually-rewritten dist-tag, or registry latency all silently shift what the next CI build calls itself.
-- **A separate `versions.json` or `release.toml`** would diverge from the per-package `version` in tooling that only inspects `package.json` (npm, dependency analyzers, supply-chain scanners, downstream consumers).
-
-The publish workflow runs on **every push to `main`**, and every run publishes a `<version>-dev.N` tarball under dist-tag `dev`. A push whose root `package.json` carries a different `version` than the previous tip is recognised as a release bump and *additionally* publishes the release: each package under the tag the release plan gives it, and a GitHub Release, marked pre-release on the release candidates. From release 8.0 the root version has no pre-release suffix, so a GitHub Release is not marked pre-release, whatever the levels of the packages in it. It then publishes the dev build of the same commit. The two publishes are not alternatives: the dev leg of a release push is what keeps `dev` from sitting on the previous base until the next routine push (a staleness that broke prisma-cli's dev channel on 2026-08-25). This model is adopted from [prisma/composer#241](https://github.com/prisma/composer/pull/241). The release-on-version-change behaviour is what makes "merge the release PR" the publish trigger; there is no separate dispatch step.
-
-The workflow runs these checks before it publishes:
-
-- **Dependency-specifier check** ([`pnpm check:publish-deps`](../../scripts/check-publish-deps.mjs)): fails the publish if any packed `package.json` would carry an unrewritten `workspace:` or `catalog:` specifier into the registry, or a range on a package of ours that is not the release plan's.
-- **Release-notes presence check** ([`pnpm check:release-notes`](../../scripts/check-release-notes.mjs)): runs for `latest` publishes only. The Release body is the committed [`docs/releases/v<version>.md`](../releases/README.md), published via `gh release create --notes-file`; this check fails the publish when that file is missing. There is **no `--generate-notes` fallback**. A PR-mode variant runs in CI ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)) and fails a release PR that bumps the root `version` without committing the matching notes file, so the omission is caught in review rather than at publish.
-- **Upgrade coverage** ([`pnpm check:upgrade-coverage`](../../scripts/check-upgrade-coverage.mjs)): feature PRs require their own pending declarations for affected audiences. Releases require assembled app and extension guides and no remaining pending fragments, including late arrivals. Dev and beta builds allow pending work. The check verifies structure and script references; human review checks the synthesized guidance against its originals.
-
-## Procedure: cut the next release candidate
-
-This procedure is for the `8.0.0` release candidates. Release 8.0 is cut as `8.0.1`, never `8.0.0`: the release PR sets the root version to `8.0.1` with `node scripts/set-version.ts 8.0.1`, since `pnpm bump-version` only advances the release-candidate counter, and commits `docs/releases/v8.0.1.md`; the merge publishes the git tag and GitHub Release `v8.0.1`. The scripts refuse a root version of `8.0.0`. The rest of releasing 8.0, a fix to one package and the support period are not written yet.
-
-The release cadence is one PR per `rc.N`. A maintainer:
-
-1. **Runs the `publish-npm-version` skill** (see [`publish-npm-version`](../../skills-contrib/publish-npm-version/SKILL.md)). The skill creates a fresh worktree off `origin/main`, drives `pnpm bump-version`, and opens a PR in the maintainer's name. Using a skill rather than a GitHub workflow ensures the PR carries real maintainer credentials so CI runs on it normally.
-2. **Assembles upgrade guides and authors the release notes.** The skill first gathers pending fragments, synthesizes and reviews the app and extension guides, and moves original fragments into the repository-only archive following the [upgrade instruction lifecycle](../../upgrade-instructions/README.md). It then drafts notes linking those assembled guides. The release PR must include a committed [`docs/releases/v<version>.md`](../releases/README.md); its contents become the GitHub Release body verbatim (`gh release create --notes-file`). The PR-mode release-notes check fails the PR if the file is missing. The `publish-npm-version` skill drafts this file before opening the PR by running the [`draft-release-notes`](../../skills-contrib/draft-release-notes/SKILL.md) skill, which enumerates the release's merged PRs, triages them, and writes the categorized notes (breaking changes first) plus a matching `CHANGELOG.md` entry; the maintainer reviews the result in the PR.
-3. **Reviews and merges the PR.** Humans review both the guides and release notes. If new fragments arrive before merge, refresh the guides and archive those inputs first; CI checks completeness on the effective merged release tree, and publication checks it independently. The merge is the publish trigger: the resulting push to `main` carries the bumped root `version`, and the publish workflow publishes `<version>` under dist-tag `latest` plus a matching GitHub Release, marked pre-release, whose body is the committed notes file. The same run then publishes `<version>-dev.1` under `dev`.
-
-If the publish needs to be re-run (transient registry failure, etc.), a maintainer can dispatch the [`Publish to npm`](../../.github/workflows/publish.yml) workflow from `main` with `dist-tag=latest` and `dry-run=false`; the workflow re-publishes the version currently committed at HEAD, including the `dev` follow-up, so recovering a failed release also recovers the `dev` dist-tag. This is the same path used to cut a hand-rolled `beta` (`dist-tag=beta`), which carries no dev follow-up.
-
-On the release candidates there are no patch releases: a fix ships as the next `rc.N`.
-
-## Procedure: validate publish changes
-
-The publish workflow's `dry-run` mode (the input default) can be invoked from any branch to validate that the publish pipeline still works after touching `publish.yml`, `set-version.ts`, `determine-version.ts`, the publish script, the release plan, or any of the build scripts. A dry-run exercises `pnpm publish --dry-run` against every publishable workspace package, runs the checks, and skips the registry publish and the GitHub Release.
-
-## Non-goals
-
-- **Maintenance of older Prisma 8 release candidates.** You upgrade to the latest. There is no tooling for patching an older release candidate, and that is intentional. Prisma 7 is the one older line that is maintained (see [Supported versions](#supported-versions)).
-- **A scripted `beta` cadence.** The `beta` dist-tag exists but cutting beta builds is a manual `workflow_dispatch`.
+If an upgrade within Prisma 8 breaks something that is GA, that is a bug. [Open an issue](https://github.com/prisma/orm/issues/new/choose) with the two versions and the smallest example that shows it. The fix is published in the newest release.
