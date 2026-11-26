@@ -23,7 +23,7 @@ The database does not yet record that rule, so a deploy to the ref stops before 
 $ prisma db migrate --to production --db $PROD
 ✘ [MIGRATION.POLICY_MISMATCH] The ref's policies differ from the database's
   why: production declares change: migrate; the database has change: migrate, reconcile.
-→ Have whoever owns the database apply the ref's policies in a deploy.
+→ Nothing runs while production declares policies that differ from the database's. Tell the user, or whoever owns the database, about the difference.
 ```
 
 Whoever owns production applies the rule with explicit consent, and from then on the database itself refuses `db update`:

@@ -6,10 +6,9 @@ export const refPositional = {
   placeholder: 'ref',
 } as const;
 
-export const DO_NOT_LOOSEN_TO_GET_PAST_A_REFUSAL =
-  "A refused deploy or plan is not a reason to loosen a ref's policies. Change\n" +
-  'them only when the team means to change how that database may change, and\n' +
-  'have the change reviewed like code.';
+export const NOT_A_REASON_TO_CHANGE =
+  "A refused deploy or plan is not a reason to change a ref's policies. They\n" +
+  'record how the team decided that database may change.';
 
 /** `a`, `a and b`, `a, b and c`. */
 export function andList(values: readonly string[]): string {

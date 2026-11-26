@@ -1287,7 +1287,7 @@ prisma migration ref policy set <ref> --change migrate --data-loss forbidden
 prisma migration ref policy delete <ref> <setting>  # Remove settings, so the ref declares nothing about them
 ```
 
-The `migration ref policy` commands rewrite only the ref file and never connect to a database: a database takes on a ref's policies only in a deploy its owner gives consent to (see `db migrate`). `set` and `delete` label each change `tightens`, `loosens` or `unchanged`. A refused deploy or plan is not a reason to loosen a ref's policies.
+The `migration ref policy` commands rewrite only the ref file and never connect to a database: a database takes on a ref's policies only in a deploy its owner gives consent to (see `db migrate`). `set` and `delete` label each change `tightens`, `loosens` or `unchanged`. A refused deploy or plan is not a reason to change a ref's policies.
 
 **Options (all subcommands):**
 - `--config <path>`: Path to `prisma.config.ts`

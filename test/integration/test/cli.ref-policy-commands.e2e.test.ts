@@ -72,7 +72,8 @@ withTempDir(({ createTempDir }) => {
             nextActions: [
               {
                 kind: 'user-choice',
-                label: "Have whoever owns the database apply the ref's policies in a deploy.",
+                label:
+                  "Nothing runs while production declares policies that differ from the database's. Tell the user, or whoever owns the database, about the difference.",
               },
             ],
           });

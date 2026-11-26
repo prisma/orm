@@ -8,12 +8,7 @@ import {
 import { defineOrmCommand } from '../../define-command';
 import { normalizeError } from '../../normalize-error';
 import { editPresentations } from './presentation';
-import {
-  andList,
-  DO_NOT_LOOSEN_TO_GET_PAST_A_REFUSAL,
-  planCheckSentence,
-  refPositional,
-} from './text';
+import { andList, NOT_A_REASON_TO_CHANGE, planCheckSentence, refPositional } from './text';
 
 function closing(ref: string, changes: readonly RefPolicyChange[]): string {
   const removed = andList(changes.map(({ setting }) => setting));
@@ -32,7 +27,7 @@ export function createRefPolicyDeleteCommand(
         'setting is named change, dataProtection.dataLoss or\n' +
         'dataProtection.accessWidening, or by its flag name: data-loss or\n' +
         'access-widening. It never connects to a database.\n\n' +
-        DO_NOT_LOOSEN_TO_GET_PAST_A_REFUSAL,
+        NOT_A_REASON_TO_CHANGE,
       examples: [
         'migration ref policy delete staging change',
         'migration ref policy delete staging data-loss access-widening --json',

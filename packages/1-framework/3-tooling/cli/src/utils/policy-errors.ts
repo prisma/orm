@@ -10,12 +10,7 @@ import type { MigrationPlanArguments } from '../control-api/operations/plan-argu
 import { shellQuoted } from '../control-api/statements/statement-flag';
 import { ActionableCliError } from './cli-errors';
 import { chooseAction, runCommandAction } from './next-actions';
-import {
-  type DataProtectionKey,
-  FORBIDDEN_LEVEL,
-  policyValueEffect,
-  settingsText,
-} from './policy-settings';
+import { type DataProtectionKey, FORBIDDEN_LEVEL, settingsText } from './policy-settings';
 import { type CliInvocation, cliCommand, printedWayToTarget, quotedPlan } from './printed-command';
 
 /** `change: migrate; dataProtection.dataLoss: data-loss-forbidden`: the declared side of each difference. */
@@ -36,40 +31,17 @@ export function errorPolicyMismatch(args: {
         `${refName} declares ${setting}: ${databasePolicyValueText(declared)}; the database has ${setting}: ${databasePolicyValueText(inForce)}.`,
     )
     .join(' ');
-  const recoveries = mismatchRecoveries(differences);
+  const report = `Nothing runs while ${refName} declares policies that differ from the database's. Tell the user, or whoever owns the database, about the difference.`;
   return new ActionableCliError(
     'MIGRATION.POLICY_MISMATCH',
     "The ref's policies differ from the database's",
     {
       why,
-      fix: recoveries.join(' '),
-      nextActions: recoveries.map(chooseAction),
+      fix: report,
+      nextActions: [chooseAction(report)],
       meta: { spaceId, refName, differences },
     },
   );
-}
-
-const DECLARE_WHAT_THE_DATABASE_HAS =
-  'Make the ref declare what the database has, and have the change reviewed.';
-const APPLY_THE_REF = "Have whoever owns the database apply the ref's policies in a deploy.";
-
-/**
- * Making the ref declare what the database has is advised only where that tightens the ref; any other difference is resolved by the database's owner, so no advice loosens a ref.
- */
-function mismatchRecoveries(differences: readonly DatabasePolicyDifference[]): readonly string[] {
-  const refLooser = differences.filter(
-    ({ setting, declared, inForce }) =>
-      policyValueEffect(setting, declared, inForce) === 'tightens',
-  );
-  const others = differences.filter((difference) => !refLooser.includes(difference));
-  if (others.length === 0) return [DECLARE_WHAT_THE_DATABASE_HAS];
-  if (refLooser.length === 0) return [APPLY_THE_REF];
-  const settings = (group: readonly DatabasePolicyDifference[]) =>
-    group.map(({ setting }) => setting).join(', ');
-  return [
-    `For ${settings(refLooser)}: ${DECLARE_WHAT_THE_DATABASE_HAS}`,
-    `For ${settings(others)}: ${APPLY_THE_REF}`,
-  ];
 }
 
 export type ChangePolicyCheckedCommand = 'db update' | 'db sign' | 'db migrate';
@@ -190,15 +162,6 @@ function refusingPolicy(source: PolicySource, forbids: string): string {
 const KEEP_APPLIED_MIGRATION =
   'If another database has already applied a migration listed here, keep it as it is.';
 
-/**
- * How a refused change can still happen: only by the database's owner changing its policy. A ref's refusal gets no such sentence, because changing what a ref declares to get past a refusal is what ADR 334 rules out.
- */
-function doItAnyway(source: PolicySource): readonly string[] {
-  return source.kind === 'ref'
-    ? []
-    : ['To do it anyway, whoever owns the database must first change its data protection policy.'];
-}
-
 function quotedList(names: readonly string[]): string {
   const quoted = names.map((name) => `"${name}"`);
   return quoted.length === 1
@@ -298,7 +261,6 @@ function keepProtected(
           migrationPlan,
         )),
     ...(extensionSpaces.length === 0 ? [] : [extensionsOwnMigrations(extensionSpaces)]),
-    ...doItAnyway(refusal.source),
   ].join(' ');
 }
 

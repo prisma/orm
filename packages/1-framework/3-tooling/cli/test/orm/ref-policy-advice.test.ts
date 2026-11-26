@@ -39,6 +39,23 @@ describe('advice about ref policies', () => {
     );
   });
 
+  it.each(['set', 'delete'])(
+    'says in the help of %s that a refusal is not a reason to change a ref',
+    async (command) => {
+      const { dir } = await projectWithRef('production', PLAIN_REF);
+
+      const run = await harness().run(['migration', 'ref', 'policy', command, '--help'], {
+        cwd: dir,
+      });
+      const help = run.stdout.replace(/│/g, '').replace(/\s+/g, ' ');
+
+      expect(help).toContain(
+        "A refused deploy or plan is not a reason to change a ref's policies. They record how the team decided that database may change.",
+      );
+      expect(help).not.toMatch(/loosen/);
+    },
+  );
+
   it('says in the help of set what each level does', async () => {
     const { dir } = await projectWithRef('production', PLAIN_REF);
 

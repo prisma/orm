@@ -98,7 +98,8 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
           nextActions: [
             {
               kind: 'user-choice',
-              label: "Have whoever owns the database apply the ref's policies in a deploy.",
+              label:
+                "Nothing runs while production declares policies that differ from the database's. Tell the user, or whoever owns the database, about the difference.",
             },
           ],
           meta: { spaceId: 'app', refName: 'production', differences: [CHANGE_DIFFERENCE] },

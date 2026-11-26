@@ -26,21 +26,22 @@ ADR 320 said that only a person editing the file changes a ref's policies. This 
 
 ADR 320 also said that every command that rewrites a ref keeps the fields it does not change. This record narrows it to: **every ref writer keeps the fields the ref format defines** (`hash`, `invariants`, `policies`). A top-level key the format does not define is dropped on rewrite, which is what every ref writer already does.
 
-**No advice points to these commands.** No error, next action or command output, and no advice in the `prisma-8` skill, tells the reader to loosen a ref's policies or points to these commands as a way past a refusal, whether it names them or describes what they do. No output of the commands names `--permit-policy-change`. The help of `set` and `delete` says that a refused deploy or plan is not a reason to loosen a ref's policies. Reference documentation may name the commands: the skill's description of the ref file and its commands, the CLI's README and help, and these design documents.
+**No advice suggests a policy change.** No error, next action, command output or skill advice suggests changing a database's or a ref's policies, in either direction and by anyone, the owner included, whether it names these commands or describes what they do. A refusal says what was refused and how to fix the refused work; a mismatch states the difference and says to report it to the user. No output of the commands names `--permit-policy-change`. The help of `set` and `delete` says that a refused deploy or plan is not a reason to change a ref's policies. Reference documentation may describe, as facts, how policies are changed and may name the commands: the skill's description of the ref file and its commands, the CLI's README and help, and these design documents. It never does so as a response to a refusal or a mismatch.
 
 ## Why the commands are acceptable
 
 The commands write the working copy of the ref file, which a deploy then reads. They can do nothing that editing the file by hand cannot. A database still takes on a ref's policies only in a deploy its owner gives consent to. ADR 320 already lists "edit the ref, then give consent" as a deliberate workaround the policies do not try to stop: they stop mistakes. The commands make a mistaken edit less likely, because they reject an invalid value before touching the file and label every change that loosens a policy `loosens`.
 
-## Why no advice names them
+## Why no advice suggests a policy change
 
-An agent that has just been refused acts on whatever the error offers it. An error that pointed to a command that loosens the ref would have that agent loosen production's policies to get its deploy through, which is the mistake ADR 320 exists to stop. So the advice for a refusal fixes what was refused. `MIGRATION.POLICY_MISMATCH` advises making the ref declare what the database has only where that makes the ref stricter, and otherwise advises having the database's owner apply the ref's policies in a deploy.
+The policies stop changes the team did not intend. An agent that has just been refused acts on whatever the error offers it, so any suggestion to change a policy, even to tighten it or to have the owner change it, becomes a way forward that agent takes. A policy changes because the team decides to, never because an error suggested it. So the advice for a refusal fixes the refused work, and `MIGRATION.POLICY_MISMATCH` states the differences and says nothing runs while they remain: "Nothing runs while production declares policies that differ from the database's. Tell the user, or whoever owns the database, about the difference."
 
 ## Consequences
 
 - The operations behind the commands are not part of the control API. A pipeline only deploys, so a program has no reason to rewrite a ref's policies.
 - The ref file format does not change, and editing the file by hand keeps working.
-- The `prisma-8` skill documents the commands as reference, beside the ref file format, and names them in its guidance only to say they are not a way past a refusal. A later agent that finds them in the skill should keep that documentation, not remove it: what is ruled out is advice that sends a refused reader to them.
+- The `prisma-8` skill documents the commands as reference, beside the ref file format, and names them in its guidance only to say they are not a way past a refusal. Its advice for a refusal or a mismatch is to fix the refused work or tell the user, never to change a policy. A later agent that finds them in the skill should keep that documentation, not remove it: what is ruled out is advice that sends a refused reader to them.
+- A test over every policy error the CLI builds, for every command and source, fails if its fix or next actions suggest changing or applying a policy.
 - A source check in the CLI's tests fails if any file under a package's `src` other than the commands and the place the CLI mounts them names the commands. It covers the code that produces errors, next actions and output; the skill and the docs, which may name the commands as reference, are outside it, and their advice is checked by review.
 
 ## Alternatives considered
