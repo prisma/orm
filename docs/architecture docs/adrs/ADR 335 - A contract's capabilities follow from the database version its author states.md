@@ -32,14 +32,14 @@ export default definePrismaConfig({
 Emitting turns the version into the contract's list of required capabilities. `prisma db sign` then refuses a database that does not provide them. The example supposes a capability, `sql.mergeReturning`, that PostgreSQL has from version 17; today all four supported versions provide the same capabilities:
 
 ```text
-Your contract requires PostgreSQL 17 or later. This database runs PostgreSQL 15.4. Either upgrade the database, or state version 15 for your contract, which turns off the features that need 17. If its capabilities list turns one of them on (sql.mergeReturning), remove it there.
+Your contract requires database capabilities first available in PostgreSQL 17 (sql.mergeReturning), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove the capabilities from your contract: state version 15, and take them out of its capabilities list if it lists them.
 ```
 
 ## Decision
 
 A contract is the application's statement of the capabilities it requires. Three rules make that statement true of the environment the application runs in.
 
-1. **The author states the environment, and the capabilities follow.** The author states the database version, and optionally the capabilities the connection provides. The version is required and has no default. The contract stores capability keys and never the version.
+1. **The author states the environment, and the capabilities follow.** The author states the database version, and optionally the capabilities the connection provides. The version is required and has no default. The contract stores capability keys and never the version. No message needs the stated version: each speaks of the first version that provides a capability, which the target's table answers.
 2. **A signed database provides them.** Verification checks the connected database against the contract's capabilities before a signature is written. The client then checks only the signature.
 3. **The client's stack provides them.** The client offers what the contract lists and nothing more. The adapter and driver it is built from are checked against the contract when the code is compiled and when the client is created.
 
@@ -51,7 +51,7 @@ A contract is the application's statement of the capabilities it requires. Three
 | What the connection provides | Driver | `sql.interactiveTransactions` |
 | What the adapter can write as a query | Adapter | None yet for PostgreSQL |
 
-The target holds a table of which version provides which capability (`postgresCapabilitiesByVersion`). Whether PostgreSQL 17 has a feature is a fact about PostgreSQL, the same for every adapter, so the target declares it and the adapter does not. The table is also where the refusal's "requires PostgreSQL 17 or later" comes from.
+The target holds a table of which version provides which capability (`postgresCapabilitiesByVersion`). Whether PostgreSQL 17 has a feature is a fact about PostgreSQL, the same for every adapter, so the target declares it and the adapter does not. The table is also where the refusal's "first available in PostgreSQL 17" comes from.
 
 A capability is a yes-or-no fact that a query client reads to decide what it offers or how it writes a query. New operations and data types are not capabilities; they go through the operation registry and the codecs. Extension descriptors declare no capability flags.
 
@@ -73,11 +73,11 @@ It has no default. A default of the oldest version would give users fewer featur
 
 ### Signing checks the database
 
-A SQL target may implement `databaseCapabilitiesNotProvided`, which receives the contract and the introspected database and returns what the database lacks, in the user's terms. The SQL family's schema verification calls it and fails on its answer under its own code, `CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED`. No control policy and no strict setting can turn that failure into a warning. `db verify` and `db sign` run that verification.
+A SQL target may implement `databaseCapabilitiesNotProvided`, which receives the contract and the introspected database and returns what the database lacks as data: the database's name and version, and each finding, such as the capabilities it lacks with the first version that provides each. The framework renders that data into the message the CLI prints and the runner's failure carries, and the CLI gives no drift advice for it, because no command changes a server's version. The SQL family's schema verification calls it and fails on its answer under its own code, `CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED`. No control policy and no strict setting can turn that failure into a warning. `db verify` and `db sign` run that verification.
 
 The PostgreSQL runner behind `db migrate`, `db update` and `db init` reads the server's version once and checks every contract space before any space's operations run. It fails with `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED` and sends nothing that changes the database.
 
-Only the flags in the target's table are checked against the database. A server older than the table's first version is refused whatever the contract requires. A server newer than the last version is treated as the last. The adapter reads the version as the number `server_version_num`, never from display text.
+Only the flags in the target's table are checked against the database. A flag no row names may be a connection's, and the stack that migrates is not the one the application runs on, so signing cannot tell; the client reports it. A server older than the table's first version is refused whatever the contract requires. A server newer than the last version is treated as the last. The adapter reads the version as the number `server_version_num`, never from display text.
 
 ### The client checks its stack, and only that
 
@@ -87,6 +87,12 @@ The contract's capabilities that are not the database's must be provided by the 
 
 - **At compile time,** creating a client from a contract whose type is known and whose stack lacks a required capability is a type error that names the capability. A helper that passes on a contract type it does not know yet compiles, and is checked at run time.
 - **When the client is created,** the same comparison runs on the values in `contract.json` and logs one warning, `CONTRACT.CAPABILITIES_NOT_PROVIDED`. It is reported as a signature that does not match is reported, and `verifyMarker: false` turns both off.
+
+A flag that is neither the database's nor the adapter's or driver's is reported in both places, whether a connection capability this driver lacks or one nothing in this release knows:
+
+```text
+Your contract requires capabilities that no supported version of your database provides, and neither do your adapter, driver or extensions (sql.someNewThing). Either remove the capabilities from your contract, or install a component that provides them.
+```
 
 `transaction()` is the first feature that depends on a connection capability. Calling it with a contract that does not list `sql.interactiveTransactions` is a type error, and a refusal at run time.
 
