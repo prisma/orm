@@ -115,7 +115,7 @@ This project adopts a pragmatic subset inspired by RFC 8785 with additional doma
 ### Minimal canonical object
 
 ```json
-{"schemaVersion":"1","targetFamily":"sql","target":"postgres","profileHash":"...","models":{},"storage":{"storageHash":"...","tables":{}}}
+{"formatVersion":1,"targetFamily":"sql","target":"postgres","profileHash":"...","models":{},"storage":{"storageHash":"...","tables":{}}}
 ```
 
 ### With capabilities
@@ -123,7 +123,7 @@ This project adopts a pragmatic subset inspired by RFC 8785 with additional doma
 `capabilities` records contract requirements. Adapters still negotiate and verify support at connect time; this example only shows required keys captured in the contract.
 
 ```json
-{"schemaVersion":"1","targetFamily":"sql","target":"postgres","profileHash":"...","models":{"User":{"fields":{"email":{"codecId":"text","nullable":false},"id":{"codecId":"int4","nullable":false}},"storage":{"table":"user"}}},"storage":{"storageHash":"...","tables":{"user":{"columns":{"email":{"type":"text"},"id":{"type":"int4"}},"primaryKey":{"columns":["id"],"name":"user_pkey"}}}},"capabilities":{"sql":{"jsonAgg":true,"lateral":true}},"codecs":{"int4":{"ts":"number"},"text":{"ts":"string"}}}
+{"formatVersion":1,"targetFamily":"sql","target":"postgres","profileHash":"...","models":{"User":{"fields":{"email":{"codecId":"text","nullable":false},"id":{"codecId":"int4","nullable":false}},"storage":{"table":"user"}}},"storage":{"storageHash":"...","tables":{"user":{"columns":{"email":{"type":"text"},"id":{"type":"int4"}},"primaryKey":{"columns":["id"],"name":"user_pkey"}}}},"capabilities":{"sql":{"jsonAgg":true,"lateral":true}},"codecs":{"int4":{"ts":"number"},"text":{"ts":"string"}}}
 ```
 
 ## Alternatives considered

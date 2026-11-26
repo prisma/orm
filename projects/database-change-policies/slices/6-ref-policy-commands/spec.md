@@ -166,5 +166,4 @@ The `prisma` binary in prisma/prisma-cli mounts each ORM command by name and own
 - **Compound actions on `ref` (`ref show-policy`, `ref set-policy`).** Allowed by the command principles, but the newer commands (`service domain add`, `project env update`) use a nested noun.
 - **A comma-separated `--change`.** Rejected for a repeatable flag, as `--delete`, `--rename` and `--allow` already are.
 - **A label `declared` for a setting not declared before.** Rejected: declaring `permitted` where nothing was declared loosens the effective policy, and the label would hide it.
-- **A new function in the migration package that edits the raw JSON and keeps unknown keys.** Rejected for this change: it would make these commands behave differently from every other ref writer.
 - **Exporting the operations from the control API, as the other ref commands are.** Rejected, see "Where the code goes".
