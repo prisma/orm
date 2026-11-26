@@ -174,7 +174,7 @@ packages/9-public/
 - Every Prisma Next package on the npm registry has a stated audience; internals are structurally absent rather than "present but discouraged".
 - Generated code and documentation reference only published names; the private workspace names cannot leak because they do not resolve outside the repo. Those names are `@internal/*`, with `@repo/*` for the repository's own tooling — two scopes that cannot be mistaken for a published `@prisma/*` name, which the single old scope could not offer once it stopped matching what shipped.
 - Extension packs name the platform packages they use as peer dependencies (e.g. `@prisma/orm-target-postgres`), and the application declares those packages in both the facade and decomposed configurations, so an extension and the application's client share one copy of each.
-- Each release publishes all the packages together, and each package gets its own version within the release ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
+- Each release publishes the packages together, and each package gets its own version within the release. One package, `@prisma/orm-extension-paradedb`, has version numbers of its own ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
 - Adding a new database means adding one target package, one facade, and (if it starts a new family) one family package — the public surface grows by two or three packages, not by a per-module count.
 
 ## Deferred decisions

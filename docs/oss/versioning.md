@@ -29,7 +29,7 @@ Prisma 8 has not had its first stable release. Today every package is published 
 - **Each one comes with an upgrade guide,** linked from its release notes. The `prisma-8` agent skill, which ships inside the Prisma packages, can apply the guide for you.
 - **List every Prisma package at the same exact version** in your `package.json`, such as `"8.0.0-rc.25"`, with nothing in front of the number.
 
-These release candidates are older than the maturity levels below, and the name means less than it will: a package published as `8.0.0-rc.25` may be far from finished. From release 8.0, "Release Candidate" is a level with a defined meaning.
+The name says less than it seems to. Every package gets the same `8.0.0-rc.N`, whatever state it is in, so a package published as `8.0.0-rc.25` may be far from finished. Only from release 8.0 is "Release Candidate" a level with a defined meaning, described below.
 
 If your project cannot keep up with breaking changes, stay on Prisma 7 until release 8.0.
 
@@ -38,7 +38,7 @@ If your project cannot keep up with breaking changes, stay on Prisma 7 until rel
 A version has three parts: major, minor and patch. In `8.3.1` they are `8`, `3` and `1`.
 
 - **The major and minor are the release.** "Release 8.3" means every package at `8.3`. Two Prisma packages belong together when their first two numbers match.
-- **The patch belongs to each package.** A package that is Generally Available has a plain version, such as `8.3.0`, and a fix to it is its next patch, `8.3.1`.
+- **The patch belongs to each package.** A package that is Generally Available has a plain version, such as `8.3.0`, and a fix raises its patch number, to `8.3.1`.
 - **A package that is not finished has its level and a counter after the version:** `8.3.0-ea.0`, then `8.3.0-ea.1` after a fix. The next section says what the levels are.
 - **Release 8.0 starts at `8.0.1`.** Its first versions are `8.0.1`, and for example `8.0.1-ea.0`. No package is published as `8.0.0`. The old `8.0.0-rc.N` versions stay on npm for good, and a version such as `8.0.0-ea.0` would sort below them, so package managers would install an old release candidate in its place. From `8.1` on, every release starts at patch 0.
 
@@ -59,18 +59,26 @@ From release 8.0, every Prisma package has one of four maturity levels. The leve
 
 ### Which packages are at which level
 
-Each database has one package that your code imports from, such as `@prisma/orm-postgres`. That package is built from a few others, called the platform packages, which hold the code shared between databases: `@prisma/orm-framework`, `@prisma/orm-toolchain`, a family package such as `@prisma/orm-family-sql`, and a target package such as `@prisma/orm-target-postgres`.
+Each database has one package that your code imports from, such as `@prisma/orm-postgres`. That package is built from a few others, called the platform packages: `@prisma/orm-framework` (the core every database shares), `@prisma/orm-toolchain` (the `prisma orm` commands), a family package such as `@prisma/orm-family-sql` (what all SQL databases share), and a target package such as `@prisma/orm-target-postgres` (what is specific to one database).
 
 At release 8.0:
 
-| Level | Packages |
-| --- | --- |
-| Generally Available | **PostgreSQL:** `@prisma/orm-postgres`, with `@prisma/orm-framework`, `@prisma/orm-toolchain`, `@prisma/orm-family-sql` and `@prisma/orm-target-postgres`. **PostgreSQL extensions:** `@prisma/orm-extension-pgvector`, `@prisma/orm-extension-postgis`, `@prisma/orm-extension-arktype-json` and `@prisma/orm-postgres-contrib`. **Others:** `@prisma/orm-extension-middleware-cache` and `@prisma/orm-better-auth`. |
-| Early Access | **MongoDB:** `@prisma/orm-mongo`, `@prisma/orm-family-mongo`, `@prisma/orm-target-mongo`. **MySQL:** `@prisma/orm-mysql`, `@prisma/orm-target-mysql`. **MariaDB:** `@prisma/orm-mariadb`, `@prisma/orm-target-mariadb`. **SQLite:** `@prisma/orm-sqlite`, `@prisma/orm-target-sqlite`. **Extension:** `@prisma/orm-extension-supabase`. |
+| What | Level at release 8.0 | Packages |
+| --- | --- | --- |
+| PostgreSQL | Generally Available | `@prisma/orm-postgres`, `@prisma/orm-target-postgres` |
+| The packages every database shares | Generally Available | `@prisma/orm-framework`, `@prisma/orm-toolchain`, `@prisma/orm-family-sql` |
+| PostgreSQL extensions | Generally Available | `@prisma/orm-extension-pgvector`, `@prisma/orm-extension-postgis`, `@prisma/orm-extension-arktype-json`, `@prisma/orm-postgres-contrib` |
+| Query cache | Generally Available | `@prisma/orm-extension-middleware-cache` |
+| Better Auth integration | Generally Available | `@prisma/orm-better-auth` |
+| MongoDB | Early Access | `@prisma/orm-mongo`, `@prisma/orm-family-mongo`, `@prisma/orm-target-mongo` |
+| MySQL | Early Access | `@prisma/orm-mysql`, `@prisma/orm-target-mysql` |
+| MariaDB | Early Access | `@prisma/orm-mariadb`, `@prisma/orm-target-mariadb` |
+| SQLite | Early Access | `@prisma/orm-sqlite`, `@prisma/orm-target-sqlite` |
+| Supabase extension | Early Access | `@prisma/orm-extension-supabase` |
 
 No package is at Preview or Release Candidate yet. Each package's README states its level.
 
-One package has no level. `@prisma/orm-extension-paradedb` is maintained by another team and has its own version numbers, starting at `0.18.0`. Its README says which Prisma releases each of its versions works with.
+One package has no level. `@prisma/orm-extension-paradedb` is maintained by another team and has its own version numbers, starting at `0.18.0`.
 
 ### A function can be below its package's level
 
@@ -180,7 +188,7 @@ Then read the release notes, because a package below GA may have changed.
 
 ### An extension below GA in a GA application
 
-A PostgreSQL application can use an extension that is still below GA, such as `@prisma/orm-extension-supabase`. Add it with a tilde on its own version:
+A PostgreSQL application can use an extension that is still below GA, such as `@prisma/orm-extension-supabase`. After adding it, make sure its line has a tilde on its own version (a plain add writes a caret, or under pnpm an exact version):
 
 ```jsonc
 "@prisma/orm-extension-supabase": "~8.3.0-ea.0"
@@ -219,7 +227,7 @@ Which range to write on each:
 
 With a caret, your extension keeps working when an application moves to a later release, and you publish nothing. With a tilde, you publish a new version of your extension for each Prisma release.
 
-At release 8.0, write `^8.0.1` and `~8.0.1-ea.0`. Never write `8.0.0` in a range: it would accept the old release candidates.
+At release 8.0, write `^8.0.1` and `~8.0.1-ea.0`, never `8.0.0`. No package is published at `8.0.0`, and `~8.0.0-ea.0` would accept the old release candidates, because `rc` sorts after `ea`.
 
 Version your own package as you see fit. We recommend taking the major and minor of the first Prisma release it works with, and using the same level suffixes. [ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md#packages-maintained-outside-this-repository) has the full convention, and the [extension-upgrade reference](../../skills/prisma-8/references/upgrade-extension.md) has the steps.
 

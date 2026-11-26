@@ -24,7 +24,11 @@ This is the invariant the [extension-upgrade flow](../../../skills/prisma-8/refe
 
 An extension's own `package.json` also has to list Prisma's packages correctly. List every `@prisma/orm-*` package that your shipped code uses as a peer dependency, and again as a development dependency for your own build and tests. A package that only your tests use is a development dependency alone. None is an ordinary dependency.
 
-Listed this way, an application on a version your extension does not accept gets a mismatch reported at install. Listed as an ordinary dependency, it would get a second copy of Prisma ORM, and the two copies do not accept each other's values. When the packages that disagree are ones the application lists itself, npm refuses the install, and pnpm, Yarn and Bun install and print a peer dependency warning. A successful install does not prove that the versions match, so read the peer warnings it prints. A monorepo whose applications are on different Prisma releases can still get two copies under npm workspaces and under Bun's hoisted linker; keep such applications on one release, or use pnpm, Yarn or Bun's isolated linker.
+Why peer dependencies:
+
+- **Listed as a peer dependency,** a version your extension does not accept is reported when the application installs. npm refuses the install. pnpm, Yarn and Bun install and print a peer dependency warning, so read the warnings: a successful install does not prove that the versions match.
+- **Listed as an ordinary dependency,** the application would get a second copy of Prisma ORM, and the two copies do not accept each other's values.
+- **A monorepo is the exception.** If its applications are on different Prisma releases, it can still get two copies under npm workspaces and under Bun's hoisted linker. Keep such applications on one release, or use pnpm, Yarn or Bun's isolated linker.
 
 Until release 8.0, list each `@prisma/orm-*` package at one exact `8.0.0-rc.N`. The [exact-pin rule](../../../skills/prisma-8/references/upgrade-extension.md#exact-pin-rule) says why.
 

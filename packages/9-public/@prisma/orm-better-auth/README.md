@@ -34,7 +34,7 @@ pnpm add "@prisma/orm-better-auth@~8.0.1" "better-auth@~1.7.22"
 
 For a later release, such as 8.3, write `8.3.0` in place of `8.0.1`.
 
-The adapter uses the Prisma packages your database package already installs: `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`. If the adapter needs a later release of them than you have, your package manager warns you, or refuses to install when it checks peer dependencies strictly. Do not install it from a later release than those packages, or the adapter loads a second copy of Prisma's code.
+The adapter uses the Prisma packages your database package already installs: `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`. If the adapter needs a later release of them than you have, your package manager warns you, or refuses to install when it checks peer dependencies strictly. So install the adapter from the same release as those packages.
 
 Better Auth must load one copy of `@better-auth/core`, the one `better-auth` itself uses. Better Auth keeps the contract check described below in that package, so a second copy never sees it.
 

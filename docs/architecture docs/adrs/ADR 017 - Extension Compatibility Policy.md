@@ -13,7 +13,7 @@
 - Define a compatibility policy for third-party lanes and alternate runtimes
 - Conformance is measured against a small set of normative contracts:
   - Data contract JSON, Unified Plan model, Plan identity and hashing, Hook API v1
-- Say which combinations are supported through package versions: the version of each package that publishes one of these contracts tells a contributor what it works with ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md))
+- Say which combinations are supported through package versions. The plan model, the hook API and the adapter interface are each published in a package, and that package's version tells a contributor what it works with ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md))
 
 ## Requirements for third-party lanes
 
@@ -94,7 +94,7 @@ We will certify third-party components at L0, L1, or L2.
 ## Versioning
 
 - **`contract.json`:** the file records the version of its own format.
-- **The plan model, the hook API and the adapter SPI** are published in the platform packages and have those packages' versions. All our packages share one release number, and what is Generally Available stays compatible within a major version. A lane or a runtime written by a third party lists the platform packages it is built on as peer dependencies, at the ranges an extension uses ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
+- **The plan model, the hook API and the adapter SPI** (the interface an adapter implements) are published in the platform packages and have those packages' versions. All our packages share one release number, and what is Generally Available stays compatible within a major version. A lane or a runtime written by a third party lists the platform packages it is built on as peer dependencies, at the ranges an extension uses ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
 
 ### Rules
 

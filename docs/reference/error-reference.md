@@ -214,9 +214,11 @@ The error lists each such package, with the version found and the version requir
 | The line already accepts the required version, but another version is installed | Run the package manager's install command. |
 | An exact version | Change it to the required version, and install. |
 | A reference to somewhere else: `catalog:`, `workspace:`, `link:`, `file:`, `portal:` or an `npm:` alias | Change the version in the place the line refers to, such as the catalog entry or the workspace package, and install. |
-| Any other range, such as `^8.1.0` or `>=8.1.0` where `~8.1.0` is required, `~8.0.0`, or `latest` | Run the command it gives, which sets the line to the required range. |
+| Any other range or tag. For a requirement of `~8.1.0`, examples are `^8.1.0`, `>=8.1.0`, `~8.0.0` and `latest`. | Run the command it gives, which sets the line to the required range. |
 
 Every fix ends with the same advice. If the package manager refuses the add or the install, or the package stays at the other version, something pins it: an override, a resolution or the lockfile. Remove that and install again. Then run init again.
+
+The required range is the one the installed database package accepts, which is a tilde. Beside a Generally Available database package whose own line has a caret, change these lines to carets afterwards, such as `^8.1.0`, so that an update moves them together with the database package.
 
 Without `--skip-install`, init installs the required version of a package that `package.json` does not list, and warns about one that it lists at another version.
 
@@ -231,7 +233,7 @@ The required packages are the `@prisma/orm-*` packages that the database package
 The fix depends on whether `package.json` lists the missing package:
 
 - **It is listed,** for example on a `catalog:` or `workspace:` line. Run the package manager's install command. The line stays as it is.
-- **It is not listed.** Run the command the error gives, which adds the package at the version or range the database package requires. Each range is in double quotes. The range can be narrower than the one init writes when it installs the packages itself: `~8.1.0`, where init would write `^8.1.0` beside a Generally Available database package. It is the range the installed database package accepts.
+- **It is not listed.** Run the command the error gives, which adds the package at the version or range the database package requires. Each range is in double quotes. The range is the one the installed database package accepts, which is a tilde, such as `~8.1.0`. Beside a Generally Available database package whose own line has a caret, init itself would write `^8.1.0`; change the new lines to carets afterwards, so that an update moves them together with the database package.
 
 Every fix ends with the same advice. If the package manager refuses the add or the install, or the package stays at the other version, something pins it: an override, a resolution or the lockfile. Remove that and install again. Then run init again.
 

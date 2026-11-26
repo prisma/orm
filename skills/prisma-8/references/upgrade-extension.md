@@ -49,7 +49,7 @@ Apply each step in order, fully: bump, install, run instructions, check pins, va
 
 ## Per-step flow
 
-This flow assumes you are an **external extension author**: your extension lives in its own repository and gets `@prisma/orm-*` from npm. Extensions inside the `prisma/prisma` monorepo do not run this skill. Their versions and ranges are written by `pnpm bump-version` and `scripts/set-version.ts`, from the repository's release plan.
+This flow assumes you are an **external extension author**: your extension lives in its own repository and gets `@prisma/orm-*` from npm. Extensions inside the Prisma ORM repository do not run this skill. Their versions and ranges are written by `pnpm bump-version` and `scripts/set-version.ts`, from the repository's release plan.
 
 For each `(from, to)` step in the chain:
 
@@ -131,7 +131,7 @@ With a caret, your package keeps working when an application moves to a later re
 
 **At release 8.0, write `^8.0.1` and `~8.0.1-ea.0`** (or `-preview.0`, `-rc.0`). Every Prisma package starts release 8.0 at patch 1. Never write `8.0.0` in a range on Prisma's packages: `~8.0.0-ea.0` accepts the old `8.0.0-rc.N` release candidates, because `rc` sorts after `ea`, and some package managers then install one.
 
-**`@prisma/orm-extension-paradedb` is the exception.** It has version numbers of its own, `0.18.0` at release 8.0, and is not published again at every release. If your package lists it, write a range on its own version, such as `^0.18.0`. At each upgrade step, set it to the release of it whose Prisma entries, under `dependencies`, `peerDependencies` and `optionalDependencies`, all accept the Prisma versions of that step: `8.0.1` for a GA package at release 8.0, and `8.0.1-ea.0` for one below GA. Find that release the way the application flow's pre-flight finds an extension's release.
+**`@prisma/orm-extension-paradedb` is the exception.** It has version numbers of its own, `0.18.0` at release 8.0, and is not published again at every release. If your package lists it, write a range on its own version, such as `^0.18.0`. At each upgrade step, choose the ParadeDB release to use like this. Look at the Prisma packages each ParadeDB release lists under `dependencies`, `peerDependencies` and `optionalDependencies`. Take the release whose entries all accept the versions those Prisma packages have at that step. At release 8.0, a GA Prisma package is at `8.0.1` and one below GA at `8.0.1-ea.0`. The application flow's pre-flight finds an extension's release in the same way.
 
 The convention has two costs. A feature of yours that needs no newer Prisma release ships as a patch. And once your package is GA, you cannot make a breaking change of your own until Prisma's next major version.
 

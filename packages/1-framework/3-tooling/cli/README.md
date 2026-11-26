@@ -127,14 +127,18 @@ Sets a project up for Prisma ORM 8: writes `prisma.config.ts`, a starter schema 
 1. It takes every `@prisma/orm-*` package in `peerDependencies`, does the same for each of those, and repeats until it finds no new one. The list can include another facade: MariaDB's requires MySQL's.
 2. It also takes every other peer dependency those files list, unless `peerDependenciesMeta` marks it optional. Examples are `temporal-polyfill`, `pg` and `@types/pg`. It does not go on to read those packages' own peer dependencies.
 
-These are the facade's required peers. Under a package manager that installs no peers, some of these `package.json` files exist only after init's own install, so init reads them after it.
+These are the facade's required peers. Under a package manager that installs no peers, some of these `package.json` files are not on disk until init has installed the packages itself. Init reads those files once that install has finished.
 
 *What it installs.* Init installs each required peer that the project does not list, as an ordinary dependency. That includes type-only packages such as `@types/pg`, because the `package.json` that requires them does not say where they belong. It then installs the facade again, at the version that was resolved. There are two exceptions. `@prisma/cli-engine` is installed as a development dependency, at the version `prisma` requires. And a driver that the facade's init contribution also names is installed once, not twice.
 
 *Which version or range it writes.* This depends on how the installed facade lists its `@prisma/orm-*` peers.
 
 - **The facade lists them at exact versions,** as every `8.0.0-rc.N` and every development build does. Every `@prisma/orm-*` line gets that same version. The project's package manager decides how the line is written: in testing, pnpm, Yarn and Bun wrote the exact version, and npm added a caret. The engine's install interface has no option to ask for an exact line.
-- **The facade lists them with ranges,** as every release from 8.0 does, **and init adds the facade itself.** For a GA facade, such as `8.1.2`, init writes a caret on every line: `^8.1.0` on the facade, and `^8.1.0` on a peer that the facade lists at `~8.1.0`. For a facade below GA, such as `8.1.0-ea.1`, it writes a tilde on every line: `~8.1.0-ea.1` on the facade, and each peer at the range the facade lists, such as `~8.1.0` or `~8.1.0-ea.0`. Every line is written the same way, so an update moves them together. [Versions and support](../../../../docs/oss/versioning.md#what-an-application-writes) explains why.
+- **The facade lists them with ranges,** as every release from 8.0 does, **and init adds the facade itself.** Every line is written the same way, so an update moves them together.
+  - *A GA facade,* such as `8.1.2`: a caret on every line. The facade gets `^8.1.0`, and so does a peer that the facade lists at `~8.1.0`. The caret is wider than what the facade lists, and that is safe because the facade's own line moves with it.
+  - *A facade below GA,* such as `8.1.0-ea.1`: a tilde on every line. The facade gets `~8.1.0-ea.1`, and each peer gets the range the facade lists, such as `~8.1.0` or `~8.1.0-ea.0`.
+
+  [Versions and support](../../../../docs/oss/versioning.md#what-an-application-writes) explains why.
 - **The facade lists them with ranges, and the project already lists the facade.** Init leaves the facade's line as it is, and writes each peer at the range the installed facade lists. That way it never installs a platform package the facade does not accept.
 
 Under pnpm, a line for a package below GA ends up exact: pnpm writes `8.1.0-ea.0` even when init gives it `~8.1.0-ea.0`, and `pnpm update` makes such a line exact too. Init does not change that. To take a fix to that package, such as `8.1.0-ea.1`, the user changes the line or adds the package again.
@@ -143,14 +147,14 @@ Under pnpm, a line for a package below GA ends up exact: pnpm writes `8.1.0-ea.0
 
 | The project's line | It counts as listed |
 | --- | --- |
-| For a peer that is not an `@prisma/orm-*` package | Always. The one exception is a peer that is required at one exact version, which is judged like an `@prisma/orm-*` line. |
+| For a peer that is not an `@prisma/orm-*` package | Always, unless the peer is required at one exact version. In that case the rows below for an `@prisma/orm-*` package apply to it too. |
 | For an `@prisma/orm-*` package: exactly the version init asks for | Always, whatever copy is installed, because the next clean install follows the line. |
 | For an `@prisma/orm-*` package: exactly the range init would write | Always. |
-| Anything else: another range, such as the caret a package manager wrote for an earlier release candidate, a dist-tag, or a `workspace:`, `catalog:`, `link:`, `file:` or alias line | When the installed copy fits the requirement, or when nothing is installed. An exact requirement needs the same version. A tilde needs the same major and minor. A caret needs the same major, from that minor on. |
+| Anything else: another range, such as the caret a package manager wrote for an earlier release candidate, a dist-tag, or a `workspace:`, `catalog:`, `link:`, `file:` or alias line | When the installed copy fits the requirement. An exact requirement needs the same version. A tilde needs the same major and minor. A caret needs the same major, from that minor on. It also counts when nothing is installed yet, because there is no copy to compare, and the install will follow the line. |
 
 When a line does not count as listed, init leaves it as it is and warns.
 
-*When versions disagree.* Each of our packages lists its sibling packages as peer dependencies: at one exact version on the release candidates, and at a range within one release from release 8.0. So a set of versions that disagrees is reported at install. When the packages that disagree are ones the application lists itself, npm refuses the install, and pnpm, Yarn and Bun install and print a peer dependency warning. A successful install does not prove that the versions match, so read the peer warnings it prints.
+*When versions disagree.* Each of our packages lists the other packages of ours it needs as peer dependencies. On the release candidates each is listed at one exact version. From release 8.0 a facade and the platform packages list each other at a range within one release, and an extension accepts later releases too. So a set of versions that does not fit together is reported at install. When the packages that disagree are ones the application lists itself, npm refuses the install, and pnpm, Yarn and Bun install and print a peer dependency warning. A successful install does not prove that the versions match, so read the peer warnings it prints.
 
 A facade that lists no `@prisma/orm-*` peer gets only the facade install itself, whatever other peers it lists.
 

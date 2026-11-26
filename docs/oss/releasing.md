@@ -37,7 +37,7 @@ node scripts/print-release-plan.ts            # the plan for the current root ve
 node scripts/print-release-plan.ts 8.1.0      # the plan for another root version
 ```
 
-The command reads the workspace and writes nothing. Its option `--ever-ga <name,...>` names the packages that have already had a GA version, which decides the tag of a version below GA. The publish workflow works that list out from the npm registry: a package has had a GA version if a plain version with major 1 or higher is published there. [`scripts/fixtures/release-plan/`](../../scripts/fixtures/release-plan/) holds the expected output for the current root version, for `8.0.1` and for `8.1.0`, and `pnpm test:scripts` compares the real output with them.
+The command reads the workspace and writes nothing. Its option `--ever-ga <name,...>` names the packages that have already had a GA version, which decides the tag of a version below GA. The publish workflow works that list out from the npm registry: a package has had a GA version if a plain version, with no suffix, is published there. `0.x` versions do not count. [`scripts/fixtures/release-plan/`](../../scripts/fixtures/release-plan/) holds the expected output for the current root version, for `8.0.1` and for `8.1.0`, and `pnpm test:scripts` compares the real output with them.
 
 [`scripts/set-version.ts`](../../scripts/set-version.ts) writes the plan into the `package.json` files. Nobody writes a version or a range between our packages by hand.
 
@@ -51,11 +51,11 @@ Three things about the plan are worth knowing:
 
 Published packages get their versions from the release plan. Everything else carries the root version: the private `@internal/*` packages, the examples, the apps and the root itself. `set-version.ts` writes both.
 
-Some published code contains a version number. The `prisma orm` commands report one, and so do three less obvious places. Each takes it from an `@internal/*` package, so it is the root version, and not the version of the published package the code ships in. None of the three is compared with a package's version:
+Some published code contains a version number: the `prisma orm` commands report one, and so do the three places below. In all of them the number comes from an `@internal/*` package, so it is the root version, and not the version of the published package the code ships in. None of the three below is compared with a package's version:
 
 - **`contractFromJson`,** the function that checks a `contract.json`, marks a contract it has checked with a key that contains the version. The mark is used inside one running process only.
 - **The MongoDB driver** sends the version to the server when it connects, as `driverInfo`. It appears in the server's logs.
-- **The Supabase extension** writes its version into every `contract.json` that uses it. Switching it to the extension's own version would change every such contract, so it stays the root version.
+- **The Supabase extension** writes its version into every `contract.json` that uses it. It was the root version before packages had versions of their own, and it stays the root version so that existing contracts keep the form they have.
 
 The `prisma-8` agent skill ships inside the five packages that applications import from: `@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb` and `@prisma/orm-mongo`. The copy in this repository is marked with the root version. The copy inside each published package is marked with that package's version, so a user can compare the skill they have with the packages they installed.
 
@@ -70,8 +70,7 @@ So merging a release pull request is what publishes a release. There is no separ
 
 Before it publishes, the workflow runs four checks:
 
-- **Conformance** (`pnpm check:conformance`).
-
+- **Conformance** ([`pnpm check:conformance`](../../scripts/check-conformance.mjs)).
 - **Dependencies** ([`pnpm check:publish-deps`](../../scripts/check-publish-deps.mjs)). It fails if a packed `package.json` still contains a `workspace:` or `catalog:` entry, if a range on one of our packages differs from the release plan, or if one of our packages is listed as an ordinary dependency of another.
 - **Release notes** ([`pnpm check:release-notes`](../../scripts/check-release-notes.mjs)). A release must have a committed [`docs/releases/v<version>.md`](../releases/README.md), which becomes the text of the GitHub Release. Nothing generates notes when the file is missing. The same check runs on a release pull request, so a missing file is caught at review.
 - **Upgrade instructions** ([`pnpm check:upgrade-coverage`](../../scripts/check-upgrade-coverage.mjs)). A pull request that changes what users or extension authors must do carries its own upgrade fragment. A release must have its assembled upgrade guides and no pending fragments left. Development builds may have pending fragments. See the [upgrade instruction lifecycle](../../upgrade-instructions/README.md).
