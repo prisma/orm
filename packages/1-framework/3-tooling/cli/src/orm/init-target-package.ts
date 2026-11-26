@@ -21,6 +21,7 @@ import {
   type InstallReason,
   type PackagesAdded,
   packagesAddedAction,
+  type RefusedPeerCase,
 } from '../commands/init/errors';
 import type { InitContribution } from '../commands/init/init-contribution';
 import {
@@ -307,54 +308,41 @@ function refuseRequiredPeersAtAnotherVersion(
       : [{ peer, found, required }];
   });
   if (wrong.length === 0) return;
-  const toAdd = wrong.filter(({ peer }) => !declared.has(peer.name)).map(({ peer }) => peer);
-  const classified = wrong.map(({ peer, found, required }) => {
-    const line = declared.get(peer.name);
-    const admits = line === undefined ? undefined : requirementAdmits(line, found);
-    const fix =
-      line === undefined
-        ? ('add' as const)
-        : peer.outcome === 'already-listed' && admits === false
-          ? ('install' as const)
-          : exactVersionOf(line) !== undefined
-            ? ('change-exact' as const)
-            : admits === undefined
-              ? ('resolve' as const)
-              : ('change-range' as const);
-    return { peer, found, required, line, fix };
-  });
   throw errorInitRequiredPeersAtAnotherVersion({
     packageName,
-    packages: classified.map(({ peer, found, required, line, fix }) => ({
-      name: peer.name,
-      found,
-      required,
-      listed: fix === 'add' || fix === 'install' ? undefined : line,
-      lineFix:
-        fix === 'change-range'
-          ? {
-              kind: 'add-at-requirement',
-              command: installCommand(ctx.packageManager, [requirementSpecifier(peer)]),
-            }
-          : fix === 'resolve'
-            ? { kind: 'resolve' }
-            : fix === 'change-exact'
-              ? { kind: 'change-and-install' }
-              : undefined,
-    })),
-    installCommand:
-      toAdd.length === 0
-        ? undefined
-        : installCommand(ctx.packageManager, toAdd.map(requirementSpecifier)),
+    packages: wrong.map(({ peer, found, required }) => {
+      const line = declared.get(peer.name);
+      const fix = refusedPeerCase(peer, line, found);
+      return {
+        name: peer.name,
+        found,
+        required,
+        listed: fix.case === 'add' || fix.case === 'install' ? undefined : line,
+        fix,
+      };
+    }),
     listedAtRequired: wrong
       .filter(({ peer }) => peer.outcome === 'already-listed')
       .map(({ peer }) => peer.name),
-    outsideListedLine: classified
-      .filter(({ fix }) => fix === 'install')
-      .map(({ peer, found }) => ({ name: peer.name, found })),
-    restoreCommand: formatInstallCommand(ctx.packageManager),
+    packageManager: ctx.packageManager,
   });
 }
+
+function refusedPeerCase(
+  peer: RequiredPeer,
+  line: string | undefined,
+  found: string,
+): RefusedPeerCase {
+  if (line === undefined) return { case: 'add', specifier: requirementSpecifier(peer) };
+  const admits = requirementAdmits(line, found);
+  if (peer.outcome === 'already-listed' && admits === false) return { case: 'install' };
+  if (exactVersionOf(line) !== undefined) return { case: 'change-exact' };
+  if (admits === undefined && POINTS_ELSEWHERE.test(line.trim())) return { case: 'resolve' };
+  return { case: 'change-range', specifier: requirementSpecifier(peer) };
+}
+
+/** A line whose version is set somewhere else: a catalog, a workspace package, a path or an alias. */
+const POINTS_ELSEWHERE = /^(?:catalog|workspace|link|file|portal|npm):/;
 
 /**
  * Installing a package runs its install scripts, so a name that is not meant for Prisma 8, such as

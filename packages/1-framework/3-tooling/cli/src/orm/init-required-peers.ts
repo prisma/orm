@@ -46,7 +46,7 @@ export interface RequiredPeers {
   /** Packages whose own manifest could not be read, so their peers are missing from `packages`. */
   readonly unread: readonly string[];
   readonly warnings: readonly string[];
-  /** Whether the facade is below GA: its version carries a level and it names its peers with ranges, so not on the release candidates. */
+  /** Whether the facade's version has a pre-release part and it names its peers with ranges; false when it names them at exact versions. */
   readonly facadeBelowGa: boolean;
 }
 
