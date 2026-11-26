@@ -1,6 +1,6 @@
 # Public API compatibility checks
 
-From `8.0.0`, Prisma 8 promises that an application upgrades to any later `8.x` release with no code changes. CI checks every pull request against that promise. This guide says what each check does and what to do when one fails. The decision and its reasons are in [ADR 330](architecture%20docs/adrs/ADR%20330%20-%20CI%20finds%20breaking%20and%20accidental%20API%20changes%20against%20the%20last%20release.md).
+From `8.0.0`, Prisma 8 promises that an application upgrades to any later `8.x` release with no code changes. CI checks every pull request against that promise. This guide says what each check does and what to do when one fails. The decision and its reasons are in [ADR 336](architecture%20docs/adrs/ADR%20336%20-%20CI%20finds%20breaking%20and%20accidental%20API%20changes%20against%20the%20last%20release.md).
 
 ## The four checks
 
@@ -13,7 +13,7 @@ From `8.0.0`, Prisma 8 promises that an application upgrades to any later `8.x` 
 
 "Reports" means the job lists the breaks it found in its summary and passes. A problem still fails it at any version: a check that could not compare, or a record that no longer matches a break and must be removed. The type tests and the example apps start to fail by themselves at the first release whose version has no pre-release part; nothing is switched on.
 
-Only what is generally available is checked strictly: a package whose last release has a plain version, and, for the type tests, an export whose name does not start with `preview_` or `ea_`. The example apps have no such exemption, because an app's error cannot be traced to one export: after a release with a plain version, any app error fails unless it is recorded.
+Only what is generally available is checked strictly: a package whose last release has a plain version, and, for the type tests, an export whose name does not start with `preview_` or `ea_`. A prefixed name is still checked strictly when the last release also exported the same thing under a name with no prefix, as a promotion leaves it: a deprecated `ea_foo` kept beside `foo` is GA until the next major version. A name starting with `rc_` is checked strictly. The example apps have no such exemption, because an app's error cannot be traced to one export: after a release with a plain version, any app error fails unless it is recorded.
 
 ## `api.txt` is out of date
 
