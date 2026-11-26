@@ -121,7 +121,7 @@ function everyPolicyError(): readonly (readonly [string, CliStructuredError])[] 
 
 /** A sentence that talks about a policy, a level or what may change, a ref, the policy commands or the consent flag. */
 const ABOUT_POLICIES =
-  /polic|forbid|consent|permit|declare|level|loosen|tighten|relax|strict|\bref\b|refs\/|\.json/i;
+  /polic|forbid|consent|permit|declare|level|loosen|tighten|relax|strict|\bref\b|refs\/|\.json|dataLoss|accessWidening|dataProtection|data loss|losing data|read or write|allow|accept|owner|owns/i;
 
 const SETTING =
   '(change|dataProtection\\.dataLoss|dataProtection\\.accessWidening|dataLoss|accessWidening)';
@@ -210,6 +210,10 @@ describe('policy errors', () => {
     'Run prisma migration ref policy set production --data-loss permitted.',
     'Ask the owner to permit data loss.',
     'Lower the data protection level.',
+    "Ask the database's owner to allow the loss.",
+    'Remove dataLoss from production.',
+    'Ask whoever owns the database to accept the change.',
+    'Have the owner switch dataProtection.dataLoss off.',
   ])('rejects the sentence %s', (sentence) => {
     const mismatch = errorPolicyMismatch({
       spaceId: 'app',
