@@ -43,7 +43,7 @@
 // describes both. The report prints each unrecorded break's record, ready to paste.
 //
 // A break fails the run when the last release has no pre-release part (`--ga` treats it as if it
-// had none) and the export is generally available: its name does not start with preview_ or ea_,
+// had none) and the export is generally available: its name does not start with rc_, preview_ or ea_,
 // or the release also exports the same thing under a name without one. Otherwise it is reported.
 // Needs `pnpm build` and network access to origin and to the registry.
 

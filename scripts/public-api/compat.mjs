@@ -831,7 +831,7 @@ function currentProgram(dir) {
 }
 
 // Generates and compiles the tests for one package. `strict` is whether a break fails the run;
-// exports named preview_* or ea_* do not, unless the release also exports them under a name without
+// exports named rc_*, preview_* or ea_* do not, unless the release also exports them under a name without
 // such a prefix. `twinSpecifier` imports a second copy of the release;
 // `budgetMs` is the time for the whole package.
 //

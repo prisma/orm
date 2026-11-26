@@ -189,7 +189,13 @@ describe('the version rules', () => {
     );
   });
 
-  it('exempts preview_ and ea_ exports', () => {
-    deepStrictEqual(['preview_x', 'ea_x', 'x'].map(isExemptExport), [true, true, false]);
+  it('exempts rc_, preview_ and ea_ exports', () => {
+    deepStrictEqual(['rc_x', 'preview_x', 'ea_x', 'x', 'rcx'].map(isExemptExport), [
+      true,
+      true,
+      true,
+      false,
+      false,
+    ]);
   });
 });

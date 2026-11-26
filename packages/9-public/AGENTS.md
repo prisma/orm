@@ -16,7 +16,7 @@ CI already makes sure the lists match the code and that the pull request descrip
 For each added export or member:
 
 - Is it meant for users, to be supported until the next major release? If it exists only so that another of our packages can reach it, it should not be exported from a package users depend on; say so.
-- Is its maturity right? Something not ready to be covered belongs in a package below GA, or under a name starting with `preview_` or `ea_`.
+- Is its maturity right? Something not ready to be covered belongs in a package below GA, or under a name starting with `rc_`, `preview_` or `ea_`.
 - Does a GA package now depend on something below GA? It cannot be more reliable than its dependencies, so that is a defect.
 - Is a new member on an interface that users implement optional, with the old behaviour when it is missing? A required one breaks every implementation.
 
