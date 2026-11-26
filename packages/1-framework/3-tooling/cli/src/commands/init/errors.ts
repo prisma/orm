@@ -494,7 +494,7 @@ export function errorInitPrisma7ConfigUnreadable(options: {
  * resolution or the lockfile pins it, and init cannot see which.
  */
 export const IF_SOMETHING_PINS_IT =
-  'If an add or an install is refused, or a copy stays at the other version, an override, a resolution or the lockfile pins it, so remove that and install again.';
+  'If an add or an install is refused, or a copy stays at another version, an override, a resolution or the lockfile pins it, so remove that and install again.';
 
 /**
  * The project does not have the facade: `--skip-install` forbade installing it, or init's
