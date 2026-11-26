@@ -93,10 +93,15 @@ const tables: ReadonlyArray<{
 const schemaExists = 'SELECT to_regnamespace($1) IS NOT NULL AS "result"';
 const schemaAbsent = 'SELECT to_regnamespace($1) IS NULL AS "result"';
 const tableExists = 'SELECT to_regclass($1) IS NOT NULL AS "result"';
-const absentOrColumnHasForm = `SELECT to_regclass($1) IS NULL OR EXISTS (
-  SELECT 1 FROM pg_attribute
-  WHERE attrelid = to_regclass($1) AND attname = $2 AND NOT attisdropped
-    AND format_type(atttypid, atttypmod) = $3 AND attnotnull = $4
+/** Reads only the catalogues, which need no privilege on the schema, so a role that cannot use the schema still gets this check's answer. */
+const absentOrColumnHasForm = `WITH "table" AS (
+  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = $1 AND c.relname = $2
+)
+SELECT NOT EXISTS (SELECT 1 FROM "table") OR EXISTS (
+  SELECT 1 FROM pg_attribute a JOIN "table" t ON a.attrelid = t.oid
+  WHERE a.attname = $3 AND NOT a.attisdropped
+    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5
 ) AS "result"`;
 /** `ALTER SCHEMA … RENAME` needs the privileges of the schema's owner and CREATE on the database. */
 const mayRenameSchema = `SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user)
@@ -121,7 +126,7 @@ function checkColumns(table: (typeof tables)[number], schema: string, id: string
     precheck: table.columns.map((column) => ({
       description: `ensure table ${qualified(table.name, schema)}${origin} has column "${column.name}" ${column.type} ${nullability(column)}: it has no such column, or the column has another type or nullability. Prisma cannot bring a table of another form up to date: the upgrade instructions of Prisma 8 say what to do`,
       sql: absentOrColumnHasForm,
-      params: [qualified(table.name, schema), column.name, column.type, column.notNull],
+      params: [schema, table.name, column.name, column.type, column.notNull],
     })),
     execute: [],
     postcheck: [],

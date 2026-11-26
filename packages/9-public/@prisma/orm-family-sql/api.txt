@@ -3231,7 +3231,7 @@
 ./family/control: type ReportedLiteralDefault = { readonly kind: 'list'; readonly elements: readonly (ReportedBody | null)[]; } | { readonly kind: 'value'; readonly body: ReportedBody; }
 ./family/control: type SameName = (left: string, right: string) => boolean
 ./family/control: type SqlDefaultFunctionName = 'autoincrement' | 'now'
-./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
+./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.PRISMA_TABLES_MISSING' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
 ./family/control: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
 ./family/control: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation'
 ./family/control: type SqlPlannerResult<TTargetDetails> = SqlPlannerFailureResult | SqlPlannerSuccessResult<TTargetDetails>
@@ -4048,7 +4048,7 @@
 ./family: type SameName = (left: string, right: string) => boolean
 ./family: type SqlDefaultFunctionName = 'autoincrement' | 'now'
 ./family: type SqlEntityHydrationFactory = (entry: unknown) => unknown
-./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
+./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.PRISMA_TABLES_MISSING' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
 ./family: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
 ./family: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation'
 ./family: type SqlPlannerResult<TTargetDetails> = SqlPlannerFailureResult | SqlPlannerSuccessResult<TTargetDetails>

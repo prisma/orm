@@ -36,6 +36,7 @@ import {
   type DatabasePolicies,
   failedPostcheckWhy,
   failedPrecheckWhy,
+  PRISMA_TABLES_SPACE_ID,
   schemaCheckWhy,
   withDatabaseUnchanged,
   withFailingSpace,
@@ -192,6 +193,10 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
 
     await this.readMoneyLiteralsInCents(driver);
     await this.acquireLock(driver);
+    if (space !== PRISMA_TABLES_SPACE_ID) {
+      const tablesCheck = await this.ensurePrismaTablesExist(driver);
+      if (!tablesCheck.ok) return tablesCheck;
+    }
     const existingMarker = await this.family.readMarker({ driver, space });
 
     const markerCheck = this.ensureMarkerCompatibility(existingMarker, options.plan);
@@ -409,6 +414,28 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
       }
     }
     return ok({ operationsExecuted, executedOperations });
+  }
+
+  /**
+   * The target's `_prisma` contract space creates the marker and ledger tables. Without them a space's operations would run and its marker write would then fail, and on a database a release candidate set up, whose tables are in the schema `prisma_contract`, the runner would read no row and plan from an empty database.
+   */
+  private async ensurePrismaTablesExist(
+    driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
+  ): Promise<Result<void, SqlMigrationRunnerFailure>> {
+    const markerLocation = this.family.markerLocation;
+    const found = await driver.query<{ readonly exists: boolean }>(
+      'SELECT to_regclass($1) IS NOT NULL AS "exists"',
+      [markerLocation],
+    );
+    if (found.rows[0]?.exists === true) return okVoid();
+    return runnerFailure(
+      'MIGRATION.PRISMA_TABLES_MISSING',
+      `Prisma's own tables are missing from this database: ${markerLocation} does not exist.`,
+      {
+        why: `The tables are created, or moved from the schema prisma_contract that the release candidates of Prisma 8 used, by applying the target's ${PRISMA_TABLES_SPACE_ID} contract space, and nothing has applied it to this database. \`prisma db init\`, \`prisma db update\`, \`prisma db migrate\` and \`prisma db sign\` apply it before anything else; code that runs the migration runner directly must apply it first with applyInstalledContractSpace.`,
+        meta: { markerLocation },
+      },
+    );
   }
 
   private async runExpectationSteps(

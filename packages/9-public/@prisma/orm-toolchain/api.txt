@@ -1238,8 +1238,8 @@
 ./migration-tools/spaces: interface DiskContractSpaceState, readonly required property headRefsBySpace: ReadonlyMap<string, ContractSpaceHeadRecord>
 ./migration-tools/spaces: interface DiskContractSpaceState, readonly required property spaceDirsOnDisk: readonly string[]
 ./migration-tools/spaces: interface InstalledContractSpaceApplied
-./migration-tools/spaces: interface InstalledContractSpaceApplied, readonly required property applied: boolean
 ./migration-tools/spaces: interface InstalledContractSpaceApplied, readonly required property operationsExecuted: number
+./migration-tools/spaces: interface InstalledContractSpaceApplied, readonly required property outcome: 'ahead' | 'applied' | 'atHead'
 ./migration-tools/spaces: interface SpaceApplyInput, readonly required property currentMarkerHash: null | string
 ./migration-tools/spaces: interface SpaceApplyInput, readonly required property currentMarkerInvariants: readonly string[]
 ./migration-tools/spaces: interface SpaceApplyInput, readonly required property migrationDirectory: string
@@ -1473,8 +1473,8 @@
 ./migration-tools: interface DiskContractSpaceState, readonly required property headRefsBySpace: ReadonlyMap<string, ContractSpaceHeadRecord>
 ./migration-tools: interface DiskContractSpaceState, readonly required property spaceDirsOnDisk: readonly string[]
 ./migration-tools: interface InstalledContractSpaceApplied
-./migration-tools: interface InstalledContractSpaceApplied, readonly required property applied: boolean
 ./migration-tools: interface InstalledContractSpaceApplied, readonly required property operationsExecuted: number
+./migration-tools: interface InstalledContractSpaceApplied, readonly required property outcome: 'ahead' | 'applied' | 'atHead'
 ./migration-tools: interface IntegrityComputationInput
 ./migration-tools: interface IntegrityComputationInput, readonly required property spaces: readonly IntegritySpaceState[]
 ./migration-tools: interface IntegrityComputationInput, readonly required property targetId: string

@@ -1,6 +1,7 @@
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { releaseCandidatePrismaTables } from './fixtures/release-candidate-prisma-tables';
 import {
   contract,
   createDriver,
@@ -14,7 +15,6 @@ import {
   testTimeout,
   toPlanContractInfo,
 } from './fixtures/runner-fixtures';
-import { releaseCandidatePrismaTables } from './fixtures/release-candidate-prisma-tables';
 
 const INIT_ADDITIVE_POLICY = { allowedOperationClasses: ['additive'] as const };
 
