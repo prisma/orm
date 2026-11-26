@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync 
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
 import { detect } from 'package-manager-detector/detect';
 import { basename, dirname, isAbsolute, join, relative } from 'pathe';
+import { contractEntryFor } from '../commands/init/contract-entry';
 import type { PackageManager } from '../commands/init/detect-package-manager';
 import { formatRunCommand, formatRunScriptCommand } from '../commands/init/detect-package-manager';
 import {
@@ -26,7 +27,7 @@ import {
 } from '../commands/init/prisma7-side-by-side';
 import { findStaleArtifacts, removeDependency } from '../commands/init/reinit-cleanup';
 import { legacySkillDirs } from '../commands/init/skill-sources';
-import { configFile, prisma7ConfigFile } from '../commands/init/templates/code-templates';
+import { configFile } from '../commands/init/templates/code-templates';
 import { envExampleContent } from '../commands/init/templates/env';
 import { requirementsBlock } from '../commands/init/templates/quick-reference';
 import {
@@ -224,7 +225,18 @@ function planScaffold(ctx: {
   if (source.kind === 'starter') {
     files.push(
       { path: inputs.schemaPath, content: contribution.starterContract(source.authoring) },
-      { path: CONFIG_FILE, content: configFile(configContractPath, contribution.configModule) },
+      {
+        path: CONFIG_FILE,
+        content: configFile({
+          configModule: contribution.configModule,
+          contract: contractEntryFor(
+            contribution,
+            { kind: 'contract', mode: source.authoring, path: configContractPath },
+            inputs.target,
+          ),
+          output: undefined,
+        }),
+      },
       { path: join(outputDir, 'db.ts'), content: contribution.databaseFile() },
       {
         path: QUICK_REFERENCE_FILE,
@@ -240,7 +252,15 @@ function planScaffold(ctx: {
     files.push(
       {
         path: CONFIG_FILE,
-        content: prisma7ConfigFile(source.schemaPath, outputDir, contribution.configModule),
+        content: configFile({
+          configModule: contribution.configModule,
+          contract: contractEntryFor(
+            contribution,
+            { kind: 'prisma7-schema', path: source.schemaPath },
+            inputs.target,
+          ),
+          output: outputDir,
+        }),
       },
       { path: join(outputDir, 'db.ts'), content: contribution.databaseFile() },
       {

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { configFile, prisma7ConfigFile } from '../../../src/commands/init/templates/code-templates';
+import type { ConfigExpression } from '../../../src/commands/init/init-contribution';
+import {
+  configFile,
+  defaultContractEntry,
+} from '../../../src/commands/init/templates/code-templates';
 import { requirementsBlock } from '../../../src/commands/init/templates/quick-reference';
 
 const CONFIG_MODULES = {
@@ -7,16 +11,35 @@ const CONFIG_MODULES = {
   mongo: '@internal/mongo/config',
 } as const;
 
+function defaultConfig(configModule: string, contractPath: string): string {
+  return configFile({
+    configModule,
+    contract: defaultContractEntry(configModule, {
+      kind: 'contract',
+      mode: contractPath.endsWith('.ts') ? 'typescript' : 'psl',
+      path: contractPath,
+    }),
+    output: undefined,
+  });
+}
+
 function configFor(target: keyof typeof CONFIG_MODULES, contractPath: string): string {
-  return configFile(contractPath, CONFIG_MODULES[target]);
+  return defaultConfig(CONFIG_MODULES[target], contractPath);
 }
 
 describe('templates', () => {
   describe('module names in the generated configs', () => {
     it('writes a module name with a quote or a backslash as a valid string literal', () => {
       for (const source of [
-        configFile('./prisma/contract.prisma', "acme-db/config'v8"),
-        prisma7ConfigFile('prisma/schema.prisma', 'src/prisma', "acme-db/config'v8"),
+        defaultConfig("acme-db/config'v8", './prisma/contract.prisma'),
+        configFile({
+          configModule: "acme-db/config'v8",
+          contract: defaultContractEntry("acme-db/config'v8", {
+            kind: 'prisma7-schema',
+            path: 'prisma/schema.prisma',
+          }),
+          output: 'src/prisma',
+        }),
       ]) {
         expect(source).toContain("from 'acme-db/config\\'v8';");
       }
@@ -32,6 +55,35 @@ describe('templates', () => {
       expect(config).toContain('contract: "./prisma/contract.prisma"');
       const importLines = config.split('\n').filter((l) => l.includes("from '@internal/"));
       expect(importLines).toHaveLength(1);
+    });
+
+    it('writes the expression a contribution gives and merges its imports with its own', () => {
+      const contract: ConfigExpression = {
+        renderTypeScript: () => "acmeContract('./prisma/contract.acme', { level: 3 })",
+        importRequirements: () => [
+          { moduleSpecifier: 'acme-db/config', symbol: 'acmeContract' },
+          { moduleSpecifier: 'acme-db/levels', symbol: 'LEVELS' },
+        ],
+      };
+
+      expect(configFile({ configModule: 'acme-db/config', contract, output: undefined })).toBe(
+        [
+          "import 'dotenv/config';",
+          "import { definePrismaConfig } from '@prisma/cli-engine';",
+          "import { acmeContract, defineConfig as ormConfig } from 'acme-db/config';",
+          "import { LEVELS } from 'acme-db/levels';",
+          '',
+          'export default definePrismaConfig({',
+          '  orm: ormConfig({',
+          "    contract: acmeContract('./prisma/contract.acme', { level: 3 }),",
+          '    db: {',
+          "      connection: process.env['DATABASE_URL']!,",
+          '    },',
+          '  }),',
+          '});',
+          '',
+        ].join('\n'),
+      );
     });
   });
 

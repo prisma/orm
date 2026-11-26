@@ -4,7 +4,7 @@ import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
 import { basename, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { configFile } from '../../src/commands/init/templates/code-templates';
+import { configFile, defaultContractEntry } from '../../src/commands/init/templates/code-templates';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { type ImportFromProject, importFromProject } from '../../src/orm/project-modules';
@@ -920,7 +920,15 @@ describe('init with the published facades that are in no list', () => {
       expect(run.exitCode, JSON.stringify(envelopeOf(run))).toBe(0);
       expect(readProjectFile(schemaPath)).toBe(contribution.starterContract(authoring));
       expect(readProjectFile('prisma.config.ts')).toBe(
-        configFile(`./${schemaPath}`, contribution.configModule),
+        configFile({
+          configModule: contribution.configModule,
+          contract: defaultContractEntry(contribution.configModule, {
+            kind: 'contract',
+            mode: authoring,
+            path: `./${schemaPath}`,
+          }),
+          output: undefined,
+        }),
       );
       expect(readProjectFile('src/prisma/db.ts')).toBe(contribution.databaseFile());
       expect(readProjectFile('.env')).toBe(contribution.envExample());

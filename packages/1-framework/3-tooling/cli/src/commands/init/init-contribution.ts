@@ -1,4 +1,16 @@
 import type { ContractSourceFormat } from '@internal/config/config-types';
+import type { ImportRequirement } from '@internal/ts-render';
+
+/** What the config's `contract:` entry points at: a contract file `init` wrote, or the project's Prisma 7 schema. */
+export type ContractEntryInput =
+  | { readonly kind: 'contract'; readonly mode: ContractSourceFormat; readonly path: string }
+  | { readonly kind: 'prisma7-schema'; readonly path: string };
+
+/** A TypeScript expression for `prisma.config.ts`, with the imports it needs. */
+export interface ConfigExpression {
+  renderTypeScript(): string;
+  importRequirements(): readonly ImportRequirement[];
+}
 
 export interface QuickReferenceInput {
   readonly mode: ContractSourceFormat;
@@ -86,4 +98,10 @@ export interface InitContribution {
   readonly probe?: (databaseUrl: string, signal: AbortSignal) => Promise<InitProbeResult>;
   /** The quick reference for a project that keeps its Prisma 7 schema as the contract source. */
   readonly prisma7QuickReference?: (input: Prisma7QuickReferenceInput) => string;
+  /**
+   * The value of the config's `contract:` entry. A plain object with the two methods, not a class
+   * instance. Without it, `init` writes the path as a string, or `prisma7Schema(<path>)` imported
+   * from `configModule`.
+   */
+  readonly contractEntry?: (input: ContractEntryInput) => ConfigExpression;
 }

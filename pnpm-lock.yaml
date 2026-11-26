@@ -1771,6 +1771,9 @@ importers:
       '@internal/psl-printer':
         specifier: workspace:8.0.0-rc.25
         version: link:../../2-authoring/psl-printer
+      '@internal/ts-render':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../1-core/ts-render
       '@internal/utils':
         specifier: workspace:8.0.0-rc.25
         version: link:../../0-foundation/utils
