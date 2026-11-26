@@ -1,7 +1,6 @@
 import { ifDefined } from '@internal/utils/defined';
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { formatSourceDiagnostic } from '../../control-api/operations/load-contract-source';
-import { exactVersionOf } from '../../orm/init-version-lines';
 import { CliStructuredError } from '../../utils/cli-errors';
 import type { PackageManager } from './detect-package-manager';
 import type { Prisma6SideBySideSetup } from './prisma6-side-by-side';
@@ -736,8 +735,18 @@ export interface RequiredPeerAtAnotherVersion {
   readonly found: string;
   /** The version or range the package that names it requires. */
   readonly required: string;
-  /** The project's `package.json` line for it, when that line asks for another version. */
+  /** The project's `package.json` line for it, when that line has to change. */
   readonly listed: string | undefined;
+  /**
+   * How to change `listed`: rewrite an exact version and install; replace a range with the
+   * requirement through `command`, which adds the package at it; or, for a line that points
+   * elsewhere (a catalog, a workspace), change the version where it points.
+   */
+  readonly lineFix:
+    | { readonly kind: 'change-and-install' }
+    | { readonly kind: 'add-at-requirement'; readonly command: string }
+    | { readonly kind: 'resolve' }
+    | undefined;
 }
 
 /** Under `--skip-install`, a required peer is installed at a version its requirement does not admit. */
@@ -746,7 +755,7 @@ export function errorInitRequiredPeersAtAnotherVersion(options: {
   readonly packages: readonly RequiredPeerAtAnotherVersion[];
   /** The command that adds those `package.json` does not list; `undefined` when it lists them all. */
   readonly installCommand: string | undefined;
-  /** Those `package.json` lists at the required version, which the package manager's install puts in place. */
+  /** Those `package.json` lists at a line that stands for the requirement; reported in `meta`. */
   readonly listedAtRequired: readonly string[];
   /**
    * Those of `listedAtRequired` whose installed copy the listed line does not admit. An install may
@@ -757,23 +766,26 @@ export function errorInitRequiredPeersAtAnotherVersion(options: {
   readonly restoreCommand: string;
 }): CliStructuredError {
   const { packageName, packages, outsideListedLine } = options;
-  const listedAtRequired = options.listedAtRequired.filter(
-    (name) => !outsideListedLine.some((outside) => outside.name === name),
-  );
-  const relisted = packages.filter((pkg) => pkg.listed !== undefined);
-  const steps: string[] = relisted.map((pkg) =>
-    pkg.listed !== undefined && exactVersionOf(pkg.listed) === undefined
-      ? `Make the line for ${pkg.name} in package.json resolve to ${pkg.required} (it is \`${pkg.listed}\` now, so change the version where it points, such as the catalog entry or the workspace package) and run \`${options.restoreCommand}\``
-      : `Change the line for ${pkg.name} in package.json from ${pkg.listed} to ${pkg.required} and run \`${options.restoreCommand}\``,
-  );
+  const steps: string[] = packages.flatMap((pkg) => {
+    const fix = pkg.lineFix;
+    if (fix === undefined) return [];
+    if (fix.kind === 'change-and-install') {
+      return [
+        `Change the line for ${pkg.name} in package.json from ${pkg.listed} to ${pkg.required} and run \`${options.restoreCommand}\``,
+      ];
+    }
+    if (fix.kind === 'resolve') {
+      return [
+        `Make the line for ${pkg.name} in package.json resolve to ${pkg.required} (it is \`${pkg.listed}\` now, so change the version where it points, such as the catalog entry or the workspace package) and run \`${options.restoreCommand}\``,
+      ];
+    }
+    return [
+      `package.json lists ${pkg.name} at ${pkg.listed}, which does not keep it within ${pkg.required}, the range ${packageName} requires, and ${pkg.found} is installed: change the line to ${pkg.required} with \`${fix.command}\``,
+    ];
+  });
   for (const outside of outsideListedLine) {
     steps.push(
       `package.json already lists ${outside.name} at a version ${packageName} accepts, but ${outside.found} is installed: run \`${options.restoreCommand}\`, and if ${outside.name} is still at another version, an override, a resolution or the lockfile pins it, so remove that and run \`${options.restoreCommand}\` again`,
-    );
-  }
-  if (listedAtRequired.length > 0) {
-    steps.push(
-      `${steps.length === 0 ? 'Run' : 'run'} \`${options.restoreCommand}\` to install ${listed(listedAtRequired)} at the version package.json lists`,
     );
   }
   if (options.installCommand !== undefined) {

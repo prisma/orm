@@ -307,14 +307,40 @@ function refuseRequiredPeersAtAnotherVersion(
       : [{ peer, found, required }];
   });
   if (wrong.length === 0) return;
-  const toAdd = wrong.filter(({ peer }) => peer.outcome === 'to-install').map(({ peer }) => peer);
+  const toAdd = wrong.filter(({ peer }) => !declared.has(peer.name)).map(({ peer }) => peer);
+  const classified = wrong.map(({ peer, found, required }) => {
+    const line = declared.get(peer.name);
+    const admits = line === undefined ? undefined : requirementAdmits(line, found);
+    const fix =
+      line === undefined
+        ? ('add' as const)
+        : peer.outcome === 'already-listed' && admits === false
+          ? ('install' as const)
+          : exactVersionOf(line) !== undefined
+            ? ('change-exact' as const)
+            : admits === undefined
+              ? ('resolve' as const)
+              : ('change-range' as const);
+    return { peer, found, required, line, fix };
+  });
   throw errorInitRequiredPeersAtAnotherVersion({
     packageName,
-    packages: wrong.map(({ peer, found, required }) => ({
+    packages: classified.map(({ peer, found, required, line, fix }) => ({
       name: peer.name,
       found,
       required,
-      listed: peer.outcome === 'left-at-another-version' ? declared.get(peer.name) : undefined,
+      listed: fix === 'add' || fix === 'install' ? undefined : line,
+      lineFix:
+        fix === 'change-range'
+          ? {
+              kind: 'add-at-requirement',
+              command: installCommand(ctx.packageManager, [requirementSpecifier(peer)]),
+            }
+          : fix === 'resolve'
+            ? { kind: 'resolve' }
+            : fix === 'change-exact'
+              ? { kind: 'change-and-install' }
+              : undefined,
     })),
     installCommand:
       toAdd.length === 0
@@ -323,14 +349,9 @@ function refuseRequiredPeersAtAnotherVersion(
     listedAtRequired: wrong
       .filter(({ peer }) => peer.outcome === 'already-listed')
       .map(({ peer }) => peer.name),
-    outsideListedLine: wrong.flatMap(({ peer, found }) => {
-      const line = declared.get(peer.name);
-      return peer.outcome === 'already-listed' &&
-        line !== undefined &&
-        requirementAdmits(line, found) === false
-        ? [{ name: peer.name, found }]
-        : [];
-    }),
+    outsideListedLine: classified
+      .filter(({ fix }) => fix === 'install')
+      .map(({ peer, found }) => ({ name: peer.name, found })),
     restoreCommand: formatInstallCommand(ctx.packageManager),
   });
 }
