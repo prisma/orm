@@ -113,15 +113,9 @@ A Prisma 8 extension names every `@prisma/orm-*` package its shipped code uses, 
 
 The version is the one the application's database package (`@prisma/orm-postgres`, `@prisma/orm-mongo`, …) uses.
 
-**Why one exact version.** The application, its extensions and the `prisma` CLI must share one copy of each Prisma package. One copy does not accept a value that another copy created, so values must never pass between copies. (A host may load a second copy on purpose, as Prisma Composer does, as long as it passes no values to the application.)
+An application must have one copy of each Prisma package, and peer dependencies are what make the package manager check that. A version that does not match is reported at install: npm refuses, and pnpm, Yarn and Bun install and print a peer dependency warning, so read the warnings. An ordinary dependency would quietly install a second copy, which fails at run time.
 
-**Why peer dependencies.** A package manager gives a package its own copy of an ordinary dependency when the installed version does not fit. It never gives a package its own copy of a peer dependency: the package uses the copy the application lists. So when every Prisma package an extension uses is a peer dependency, the application's list is the only place a copy can come from. The application lists the platform packages beside its database package for the same reason.
-
-**What happens when versions do not match.** The mismatch is reported at install, and no second copy is made. npm refuses the install. pnpm, Yarn and Bun install and print a peer dependency warning, so read the warnings: a successful install does not prove that the versions match.
-
-**The exception.** A monorepo whose applications are on different Prisma releases can still get two copies under npm workspaces and under Bun's hoisted linker. Keep such applications on one release, or use pnpm, Yarn or Bun's isolated linker.
-
-To list every copy and the package that brought it, run `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework`. [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) explains all of this in full.
+To list every copy and the package that brought it, run `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework`. [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) explains the reasons, and the one case peer dependencies do not cover, a monorepo with applications on different Prisma releases.
 
 The one-line check in step 3 of the per-step flow enforces the rule; the `prisma-8-check-pins` guard the monorepo uses for its own extensions is not published. Wire the check into the extension's CI alongside the build/test step so an accidental range pin fails the PR before it lands.
 

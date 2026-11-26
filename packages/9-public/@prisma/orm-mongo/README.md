@@ -22,13 +22,7 @@ pnpm add mongodb
 └── @prisma/orm-toolchain      ORM command family for the `prisma` CLI, emitter, config loader
 ```
 
-**Why your application lists the platform packages.** It must have exactly one copy of each. With two copies, Prisma fails with an error that does not say why, because one copy does not accept a value that the other created.
-
-- **Listing them is what gives you one copy.** This package requires them as peer dependencies, and a package manager installs a peer dependency only where your application lists it.
-- **A version that does not fit is reported when you install.** npm refuses the install. pnpm, Yarn and Bun install and print a peer dependency warning, so read the warnings: a successful install does not prove that the versions fit.
-- **You never import them.** Your code imports only from `@prisma/orm-mongo` and from extensions.
-
-[ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) explains this in full.
+Keep all of these lines, on the same release. Your code imports only from `@prisma/orm-mongo` and from extensions, never from the other packages. If your package manager prints a peer dependency warning for a Prisma package, or refuses to install, the versions in these lines do not fit together: put them back on one release. [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) explains why they are listed.
 
 In a repository with several applications on different Prisma versions, npm workspaces and Bun with its hoisted linker can give one application two copies of a platform package without a warning. Keep the applications on one Prisma version, or use pnpm, Yarn, or Bun with its isolated linker.
 
