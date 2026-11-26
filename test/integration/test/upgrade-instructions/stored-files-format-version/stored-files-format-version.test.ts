@@ -245,6 +245,17 @@ describe('a stored file the script does not recognise', () => {
     );
   });
 
+  it('reports a snapshot with neither field, which contract emit does not rewrite', () => {
+    const path =
+      'app/migrations/snapshots/269d0430c7c70fa502e75feb52d9219c0339daa041c6cc9fb4ecb5ad8d0373b6/contract.json';
+    expect(runWith({ [path]: '{"storage":{},"targetFamily":"sql"}\n' }).run).toEqual(
+      leftUnchanged(
+        path,
+        'it has neither "formatVersion" nor "schemaVersion", so no release of Prisma wrote it. Restore it from version control',
+      ),
+    );
+  });
+
   it('leaves a contract.json that is not a Prisma contract alone', () => {
     expect(runWith({ 'other/contract.json': '{"name":"not prisma"}\n' }).run).toEqual({
       status: 0,
