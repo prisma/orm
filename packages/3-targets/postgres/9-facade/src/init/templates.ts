@@ -1,21 +1,22 @@
-import type { ContractEntry, ContractEntryInput } from '@internal/cli/init-contribution';
+import type { ContractEntryExpression, ContractEntryInput } from '@internal/cli/init-contribution';
 import type { ContractSourceFormat } from '@internal/config/config-types';
 import {
   POSTGRES_MIN_SERVER_VERSION,
   POSTGRES_NEWEST_VERSION,
 } from '@internal/target-postgres/server-version';
+import type { JsonValue } from '@internal/utils/json';
 import { moduleBase } from '../config/module-base';
 
 export const configModule = `${moduleBase}/config`;
 const builder = `${moduleBase}/contract-builder`;
 
 /** The config's `contract:` entry, stating the newest PostgreSQL version the target knows; a TypeScript contract states it in `defineContract`. */
-export function contractEntry(input: ContractEntryInput): ContractEntry {
+export function contractEntry(input: ContractEntryInput): ContractEntryExpression {
   if (input.kind === 'prisma7-schema') {
     return {
       call: {
-        module: configModule,
-        export: 'prisma7Schema',
+        moduleSpecifier: configModule,
+        symbol: 'prisma7Schema',
         args: [input.path, { databaseVersion: POSTGRES_NEWEST_VERSION }],
       },
     };
@@ -23,6 +24,35 @@ export function contractEntry(input: ContractEntryInput): ContractEntry {
   return input.mode === 'typescript'
     ? { value: input.path }
     : { value: { path: input.path, databaseVersion: POSTGRES_NEWEST_VERSION } };
+}
+
+function sampleSource(value: JsonValue): string {
+  if (typeof value === 'string') {
+    return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+  }
+  if (value === null || typeof value !== 'object') {
+    return String(value);
+  }
+  if (isJsonArray(value)) {
+    return `[${value.map(sampleSource).join(', ')}]`;
+  }
+  const entries = Object.entries(value).map(
+    ([key, item]) =>
+      `${/^[A-Za-z_$][\w$]*$/.test(key) ? key : sampleSource(key)}: ${sampleSource(item)}`,
+  );
+  return `{ ${entries.join(', ')} }`;
+}
+
+function isJsonArray(value: JsonValue): value is readonly JsonValue[] {
+  return Array.isArray(value);
+}
+
+/** The contract entry as the quick reference shows it, in the quick reference's own quoting. */
+export function contractEntrySample(input: ContractEntryInput): string {
+  const entry = contractEntry(input);
+  return 'value' in entry
+    ? sampleSource(entry.value)
+    : `${entry.call.symbol}(${entry.call.args.map(sampleSource).join(', ')})`;
 }
 
 export function starterContract(mode: ContractSourceFormat): string {

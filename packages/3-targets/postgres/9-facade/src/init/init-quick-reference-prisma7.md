@@ -34,7 +34,7 @@ import { defineConfig as ormConfig, prisma7Schema } from '{{configEntrypoint}}';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: prisma7Schema('{{schemaPath}}', { databaseVersion: 18 }),
+    contract: {{contractEntry}},
     output: '{{outputDir}}',
     db: {
       connection: process.env['DATABASE_URL']!,

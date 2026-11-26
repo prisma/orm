@@ -5,13 +5,14 @@ import type {
   ReadmeInput,
 } from '@internal/cli/init-contribution';
 import { POSTGRES_MIN_SERVER_VERSION } from '@internal/target-postgres/server-version';
-import { dirname } from 'pathe';
+import { dirname, isAbsolute } from 'pathe';
 import { moduleBase } from '../config/module-base';
 import { probePostgres } from './probe';
 import { renderTemplate } from './render';
 import {
   configModule,
   contractEntry,
+  contractEntrySample,
   contractSample,
   databaseFile,
   envExample,
@@ -28,6 +29,11 @@ function quickReference(input: QuickReferenceInput): string {
     pkgRun: input.cliCommand,
     pkg: moduleBase,
     configEntrypoint: configModule,
+    contractEntry: contractEntrySample({
+      kind: 'starter',
+      mode: input.mode,
+      path: isAbsolute(input.schemaPath) ? input.schemaPath : `./${input.schemaPath}`,
+    }),
     schemaSample: contractSample(input.mode),
     idType: starterIdType(input.mode),
     requirements: input.requirements,
@@ -42,6 +48,7 @@ function prisma7QuickReference(input: Prisma7QuickReferenceInput): string {
     pkgRun: input.cliCommand,
     pkg: moduleBase,
     configEntrypoint: configModule,
+    contractEntry: contractEntrySample({ kind: 'prisma7-schema', path: input.schemaPath }),
     requirements: input.requirements,
     prisma7ConfigSentence:
       input.prisma7Config === undefined

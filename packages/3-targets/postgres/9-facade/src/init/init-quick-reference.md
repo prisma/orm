@@ -45,7 +45,7 @@ import { defineConfig as ormConfig } from '{{configEntrypoint}}';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './{{schemaPath}}',
+    contract: {{contractEntry}},
     db: {
       connection: process.env['DATABASE_URL']!,
     },

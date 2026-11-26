@@ -63,7 +63,7 @@ describe('templates', () => {
     it('states the newest PostgreSQL version beside a Prisma schema contract', () => {
       expect(
         contribution.contractEntry?.({
-          kind: 'contract',
+          kind: 'starter',
           mode: 'psl',
           path: './prisma/contract.prisma',
         }),
@@ -75,7 +75,7 @@ describe('templates', () => {
     it('is the path of a TypeScript contract, which states its version in defineContract', () => {
       expect(
         contribution.contractEntry?.({
-          kind: 'contract',
+          kind: 'starter',
           mode: 'typescript',
           path: './prisma/contract.ts',
         }),
@@ -90,11 +90,45 @@ describe('templates', () => {
         contribution.contractEntry?.({ kind: 'prisma7-schema', path: 'prisma/schema.prisma' }),
       ).toEqual({
         call: {
-          module: '@internal/postgres/config',
-          export: 'prisma7Schema',
+          moduleSpecifier: '@internal/postgres/config',
+          symbol: 'prisma7Schema',
           args: ['prisma/schema.prisma', { databaseVersion: POSTGRES_NEWEST_VERSION }],
         },
       });
+    });
+  });
+
+  describe('the quick references show the config entry init writes', () => {
+    it.each([
+      [
+        'psl',
+        'src/prisma/contract.prisma',
+        `{ path: './src/prisma/contract.prisma', databaseVersion: ${POSTGRES_NEWEST_VERSION} }`,
+      ],
+      ['typescript', 'src/prisma/contract.ts', `'./src/prisma/contract.ts'`],
+    ] as const)('for a %s starter', (mode, schemaPath, entry) => {
+      expect(
+        contribution.contractEntry?.({ kind: 'starter', mode, path: `./${schemaPath}` }),
+      ).toEqual(
+        mode === 'psl'
+          ? { value: { path: `./${schemaPath}`, databaseVersion: POSTGRES_NEWEST_VERSION } }
+          : { value: `./${schemaPath}` },
+      );
+      expect(quickReferenceFor(mode, schemaPath)).toContain(`\n    contract: ${entry},\n`);
+    });
+
+    it('for a Prisma 7 schema', () => {
+      const reference = contribution.prisma7QuickReference?.({
+        schemaPath: 'prisma/schema.prisma',
+        outputDir: 'src/prisma',
+        cliCommand: 'pnpm prisma',
+        requirements: REQUIREMENTS,
+        prisma7Config: undefined,
+      });
+
+      expect(reference).toContain(
+        `\n    contract: prisma7Schema('prisma/schema.prisma', { databaseVersion: ${POSTGRES_NEWEST_VERSION} }),\n`,
+      );
     });
   });
 
@@ -312,6 +346,7 @@ describe('templates', () => {
           'pkgRun',
           'pkg',
           'configEntrypoint',
+          'contractEntry',
           'schemaSample',
           'idType',
           'requirements',
@@ -344,6 +379,7 @@ describe('templates', () => {
           'pkgRun',
           'pkg',
           'configEntrypoint',
+          'contractEntry',
           'requirements',
           'prisma7ConfigSentence',
           'prisma7ConfigRow',
