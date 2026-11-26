@@ -28,3 +28,7 @@ Spec section 4.2 asks `init` to write the version it reads from the database. It
 ## The CLI's general advice after a drift guesses the workflow
 
 After `db verify` or `db sign` finds a database that differs from the contract (a missing table, a wrong column type), the CLI suggests `db update` or changing the contract to describe the database. Both guess how the project changes its database. A project that uses migrations should write a migration, and the database is not always the truth. Done is advice that follows from what the project does, or none where the CLI cannot tell.
+
+## The database refusal travels as a schema issue
+
+Verification reports a database that lacks capabilities as one more issue in its list of schema differences, with its own cause, and the CLI filters it out of the drift output in several places. It is a verdict on the server, not a difference in the schema. Done is a field of its own on the verification result, beside the schema issues, which the CLI and the runner read the same way.

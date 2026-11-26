@@ -7,7 +7,7 @@ The reasoning, the scenarios and the prior art behind this spec are in [design-n
 An application states in its contract which capabilities it requires, and three things are then true:
 
 1. **The requirements describe the user's real environment.** The user states the database version and the connection the application runs over, and the contract's required capabilities follow from them. A feature that needs PostgreSQL 17 is available to a project on 17 and absent, at type-check, from a project on 16.
-2. **A signed database provides them.** Signing checks the database against the contract's requirements before it writes the signature. The signature is then the database's promise to satisfy the contract, and it is the only check of the database the client makes.
+2. **A signed database provides them.** Signing checks the database against the contract's requirements before it writes the signature. The signature is then the database's promise to satisfy the contract, for every capability the installed table knows, and it is the only check of the database the client makes. A capability the table does not know is reported by the client's check of its stack (point 3).
 3. **The assembled stack provides them.** The target, adapter and driver given to the client are checked against the contract at compile time and when the client starts.
 
 Most of this is already what the subsystem docs describe ([Data Contract](../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md), [Adapters & Targets](../../docs/architecture%20docs/subsystems/5.%20Adapters%20%26%20Targets.md), [Runtime & Middleware Framework](../../docs/architecture%20docs/subsystems/4.%20Runtime%20%26%20Middleware%20Framework.md)). The code does not do it. Stating the version is the new part.

@@ -1,4 +1,4 @@
-# Slice: the refusal of a database is data the CLI renders
+# Slice: the refusal of a database is data, rendered once and printed by the CLI
 
 Part of slice 3 of [plan.md](plan.md) ("Signing checks the database"). The operator settled the design and the wording on 2026-11-26, and approved the framework change it needs. This brief is our best effort: if the code shows part of it is wrong, say so with the evidence.
 
@@ -9,7 +9,7 @@ Today the PostgreSQL package writes the refusal as finished prose, with branches
 ## Outcome
 
 - A database that does not provide what the contract requires is reported as its own kind of failure, carried to the CLI as data, not prose.
-- The CLI renders it, the same way for every database, and prints no `db update` line or other drift advice for it.
+- The framework renders it, the same way for every database; the CLI prints it and prints no `db update` line or other drift advice for it.
 - A capability that neither the target's table nor the client's adapter and driver declare is reported by the client, not dropped.
 - The contract keeps storing capability keys only. The message never needs the version its author stated.
 
@@ -44,7 +44,7 @@ The general drift advice for other mismatches (`db update` or "change the contra
 ## Tests
 
 - The target turns a contract's capabilities, its table and a server version into the findings, for each kind, including several first versions and a server between two rows. A test with a table whose rows differ.
-- The CLI renders each kind exactly as worded above, and prints no `db update` line when the only failure is this one; when other drift issues are present, theirs still print.
+- Each kind is rendered exactly as worded above, the CLI and prints no `db update` line when the only failure is this one; when other drift issues are present, theirs still print.
 - A capability no row names is not a signing finding; the client reports it. Every flag the table names is on in some row, so no database capability is checked nowhere.
 - `db sign`, `db verify` and the runner's refusal each produce the rendered text.
 
