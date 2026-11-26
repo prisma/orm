@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { Contract } from '@internal/contract/types';
 import { coreHash, profileHash } from '@internal/contract/types';
 import { SqlStorage } from '@internal/sql-contract/types';
@@ -356,6 +357,78 @@ describe('sqlite transaction()', () => {
       expect(results).toHaveLength(10);
       expect(maxActiveTransactions).toBe(1);
     } finally {
+      await db1.close();
+      await db2.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('shares the queue between plain paths and percent-encoded file: URI aliases', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'prisma-sqlite-uri-queue-'));
+    const dbPath = join(tempDir, 'shared db.db');
+    const fileUri = pathToFileURL(dbPath).href;
+    const db1 = sqlite({ contract, path: dbPath });
+    const db2 = sqlite({ contract, path: fileUri });
+    let activeTransactions = 0;
+    let maxActiveTransactions = 0;
+
+    try {
+      await Promise.all([
+        db1.transaction(async () => {
+          activeTransactions += 1;
+          maxActiveTransactions = Math.max(maxActiveTransactions, activeTransactions);
+          try {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          } finally {
+            activeTransactions -= 1;
+          }
+        }),
+        db2.transaction(async () => {
+          activeTransactions += 1;
+          maxActiveTransactions = Math.max(maxActiveTransactions, activeTransactions);
+          try {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          } finally {
+            activeTransactions -= 1;
+          }
+        }),
+      ]);
+
+      expect(maxActiveTransactions).toBe(1);
+    } finally {
+      await db1.close();
+      await db2.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a closed client immediately without waiting behind another client transaction', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'prisma-sqlite-closed-queue-'));
+    const dbPath = join(tempDir, 'shared.db');
+    const db1 = sqlite({ contract, path: dbPath });
+    const db2 = sqlite({ contract, path: dbPath });
+    let startedFirst!: () => void;
+    const firstStarted = new Promise<void>((resolve) => {
+      startedFirst = resolve;
+    });
+    let releaseFirst!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    try {
+      const activeTx = db1.transaction(async () => {
+        startedFirst();
+        await gate;
+      });
+      await firstStarted;
+      await db2.close();
+
+      await expect(db2.transaction(async () => 'never')).rejects.toThrow('SQLite client is closed');
+      releaseFirst();
+      await activeTx;
+    } finally {
+      releaseFirst?.();
       await db1.close();
       await db2.close();
       rmSync(tempDir, { recursive: true, force: true });

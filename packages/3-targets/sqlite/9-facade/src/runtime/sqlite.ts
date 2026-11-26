@@ -1,5 +1,6 @@
 import { realpathSync } from 'node:fs';
 import { basename, dirname, join, resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import type { Contract } from '@internal/contract/types';
 import type { SqliteBinding } from '@internal/driver-sqlite/runtime';
@@ -57,6 +58,14 @@ export type SqliteTargetId = 'sqlite';
 
 const sharedTransactionQueues = new Map<string, Promise<unknown>>();
 
+function decodeFileUriComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function resolveDatabaseQueueKey(binding: { readonly path: string } | undefined): string | null {
   if (!binding) return null;
   const rawPath = binding.path.trim();
@@ -66,9 +75,31 @@ function resolveDatabaseQueueKey(binding: { readonly path: string } | undefined)
 
   let filePath = rawPath;
   if (filePath.startsWith('file:')) {
-    const withoutScheme = filePath.slice('file:'.length);
-    const queryIndex = withoutScheme.indexOf('?');
-    filePath = queryIndex >= 0 ? withoutScheme.slice(0, queryIndex) : withoutScheme;
+    const queryOrFragmentIndex = filePath.search(/[?#]/);
+    const uriWithoutQuery =
+      queryOrFragmentIndex >= 0 ? filePath.slice(0, queryOrFragmentIndex) : filePath;
+    if (
+      filePath.includes('mode=memory') ||
+      uriWithoutQuery === 'file:' ||
+      uriWithoutQuery === 'file::memory:'
+    ) {
+      return null;
+    }
+
+    if (uriWithoutQuery.startsWith('file:/')) {
+      try {
+        filePath = fileURLToPath(uriWithoutQuery);
+      } catch {
+        filePath = decodeFileUriComponent(
+          uriWithoutQuery.startsWith('file://')
+            ? uriWithoutQuery.slice('file://'.length)
+            : uriWithoutQuery.slice('file:'.length),
+        );
+      }
+    } else {
+      filePath = decodeFileUriComponent(uriWithoutQuery.slice('file:'.length));
+    }
+
     if (!filePath || filePath === ':memory:') {
       return null;
     }
@@ -448,6 +479,9 @@ export default function sqlite<
       fn: (tx: SqliteTransactionContext<TContract, TCollections>) => PromiseLike<R>,
       localOptions?: SqliteTransactionOptions,
     ): Promise<R> {
+      if (closed) {
+        throw closedError();
+      }
       const local = validateTransactionOptions(localOptions);
       const isolationLevel =
         local?.isolationLevel !== undefined
