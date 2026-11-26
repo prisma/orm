@@ -25,7 +25,6 @@ import type {
 } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
-import { createControlClient } from '../control-api/client';
 import { errorFromCaught } from '../control-api/operations/caught-errors';
 import { mapContractAtError } from '../control-api/operations/contract-at-errors';
 import {
@@ -822,5 +821,3 @@ export function createMigrateCommand(
     },
   });
 }
-
-export const migrateCommand = createMigrateCommand(createControlClient);

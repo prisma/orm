@@ -735,5 +735,3 @@ export function createDbSignCommand(
     },
   });
 }
-
-export const dbSignCommand = createDbSignCommand();
