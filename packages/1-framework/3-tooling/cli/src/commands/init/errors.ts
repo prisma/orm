@@ -489,6 +489,14 @@ export function errorInitPrisma7ConfigUnreadable(options: {
 }
 
 /**
+ * The sentence every advice to add or install a package ends with under `--skip-install`: a
+ * package manager can refuse the add, or leave the copy where it is, when an override, a
+ * resolution or the lockfile pins it, and init cannot see which.
+ */
+export const IF_SOMETHING_PINS_IT =
+  'If an add or an install is refused, or a copy stays at the other version, an override, a resolution or the lockfile pins it, so remove that and install again.';
+
+/**
  * The project does not have the facade: `--skip-install` forbade installing it, or init's
  * install command succeeded and the package still cannot be found from the project. Init takes
  * every file it writes from that package, so it stops before writing any scaffold file.
@@ -517,7 +525,7 @@ export function errorInitTargetPackageNotInstalled(options: {
       ? `Check that \`${options.installCommand}\` makes ${packageName} resolvable from this directory, then run \`prisma orm init\` again.${plugNPlay}`
       : options.unlisted
         ? `Run \`prisma orm init\` again without \`--skip-install\`: it checks that ${packageName} lists the keyword \`${PRISMA_ORM_PACKAGE_KEYWORD}\` before installing it.${plugNPlay}`
-        : `Install it with \`${options.installCommand}\`, then run \`prisma orm init\` again, or run it without \`--skip-install\`.${plugNPlay}`;
+        : `Install it with \`${options.installCommand}\`. ${IF_SOMETHING_PINS_IT} Then run \`prisma orm init\` again, or run it without \`--skip-install\`.${plugNPlay}`;
   return new CliStructuredError(
     'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
     ranCommand !== undefined
@@ -716,7 +724,7 @@ export function errorInitRequiredPeersNotInstalled(options: {
     `${packageName} needs peer dependencies that are not installed`,
     {
       why: `${packageName} names ${listed(missing)} as required peer dependencies, and ${missing.length === 1 ? 'it cannot' : 'they cannot'} be found from the project or from where ${packageName} is installed. \`--skip-install\` forbids installing them. Nothing was changed.`,
-      fix: `${steps.join(', and ')}, then run \`prisma orm init\` again.`,
+      fix: `${steps.join(', and ')}. ${IF_SOMETHING_PINS_IT} Then run \`prisma orm init\` again.`,
       docsUrl: docsUrlFor('CLI.INIT_REQUIRED_PEERS_NOT_INSTALLED'),
       meta: {
         packageName,
@@ -804,7 +812,7 @@ export function errorInitRequiredPeersAtAnotherVersion(options: {
     `${packageName} needs peer dependencies at versions that are not installed`,
     {
       why: `${packageName} needs its required peer dependencies at the versions it names, and the project has ${listed(found)}. A copy at another version does not stand for the one required, and init cannot tell which peers the required version needs in turn. \`--skip-install\` forbids installing them. Nothing was changed.`,
-      fix: `${steps.join(', and ')}. If an add or an install is refused, or a copy stays at the other version, an override, a resolution or the lockfile pins it, so remove that and install again. Then run \`prisma orm init\` again.`,
+      fix: `${steps.join(', and ')}. ${IF_SOMETHING_PINS_IT} Then run \`prisma orm init\` again.`,
       docsUrl: docsUrlFor('CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION'),
       meta: {
         packageName,

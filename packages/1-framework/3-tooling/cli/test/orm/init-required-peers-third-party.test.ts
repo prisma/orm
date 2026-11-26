@@ -4,6 +4,7 @@ import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
 import { dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { IF_SOMETHING_PINS_IT } from '../../src/commands/init/errors';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import {
@@ -17,6 +18,7 @@ import { noRegistryLookup, noRegistryPeersLookup } from '../utils/registry-keywo
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const VERSION = '8.1.0';
+const IF_PINNED = `${IF_SOMETHING_PINS_IT} Then run \`prisma orm init\` again.`;
 const POSTGRES = ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', '--json'];
 
 let projectDir: string;
@@ -214,9 +216,7 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
           },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label: expect.stringContaining(
-                'pnpm add "temporal-polyfill@^1.0.8"`, then run `prisma orm init` again',
-              ),
+              label: expect.stringContaining(`pnpm add "temporal-polyfill@^1.0.8"\`. ${IF_PINNED}`),
             }),
           ]),
         },
@@ -248,8 +248,7 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
           },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label:
-                'Run `pnpm install` to install temporal-polyfill, which package.json already lists, then run `prisma orm init` again.',
+              label: `Run \`pnpm install\` to install temporal-polyfill, which package.json already lists. ${IF_PINNED}`,
             }),
           ]),
         },
@@ -283,8 +282,7 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
           },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label:
-                'Run `pnpm install` to install temporal-polyfill, which package.json already lists, and add the others with `pnpm add "left-pad@^1.3.0"`, then run `prisma orm init` again.',
+              label: `Run \`pnpm install\` to install temporal-polyfill, which package.json already lists, and add the others with \`pnpm add "left-pad@^1.3.0"\`. ${IF_PINNED}`,
             }),
           ]),
         },
@@ -367,9 +365,6 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
     timeouts.coldTransformImport,
   );
 });
-
-const IF_PINNED =
-  'If an add or an install is refused, or a copy stays at the other version, an override, a resolution or the lockfile pins it, so remove that and install again. Then run `prisma orm init` again.';
 
 const OUTSIDE_LISTED_LINE = `package.json already lists @prisma/orm-framework at a version @prisma/orm-postgres accepts, but 8.0.0 is installed: run \`pnpm install\`. ${IF_PINNED}`;
 
