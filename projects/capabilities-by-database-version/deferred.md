@@ -32,3 +32,7 @@ After `db verify` or `db sign` finds a database that differs from the contract (
 ## The database refusal travels as a schema issue
 
 Verification reports a database that lacks capabilities as one more issue in its list of schema differences, with its own cause, and the CLI filters it out of the drift output in several places. It is a verdict on the server, not a difference in the schema. Done is a field of its own on the verification result, beside the schema issues, which the CLI and the runner read the same way.
+
+## "Capability" also names an optional family feature
+
+ADR 207 calls an optional method on a family instance a capability (`SchemaViewCapable`, `PslContractInferCapable`), a different concept from the capabilities a contract requires. One user-facing message carries it: `contract infer`'s refusal says "The configured family does not implement the PslContractInferCapable capability". Found in [terminology-review.md](terminology-review.md); outside this project, which is about what a contract requires.
