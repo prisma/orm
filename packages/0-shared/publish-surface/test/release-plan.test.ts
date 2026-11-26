@@ -464,9 +464,19 @@ describe('planRelease', () => {
       input({ release: { major: 9, minor: 0 }, levelChanges: { postgres: 'preview' } }),
     );
 
-    expect(line(plan, 'postgres')).toBe(
-      '9.0.0-preview.0 preview family ~9.0.0 framework ~9.0.0 target ~9.0.0',
-    );
+    expect({
+      framework: line(plan, 'framework'),
+      postgres: line(plan, 'postgres'),
+      mongo: line(plan, 'mongo'),
+      supabase: line(plan, 'supabase'),
+      paradedb: line(plan, 'paradedb'),
+    }).toEqual({
+      framework: '9.0.0 latest',
+      postgres: '9.0.0-preview.0 preview family ~9.0.0 framework ~9.0.0 target ~9.0.0',
+      mongo: '9.0.0-preview.0 latest framework ~9.0.0',
+      supabase: '9.0.0-preview.0 latest postgres ~9.0.0-preview.0',
+      paradedb: '0.18.0 latest framework ^9.0.0',
+    });
   });
 
   it('moves a package up within 8.0 from 8.0.1-ea.N to 8.0.1-rc.0, and ranges on it follow', () => {
