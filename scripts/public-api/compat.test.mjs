@@ -148,8 +148,11 @@ describe('checkPackage, with the release treated as GA', () => {
       ['generic-typeonly', 'generic'],
       ['shape-value-typeonly', 'shape-value-release'],
     ]) {
+      const result = check(current, { release });
+      deepStrictEqual(result.undecided, []);
+      deepStrictEqual(result.decidedByMembers, []);
       deepStrictEqual(
-        brokenExports(check(current, { release })).filter((each) => each.test === 'value'),
+        brokenExports(result).filter((each) => each.test === 'value'),
         [
           {
             path: '.',
@@ -197,6 +200,11 @@ describe('checkPackage, with the release treated as GA', () => {
         'Holder constructor shared marker',
       ],
     );
+  });
+
+  it('compares a class with a protected static unique symbol', () => {
+    const result = check('protected-static-symbol', { release: 'protected-static-symbol' });
+    deepStrictEqual([brokenExports(result), result.undecided, result.problems], [[], [], []]);
   });
 
   it('fails when the release imports a file of its own that is missing', () => {

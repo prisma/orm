@@ -1090,7 +1090,15 @@ export function checkPackage({
     const isBroken = breaks.some(
       (each) => each.path === entry.path && each.name === entry.name && each.test === segment.test,
     );
-    if (!isBroken) broke(entry, segment, outcome);
+    if (isBroken) continue;
+    broke(entry, segment, outcome);
+    const sameTest = (each) =>
+      each.path === entry.path && each.name === entry.name && each.test === segment.test;
+    for (const list of [undecided, decidedByMembers]) {
+      for (let index = list.length - 1; index >= 0; index--) {
+        if (sameTest(list[index])) list.splice(index, 1);
+      }
+    }
   }
 
   // Two classes or unique symbols with one name share one marker, so a comparison that reaches one
