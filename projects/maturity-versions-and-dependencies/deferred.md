@@ -12,10 +12,6 @@ Removing the field changes an interface that facades outside this repository imp
 
 The facade is the package an application installs, such as `@prisma/orm-postgres`; a target package is `@prisma/orm-target-*`. Earlier work called the facade a "target package", and about 300 uses remain on `main` outside the files this project changes: the command-line tool's internal names (`target-packages.ts`, `TargetPackage`, `KNOWN_TARGET_PACKAGES`) and comments, the error reference, the versioning and CLI docs, the released upgrade guides in the `prisma-8` skill, and two published names, the subpath `@prisma/orm-framework/target-package-config` and the error codes `CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED` and `_NOT_VERIFIED`. Text users read says "the package for your database", never "facade". The `--target` flag keeps its name. To be fixed in a pull request of its own, after slice 1.
 
-## Whether a GA package can go below GA again
-
-Version numbers allow it at a new minor (`8.5.0-preview.0` sorts above `8.4.x`). It bears on what GA promises, and nobody has decided it. The release scripts refuse it and the decision record says it is not decided. For the operator, when a case arises.
-
 ## The Supabase extension's version stamp in contracts
 
 The Supabase extension writes a version into each emitted contract. It follows the root version, which from release `8.0` is the release number (`8.0.1` at release `8.0`, `X.Y.0` after) and not the package's own version. Making it the package's version would change every emitted `contract.json`, which belongs to the work on stored files, not here. Documented in `docs/oss/versioning.md`.

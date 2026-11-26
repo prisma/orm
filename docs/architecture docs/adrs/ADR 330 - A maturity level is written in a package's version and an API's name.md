@@ -73,7 +73,7 @@ A level is defined by the least we do for a package or an API at that level.
 
 **A failing test blocks every package.** Our packages are released together, so a failing test of a package at Preview or above blocks the release for all of them. Early Access is the one level that may be released with a failing test; that is allowed, not required.
 
-**A level moves up within a minor, and down only at a new minor.** A version can only move forward, and the levels' words sort upward in the order of the levels: `ea`, `preview`, `rc`, then the plain version. So a package can move up in any release. A package that has never been GA can move down at a new minor. The release scripts refuse to take a GA package below GA, at any later release. This is not settled: GA promises compatibility until the next major version, and whether a later minor or a new major may take a package below GA has not been agreed.
+**A level moves up within a minor, and down only at a new minor.** A version can only move forward, and the levels' words sort upward in the order of the levels: `ea`, `preview`, `rc`, then the plain version. So a package can move up in any release. A package that has never been GA can move down at a new minor. A GA package stays GA until the next major version. Taking it below GA within the major would break what GA promises, and users on `^8.4.0` would silently stop getting its updates, because a caret never selects a pre-release such as `8.5.0-preview.0`. At a new major it may start below GA, since a new major ends that promise. The release scripts enforce both.
 
 **This is not the support scale.** The public issue [Priorities & Operating Contexts](https://github.com/prisma/orm/issues/25843) sorts databases, runtimes and frameworks into First-Class, Supported and Unofficial. That says where the maintainers spend effort and how they answer issues. A maturity level says how finished one package is. A First-Class database can have an Early Access facade while that facade is being built.
 
@@ -93,15 +93,15 @@ Nothing else has a level of its own. An entrypoint (a path inside a package that
 | Level | In a package's version | At the start of an API's name |
 | --- | --- | --- |
 | Generally Available | Plain version: `8.3.0` | Nothing: `search` |
-| Release Candidate | `8.3.0-rc.0` | Not decided |
+| Release Candidate | `8.3.0-rc.0` | `rc_search` |
 | Preview | `8.3.0-preview.0` | `preview_search` |
 | Early Access | `8.3.0-ea.0` | `ea_search` |
 
-Whether a single API inside a GA package can be at Release Candidate, and how its name would say so, is not decided.
+A single API inside a GA package can be at any of the three levels below GA, so packages and APIs share one scale.
 
 The word and the name are joined by an underscore, so that the level cannot be read as part of the name: `previewImage` could be a GA API about image previews, while `preview_image` can only be an `image` API at Preview or above. A reader, and any tool that reads names, can then tell from the name alone the least an API is promised. Every name in TypeScript, including a config option, takes this form.
 
-A name outside TypeScript uses the same word with that kind of name's own separator: a command-line flag is `--preview-search`, and a contract-language attribute or an environment variable follows its own convention the same way. In those forms the level cannot be told from an ordinary word by its form alone.
+A type, whose name starts with a capital letter, is `Preview_Search`, and an attribute in a contract written in PSL is `@preview_search`. A command-line flag and an error code carry no level. A flag belongs to its command, and an error code to the function that throws it, so a change to either is a change of that command or function, at that command's or function's level.
 
 **A promotion adds a name and keeps the old one.** When an API moves up a level, such as from Early Access to Preview or from Preview to GA, the release adds the name for the new level. The old name stays as another name for the same API, marked deprecated, and is removed at the next major version. Otherwise every application and extension that calls `ea_search` would break when it becomes `preview_search`, and again when it becomes `search`: the API would stop working at the moment it became more reliable. For a while a name can then say less than is true (`ea_search` may be GA), which errs on the safe side.
 

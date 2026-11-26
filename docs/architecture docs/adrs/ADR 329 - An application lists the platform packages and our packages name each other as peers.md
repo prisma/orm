@@ -111,7 +111,7 @@ The framework recognises a data-type value by the copy that made it. The value c
 
 Two copies are harmless when they never exchange values. Prisma Composer (Prisma's deployment tool) relies on this: it loads a second copy of the ORM beside the application on purpose, for its own work.
 
-The `prisma` command-line tool is a harder case. It installs `@prisma/orm-toolchain` as its own dependency, at its own version, and Composer does the same. Some values from the application's config file do reach that copy, and some of them are recognised by the copy that made them. How the tool works with an application whose packages are at another version is decided separately.
+The `prisma` command-line tool is a harder case. It installs `@prisma/orm-toolchain` as its own dependency, at its own version, and Composer does the same. Some values from the application's config file do reach that copy, and some of them are recognised by the copy that made them. So `prisma` takes the release number's major and minor, works only with an application whose packages are on that minor, and otherwise stops with a message that names both versions.
 
 ## Why this configuration
 
@@ -172,4 +172,4 @@ The first six rows were tried as described under [Why this configuration](#why-t
 
 One other approach was tried in the code instead of the installation:
 
-- **Detect a second copy when the application starts, and stop.** Prisma Composer loads a second copy of the ORM beside the application on purpose, for its own work, so the check stopped working applications. A check that reports only two copies that are actually used together is a separate decision.
+- **Detect a second copy when the application starts, and stop.** Prisma Composer loads a second copy of the ORM beside the application on purpose, for its own work, so the check stopped working applications.
