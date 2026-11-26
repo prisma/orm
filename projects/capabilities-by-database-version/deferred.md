@@ -20,3 +20,7 @@ A contract that does not list `sql.interactiveTransactions` gets a refusal from 
 ## The other databases
 
 MySQL, MariaDB, SQLite and MongoDB contracts take a fixed capability list from their adapter, which also declares `sql.interactiveTransactions` although the driver is the component that knows it. Done is slice 4 of the plan for each.
+
+## `init` writes the newest version, not the server's
+
+Spec section 4.2 asks `init` to write the version it reads from the database. It writes the newest version in the PostgreSQL table instead, because `--probe-db` is optional and runs after the files are written and the driver installed. All four versions give the same contract today, and a user on an older server gets a refusal at signing that names the version to state. Done is `init` writing the probed version when `--probe-db` is given, which needs the probe to run before the config is written or the config to be rewritten after it.
