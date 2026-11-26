@@ -88,6 +88,15 @@ Stopping point for the open upgrade issues: every urgent and high issue is close
 
 Will, 2026-09-30: the emulator controls (start, stop, list, reset) are now urgent and start immediately. They were already required for GA; what changed is the order. They move to the top of the editor and tools stream. The VS Code extension work that depends on them (items 2 and 3 of that stream) waits on them. Background from 2026-09-28: several emulators of each type can run, so status is a list; the eval found that stopping `prisma dev` leaves the emulator processes running and no stop or cleanup command exists.
 
+## Changes of 2026-11-26
+
+- The docs restructure (stream 5, row 5) is done when the docs no longer work around a defect in a Prisma tool whose fix is in a published release (Will, 2026-11-26). The row had no end, so it could not close, although the audit's restructure, corrections and new pages had merged. After that, each release's docs update removes the workarounds that release fixes.
+- The Supabase page and the example repositories wait on other work, so they move out of row 5 into rows of their own, placed Later (Will, 2026-11-26).
+- Fixing the tool defects that the docs work around is a row of its own (stream 5, row 10). It is not placed yet.
+- Recorded from the docs audit on 2026-11-26, decided earlier:
+  - The docs never work around a defect in a Prisma tool; the tool gets fixed (Will, 2026-11-22). The rule is in `apps/docs/AGENTS.md` in prisma/web.
+  - Example repositories for the docs live in `prisma/prisma-examples`, one folder per starting state, with their versions bumped in each docs sync. Docs never link to `examples/` in prisma/orm, which exist for end-to-end tests (Will, 2026-09-28).
+
 ## Changes of 2026-11-24
 
 - Stream 7 is a stream of 12 projects, not one project (Will, 2026-11-24).
