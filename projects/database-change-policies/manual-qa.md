@@ -22,7 +22,7 @@ What it checks: the `migration ref policy show`, `set` and `delete` commands, as
 6. Bad input: `set` with no flag, `--data-loss strict`, `--data-loss access-widening-forbidden`, `--access-widening data-loss-permitted --json`, `--change deploy`, `--change ""`, `delete` with no setting, `delete production dataLoss`. Expect `CLI.INVALID_ARGUMENTS` naming the allowed values, file unchanged.
 7. `head` for each command (expect "The head ref cannot declare policies"); missing ref `staging` (expect `MIGRATION.UNKNOWN_REF`); a ref file with an invalid policy value and one with broken JSON (expect `MIGRATION.INVALID_REF_FILE`, file not written).
 8. Another ref file invalid: `set` on a different ref still succeeds.
-9. A ref file with an unknown top-level key and invariants: `set` keeps invariants, drops the unknown key.
+9. A ref file with an unknown top-level key and invariants: `set` fails with `MIGRATION.INVALID_REF_FILE` and leaves the file as it was.
 10. `migration ref delete staging data-loss` (the word `policy` missing): fails, ref kept.
 11. `migration ref list` shows declared policies in the human table; data lines and `--json` unchanged.
 12. Compare checksums from setup step 5: nothing outside the ref files changed.
