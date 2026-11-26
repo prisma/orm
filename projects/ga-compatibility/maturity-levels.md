@@ -57,6 +57,8 @@ An extension author tells what they can depend on in the same two ways as an app
 - The compatibility policy covers everything that is GA: every API of a GA package whose name carries no lower level.
 - A package or API below GA may change in any release.
 - Such a change never affects an application that does not use it.
+- **A promotion never removes a name.** When `ea_foo` becomes `preview_foo`, or `preview_foo` becomes `foo`, the release adds the new name. The old name stays as another name for the same thing, marked deprecated, and is removed at the next major version. Code written against the old name keeps working through every promotion. A name can therefore say less than is true for a while: `ea_foo` may be GA. That errs on the safe side.
+- A promotion that comes with a change of form is a change like any other below GA: the new name has the new form, and the old name is removed in that release, since it cannot stand for both.
 - Which levels the reference documentation covers is in the [spec](spec.md), section 8.
 
 ## 6. Not yet decided
@@ -64,7 +66,6 @@ An extension author tells what they can depend on in the same two ways as an app
 - **The full definition of each level.** The table in section 2 is a working version. Unanswered: what level the framework package has when it has no database of its own; which release a failing test blocks while all packages are released together; who decides what a Preview package supports. The [plan](plan.md) has a task for this, and for a page that explains the levels to users.
 - **Version numbers while packages are at different levels.** Today every package has the same version and they are released together. Once one package is GA and another is Preview, their versions differ. Unanswered: what the Preview package's version is at each release; that a range on a pre-release, such as `^8.1.0-preview.3`, does not select the pre-releases of the next minor, so a user edits it by hand; which tag a package gets that has never had a GA release; and which package carries a database's level (the facade, the target package or both).
 - **Release Candidate for a single API.** Whether an API inside a GA package can be a release candidate, and how its name would say so.
-- **How an API moves to GA.** Its name changes, from `preview_foo` to `foo`. Proposed and not agreed: the release that makes it GA adds the plain name, and the old name keeps working until the next major.
 - **How the word is written where the name is not a TypeScript identifier.** A command-line flag, a config option, an attribute in a schema file, an error code, and a type whose name starts with a capital letter.
 - **How the levels relate to the scale First-Class, Supported and Unofficial** in [prisma/orm#25843](https://github.com/prisma/orm/issues/25843), which says where we spend effort and not how finished a package is.
 

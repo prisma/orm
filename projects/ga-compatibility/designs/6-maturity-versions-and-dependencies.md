@@ -106,7 +106,7 @@ A consequence: the `prisma` package, which is released from another repository o
 - **A release of an older major version always names its tag**, so that it cannot take `latest` back from the current major.
 - **An outside package that uses an API below GA** declares a range within one minor on the package that has it.
 - **A level on something that is not a TypeScript name**, such as a command-line flag or a config option, uses the same word with that thing's own separator: `--preview-foo`, `previewFoo`.
-- **When an API below GA becomes GA**, the plain name is added, and the old name keeps working until the next major version.
+- **When an API moves up a level**, from Early Access to Preview or from Preview to GA, the new name is added, and the old name keeps working, marked deprecated, until the next major version. A promotion that changes the API's form removes the old name in that release.
 - **Updating the upgrade skills** happens before GA, as the [plan](../plan.md) says.
 
 These settle the points that section 6 of [maturity-levels.md](../maturity-levels.md) lists as not decided, except the full definition of each level and how the levels relate to the support categories in prisma/orm#25843, which are this project's work.
