@@ -30,7 +30,7 @@ const databaseCapabilitiesNotProvided: SchemaDiffIssue = {
   expected: node,
   explanation: {
     text: 'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 14.10. Upgrade the database to PostgreSQL 15 or later.',
-    cause: 'capabilities-not-provided',
+    cause: 'database-capabilities-not-provided',
     notProvided: {
       database: 'PostgreSQL',
       findings: [{ kind: 'older-than-supported', databaseVersion: '14.10', oldestSupported: 15 }],

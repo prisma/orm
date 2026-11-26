@@ -12,6 +12,7 @@ import {
   HASH_EXT,
   harness,
   mocks,
+  NOT_PROVIDED,
   ormConfig,
   PROFILE_HASH,
   projectDir,
@@ -147,6 +148,32 @@ describe('db sign when a ref cannot be written after the markers are written', (
         conflictSpaces: ['audit'],
         unwrittenRefs: [{ space: 'app', name: 'db', hash: HASH_A }],
         advancedRefs: [],
+      },
+    });
+  });
+
+  it('says a space it did not sign because the database lacks capabilities was refused for that', async () => {
+    mocks.dbSign.mockResolvedValue(
+      ok({
+        spaces: [signedSpace('app', HASH_A), failedSpace('pgvector', HASH_EXT, NOT_PROVIDED)],
+      }),
+    );
+    const dir = await projectDir();
+
+    const run = await withReadOnlyAppRefs(dir, () =>
+      harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir }),
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(settledError(run)).toMatchObject({
+      why: expect.stringMatching(
+        /^The database was signed: the marker of space "app" holds its contract\. Space "pgvector" was not signed, because the database does not provide what its contract requires\. These refs were not written: ref "db" of space "app" \(.*EACCES.*\)\.$/,
+      ),
+      meta: {
+        signedSpaces: ['app'],
+        failedSpaces: [],
+        lackingSpaces: ['pgvector'],
+        conflictSpaces: [],
       },
     });
   });

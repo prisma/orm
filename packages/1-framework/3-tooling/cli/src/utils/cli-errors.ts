@@ -92,9 +92,9 @@ export {
  * here spell one; the foundation classes every library also raises keep
  * carrying `code`, `why` and `fix` alone.
  *
- * Both fields are required: the `fix` prose is what the commander shell still
- * renders, and the handler boundary drops it in favour of `nextActions` when it
- * settles the engine's envelope.
+ * `nextActions` is required. `fix` is the same advice as prose, which the
+ * commander shell still renders and the handler boundary drops in favour of
+ * `nextActions`; it is left out when there is no advice.
  */
 export class ActionableCliError extends CliStructuredError {
   override readonly nextActions: readonly NextAction[];
@@ -210,6 +210,8 @@ function notSignedSentence(
 export function errorSignRefsNotWritten(options: {
   readonly signedSpaces: readonly string[];
   readonly failedSpaces: readonly string[];
+  /** Spaces not signed only because the database does not provide what their contracts require. */
+  readonly lackingSpaces: readonly string[];
   readonly conflictSpaces: readonly string[];
   readonly refusedSpaces: readonly {
     readonly space: string;
@@ -226,8 +228,15 @@ export function errorSignRefsNotWritten(options: {
   readonly diagnostics: readonly Diagnostic[];
   readonly cause: unknown;
 }): ActionableCliError {
-  const { signedSpaces, failedSpaces, conflictSpaces, refusedSpaces, unwrittenRefs, rerunCommand } =
-    options;
+  const {
+    signedSpaces,
+    failedSpaces,
+    lackingSpaces,
+    conflictSpaces,
+    refusedSpaces,
+    unwrittenRefs,
+    rerunCommand,
+  } = options;
   const markers =
     signedSpaces.length === 1
       ? `the marker of space ${quotedSpaces(signedSpaces)} holds its contract`
@@ -237,6 +246,11 @@ export function errorSignRefsNotWritten(options: {
       failedSpaces,
       'its schema does not satisfy its contract',
       'their schemas do not satisfy their contracts',
+    ) +
+    notSignedSentence(
+      lackingSpaces,
+      'the database does not provide what its contract requires',
+      'the database does not provide what their contracts require',
     ) +
     notSignedSentence(
       conflictSpaces,
@@ -272,6 +286,7 @@ export function errorSignRefsNotWritten(options: {
       meta: {
         signedSpaces,
         failedSpaces,
+        lackingSpaces,
         conflictSpaces,
         refusedSpaces,
         unwrittenRefs,

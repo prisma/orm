@@ -147,18 +147,18 @@ export function verificationThrow(inputs: {
 }
 
 /** Whether an issue says the database does not provide what the contract requires, which no change to its schema fixes. */
-export function isCapabilitiesNotProvided(issue: SchemaDiffIssue): boolean {
-  return issue.explanation?.cause === 'capabilities-not-provided';
+export function isDatabaseCapabilitiesNotProvided(issue: SchemaDiffIssue): boolean {
+  return issue.explanation?.cause === 'database-capabilities-not-provided';
 }
 
 /** The issues a change to the database's schema or to the contract source can fix. */
 export function driftIssues(issues: readonly SchemaDiffIssue[]): readonly SchemaDiffIssue[] {
-  return issues.filter((issue) => !isCapabilitiesNotProvided(issue));
+  return issues.filter((issue) => !isDatabaseCapabilitiesNotProvided(issue));
 }
 
 /** Whether every issue says the database does not provide what the contract requires: the verdict is that refusal alone. */
-export function onlyCapabilitiesNotProvided(issues: readonly SchemaDiffIssue[]): boolean {
-  return issues.length > 0 && issues.every(isCapabilitiesNotProvided);
+export function onlyDatabaseCapabilitiesNotProvided(issues: readonly SchemaDiffIssue[]): boolean {
+  return issues.length > 0 && issues.every(isDatabaseCapabilitiesNotProvided);
 }
 
 export function issueNodes(
@@ -246,7 +246,7 @@ export function schemaDriftNextActions(inputs: {
   readonly issues: readonly SchemaDiffIssue[];
 }): readonly NextAction[] {
   const { verb, contractRef } = inputs;
-  if (onlyCapabilitiesNotProvided(inputs.issues)) return [];
+  if (onlyDatabaseCapabilitiesNotProvided(inputs.issues)) return [];
   const issues = driftIssues(inputs.issues);
   const retryAfterEmit =
     contractRef === undefined

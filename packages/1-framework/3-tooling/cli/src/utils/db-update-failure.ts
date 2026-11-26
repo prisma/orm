@@ -10,7 +10,7 @@ import {
   dbUpdateRowsFailingCheckAdvice,
   dbUpdateRowsHoldingValueAdvice,
   dbUpdateRowsWithoutValueAdvice,
-  refusedForCapabilities,
+  refusedForDatabaseCapabilities,
 } from './runner-failure-advice';
 import { runnerFailureError } from './runner-failure-error';
 import { schemaCheckIssues } from './schema-check-issues';
@@ -30,7 +30,7 @@ export function dbUpdateRunnerFailureError(
   const { migrationPlan, invocation } = context;
   const update = dbUpdateRerun(invocation);
   const { blockingObjects } = failure.meta;
-  const advice = refusedForCapabilities(failure)
+  const advice = refusedForDatabaseCapabilities(failure)
     ? []
     : blockingObjects !== undefined
       ? blockingObjectsAdvice(blockingObjects, update)

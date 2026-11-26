@@ -46,7 +46,7 @@ import { controlProgressReporter } from '../progress';
 import {
   driftIssues,
   issueNodes,
-  onlyCapabilitiesNotProvided,
+  onlyDatabaseCapabilitiesNotProvided,
   readEmittedContract,
   requireVerifyConnection,
   schemaDriftNextActions,
@@ -211,7 +211,7 @@ function quotedList(spaces: readonly DbSignSpaceOutcome[]): string {
 
 /** Why a space's verification failed, as a clause: the database lacks capabilities, or its schema does not match. The refusal's own text is in the space's diagnostic. */
 function verificationFailure(schema: VerifyDatabaseSchemaResult): string {
-  return onlyCapabilitiesNotProvided(schema.schema.issues)
+  return onlyDatabaseCapabilitiesNotProvided(schema.schema.issues)
     ? 'the database does not provide what its contract requires'
     : 'the schema does not satisfy its contract';
 }
@@ -222,18 +222,18 @@ function failedSchemaOf(outcome: DbSignSpaceOutcome): VerifyDatabaseSchemaResult
   return undefined;
 }
 
-function refusedForCapabilities(outcome: DbSignSpaceOutcome): boolean {
+function refusedForDatabaseCapabilities(outcome: DbSignSpaceOutcome): boolean {
   const schema = failedSchemaOf(outcome);
-  return schema !== undefined && onlyCapabilitiesNotProvided(schema.schema.issues);
+  return schema !== undefined && onlyDatabaseCapabilitiesNotProvided(schema.schema.issues);
 }
 
 function failsSchema(outcome: DbSignSpaceOutcome): boolean {
-  return failedSchemaOf(outcome) !== undefined && !refusedForCapabilities(outcome);
+  return failedSchemaOf(outcome) !== undefined && !refusedForDatabaseCapabilities(outcome);
 }
 
 function signSummary(spaces: readonly DbSignSpaceOutcome[]): string {
   const failed = spaces.filter(failsSchema);
-  const lacking = spaces.filter(refusedForCapabilities);
+  const lacking = spaces.filter(refusedForDatabaseCapabilities);
   const conflicts = spaces.filter((outcome) => outcome.status === 'conflict');
   const refused = spaces.filter((outcome) => outcome.status === 'missing-invariants');
   if (
@@ -706,7 +706,13 @@ export function createDbSignCommand(
               errorSignRefsNotWritten({
                 signedSpaces: spaces.filter(isSigned).map((outcome) => outcome.space),
                 failedSpaces: spaces
-                  .filter((outcome) => outcome.status === 'failed')
+                  .filter((outcome) => outcome.status === 'failed' && failsSchema(outcome))
+                  .map((outcome) => outcome.space),
+                lackingSpaces: spaces
+                  .filter(
+                    (outcome) =>
+                      outcome.status === 'failed' && refusedForDatabaseCapabilities(outcome),
+                  )
                   .map((outcome) => outcome.space),
                 conflictSpaces: spaces
                   .filter((outcome) => outcome.status === 'conflict')

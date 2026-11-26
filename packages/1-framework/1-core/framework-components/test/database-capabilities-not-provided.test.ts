@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  capabilitiesNotProvidedIssue,
   type DatabaseCapabilitiesNotProvided,
+  databaseCapabilitiesNotProvidedIssue,
   databaseCapabilitiesNotProvidedText,
 } from '../src/control/database-capabilities-not-provided';
 
@@ -104,16 +104,16 @@ describe('the issue for a database that does not provide what a contract require
       children: () => [],
     };
 
-    expect(capabilitiesNotProvidedIssue({ path: ['capabilities'], expected, notProvided })).toEqual(
-      {
-        path: ['capabilities'],
-        expected,
-        explanation: {
-          text: 'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 14.10. Upgrade the database to PostgreSQL 15 or later.',
-          cause: 'capabilities-not-provided',
-          notProvided,
-        },
+    expect(
+      databaseCapabilitiesNotProvidedIssue({ path: ['capabilities'], expected, notProvided }),
+    ).toEqual({
+      path: ['capabilities'],
+      expected,
+      explanation: {
+        text: 'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 14.10. Upgrade the database to PostgreSQL 15 or later.',
+        cause: 'database-capabilities-not-provided',
+        notProvided,
       },
-    );
+    });
   });
 });

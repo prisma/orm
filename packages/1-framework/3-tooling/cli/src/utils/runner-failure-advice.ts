@@ -765,7 +765,7 @@ export function blockingObjectsAdvice(
 /**
  * Whether the runner refused the database because it does not provide what the contract requires. Its message already says what to do, and no command can change the server, so such a failure gets no advice.
  */
-export function refusedForCapabilities(failure: MigrationRunnerFailure): boolean {
+export function refusedForDatabaseCapabilities(failure: MigrationRunnerFailure): boolean {
   return failure.meta.databaseCapabilitiesNotProvided !== undefined;
 }
 
@@ -779,7 +779,7 @@ export function migrateAdvice(
   failedOnDisk: FailedMigrationOnDisk | undefined,
   invocation: CliInvocation,
 ): RunnerAdvice {
-  if (refusedForCapabilities(failure)) return [];
+  if (refusedForDatabaseCapabilities(failure)) return [];
   const failedMigration =
     failedOnDisk === undefined ? undefined : failedMigrationText(failedOnDisk, invocation);
   const { blockingObjects } = failure.meta;

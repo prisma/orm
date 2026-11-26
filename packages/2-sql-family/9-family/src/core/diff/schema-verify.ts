@@ -26,6 +26,7 @@ import type {
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import {
+  databaseCapabilitiesNotProvidedIssue,
   databaseCapabilitiesNotProvidedText,
   dispositionForCategory,
   issueOutcome,
@@ -39,7 +40,7 @@ import type { SqlSchemaDiffFn } from '../migrations/schema-differ';
 import type { CodecControlHooks } from '../migrations/types';
 import {
   DATABASE_CAPABILITIES_NODE_KIND,
-  databaseCapabilitiesNotProvidedIssue,
+  DatabaseCapabilitiesNode,
   type SqlDatabaseCapabilitiesNotProvidedFn,
   VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
 } from './database-capabilities-not-provided';
@@ -323,7 +324,15 @@ export function verifySqlSchemaByDiff(
     schema: input.schema,
   });
   const failures = [
-    ...(notProvided === undefined ? [] : [databaseCapabilitiesNotProvidedIssue(notProvided)]),
+    ...(notProvided === undefined
+      ? []
+      : [
+          databaseCapabilitiesNotProvidedIssue({
+            path: ['capabilities'],
+            expected: new DatabaseCapabilitiesNode(),
+            notProvided,
+          }),
+        ]),
     ...diffVerdict.failures,
     ...storageTypeVerdict.failures,
   ];

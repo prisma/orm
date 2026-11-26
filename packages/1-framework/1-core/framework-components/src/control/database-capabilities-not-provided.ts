@@ -81,7 +81,7 @@ export function databaseCapabilitiesNotProvidedText(
 }
 
 /** The issue at `path` for a database that does not provide what the contract requires, with `expected` as its subject and its text rendered from `notProvided`. */
-export function capabilitiesNotProvidedIssue(input: {
+export function databaseCapabilitiesNotProvidedIssue(input: {
   readonly path: readonly string[];
   readonly expected: DiffableNode;
   readonly notProvided: DatabaseCapabilitiesNotProvided;
@@ -91,7 +91,7 @@ export function capabilitiesNotProvidedIssue(input: {
     expected: input.expected,
     explanation: {
       text: databaseCapabilitiesNotProvidedText(input.notProvided),
-      cause: 'capabilities-not-provided',
+      cause: 'database-capabilities-not-provided',
       notProvided: input.notProvided,
     },
   };

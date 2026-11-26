@@ -150,7 +150,7 @@ export type {
   DatabaseVersion,
 } from '../control/database-capabilities-not-provided';
 export {
-  capabilitiesNotProvidedIssue,
+  databaseCapabilitiesNotProvidedIssue,
   databaseCapabilitiesNotProvidedText,
 } from '../control/database-capabilities-not-provided';
 export {
@@ -236,7 +236,7 @@ export {
   schemaIssuesWhy,
 } from '../control/runner-failure-why';
 export type {
-  CapabilitiesNotProvidedExplanation,
+  DatabaseCapabilitiesNotProvidedExplanation,
   DiffableNode,
   ExpectationFailureReason,
   MismatchCause,

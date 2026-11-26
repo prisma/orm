@@ -653,7 +653,7 @@ describe('db verify', () => {
       expected: { id: 'capabilities', nodeKind: 'database-capabilities' },
       explanation: {
         text: OLDER,
-        cause: 'capabilities-not-provided',
+        cause: 'database-capabilities-not-provided',
         notProvided: {
           database: 'PostgreSQL',
           findings: [

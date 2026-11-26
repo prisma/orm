@@ -1,9 +1,7 @@
 import type { Contract } from '@internal/contract/types';
-import {
-  capabilitiesNotProvidedIssue,
-  type DatabaseCapabilitiesNotProvided,
-  type DiffableNode,
-  type SchemaDiffIssue,
+import type {
+  DatabaseCapabilitiesNotProvided,
+  DiffableNode,
 } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
@@ -23,8 +21,10 @@ export type SqlDatabaseCapabilitiesNotProvidedFn = (input: {
 /** The node kind of the issue's subject. The family classifies it itself, so no target's classifier needs to know it. */
 export const DATABASE_CAPABILITIES_NODE_KIND = 'database-capabilities';
 
-/** The capabilities the contract requires of the database, as the subject of the issue that reports them not provided. */
-class DatabaseCapabilitiesNode implements DiffableNode {
+/**
+ * The capabilities the contract requires of the database, as the subject of the issue that reports them not provided. The issue holds only this expected side: an issue with no expected node is an extra, which a check across contract spaces drops from each space's result as an element some other space may own.
+ */
+export class DatabaseCapabilitiesNode implements DiffableNode {
   readonly nodeKind = DATABASE_CAPABILITIES_NODE_KIND;
   readonly id = 'capabilities';
 
@@ -39,17 +39,4 @@ class DatabaseCapabilitiesNode implements DiffableNode {
   children(): readonly DiffableNode[] {
     return [];
   }
-}
-
-/**
- * The issue for capabilities the database does not provide. It holds only the expected side: an issue with no expected node is an extra, which a check across contract spaces drops from each space's result as an element some other space may own.
- */
-export function databaseCapabilitiesNotProvidedIssue(
-  notProvided: DatabaseCapabilitiesNotProvided,
-): SchemaDiffIssue {
-  return capabilitiesNotProvidedIssue({
-    path: ['capabilities'],
-    expected: new DatabaseCapabilitiesNode(),
-    notProvided,
-  });
 }

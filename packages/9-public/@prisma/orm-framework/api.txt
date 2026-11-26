@@ -924,11 +924,11 @@
 ./components/control: function assembleControlMutationDefaults(descriptors: ReadonlyArray<Pick<ComponentMetadata, 'controlMutationDefaults'> & { readonly id?: string; }>): AssembledControlMutationDefaults
 ./components/control: function assertUniqueCodecOwner(options: { readonly codecId: string; readonly owners: Map<string, string>; readonly descriptorId: string; readonly entityLabel: string; readonly entityOwnershipLabel: string; }): void
 ./components/control: function buildExtensionLoadOrder(extensions: ReadonlyArray<DependencyDeclaringDescriptor>): readonly string[]
-./components/control: function capabilitiesNotProvidedIssue(input: { readonly path: readonly string[]; readonly expected: DiffableNode; readonly notProvided: DatabaseCapabilitiesNotProvided; }): SchemaDiffIssue
 ./components/control: function compareMarkerDatabasePolicies(marker: ContractMarkerRecord | null | undefined, checked: DatabasePolicies): MarkerDatabasePoliciesComparison
 ./components/control: function contractSnapshotJsonSpecifier(snapshotsImportPath: string, storageHash: string): string
 ./components/control: function contractSnapshotTypesSpecifier(snapshotsImportPath: string, storageHash: string): string
 ./components/control: function createControlStack<TFamilyId extends string, TTargetId extends string>(input: CreateControlStackInput<TFamilyId, TTargetId>): ControlStack<TFamilyId, TTargetId>
+./components/control: function databaseCapabilitiesNotProvidedIssue(input: { readonly path: readonly string[]; readonly expected: DiffableNode; readonly notProvided: DatabaseCapabilitiesNotProvided; }): SchemaDiffIssue
 ./components/control: function databaseCapabilitiesNotProvidedText(notProvided: DatabaseCapabilitiesNotProvided): string
 ./components/control: function databasePoliciesMovedFailure(checked: DatabasePolicies, found: DatabasePolicies): MigrationRunnerFailure & { readonly code: 'MIGRATION.MARKER_CAS_FAILURE'; }
 ./components/control: function databasePoliciesOf(marker: ContractMarkerRecord | null | undefined): Result<DatabasePolicies, DatabasePoliciesUnreadable>
@@ -1000,10 +1000,6 @@
 ./components/control: interface BlockingObject
 ./components/control: interface BlockingObject, readonly required property kind: string
 ./components/control: interface BlockingObject, readonly required property name: string
-./components/control: interface CapabilitiesNotProvidedExplanation
-./components/control: interface CapabilitiesNotProvidedExplanation, readonly required property cause: 'capabilities-not-provided'
-./components/control: interface CapabilitiesNotProvidedExplanation, readonly required property notProvided: DatabaseCapabilitiesNotProvided
-./components/control: interface CapabilitiesNotProvidedExplanation, readonly required property text: string
 ./components/control: interface CapabilityFirstAvailable
 ./components/control: interface CapabilityFirstAvailable, readonly required property capability: string
 ./components/control: interface CapabilityFirstAvailable, readonly required property firstVersion: DatabaseVersion
@@ -1100,6 +1096,10 @@
 ./components/control: interface DatabaseCapabilitiesNotProvided
 ./components/control: interface DatabaseCapabilitiesNotProvided, readonly required property database: string
 ./components/control: interface DatabaseCapabilitiesNotProvided, readonly required property findings: readonly [DatabaseCapabilitiesNotProvidedFinding, ...DatabaseCapabilitiesNotProvidedFinding[]]
+./components/control: interface DatabaseCapabilitiesNotProvidedExplanation
+./components/control: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property cause: 'database-capabilities-not-provided'
+./components/control: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property notProvided: DatabaseCapabilitiesNotProvided
+./components/control: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property text: string
 ./components/control: interface DatabasePolicies
 ./components/control: interface DatabasePolicies, readonly required property change: readonly ChangeStrategy[]
 ./components/control: interface DatabasePolicies, readonly required property dataProtection: { readonly dataLoss: DataLossLevel; readonly accessWidening: AccessWideningLevel; }
@@ -1509,7 +1509,7 @@
 ./components/control: type MigrationSubject = ({ readonly kind: 'enumValue'; } & EnumValueCoordinate) | ({ readonly kind: 'field'; } & FieldCoordinate) | ({ readonly kind: 'model'; } & ModelCoordinate) | ({ readonly kind: 'valueObjectField'; } & ValueObjectFieldCoordinate) | { readonly kind: 'storage'; readonly name: string; }
 ./components/control: type MigrationSubjectJson = ({ readonly kind: 'enumValue'; } & EnumValueCoordinateJson) | ({ readonly kind: 'field'; } & FieldCoordinateJson) | ({ readonly kind: 'model'; } & ModelCoordinateJson) | ({ readonly kind: 'valueObjectField'; } & ValueObjectFieldCoordinateJson) | { readonly kind: 'storage'; readonly name: string; }
 ./components/control: type MismatchCause = MismatchExplanation['cause']
-./components/control: type MismatchExplanation = CapabilitiesNotProvidedExplanation | NodeMismatchExplanation
+./components/control: type MismatchExplanation = DatabaseCapabilitiesNotProvidedExplanation | NodeMismatchExplanation
 ./components/control: type ResolvedMigrationStatement = ResolvedFieldBackfillStatement | ResolvedFieldConvertStatement | ResolvedRenameStatement | ResolvedValueObjectFieldBackfillStatement | ResolvedVariantConvertStatement
 ./components/control: type ResolvedRenameStatement = ResolvedEnumValueRenameStatement | ResolvedFieldRenameStatement | ResolvedModelRenameStatement | ResolvedNamespaceRenameStatement | ResolvedValueObjectFieldRenameStatement
 ./components/control: type SchemaLabelPartRole = 'detail' | 'keyword' | 'name' | 'title'
@@ -2103,7 +2103,6 @@
 ./components: function buildSingleNamespaceView<TView>(storage: Storage, builtinKinds: readonly string[]): TView
 ./components: function canonicalizeJson(value: unknown): string
 ./components: function canonicalizeTaggedLiteralBody(resolved: string): TaggedLiteralCanonicalization
-./components: function capabilitiesNotProvidedIssue(input: { readonly path: readonly string[]; readonly expected: DiffableNode; readonly notProvided: DatabaseCapabilitiesNotProvided; }): SchemaDiffIssue
 ./components: function castTypedValue(support: DataTypeSupport, receivingType: DataTypeId, receivingParams: DataTypeParams, value: DataTypeValue): Result<DataTypeValue, CastRefusal>
 ./components: function changedElementCoordinates(from: Pick<StorageBase, 'namespaces'> | null, to: Pick<StorageBase, 'namespaces'>): EntityCoordinate[]
 ./components: function checkAborted(ctx: { readonly signal?: AbortSignal; }, phase: RuntimeAbortedPhase): void
@@ -2131,6 +2130,7 @@
 ./components: function dataTypeParams(type: DataType, typeParams: unknown): DataTypeParams
 ./components: function dataTypeParamsProblem(type: DataType, params: Readonly<Record<string, unknown>>): DataTypeParamsProblem | undefined
 ./components: function dataTypeValuesEqual(a: DataTypeValue, b: DataTypeValue): boolean
+./components: function databaseCapabilitiesNotProvidedIssue(input: { readonly path: readonly string[]; readonly expected: DiffableNode; readonly notProvided: DatabaseCapabilitiesNotProvided; }): SchemaDiffIssue
 ./components: function databaseCapabilitiesNotProvidedText(notProvided: DatabaseCapabilitiesNotProvided): string
 ./components: function databasePoliciesMovedFailure(checked: DatabasePolicies, found: DatabasePolicies): MigrationRunnerFailure & { readonly code: 'MIGRATION.MARKER_CAS_FAILURE'; }
 ./components: function databasePoliciesOf(marker: ContractMarkerRecord | null | undefined): Result<DatabasePolicies, DatabasePoliciesUnreadable>
@@ -2517,10 +2517,6 @@
 ./components: interface BlockingObject
 ./components: interface BlockingObject, readonly required property kind: string
 ./components: interface BlockingObject, readonly required property name: string
-./components: interface CapabilitiesNotProvidedExplanation
-./components: interface CapabilitiesNotProvidedExplanation, readonly required property cause: 'capabilities-not-provided'
-./components: interface CapabilitiesNotProvidedExplanation, readonly required property notProvided: DatabaseCapabilitiesNotProvided
-./components: interface CapabilitiesNotProvidedExplanation, readonly required property text: string
 ./components: interface CapabilityFirstAvailable
 ./components: interface CapabilityFirstAvailable, readonly required property capability: string
 ./components: interface CapabilityFirstAvailable, readonly required property firstVersion: DatabaseVersion
@@ -2742,6 +2738,10 @@
 ./components: interface DatabaseCapabilitiesNotProvided
 ./components: interface DatabaseCapabilitiesNotProvided, readonly required property database: string
 ./components: interface DatabaseCapabilitiesNotProvided, readonly required property findings: readonly [DatabaseCapabilitiesNotProvidedFinding, ...DatabaseCapabilitiesNotProvidedFinding[]]
+./components: interface DatabaseCapabilitiesNotProvidedExplanation
+./components: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property cause: 'database-capabilities-not-provided'
+./components: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property notProvided: DatabaseCapabilitiesNotProvided
+./components: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property text: string
 ./components: interface DatabasePolicies
 ./components: interface DatabasePolicies, readonly required property change: readonly ChangeStrategy[]
 ./components: interface DatabasePolicies, readonly required property dataProtection: { readonly dataLoss: DataLossLevel; readonly accessWidening: AccessWideningLevel; }
@@ -3656,7 +3656,7 @@
 ./components: type MigrationSubject = ({ readonly kind: 'enumValue'; } & EnumValueCoordinate) | ({ readonly kind: 'field'; } & FieldCoordinate) | ({ readonly kind: 'model'; } & ModelCoordinate) | ({ readonly kind: 'valueObjectField'; } & ValueObjectFieldCoordinate) | { readonly kind: 'storage'; readonly name: string; }
 ./components: type MigrationSubjectJson = ({ readonly kind: 'enumValue'; } & EnumValueCoordinateJson) | ({ readonly kind: 'field'; } & FieldCoordinateJson) | ({ readonly kind: 'model'; } & ModelCoordinateJson) | ({ readonly kind: 'valueObjectField'; } & ValueObjectFieldCoordinateJson) | { readonly kind: 'storage'; readonly name: string; }
 ./components: type MismatchCause = MismatchExplanation['cause']
-./components: type MismatchExplanation = CapabilitiesNotProvidedExplanation | NodeMismatchExplanation
+./components: type MismatchExplanation = DatabaseCapabilitiesNotProvidedExplanation | NodeMismatchExplanation
 ./components: type MutationDefaultsOp = 'create' | 'update'
 ./components: type NamespacedEntities<TStorage extends { readonly namespaces: object; }, TBuiltinKinds extends string> = { readonly [Ns in keyof TStorage['namespaces']]: SingleNamespaceView<EntriesOf<TStorage['namespaces'][Ns]>, TBuiltinKinds>; }
 ./components: type NoInputAggregateDescriptor = AggregateDescriptorBase & { readonly input: { readonly kind: 'none'; }; readonly output: NamedAggregateOutput; }

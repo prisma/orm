@@ -19,7 +19,10 @@ import {
   printedPlan,
   quotedPlan,
 } from './printed-command';
-import { dbInitRowsWithoutValueAdvice, refusedForCapabilities } from './runner-failure-advice';
+import {
+  dbInitRowsWithoutValueAdvice,
+  refusedForDatabaseCapabilities,
+} from './runner-failure-advice';
 import { runnerFailureError } from './runner-failure-error';
 import { schemaCheckIssues } from './schema-check-issues';
 
@@ -109,7 +112,7 @@ export function dbInitRunnerFailureError(
   invocation: CliInvocation,
 ): CliStructuredError {
   const init = cliCommand(invocation, 'db init');
-  const advice = refusedForCapabilities(failure)
+  const advice = refusedForDatabaseCapabilities(failure)
     ? []
     : facts.rowsWithoutValue !== undefined
       ? dbInitRowsWithoutValueAdvice(facts.rowsWithoutValue, invocation)
