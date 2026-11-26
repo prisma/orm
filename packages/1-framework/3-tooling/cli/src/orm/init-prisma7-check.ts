@@ -6,7 +6,7 @@ import {
   errorInitPrisma7SchemaRefused,
   errorInitPrisma7SourceUnavailable,
 } from '../commands/init/errors';
-import type { ContractEntry, InitContribution } from '../commands/init/init-contribution';
+import type { ContractEntryExpression, InitContribution } from '../commands/init/init-contribution';
 import { loadContractSource } from '../control-api/operations/load-contract-source';
 import type { ImportFromProject } from './project-modules';
 
@@ -25,10 +25,11 @@ export type CheckPrisma7Source = (request: {
 
 /**
  * Finds out whether the installed facade can read the Prisma 7 schema before init changes
- * the project: loads the package's config module as the project resolves it and runs its
- * `prisma7Schema` source without writing. The CLI carries no target code, so the installed
- * package is the only one that can answer. A `prisma7Schema` export is the only sign that a
- * package takes a Prisma 7 schema, and such a package must give `prisma7QuickReference`.
+ * the project: loads the package's config module as the project resolves it and runs the
+ * contribution's contract entry for the schema, the one init then writes, without writing. The CLI
+ * carries no target code, so the installed package is the only one that can answer. A
+ * `prisma7Schema` export from the config module is still the only sign that a package takes a
+ * Prisma 7 schema, and such a package must give `prisma7QuickReference`.
  */
 export function createPrisma7SourceCheck(ctx: {
   readonly cwd: string;
@@ -120,7 +121,7 @@ export function createPrisma7SourceCheck(ctx: {
  * result of calling the export with the arguments, imported as the project resolves it.
  */
 async function runContractEntry(
-  entry: ContractEntry,
+  entry: ContractEntryExpression,
   ctx: {
     readonly cwd: string;
     readonly importFromProject: ImportFromProject;
@@ -134,15 +135,15 @@ async function runContractEntry(
   }
   const { call } = entry;
   const namespace =
-    call.module === ctx.loaded.module
+    call.moduleSpecifier === ctx.loaded.module
       ? ctx.loaded.namespace
-      : await importCallModule(call.module, ctx);
-  const callee = namespace[call.export];
+      : await importCallModule(call.moduleSpecifier, ctx);
+  const callee = namespace[call.symbol];
   if (typeof callee !== 'function') {
     throw errorInitContributionUnavailable({
       packageName: ctx.packageName,
       reason: 'invalid-shape',
-      detail: `its contractEntry calls ${call.export} from ${call.module}, which exports no function of that name`,
+      detail: `its contractEntry calls ${call.symbol} from ${call.moduleSpecifier}, which exports no function of that name`,
       unlisted: false,
       missingPeers: [],
       missingPeersCommand: undefined,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ContractEntry } from '../../../src/commands/init/init-contribution';
+import type { ContractEntryExpression } from '../../../src/commands/init/init-contribution';
 import {
   configFile,
   defaultContractEntry,
@@ -15,7 +15,7 @@ function defaultConfig(configModule: string, contractPath: string): string {
   return configFile({
     configModule,
     contract: defaultContractEntry(configModule, {
-      kind: 'contract',
+      kind: 'starter',
       mode: contractPath.endsWith('.ts') ? 'typescript' : 'psl',
       path: contractPath,
     }),
@@ -58,7 +58,7 @@ describe('templates', () => {
     });
 
     it('writes a value entry as a literal and adds no import', () => {
-      const contract: ContractEntry = {
+      const contract: ContractEntryExpression = {
         value: { path: './prisma/contract.acme', level: 3, tags: ['a'], strict: true },
       };
 
@@ -82,15 +82,15 @@ describe('templates', () => {
     });
 
     it('writes a call entry and merges its import with its own', () => {
-      const sameModule: ContractEntry = {
+      const sameModule: ContractEntryExpression = {
         call: {
-          module: 'acme-db/config',
-          export: 'acmeContract',
+          moduleSpecifier: 'acme-db/config',
+          symbol: 'acmeContract',
           args: ['./prisma/contract.acme', { level: 3 }],
         },
       };
-      const otherModule: ContractEntry = {
-        call: { module: 'acme-db/levels', export: 'levelled', args: [] },
+      const otherModule: ContractEntryExpression = {
+        call: { moduleSpecifier: 'acme-db/levels', symbol: 'levelled', args: [] },
       };
 
       expect(

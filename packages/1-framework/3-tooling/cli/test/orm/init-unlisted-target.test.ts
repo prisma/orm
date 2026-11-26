@@ -4,7 +4,7 @@ import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
 import { basename, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { configFile, defaultContractEntry } from '../../src/commands/init/templates/code-templates';
+import { initConfigFile } from '../../src/commands/init/contract-entry';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { type ImportFromProject, importFromProject } from '../../src/orm/project-modules';
@@ -920,13 +920,10 @@ describe('init with the published facades that are in no list', () => {
       expect(run.exitCode, JSON.stringify(envelopeOf(run))).toBe(0);
       expect(readProjectFile(schemaPath)).toBe(contribution.starterContract(authoring));
       expect(readProjectFile('prisma.config.ts')).toBe(
-        configFile({
-          configModule: contribution.configModule,
-          contract: defaultContractEntry(contribution.configModule, {
-            kind: 'contract',
-            mode: authoring,
-            path: `./${schemaPath}`,
-          }),
+        initConfigFile({
+          contribution,
+          input: { kind: 'starter', mode: authoring, path: `./${schemaPath}` },
+          owner: { packageName, unlisted: true },
           output: undefined,
         }),
       );

@@ -11,7 +11,7 @@ import sqliteContribution from '@internal/sqlite/init';
 import { normalize as portablePath, relative as portableRelative } from 'pathe';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { configFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
+import { initConfigFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/contract-entry';
 
 type TargetId = 'postgres' | 'mongo' | 'sqlite' | 'mysql';
 type AuthoringId = ContractSourceFormat;
@@ -105,7 +105,12 @@ function templateSources(target: TargetId, authoring: AuthoringId): readonly str
   return [
     contribution.starterContract(authoring),
     contribution.databaseFile(),
-    configFile(`./${schemaPath}`, contribution.configModule),
+    initConfigFile({
+      contribution,
+      input: { kind: 'starter', mode: authoring, path: `./${schemaPath}` },
+      owner: { packageName: target, unlisted: false },
+      output: undefined,
+    }),
   ];
 }
 

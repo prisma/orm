@@ -1,6 +1,5 @@
-export type { JsonValue } from '@internal/ts-render';
 export type {
-  ContractEntry,
+  ContractEntryExpression,
   ContractEntryInput,
   InitContribution,
   InitProbeResult,

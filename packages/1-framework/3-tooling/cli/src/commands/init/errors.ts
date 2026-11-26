@@ -875,12 +875,12 @@ export function errorInitPrisma7SourceUnavailable(
     | { readonly reason: 'unlisted' }
     | {
         readonly reason: 'not-resolvable';
-        /** The config module the contribution names. */
+        /** The config module the contribution names, or a module its contract entry calls into. */
         readonly module: string;
       }
     | {
         readonly reason: 'unloadable';
-        /** The config module the contribution names. */
+        /** The config module the contribution names, or a module its contract entry calls into. */
         readonly module: string;
         readonly cause: string;
       }
@@ -897,7 +897,7 @@ export function errorInitPrisma7SourceUnavailable(
       : options.reason === 'not-resolvable'
         ? {
             summary: `Could not load ${options.module} from the project`,
-            why: `${packageName} was installed, but the project cannot find \`${options.module}\`, the config module its init contribution names, so init cannot check that Prisma 8 reads ${schemaPath}.`,
+            why: `${packageName} was installed, but the project cannot find \`${options.module}\`, a module its init contribution names, so init cannot check that Prisma 8 reads ${schemaPath}.`,
             fix: `Check that ${packageName} is installed and exports ${options.module}, resolvable from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`,
           }
         : options.reason === 'unlisted'

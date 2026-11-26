@@ -3,7 +3,7 @@ import {
   DEFAULT_CONTRACT_SOURCE_DIR,
 } from '@internal/config/config-types';
 import { type ImportRequirement, jsonToTsSource, renderImports } from '@internal/ts-render';
-import type { ContractEntry, ContractEntryInput } from '../init-contribution';
+import type { ContractEntryExpression, ContractEntryInput } from '../init-contribution';
 
 export function defaultSchemaPath(authoring: ContractSourceFormat): string {
   if (authoring === 'typescript') {
@@ -27,22 +27,32 @@ function escapedForSingleQuotes(requirement: ImportRequirement): ImportRequireme
 export function defaultContractEntry(
   configModule: string,
   input: ContractEntryInput,
-): ContractEntry {
+): ContractEntryExpression {
   if (input.kind === 'prisma7-schema') {
-    return { call: { module: configModule, export: 'prisma7Schema', args: [input.path] } };
+    return { call: { moduleSpecifier: configModule, symbol: 'prisma7Schema', args: [input.path] } };
   }
   return { value: input.path };
 }
 
-function contractSource(entry: ContractEntry): string {
+function contractSource(entry: ContractEntryExpression): string {
   if ('value' in entry) {
     return jsonToTsSource(entry.value);
   }
-  return `${entry.call.export}(${entry.call.args.map(jsonToTsSource).join(', ')})`;
+  return `${entry.call.symbol}(${entry.call.args.map(jsonToTsSource).join(', ')})`;
 }
 
-function contractImports(entry: ContractEntry): readonly ImportRequirement[] {
-  return 'call' in entry ? [{ moduleSpecifier: entry.call.module, symbol: entry.call.export }] : [];
+function contractImports(entry: ContractEntryExpression): readonly ImportRequirement[] {
+  return 'call' in entry
+    ? [{ moduleSpecifier: entry.call.moduleSpecifier, symbol: entry.call.symbol }]
+    : [];
+}
+
+/** The imports the config always has; the names they bind cannot be taken by the contract entry. */
+export function configFileImports(configModule: string): readonly ImportRequirement[] {
+  return [
+    { moduleSpecifier: '@prisma/cli-engine', symbol: 'definePrismaConfig' },
+    { moduleSpecifier: configModule, symbol: 'defineConfig', alias: 'ormConfig' },
+  ];
 }
 
 /**
@@ -51,15 +61,13 @@ function contractImports(entry: ContractEntry): readonly ImportRequirement[] {
  */
 export function configFile(options: {
   readonly configModule: string;
-  readonly contract: ContractEntry;
+  readonly contract: ContractEntryExpression;
   readonly output: string | undefined;
 }): string {
   const imports = renderImports(
-    [
-      { moduleSpecifier: '@prisma/cli-engine', symbol: 'definePrismaConfig' },
-      { moduleSpecifier: options.configModule, symbol: 'defineConfig', alias: 'ormConfig' },
-      ...contractImports(options.contract),
-    ].map(escapedForSingleQuotes),
+    [...configFileImports(options.configModule), ...contractImports(options.contract)].map(
+      escapedForSingleQuotes,
+    ),
   );
   const output =
     options.output === undefined ? '' : `\n    output: ${JSON.stringify(options.output)},`;

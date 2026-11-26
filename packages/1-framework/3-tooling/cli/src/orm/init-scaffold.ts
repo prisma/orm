@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync 
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
 import { detect } from 'package-manager-detector/detect';
 import { basename, dirname, isAbsolute, join, relative } from 'pathe';
-import { contractEntryFor } from '../commands/init/contract-entry';
+import { initConfigFile } from '../commands/init/contract-entry';
 import type { PackageManager } from '../commands/init/detect-package-manager';
 import { formatRunCommand, formatRunScriptCommand } from '../commands/init/detect-package-manager';
 import {
@@ -27,7 +27,6 @@ import {
 } from '../commands/init/prisma7-side-by-side';
 import { findStaleArtifacts, removeDependency } from '../commands/init/reinit-cleanup';
 import { legacySkillDirs } from '../commands/init/skill-sources';
-import { configFile } from '../commands/init/templates/code-templates';
 import { envExampleContent } from '../commands/init/templates/env';
 import { requirementsBlock } from '../commands/init/templates/quick-reference';
 import {
@@ -231,13 +230,10 @@ function planScaffold(ctx: {
       { path: inputs.schemaPath, content: contribution.starterContract(source.authoring) },
       {
         path: CONFIG_FILE,
-        content: configFile({
-          configModule: contribution.configModule,
-          contract: contractEntryFor(
-            contribution,
-            { kind: 'contract', mode: source.authoring, path: configContractPath },
-            contributionOwner,
-          ),
+        content: initConfigFile({
+          contribution,
+          input: { kind: 'starter', mode: source.authoring, path: configContractPath },
+          owner: contributionOwner,
           output: undefined,
         }),
       },
@@ -256,13 +252,10 @@ function planScaffold(ctx: {
     files.push(
       {
         path: CONFIG_FILE,
-        content: configFile({
-          configModule: contribution.configModule,
-          contract: contractEntryFor(
-            contribution,
-            { kind: 'prisma7-schema', path: source.schemaPath },
-            contributionOwner,
-          ),
+        content: initConfigFile({
+          contribution,
+          input: { kind: 'prisma7-schema', path: source.schemaPath },
+          owner: contributionOwner,
           output: outputDir,
         }),
       },

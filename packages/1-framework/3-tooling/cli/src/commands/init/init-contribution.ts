@@ -1,21 +1,26 @@
 import type { ContractSourceFormat } from '@internal/config/config-types';
-import type { JsonValue } from '@internal/ts-render';
+import type { JsonValue } from '@internal/utils/json';
 
-/** What the config's `contract:` entry points at: a contract file `init` wrote, or the project's Prisma 7 schema. */
+/**
+ * What the config's `contract:` entry points at: the starter contract `init` wrote, or the project's
+ * Prisma 7 schema. `path` is written into the config as it is: for a starter, relative to the project
+ * and starting with `./` (or absolute, when the user gave an absolute path); for a Prisma 7 schema,
+ * the path the user gave, relative to the project.
+ */
 export type ContractEntryInput =
-  | { readonly kind: 'contract'; readonly mode: ContractSourceFormat; readonly path: string }
+  | { readonly kind: 'starter'; readonly mode: ContractSourceFormat; readonly path: string }
   | { readonly kind: 'prisma7-schema'; readonly path: string };
 
 /**
  * The config's `contract:` entry as data, so `init` can both write it and run it: a JSON value, or
  * a call of a function a module exports, with JSON arguments.
  */
-export type ContractEntry =
+export type ContractEntryExpression =
   | { readonly value: JsonValue }
   | {
       readonly call: {
-        readonly module: string;
-        readonly export: string;
+        readonly moduleSpecifier: string;
+        readonly symbol: string;
         readonly args: readonly JsonValue[];
       };
     };
@@ -108,8 +113,10 @@ export interface InitContribution {
   readonly prisma7QuickReference?: (input: Prisma7QuickReferenceInput) => string;
   /**
    * The config's `contract:` entry. `init` writes it into `prisma.config.ts`, and runs it to check a
-   * Prisma 7 schema before writing. Without it, the entry is the path, or a call of `prisma7Schema`
-   * from `configModule` with the path.
+   * Prisma 7 schema before writing. A `prisma7-schema` input is passed only when `configModule`
+   * exports `prisma7Schema`, which stays the sign that the package takes a Prisma 7 schema. Without
+   * this member, the entry is the path, or a call of `prisma7Schema` from `configModule` with the
+   * path.
    */
-  readonly contractEntry?: (input: ContractEntryInput) => ContractEntry;
+  readonly contractEntry?: (input: ContractEntryInput) => ContractEntryExpression;
 }
