@@ -132,7 +132,7 @@ The `prisma` binary in prisma/prisma-cli mounts each ORM command by name and own
 
 ## What changes in recorded decisions and docs
 
-- A new short ADR amends ADR 320. Its sentence "Only a person editing the file changes it" becomes: a person changes it, by hand or with these commands, and no command changes a ref's policies as a side effect of doing something else. Its statement that every ref writer keeps the fields it does not change becomes: keeps the fields the ref format defines. The new ADR gives the reasons in the Decision section above. ADR 320 gets only a pointer to it.
+- A new short ADR amends ADR 320. Its sentence "Only a person editing the file changes it" becomes: a person changes it, by hand or with these commands, and no command changes a ref's policies as a side effect of doing something else. Its statement that every ref writer keeps the fields it does not change becomes: keeps the fields the ref format defines that it does not change. The new ADR gives the reasons in the Decision section above. ADR 320 gets only a pointer to it.
 - The `prisma-8` skill documents the commands next to the ref file format, names them as well as hand edits in its "never loosen" guidance, lists them in its routing triggers, and its error tables (`migrations.md`, `debug.md`) carry the new `POLICY_MISMATCH` advice.
 - `docs/reference/error-reference.md` carries the new advice.
 - The glossary entry for a ref, the CLI README's output table, the CLI subsystem doc's command list, `docs/architecture docs/subsystems/7. Migration System.md`, the migration model doc and the project spec's line on who changes a ref's policies mention the `policies` field and the commands.

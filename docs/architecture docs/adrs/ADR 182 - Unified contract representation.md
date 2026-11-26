@@ -158,7 +158,7 @@ This pattern is already established in the Mongo family. `validateMongoContract(
 
 The unified contract type focuses on the domain and storage layers — the data that authoring surfaces produce and runtime consumers read. Several properties previously carried on `ContractBase` are added by the emitter during emission, not authored by the user:
 
-- `schemaVersion` — contract format version, stamped by the emitter
+- `formatVersion` — contract format version, stamped by the emitter
 - `storageHash` / `executionHash` / `profileHash` — computed hashes for verification
 - `meta` — generator metadata
 - `sources` — source file references
