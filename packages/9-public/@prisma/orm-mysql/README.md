@@ -1,8 +1,13 @@
 # @prisma/orm-mysql
 
-The package a MySQL application installs for its database. It wires the framework, the SQL family, and the MySQL target together. It names the platform packages it is built on as peer dependencies: until release 8.0 at this package's own exact version, and from release 8.0 at a range within this package's release, such as `~8.1.0`. The application lists them beside it, and `prisma orm init` writes that list. To install them by hand, give every `@prisma/orm-*` package the same `8.0.0-rc.N` until release 8.0, and from release 8.0 the lines [the versioning page](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#what-an-application-writes) gives. For release 8.0 they are the following; for a later release `X.Y`, write `X.Y.0` in place of `8.0.1`:
+The package a MySQL application imports Prisma from. It wires the framework, the SQL family, and the MySQL target together.
 
-> **Maturity level: Early Access.** It is released so that people can try it, and it may change in any release. Until release 8.0 every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`; from release 8.0 the version shows the level. At each new minor, edit every `@prisma/orm-*` line to the new minor by hand and run the install; a package manager's command that updates to the latest version is not a substitute ([why](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#a-new-minor-below-ga)). See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+> **Maturity level: Early Access.** This package is published so that you can try it. It may have known failures, and any new version may change it. At each new release you edit the Prisma lines in your `package.json` by hand, and [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#a-new-minor-below-ga) shows how. Until release 8.0 it is published as `8.0.0-rc.N`, like every Prisma 8 package, and any of those versions may contain breaking changes.
+
+This package is built from other Prisma packages, the platform packages, and your application lists them beside it in `package.json`. `prisma orm init` writes those lines for you. To add them by hand:
+
+- Until release 8.0, give every `@prisma/orm-*` package the same exact version, such as `8.0.0-rc.25`.
+- From release 8.0, use the command below. It is written for release 8.0. For a later release, such as 8.3, write `8.3.0` in place of `8.0.1`.
 
 ```sh
 pnpm add "@prisma/orm-mysql@~8.0.1-ea.0" "@prisma/orm-framework@~8.0.1" "@prisma/orm-family-sql@~8.0.1" "@prisma/orm-target-mysql@~8.0.1-ea.0" "@prisma/orm-toolchain@~8.0.1"

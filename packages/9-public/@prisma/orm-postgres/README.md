@@ -1,8 +1,13 @@
 # @prisma/orm-postgres
 
-The package a PostgreSQL application installs for its database. It wires the framework, the SQL family, and the Postgres target into a single lazy client. It names the platform packages it is built on as peer dependencies: until release 8.0 at this package's own exact version, and from release 8.0 at a range within this package's release, such as `~8.1.0`. The application lists them beside it, and `prisma orm init` writes that list. To install them by hand, give every `@prisma/orm-*` package the same `8.0.0-rc.N` until release 8.0, and from release 8.0 the lines [the versioning page](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#what-an-application-writes) gives. For release 8.0 they are the following; for a later release `X.Y`, write `X.Y.0` in place of `8.0.1`:
+The package a PostgreSQL application imports Prisma from. It wires the framework, the SQL family, and the Postgres target into a single lazy client.
 
-> **Maturity level: Generally Available.** A later release in the same major version does not break its users. Until release 8.0 every Prisma 8 package is published as a release candidate, `8.0.0-rc.N`; from release 8.0 the version shows the level. See [maturity levels](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+> **Maturity level: Generally Available.** From release 8.0, no later 8.x release breaks code that uses this package. Until release 8.0 it is published as `8.0.0-rc.N`, like every Prisma 8 package, and any of those versions may contain breaking changes. See [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+
+This package is built from other Prisma packages, the platform packages, and your application lists them beside it in `package.json`. `prisma orm init` writes those lines for you. To add them by hand:
+
+- Until release 8.0, give every `@prisma/orm-*` package the same exact version, such as `8.0.0-rc.25`.
+- From release 8.0, use the command below. It is written for release 8.0. For a later release, such as 8.3, write `8.3.0` in place of `8.0.1`.
 
 ```sh
 pnpm add "@prisma/orm-postgres@^8.0.1" "@prisma/orm-framework@^8.0.1" "@prisma/orm-family-sql@^8.0.1" "@prisma/orm-target-postgres@^8.0.1" "@prisma/orm-toolchain@^8.0.1"
@@ -58,7 +63,7 @@ This package ships no bin. The ORM commands run inside the unified `prisma` CLI,
 
 ## Decomposing
 
-Every application lists the four platform packages, so an application that outgrows the default wiring already has them. It imports from them directly and recomposes them — for example replacing `@prisma/orm-target-postgres/adapter` with a pooled adapter of its own while keeping the target and driver — and drops this package. Because every package is of the same release, the decomposed application gets exactly what this package would have provided, minus the replaced part.
+Every application lists the four platform packages, so an application that outgrows the default wiring already has them. It imports from them directly and recomposes them — for example replacing `@prisma/orm-target-postgres/adapter` with a pooled adapter of its own while keeping the target and driver — and drops this package. Because all of these packages come from one release, the decomposed application gets exactly what this package would have provided, minus the replaced part.
 
 ## Responsibilities
 
