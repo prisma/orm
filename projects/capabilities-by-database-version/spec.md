@@ -88,9 +88,11 @@ The contract stores capability keys and not the version its author stated. That 
 - starting the application against a database that was never checked, or was checked for another contract;
 - a contract whose capabilities the installed PostgreSQL package's table does not know, such as one emitted by a newer release.
 
-For each, the evidence is the real message, produced by a test or by manual QA, and a judgement of whether a user can act on it without knowing what a capability is. Today this is shown only for signing, where the version is worked out from the capabilities as the oldest version that provides them all.
+For each, the evidence is the real message, produced by a test or by manual QA, and a judgement of whether a user can act on it without knowing what a capability is.
 
 If any of these can only say which capabilities are missing, the contract must store the stated version. That changes the structure of `contract.json`, so it must be decided and built before `8.0`, not after.
+
+**Settled on 2026-11-26: the message needs no stated version.** It says only what the table shows: "Your contract requires database capabilities first available in PostgreSQL 17 (…), but this database runs PostgreSQL 15.4." A capability that no version in the installed table provides, and that the adapter, driver and extensions do not declare, is reported as unrecognized, with the remedy to remove it or add a component that provides it. The refusal reaches the CLI as data, and the CLI renders it ([slice-refusal-as-data.md](slice-refusal-as-data.md)). The remaining evidence is the message at client start against a database that was never checked, or was checked for another contract.
 
 ## 6. Out of scope
 

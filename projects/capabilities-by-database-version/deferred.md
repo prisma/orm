@@ -24,3 +24,7 @@ MySQL, MariaDB, SQLite and MongoDB contracts take a fixed capability list from t
 ## `init` writes the newest version, not the server's
 
 Spec section 4.2 asks `init` to write the version it reads from the database. It writes the newest version in the PostgreSQL table instead, because `--probe-db` is optional and runs after the files are written and the driver installed. All four versions give the same contract today, and a user on an older server gets a refusal at signing that names the version to state. Done is `init` writing the probed version when `--probe-db` is given, which needs the probe to run before the config is written or the config to be rewritten after it.
+
+## The CLI's general advice after a drift guesses the workflow
+
+After `db verify` or `db sign` finds a database that differs from the contract (a missing table, a wrong column type), the CLI suggests `db update` or changing the contract to describe the database. Both guess how the project changes its database. A project that uses migrations should write a migration, and the database is not always the truth. Done is advice that follows from what the project does, or none where the CLI cannot tell.
