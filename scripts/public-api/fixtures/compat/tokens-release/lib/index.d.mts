@@ -7,4 +7,6 @@ interface Bag {
 }
 declare function plain(): string;
 declare function bag(): Bag;
+type Gone = First & never;
+export type { Gone };
 export { bag, make, plain, use };

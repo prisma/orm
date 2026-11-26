@@ -114,6 +114,10 @@ describe('checkPackage, with the release treated as GA', () => {
     );
     match(result.undecided[0].message, /private class fixture-compat:Token/);
     strictEqual(result.undecided[0].stage, 'shared marker');
+    deepStrictEqual(
+      names(result.notCompared).filter((each) => each.includes('Gone')),
+      ['. Gone type'],
+    );
   });
 
   it('subclasses an abstract class with a protected member keyed by a well-known symbol', () => {
@@ -179,6 +183,19 @@ describe('checkPackage, with the release treated as GA', () => {
     deepStrictEqual(
       result.undecided.map(({ name, test }) => `${name} ${test}`),
       ['keyed value'],
+    );
+  });
+
+  it('takes an export decided member by member off that list when it reaches a shared marker', () => {
+    const result = check('shape-marker', { release: 'shape-marker' });
+    deepStrictEqual(result.decidedByMembers, []);
+    deepStrictEqual(
+      result.undecided.map(({ name, test, stage }) => `${name} ${test} ${stage}`),
+      [
+        'Holder type shared marker',
+        'Holder value shared marker',
+        'Holder constructor shared marker',
+      ],
     );
   });
 
