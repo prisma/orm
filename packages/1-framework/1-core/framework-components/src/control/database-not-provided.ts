@@ -10,7 +10,6 @@ export interface CapabilityFirstAvailable {
 /**
  * One way a database does not provide what a contract requires:
  * - `missing-capabilities`: the database's version lacks capabilities a later version provides. `versionToState` is the version of the target's table that describes the database, which the contract can state instead.
- * - `unrecognized-capabilities`: capabilities that no version of the target's table provides and no component declares.
  * - `older-than-supported`: the database is older than the oldest version the target supports.
  * - `version-not-read`: the database's version could not be read; `versionQuery` is the statement that reports it.
  */
@@ -21,7 +20,6 @@ export type DatabaseNotProvidedFinding =
       readonly versionToState: DatabaseVersion;
       readonly capabilities: readonly CapabilityFirstAvailable[];
     }
-  | { readonly kind: 'unrecognized-capabilities'; readonly capabilities: readonly string[] }
   | {
       readonly kind: 'older-than-supported';
       readonly databaseVersion: DatabaseVersion;
@@ -53,8 +51,6 @@ function findingText(database: string, finding: DatabaseNotProvidedFinding): str
         .join(' and ');
       return `Your contract requires database capabilities first available in ${versions}, but this database runs ${database} ${finding.databaseVersion}. Either upgrade the database, or remove the capabilities from your contract: state version ${finding.versionToState}, and take them out of its capabilities list if it lists them.`;
     }
-    case 'unrecognized-capabilities':
-      return `Your contract requires unrecognized database capabilities (${finding.capabilities.join(', ')}). No supported ${database} version provides them, and neither do your adapter, driver or extensions. Either remove the capabilities from your contract, or install a component that provides them.`;
     case 'older-than-supported':
       return `This release of Prisma requires ${database} ${finding.oldestSupported} or later. This database runs ${database} ${finding.databaseVersion}. Upgrade the database to ${database} ${finding.oldestSupported} or later.`;
     case 'version-not-read':

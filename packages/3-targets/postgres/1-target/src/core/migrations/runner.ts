@@ -795,7 +795,6 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
         capabilities: spaceOptions.destinationContract.capabilities,
         table: this.capabilitiesByVersion,
         serverVersionNumber,
-        declaredCapabilities: undefined,
       });
       if (notProvided === undefined) continue;
       const failure = runnerFailure(

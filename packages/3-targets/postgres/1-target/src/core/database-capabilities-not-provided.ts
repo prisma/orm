@@ -101,48 +101,29 @@ function versionFinding(
 }
 
 /**
- * What a PostgreSQL server at `serverVersionNumber` does not provide of the capabilities a contract requires, by `table`, or `undefined` when it provides them all. A capability no row of `table` names is the database's only if no component declares it: `declaredCapabilities` are the capabilities the adapter, driver and extensions declare, and `undefined` when they are not known, in which case such a capability is taken to be one of theirs and is not reported. "First available in" holds because each row of the table holds every flag of the row before it.
+ * What a PostgreSQL server at `serverVersionNumber` does not provide of the capabilities a contract requires, by `table`, or `undefined` when it provides them all. Only the capabilities some row of `table` names are checked: the others are the connection's, or unknown to this release, and the client reports those its adapter and driver do not declare. "First available in" holds because each row of the table holds every flag of the row before it.
  */
 export function postgresDatabaseNotProvided(input: {
   readonly capabilities: CapabilityMatrix;
   readonly table: CapabilitiesByVersion;
   readonly serverVersionNumber: number | undefined;
-  readonly declaredCapabilities: CapabilityMatrix | undefined;
 }): DatabaseNotProvided | undefined {
-  const { capabilities, table, serverVersionNumber, declaredCapabilities } = input;
-  const required = flagsRequired(capabilities);
-  const unrecognized =
-    declaredCapabilities === undefined
-      ? []
-      : required.filter(
-          (flag) =>
-            firstVersionWith(table, flag) === undefined &&
-            flagIn(declaredCapabilities, flag) !== true,
-        );
-  const findings = [
-    versionFinding(required, table, serverVersionNumber),
-    ...(unrecognized.length === 0
-      ? []
-      : [
-          {
-            kind: 'unrecognized-capabilities',
-            capabilities: unrecognized.map(keyOf),
-          } as const,
-        ]),
-  ].filter((finding) => finding !== undefined);
-  return findings.length === 0 ? undefined : { database: 'PostgreSQL', findings };
+  const finding = versionFinding(
+    flagsRequired(input.capabilities),
+    input.table,
+    input.serverVersionNumber,
+  );
+  return finding === undefined ? undefined : { database: 'PostgreSQL', findings: [finding] };
 }
 
 /** What a PostgreSQL server at `serverVersionNumber` does not provide of `capabilities`, by PostgreSQL's table. */
 export function postgresDatabaseNotProvidedByTable(
   capabilities: CapabilityMatrix,
   serverVersionNumber: number | undefined,
-  declaredCapabilities: CapabilityMatrix | undefined,
 ): DatabaseNotProvided | undefined {
   return postgresDatabaseNotProvided({
     capabilities,
     table: postgresCapabilitiesByVersion,
     serverVersionNumber,
-    declaredCapabilities,
   });
 }

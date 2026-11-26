@@ -42,9 +42,9 @@ function databaseRunning(serverVersionNumber: number | undefined) {
   });
 }
 
-function verify(serverVersionNumber: number | undefined) {
+function verify(serverVersionNumber: number | undefined, contract = observingContract) {
   return verifySqlSchemaByDiff({
-    contract: observingContract,
+    contract,
     schema: databaseRunning(serverVersionNumber),
     strict: false,
     frameworkComponents: postgresTypeComponents,
@@ -57,6 +57,21 @@ function verify(serverVersionNumber: number | undefined) {
 describe('PostgreSQL verification checks the database provides what the contract requires of it', () => {
   it('passes a server the table supports', () => {
     expect(verify(150004)).toMatchObject({ ok: true, schema: { issues: [] } });
+  });
+
+  it('passes a contract that requires a capability no row of the table names, which the client reports', () => {
+    const withUnknownCapability = {
+      ...observingContract,
+      capabilities: {
+        ...observingContract.capabilities,
+        sql: { ...observingContract.capabilities['sql'], someNewThing: true },
+      },
+    };
+
+    expect(verify(150004, withUnknownCapability)).toMatchObject({
+      ok: true,
+      schema: { issues: [] },
+    });
   });
 
   it('fails a server older than the first supported version with its own code, even under an observing policy', () => {

@@ -46,11 +46,7 @@ function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
     },
     databaseCapabilitiesNotProvided({ contract, schema }) {
       PostgresDatabaseSchemaNode.assert(schema);
-      return postgresDatabaseNotProvidedByTable(
-        contract.capabilities,
-        schema.serverVersionNumber,
-        undefined,
-      );
+      return postgresDatabaseNotProvidedByTable(contract.capabilities, schema.serverVersionNumber);
     },
     classifySubjectGranularity: postgresDiffSubjectGranularity,
     classifyEntityKind: postgresDiffSubjectEntityKind,

@@ -12,8 +12,6 @@ const table = {
   17: { sql: { returning: true, jsonTable: true, mergeReturning: true } },
 } as const;
 
-const connection = { sql: { interactiveTransactions: true } };
-
 const forVersion17 = {
   sql: { returning: true, jsonTable: true, mergeReturning: true, interactiveTransactions: true },
 };
@@ -22,12 +20,7 @@ function notProvidedOn(
   serverVersionNumber: number | undefined,
   capabilities: Record<string, Record<string, boolean>> = forVersion17,
 ) {
-  return postgresDatabaseNotProvided({
-    capabilities,
-    table,
-    serverVersionNumber,
-    declaredCapabilities: connection,
-  });
+  return postgresDatabaseNotProvided({ capabilities, table, serverVersionNumber });
 }
 
 describe('what a PostgreSQL database does not provide of what a contract requires', () => {
@@ -68,18 +61,16 @@ describe('what a PostgreSQL database does not provide of what a contract require
     });
   });
 
-  it('is the capabilities no row provides and no component declares, as unrecognized', () => {
+  it('skips the capabilities no row names, which the client checks against its adapter and driver', () => {
     expect(
-      notProvidedOn(170002, { sql: { returning: true, someNewThing: true }, other: { x: true } }),
-    ).toEqual({
-      database: 'PostgreSQL',
-      findings: [
-        { kind: 'unrecognized-capabilities', capabilities: ['sql.someNewThing', 'other.x'] },
-      ],
-    });
+      notProvidedOn(160004, {
+        sql: { returning: true, interactiveTransactions: true, someNewThing: true },
+        other: { x: true },
+      }),
+    ).toBeUndefined();
   });
 
-  it('is both, missing first, when the contract requires missing and unrecognized capabilities', () => {
+  it('names only the capabilities a later row provides, beside one no row names', () => {
     expect(
       notProvidedOn(160004, { sql: { returning: true, mergeReturning: true, someNewThing: true } }),
     ).toEqual({
@@ -91,22 +82,8 @@ describe('what a PostgreSQL database does not provide of what a contract require
           versionToState: 16,
           capabilities: [{ capability: 'sql.mergeReturning', firstVersion: 17 }],
         },
-        { kind: 'unrecognized-capabilities', capabilities: ['sql.someNewThing'] },
       ],
     });
-  });
-
-  it('skips the capabilities a component declares', () => {
-    expect(
-      postgresDatabaseNotProvided({
-        capabilities: {
-          sql: { returning: true, interactiveTransactions: true, viaExtension: true },
-        },
-        table,
-        serverVersionNumber: 160004,
-        declaredCapabilities: { sql: { interactiveTransactions: true, viaExtension: true } },
-      }),
-    ).toBeUndefined();
   });
 
   it('skips the capabilities the contract turns off', () => {
@@ -130,21 +107,13 @@ describe('what a PostgreSQL database does not provide of what a contract require
     });
   });
 
-  it('skips a namespace or flag the table holds only by inheritance, such as constructor, as none it recognizes', () => {
+  it('skips a namespace or flag the table holds only by inheritance, such as constructor', () => {
     expect(
       notProvidedOn(160004, {
         sql: { returning: true, constructor: true },
         constructor: { name: true },
       }),
-    ).toEqual({
-      database: 'PostgreSQL',
-      findings: [
-        {
-          kind: 'unrecognized-capabilities',
-          capabilities: ['sql.constructor', 'constructor.name'],
-        },
-      ],
-    });
+    ).toBeUndefined();
   });
 
   it('is a version that could not be read, with the statement that reports it', () => {

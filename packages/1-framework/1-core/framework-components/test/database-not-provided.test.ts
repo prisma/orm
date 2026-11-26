@@ -43,30 +43,6 @@ describe('the text for a database that does not provide what a contract requires
     );
   });
 
-  it('says no supported version and no component provides an unrecognized capability', () => {
-    expect(
-      textOf([{ kind: 'unrecognized-capabilities', capabilities: ['sql.someNewThing'] }]),
-    ).toBe(
-      'Your contract requires unrecognized database capabilities (sql.someNewThing). No supported PostgreSQL version provides them, and neither do your adapter, driver or extensions. Either remove the capabilities from your contract, or install a component that provides them.',
-    );
-  });
-
-  it('says both, missing capabilities first, when the contract requires missing and unrecognized capabilities', () => {
-    expect(
-      textOf([
-        {
-          kind: 'missing-capabilities',
-          databaseVersion: '15.4',
-          versionToState: 15,
-          capabilities: [{ capability: 'sql.mergeReturning', firstVersion: 17 }],
-        },
-        { kind: 'unrecognized-capabilities', capabilities: ['sql.a', 'sql.b'] },
-      ]),
-    ).toBe(
-      'Your contract requires database capabilities first available in PostgreSQL 17 (sql.mergeReturning), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove the capabilities from your contract: state version 15, and take them out of its capabilities list if it lists them. Your contract requires unrecognized database capabilities (sql.a, sql.b). No supported PostgreSQL version provides them, and neither do your adapter, driver or extensions. Either remove the capabilities from your contract, or install a component that provides them.',
-    );
-  });
-
   it('says the oldest supported version for a database older than it', () => {
     expect(
       textOf([{ kind: 'older-than-supported', databaseVersion: '14.10', oldestSupported: 15 }]),
