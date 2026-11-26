@@ -26,7 +26,7 @@ interface JsonRecord {
   [key: string]: Json;
 }
 
-type StoredFileKind = 'contract' | 'migration' | 'ref';
+type StoredFileKind = 'contract' | 'snapshot' | 'migration' | 'ref';
 
 const SKIPPED_DIRECTORIES = new Set(['node_modules', 'dist', 'build']);
 const SPACE_ID = /^[a-z][a-z0-9_-]{0,63}$/;
@@ -297,8 +297,13 @@ function expectedKind(root: string, path: string): StoredFileKind | undefined {
   const name = basename(path);
   if (name === 'migration.json' && isMigrationPackage(dirname(path))) return 'migration';
   if (!name.endsWith('.contract.json') && isRefLocation(root, path)) return 'ref';
-  if (name === 'contract.json') return 'contract';
+  if (name === 'contract.json') return isSnapshot(path) ? 'snapshot' : 'contract';
   return undefined;
+}
+
+function isSnapshot(path: string): boolean {
+  const hashDir = dirname(path);
+  return STORAGE_HASH.test(basename(hashDir)) && basename(dirname(hashDir)) === 'snapshots';
 }
 
 type Rewrite =
@@ -331,11 +336,14 @@ function rewrite(text: string, value: JsonRecord, expected: StoredFileKind | und
   if (expected === 'ref') return rewriteRef(text, value);
   if (!isContract(value)) return { kind: 'unchanged' };
   if (!('schemaVersion' in value)) {
-    if (expected !== 'contract') return { kind: 'unchanged' };
+    if (expected !== 'contract' && expected !== 'snapshot') return { kind: 'unchanged' };
+    const remedy =
+      expected === 'snapshot'
+        ? 'Restore it from version control'
+        : 'Emit it again with `prisma contract emit`, or restore it from version control';
     return {
       kind: 'problem',
-      reason:
-        'it has neither "formatVersion" nor "schemaVersion", so no release of Prisma wrote it. Emit it again with `prisma contract emit`, or restore it from version control',
+      reason: `it has neither "formatVersion" nor "schemaVersion", so no release of Prisma wrote it. ${remedy}`,
     };
   }
   if (value['schemaVersion'] !== '1')
