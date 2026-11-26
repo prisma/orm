@@ -143,10 +143,27 @@ function classMembers(node, packageName, rewriteMethods) {
   );
 }
 
+const className = (node) => node.name?.text ?? 'default';
+
+// What a declaration's marker is named after: a class with private members, a unique symbol
+// constant, or a static unique symbol, as `Class.name`.
+export function markedName(node) {
+  if (ts.isClassDeclaration(node)) {
+    return node.members.some(isPrivate) ? { kind: 'class', name: className(node) } : undefined;
+  }
+  if (!isUniqueSymbol(node.type)) return undefined;
+  if (ts.isVariableDeclaration(node)) return { kind: 'symbol', name: nameText(node.name) };
+  if (ts.isPropertyDeclaration(node)) {
+    const owner = ts.isClassDeclaration(node.parent) ? `${className(node.parent)}.` : '';
+    return { kind: 'symbol', name: `${owner}${nameText(node.name)}` };
+  }
+  return undefined;
+}
+
 const marker = (node, packageName) =>
   f.createPropertyDeclaration(
     [f.createModifier(ts.SyntaxKind.ReadonlyKeyword)],
-    f.createStringLiteral(`private ${packageName}:${node.name?.text ?? 'default'}`),
+    f.createStringLiteral(`private ${packageName}:${className(node)}`),
     undefined,
     f.createLiteralTypeNode(f.createTrue()),
     undefined,
@@ -188,23 +205,24 @@ export function rewriteDeclarations(fileName, text, { own, packageName, symbolNa
     if (ts.isTypeLiteralNode(node)) {
       return f.updateTypeLiteralNode(node, f.createNodeArray(typeMembers(node.members)));
     }
-    if (ts.isVariableDeclaration(node) && isUniqueSymbol(node.type)) {
+    const marked = markedName(node);
+    if (marked?.kind !== 'symbol') return node;
+    if (ts.isVariableDeclaration(node)) {
       return f.updateVariableDeclaration(
         node,
         node.name,
         node.exclamationToken,
-        symbolLiteral(symbolName(node.name.getText())),
+        symbolLiteral(symbolName(marked.name)),
         node.initializer,
       );
     }
-    if (ts.isPropertyDeclaration(node) && isUniqueSymbol(node.type)) {
-      const owner = ts.isClassDeclaration(node.parent) ? `${node.parent.name?.text}.` : '';
+    if (ts.isPropertyDeclaration(node)) {
       return f.updatePropertyDeclaration(
         node,
         node.modifiers,
         node.name,
         node.questionToken,
-        symbolLiteral(symbolName(`${owner}${nameText(node.name)}`)),
+        symbolLiteral(symbolName(marked.name)),
         node.initializer,
       );
     }
@@ -232,11 +250,10 @@ function declarationFiles(dir) {
   });
 }
 
-// The unique symbols a package declares, as the files that declare each name: `Class.name` for a
-// class's static ones; and, under `class Name`, the files that declare a class with private
-// members, whose marker is named after the class.
-function uniqueSymbolsOf(packageRoot) {
-  const found = new Map();
+// The names of the markers a package's declarations make, as `markedName` gives them, each with the
+// files that declare it.
+function markedNamesOf(packageRoot) {
+  const found = { class: new Map(), symbol: new Map() };
   for (const file of declarationFiles(packageRoot)) {
     const source = ts.createSourceFile(
       file,
@@ -244,15 +261,11 @@ function uniqueSymbolsOf(packageRoot) {
       ts.ScriptTarget.Latest,
       true,
     );
-    const add = (name) => found.set(name, [...new Set([...(found.get(name) ?? []), file])]);
     const visit = (node) => {
-      if (ts.isClassDeclaration(node) && node.name && node.members.some(isPrivate)) {
-        add(`class ${node.name.text}`);
-      }
-      if (ts.isVariableDeclaration(node) && isUniqueSymbol(node.type)) add(node.name.getText());
-      else if (ts.isPropertyDeclaration(node) && isUniqueSymbol(node.type)) {
-        const owner = ts.isClassDeclaration(node.parent) ? node.parent.name?.text : undefined;
-        add(`${owner ? `${owner}.` : ''}${nameText(node.name)}`);
+      const marked = markedName(node);
+      if (marked) {
+        const names = found[marked.kind];
+        names.set(marked.name, [...new Set([...(names.get(marked.name) ?? []), file])]);
       }
       ts.forEachChild(node, visit);
     };
@@ -284,15 +297,13 @@ export function createCompareHost(options, { packageOf, isOwn }) {
   host.mergedClasses = new Set();
   const symbolNameIn = ({ name, root }) => {
     if (!symbolsByRoot.has(root)) {
-      symbolsByRoot.set(root, uniqueSymbolsOf(root));
-      for (const [key, files] of symbolsByRoot.get(root)) {
-        if (key.startsWith('class ') && files.length > 1) {
-          host.mergedClasses.add(`${name}:${key.slice('class '.length)}`);
-        }
+      symbolsByRoot.set(root, markedNamesOf(root));
+      for (const [className, files] of symbolsByRoot.get(root).class) {
+        if (files.length > 1) host.mergedClasses.add(`${name}:${className}`);
       }
     }
     return (symbol) => {
-      if ((symbolsByRoot.get(root).get(symbol) ?? []).length > 1) {
+      if ((symbolsByRoot.get(root).symbol.get(symbol) ?? []).length > 1) {
         host.mergedSymbols.add(`${name}:${symbol}`);
       }
       return `unique symbol ${name}:${symbol}`;
@@ -368,4 +379,99 @@ export function createCompareHost(options, { packageOf, isOwn }) {
       };
     });
   return host;
+}
+
+// The exports of a package, as `path\0name`, whose declarations reach, through the names they
+// use, a declaration whose marker is in `targets`: `package:name`, with the name `markedName`
+// gives, in `classes` or `symbols`. `packageOf` gives a file's package. The compiler's own library
+// files are not followed. One walk records which declarations each one names; those that reach a
+// target are then found backwards from the targets.
+export function exportsReaching(program, entryPoints, { classes, symbols }, packageOf) {
+  const checker = program.getTypeChecker();
+  const isTarget = (declaration) => {
+    const marked = markedName(declaration);
+    if (!marked) return false;
+    const owner = packageOf(declaration.getSourceFile().fileName)?.name;
+    return (marked.kind === 'class' ? classes : symbols).has(`${owner}:${marked.name}`);
+  };
+  const declarationsOf = (symbol) => {
+    const resolved =
+      symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+    return resolved.declarations ?? [];
+  };
+  // What a node names: an identifier, or a member picked by a literal, as in `K[0]`, `K["id"]` and
+  // `(typeof K)["id"]`.
+  const namesAt = (node) => {
+    if (ts.isIdentifier(node)) return [checker.getSymbolAtLocation(node)].filter(Boolean);
+    const parent = node.parent;
+    if (
+      (ts.isStringLiteral(node) || ts.isNumericLiteral(node)) &&
+      parent &&
+      ts.isElementAccessExpression(parent) &&
+      parent.argumentExpression === node
+    ) {
+      return [checker.getSymbolAtLocation(node)].filter(Boolean);
+    }
+    if (
+      ts.isLiteralTypeNode(node) &&
+      (ts.isStringLiteral(node.literal) || ts.isNumericLiteral(node.literal)) &&
+      parent &&
+      ts.isIndexedAccessTypeNode(parent) &&
+      parent.indexType === node
+    ) {
+      const property = checker
+        .getTypeFromTypeNode(parent.objectType)
+        .getProperty(node.literal.text);
+      return property ? [property] : [];
+    }
+    return [];
+  };
+  const namedBy = new Map();
+  const pending = [];
+  const exportsByKey = new Map();
+  for (const { subpath, declarationFile } of entryPoints) {
+    const module = checker.getSymbolAtLocation(program.getSourceFile(declarationFile));
+    for (const exported of module ? checker.getExportsOfModule(module) : []) {
+      const declarations = declarationsOf(exported);
+      exportsByKey.set(`${subpath}\0${exported.name}`, declarations);
+      pending.push(...declarations);
+    }
+  }
+  while (pending.length > 0) {
+    const declaration = pending.pop();
+    if (namedBy.has(declaration)) continue;
+    const named = new Set();
+    namedBy.set(declaration, named);
+    if (declaration.getSourceFile().hasNoDefaultLib) continue;
+    const visit = (node) => {
+      for (const found of namesAt(node)) {
+        for (const each of declarationsOf(found)) {
+          named.add(each);
+          if (!namedBy.has(each)) pending.push(each);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(declaration);
+  }
+  const namers = new Map();
+  for (const [declaration, named] of namedBy) {
+    for (const each of named) {
+      if (!namers.has(each)) namers.set(each, []);
+      namers.get(each).push(declaration);
+    }
+  }
+  const reaching = new Set();
+  const backwards = [...namedBy.keys()].filter(isTarget);
+  while (backwards.length > 0) {
+    const declaration = backwards.pop();
+    if (reaching.has(declaration)) continue;
+    reaching.add(declaration);
+    backwards.push(...(namers.get(declaration) ?? []));
+  }
+  return new Set(
+    [...exportsByKey]
+      .filter(([, declarations]) => declarations.some((each) => reaching.has(each)))
+      .map(([key]) => key),
+  );
 }

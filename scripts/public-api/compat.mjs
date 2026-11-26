@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { createCompareHost, nameText } from './compat-declarations.mjs';
+import { createCompareHost, exportsReaching, nameText } from './compat-declarations.mjs';
 import { COMPILER_OPTIONS } from './compiler-options.mjs';
 import { apiFingerprint } from './fingerprint.mjs';
 import { entryPointsOf } from './read-api.mjs';
@@ -811,118 +811,6 @@ function compileTests({
   return { outcomes, problems, importFailures, passes };
 }
 
-// Generates and compiles the tests for one package. `strict` is whether a break fails the run;
-// exports named preview_* or ea_* never do. `twinSpecifier` imports a second copy of the release;
-// `budgetMs` is the time for the whole package.
-//
-// Each comparison is first TypeScript's own, on declarations rewritten as compat-declarations.mjs
-// describes; the pipeline is described in api-compat.mjs.
-// The exports of a package, as `path\0name`, whose declarations reach, through the names they
-// use, a declaration of one of `targets`: `package:name` of a class, and `package:name` or
-// `package:Class.name` of a unique symbol, named as the comparison host names them. The compiler's
-// own library files are not followed. One walk records which declarations each one names; the
-// declarations that reach a target are then found backwards from the targets.
-function exportsReaching(program, entryPoints, { classes, symbols }) {
-  const checker = program.getTypeChecker();
-  const isUniqueSymbol = (type) =>
-    type !== undefined &&
-    ts.isTypeOperatorNode(type) &&
-    type.operator === ts.SyntaxKind.UniqueKeyword;
-  const isTarget = (declaration) => {
-    const name = declaration.name;
-    if (!name) return false;
-    const owner = packageOf(declaration.getSourceFile().fileName)?.name;
-    if (ts.isClassDeclaration(declaration)) return classes.has(`${owner}:${name.text}`);
-    if (!isUniqueSymbol(declaration.type)) return false;
-    if (ts.isVariableDeclaration(declaration)) return symbols.has(`${owner}:${nameText(name)}`);
-    if (ts.isPropertyDeclaration(declaration) && ts.isClassDeclaration(declaration.parent)) {
-      const className = declaration.parent.name?.text;
-      return symbols.has(`${owner}:${className ? `${className}.` : ''}${nameText(name)}`);
-    }
-    return false;
-  };
-  const declarationsOf = (symbol) => {
-    const resolved =
-      symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
-    return resolved.declarations ?? [];
-  };
-  // What a node names: an identifier, or a member picked by a literal, as in `K[0]`, `K["id"]` and
-  // `(typeof K)["id"]`.
-  const namesAt = (node) => {
-    if (ts.isIdentifier(node)) return [checker.getSymbolAtLocation(node)].filter(Boolean);
-    const parent = node.parent;
-    if (
-      (ts.isStringLiteral(node) || ts.isNumericLiteral(node)) &&
-      parent &&
-      ts.isElementAccessExpression(parent) &&
-      parent.argumentExpression === node
-    ) {
-      return [checker.getSymbolAtLocation(node)].filter(Boolean);
-    }
-    if (
-      ts.isLiteralTypeNode(node) &&
-      (ts.isStringLiteral(node.literal) || ts.isNumericLiteral(node.literal)) &&
-      parent &&
-      ts.isIndexedAccessTypeNode(parent) &&
-      parent.indexType === node
-    ) {
-      const property = checker
-        .getTypeFromTypeNode(parent.objectType)
-        .getProperty(node.literal.text);
-      return property ? [property] : [];
-    }
-    return [];
-  };
-  const namedBy = new Map();
-  const pending = [];
-  const exportsByKey = new Map();
-  for (const { subpath, declarationFile } of entryPoints) {
-    const module = checker.getSymbolAtLocation(program.getSourceFile(declarationFile));
-    for (const exported of module ? checker.getExportsOfModule(module) : []) {
-      const declarations = declarationsOf(exported);
-      exportsByKey.set(`${subpath}\0${exported.name}`, declarations);
-      pending.push(...declarations);
-    }
-  }
-  while (pending.length > 0) {
-    const declaration = pending.pop();
-    if (namedBy.has(declaration)) continue;
-    const named = new Set();
-    namedBy.set(declaration, named);
-    if (declaration.getSourceFile().hasNoDefaultLib) continue;
-    const visit = (node) => {
-      for (const found of namesAt(node)) {
-        for (const each of declarationsOf(found)) {
-          named.add(each);
-          if (!namedBy.has(each)) pending.push(each);
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(declaration);
-  }
-  const namers = new Map();
-  for (const [declaration, named] of namedBy) {
-    for (const each of named) {
-      if (!namers.has(each)) namers.set(each, []);
-      namers.get(each).push(declaration);
-    }
-  }
-  const reaching = new Set();
-  const backwards = [...namedBy.keys()].filter(isTarget);
-  while (backwards.length > 0) {
-    const declaration = backwards.pop();
-    if (reaching.has(declaration)) continue;
-    reaching.add(declaration);
-    backwards.push(...(namers.get(declaration) ?? []));
-  }
-  return new Set(
-    [...exportsByKey]
-      .filter(([, declarations]) => declarations.some((each) => reaching.has(each)))
-      .map(([key]) => key),
-  );
-}
-
 function currentProgram(dir) {
   const root = realpathSync(dir);
   const entryPoints = entryPointsOf(root);
@@ -935,6 +823,12 @@ function currentProgram(dir) {
   };
 }
 
+// Generates and compiles the tests for one package. `strict` is whether a break fails the run;
+// exports named preview_* or ea_* never do. `twinSpecifier` imports a second copy of the release;
+// `budgetMs` is the time for the whole package.
+//
+// Each comparison is first TypeScript's own, on declarations rewritten as compat-declarations.mjs
+// describes; the pipeline is described in api-compat.mjs.
 export function checkPackage({
   name,
   releaseDir,
@@ -1210,8 +1104,8 @@ export function checkPackage({
     const targets = { classes: host.mergedClasses, symbols: host.mergedSymbols };
     const current = currentProgram(currentDir);
     const reaching = new Set([
-      ...exportsReaching(generated.program, generated.entryPoints, targets),
-      ...exportsReaching(current.program, current.entryPoints, targets),
+      ...exportsReaching(generated.program, generated.entryPoints, targets, packageOf),
+      ...exportsReaching(current.program, current.entryPoints, targets, packageOf),
     ]);
     const labels = ambiguous.map(({ label }) => label).join(', ');
     const settled = (list, entry, segment) =>

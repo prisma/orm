@@ -171,6 +171,17 @@ describe('checkPackage, with the release treated as GA', () => {
     deepStrictEqual(result.notCompared, []);
   });
 
+  it('names a static unique symbol of an anonymous class the same way when rewriting and when finding collisions', () => {
+    const result = check('anonymous-symbol-swapped', { release: 'anonymous-symbol-release' });
+    deepStrictEqual(names(result.notCompared), [
+      '* unique symbol fixture-compat:default.id unique symbol',
+    ]);
+    deepStrictEqual(
+      result.undecided.map(({ name, test }) => `${name} ${test}`),
+      ['keyed value'],
+    );
+  });
+
   it('fails when the release imports a file of its own that is missing', () => {
     const { problems } = check('relative-release', { release: 'relative-missing' });
     strictEqual(problems.length, 1);
