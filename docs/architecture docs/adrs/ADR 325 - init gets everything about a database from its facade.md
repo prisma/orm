@@ -67,6 +67,7 @@ The CLI holds no template, connection string or server check for any target. Aft
 | --- | --- |
 | `label` | Shows it as the target's name in the quick reference |
 | `configModule` | Writes `prisma.config.ts` importing `defineConfig` from it |
+| `contractEntry(input)` | Optional. Writes what it returns as the config's `contract:` entry. See [The config's contract entry](#the-configs-contract-entry) |
 | `peerPackages` | Installs these driver packages into the application |
 | `authoringModes` | Offers these ways to write the contract: PSL, TypeScript or both |
 | `starterContract(mode)` | Writes it as the starter contract |
@@ -82,6 +83,19 @@ The CLI holds no template, connection string or server check for any target. Aft
 The CLI keeps everything that is the same for every target: which files exist and where they go, package manager detection, the text of `prisma.config.ts` around `configModule`, `tsconfig.json`, `.gitignore`, `.gitattributes`, the `package.json` scripts, the questions it asks and what it prints.
 
 Two facts are shared by the CLI and every contribution, and the `InitContribution` type states them: the connection string is read from `DATABASE_URL`, and `dotenv` is installed with the facade, so `db.ts` may import `dotenv/config`.
+
+### The config's contract entry
+
+A facade may need more in the config's `contract:` entry than the path, such as the PostgreSQL facade's required `databaseVersion`. `contractEntry(input)` returns the entry as data, in one of two forms: a JSON value, or a call of a function a module exports, with JSON arguments. `input` says which contract source the project has: a contract file and its authoring mode, or a Prisma 7 schema.
+
+```ts
+contractEntry: (input) =>
+  input.kind === 'prisma7-schema'
+    ? { call: { module: '@prisma/orm-postgres/config', export: 'prisma7Schema', args: [input.path, { databaseVersion: 18 }] } }
+    : { value: { path: input.path, databaseVersion: 18 } },
+```
+
+The CLI writes the entry into `prisma.config.ts`, a call with its import in the file's one import block, and knows nothing about what the arguments mean. Before writing anything for a project that keeps its Prisma 7 schema, `init` runs the same call to check that the facade can read the schema. One description serves both, as an operation in a migration is data that is both rendered into a file and run. The entry is data, not an object of the framework's classes, because the CLI that loads the contribution may be a different installed copy of the framework, so it checks the entry's shape and never its class. Without the member, the entry is the path, or `prisma7Schema(<path>)` from `configModule`.
 
 `init` finds the entrypoint as the project itself would: Node resolves `<package>/init` from the project folder. The CLI then imports that file. Because of that, the `init` entrypoint may import types from the framework but no framework code that runs. The CLI that loads it can be a different installed copy of the framework from the one the facade depends on, and two copies in one process do not recognise each other's values.
 
@@ -162,7 +176,7 @@ check the flags
 A project that already has a Prisma schema states its database there, as a `provider`. `init` reads it and finds the facade through the list. Only listed packages take part: a provider with no entry is refused, with advice to start a fresh project with `--target`.
 
 - **A provider that Prisma 7 does not support**, such as `mongodb`, marks a Prisma 6 project. `init` changes nothing and prints how to set Prisma 8 up beside it.
-- **A Prisma 7 schema can stay as the contract source**, so that Prisma 8 can be adopted on a database Prisma 7 still migrates. `init` asks about it when it finds one, and `--from-prisma7-schema` asks for it outright. A facade supports it by exporting a function named `prisma7Schema` from its `configModule`, beside `defineConfig`; the function turns the path of a Prisma 7 schema into a contract source. The CLI writes the config around that function, and the contribution must give the matching quick reference in `prisma7QuickReference`, and `init` refuses a package that exports the function without it. With a facade that has no `prisma7Schema`, `init` sets up a fresh project instead in an interactive run, and stops without writing anything when `--from-prisma7-schema` was given.
+- **A Prisma 7 schema can stay as the contract source**, so that Prisma 8 can be adopted on a database Prisma 7 still migrates. `init` asks about it when it finds one, and `--from-prisma7-schema` asks for it outright. A facade supports it by exporting a function named `prisma7Schema` from its `configModule`, beside `defineConfig`; the function turns the path of a Prisma 7 schema into a contract source. The CLI writes the config around a call of that function, or the call the contribution's `contractEntry` gives, and the contribution must give the matching quick reference in `prisma7QuickReference`, and `init` refuses a package that exports the function without it. With a facade that has no `prisma7Schema`, `init` sets up a fresh project instead in an interactive run, and stops without writing anything when `--from-prisma7-schema` was given.
 - **An unlisted package cannot keep a Prisma 7 schema.** `--from-prisma7-schema` with `--target` naming an unlisted package is refused before anything is installed. Without `--from-prisma7-schema`, `--target` naming an unlisted package sets up a fresh project and leaves the Prisma 7 schema alone.
 
 ## Consequences
@@ -198,6 +212,14 @@ This keeps package code from running before the project is set up. Rejected beca
 ### The contribution supplies the whole config for a Prisma 7 schema
 
 In place of the `prisma7Schema` function, the contribution would return the full text of `prisma.config.ts` for a project that keeps its Prisma 7 schema. Rejected because that text differs from the ordinary config in one line, so every facade would carry a copy of text the CLI already writes, and a change to it would have to be made in each of them.
+
+### A member for each option the config needs
+
+The contribution would return option values, such as `{ databaseVersion: 18 }`, and the CLI would add them beside the path. Rejected because each new option a facade needs, or a new place to put one, would add another member to the contribution.
+
+### The contract entry as source text with its imports
+
+The contribution would return an object that renders itself as TypeScript and lists its imports, the interface migration renderers use. Rejected because text can be written but not run, and the check for a Prisma 7 schema runs the entry before anything is written.
 
 ### Package names only, with no list
 
