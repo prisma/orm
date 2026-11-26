@@ -1,10 +1,10 @@
 # Public API compatibility checks
 
-From `8.0.0`, Prisma 8 promises that an application upgrades to any later `8.x` release with no code changes. CI checks every pull request against that promise. This guide says what each check does and what to do when one fails. The decision and its reasons are in [ADR 336](architecture%20docs/adrs/ADR%20336%20-%20CI%20finds%20breaking%20and%20accidental%20API%20changes%20against%20the%20last%20release.md).
+From release 8.0, Prisma 8 promises that an application upgrades to any later `8.x` release with no code changes. CI checks every pull request against that promise. This guide says what each check does and what to do when one fails. The decision and its reasons are in [ADR 336](architecture%20docs/adrs/ADR%20336%20-%20CI%20finds%20breaking%20and%20accidental%20API%20changes%20against%20the%20last%20release.md).
 
 ## The four checks
 
-| Check | Where | What it does | Before `8.0.0` | From `8.0.0` |
+| Check | Where | What it does | Before release 8.0 | From release 8.0 |
 | --- | --- | --- | --- | --- |
 | The API lists are current | `Lint` job, `pnpm api:check` | Each published package's `api.txt` matches the build | Fails | Fails |
 | The description names each change | `API changes` workflow | A pull request that changes an `api.txt` or a record of a break gets a comment listing the changes, and its description must name each changed export, package or app | Fails | Fails |
@@ -13,7 +13,7 @@ From `8.0.0`, Prisma 8 promises that an application upgrades to any later `8.x` 
 
 "Reports" means the job lists the breaks it found in its summary and passes. A problem still fails it at any version: a check that could not compare, or a record that no longer matches a break and must be removed. The type tests and the example apps start to fail by themselves at the first release whose version has no pre-release part; nothing is switched on.
 
-Only what is generally available is checked strictly: a package whose last release has a plain version, and, for the type tests, an export whose name does not start with `preview_` or `ea_`. A prefixed name is still checked strictly when the last release also exported the same thing under a name with no prefix, as a promotion leaves it: a deprecated `ea_foo` kept beside `foo` is GA until the next major version. A name starting with `rc_` is checked strictly. The example apps have no such exemption, because an app's error cannot be traced to one export: after a release with a plain version, any app error fails unless it is recorded.
+Only what is generally available is checked strictly: a package whose last release has a plain version, and, for the type tests, an export whose name does not start with `preview_` or `ea_`. A prefixed name is still checked strictly when the last release also exported the same thing under a name with no prefix, as a promotion leaves it: a deprecated `ea_foo` kept beside `foo` is GA until the next major version. The check recognises three ways of writing the old name: re-exporting the same declaration (`export { foo as ea_foo }`), a constant (`export const ea_foo = foo`), and a type alias that passes its type parameters through (`export type ea_Foo<T> = Foo<T>`). Write a deprecated name in one of these forms; an `interface ea_Foo extends Foo {}` is not recognised. A member whose name has a prefix, such as `Client.preview_run`, is held to the level of its export. A name starting with `rc_` is checked strictly. The example apps have no such exemption, because an app's error cannot be traced to one export: after a release with a plain version, any app error fails unless it is recorded.
 
 ## `api.txt` is out of date
 
@@ -57,7 +57,7 @@ Reviewers, people and agents, read the section to decide whether each addition i
 
 The `api-compat` job installs the last release of each package and compiles a generated test per export that asks whether the current type can stand where the last release's stood. A failure is listed as a break, with the import path, the export, the kind of test (the export's type, its value, its constructor, and so on) and TypeScript's message, followed by a record that would cover it.
 
-To run it locally: `pnpm build`, then `pnpm api:compat`. `--only <package>` checks one package, and `--ga` treats the last release as generally available, to see what will fail from `8.0.0`.
+To run it locally: `pnpm build`, then `pnpm api:compat`. `--only <package>` checks one package, and `--ga` treats the last release as generally available, to see what will fail from release 8.0.
 
 What is a break and what is not:
 

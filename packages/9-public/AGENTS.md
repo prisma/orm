@@ -4,7 +4,7 @@ Every package in this folder is published, and each has a generated `api.txt` be
 
 ## Why a reviewer looks closely
 
-From `8.0.0`, Prisma 8 promises that an application upgrades to any later `8.x` release with no code changes. Two kinds of change undo that promise without anyone meaning to:
+From release 8.0, Prisma 8 promises that an application upgrades to any later `8.x` release with no code changes. Two kinds of change undo that promise without anyone meaning to:
 
 - **An accidental addition.** Once a GA release has exported something, we must keep it, unchanged in any way that breaks its users, until Prisma 9. So every new line in an `api.txt` is a commitment, not a detail.
 - **A break.** A removed export, a narrower parameter, a wider return type, or a new required member on an interface that users implement stops existing code compiling. CI finds most of these against the last release, but only for what is GA, and only for declarations it can see.
