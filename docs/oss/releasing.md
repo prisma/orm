@@ -37,7 +37,7 @@ node scripts/print-release-plan.ts            # the plan for the current root ve
 node scripts/print-release-plan.ts 8.1.0      # the plan for another root version
 ```
 
-The command reads the workspace and writes nothing. Its option `--ever-ga <name,...>` names the packages that have already had a GA version, which decides the tag of a version below GA. [`scripts/fixtures/release-plan/`](../../scripts/fixtures/release-plan/) holds the expected output for the current root version, for `8.0.1` and for `8.1.0`, and `pnpm test:scripts` compares the real output with them.
+The command reads the workspace and writes nothing. Its option `--ever-ga <name,...>` names the packages that have already had a GA version, which decides the tag of a version below GA. The publish workflow works that list out from the npm registry: a package has had a GA version if a plain version with major 1 or higher is published there. [`scripts/fixtures/release-plan/`](../../scripts/fixtures/release-plan/) holds the expected output for the current root version, for `8.0.1` and for `8.1.0`, and `pnpm test:scripts` compares the real output with them.
 
 [`scripts/set-version.ts`](../../scripts/set-version.ts) writes the plan into the `package.json` files. Nobody writes a version or a range between our packages by hand.
 
@@ -51,13 +51,13 @@ Three things about the plan are worth knowing:
 
 Published packages get their versions from the release plan. Everything else carries the root version: the private `@internal/*` packages, the examples, the apps and the root itself. `set-version.ts` writes both.
 
-Three pieces of published code report a version, and each reports the root version, read from an `@internal/*` package, and not the published package's own version:
+Three pieces of published code contain a version number. Each takes it from an `@internal/*` package, so it is the root version, and not the version of the published package the code ships in. None of the three is compared with a package's version:
 
-- **The key `contractFromJson` uses to mark a contract as checked.** It is used within one process and compared with nothing else.
-- **The `driverInfo` the MongoDB driver sends to the server** when it connects. It appears in the server's logs.
-- **The Supabase extension's version in `contract.json`.** Changing it would change every emitted contract.
+- **`contractFromJson`,** the function that checks a `contract.json`, marks a contract it has checked with a key that contains the version. The mark is used inside one running process only.
+- **The MongoDB driver** sends the version to the server when it connects, as `driverInfo`. It appears in the server's logs.
+- **The Supabase extension** writes its version into every `contract.json` that uses it. Switching it to the extension's own version would change every such contract, so it stays the root version.
 
-The `prisma-8` agent skill ships inside the five facade packages. The copy in this repository is stamped with the root version, and each packed copy with the version of the package it ships in, so a user can compare the skill they have with the packages they installed.
+The `prisma-8` agent skill ships inside the five packages that applications import from: `@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb` and `@prisma/orm-mongo`. The copy in this repository is marked with the root version. The copy inside each published package is marked with that package's version, so a user can compare the skill they have with the packages they installed.
 
 ## What the publish workflow does
 
@@ -97,22 +97,22 @@ This is the procedure until release 8.0. Each release candidate is one pull requ
 
 A version number is used once. If a publish fails part-way and leaves a number on npm, skip that number.
 
-## Procedure: release 8.0
+## Procedure: release 8.0, and every release after it
 
-Release 8.0 is published as `8.0.1`, never `8.0.0`.
+Release 8.0 is published as `8.0.1`, never `8.0.0`. Every later release starts at patch 0: `8.1.0`, `8.2.0`.
 
-1. Set the root version with `node scripts/set-version.ts 8.0.1`. (`pnpm bump-version` only raises the release-candidate number.)
-2. Commit `docs/releases/v8.0.1.md`.
-3. Merge. The git tag and the GitHub Release are `v8.0.1`. From here on a GitHub Release is not marked as a pre-release, whatever the levels of the packages in it.
+1. Set the root version with `node scripts/set-version.ts 8.0.1`, or the later release's version. (`pnpm bump-version` only raises the release-candidate number.)
+2. Assemble the upgrade guides and commit the release notes, `docs/releases/v8.0.1.md`, as for a release candidate.
+3. Merge. The git tag and the GitHub Release are `v8.0.1`. From release 8.0 on, a GitHub Release is not marked as a pre-release, whatever the levels of the packages in it.
 
 The scripts do not yet publish a fix to one package alone. Until they do, a fix ships in the next release.
 
 ## Publishing again, or under `beta`
 
-If a publish fails for a passing reason, such as a registry error, run the `Publish to npm` workflow by hand from `main` with `dist-tag=latest` and `dry-run=false`. It publishes the root version at the current commit again, with the development build.
+If a publish fails for a temporary reason, such as a registry error, run the `Publish to npm` workflow by hand from `main` with `dist-tag=latest` and `dry-run=false`. It publishes the root version at the current commit again, with the development build.
 
 The same manual run with `dist-tag=beta` publishes a build under `beta`, with no development build.
 
 ## Procedure: check a change to the release tooling
 
-After changing `publish.yml`, `set-version.ts`, `determine-version.ts`, the publish script, the release plan or a build script, run the `Publish to npm` workflow by hand on your branch with `dry-run` left on, which is the default. It runs every check and `pnpm publish --dry-run` for every package, and publishes nothing.
+After changing `publish.yml`, `set-version.ts`, `determine-version.ts` (which works out the development build's version), the publish script, the release plan or a build script, run the `Publish to npm` workflow by hand on your branch with `dry-run` left on, which is the default. It runs every check and `pnpm publish --dry-run` for every package, and publishes nothing.

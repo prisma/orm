@@ -26,7 +26,14 @@ db.orm.users.preview_search('ada')      // Preview: may still change
 
 These are the only two places a user needs to look. There is no table to look up and no flag to switch on.
 
-Writing the level into the version has one further effect, which takes up the second half of this record: it decides which version ranges an application writes in its `package.json`.
+Writing the level into the version has one further effect, which takes up the second half of this record. It decides how an application lists Prisma's packages in its `package.json`:
+
+```jsonc
+"@prisma/orm-postgres": "^8.3.0"       // GA: the caret takes every later 8.x release
+"@prisma/orm-mysql":    "~8.3.0-ea.0"  // Early Access: the tilde stays on release 8.3
+```
+
+[What goes in an application's package.json](#what-goes-in-an-applications-packagejson) explains both lines, step by step.
 
 ## The problem
 
@@ -85,7 +92,7 @@ Three rules go with the table.
 
 **One failing test stops the whole release.** A release, such as `8.3`, publishes all our packages together. So a failing test in one package at Preview or above stops the release of all of them. A failing test in an Early Access package does not have to.
 
-**A GA package depends only on GA packages of ours.** In general, a package depends only on packages at its own level or above. If a GA package depended on an Early Access one, a change to the Early Access package would break the GA package's users, and GA promises that does not happen. The release scripts refuse it. It follows that a platform package is at least at the level of the most finished facade or extension built on it: the framework is GA because the PostgreSQL facade is.
+**A GA package depends only on GA packages of ours.** In general, a package depends only on packages at its own level or above. If a GA package depended on an Early Access one, a change to the Early Access package would break the GA package's users, and GA promises that does not happen. The release scripts refuse it. It follows that a platform package is at least at the level of the most finished facade or extension built on it: the framework is GA because the PostgreSQL facade is. For the same reason, a GA package does not call a function below GA in another package.
 
 **A level is not a support category.** The public issue [Priorities & Operating Contexts](https://github.com/prisma/orm/issues/25843) sorts databases, runtimes and frameworks into First-Class, Supported and Unofficial. That scale says where the maintainers spend their effort. A level says how finished one package is. Neither decides the other: a First-Class database can have an Early Access facade while the facade is being built, and a database that gets less of our effort can have a GA one.
 
@@ -94,7 +101,7 @@ Three rules go with the table.
 Two things have a level.
 
 - **A package.** Every package we publish has one, except a package with [its own version](#packages-with-their-own-version). A database's level is the level of its facade, so each database reaches GA on its own date.
-- **An API.** An API is anything a package exports, or a member of one: a function, a method, a property, an option, a type. An API has the level of its package, unless its name starts with a level word such as `preview_`. Then it is below its package's level. The next section gives the exact rule.
+- **An API.** An API is anything a package exports, or a member of one: a function, a method, a property, an option, a type. An API has the level of its package, unless its name starts with a level word such as `preview_`. Then it has the level its name gives, which is never above its package's level. The next section gives the exact rule.
 
 A name can only lower a level, never raise one. A package below GA cannot contain a GA function, because the package's version already says that anything in it may change. In the same way, a member of something below GA is at that level or lower: a method of an Early Access class is not GA.
 
@@ -165,17 +172,17 @@ Semantic Versioning, the convention npm follows, calls a version with such a suf
 
 ### Three facts about version ranges
 
-A `package.json` does not list exact versions. It lists ranges, and the package manager installs the newest version each range accepts. Pre-releases get a special rule. Everything in the rest of this record follows from the three facts below.
+A `package.json` does not list exact versions. It lists ranges, and the package manager installs a version each range accepts: usually the newest, though npm and pnpm prefer the version under the npm tag `latest` when the range accepts that one. Pre-releases get a special rule. Everything in the rest of this record follows from the three facts below.
 
 | Range | Accepts | Does not accept |
 | --- | --- | --- |
-| `^8.3.0` (caret) | Any later `8.x` version: `8.3.1`, `8.4.0`, `8.9.2` | `9.0.0`, and every pre-release, such as `8.4.0-ea.0` |
-| `~8.3.0` (tilde) | Any later `8.3.x` version: `8.3.1`, `8.3.7` | `8.4.0`, and every pre-release |
+| `^8.3.0` (caret) | `8.3.0` and any later `8.x` version: `8.3.1`, `8.4.0`, `8.9.2` | `9.0.0`, and every pre-release, such as `8.4.0-ea.0` |
+| `~8.3.0` (tilde) | `8.3.0` and any later `8.3.x` version: `8.3.1`, `8.3.7` | `8.4.0`, and every pre-release |
 | `~8.3.0-ea.0` | Pre-releases of `8.3.0`, then any `8.3.x`: `8.3.0-ea.1`, `8.3.0-rc.0`, `8.3.0`, `8.3.1` | `8.4.0-ea.0`, `8.4.0` |
 
 1. **A caret accepts later minors. A tilde stays within one minor.**
 2. **A range on a plain version never accepts a pre-release.** A user whose line says `^8.3.0` cannot get an Early Access version by accident. They get one only by writing its version themselves.
-3. **A range on a pre-release accepts pre-releases of that exact version only.** `~8.3.0-ea.0` accepts `8.3.0-ea.1`, but never `8.4.0-ea.0`. A caret makes no difference here: `^8.3.0-ea.0` does not accept `8.4.0-ea.0` either. So no caret or tilde range can follow a package below GA from one minor into the next.
+3. **A range written on a pre-release of `8.3.0` accepts pre-releases of `8.3.0`, and of no other version.** `~8.3.0-ea.0` accepts `8.3.0-ea.1`, but never `8.4.0-ea.0`. A caret makes no difference here: `^8.3.0-ea.0` does not accept `8.4.0-ea.0` either. So no caret or tilde range can follow a package below GA from one minor into the next.
 
 Fact 3 is why a fix below GA raises the counter and not the patch number. A user's `~8.3.0-ea.0` accepts `8.3.0-ea.1`. It would not accept `8.3.1-ea.0`, which is a pre-release of a different version.
 
@@ -189,7 +196,7 @@ The release scripts refuse a change that breaks these rules.
 
 ## Which versions of each other our packages accept
 
-Our packages do not bring each other along. Each one says which other packages of ours it needs, and at which versions, and the application installs them. In `package.json` terms, each lists the others as peer dependencies, each with a range ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) explains why). When the application installs a version that some package does not accept, npm refuses to install, and pnpm, Yarn and Bun print a warning.
+Our packages do not bring each other along. Each one says which other packages of ours it needs, and at which versions, and the application installs them. In `package.json` terms, each lists the others as peer dependencies, each with a range ([ADR 329](ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) explains why). When the application installs a version that some package does not accept, npm refuses to install, and pnpm, Yarn and Bun install it and print a warning.
 
 The release scripts compute these ranges, and a check before publishing refuses a `package.json` that disagrees.
 
@@ -217,9 +224,9 @@ The third row assumes the extension uses only GA functions. An extension that ca
 "@prisma/orm-toolchain":       "^8.3.0"
 ```
 
-When release `8.4` comes out, the user runs their package manager's update command, and every line moves to `8.4` together. GA promises that `8.4` does not break their code, so the user edits nothing.
+When release `8.4` comes out, the user runs their package manager's update command, and every package moves to `8.4` together. The lines themselves do not need to change, because `^8.3.0` already accepts `8.4.0`. GA promises that `8.4` does not break their code, so the user edits nothing.
 
-The lines cannot drift apart unnoticed. The facade accepts the platform packages only at its own minor (the first row of the table above). If an update ever moved one line and not the others, the package manager would report it.
+The packages are also checked against each other. The facade accepts the platform packages only at its own minor (the first row of the table above), so a set that is half on one release and half on another does not pass an install unreported.
 
 ### When the facade is below GA: a tilde on every line
 
@@ -239,11 +246,11 @@ The framework, the SQL family and the toolchain are GA packages, yet their lines
 | `@prisma/orm-framework` | `^8.3.0` | `8.4.0`. The caret accepts it. |
 | `@prisma/orm-mysql` | `~8.3.0-ea.0` | Still `8.3.0-ea.N`. No range on `8.3.0-ea.0` accepts `8.4.0-ea.0` (fact 3). |
 
-The update has moved half of the application to `8.4` and left MySQL on `8.3`. Those two halves were never tested together, and the MySQL facade says so itself: at `8.3` it accepts the framework only at `8.3`. What the user sees depends on the package manager. pnpm and Yarn install the mixed set and print a warning. Bun installs it with no warning. npm moves nothing at all, so the application stops getting updates. In each case the user ends up with a combination nobody tested, or with no updates.
+The update has moved half of the application to `8.4` and left MySQL on `8.3`. Those two halves were never tested together, and the MySQL facade says so itself: at `8.3` it accepts the framework only at `8.3`. What the user sees depends on the package manager. pnpm and Yarn install the mixed set and print a warning. Bun's update command installs it with no warning, although Bun's install command would warn. npm moves nothing at all, so the application stops getting updates. In each case the user ends up with a combination nobody tested, or with no updates.
 
 With a tilde on every line, the same update is harmless: every package stays in `8.3`, takes fixes within `8.3`, and still fits together.
 
-The cost falls on users of a database below GA. To move to `8.4`, they edit all five lines by hand, to `~8.4.0-ea.0` and `~8.4.0`, and install. A package manager's update command does not do this correctly: pnpm's rewrites a tilde on a pre-release as an exact version, which never moves again, and Yarn's writes a caret. With carets on the GA lines they would still have to edit the two MySQL lines by hand, so the tilde costs three more edited lines. In return, an update can never leave the application half on one release and half on another.
+The cost falls on users of a database below GA. To move to `8.4`, they edit all five lines by hand, to `~8.4.0-ea.0` and `~8.4.0`, and install. The package managers' own commands do not do this correctly. `pnpm update` rewrites a tilde on a pre-release as an exact version, which never moves again. Yarn's command that updates to the latest version writes a caret. With carets on the GA lines they would still have to edit the two MySQL lines by hand, so the tilde costs three more edited lines. In return, an update can never leave the application half on one release and half on another.
 
 ### An extension below GA in a GA application
 
@@ -253,9 +260,11 @@ A PostgreSQL application can add an extension that is still at Early Access. Its
 
 When a project already has a line for the facade, `init` leaves that line as the user wrote it. It then writes each platform package at exactly the range the installed facade accepts, such as `~8.3.0`, whatever the facade's level. That way it never installs a platform package the user's facade does not accept.
 
+This has a cost when the user's facade line is a caret, `^8.3.0`. The lines are then written two ways, and at release `8.4` an update moves the facade and not the platform packages. The package manager reports the mismatch, and the user changes the platform lines to carets. `init` does not do that for them, because it never rewrites a line the user wrote.
+
 ## Which version a plain install gets
 
-A user who runs `npm install @prisma/orm-postgres`, with no version, gets the version published under the npm tag `latest`.
+An npm tag is a label that points at one version of a package. A user who runs `npm install @prisma/orm-postgres`, with no version, gets the version the tag `latest` points at.
 
 - A GA version is published under `latest`.
 - A version below GA is published under `latest` too, if the package has never had a GA version. Otherwise nobody could install a new package without knowing its exact version. The version still shows its level.
@@ -267,7 +276,7 @@ Every version published before release `8.0` was published under `latest`, whate
 
 Before levels existed, every package was published as `8.0.0-rc.1`, `8.0.0-rc.2` and so on, up to `8.0.0-rc.26` and beyond, whatever its real state. Those versions stay on the npm registry for good.
 
-They sort above the versions that release `8.0` would give a package below GA, because `ea` and `preview` sort before `rc`:
+They sort above the versions that release `8.0` would give a package below GA. `ea` and `preview` sort before `rc`, and `rc.0` sorts before `rc.26`:
 
 ```text
 8.0.0-ea.0  <  8.0.0-preview.0  <  8.0.0-rc.0  <  8.0.0-rc.26 (old)  <  8.0.0

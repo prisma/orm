@@ -6,9 +6,9 @@
 
 ## At a glance
 
-"Release `8.4`" below means the versions `8.4.0`, `8.4.1` and so on of Prisma's packages.
+"Release `8.4`" below means the versions of Prisma's packages that start with `8.4`.
 
-An application updates its Prisma packages to release `8.4` and keeps the pgvector extension it already had, at `8.3.0`. If pgvector listed the Prisma framework as an ordinary dependency, at `~8.3.0`, the package manager would install this:
+An application updates its Prisma packages to release `8.4` and keeps the pgvector extension it already had, at `8.3.0`. Suppose pgvector listed the Prisma framework as an ordinary dependency, at exactly the version it was built with, `8.3.0`. The package manager would then install this:
 
 ```text
 node_modules/
@@ -44,14 +44,14 @@ node_modules/
 
 It does so with two rules:
 
-1. **Each package Prisma publishes lists the other Prisma packages it needs as peer dependencies,** never as ordinary dependencies.
-2. **The application lists all of them in its own `package.json`.**
+1. **Each Prisma package that an application installs lists the other Prisma packages it needs as peer dependencies,** never as ordinary dependencies.
+2. **The application lists every one of those packages in its own `package.json`.**
 
 The difference between the two kinds of dependency is the whole mechanism:
 
 ```jsonc
 // in the package.json of @prisma/orm-extension-pgvector
-"dependencies":     { "@prisma/orm-framework": "..." }   // ordinary: the package manager may give pgvector its own copy
+"dependencies":     { "@prisma/orm-framework": "..." }   // ordinary: pgvector gets its own copy when the installed one does not fit
 "peerDependencies": { "@prisma/orm-framework": "..." }   // peer: pgvector uses the copy the application installed
 ```
 
@@ -86,7 +86,7 @@ The application lists the platform packages in `package.json` so that exactly on
 
 ## Why two copies break
 
-An application hands each extension's parts to its client: data types, codecs and operations. The toolchain receives the same parts when it generates files. Each part runs on whichever copy of the framework its package found.
+An application hands each extension's parts to the application's client: data types, codecs and operations. The toolchain receives the same parts when it generates files. Each part runs on whichever copy of the framework its own package finds. Node looks for a package in the importing package's own `node_modules` folder first, and then in each folder above it.
 
 Look again at the first tree. pgvector's own code ends up running on two copies of the framework at once:
 
@@ -154,7 +154,7 @@ Read the three files together. The application installs the framework at `8.4.0`
 
 The two ranges differ on purpose. The packages of one release are tested together, so the facade accepts only its own release. An extension has to keep working when the application moves to a later release, so it accepts later ones. [ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md) sets these ranges and explains them. This record decides only the two rules: peer dependencies between our packages, and every one of them listed by the application.
 
-**The result:** one application gets one copy of each platform package, or a report from the package manager that the versions do not fit. That holds under npm, pnpm, Yarn and Bun, in each of the ways those tools can lay out installed packages: Yarn's `node_modules` and Plug'n'Play modes, and Bun's hoisted and isolated modes.
+**The result:** one application gets one copy of each platform package, or a report from the package manager that the versions do not fit. That holds under npm, under pnpm, under Yarn in both its `node_modules` mode and its Plug'n'Play mode, and under Bun in both its hoisted mode and its isolated mode. (The modes are different ways of laying out installed packages on disk.)
 
 ### Two packages that list a facade
 
@@ -163,32 +163,17 @@ A package of ours that uses a facade's own code lists that facade as a peer depe
 - `@prisma/orm-mariadb` is built on `@prisma/orm-mysql`. A MariaDB application lists both facades and both target packages.
 - `@prisma/orm-extension-supabase` wraps the client that the PostgreSQL facade builds, so it cannot work without that facade.
 
-## The `prisma` command-line tool
-
-The rules above cover the packages an application imports. The `prisma` command-line tool is a separate case, because it brings a copy of its own.
-
-The tool is published from another repository. It is installed with its own copy of `@prisma/orm-toolchain`, at its own version, and runs the `prisma orm` commands from that copy. When it runs a command it loads the application's config file. That file imports the application's facade, so the objects in it are created by the application's copies of our packages. The tool's copy then receives them. So here two copies do exchange values.
-
-The decision for the tool:
-
-- `prisma` is published with the same major and minor version as the release.
-- It compares that with the facade installed in the application. If the facade is on another minor, it stops with a message that gives both versions.
-- Within one minor the two copies can still differ in their patch number. So the tool reads the values it receives from the config file by their shape, and does not apply the private-field check to them.
-
 ## Why these two rules
 
-**An ordinary dependency can bring a second copy.** Package A lists package B as an ordinary dependency, with a range of versions. If the copy of B already installed is outside that range, the package manager gives A its own copy of B. That is the first tree at the top.
+**An ordinary dependency can bring a second copy.** Package A lists package B as an ordinary dependency, with a range of versions. If the copy of B already installed is outside that range, the package manager gives A its own copy of B. That is the first tree at the top. A wider range makes this rarer, but it does not rule it out. The package manager decides when two packages share a copy, and in the tests below npm installed two copies when a facade listed the platform packages as ordinary dependencies with a tilde range.
 
 **A peer dependency that the application lists cannot.** When A lists B as a peer dependency, the package manager does not give A its own copy. A uses the application's. That is rule 1.
 
-**The application has to list them, because package managers differ on a peer dependency that nobody lists.** Yarn does not install it at all, and the package that needs it cannot load. npm, pnpm and Bun install it by themselves, each choosing a version in its own way, and Bun then gave two copies when an extension came from another release. With a line in the application's `package.json`, every package manager installs the same thing. That is rule 2.
+**The application has to list them, because package managers differ on a peer dependency that nobody lists.** Yarn does not install it at all, and the package that needs it cannot load. npm, pnpm and Bun install it by themselves, each choosing a version in its own way, and under Bun that gives two copies when an extension comes from another release. With a line in the application's `package.json`, every package manager installs the same thing. That is rule 2.
 
 **The arrangement was tested against the others.** Each arrangement under [Alternatives considered](#alternatives-considered) was tried with stand-in packages on a local registry, under every package manager and mode named above. Each was tried with an extension, a platform package or the facade at a different version from the rest. Only two arrangements gave one copy, or a reported mismatch, every time: this one, and one that ties each extension to a single facade.
 
-Two further benefits follow from the rules:
-
-- **The package manager checks the versions.** When the application's lines and a package's peer dependencies disagree, npm refuses to install, and pnpm, Yarn and Bun install and print a warning.
-- **One package can be published alone.** A fix published as `@prisma/orm-target-postgres` `8.4.1` installs beside the facade at `8.4.0`, because the facade accepts `~8.4.0`. No other package has to be published with it.
+One further benefit follows from the rules: the package manager checks the versions. Each peer dependency states which versions it accepts, and the package manager compares that with what the application installed.
 
 ## What keeps the rules in place
 
@@ -196,13 +181,25 @@ Two further benefits follow from the rules:
 - **Adding an extension later needs no new lines for platform packages.** The platform packages an extension needs are ones the application already has. The user installs the extension itself with their package manager.
 - **The build refuses a package that breaks rule 1.** Most of our published packages are assembled from smaller packages inside this repository ([ADR 242](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md)), so nobody writes their dependency lists by hand. For each of those, the build works out which packages of ours its code uses, and fails unless its `package.json` lists exactly those as peer dependencies. A second check, before publishing, fails if any published package lists one of ours as an ordinary dependency. That second check also covers the packages that are written by hand, such as `@prisma/orm-better-auth`.
 
+## The `prisma` command-line tool
+
+The two rules cover the packages an application installs for its own code. The `prisma` command-line tool is a program, not one of those packages, and it is a separate case because it brings a copy of its own.
+
+The tool is published from another repository. It is installed with its own copy of `@prisma/orm-toolchain`, at its own version, and runs the `prisma orm` commands from that copy. When it runs a command it loads the application's config file. That file imports the application's facade, so the objects in it are created by the application's copies of our packages. The tool's copy then receives them. So here two copies do exchange values.
+
+The decision for the tool:
+
+- `prisma` is published with the same major and minor version as the release.
+- It compares that with the facade installed in the application. If the facade is on another minor, it stops with a message that gives both versions.
+- The tool's copy and the application's copy are always two copies, even at the same version. So the tool reads the values it receives from the config file by their shape, and does not apply the private-field check to them. The check on the minor exists because the shape of those values can change from one release to the next.
+
 ## Consequences
 
 - **An application's `package.json` is longer.** A PostgreSQL application has five lines of ours where one would do if the facade brought the rest. `init` writes them.
 - **A warning is easy to miss.** Three of the four package managers install a mismatched set of versions with only a warning, so a successful install does not prove that the versions fit. The application then has one copy of each platform package, but at a version that one of our packages was not tested with, and the warning is the only sign. Users need to read peer dependency warnings and correct their lines.
 - **The run-time error still does not name its cause.** This record makes two copies unlikely. It does not change what the user sees when they happen anyway.
 - **A program that brings its own toolchain lists the framework too.** The toolchain lists the framework as a peer dependency. So the `prisma` tool and Prisma Composer, which each install their own toolchain, each list `@prisma/orm-framework` beside it.
-- **The files Prisma generates into an application import from the facade and the extensions,** as the application's own code does. The generated type file `contract.d.ts` names the same packages the user's code imports.
+- **The files Prisma generates into an application import only from the facade and the extensions,** as the application's own code does. The application lists the platform packages, but nothing in it imports them, generated or written by hand.
 - **The database driver is a peer dependency too.** [ADR 219](ADR%20219%20-%20Database%20driver%20coupling%20-%20framework%20owns%20user-facing%20types%20and%20driver%20is%20a%20single-major%20peer%20dependency.md) decided that, for the same reasons: the user sees the driver in their own list, and a conflict shows up at install.
 - **A monorepo whose applications are held on different releases can still get two copies, with no warning.** This happens under npm workspaces and under Bun's hoisted mode. Both try to install each package once, at the root of the repository, for every application to share. Take `app-a` held on release `8.4` and `app-b` held on `8.5`, for example by tilde ranges, both using the same version of pgvector:
 
