@@ -329,9 +329,21 @@ postgres({
 import { Pool } from 'pg';
 const pool = new Pool({ connectionString: process.env['DATABASE_URL'] });
 postgres({ contract, pg: pool });
+
+// BYO pool with the target's session settings baked in — createPgPool is the
+// same helper the factory itself uses for a url binding.
+import { createPgPool } from '@prisma/orm-postgres/driver/runtime';
+import postgresTarget from '@prisma/orm-postgres/target/runtime';
+const settingsPool = createPgPool(
+  { connectionString: process.env['DATABASE_URL'] },
+  postgresTarget.sessionSettings ?? {},
+);
+postgres({ contract, pg: settingsPool });
 ```
 
 The `url` and `pg` keys are mutually exclusive at the type level; passing both errors.
+
+A pool made with `new Pool(...)` works: the driver sets the session settings the Postgres target declares (`DateStyle: 'ISO'`) on each client it uses, at the cost of an extra round trip when a client is first used (and again after it was handed out for exclusive use, whose holder may have changed its session). `createPgPool(config, sessionSettings)` from `@prisma/orm-postgres/driver/runtime` instead makes a pool whose every session starts with the settings as startup options — no extra round trip, and `RESET ALL` keeps them. It takes the same `PoolConfig` `pg` takes plus the settings, and `postgresTarget.sessionSettings` from `@prisma/orm-postgres/target/runtime` is the settings the target declares. `createPgClient(config, sessionSettings)` does the same for a single `pg.Client`.
 
 `DATABASE_URL` lives in `.env`. The CLI reads it for emit / verify / migration commands; the runtime reads it through `process.env` at `db.ts` load time.
 

@@ -715,6 +715,33 @@ After planning or applying, you can inspect the migration graph offline:
 
 For the full graph topology: `pnpm prisma migration graph` (also supports `--legend`, `--ascii`, `--dot`, `--json`).
 
+## Reading migration packages in a script
+
+The same on-disk format the commands above render is readable programmatically, from `@prisma/orm-<target>/migration-tools/io` (e.g. `@prisma/orm-postgres/migration-tools/io`) — the reader the CLI itself uses, for a script that audits a project's migrations or checks a migration package's integrity outside the CLI:
+
+- `readMigrationPackage(dir, options)` reads one package directory and returns its `OnDiskMigrationPackage` (`migration.json` + `ops.json`, validated). `options` takes `migrationsDir` — the project's top-level migrations directory, which the contract snapshots resolve against — and an optional `verifySnapshotContent` check for the end-contract snapshot. On a snapshot-content mismatch, the tolerant read omits `endContractJson` without adding a `PackageLoadProblem`, and the migration hash still passes because it covers only the manifest and operations — so an audit that checks only `problems` misses it; snapshot-integrity checks must read through the strict store instead: `readContractSnapshotJson(migrationsDir, storageHash, verifier)` from `@prisma/orm-<target>/migration-tools/contract-snapshot-store` reports the mismatch as `MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH`, but only when its third argument is a verifier — called without one it only reads and parses the file and returns its content unchecked, a mismatched snapshot included. Build it with `createSnapshotContentVerifier(hooks)` from the same entry point, with `hooks` the ones the target's contract serializer declares — `contractSerializer.hashCanonicalizationHooks` on the default export of `@prisma/orm-<target>/target/control` — since they are the canonicalization the published hash was computed with; a serializer that declares none (Mongo) cannot be recomputed from a snapshot, so its snapshots read without content verification, as they do in the CLI.
+- `readMigrationsDir(migrationsRoot, options)` reads a graph directory. It never throws on a bad package: the result's `packages` keeps every package it could read (hash-mismatched ones included, represented rather than fatal) and `problems` carries one `PackageLoadProblem` per package it could not — `hashMismatch` (stored vs recomputed `migrationHash`), `providedInvariantsMismatch`, or `packageUnloadable` (that one is omitted from `packages`). A directory that does not exist reads as an empty graph, not an error. A subdirectory without `migration.json` (one that lost its manifest but keeps `ops.json`, say) is skipped before loading — no `packageUnloadable` is reported for it — so an audit that relies on `problems` should also check that each package directory it expects still has its `migration.json` — the directory existing proves nothing, since a directory that lost its manifest is exactly what gets skipped — or compare the directories it expects with the `dirName`s the read reports across `packages` and `problems`. Filesystem errors do throw when listing the root (other than its absence) or stat-ing an entry (a broken symlink, say). The manifest check is the exception: it catches every error from stat-ing `migration.json`, not only the file's absence, so a failure there (a permission error, say) skips the directory exactly as a missing manifest does — no `PackageLoadProblem`, the package in neither `packages` nor `problems` — and the check against the expected directories above covers that case too.
+
+Migration packages live per contract space, under `<migrationsDir>/<spaceId>/` (`app` is the application's own space id), so a script reads the space's directory and passes the top-level migrations directory as the option. The default `migrations.dir` is `migrations` (relative to the config file); on a project that keeps the default, both paths are `migrations`-rooted as below — on a project that configures `migrations.dir`, pass paths that match it, or the read sees a directory that does not exist and audits nothing. Where the script is started from matters the same way: the reader takes paths as given and resolves relative ones against the working directory, never against the config file (anchoring `migrations.dir` to the config file's directory is something the CLI does before it calls the reader), so a script started from another directory reads a directory that does not exist and — since a missing root reads as an empty graph — audits nothing. Start it from the config file's directory, or anchor both paths to that directory yourself:
+
+```typescript
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { readMigrationsDir } from '@prisma/orm-postgres/migration-tools/io';
+
+// Anchored to this script's own directory (here: the project root, next to
+// the config file) rather than to the working directory it is started from:
+const migrationsDir = fileURLToPath(new URL('migrations', import.meta.url));
+const { packages, problems } = await readMigrationsDir(resolve(migrationsDir, 'app'), {
+  migrationsDir,
+});
+for (const problem of problems) {
+  console.error(`${problem.dirName}: ${problem.kind}`);
+}
+```
+
+A `hashMismatch` problem is the programmatic form of `MIGRATION.HASH_MISMATCH`: `ops.json` / `migration.json` were edited without self-emitting, and the fix is the same (see *Workflow — Recover from `MIGRATION.HASH_MISMATCH`*). Editing the files directly is still not supported — the reader is for auditing, not for authoring.
+
 ## `@@control` and DDL scope
 
 Objects whose `@@control` policy excludes them from Prisma 8's managed surface are omitted from planned DDL. The four policies are: `managed` (Prisma plans and applies DDL), `tolerated` (object may exist, no DDL emitted), `external` (object is expected to exist, no DDL), `observed` (Prisma reads but never writes). Declare `@@control(managed|tolerated|external|observed)` in your schema; see `references/contract.md` and [`packages/2-sql-family/2-authoring/contract-psl/README.md`](https://github.com/prisma/orm/blob/main/packages/2-sql-family/2-authoring/contract-psl/README.md) for authoring syntax.

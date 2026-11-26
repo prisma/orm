@@ -611,6 +611,28 @@ db.sql.public.post
 
 The SQL builder's `.orderBy(column, { direction, nulls })` takes the same null placement: `.orderBy('invited_by_id', { direction: 'asc', nulls: 'first' })` renders `ORDER BY "invited_by_id" ASC NULLS FIRST`.
 
+### The relational-AST layer beneath the builder
+
+The builder lowers into the relational AST, and the AST's surfaces are published entry points for code that works at that level — an extension operation's implementation, a plan inspector, a fragment the builder cannot spell:
+
+- `@prisma/orm-postgres/relational-core/expression` — the expression helpers. `param(value, { codecId })` wraps a value whose codec cannot be inferred from context, as in `param(cutoff, { codecId: 'pg/timestamptz-temporal@1' })` — the fix `RUNTIME.RAW_SQL_UNSUPPORTED_INTERPOLATION` names for a raw-SQL interpolation of anything other than `number`, `bigint`, `string`, `boolean` or `Uint8Array`. `toExpr(value, codec?)` lifts a value or expression into an AST expression. `buildOperation(spec)` turns an operation's arguments into the AST node the pipeline lowers.
+- `@prisma/orm-postgres/relational-core/ast` — the AST node classes a plan's query is built from (`ColumnRef`, `ParamRef`, `LiteralExpr`, `BinaryExpr`, `TableSource`, …), plus the visitor and rewriter interfaces over them.
+- `@prisma/orm-postgres/relational-core/types` — the plan and scope types. `SqlOrmPlan` is the shape `db.query(plan)` and `db.execute(plan)` accept.
+
+```typescript
+import { param } from '@prisma/orm-postgres/relational-core/expression';
+
+// A Timestamp value the raw lane cannot infer a codec for — wrapped, not refused.
+const plan = db.raw.sql`
+  UPDATE "event"
+  SET "archived" = true
+  WHERE "at" < ${param(cutoff, { codecId: 'pg/timestamptz-temporal@1' })}
+`
+  .affectedCount()
+  .build();
+const { affectedRows } = await db.execute(plan);
+```
+
 ## Workflow — Transactions
 
 The concept: `db.transaction(fn)` opens a transaction and passes a `tx` context to the callback. `tx` offers the client's query members with the same types, and each runs inside the transaction: `sql`, `orm` (with the client's custom collection classes), `raw`, `prepare`, `query(plan)` (rows) and `execute(plan)` (affected count), plus `toSql`, `enums` and `nativeEnums`. A prepared statement runs on what it is given, so `ps.query(tx, params)` runs inside the transaction. See *Workflow — Transactions* in `references/runtime.md` for raw SQL and `tx.prepare`. The transaction commits on the callback's successful return and rolls back on any thrown error.
