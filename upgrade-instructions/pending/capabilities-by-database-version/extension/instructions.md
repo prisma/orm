@@ -76,11 +76,13 @@ export const contract = defineContract(
 );
 ```
 
-Without the list, `defineContract` is a type error, and at run time it throws:
+Without the list, the contract requires the newest PostgreSQL version's list and the driver's, and `prisma contract emit` warns with `CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED`. That default is a stopgap for contracts written before the list existed, and Prisma 8.0 requires the list. It is the wrong list for an extension, which should require the oldest version it supports, so write the list.
 
-> State the capabilities your contract requires in requiredCapabilities in defineContract. The list is missing.
+An empty list throws:
 
-An empty list throws the same message ending `The list is empty.` A capability set, the form the removed `capabilities` option took, is refused as not a list:
+> State the capabilities your contract requires in requiredCapabilities in defineContract. The list is empty.
+
+A capability set, the form the removed `capabilities` option took, is refused as not a list:
 
 > requiredCapabilities in defineContract is not a list. State the capabilities your contract requires as a list of capability keys.
 
@@ -136,9 +138,7 @@ contract: {
 },
 ```
 
-Without it, loading the config fails with:
-
-> State the capabilities your contract requires in requiredCapabilities beside the contract path './prisma/contract.prisma' in the config. The list is missing.
+Without it, the same default and the same warning apply.
 
 A `.ts` contract path in that entry does not change, and the config refuses `requiredCapabilities` beside it. A Prisma 7 schema read with `prisma7Schema` takes the list in a second argument: `prisma7Schema('prisma/schema.prisma')` becomes `prisma7Schema('prisma/schema.prisma', { requiredCapabilities: [...postgres15, ...postgresDriver] })`.
 

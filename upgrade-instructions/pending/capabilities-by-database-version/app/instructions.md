@@ -2,7 +2,7 @@
 changes:
   - id: postgres-contract-lists-required-capabilities
     summary: |
-      A PostgreSQL contract now lists every capability it requires, where the contract is written: `defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver], ... })`, the config's contract entry `{ path: './prisma/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] }`, or `prisma7Schema(path, { requiredCapabilities: [...postgres18, ...postgresDriver] })`. `postgres15` to `postgres18` list what each PostgreSQL version provides, and `postgresDriver` what the driver's connection provides; import them beside `defineContract` or `defineConfig`. Add the list, run `prisma contract emit`, then run `prisma db sign` against each database.
+      A PostgreSQL contract now lists every capability it requires, where the contract is written: `defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver], ... })`, the config's contract entry `{ path: './prisma/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] }`, or `prisma7Schema(path, { requiredCapabilities: [...postgres18, ...postgresDriver] })`. `postgres15` to `postgres18` list what each PostgreSQL version provides, and `postgresDriver` what the driver's connection provides; import them beside `defineContract` or `defineConfig`. A contract without the list still works: it requires the newest version's list and the driver's, and `prisma contract emit` warns with `CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED` until the list is added. Prisma 8.0 requires the list. Add the list, run `prisma contract emit`, then run `prisma db sign` against each database.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs}"
       matches:
@@ -16,7 +16,7 @@ changes:
         - '\bprisma(?:7)?Contract\s*\('
   - id: postgres-emitted-contract-is-emitted-again
     summary: |
-      A PostgreSQL `contract.json` and `contract.d.ts` emitted by an earlier release list capability flags the client no longer accepts, and lack `sql.interactiveTransactions`. Until they are emitted again, creating the client is a type error and logs the warning `CONTRACT.CAPABILITIES_NOT_PROVIDED`.
+      A PostgreSQL `contract.json` and `contract.d.ts` emitted by an earlier release list capability flags that nothing reads any more, and lack `sql.interactiveTransactions`. They keep working: the client ignores those flags, and offers `transaction()` to such a contract. Emit them again to replace the flags with the contract's list.
     detection:
       glob: "**/contract.json"
       matches:
@@ -55,6 +55,12 @@ These changes apply to a project on `@prisma/orm-postgres`. Do them in the order
 ## `postgres-contract-lists-required-capabilities`
 
 A capability is a fact that a database version or a connection provides, such as `sql.lateral` or `sql.interactiveTransactions`, and that a contract requires. A contract's capabilities used to come from the adapter. Now you write, where the contract is written, the list of every capability the contract requires. Nothing is added to it.
+
+The list is recommended now and required from Prisma 8.0. A contract that does not list them requires the newest PostgreSQL version's list and the driver's, the list `prisma orm init` writes, and `prisma contract emit` warns until you add it. For a Prisma schema contract the warning reads:
+
+> Your contract does not list the capabilities it requires, so it requires those of the newest PostgreSQL version and of the driver. Add `requiredCapabilities: [...postgres18, ...postgresDriver]` beside the contract path './prisma/contract.prisma' in the config, as `contract: { path, requiredCapabilities }`, with `import { postgres18, postgresDriver } from '@prisma/orm-postgres/config';`. Prisma 8.0 removes this default and requires the list.
+
+Its code is `CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED`. It does not change emit's exit code.
 
 ### 1. Choose the lists
 
@@ -100,11 +106,13 @@ export const contract = defineContract(
 );
 ```
 
-Without the list, `defineContract` is a type error, and at run time it throws:
+Without the list, `prisma contract emit` warns, saying to add `requiredCapabilities: [...postgres18, ...postgresDriver]` in `defineContract` with the import from `@prisma/orm-postgres/contract-builder`. Building the contract elsewhere, such as in a test, prints nothing.
 
-> State the capabilities your contract requires in requiredCapabilities in defineContract. The list is missing.
+An empty list throws:
 
-An empty list throws the same message ending `The list is empty.` A capability set, the form the removed `capabilities` option took, is refused as not a list:
+> State the capabilities your contract requires in requiredCapabilities in defineContract. The list is empty.
+
+A capability set, the form the removed `capabilities` option took, is refused as not a list:
 
 > requiredCapabilities in defineContract is not a list. State the capabilities your contract requires as a list of capability keys.
 
@@ -112,7 +120,7 @@ An entry that is not a capability key is refused by name, for example:
 
 > requiredCapabilities in defineContract lists "returning", which is not a capability key. A key is a namespace and a flag joined by a dot, as error messages print it.
 
-The config and `prisma7Schema` refuse the same four cases, naming where they take the list.
+The config and `prisma7Schema` refuse the same three cases, naming where they take the list.
 
 A contract written in the Prisma schema language lists them in the config's contract entry, in the `defineConfig` from `@prisma/orm-postgres/config`. The contract path becomes an object. Before:
 
@@ -141,9 +149,7 @@ export default definePrismaConfig({
 });
 ```
 
-A `.prisma` path without the list is a type error, and loading the config fails with:
-
-> State the capabilities your contract requires in requiredCapabilities beside the contract path './prisma/contract.prisma' in the config. The list is missing.
+A `.prisma` path without the list, or an entry `{ path }` without it, still works, and `prisma contract emit` prints the warning quoted at the start of this section.
 
 A config whose contract is a TypeScript file (`contract: './prisma/contract.ts'`) does not change. The TypeScript contract lists its capabilities in `defineContract`, so the config refuses `requiredCapabilities` beside a `.ts` path.
 
@@ -161,9 +167,7 @@ contract: prisma7Schema('prisma/schema.prisma', {
 }),
 ```
 
-Without it, loading the config fails with:
-
-> State the capabilities your contract requires in requiredCapabilities in the options of prisma7Schema('prisma/schema.prisma'). The list is missing.
+Without it, `prisma contract emit` warns, saying to add the list in the options of `prisma7Schema('prisma/schema.prisma')`.
 
 The fourth form, a config built without this `defineConfig`, is in `postgres-config-without-define-config-passes-capabilities` below.
 
@@ -216,28 +220,21 @@ contract: prismaContract('./prisma/contract.prisma', {
 }),
 ```
 
-A source given no `capabilities` writes a contract that lists none. Then emit and sign, as in steps 3 and 4 above.
+A source given no `capabilities` writes a contract that lists none, with no warning, and `postgresContractCapabilities` refuses a missing list: only the PostgreSQL `defineConfig` knows the default. Then emit and sign, as in steps 3 and 4 above.
 
 ## `postgres-emitted-contract-is-emitted-again`
 
-A `contract.json` and `contract.d.ts` emitted by an earlier release list flags that no PostgreSQL target, adapter or driver declares any more, such as `postgres.orderBy`. The client no longer accepts a contract that requires something its stack does not provide.
+A `contract.json` and `contract.d.ts` emitted by an earlier release list flags that nothing reads any more, such as `postgres.orderBy` (see `postgres-capability-flags-removed`), and do not list `sql.interactiveTransactions`.
 
-Until you emit the contract again:
+They keep working. The PostgreSQL target declares those flags as retired, so `postgres(...)`, `postgresServerless(...)` and `supabase(...)` accept such a contract with no type error and no warning, and signing ignores the flags. Such a contract was emitted before contracts listed their connection's capabilities, so `transaction()` stays available to it, as it was in that release.
 
-- `postgres(...)`, `postgresServerless(...)` and `supabase(...)` are type errors. The error names a missing property that starts with the flag, followed by `is required by the contract but not provided by this client's connection`.
-- Creating the client logs one warning with the code `CONTRACT.CAPABILITIES_NOT_PROVIDED`, through the client's `log`. For a contract without extensions it reads:
-
-  > Your contract requires `postgres.jsonAgg`, `postgres.lateral`, `postgres.limit`, `postgres.orderBy`, `postgres.returning` and `sql.enums`, which this client's connection does not provide. Remove them from your contract's required capabilities, or connect with a driver that provides them.
-
-- The contract lacks `sql.interactiveTransactions`, so `db.transaction(...)` is a type error and throws.
-
-Run `prisma contract emit` (step 3 above) to fix all three.
+Run `prisma contract emit` (step 3 above) when you add the list. The emitted contract then lists exactly what the list names, and the retired flags are gone.
 
 ## `postgres-transaction-needs-interactive-transactions`
 
 `transaction()` on the PostgreSQL client, on a serverless connection, and on a Supabase role-bound client now needs the contract to require `sql.interactiveTransactions`. The PostgreSQL driver provides it, and `postgresDriver` lists it, so a contract that spreads `postgresDriver` into its list has it.
 
-For a contract without it, the callback passed to `transaction()` is a type error that names `sql.interactiveTransactions`, and calling it throws `ORM.CAPABILITY_MISSING`:
+For a contract without it, other than one an earlier release emitted (see `postgres-emitted-contract-is-emitted-again`), the callback passed to `transaction()` is a type error that names `sql.interactiveTransactions`, and calling it throws `ORM.CAPABILITY_MISSING`:
 
 > `transaction()` is unavailable: your contract declares no dependency on `sql.interactiveTransactions`. To enable it, add `sql.interactiveTransactions` to your contract's required capabilities.
 

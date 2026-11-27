@@ -62,14 +62,16 @@ The PostgreSQL adapter declares no capabilities. The PostgreSQL driver declares 
 
 ### How a contract gets its list
 
-The author writes the list of every capability the contract requires, where the contract is written. There is no default, and nothing is added to it. The facade exports what each supported version provides, `postgres15` to `postgres18`, built from the table above, and what the driver's connection provides, `postgresDriver`, from `@prisma/orm-postgres/contract-builder` and `@prisma/orm-postgres/config`. Each is a list of capability keys as messages print them.
+The author writes the list of every capability the contract requires, where the contract is written. Nothing is added to it. The facade exports what each supported version provides, `postgres15` to `postgres18`, built from the table above, and what the driver's connection provides, `postgresDriver`, from `@prisma/orm-postgres/contract-builder` and `@prisma/orm-postgres/config`. Each is a list of capability keys as messages print them.
 
 - A TypeScript contract lists them in `defineContract`: `defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }, …)`.
-- A Prisma schema lists them in the config's contract entry: `contract: { path: './prisma/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] }`. A `.prisma` path given as a bare string is refused, and a `.ts` path with `requiredCapabilities` beside it is refused.
+- A Prisma schema lists them in the config's contract entry: `contract: { path: './prisma/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] }`. A `.ts` path with `requiredCapabilities` beside it is refused.
 - A Prisma 7 schema lists them in `prisma7Schema('prisma/schema.prisma', { requiredCapabilities: [...postgres18, ...postgresDriver] })`.
 - A config that builds its contract source itself, with `prismaContract` or `prisma7Contract`, passes `capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])` to the source.
 
-The list must be present, a list, not empty, and each entry a capability key; otherwise `CONTRACT.ARGUMENT_INVALID` says which of the four it is. To leave a capability out, filter it out or write the keys yourself:
+The list must be a list, not empty, and each entry a capability key; otherwise `CONTRACT.ARGUMENT_INVALID` says which of the three it is.
+
+Until Prisma 8.0, the list may be left out, as a contract written for a release candidate leaves it out: in `defineContract`, in the config's contract entry (or a bare `.prisma` path), and in `prisma7Schema`. Such a contract requires the newest version's list and the driver's, `[...postgres18, ...postgresDriver]`, the list `prisma orm init` writes, and its type knows those keys. `prisma contract emit` reports the warning `CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED` with the line to add and its import, and its exit code does not change. Building a TypeScript contract anywhere else prints nothing. `postgresContractCapabilities` has no default. Prisma 8.0 removes the default and requires the list. To leave a capability out, filter it out or write the keys yourself:
 
 ```typescript
 requiredCapabilities: [
@@ -82,6 +84,10 @@ A list without `postgresDriver` does not require `sql.interactiveTransactions`, 
 
 Extensions listed in `extensions` add no flags. `contract.json` stores the flags as a nested object, namespace by namespace, and never a version.
 
+### Contracts emitted by a release candidate
+
+The release candidates wrote the adapter's fixed list into every PostgreSQL contract, with flags nothing reads any more: `postgres.orderBy`, `postgres.limit`, `postgres.lateral`, `postgres.jsonAgg`, `postgres.returning`, `sql.enums`, and the extensions' `postgres.pgvector.cosine`, `postgres.postgis.geometry` and `postgres.paradedb/bm25`. The PostgreSQL target declares them as retired (`retiredCapabilities` on its runtime descriptor). The client's check ignores a retired flag, at type level and when the client is created, and signing never checks it, because no row of the table names it. Those contracts also list no connection capability, so a contract that names a retired flag may call `transaction()` without `sql.interactiveTransactions`, as every client of that release could. The flags leave the contract when it is emitted again. The extensions' flags are declared by the target, not by each extension, because those releases wrote them into the `postgres` namespace and the client's type-level check sees the target but not the extensions.
+
 ### Where each check happens
 
 | When | What is checked | On failure |
@@ -89,9 +95,9 @@ Extensions listed in `extensions` add no flags. `contract.json` stores the flags
 | Authoring a Prisma schema | A feature that needs a flag, such as `@@check` or a scalar list | A diagnostic, such as `PSL_CHECK_UNSUPPORTED_TARGET` or `PSL_SCALAR_LIST_UNSUPPORTED_TARGET` |
 | Type-checking a query | A method that needs a flag, such as `forUpdate()` or `distinctOn()` | The method is not offered |
 | Running a query | The same methods, for a contract whose type does not say | `ORM.CAPABILITY_MISSING`; a locking clause the adapter cannot render fails with `RUNTIME.AST_UNSUPPORTED` |
-| Type-checking `transaction()` | `sql.interactiveTransactions` | The callback passed to `transaction()` is a type error that names the flag |
-| Calling `transaction()` | `sql.interactiveTransactions` | `ORM.CAPABILITY_MISSING` |
-| Creating the client | Flags that are not the database's must be provided by the client's adapter and driver | A type error, and a warning with code `CONTRACT.CAPABILITIES_NOT_PROVIDED` through the client's `log`, once. `verifyMarker: false` turns the warning off |
+| Type-checking `transaction()` | `sql.interactiveTransactions`, unless a release candidate emitted the contract | The callback passed to `transaction()` is a type error that names the flag |
+| Calling `transaction()` | `sql.interactiveTransactions`, unless a release candidate emitted the contract | `ORM.CAPABILITY_MISSING` |
+| Creating the client | Flags that are not the database's, and not retired, must be provided by the client's adapter and driver | A type error, and a warning with code `CONTRACT.CAPABILITIES_NOT_PROVIDED` through the client's `log`, once. `verifyMarker: false` turns the warning off |
 | `db verify`, `db sign` | The database's flags against the server's version (`server_version_num`) | `CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED`; nothing is signed |
 | `db migrate`, `db update`, `db init` | The same, for every contract space, before anything runs | `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED`; nothing is changed |
 
