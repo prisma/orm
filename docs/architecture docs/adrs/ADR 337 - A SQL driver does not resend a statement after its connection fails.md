@@ -1,9 +1,9 @@
 # ADR 337 — A SQL driver does not resend a statement after its connection fails
 
-**Status:** Accepted
+**Status:** Proposed
 **Date:** 2026-11-27
 **Domain:** Adapters / Targets
-**Related:** [ADR 159 — Driver Terminology and Lifecycle](ADR%20159%20-%20Driver%20Terminology%20and%20Lifecycle.md) (how a driver ensures a connection is its own choice), [ADR 210 — Prepared Statements](ADR%20210%20-%20Prepared%20Statements%20-%20Author%20Surface%20and%20Driver%20SPI.md) (the one statement a driver sends again: a re-prepare after the server lost a prepared statement), [Adapters & Targets](../subsystems/5.%20Adapters%20&%20Targets.md)
+**Related:** [ADR 159 — Driver Terminology and Lifecycle](ADR%20159%20-%20Driver%20Terminology%20and%20Lifecycle.md) (how a driver ensures a connection is its own choice), [ADR 210 — Prepared Statements](ADR%20210%20-%20Prepared%20Statements%20-%20Author%20Surface%20and%20Driver%20SPI.md) (the one statement a driver sends again: a re-prepare after the server lost a prepared statement), [ADR 003 — One Query One Statement](ADR%20003%20-%20One%20Query%20One%20Statement.md), [Project intent](../../design/00-purpose/project-intent.md) ("No hidden extra round-trips, fallbacks or guesses"), [Adapters & Targets](../subsystems/5.%20Adapters%20&%20Targets.md)
 
 ## At a glance
 
@@ -45,7 +45,7 @@ Here the work is a read, which the application knows is safe to run twice. For a
 
 What to use instead:
 
-- **The driver checks an idle connection before it uses it.** A pooled driver confirms that a connection which sat idle is alive before it sends a caller's statement on it. The Postgres driver does this itself. The MySQL and MariaDB drivers do it through their connector, which checks a connection idle for over 500 ms by default.
+- **A pooled driver checks an idle connection before it uses it.** It confirms that a pooled connection which sat idle is alive before it sends a caller's statement on it. The pooled Postgres driver does this itself, on a connection idle for a second or more. The MySQL and MariaDB drivers do it through their connector, which checks a connection idle for over 500 ms by default.
 - **An application that wants a retry retries its own unit of work.** Only the application knows whether a statement that may have run is safe to run again.
 
 The record is scoped to SQL drivers. The MongoDB driver resends reads and writes by its own protocol (`retryReads`, `retryWrites`), which the MongoDB server makes safe, and this record does not change that.
@@ -58,13 +58,13 @@ A check before use removes most of the failures that a resend would hide, withou
 
 What the check does not cover still fails with `SqlConnectionError`: a connection that dies between the check and the statement, or while a statement runs.
 
-## Statements the driver sends that the user did not write
+## How this fits the project intent
 
-The project intent promises no hidden extra round trips. A driver may still send a statement the user did not write when it changes no data and no session state the caller can see. Its README lists each one. For the Postgres driver today:
+The [project intent](../../design/00-purpose/project-intent.md) promises "no hidden extra round-trips, fallbacks or guesses", and [ADR 003](ADR%20003%20-%20One%20Query%20One%20Statement.md) promises one statement per query. The check is a trade-off against the first promise, and this record accepts it on these terms:
 
-- the session-settings statement, which sets the settings the target declares on a connection that does not start with them;
-- `BEGIN` and `COMMIT` around a cursor stream outside a transaction, which keep the cursor's portal alive;
-- the liveness check: an empty statement on a pooled connection that sat idle, or the session-settings statement when it is due.
+- **It is one extra round trip, documented, on a connection idle for a second or more.** A connection used within the last second is used without one, so a busy application pays nothing. The Postgres driver's README describes it and lists every statement the driver sends that the user did not write.
+- **It sends no user statement twice.** The caller's statement is sent once, as ADR 003 says, whatever the check finds.
+- **Taking another connection happens before any user statement is sent.** The caller asked for its statement to run on a live connection, and that is what it gets. The driver does not fall back to a second attempt after the caller's statement failed; that is the resend this record declines.
 
 ## Prior art
 
@@ -84,7 +84,9 @@ The project intent promises no hidden extra round trips. A driver may still send
 - A request no longer fails, or waits with no limit, because the pool handed the driver a connection that died while idle.
 - A busy application pays nothing: a connection used within the last second is used without a check.
 - A connection that fails between the check and the statement still fails that statement. The application sees it as `SqlConnectionError` and decides what to do.
-- Each statement the driver sends on its own account is listed in its README, so the extra round trips are documented and bounded.
+- The Postgres driver's README lists each statement the driver sends on its own account, so the extra round trips are documented and bounded.
+- A check can time out on a healthy connection, for example behind a transaction-mode pooler that is out of server connections, or when the process's event loop is blocked for longer than the time limit. The driver then evicts that connection and the older idle ones, which costs reconnects and up to the time limit in latency, never a wrong result.
+- Reopen this decision if plans gain a way to mark a statement as safe to repeat, which would make the Rails approach below possible without a promise from each author, or if the check before use proves too costly or too weak on a platform we support.
 
 ## Alternatives considered
 
