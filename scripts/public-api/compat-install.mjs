@@ -1,5 +1,5 @@
-// Installs the last release of each package beside the current build, in a folder with a
-// workspace of its own so that the repository's lockfile never changes. The release's third-party
+// Installs each package at the version the last release published it at, beside the current
+// build, in a folder with a workspace of its own so that the repository's lockfile never changes. The release's third-party
 // dependencies get the versions the current build resolves, which come from the repository's
 // lockfile: with different versions on the two sides, every type from such a dependency would
 // differ, and each would show up as a break.
@@ -224,20 +224,12 @@ export function makeTwin({ releaseDir, twinRoot, ownNames, copies = new Map() })
 
 // Writes the install folder's manifest and workspace, installs, stamps every copy of our packages
 // with a version of its own, and links each current package beside its release.
-export function installRelease({
-  dir,
-  packages,
-  version,
-  overrides,
-  peers,
-  ownNames,
-  settings = {},
-}) {
+export function installRelease({ dir, packages, overrides, peers, ownNames, settings = {} }) {
   mkdirSync(dir, { recursive: true });
   const dependencies = {
     ...peers,
     ...Object.fromEntries(
-      packages.map(({ name }) => [aliasOf('release', name), `npm:${name}@${version}`]),
+      packages.map(({ name, version }) => [aliasOf('release', name), `npm:${name}@${version}`]),
     ),
   };
   writeFileSync(
