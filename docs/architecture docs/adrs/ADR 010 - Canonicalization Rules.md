@@ -1,115 +1,11 @@
 # ADR 010 — Canonicalization Rules for contract.json
 
-**Revised:** 2026-07-23 — hashes are represented as bare lowercase hex; the former `sha256:` algorithm prefix was dropped before the RC format freeze. The prefix carried no information — the algorithm never varies per hash — and nothing in the hash names the rules that produced it, the same no-in-band-version reasoning [ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md) records. Examples below use the bare form.
+**Status:** Accepted
+**Domain:** Contract & Schema
 
-Hashes cover only `targetFamily`, `target` and their own section, and the rules that compute them do not change within a major version: see [ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md).
+## At a glance
 
-## Context
-
-- `contract.json` is the canonical artifact consumed by the runtime, planner, preflight, and PPg
-- Hashing, caching, and CI diffs require byte-identical output across platforms and authoring modes
-- Non-determinism from key order, whitespace, default materialization, and adapter metadata has previously caused noisy diffs and false cache misses
-- We need explicit, testable rules for canonicalization
-
-## Decision
-
-- Define a strict canonical form for a contract's sections and for `contract.json`
-- Compute each hash when the contract is built, from the parsed sections in canonical form, never from the bytes of a file
-- Compute `storageHash` and `profileHash` for every contract, and `executionHash` only when the contract carries execution defaults
-- Treat any divergence from these rules as an emitter bug
-- State that TS-first and PSL-first must canonicalize to the identical JSON and `storageHash` for equivalent intent
-- The canonicalization rules that hashes use do not change within a major version (ADR 332). A change to them ships only in a major release, with a way to move existing files and databases.
-
-## Canonical JSON profile
-
-This project adopts a pragmatic subset inspired by RFC 8785 with additional domain rules.
-
-### Encoding
-
-A hash is computed from the parsed sections, never from the bytes of a file. Its input is `targetFamily`, `target` and the section, with the section in the family's normal form, every key sorted, printed by `JSON.stringify` with a two-space indent. The indentation is part of the rule: the same JSON printed without it has a different hash.
-
-Prisma writes a contract in two forms, and neither is a hash input:
-
-- **The emitted `contract.json`** is printed the same way, with its top level in the presentation order below and every other key sorted. UTF-8 without BOM, `\n` newlines, no trailing newline.
-- **A snapshot's copy**, under `migrations/snapshots/<storage hash>/`, is compact JSON with every key sorted and a trailing newline.
-
-A check of a stored contract parses the file and hashes its sections again.
-
-### Object key ordering
-
-- Keys sorted lexicographically by UTF-16 code unit order
-- Sort applied recursively to all objects
-- For top-level sections we enforce a small, explicit *presentation order* before lexicographic sort to stabilize human diffs.
-  - This does not change semantics (the JSON meaning is the same either way).
-  - It only makes reviews easier by keeping “header” fields (identity + hashes) grouped, followed by the large semantic sections, with `meta` last.
-  - Within each section (and for any non-top-level object), standard lexicographic sort applies, except where domain-specific ordering rules are defined below.
-
-**Source of truth:** the exact top-level ordering is defined by `TOP_LEVEL_ORDER` in `packages/1-framework/0-foundation/contract/src/canonicalization.ts`. Any new top-level section that becomes part of the canonical artifact must be added there (and covered by tests) to keep diffs stable.
-
-### Arrays
-
-- Arrays are preserved in the order that is semantically meaningful
-- Every array keeps the order it is given in, except the lists named below
-- Column lists in composite keys retain declared order
-- Lists whose order means nothing to the database are ordered by the family, in its normal form: the SQL family orders a table's checks, foreign keys, indexes and unique constraints by name, and an entry without a name by its content; the MongoDB family orders a collection's indexes by name, and indexes with the same name by their content. Reordering them in the contract source changes no hash
-- Model and table registries are represented as objects, not arrays, to avoid order-dependence
-
-### Optional and default fields
-
-The framework's canonicalizer leaves out nothing. It sorts keys and encodes what it is given; it does not know what any field means, so it never decides that a `false`, an empty array or an empty object is a default.
-
-Each family owns the normal form of its own content, and gives it to the framework through one function (`normalizeStorage`) that the framework applies both when it writes `storage` and when it hashes it. A value is therefore in the hash input exactly when it is in the written section, except a namespace's `kind`, which is written and which the storage hash leaves out (ADR 332).
-
-- A family leaves out a field only where the family itself defines the absent field and the value to mean the same, and it names each such field. For example, the SQL family leaves out a column's `many: false` and a foreign key's `onDelete: "noAction"`; the MongoDB family leaves out an index's `unique: false`.
-- Nothing is left out because of the shape of its value. Data a family does not own is kept exactly as given: a type's parameters, an index's options, a MongoDB partial filter expression, a generator's parameters, the members of a value set, and every field of an entry an extension pack defines.
-- `nullable` is always written — see ADR 172.
-- A capability flag that is off is left out by the code that builds the capability list.
-- A family also leaves its own defaults out of the `domain` section when it writes it, for example a field's `many: false`. `domain` is not hashed.
-- Only a family names defaults. Every field of an entry that a target or an extension pack defines is hashed exactly as given, so its author gives each field one form: the field is required, or its constructor stores the default in one way only. Otherwise the same meaning has two storage hashes, and after `8.0.0` that cannot be corrected within the major.
-
-An earlier rule had the framework drop every `false`, `[]` and `{}` unless a path was on an exception list. It dropped values that were not defaults: `{ "fastupdate": false }` in an index's options was written as `{}`, a MongoDB partial filter `{ "isAdmin": false }` was written as a filter that matches every document, and two types whose parameters differed only by such a value had one storage hash.
-
-### Identifiers and names
-
-- Persist identifiers as authored or deterministically generated strings
-- Do not case-normalize author-provided names beyond validation
-- Deterministic names for PK/UK/FK/IDX per ADR 009 must appear in canonical form
-- Engine-specific quoting is not embedded in the contract
-
-### Target extensions
-
-- Capability requirement keys live under `capabilities.<key>`
-- Use shared `capabilities.sql.*` keys for family-wide SQL features, and use target brand keys only for target-specific capabilities
-- Keys within extensions follow the same lexicographic ordering
-
-### Meta (tooling-only; excluded from hashes)
-
-`meta` exists to carry optional, tooling-facing information. It does not change contract meaning and **must not** influence any hash.
-
-- `meta` is excluded from `storageHash`, `executionHash`, and `profileHash` inputs.
-- `meta` key ordering is lexicographic and appears after core sections (see top-level presentation order above).
-
-### Hashing
-
-- `storageHash` is computed over `targetFamily`, `target` and `storage` in the family's normal form, with keys sorted
-- `executionHash` is emitted only when execution-plane defaults are present in the emitted contract artifact
-- `profileHash` is computed over `targetFamily`, `target` and `capabilities`, with keys sorted
-- Hash algorithm: SHA-256, represented as bare lowercase `<hex>` (no algorithm prefix)
-
-## Emitter responsibilities
-
-- The storage hash is computed when the contract is built, by the family's authoring code. The emitter writes it, and refuses to write a `storage` section that does not hash to it
-- Ensure TS-first and PSL-first projects produce identical canonical JSON and `storageHash` for the same logical schema
-
-## Consumer responsibilities
-
-- Treat `contract.json` as immutable content-addressed data
-- Do not edit a stored contract by hand
-- Use `storageHash` for applicability checks and `profileHash` for drift checks
-
-## Example
-
-The input of a storage hash, as it is hashed:
+A contract's storage hash is the SHA-256 of exactly this text: the target, the family and the `storage` section, with every key sorted, printed with a two-space indent.
 
 ```json
 {
@@ -128,43 +24,92 @@ The input of a storage hash, as it is hashed:
 }
 ```
 
-## Alternatives considered
+The framework produced that text by sorting keys and nothing else. What is inside `storage` was decided by the SQL family: it left out the fields it defines as defaults and ordered the lists whose order means nothing.
 
-- **RFC 8785 strict conformance without domain rules**: Insufficient for our defaults and naming requirements
-- **Compact JSON with no whitespace as the hash input**: what an earlier draft of this record described. The emitted file is indented so that it can be read and diffed, and the hash input is printed the same way
-- **Protobuf or CBOR canonical formats**: Tighter encoding but worse DX and harder ecosystem interoperability
+## Decision
+
+Canonicalization is split between two owners.
+
+- **The framework sorts and encodes.** It does not know what any field means, so it leaves out no value and reorders no list.
+- **Each family owns the normal form of its own content.** A family gives the framework one function, `normalizeStorage`, which leaves out the fields that family defines as defaults and orders the lists whose order means nothing to the database.
+
+The framework applies the family's function to `storage` both when it writes a contract and when it computes or checks a storage hash. A value is therefore in the hash input exactly when it is in the written `storage`. The one exception is a namespace's `kind`, which is written and which the storage hash leaves out ([ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md)).
+
+Which sections each hash covers, and the rule that none of this changes within a major version, are in ADR 332. This record says how a section becomes the text that is hashed and the file that is written.
+
+## Why
+
+Prisma records the hashes in a project's files and in its databases, and compares them to decide whether a database matches a contract and whether two migrations connect. Two properties follow.
+
+- **The same contract must always give the same text.** A contract written in TypeScript and the same contract written in the Prisma schema language must hash the same, on any machine. That needs a fixed key order, a fixed encoding and one form for every default.
+- **Two contracts that require different databases must never give the same text,** and a written contract must hold every value its author wrote. So a value may be left out only by the owner who knows that the absent field and the value mean the same.
+
+A value's shape does not say whether it is a default. `false` on a column's `many` means "not a list", which is also what an absent `many` means. `false` inside a PostgreSQL index's options, as in `{ "fastupdate": false }`, is a setting the user chose. Only the family knows the first, and nobody but the user knows the second. That is why the framework leaves out nothing and each family names what it leaves out.
+
+## The rules
+
+### What the framework does
+
+- **Keys.** Every object's keys are sorted by UTF-16 code unit, at every depth.
+- **Arrays.** Every array keeps the order it is given in.
+- **Encoding.** The result is printed by `JSON.stringify` with a two-space indent. Numbers, booleans, `null` and string escapes are as `JSON.stringify` prints them. The indent is part of the rule: the same JSON printed without it has a different hash.
+- **Hash.** SHA-256 of that text as UTF-8, written as lowercase hexadecimal with no prefix. Nothing in a hash names the rules that produced it; [ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md) gives the same reasoning for wire names.
+
+A hash is computed from parsed sections, never from the bytes of a file. A check of a stored contract parses the file and hashes its sections again.
+
+### What a family does
+
+A family's normal form does two things to `storage`.
+
+**It leaves out the family's own defaults.** A family leaves out a field only where the family itself defines the absent field and the value to mean the same, and it names each such field. Nothing is left out because of the shape of its value.
+
+| Family | Left out |
+| --- | --- |
+| SQL | a column's or field's `many: false`; a table's empty `checks`; an index's empty `columns` or empty `options`; a foreign key's `index` flag, and its `onDelete` or `onUpdate` of `noAction`; an empty `typeParams`; an empty map of entries of a kind other than `table` |
+| MongoDB | a collection's empty `indexes`; an index's `unique` or `sparse` of `false`; a collation's `caseLevel` or `numericOrdering` of `false`; empty `required` and `properties` in the validator derived from the models; a field's `many: false`; an empty map of entries of a kind other than `collection` |
+
+`nullable` is always written ([ADR 172](ADR%20172%20-%20Contract%20domain-storage%20separation.md)). A MongoDB collation's `backwards` and `normalization` are always kept, because the server's default for them depends on the locale.
+
+**It orders the lists whose order means nothing to the database.** The SQL family orders a table's checks, foreign keys, indexes and unique constraints by name, and an entry without a name by its content. The MongoDB family orders a collection's indexes by name, and indexes with the same name by their content. Reordering them in the contract source changes no hash. Lists whose order has meaning keep it: the columns of a composite key, the keys of a MongoDB index, the members of a value set.
+
+**Everything else is kept exactly as given.** That includes the data a family carries without owning: a type's parameters, an index's options, a MongoDB partial filter expression, a generator's parameters, the members of a value set, and every field of an entry that a target or an extension pack defines.
+
+A family also leaves its own defaults out of the `domain` section when it writes it, for example a field's `many: false`. `domain` is not hashed. A capability flag that is off is left out by the code that builds the capability list, so `capabilities` holds only flags that are on.
+
+### What an author of an entry kind does
+
+Only a family names defaults. Every field of an entry that a target or an extension pack defines is hashed exactly as given. So the author gives each field one form: the field is required, or its constructor stores the default in one way only. Otherwise a value written out and the same value left out are one meaning with two storage hashes, and that cannot be corrected within a major version.
+
+### The written files
+
+Prisma writes a contract in two forms. Neither is a hash input.
+
+- **The emitted `contract.json`** is printed with a two-space indent and no trailing newline. Its top-level keys are in a fixed presentation order, which keeps the identity and the hashes at the top and `meta` last; every other key is sorted. The order is `TOP_LEVEL_ORDER` in `packages/1-framework/0-foundation/contract/src/canonicalization.ts`, and a new top-level section is added there.
+- **A snapshot's copy**, under `migrations/snapshots/<storage hash>/`, is compact JSON with every key sorted and a trailing newline.
+
+`meta` is for tooling. It does not change what a contract means and is in no hash.
+
+### Who computes and who checks
+
+- The family's authoring code computes the storage hash when it builds the contract.
+- The emitter writes it, and refuses to write a `storage` section that does not hash to it.
+- A reader of a snapshot, and the check of the contract an extension package ships, hash the stored `storage` again and refuse a mismatch.
+
+Each of them is given the family's `normalizeStorage`; there is no way to compute a storage hash without it.
 
 ## Consequences
 
-### Positive
+- A contract written in TypeScript and the same contract written in the Prisma schema language give the same file and the same hashes.
+- A family that forgets to name a default writes the default into every contract. That is visible in the file and in review, and it is harmless to the hash as long as the family always writes it. The opposite mistake, leaving out a value that is not a default, is the one that makes two contracts share a hash, and it now needs a rule someone wrote on purpose.
+- An author of a type, an extension pack or a target can rely on Prisma to keep `false`, `[]` and `{}` inside the data they own.
+- The rules, and each family's output for a given contract, do not change within a major version (ADR 332). A family may reorganise its normal form's code, but it must give the same output. A test in each family holds saved contracts, each with every named default once written out and once left out, to one hash.
 
-- Identical artifacts across authoring modes
-- Stable `storageHash` and `profileHash` for CI and PPg
-- Cleaner diffs and lower review noise
-- Deterministic planner inputs and fewer spurious changes
+## Alternatives considered
 
-### Trade-offs
-
-- Slight complexity in emitter and tests
-- Consumers must not reformat artifacts
-
-## Testing and compliance
-
-- Golden tests for representative schemas, including edge cases of names, defaults, and extensions
-- Round-trip parse → canonicalize → hash → parse checks
-
-## Backwards compatibility
-
-- The rules do not change within a major version (ADR 332). The one change made before `8.0.0` was handled by the upgrade instructions of that release.
-
-## Open questions
-
-- Whether to expose a `--pretty` view for humans without altering the on-disk artifact
-- Policy for large numeric types that exceed IEEE-754 safe integers in JS tooling
-- Canonicalization of expression-based indexes when added to the model
-
-## Decision record
-
-- Adopt strict canonicalization rules for a contract's sections and compute every hash from them
-- The emitter refuses to write a storage section that does not hash to the contract's storage hash; consumers treat artifacts as immutable data
-- Domain-specific rules align with our hashing split and deterministic naming to keep artifacts stable and useful
+- **Have the framework leave out every `false`, empty array and empty object, and let each family list the paths where they are kept.** Rejected. The framework cannot know which of those values are defaults, so every value that was not one had to be found and listed. Where the list was incomplete, the value was lost from the file and from the hash: an index's options `{ "fastupdate": false }` were written as `{}`, a MongoDB partial filter `{ "isAdmin": false }` was written as a filter that matches every document, and two types whose parameters differed only by such a value had one storage hash.
+- **Require that `false` and empty always mean absent inside data a family does not own.** Rejected. It puts a convention nothing checks on authors outside this repository, and a violation gives two different contracts one hash.
+- **Hand the framework content that each family has already normalised, with no function.** Rejected. A storage hash is also computed where no written file exists and checked against files read back, and every such place would have to remember to normalise first. With one required function, writing and hashing cannot differ.
+- **Compact JSON, with no whitespace, as the hash input.** Rejected. The emitted file is indented so that it can be read and diffed, and the hash input is printed the same way so that there is one printing rule.
+- **Strict RFC 8785 (JSON Canonicalization Scheme).** Rejected. It fixes the encoding but says nothing about defaults or list order, which are where two forms of one contract come from.
+- **A binary canonical format such as Protobuf or CBOR.** Rejected. A contract is read and reviewed by people and by tools that expect JSON.
+- **Leave the order of foreign keys and MongoDB indexes in the hash.** Rejected. Reordering two relations in a model would change the storage hash and ask for a migration that does nothing.
