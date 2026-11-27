@@ -32,7 +32,7 @@ From release 8.0, list ranges:
 
 For your own package's version, we recommend the major and minor of the first Prisma release it works with, and your own patch number. The [extension-upgrade skill](../../../skills/prisma-8/references/upgrade-extension.md#from-release-80-number-your-package-and-declare-ranges) has the details.
 
-`prisma-8-check-pins` does not check the `@prisma/orm-*` entries. The one-line check in step 4 of the [extension-upgrade skill's per-step flow](../../../skills/prisma-8/references/upgrade-extension.md#per-step-flow) does.
+`prisma-8-check-pins` does not check the `@prisma/orm-*` entries. The one-line check in step 3 of the [extension-upgrade skill's per-step flow](../../../skills/prisma-8/references/upgrade-extension.md#per-step-flow) does.
 
 Run from the extension's repository root:
 
