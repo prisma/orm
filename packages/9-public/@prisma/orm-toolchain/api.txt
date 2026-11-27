@@ -270,6 +270,7 @@
 ./cli/control-api/testing: function createFixtureControlClient(overrides?: Partial<ControlClientFixtures>): FixtureControlClient
 ./cli/control-api/testing: function defaultControlClientFixtures(): ControlClientFixtures
 ./cli/control-api/testing: interface ControlClientFixtures
+./cli/control-api/testing: interface ControlClientFixtures, readonly required property bringPrismaTablesUpToDate: InstalledContractSpaceApplied | undefined
 ./cli/control-api/testing: interface ControlClientFixtures, readonly required property dbInit: DbInitResult
 ./cli/control-api/testing: interface ControlClientFixtures, readonly required property dbSign: ExecuteDbSignResult
 ./cli/control-api/testing: interface ControlClientFixtures, readonly required property dbUpdate: DbUpdateResult
@@ -419,6 +420,7 @@
 ./cli/control-api: interface ContractSpaceSeedPhaseResult
 ./cli/control-api: interface ContractSpaceSeedPhaseResult, readonly required property seeded: readonly ContractSpaceSeedPhaseRecord[]
 ./cli/control-api: interface ControlClient
+./cli/control-api: interface ControlClient, required method bringPrismaTablesUpToDate(): Promise<InstalledContractSpaceApplied | undefined>
 ./cli/control-api: interface ControlClient, required method close(): Promise<void>
 ./cli/control-api: interface ControlClient, required method connect(connection?: unknown, options?: ControlDriverConnectOptions): Promise<void>
 ./cli/control-api: interface ControlClient, required method dbInit(options: DbInitOptions): Promise<DbInitResult>
@@ -569,6 +571,7 @@
 ./cli/control-api: interface ExecuteDbUpdateOptions, readonly required property targetId: TTargetId
 ./cli/control-api: interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId extends string> extends PlannerWarningsListener
 ./cli/control-api: interface ExecuteDbVerifyOptions, readonly optional property onProgress?: OnControlProgress
+./cli/control-api: interface ExecuteDbVerifyOptions, readonly optional property prismaTables?: ContractSpace
 ./cli/control-api: interface ExecuteDbVerifyOptions, readonly optional property verifySnapshotContent?: SnapshotContentVerifier
 ./cli/control-api: interface ExecuteDbVerifyOptions, readonly required property contract: Contract
 ./cli/control-api: interface ExecuteDbVerifyOptions, readonly required property driver: ControlDriverInstance<TFamilyId, TTargetId>
