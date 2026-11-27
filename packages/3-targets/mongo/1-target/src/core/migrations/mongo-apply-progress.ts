@@ -14,11 +14,19 @@ export interface CopyCounts {
 /**
  * How far an apply got. `finished` operations ran to their end; when `inFlight` is true, the next
  * one threw while it ran, so its commands may or may not have taken effect. `copyCounts` holds
- * the counts read before the next operation, when it is a copy they are read for.
+ * the counts read before the next operation, when it is a copy they are read for; they are read
+ * before it starts, so a failed read leaves it not started.
  */
 export interface ApplyProgress {
   operations: readonly AnyMongoMigrationOperation[];
   finished: number;
   inFlight: boolean;
   copyCounts: CopyCounts | undefined;
+}
+
+/** The operations that finished, and the one that was running when the apply stopped. */
+export function operationsThatMayHaveRun(
+  progress: Readonly<ApplyProgress>,
+): readonly AnyMongoMigrationOperation[] {
+  return progress.operations.slice(0, progress.finished + (progress.inFlight ? 1 : 0));
 }

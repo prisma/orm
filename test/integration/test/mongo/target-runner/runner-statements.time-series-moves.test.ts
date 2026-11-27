@@ -39,6 +39,8 @@ const copy = dataTransform('move Measurement documents to measurements', {
     ]),
 });
 const deletion = deleteDocuments({ collection: 'events', filter });
+const STOPPED =
+  "Writes to collections measurements and events must still be stopped: that delete also removes any document written to collection events since the copy, which the copy did not take. If you cannot be sure that nothing wrote to either collection since the apply stopped, keep collection events as it is and compare the two collections: each document of collection events that the copy's $match filter selects that collection measurements also holds, with the same _id and the same value in each field the copy does not change, was copied. Delete only those from collection events yourself, then run the command again. Otherwise";
 const failing = dataTransform('an operation that fails', {
   run: () => rawAggregate('events', [{ $nonsenseStage: 1 }]),
 });
@@ -156,7 +158,7 @@ describe('MongoMigrationPlanner and runner - a move into a new time-series colle
         ...(await state()),
       }).toEqual({
         advice: expect.stringContaining(
-          `Operation data_transform.move Measurement documents to measurements copied documents into collection measurements with an $out stage, and operation ${deletion.id}, which deletes them from collection events, has not finished. Before you run the command again, finish that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts`,
+          `Operation data_transform.move Measurement documents to measurements copied documents into collection measurements with an $out stage, and operation ${deletion.id}, which deletes them from collection events, has not finished. ${STOPPED}, before you run the command again, finish that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts`,
         ),
         second: 'applied',
         ...moved,
@@ -195,8 +197,7 @@ describe('MongoMigrationPlanner and runner - a move into a time-series collectio
     }
   }
 
-  const counts =
-    'Before the copy, collection measurements held 1 document, and the copy was to add 2 documents of collection events. To tell whether it finished, count the documents of collection measurements, for example with db.getCollection("measurements").countDocuments() in mongosh. If it holds 3, the copy finished: before you run the command again, run that delete yourself';
+  const counts = `Before the copy, collection measurements held 1 document, and the copy was to add 2 documents of collection events. To tell whether it finished, count the documents of collection measurements, for example with db.getCollection("measurements").countDocuments() in mongosh. If it holds 3, the copy finished. ${STOPPED}, before you run the command again, run that delete yourself`;
 
   it(
     'says to delete nothing when the copy stopped before its $out committed, though the target already holds an _id of the source',
@@ -223,6 +224,42 @@ describe('MongoMigrationPlanner and runner - a move into a time-series collectio
         ]),
         events: [{ name: 'launch' }],
       });
+      expect(await live.documents('measurements')).toHaveLength(3);
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'keeps a document written to the source after the stop, when the collections are compared as the failure says',
+    async () => {
+      const { advice, count, rerun } = await interruptedCopy('afterCommit');
+      await live.db().collection('events').insertOne({ at, value: 3 });
+      const events = live.db().collection('events');
+      for (const document of await events.find(filter).toArray()) {
+        const copied = await live.db().collection('measurements').findOne(document);
+        if (copied !== null) await events.deleteOne({ _id: document._id });
+      }
+      const second = await live.runOperations(rerun, from, to, { policy });
+
+      expect({
+        advice,
+        count,
+        second: second.ok ? 'applied' : second.failure,
+        measurements: await live.documents('measurements'),
+        events: await live.documents('events'),
+      }).toEqual({
+        advice: expect.stringContaining(`If it holds 3, the copy finished. ${STOPPED}`),
+        count: 3,
+        second: 'applied',
+        measurements: expect.arrayContaining([
+          { at, value: 0 },
+          { at, value: 1 },
+          { at, value: 2 },
+          { at, value: 3 },
+        ]),
+        events: [{ name: 'launch' }],
+      });
+      expect(await live.documents('measurements')).toHaveLength(4);
     },
     timeouts.spinUpMongoMemoryServer,
   );
@@ -341,7 +378,7 @@ describe('MongoMigrationPlanner and runner - a move of two groups of models into
         further: await live.furtherPlanLabels(groupsTo),
       }).toEqual({
         advice: expect.stringContaining(
-          `Operation ${groupsCopy.id} copied documents into collection measurements with an $out stage, and operations ${measurementDeletion.id} and ${sampleDeletion.id}, which delete them from collection events, have not finished. Before you run the command again, finish those deletes yourself`,
+          `Operation ${groupsCopy.id} copied documents into collection measurements with an $out stage, and operations ${measurementDeletion.id} and ${sampleDeletion.id}, which delete them from collection events, have not finished. Writes to collections measurements and events must still be stopped: those deletes also remove any document written to collection events since the copy, which the copy did not take. If you cannot be sure that nothing wrote to either collection since the apply stopped, keep collection events as it is and compare the two collections: each document of collection events that one of the copy's $match filters selects that collection measurements also holds, with the same _id and the same value in each field the copy does not change, was copied. Delete only those from collection events yourself, then run the command again. Otherwise, before you run the command again, finish those deletes yourself`,
         ),
         second: 'applied',
         measurements: [
@@ -422,7 +459,7 @@ describe('MongoMigrationPlanner and runner - the copy of the time-series rename 
         ...(await state()),
       }).toEqual({
         advice: expect.stringContaining(
-          `Operation data_transform.copy readings to measurements copied the documents of collection readings into collection measurements with an $out stage, and operation ${drop.id}, which drops collection readings, has not run. Before you run the command again, delete the documents of collection readings or drop it yourself`,
+          `Operation data_transform.copy readings to measurements copied the documents of collection readings into collection measurements with an $out stage, and operation ${drop.id}, which drops collection readings, has not run. Writes to collections measurements and readings must still be stopped: deleting the documents of collection readings or dropping it also removes any document written to collection readings since the copy, which the copy did not take. If you cannot be sure that nothing wrote to either collection since the apply stopped, keep collection readings as it is and compare the two collections: each document of collection readings that collection measurements also holds, with the same _id and the same value in each field the copy does not change, was copied. Delete only those from collection readings yourself, then run the command again. Otherwise, before you run the command again, delete the documents of collection readings or drop it yourself`,
         ),
         second: 'applied',
         readings: [],

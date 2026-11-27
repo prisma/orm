@@ -263,7 +263,7 @@ function applyText(count: number): string {
 
 /** What the user must hold while a hand-written move runs, since its copy and delete are two operations with no transaction, and `$merge` matches by `_id`. */
 const MOVE_LIMITS =
-  'Stop writes to each collection the documents move out of until the apply ends: the delete also removes a document of those models written there after the copy, and that document was not copied.';
+  'Stop writes to each collection the documents move out of until the apply succeeds, re-runs included: the delete also removes a document of those models written there after the copy, and that document was not copied.';
 
 const MERGE_LIMITS =
   ' $merge matches documents by _id, so a moved document whose _id a document of the collection it moves into already holds is merged into that document. Check first that no _id is in both collections, and stop writes to each collection the documents move into from before that check until the apply finishes, re-runs included: a document written there after the check could hold the _id of a document that moves.';

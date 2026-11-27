@@ -96,7 +96,11 @@ import {
   unrewritableFieldNameReason,
   unrewritableKeyReason,
 } from './migration-factories';
-import type { ApplyProgress, CopyCounts } from './mongo-apply-progress';
+import {
+  type ApplyProgress,
+  type CopyCounts,
+  operationsThatMayHaveRun,
+} from './mongo-apply-progress';
 import { deserializeMongoOps } from './mongo-ops-serializer';
 import { outCopyRerunText, type UnionCopy, unionCopyOf } from './mongo-out-copy-reruns';
 import { byHandRenamePlacement } from './mongo-plan-text';
@@ -257,13 +261,13 @@ function withStructuredAdvice(error: StructuredError, advice: string): Structure
 function thrownFailure(
   operation: AnyMongoMigrationOperation,
   error: unknown,
-  finished: boolean,
+  stoppedOperationFinished: boolean,
   before: Ran,
 ): MongoMigrationRunnerFailure {
   const reason = error instanceof Error ? error.message : String(error);
   return migrationRunnerFailure(
     'MIGRATION.EXECUTION_FAILED',
-    finished
+    stoppedOperationFinished
       ? `The apply stopped after operation ${operation.id} finished: ${reason}`
       : `Operation ${operation.id} failed: ${reason}`,
     {
@@ -471,7 +475,7 @@ function uncheckedCreateTargetExistsRefusal(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: collection ${name} already exists, and this migration's create has no after-check that lets a run skip it`,
     {
-      why: `This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection ${name}. If no other database has applied this migration, run its migration.ts with node, which writes its ops.json again with the after-check and changes the migration's hash, then run the command again${before.skips ? `: ${skipped}.` : ` with postchecks and idempotency checks on, since only they skip it: ${skipped}.`} ${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} Otherwise leave the migration as it is, and apply the operations of this migration that did not run by hand.`,
+      why: `This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection ${name}. If no other database has applied this migration, run its migration.ts with node, which writes its ops.json again with the after-check and changes the migration's hash, then run the command again${before.skips ? `: ${skipped}.` : ` with postchecks and idempotency checks on, since only they skip it: ${skipped}.`} ${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} Otherwise leave the migration as it is, apply the operations of this migration that did not run by hand, then run db sign with the name of this migration's directory: it checks that the database matches the contract this migration leads to and records the database there, so the next run starts after this migration. db sign refuses a database whose change policy does not include reconcile.`,
       meta: { operationId: op.id },
     },
   );
@@ -1722,7 +1726,7 @@ export class MongoMigrationRunner {
       if (isStructuredError(error)) throw withStructuredAdvice(error, text);
       result = notOk(
         thrownFailure(stopped, error, !inFlight, {
-          operations: operations.slice(0, finished + (inFlight ? 1 : 0)),
+          operations: operationsThatMayHaveRun(progress),
           skips: runSkips(options.executionChecks),
         }),
       );
@@ -1776,15 +1780,10 @@ export class MongoMigrationRunner {
     let operationsExecuted = 0;
 
     for (const [operationIndex, operation] of operations.entries()) {
-      progress.copyCounts = undefined;
+      progress.copyCounts = await this.copyCountsBefore(operation);
       options.callbacks?.onOperationStart?.(operation);
       try {
         if (isMongoDmlOperation(operation)) {
-          const copy = unionCopyOf(operation);
-          const [plan] = operation.run;
-          if (copy !== undefined && plan !== undefined) {
-            progress.copyCounts = await this.copyCounts(plan, copy);
-          }
           const result = await this.executeDmlOperation(
             operation,
             adapter,
@@ -2505,6 +2504,16 @@ export class MongoMigrationRunner {
           : [],
       ),
     );
+  }
+
+  /** The counts for `operation` when it is a copy whose finish they show, read before it starts. */
+  private async copyCountsBefore(
+    operation: AnyMongoMigrationOperation,
+  ): Promise<CopyCounts | undefined> {
+    if (!isMongoDmlOperation(operation)) return undefined;
+    const copy = unionCopyOf(operation);
+    const [plan] = operation.run;
+    return copy === undefined || plan === undefined ? undefined : this.copyCounts(plan, copy);
   }
 
   /** The counts that show afterwards whether `copy` finished, read before it runs: first the target's, then the source's for each of its filters. */

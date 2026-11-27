@@ -5,7 +5,7 @@ const EVENT = { collection: 'events', fields: ['_id', 'name'] };
 const LIMITS =
   'Collection "measurements" is a time-series collection, which a $merge stage cannot write into, and an $out stage replaces everything it holds.';
 const MOVE_LIMITS =
-  'Stop writes to each collection the documents move out of until the apply ends: the delete also removes a document of those models written there after the copy, and that document was not copied.';
+  'Stop writes to each collection the documents move out of until the apply succeeds, re-runs included: the delete also removes a document of those models written there after the copy, and that document was not copied.';
 const OUT_LIMITS =
   'Stop writes to collection "measurements" too, for the whole apply, re-runs included: an $out stage replaces the collection with what it read, so a document written there while the copy runs is lost. An $out stage cannot write into a sharded collection.';
 

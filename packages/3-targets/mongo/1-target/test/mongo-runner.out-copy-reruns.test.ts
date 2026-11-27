@@ -51,7 +51,13 @@ const stopsAtCheckedTransform = [...copyAndDelete, [{ _id: 1 }], []];
 
 const DUPLICATES = `To find them, group collection measurements by _id and keep each _id that appears more than once, for example with db.getCollection("measurements").aggregate([{ $group: { _id: '$_id', n: { $sum: 1 } } }, { $match: { n: { $gt: 1 } } }]) in mongosh.`;
 
-const unfinished = `Operation data_transform.move Measurement to measurements copied documents into collection measurements with an $out stage, and operation ${deletion.id}, which deletes them from collection events, has not finished. Before you run the command again, finish that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts: the copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If the command was already run again before the delete finished, collection measurements holds some of the moved documents two or more times, under the same _id. ${DUPLICATES}`;
+const COMPARE_EVENTS =
+  "compare the two collections: each document of collection events that the copy's $match filter selects that collection measurements also holds, with the same _id and the same value in each field the copy does not change, was copied. Delete only those from collection events yourself, then run the command again.";
+const STOPPED_EVENTS = `Writes to collections measurements and events must still be stopped: that delete also removes any document written to collection events since the copy, which the copy did not take. If you cannot be sure that nothing wrote to either collection since the apply stopped, keep collection events as it is and ${COMPARE_EVENTS} Otherwise`;
+const STOPPED_READINGS =
+  'Writes to collections measurements and readings must still be stopped: deleting the documents of collection readings or dropping it also removes any document written to collection readings since the copy, which the copy did not take. If you cannot be sure that nothing wrote to either collection since the apply stopped, keep collection readings as it is and compare the two collections: each document of collection readings that collection measurements also holds, with the same _id and the same value in each field the copy does not change, was copied. Delete only those from collection readings yourself, then run the command again. Otherwise';
+
+const unfinished = `Operation data_transform.move Measurement to measurements copied documents into collection measurements with an $out stage, and operation ${deletion.id}, which deletes them from collection events, has not finished. ${STOPPED_EVENTS}, before you run the command again, finish that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts: the copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If the command was already run again before the delete finished, collection measurements holds some of the moved documents two or more times, under the same _id. ${DUPLICATES}`;
 
 describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
   it('says to finish the delete on the source when the apply stops between the copy and the delete', async () => {
@@ -185,7 +191,7 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     const result = await execute(harness, [groupsCopy, failingUpdate, deletion, sampleDeletion]);
 
     expect(failureFields(result.assertNotOk()).why).toContain(
-      `Operation data_transform.move Measurement and Sample to measurements copied documents into collection measurements with an $out stage, and operations ${deletion.id} and ${sampleDeletion.id}, which delete them from collection events, have not finished. Before you run the command again, finish those deletes yourself, on collection events, each with the filter of its deleteDocuments call in the migration's migration.ts: the copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If the command was already run again before the deletes finished, collection measurements holds some of the moved documents two or more times, under the same _id. ${DUPLICATES}`,
+      `Operation data_transform.move Measurement and Sample to measurements copied documents into collection measurements with an $out stage, and operations ${deletion.id} and ${sampleDeletion.id}, which delete them from collection events, have not finished. Writes to collections measurements and events must still be stopped: those deletes also remove any document written to collection events since the copy, which the copy did not take. If you cannot be sure that nothing wrote to either collection since the apply stopped, keep collection events as it is and compare the two collections: each document of collection events that one of the copy's $match filters selects that collection measurements also holds, with the same _id and the same value in each field the copy does not change, was copied. Delete only those from collection events yourself, then run the command again. Otherwise, before you run the command again, finish those deletes yourself, on collection events, each with the filter of its deleteDocuments call in the migration's migration.ts: the copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If the command was already run again before the deletes finished, collection measurements holds some of the moved documents two or more times, under the same _id. ${DUPLICATES}`,
     );
   });
 
@@ -345,7 +351,7 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     const result = await execute(harness, [renameCopy, failingUpdate, drop]);
 
     expect(failureFields(result.assertNotOk()).why).toContain(
-      `Operation data_transform.copy readings to measurements copied the documents of collection readings into collection measurements with an $out stage, and operation ${drop.id}, which drops collection readings, has not run. Before you run the command again, delete the documents of collection readings or drop it yourself: the copy has no check, so it runs again, and it would add the documents of collection readings to collection measurements a second time. Do not delete documents from collection measurements instead. If the command was already run again before collection readings was dropped, its documents are in collection measurements more than once: each of them is there two or more times, under the same _id. ${DUPLICATES} The operations that ran before the failure stay applied.`,
+      `Operation data_transform.copy readings to measurements copied the documents of collection readings into collection measurements with an $out stage, and operation ${drop.id}, which drops collection readings, has not run. ${STOPPED_READINGS}, before you run the command again, delete the documents of collection readings or drop it yourself: the copy has no check, so it runs again, and it would add the documents of collection readings to collection measurements a second time. Do not delete documents from collection measurements instead. If the command was already run again before collection readings was dropped, its documents are in collection measurements more than once: each of them is there two or more times, under the same _id. ${DUPLICATES} The operations that ran before the failure stay applied.`,
     );
   });
 
@@ -376,7 +382,7 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     expect(failureFields(result.assertNotOk())).toMatchObject({
       code: 'MIGRATION.EXECUTION_FAILED',
       message: `Operation ${unionCopy.id} failed: connection 3 to 127.0.0.1:27017 closed`,
-      why: `Fix what the error names, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again. Operation ${unionCopy.id} was copying documents of collection events into collection measurements with an $out stage when the apply stopped. The error does not show whether the copy finished. Operation ${deletion.id}, which deletes them from collection events, has not run. Before the copy, collection measurements held 3 documents, and the copy was to add 2 documents of collection events. To tell whether it finished, count the documents of collection measurements, for example with db.getCollection("measurements").countDocuments() in mongosh. If it holds 5, the copy finished: before you run the command again, run that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts. The copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If it holds 3, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to collection measurements or collection events, or the command was already run again: delete nothing until you have found out which. If the command was already run again after the copy finished, collection measurements holds some of the moved documents two or more times, under the same _id. ${DUPLICATES} The operations that ran before the failure stay applied.`,
+      why: `Fix what the error names, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again. Operation ${unionCopy.id} was copying documents of collection events into collection measurements with an $out stage when the apply stopped. The error does not show whether the copy finished. Operation ${deletion.id}, which deletes them from collection events, has not run. Before the copy, collection measurements held 3 documents, and the copy was to add 2 documents of collection events. To tell whether it finished, count the documents of collection measurements, for example with db.getCollection("measurements").countDocuments() in mongosh. If it holds 5, the copy finished. ${STOPPED_EVENTS}, before you run the command again, run that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts. The copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If it holds 3, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to or deleted from collection measurements, or the command was already run again. Delete nothing from collection events until you ${COMPARE_EVENTS} If the command was already run again after the copy finished, collection measurements holds some of the moved documents two or more times, under the same _id. ${DUPLICATES} The operations that ran before the failure stay applied.`,
       meta: { operationId: unionCopy.id, databaseUnchanged: false },
     });
   });
@@ -424,7 +430,7 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     const result = await execute(harness, [renameCopy, drop]);
 
     expect(failureFields(result.assertNotOk()).why).toContain(
-      `Operation ${renameCopy.id} was copying the documents of collection readings into collection measurements with an $out stage when the apply stopped. The error does not show whether the copy finished. Operation ${drop.id}, which drops collection readings, has not run. Before the copy, collection measurements held 0 documents, and the copy was to add 4 documents of collection readings. To tell whether it finished, count the documents of collection measurements, for example with db.getCollection("measurements").countDocuments() in mongosh. If it holds 4, the copy finished: before you run the command again, delete the documents of collection readings or drop it yourself. The copy has no check, so it runs again, and it would add the documents of collection readings to collection measurements a second time.`,
+      `Operation ${renameCopy.id} was copying the documents of collection readings into collection measurements with an $out stage when the apply stopped. The error does not show whether the copy finished. Operation ${drop.id}, which drops collection readings, has not run. Before the copy, collection measurements held 0 documents, and the copy was to add 4 documents of collection readings. To tell whether it finished, count the documents of collection measurements, for example with db.getCollection("measurements").countDocuments() in mongosh. If it holds 4, the copy finished. ${STOPPED_READINGS}, before you run the command again, delete the documents of collection readings or drop it yourself. The copy has no check, so it runs again, and it would add the documents of collection readings to collection measurements a second time.`,
     );
   });
 
@@ -445,6 +451,22 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     harness.driver.failAggregateWith(LOST);
 
     await expect(execute(harness, [unionCopy, deletion])).rejects.toBe(LOST);
+  });
+
+  it('records a copy whose count read failed as not started, so the stop is after the operation before it', async () => {
+    const harness = makeHarness();
+    for (const rows of [...COPY_COUNTS, [{ modifiedCount: 0 }]]) harness.driver.queueResponse(rows);
+    harness.driver.failAggregateWith(LOST, COPY_COUNTS.length + 1);
+    const drop = dropCollection('readings');
+
+    const result = await execute(harness, [renameCopy, unionCopy, drop, deletion]);
+
+    expect(failureFields(result.assertNotOk())).toMatchObject({
+      code: 'MIGRATION.EXECUTION_FAILED',
+      message: `The apply stopped after operation ${renameCopy.id} finished: connection 3 to 127.0.0.1:27017 closed`,
+      why: expect.not.stringContaining(unionCopy.id),
+      meta: { operationId: renameCopy.id, databaseUnchanged: true },
+    });
   });
 
   it('treats a write-concern error on the copy as a copy that may have finished', async () => {
@@ -479,7 +501,7 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     const result = await execute(harness, [renameCopy, drop]);
 
     expect(failureFields(result.assertNotOk()).why).toContain(
-      `Operation ${renameCopy.id} copied the documents of collection readings into collection measurements with an $out stage, and operation ${drop.id}, which drops collection readings, was running when the apply stopped and may not have finished. Before you run the command again, if collection readings still exists, delete its documents or drop it yourself:`,
+      `Operation ${renameCopy.id} copied the documents of collection readings into collection measurements with an $out stage, and operation ${drop.id}, which drops collection readings, was running when the apply stopped and may not have finished. If collection readings is gone, run the command again. ${STOPPED_READINGS}, before you run the command again, delete the documents of collection readings or drop it yourself:`,
     );
   });
 

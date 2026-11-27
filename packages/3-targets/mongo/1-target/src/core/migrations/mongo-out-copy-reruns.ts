@@ -5,7 +5,11 @@ import {
   isMongoDmlOperation,
 } from '@internal/mongo-query-ast/control';
 import { RawAggregateCommand, RawDeleteManyCommand } from '@internal/mongo-query-ast/execution';
-import type { ApplyProgress, CopyCounts } from './mongo-apply-progress';
+import {
+  type ApplyProgress,
+  type CopyCounts,
+  operationsThatMayHaveRun,
+} from './mongo-apply-progress';
 import { joinedList } from './mongo-plan-text';
 
 /**
@@ -137,6 +141,29 @@ function documentsText(count: number): string {
   return count === 1 ? '1 document' : `${count} documents`;
 }
 
+/** How to find the documents of `copy`'s source that it copied, so that only those are deleted by hand. */
+function comparisonText(copy: UnionCopy): string {
+  const { into, source } = copy;
+  const filters = copy.filters.length;
+  const selected =
+    filters === 0
+      ? `each document of collection ${source}`
+      : `each document of collection ${source} that ${filters === 1 ? "the copy's $match filter" : "one of the copy's $match filters"} selects`;
+  return `compare the two collections: ${selected} that collection ${into} also holds, with the same _id and the same value in each field the copy does not change, was copied. Delete only those from collection ${source} yourself, then run the command again.`;
+}
+
+/** Why writes to both collections of `copy` must still be stopped before its source is emptied by hand, and what to do when that cannot be known. */
+function writesStoppedText(copy: UnionCopy, single: boolean): string {
+  const { into, source } = copy;
+  const removal =
+    copy.filters.length === 0
+      ? `deleting the documents of collection ${source} or dropping it also removes`
+      : single
+        ? 'that delete also removes'
+        : 'those deletes also remove';
+  return `Writes to collections ${into} and ${source} must still be stopped: ${removal} any document written to collection ${source} since the copy, which the copy did not take. If you cannot be sure that nothing wrote to either collection since the apply stopped, keep collection ${source} as it is and ${comparisonText(copy)} Otherwise`;
+}
+
 function unfinishedDeleteText(copy: UnionCopy, deleteIds: readonly string[]): string {
   const { id, into, source } = copy;
   const one = deleteIds.length === 1;
@@ -146,15 +173,15 @@ function unfinishedDeleteText(copy: UnionCopy, deleteIds: readonly string[]): st
   const finish = one
     ? `finish that delete yourself, on collection ${source} with the filter of its deleteDocuments call in the migration's migration.ts`
     : `finish those deletes yourself, on collection ${source}, each with the filter of its deleteDocuments call in the migration's migration.ts`;
-  return `Operation ${id} copied documents into collection ${into} with an $out stage, and ${deletes}. Before you run the command again, ${finish}: the copy has no check, so it runs again, and it would add the documents still in collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the command was already run again before the ${one ? 'delete' : 'deletes'} finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
+  return `Operation ${id} copied documents into collection ${into} with an $out stage, and ${deletes}. ${writesStoppedText(copy, one)}, before you run the command again, ${finish}: the copy has no check, so it runs again, and it would add the documents still in collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the command was already run again before the ${one ? 'delete' : 'deletes'} finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
 /** `running` when the drop was running when the apply stopped, so it may or may not have dropped the source. */
 function undroppedText(copy: UnionCopy, dropId: string, running: boolean): string {
   const { id, into, source } = copy;
   const drop = running
-    ? `was running when the apply stopped and may not have finished. Before you run the command again, if collection ${source} still exists, delete its documents or drop it yourself`
-    : `has not run. Before you run the command again, delete the documents of collection ${source} or drop it yourself`;
+    ? `was running when the apply stopped and may not have finished. If collection ${source} is gone, run the command again. ${writesStoppedText(copy, true)}, before you run the command again, delete the documents of collection ${source} or drop it yourself`
+    : `has not run. ${writesStoppedText(copy, true)}, before you run the command again, delete the documents of collection ${source} or drop it yourself`;
   return `Operation ${id} copied the documents of collection ${source} into collection ${into} with an $out stage, and operation ${dropId}, which drops collection ${source}, ${drop}: the copy has no check, so it runs again, and it would add the documents of collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the command was already run again before collection ${source} was dropped, its documents are in collection ${into} more than once: each of them is there two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
@@ -184,20 +211,20 @@ function interruptedCopyText(
     : one
       ? `run that delete yourself, on collection ${source} with the filter of its deleteDocuments call in the migration's migration.ts`
       : `run those deletes yourself, on collection ${source}, each with the filter of its deleteDocuments call in the migration's migration.ts`;
-  return `${stopped} The error does not show whether the copy finished. ${removals}. Before the copy, collection ${into} held ${documentsText(counts.target)}, and the copy was to add ${documentsText(counts.selected)} of collection ${source}. To tell whether it finished, count the documents of collection ${into}, for example with db.getCollection(${JSON.stringify(into)}).countDocuments() in mongosh. If it holds ${counts.target + counts.selected}, the copy finished: before you run the command again, ${finish}. The copy has no check, so it runs again, and it would add ${whole ? 'the documents of' : 'the documents still in'} collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If it holds ${counts.target}, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to collection ${into} or collection ${source}, or the command was already run again: delete nothing until you have found out which. If the command was already run again after the copy finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
+  return `${stopped} The error does not show whether the copy finished. ${removals}. Before the copy, collection ${into} held ${documentsText(counts.target)}, and the copy was to add ${documentsText(counts.selected)} of collection ${source}. To tell whether it finished, count the documents of collection ${into}, for example with db.getCollection(${JSON.stringify(into)}).countDocuments() in mongosh. If it holds ${counts.target + counts.selected}, the copy finished. ${writesStoppedText(copy, one)}, before you run the command again, ${finish}. The copy has no check, so it runs again, and it would add ${whole ? 'the documents of' : 'the documents still in'} collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If it holds ${counts.target}, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to or deleted from collection ${into}, or the command was already run again. Delete nothing from collection ${source} until you ${comparisonText(copy)} If the command was already run again after the copy finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
 /**
  * What to do before a re-run about a copy the planner prints for a move into a time-series
  * collection, when the apply stopped after it, or while it ran, and before the delete or the drop
  * that follows it finished. The copy has no check, so a re-run adds the documents still in its
- * source a second time. A copy that was running when the apply stopped gets text only when the
- * runner had read its counts: without them, it had not started. Any other copy gets no text: the
+ * source a second time. A copy that was running when the apply stopped had its counts read before
+ * it started. Any other copy gets no text: the
  * runner cannot tell what its re-run does.
  */
 export function outCopyRerunText(progress: Readonly<ApplyProgress>): string | undefined {
   const { operations, finished, inFlight, copyCounts } = progress;
-  const texts = operations.slice(0, finished + (inFlight ? 1 : 0)).flatMap((operation, index) => {
+  const texts = operationsThatMayHaveRun(progress).flatMap((operation, index) => {
     const copy = unionCopyOf(operation);
     if (copy === undefined) return [];
     const pending = (removalsOf(operations, index, copy) ?? []).filter(
