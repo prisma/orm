@@ -222,10 +222,10 @@ export function makeTwin({ releaseDir, twinRoot, ownNames, copies = new Map() })
   return dir;
 }
 
-// The install folder's dependencies and overrides. Each package is installed under an alias at the
-// version the release published it at. Every package of ours the release has is pinned at its
-// version from the release too, so that a range one of them names another by resolves to the
-// release, not to something published since; third-party packages are pinned as `thirdParty` says.
+// The install folder's dependencies and overrides. Each package is installed under an alias at its
+// version at the release's tag. Every package of ours the tag has is pinned at that version too,
+// so that a range one of them names another by resolves to the release, not to something published
+// since; third-party packages are pinned as `thirdParty` says.
 export function releaseInstall({ packages, released, peers, thirdParty }) {
   return {
     dependencies: {

@@ -157,10 +157,13 @@ describe('packagesAtTag', () => {
     ]);
   });
 
-  it('fails on a package without a version at the tag, naming the file and the tag', () => {
+  it('fails on a package without a valid version at the tag, naming the file and the tag', () => {
     const dir = join(repository, 'packages', '9-public', '@prisma', 'orm-broken');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: '@prisma/orm-broken' }));
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ name: '@prisma/orm-broken', version: 'next' }),
+    );
     git(repository, 'add', '.');
     git(repository, 'commit', '--quiet', '-m', 'broken');
     git(repository, 'tag', 'v8.2.0');
@@ -170,7 +173,7 @@ describe('packagesAtTag', () => {
         strictEqual(error instanceof LastReleaseError, true);
         strictEqual(
           error.message,
-          'packages/9-public/@prisma/orm-broken/package.json at v8.2.0 has no version',
+          'packages/9-public/@prisma/orm-broken/package.json at v8.2.0 has no valid version ("next")',
         );
         return true;
       },

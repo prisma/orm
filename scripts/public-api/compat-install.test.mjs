@@ -211,7 +211,7 @@ describe('makeTwin', () => {
 });
 
 describe('releaseInstall', () => {
-  it('installs each package at the version the release published it at, and pins all of ours to the release', () => {
+  it('installs each package at its version at the release’s tag, and pins all of ours to the release', () => {
     deepStrictEqual(
       releaseInstall({
         packages: [

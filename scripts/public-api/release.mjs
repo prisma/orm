@@ -202,7 +202,9 @@ export function packagesAtTag(tag, root) {
     .map((file) => {
       const { name, version } = JSON.parse(git(['show', `${tag}:${file}`], root));
       if (typeof version !== 'string' || !isVersion(version)) {
-        throw new LastReleaseError(`${file} at ${tag} has no version`);
+        throw new LastReleaseError(
+          `${file} at ${tag} has no valid version (${JSON.stringify(version)})`,
+        );
       }
       return { name, version };
     })
