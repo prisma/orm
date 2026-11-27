@@ -28,8 +28,10 @@ withTempDir(({ createTempDir }) => {
         expect(init.exitCode).toBe(0);
 
         await withClient(db.connectionString, async (client) => {
-          await client.query('ALTER TABLE _prisma.marker ALTER COLUMN invariants DROP NOT NULL');
-          await client.query(`UPDATE _prisma.marker SET invariants = NULL WHERE space = 'app'`);
+          await client.query(
+            'ALTER TABLE _prisma.signatures ALTER COLUMN invariants DROP NOT NULL',
+          );
+          await client.query(`UPDATE _prisma.signatures SET invariants = NULL WHERE space = 'app'`);
         });
 
         // A corrupt marker row stops the verification from running at all, so

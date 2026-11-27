@@ -245,7 +245,7 @@ async function checkNames(connectionString: string, table: string): Promise<read
 async function markerHash(connectionString: string): Promise<unknown> {
   const { rows } = await sql(
     connectionString,
-    "SELECT core_hash FROM _prisma.marker WHERE space = 'app'",
+    "SELECT core_hash FROM _prisma.signatures WHERE space = 'app'",
   );
   return rows[0]?.['core_hash'];
 }

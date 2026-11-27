@@ -32,7 +32,7 @@ withTempDir(({ createTempDir }) => {
             // Verify marker was created in database
             await withClient(connectionString, async (client) => {
               const result = await client.query(
-                'select core_hash, profile_hash from _prisma.marker where space = $1',
+                'select core_hash, profile_hash from _prisma.signatures where space = $1',
                 ['app'],
               );
               expect(result.rows.length).toBe(1);

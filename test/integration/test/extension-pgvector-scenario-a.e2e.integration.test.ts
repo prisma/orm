@@ -227,7 +227,7 @@ describe('pgvector contract space through db init (PGlite)', {
       space: string;
       core_hash: string;
       invariants: string;
-    }>('select space, core_hash, invariants from _prisma.marker order by space');
+    }>('select space, core_hash, invariants from _prisma.signatures order by space');
     const markerBySpace = new Map(markers.rows.map((row) => [row.space, row]));
 
     expect(markerBySpace.has('app')).toBe(true);

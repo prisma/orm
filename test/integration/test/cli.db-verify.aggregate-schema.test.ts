@@ -123,16 +123,12 @@ withTempDir(({ createTempDir }) => {
               space: APP_SPACE_ID,
               storageHash: appContract.storage.storageHash,
               profileHash: appContract.profileHash ?? appContract.storage.storageHash,
-              contractJson: appContract,
-              canonicalVersion: 1,
             });
 
             await seedTestMarker(client, {
               space: EXT_SPACE_ID,
               storageHash: extContractJson.storage.storageHash,
               profileHash: extContractJson.profileHash ?? extContractJson.storage.storageHash,
-              contractJson: extContractJson,
-              canonicalVersion: 1,
               invariants: [...extHeadRef.invariants],
             });
           });

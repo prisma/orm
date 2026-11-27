@@ -111,9 +111,10 @@ withTempDir(({ createTempDir }) => {
               [migration.to, before[`migrations/snapshots/${migration.to}/contract.json`]],
             );
           }
-          await client.query(`UPDATE "_prisma"."marker" SET core_hash = $1 WHERE space = 'app'`, [
-            head.to,
-          ]);
+          await client.query(
+            `UPDATE "_prisma"."signatures" SET core_hash = $1 WHERE space = 'app'`,
+            [head.to],
+          );
         });
 
         const script = spawnSync(process.execPath, [appScript], {

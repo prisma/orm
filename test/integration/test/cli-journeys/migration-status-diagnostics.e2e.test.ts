@@ -96,7 +96,7 @@ withTempDir(({ createTempDir }) => {
 
     /**
      * Scenario: migrations exist on disk but the database has never been
-     * initialized (no marker row in _prisma.marker).
+     * initialized (no marker row in _prisma.signatures).
      *
      * This happens when a developer clones a repo with existing migrations
      * and connects to a fresh database. The key signal is the missing

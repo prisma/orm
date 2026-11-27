@@ -179,7 +179,7 @@ describe('family instance signSpaces', () => {
           ).rejects.toMatchObject({
             code: 'MIGRATION.PRISMA_TABLES_MISSING',
             message:
-              "Prisma's own tables are missing from this database: _prisma.marker does not exist.",
+              "Prisma's own tables are missing from this database: _prisma.signatures does not exist.",
           });
         } finally {
           await driver.close();
@@ -212,8 +212,6 @@ describe('family instance signSpaces', () => {
         await seedTestMarker(client, {
           storageHash: 'old-hash',
           profileHash: 'old-profile-hash',
-          contractJson: { target: 'postgres' },
-          canonicalVersion: 1,
         });
       });
     }, timeouts.spinUpPpgDev);
@@ -286,7 +284,7 @@ describe('family instance signSpaces', () => {
 
         await withClient(connectionString, async (client) => {
           await client.query(
-            `update _prisma.marker set invariants = $1::text[] where space = 'app'`,
+            `update _prisma.signatures set invariants = $1::text[] where space = 'app'`,
             [['email-verified', 'phone-backfill']],
           );
         });
@@ -349,7 +347,7 @@ describe('family instance signSpaces', () => {
           `);
           await client.query(`
             create trigger refuse_extension_marker
-            before insert or update on _prisma.marker
+            before insert or update on _prisma.signatures
             for each row execute function refuse_extension_marker()
           `);
         });

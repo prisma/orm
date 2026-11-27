@@ -29,8 +29,8 @@ withTempDir(({ createTempDir }) => {
           await withClient(connectionString, async (client) => {
             await bootstrapPostgresSignMarkerTables(client);
             await client.query(`
-              INSERT INTO _prisma.marker (space, core_hash, profile_hash, contract_json)
-              VALUES ('retired-extension', 'retired', 'retired-profile', '{}')
+              INSERT INTO _prisma.signatures (space, core_hash, profile_hash)
+              VALUES ('retired-extension', 'retired', 'retired-profile')
               ON CONFLICT (space) DO NOTHING
             `);
           });

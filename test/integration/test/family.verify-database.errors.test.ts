@@ -217,8 +217,6 @@ describe('family instance verify - errors', () => {
             await seedTestMarker(client, {
               storageHash: 'different-hash',
               profileHash: contractWithDb.profileHash ?? contractWithDb.storage.storageHash,
-              contractJson: contractWithDb,
-              canonicalVersion: 1,
             });
           });
 
@@ -273,8 +271,6 @@ describe('family instance verify - errors', () => {
             await seedTestMarker(client, {
               storageHash: contractWithDb.storage.storageHash,
               profileHash: 'different-profile-hash',
-              contractJson: contractWithDb,
-              canonicalVersion: 1,
             });
           });
 
@@ -367,8 +363,6 @@ describe('family instance verify - errors', () => {
             await seedTestMarker(client, {
               storageHash: contractWithDb.storage.storageHash,
               profileHash: contractWithDb.profileHash ?? contractWithDb.storage.storageHash,
-              contractJson: contractWithDb,
-              canonicalVersion: 1,
             });
           });
 

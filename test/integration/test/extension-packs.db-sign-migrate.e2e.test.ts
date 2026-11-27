@@ -141,7 +141,7 @@ async function markers(
 ): Promise<Record<string, { readonly hash: string; readonly invariants: readonly string[] }>> {
   return withClient(connectionString, async (client) => {
     const result = await client.query(
-      "SELECT space, core_hash, invariants FROM _prisma.marker WHERE space <> '_prisma' ORDER BY space",
+      "SELECT space, core_hash, invariants FROM _prisma.signatures WHERE space <> '_prisma' ORDER BY space",
     );
     return Object.fromEntries(
       result.rows.map((row) => [row.space, { hash: row.core_hash, invariants: row.invariants }]),
@@ -196,7 +196,7 @@ withTempDir(({ createTempDir }) => {
       const oldHead = oldHeadOf(pack);
       await withClient(connectionString, (client) =>
         client.query(
-          'UPDATE _prisma.marker SET core_hash = $1, invariants = $2::text[] WHERE space = $3',
+          'UPDATE _prisma.signatures SET core_hash = $1, invariants = $2::text[] WHERE space = $3',
           [oldHead.hash, [oldHead.invariant], spaceId],
         ),
       );
@@ -234,7 +234,7 @@ withTempDir(({ createTempDir }) => {
           const project = await setUpOnOldHead(connectionString);
           const { publicHead, dirName, ops } = searchPathMigrationOf(pack);
           await withClient(connectionString, (client) =>
-            client.query('UPDATE _prisma.marker SET core_hash = $1 WHERE space = $2', [
+            client.query('UPDATE _prisma.signatures SET core_hash = $1 WHERE space = $2', [
               publicHead,
               spaceId,
             ]),

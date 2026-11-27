@@ -19,7 +19,7 @@ import {
  */
 async function prismaSpaceRow(connectionString: string) {
   return withClient(connectionString, async (client) => {
-    const result = await client.query('SELECT space FROM _prisma.marker WHERE space = $1', [
+    const result = await client.query('SELECT space FROM _prisma.signatures WHERE space = $1', [
       PRISMA_SPACE_ID,
     ]);
     return result.rows;

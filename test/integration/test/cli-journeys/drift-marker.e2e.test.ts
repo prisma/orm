@@ -205,7 +205,7 @@ withTempDir(({ createTempDir }) => {
         // Corrupt the marker
         await withClient(db.connectionString, async (client) => {
           await client.query(
-            `UPDATE _prisma.marker SET core_hash = 'corrupted-garbage' WHERE space = 'app'`,
+            `UPDATE _prisma.signatures SET core_hash = 'corrupted-garbage' WHERE space = 'app'`,
           );
         });
 

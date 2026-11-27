@@ -189,7 +189,7 @@ withTempDir(({ createTempDir }) => {
         expect(engineError(refused)?.code).toBe('MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE');
         const marker = await sql(
           db.connectionString,
-          "SELECT core_hash FROM _prisma.marker WHERE space = 'app'",
+          "SELECT core_hash FROM _prisma.signatures WHERE space = 'app'",
         );
         const markerHash = String(marker.rows[0]?.['core_hash']).replace(/^sha256:/, '');
         expect(JSON.stringify(engineError(refused)?.nextActions)).toContain(

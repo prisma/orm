@@ -170,8 +170,6 @@ describe('family instance verify - basic', () => {
             await seedTestMarker(client, {
               storageHash: contractWithDb.storage.storageHash,
               profileHash: contractWithDb.profileHash ?? contractWithDb.storage.storageHash,
-              contractJson: contractWithDb,
-              canonicalVersion: 1,
             });
           });
 
