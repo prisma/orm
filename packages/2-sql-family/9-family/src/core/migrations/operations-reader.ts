@@ -6,13 +6,14 @@ import { RequiredColumnJson } from './required-column';
 import { EarlierRowsHoldingValueJson, RowsHoldingValueJson } from './rows-holding-value';
 import type { SqlMigrationPlanOperation } from './types';
 import { ConvertedColumnJson } from './unconverted-field';
+import type { DocumentPlace } from './unknown-key-probe';
 
 /** What a target tells the SQL operations reader about the parts of an operation it alone defines. */
 export interface SqlTargetOperationsFormat {
   /** The strict schema of an operation's `target.details`. */
   readonly targetDetails: Type<unknown>;
   /** Turns target details that only an earlier release wrote into the current form, before they are checked. */
-  readonly currentTargetDetails?: (details: Readonly<Record<string, unknown>>) => unknown;
+  readonly toCurrentTargetDetails?: (details: Readonly<Record<string, unknown>>) => unknown;
   /** The entries of a step's `meta` the target alone writes and reads, each strict; other entries stay open. */
   readonly stepMeta?: Type<unknown>;
 }
@@ -34,6 +35,23 @@ export type SqlOperationsReader<TTargetDetails> = (
   operations: readonly unknown[],
   location?: SqlOperationsLocation,
 ) => readonly SqlMigrationPlanOperation<TTargetDetails>[];
+
+const steps = ['precheck', 'execute', 'postcheck'] as const;
+
+/**
+ * The places in an `ops.json` the SQL operations reader leaves open, for `probeUnknownKeys`.
+ * A target adds the entries of a step's `meta` it writes and no reader acts on.
+ */
+export const SQL_OPERATIONS_OPEN_PLACES: readonly DocumentPlace[] = [
+  ['*', 'meta', '**'],
+  ...steps.flatMap((step): DocumentPlace[] =>
+    [
+      [step, '*', 'params', '**'],
+      [step, '*', 'meta'],
+      [step, '*', 'meta', '*', 'codecRef', 'typeParams', '**'],
+    ].map((place) => ['*', ...place]),
+  ),
+];
 
 const SharedStepMeta = type({
   'requiredColumn?': RequiredColumnJson,
@@ -96,32 +114,38 @@ function withCurrentRemovalMark(
 ): unknown {
   if (!isRecord(step) || !isRecord(step['meta'])) return step;
   const { rowsHoldingValue: mark, ...otherMeta } = step['meta'];
-  if (!EarlierRowsHoldingValueJson.allows(mark)) return step;
+  if (!isRecord(mark) || ['table', 'column', 'storedValue'].some((key) => key in mark)) {
+    return step;
+  }
   const params = step['params'];
   const storedValue: unknown = Array.isArray(params) ? params[0] : undefined;
-  const placed =
+  if (
     details?.table !== undefined &&
-    (typeof storedValue === 'string' || typeof storedValue === 'number');
-  return {
-    ...step,
-    meta: placed
-      ? {
-          ...otherMeta,
-          rowsHoldingValue: { ...mark, table: details.table, column: details.name, storedValue },
-        }
-      : otherMeta,
-  };
+    (typeof storedValue === 'string' || typeof storedValue === 'number')
+  ) {
+    return {
+      ...step,
+      meta: {
+        ...otherMeta,
+        rowsHoldingValue: { ...mark, table: details.table, column: details.name, storedValue },
+      },
+    };
+  }
+  return EarlierRowsHoldingValueJson.allows(mark) ? { ...step, meta: otherMeta } : step;
 }
 
 function withCurrentTargetDetails(
   operation: Readonly<Record<string, unknown>>,
-  currentTargetDetails: SqlTargetOperationsFormat['currentTargetDetails'],
+  toCurrentTargetDetails: SqlTargetOperationsFormat['toCurrentTargetDetails'],
 ): Readonly<Record<string, unknown>> {
   const target = operation['target'];
-  if (currentTargetDetails === undefined || !isRecord(target) || !isRecord(target['details'])) {
+  if (toCurrentTargetDetails === undefined || !isRecord(target) || !isRecord(target['details'])) {
     return operation;
   }
-  return { ...operation, target: { ...target, details: currentTargetDetails(target['details']) } };
+  return {
+    ...operation,
+    target: { ...target, details: toCurrentTargetDetails(target['details']) },
+  };
 }
 
 /**
@@ -130,10 +154,10 @@ function withCurrentTargetDetails(
  */
 function inCurrentForm(
   operation: unknown,
-  currentTargetDetails: SqlTargetOperationsFormat['currentTargetDetails'],
+  toCurrentTargetDetails: SqlTargetOperationsFormat['toCurrentTargetDetails'],
 ): unknown {
   if (!isRecord(operation)) return operation;
-  const current = withCurrentTargetDetails(operation, currentTargetDetails);
+  const current = withCurrentTargetDetails(operation, toCurrentTargetDetails);
   const details = storageDetailsOf(current);
   const steps = (key: string): unknown => {
     const list = current[key];
@@ -174,7 +198,7 @@ export function createSqlOperationsReader<TTargetDetails>(
   return (operations, location) =>
     operations.map((operation, index) => {
       const result = schema(
-        inCurrentForm(withoutUndefinedKeys(operation), format.currentTargetDetails),
+        inCurrentForm(withoutUndefinedKeys(operation), format.toCurrentTargetDetails),
       );
       if (!(result instanceof type.errors)) {
         return blindCast<

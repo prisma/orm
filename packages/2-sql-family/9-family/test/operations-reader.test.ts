@@ -1,6 +1,10 @@
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
-import { createSqlOperationsReader } from '../src/core/migrations/operations-reader';
+import {
+  createSqlOperationsReader,
+  SQL_OPERATIONS_OPEN_PLACES,
+} from '../src/core/migrations/operations-reader';
+import { probeUnknownKeys } from '../src/core/migrations/unknown-key-probe';
 
 const readOperations = createSqlOperationsReader({
   targetDetails: type({
@@ -122,6 +126,19 @@ describe('createSqlOperationsReader', () => {
     );
   });
 
+  it('refuses a key the format does not define at every object outside its open places, so only a step mark no reader acts on takes one', () => {
+    expect(
+      probeUnknownKeys(
+        [operation()],
+        (operations) => readOperations(Array.isArray(operations) ? operations : []),
+        SQL_OPERATIONS_OPEN_PLACES,
+      ),
+    ).toEqual({
+      objects: 23,
+      accepted: ['[0].precheck[0].meta.note', '[0].precheck[0].meta.note.nested'],
+    });
+  });
+
   it('names the migration and space an operation belongs to', () => {
     expect(
       reasonOf(() =>
@@ -219,15 +236,22 @@ describe('createSqlOperationsReader', () => {
       expect(read?.precheck[0]?.meta).toEqual({});
     });
 
-    it('refuses a key that mark does not define', () => {
+    it.each([
+      ['a key that mark does not define', { unexpected: true }, 'unexpected must be removed'],
+      [
+        'a value of the wrong type',
+        { value: true },
+        'value must be a number or a string (was boolean)',
+      ],
+    ])('refuses %s, naming only what is wrong', (_, change, problem) => {
       const op = earlierRemoval({ objectType: 'column', name: 'mood', table: 'user' });
       Reflect.set(
         Reflect.get((op['precheck'] as object[])[0] as object, 'meta') as object,
         'rowsHoldingValue',
-        { ...earlierMark, unexpected: true },
+        { ...earlierMark, ...change },
       );
-      expect(reasonOf(() => readOperations([op]))).toContain(
-        'precheck[0].meta.rowsHoldingValue.unexpected',
+      expect(reasonOf(() => readOperations([op]))).toBe(
+        `Operation 0 ("removeStoredValue.user.mood.sad") is not in a format this release of Prisma reads: precheck[0].meta.rowsHoldingValue.${problem}.`,
       );
     });
   });

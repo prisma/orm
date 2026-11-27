@@ -11,13 +11,13 @@ export const SqliteTargetDetailsJson = type({
 });
 
 /** Releases up to 8.0.0-rc.19 wrote the schema `main` into every operation's details. */
-function currentTargetDetails(details: Readonly<Record<string, unknown>>): unknown {
+function toCurrentTargetDetails(details: Readonly<Record<string, unknown>>): unknown {
   const { schema, ...current } = details;
   return schema === 'main' ? current : details;
 }
 
 export const readSqliteOperations = createSqlOperationsReader<SqlitePlanTargetDetails>({
   targetDetails: SqliteTargetDetailsJson,
-  currentTargetDetails,
+  toCurrentTargetDetails,
   stepMeta: type({ 'conversionCopy?': ConversionCopyJson }),
 });

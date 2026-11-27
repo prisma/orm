@@ -2759,6 +2759,7 @@
 ./family/control: const COLUMN_RENAME_UNMATCHED_CODE = "MIGRATION.COLUMN_RENAME_UNMATCHED"
 ./family/control: const INIT_ADDITIVE_POLICY: MigrationOperationPolicy
 ./family/control: const NO_RENAMED_ORIGINS: WorkingSchemaOrigins
+./family/control: const SQL_OPERATIONS_OPEN_PLACES: readonly DocumentPlace[]
 ./family/control: const TABLE_NAME_CASE_CHANGED_CODE = "MIGRATION.TABLE_NAME_CASE_CHANGED"
 ./family/control: const VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED = "CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED"
 ./family/control: const exactName: SameName
@@ -2816,6 +2817,7 @@
 ./family/control: function planVariantRowRewrites(input: { readonly statements: readonly ResolvedMigrationStatement[]; readonly fromContract: Contract<SqlStorage> | null; readonly contract: Contract<SqlStorage>; readonly tables: SchemaTables; }): Result<readonly VariantRowRewrite[], SqlPlannerConflict>
 ./family/control: function plannerFailure(conflicts: readonly SqlPlannerConflict[]): SqlPlannerFailureResult
 ./family/control: function plannerSuccess<TTargetDetails>(plan: SqlMigrationPlan<TTargetDetails>, appliedStatements: readonly AppliedMigrationStatement[], subjects: MigrationPlanSubjects, warnings?: readonly SqlPlannerConflict[]): SqlPlannerSuccessResult<TTargetDetails>
+./family/control: function probeUnknownKeys(document: unknown, read: (document: unknown) => unknown, openPlaces: readonly DocumentPlace[]): UnknownKeyProbe
 ./family/control: function readColumnDefault(codec: @prisma/orm-framework.Codec, reported: { readonly literal: ReportedLiteralDefault; readonly raw: string; }, written: undefined | { readonly literal: ReportedLiteralDefault; readonly expression: string; }): Promise<ReadColumnDefault>
 ./family/control: function readReportedDefault(codec: @prisma/orm-framework.Codec, literal: ReportedLiteralDefault, raw: string): Promise<ReadReportedDefault>
 ./family/control: function removalsOfMigration<TOperation extends { readonly precheck: readonly SqlMigrationPlanOperationStep[]; readonly execute: readonly SqlMigrationPlanOperationStep[]; readonly postcheck: readonly SqlMigrationPlanOperationStep[]; }>(operations: readonly TOperation[], edges: readonly { readonly operationCount: number; }[], operationIndex: number): readonly MarkedRemoval<TOperation>[]
@@ -3148,8 +3150,8 @@
 ./family/control: interface SqlSchemaDiffResult, readonly required property namespacePairs: ReadonlyArray<{ readonly actual: SqlSchemaIRNode | undefined; }>
 ./family/control: interface SqlSchemaDiffResult, readonly required property resolveControlPolicy: (issue: SchemaDiffIssue) => ControlPolicy | undefined
 ./family/control: interface SqlTargetOperationsFormat
-./family/control: interface SqlTargetOperationsFormat, readonly optional property currentTargetDetails?: (details: Readonly<Record<string, unknown>>) => unknown
 ./family/control: interface SqlTargetOperationsFormat, readonly optional property stepMeta?: Type<unknown>
+./family/control: interface SqlTargetOperationsFormat, readonly optional property toCurrentTargetDetails?: (details: Readonly<Record<string, unknown>>) => unknown
 ./family/control: interface SqlTargetOperationsFormat, readonly required property targetDetails: Type<unknown>
 ./family/control: interface SqlTextSources
 ./family/control: interface SqlTextSources, required method imports(): readonly ImportRequirement[]
@@ -3250,6 +3252,9 @@
 ./family/control: interface TargetRefusal
 ./family/control: interface TargetRefusal, readonly required property fix: string
 ./family/control: interface TargetRefusal, readonly required property reason: string
+./family/control: interface UnknownKeyProbe
+./family/control: interface UnknownKeyProbe, readonly required property accepted: readonly string[]
+./family/control: interface UnknownKeyProbe, readonly required property objects: number
 ./family/control: interface VariantRowRewrite
 ./family/control: interface VariantRowRewrite, readonly required property cascadingTable: CascadingTable | undefined
 ./family/control: interface VariantRowRewrite, readonly required property codecRef: CodecRef
@@ -3265,6 +3270,7 @@
 ./family/control: interface WorkingSchemaOrigins, required method originColumn(origin: ModelTable, column: string): string
 ./family/control: interface WorkingSchemaOrigins, required method originTable(current: ModelTable): ModelTable
 ./family/control: type DefaultResolver = (def: ColumnDefault, column: DefaultResolverColumn) => ColumnDefault
+./family/control: type DocumentPlace = readonly string[]
 ./family/control: type FieldEvent = 'added' | 'altered' | 'dropped'
 ./family/control: type FieldStorageEffect = { readonly kind: 'renameColumn'; readonly table: ModelTable; readonly from: string; readonly to: string; } | { readonly kind: 'unchanged'; }
 ./family/control: type JsonPathStep = { readonly kind: 'member'; readonly name: string; } | { readonly kind: 'wildcard'; }
@@ -3474,6 +3480,7 @@
 ./family: const COLUMN_RENAME_UNMATCHED_CODE = "MIGRATION.COLUMN_RENAME_UNMATCHED"
 ./family: const INIT_ADDITIVE_POLICY: MigrationOperationPolicy
 ./family: const NO_RENAMED_ORIGINS: WorkingSchemaOrigins
+./family: const SQL_OPERATIONS_OPEN_PLACES: readonly DocumentPlace[]
 ./family: const TABLE_NAME_CASE_CHANGED_CODE = "MIGRATION.TABLE_NAME_CASE_CHANGED"
 ./family: const VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED = "CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED"
 ./family: const exactName: SameName
@@ -3550,6 +3557,7 @@
 ./family: function plannerFailure(conflicts: readonly SqlPlannerConflict[]): SqlPlannerFailureResult
 ./family: function plannerSuccess<TTargetDetails>(plan: SqlMigrationPlan<TTargetDetails>, appliedStatements: readonly AppliedMigrationStatement[], subjects: MigrationPlanSubjects, warnings?: readonly SqlPlannerConflict[]): SqlPlannerSuccessResult<TTargetDetails>
 ./family: function pluralize(word: string): string
+./family: function probeUnknownKeys(document: unknown, read: (document: unknown) => unknown, openPlaces: readonly DocumentPlace[]): UnknownKeyProbe
 ./family: function readColumnDefault(codec: @prisma/orm-framework.Codec, reported: { readonly literal: ReportedLiteralDefault; readonly raw: string; }, written: undefined | { readonly literal: ReportedLiteralDefault; readonly expression: string; }): Promise<ReadColumnDefault>
 ./family: function readReportedDefault(codec: @prisma/orm-framework.Codec, literal: ReportedLiteralDefault, raw: string): Promise<ReadReportedDefault>
 ./family: function removalsOfMigration<TOperation extends { readonly precheck: readonly SqlMigrationPlanOperationStep[]; readonly execute: readonly SqlMigrationPlanOperationStep[]; readonly postcheck: readonly SqlMigrationPlanOperationStep[]; }>(operations: readonly TOperation[], edges: readonly { readonly operationCount: number; }[], operationIndex: number): readonly MarkedRemoval<TOperation>[]
@@ -3954,8 +3962,8 @@
 ./family: interface SqlSchemaDiffResult, readonly required property namespacePairs: ReadonlyArray<{ readonly actual: SqlSchemaIRNode | undefined; }>
 ./family: interface SqlSchemaDiffResult, readonly required property resolveControlPolicy: (issue: SchemaDiffIssue) => ControlPolicy | undefined
 ./family: interface SqlTargetOperationsFormat
-./family: interface SqlTargetOperationsFormat, readonly optional property currentTargetDetails?: (details: Readonly<Record<string, unknown>>) => unknown
 ./family: interface SqlTargetOperationsFormat, readonly optional property stepMeta?: Type<unknown>
+./family: interface SqlTargetOperationsFormat, readonly optional property toCurrentTargetDetails?: (details: Readonly<Record<string, unknown>>) => unknown
 ./family: interface SqlTargetOperationsFormat, readonly required property targetDetails: Type<unknown>
 ./family: interface SqlTextSources
 ./family: interface SqlTextSources, required method imports(): readonly ImportRequirement[]
@@ -4063,6 +4071,9 @@
 ./family: interface TargetRefusal
 ./family: interface TargetRefusal, readonly required property fix: string
 ./family: interface TargetRefusal, readonly required property reason: string
+./family: interface UnknownKeyProbe
+./family: interface UnknownKeyProbe, readonly required property accepted: readonly string[]
+./family: interface UnknownKeyProbe, readonly required property objects: number
 ./family: interface VariantRowRewrite
 ./family: interface VariantRowRewrite, readonly required property cascadingTable: CascadingTable | undefined
 ./family: interface VariantRowRewrite, readonly required property codecRef: CodecRef
@@ -4095,6 +4106,7 @@
 ./family: type ContractMarkerRow = { core_hash: string; profile_hash: string; contract_json: null | unknown; canonical_version: null | number; updated_at: Date | string; app_tag: null | string; meta: null | unknown; invariants: unknown; }
 ./family: type DefaultMappingResult = { readonly attribute: string; }
 ./family: type DefaultResolver = (def: ColumnDefault, column: DefaultResolverColumn) => ColumnDefault
+./family: type DocumentPlace = readonly string[]
 ./family: type FieldEvent = 'added' | 'altered' | 'dropped'
 ./family: type FieldStorageEffect = { readonly kind: 'renameColumn'; readonly table: ModelTable; readonly from: string; readonly to: string; } | { readonly kind: 'unchanged'; }
 ./family: type GeneratorCallRefusal = { readonly kind: 'no-function' | 'on-list'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; } | { readonly kind: 'reads-back-differently'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; readonly text: string; readonly readBack: ExecutionMutationDefaultValue | undefined; readonly refusedBecause: string | undefined; }
