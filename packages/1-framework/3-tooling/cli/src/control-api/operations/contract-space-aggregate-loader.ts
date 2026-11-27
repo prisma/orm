@@ -231,7 +231,7 @@ function migrationPackageRepairText(
   }
   return migrationTsKeepsItsHash(absolutePackageDir)
     ? `Restore the migration package from version control, or write its migration.json and ops.json again by running \`node "${join(packageDir, 'migration.ts')}"\`.`
-    : `Restore the migration package from version control. If no database has applied this migration and no ref names where it or a later migration ends, you can instead delete the folder ${packageDir} and the folders of the migrations after it, then plan again from the contract it started from with \`{bin} migration plan --from <hash>\`, where the hash is that of the start snapshot its migration.ts imports, or @empty when it imports none.`;
+    : `Restore the migration package from version control. If no database has applied this migration, you can instead delete its migration.json if there is one and run \`node "${join(packageDir, 'migration.ts')}"\`, which writes migration.json and ops.json again with a new creation time, so the migration gets a new hash.`;
 }
 
 /** A stored file of the migrations directory the aggregate could not read: a ref, or a migration's `migration.json`. */

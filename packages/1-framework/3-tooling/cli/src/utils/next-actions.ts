@@ -44,7 +44,7 @@ export function migrationTsKeepsItsHash(packageDir: string): boolean {
 }
 
 /**
- * How a migration package whose files are wrong is put right. It is restored from version control. An application migration's `migration.json` and `ops.json` are written again by its `migration.ts` when that keeps the migration's hash; otherwise a migration no database has applied is planned again. An extension's migration has no `migration.ts`: it comes with the extension, and `contract emit` writes a migration folder that is missing from the installed extension.
+ * How a migration package whose files are wrong is put right. It is restored from version control. An application migration's `migration.json` and `ops.json` are written again by its `migration.ts`. That keeps the migration's hash when `migration.json` keeps its `createdAt`; otherwise it gives the migration a new hash, which only the ledger of a database that applied it records, so it is advised only where no database has. An extension's migration has no `migration.ts`: it comes with the extension, and `contract emit` writes a migration folder that is missing from the installed extension.
  */
 export function migrationPackageRepairActions(place: MigrationPackagePlace): NextAction[] {
   const restore = chooseAction('Restore the migration package from version control');
@@ -58,24 +58,20 @@ export function migrationPackageRepairActions(place: MigrationPackagePlace): Nex
       chooseAction('Or install a version of the extension that ships its migrations'),
     ];
   }
-  if (!migrationTsKeepsItsHash(place.packageDir)) {
-    return [restore, replanAction(relative(place.cwd, place.packageDir))];
-  }
+  const runMigrationTs = `node "${relative(place.cwd, join(place.packageDir, 'migration.ts'))}"`;
   return [
     restore,
-    runCommandAction(
-      'Or write migration.json and ops.json again from its migration.ts',
-      `node "${relative(place.cwd, join(place.packageDir, 'migration.ts'))}"`,
-    ),
+    migrationTsKeepsItsHash(place.packageDir)
+      ? runCommandAction(
+          'Or write migration.json and ops.json again from its migration.ts',
+          runMigrationTs,
+        )
+      : runCommandAction(MIGRATION_TS_WITH_NEW_HASH, runMigrationTs),
   ];
 }
 
-function replanAction(packageDir: string): NextAction {
-  return runCommandAction(
-    `Or, if no database has applied this migration and no ref names where it or a later migration ends, delete the folder ${packageDir} and the folders of the migrations after it, then plan again from the contract it started from: the hash of the start snapshot its migration.ts imports, or @empty when it imports none`,
-    '{bin} migration plan --from <hash>',
-  );
-}
+const MIGRATION_TS_WITH_NEW_HASH =
+  'Or, if no database has applied this migration, delete its migration.json if there is one and run this command, which writes migration.json and ops.json again with a new creation time, so the migration gets a new hash';
 
 /** A contract snapshot in the migrations directory, the space it belongs to, and that space's head: the emitted contract's hash for the application, the installed extension's for an extension. */
 export interface SnapshotPlace {

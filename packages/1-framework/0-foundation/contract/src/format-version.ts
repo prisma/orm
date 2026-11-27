@@ -405,14 +405,14 @@ const REMAKE_ADVICE: Readonly<
     ],
   },
   migration: {
-    fix: 'No release of Prisma wrote this file. Restore it from version control. If no database has applied the migration and no ref names where it or a later migration ends, you can instead delete its folder and the folders of the migrations after it, then plan again from the contract it started from with `{bin} migration plan --from <hash>`, where the hash is that of the start snapshot its migration.ts imports, or @empty when it imports none.',
+    fix: 'No release of Prisma wrote this file. Restore it from version control. If no database has applied the migration, you can instead delete this migration.json and run `node <migration folder>/migration.ts`, which writes migration.json and ops.json again with a new creation time, so the migration gets a new hash.',
     nextActions: [
       RESTORE_FROM_VERSION_CONTROL,
       {
         kind: 'run-command',
         label:
-          'Or, if no database has applied the migration and no ref names where it or a later migration ends, delete its folder and those of the migrations after it, then plan again from the contract it started from',
-        command: '{bin} migration plan --from <hash>',
+          'Or, if no database has applied the migration, delete this migration.json and run this command, which writes migration.json and ops.json again with a new creation time, so the migration gets a new hash',
+        command: 'node <migration folder>/migration.ts',
       },
     ],
   },
