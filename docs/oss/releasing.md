@@ -73,7 +73,7 @@ Before it publishes, the workflow runs four checks:
 - **Conformance** ([`pnpm check:conformance`](../../scripts/check-conformance.mjs)).
 - **Dependencies** ([`pnpm check:publish-deps`](../../scripts/check-publish-deps.mjs)). It fails if a packed `package.json` still contains a `workspace:` or `catalog:` entry, if a range on one of our packages differs from the release plan, or if one of our packages is listed as an ordinary dependency of another.
 - **Release notes** ([`pnpm check:release-notes`](../../scripts/check-release-notes.mjs)). A release must have a committed [`docs/releases/v<version>.md`](../releases/README.md), which becomes the text of the GitHub Release. Nothing generates notes when the file is missing. The same check runs on a release pull request, so a missing file is caught at review.
-- **Upgrade instructions** ([`pnpm check:upgrade-coverage`](../../scripts/check-upgrade-coverage.mjs)). A pull request that changes what users or extension authors must do carries its own upgrade fragment. A release must have its assembled upgrade guides and no pending fragments left. A release after release 8.0 needs a guide only for an audience that had fragments for it, because an upgrade within Prisma 8 asks nothing of Generally Available code. Development builds may have pending fragments. See the [upgrade instruction lifecycle](../../upgrade-instructions/README.md).
+- **Upgrade instructions** ([`pnpm check:upgrade-coverage`](../../scripts/check-upgrade-coverage.mjs)). A pull request that changes what users or extension authors must do carries its own upgrade fragment. A release must have its assembled upgrade guides and no pending fragments left. Development builds may have pending fragments. See the [upgrade instruction lifecycle](../../upgrade-instructions/README.md).
 
 ### npm tags
 
@@ -105,6 +105,7 @@ From release 8.1 on, a release is one pull request, made the same way as a relea
 1. **Run the [`publish-npm-version`](../../skills-contrib/publish-npm-version/SKILL.md) skill.** `pnpm bump-version` raises the minor, from `8.0.1` to `8.1.0`. Every release after 8.0 starts at patch 0.
 2. **Review the upgrade guides and the release notes, and merge.** A release needs an upgrade guide only if a pull request since the last release added upgrade instructions; most releases will have none. The git tag and the GitHub Release are `v<version>`. The workflow marks a GitHub Release as a pre-release only for a release candidate.
 
+<<<<<<< HEAD
 Anything on `main` can be released at any time. A fix therefore ships in the next release, which is cut early when the fix cannot wait. The scripts publish no fix to one package alone and no release from a branch other than `main`. If `main` ever stops being releasable at any time, that is the moment to add such scripts.
 
 ## Procedure: release 8.0
@@ -159,6 +160,9 @@ Do the steps in this order.
 
    For a GA package the message says `^8.0.1`, and for `@prisma/orm-extension-paradedb` it says `^0.18.0`. The range matches every `8.0.0-rc.N` and the development builds made from them, and no other version.
 9. **In the next pull request, remove this procedure** and "Procedure: cut the next release candidate" from this page, together with the "until release 8.0" halves of its other sections.
+=======
+Anything on `main` can be released at any time. A fix therefore ships in the next release, which is cut early when the fix cannot wait. The scripts publish no fix to one package alone and no release from a branch other than `main`. If `main` ever stops being releasable at any time, that is the moment to add them.
+>>>>>>> parent of 57b032a7c6 (A release after 8.0 needs an upgrade guide only for an audience with fragments)
 
 ## Publishing again, or under `beta`
 

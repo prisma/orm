@@ -61,8 +61,6 @@ export const PENDING = 'upgrade-instructions/pending/';
 const PENDING_INSTRUCTIONS =
   /^upgrade-instructions\/pending\/[^/]+\/(app|extension)\/instructions\.md$/;
 export const PUBLISHED_ROOT = 'skills/prisma-8/upgrading/';
-const ARCHIVE = 'upgrade-instructions/releases/';
-const FIRST_GENERALLY_AVAILABLE = parseVersion(rootVersionOfRelease({ major: 8, minor: 0 }));
 const PUBLISHED_DIRECTORY = new RegExp(`^(${PUBLISHED_ROOT}(?:app|extension)/upgrades/[^/]+)/`);
 const PUBLISHED_TRANSITION = new RegExp(`^${PUBLISHED_ROOT}(?:app|extension)/upgrades/([^/]+)/`);
 
@@ -84,28 +82,6 @@ export function parseTransitionLabel(label) {
     );
   };
   return { from: segment(match[1]), to: segment(match[2]) };
-}
-function fragmentAudience(path, root) {
-  return path.startsWith(root)
-    ? /^[^/]+\/(app|extension)\//.exec(path.slice(root.length))?.[1]
-    : undefined;
-}
-/**
- * An upgrade after release 8.0 asks nothing of Generally Available code, so a release from it needs
- * a guide only for an audience with fragments for it: pending before or after it, or archived.
- */
-function audiencesNeedingGuides({ repoRoot, head, from, to, transition, pendingPaths }) {
-  const audiences = COVERED_DIRECTORIES.map(({ audience }) => audience);
-  if (to.rc !== null || comparePrecedence(from, FIRST_GENERALLY_AVAILABLE) < 0) return audiences;
-  const archive = `${ARCHIVE}${transition}/sources/`;
-  const paths = [
-    ...pendingPaths,
-    ...git(repoRoot, 'ls-tree', '-r', '-z', '--name-only', head, '--', archive).split('\0'),
-  ];
-  const withFragments = new Set(
-    paths.map((path) => fragmentAudience(path, PENDING) ?? fragmentAudience(path, archive)),
-  );
-  return audiences.filter((audience) => withFragments.has(audience));
 }
 function publishedGuide(audience, transition) {
   return `${PUBLISHED_ROOT}${audience}/upgrades/${transition}/instructions.md`;
@@ -378,14 +354,7 @@ export function runCheck({ repoRoot, head = 'HEAD', prev, mode = 'pr' }) {
         path,
         reason: 'assemble and archive all pending files before release',
       });
-    for (const audience of audiencesNeedingGuides({
-      repoRoot,
-      head,
-      from: releaseFrom,
-      to: headVersion,
-      transition,
-      pendingPaths: [...files.keys(), ...baseFiles.keys()],
-    }))
+    for (const { audience } of COVERED_DIRECTORIES)
       validate.add(publishedGuide(audience, transition));
   } else if (mode === 'pr') {
     for (const { audience, directories } of COVERED_DIRECTORIES) {

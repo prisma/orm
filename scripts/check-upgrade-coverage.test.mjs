@@ -338,64 +338,6 @@ describe('release completeness', () => {
       version('0.7.0');
     }
   });
-  describe('after release 8.0', () => {
-    const archived = (audience) =>
-      `upgrade-instructions/releases/8.0-to-8.1/sources/feature/${audience}/instructions.md`;
-    it('passes a release with nothing to say and no guides', () => {
-      version('8.0.1');
-      commit();
-      git('tag', 'v8.0.1');
-      version('8.1.0');
-      const base = commit();
-      passes(base, '--mode', 'publish');
-      passes(null, '--mode', 'publish');
-    });
-    it('blocks pending fragments as before', () => {
-      version('8.0.1');
-      const base = commit();
-      version('8.1.0');
-      write(pending('feature'));
-      commit();
-      fails(base, /pending/);
-      fails(base, /pending/, '--mode', 'publish');
-    });
-    it('requires the guide of an audience whose fragments the release removed', () => {
-      version('8.0.1');
-      write(pending('feature', 'extension'));
-      const base = commit();
-      git('rm', '-q', pending('feature', 'extension'));
-      version('8.1.0');
-      commit();
-      fails(base, /extension\/upgrades\/8\.0-to-8\.1/);
-      write(guide('8.0-to-8.1', 'extension'));
-      commit();
-      passes(base);
-    });
-    it('requires the guide of an audience whose fragments the release archived', () => {
-      version('8.0.1');
-      const base = commit();
-      version('8.1.0');
-      write(archived('app'));
-      commit();
-      fails(base, /app\/upgrades\/8\.0-to-8\.1/, '--mode', 'publish');
-      write(guide('8.0-to-8.1'));
-      commit();
-      passes(base, '--mode', 'publish');
-    });
-    for (const [from, to, transition] of [
-      ['8.0.0-rc.24', '8.0.0-rc.25', '8.0.0-rc.24-to-8.0.0-rc.25'],
-      ['8.0.0-rc.25', '8.0.1', '8.0.0-rc.25-to-8.0'],
-      ['8.0.1', '8.1.0-rc.1', '8.0-to-8.1.0-rc.1'],
-    ])
-      it(`still requires both guides from ${from} to ${to}`, () => {
-        version(from);
-        const base = commit();
-        version(to);
-        commit();
-        fails(base, new RegExp(`app/upgrades/${transition.replaceAll('.', '\\.')}`));
-        fails(base, /extension\/upgrades/, '--mode', 'publish');
-      });
-  });
   it('publish is always release, even when explicit refs have equal versions', () => {
     const base = commit();
     write(pending('feature'));
