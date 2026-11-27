@@ -157,12 +157,21 @@ export function driftIssues(issues: readonly SchemaDiffIssue[]): readonly Schema
   return issues.filter((issue) => !isDatabaseCapabilitiesNotProvided(issue));
 }
 
-/** Whether some issue says the database does not provide what the contract requires. Every command that changes the database refuses it then, so the refusal leads and no drift advice is given for any space. */
+/** Whether some issue says the database does not provide what the contract requires. */
 export function includesDatabaseCapabilitiesNotProvided(
   issues: readonly SchemaDiffIssue[],
 ): boolean {
   return issues.some(isDatabaseCapabilitiesNotProvided);
 }
+
+/** Whether the database is refused in this run: some space's issues say it does not provide what that space's contract requires. `db update`, `db init` and `db migrate` refuse it then, so no space in the run gets advice that would change the database. */
+export function databaseRefusedInRun(
+  issuesBySpace: readonly (readonly SchemaDiffIssue[])[],
+): boolean {
+  return issuesBySpace.some(includesDatabaseCapabilitiesNotProvided);
+}
+
+const REFUSED_COMMANDS = '`db update`, `db init` and `db migrate` refuse this database';
 
 export function issueNodes(
   issues: readonly SchemaDiffIssue[],
@@ -215,6 +224,7 @@ export function schemaFindingBlocks(inputs: {
 export function schemaVerdictDiagnostic(inputs: {
   readonly result: VerifyDatabaseSchemaResult;
   readonly space: string | undefined;
+  readonly databaseRefused: boolean;
   readonly nextActions: readonly NextAction[];
 }): Diagnostic {
   const code = inputs.result.code;
@@ -224,7 +234,7 @@ export function schemaVerdictDiagnostic(inputs: {
     code: dotted ? code : 'CONTRACT.VERIFY_FAILED',
     severity: 'error',
     summary: inputs.result.summary,
-    ...ifDefined('why', schemaVerdictWhy(issues)),
+    ...ifDefined('why', schemaVerdictWhy(issues, inputs.databaseRefused)),
     nextActions: inputs.nextActions,
     meta: {
       ...(inputs.space === undefined ? {} : { space: inputs.space }),
@@ -234,13 +244,19 @@ export function schemaVerdictDiagnostic(inputs: {
   };
 }
 
-function schemaVerdictWhy(issues: readonly SchemaDiffIssue[]): string | undefined {
+function schemaVerdictWhy(
+  issues: readonly SchemaDiffIssue[],
+  databaseRefused: boolean,
+): string | undefined {
   const drift = driftIssues(issues);
   if (drift.length === 0) return undefined;
-  if (!includesDatabaseCapabilitiesNotProvided(issues)) {
-    return schemaIssuesWhy('The live schema differs', drift);
+  if (includesDatabaseCapabilitiesNotProvided(issues)) {
+    return `${REFUSED_COMMANDS} until it provides what the contract requires. ${schemaIssuesWhy('The live schema also differs', drift)}`;
   }
-  return `No command changes this database until it provides what the contract requires. ${schemaIssuesWhy('The live schema also differs', drift)}`;
+  if (databaseRefused) {
+    return `${REFUSED_COMMANDS} until it provides what the contract of another space requires. ${schemaIssuesWhy('The live schema differs', drift)}`;
+  }
+  return schemaIssuesWhy('The live schema differs', drift);
 }
 
 /**
@@ -248,17 +264,17 @@ function schemaVerdictWhy(issues: readonly SchemaDiffIssue[]): string | undefine
  * form of its own is fixed in the contract when the two mean the same, and by `db update` when they
  * do not. `db update` is always offered; changing the contract to describe the database is offered
  * when some issue is not one the database may only have stored in its own form, or there is none.
- * A database that does not provide what the contract requires gets no action, even beside drift:
- * every command that changes the database refuses it until then, and a caller offers none for
- * another space's drift in the same run either.
+ * A run in which the database is refused gets no action for any space: `db update`, `db init` and
+ * `db migrate` refuse the database until it provides what the contracts require.
  */
 export function schemaDriftNextActions(inputs: {
   readonly verb: 'sign' | 'verify';
   readonly contractRef: string | undefined;
   readonly issues: readonly SchemaDiffIssue[];
+  readonly databaseRefused: boolean;
 }): readonly NextAction[] {
   const { verb, contractRef } = inputs;
-  if (includesDatabaseCapabilitiesNotProvided(inputs.issues)) return [];
+  if (inputs.databaseRefused) return [];
   const issues = driftIssues(inputs.issues);
   const retryAfterEmit =
     contractRef === undefined

@@ -30,7 +30,7 @@ import { migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
-  includesDatabaseCapabilitiesNotProvided,
+  databaseRefusedInRun,
   readEmittedContract,
   requireVerifyConnection,
   schemaDriftNextActions,
@@ -328,20 +328,18 @@ function driftDiagnostics(inputs: {
   readonly combined: CombinedVerifyResult;
 }): readonly Diagnostic[] {
   const failed = [...inputs.perSpace].filter(([, result]) => !result.ok);
-  const databaseRefused = failed.some(([, result]) =>
-    includesDatabaseCapabilitiesNotProvided(result.schema.issues),
-  );
+  const databaseRefused = databaseRefusedInRun(failed.map(([, result]) => result.schema.issues));
   const perSpace = failed.map(([space, result]) =>
     schemaVerdictDiagnostic({
       result,
       space,
-      nextActions: databaseRefused
-        ? []
-        : schemaDriftNextActions({
-            verb: 'verify',
-            contractRef: undefined,
-            issues: result.schema.issues,
-          }),
+      databaseRefused,
+      nextActions: schemaDriftNextActions({
+        verb: 'verify',
+        contractRef: undefined,
+        issues: result.schema.issues,
+        databaseRefused,
+      }),
     }),
   );
   if (perSpace.length > 0) {
@@ -351,6 +349,7 @@ function driftDiagnostics(inputs: {
     schemaVerdictDiagnostic({
       result: inputs.combined.result,
       space: undefined,
+      databaseRefused: false,
       nextActions: [
         {
           kind: 'user-choice',

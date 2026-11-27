@@ -210,7 +210,7 @@ function notSignedSentence(
 export function errorSignRefsNotWritten(options: {
   readonly signedSpaces: readonly string[];
   readonly failedSpaces: readonly string[];
-  /** Spaces not signed only because the database does not provide what their contracts require. */
+  /** Spaces not signed because the database does not provide what their contracts require. */
   readonly lackingSpaces: readonly string[];
   readonly conflictSpaces: readonly string[];
   readonly refusedSpaces: readonly {
@@ -224,7 +224,8 @@ export function errorSignRefsNotWritten(options: {
     readonly hash: string;
   }[];
   readonly rerunCommand: string;
-  readonly migrateCommand: string;
+  /** Undefined when the database is refused in this run, since `db migrate` would refuse it too. */
+  readonly migrateCommand: string | undefined;
   readonly diagnostics: readonly Diagnostic[];
   readonly cause: unknown;
 }): ActionableCliError {
@@ -274,7 +275,7 @@ export function errorSignRefsNotWritten(options: {
       fix: `Fix what stopped the write, then run \`${rerunCommand}\` again: the markers already hold the contracts, so it writes only the refs.`,
       nextActions: [
         runCommandAction('Sign again to write the refs that were not written', rerunCommand),
-        ...(refusedSpaces.length === 0
+        ...(refusedSpaces.length === 0 || options.migrateCommand === undefined
           ? []
           : [
               runCommandAction(

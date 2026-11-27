@@ -223,6 +223,44 @@ describe('db sign when a ref cannot be written after the markers are written', (
     ).toEqual(['MIGRATION.SIGN_INVARIANTS_MISSING']);
   });
 
+  it('offers no db migrate for missing invariants while the database does not provide what a contract requires', async () => {
+    const refusedAndLacking: DbSignSpaceOutcome = {
+      space: 'pgvector',
+      status: 'missing-invariants',
+      contract: { storageHash: HASH_EXT, profileHash: PROFILE_HASH },
+      missingInvariants: ['pgvector:install-vector-v1'],
+      schema: NOT_PROVIDED,
+    };
+    mocks.dbSign.mockResolvedValue(ok({ spaces: [signedSpace('app', HASH_A), refusedAndLacking] }));
+    const dir = await projectDir();
+
+    const run = await withReadOnlyAppRefs(dir, () =>
+      harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir }),
+    );
+
+    expect(run.exitCode).toBe(2);
+    const error = settledError(run);
+    expect(error).toMatchObject({
+      why: expect.stringMatching(
+        /^The database was signed: the marker of space "app" holds its contract\. Space "pgvector" was not signed, because the database does not provide what its contract requires\. Space "pgvector" was not signed, because its marker does not record invariants its head ref requires\. These refs were not written: ref "db" of space "app" \(.*EACCES.*\)\.$/,
+      ),
+      meta: {
+        signedSpaces: ['app'],
+        failedSpaces: [],
+        lackingSpaces: ['pgvector'],
+        conflictSpaces: [],
+        refusedSpaces: [{ space: 'pgvector', missingInvariants: ['pgvector:install-vector-v1'] }],
+      },
+    });
+    expect(Reflect.get(Object(error), 'nextActions')).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Sign again to write the refs that were not written',
+        command: 'prisma-test db sign',
+      },
+    ]);
+  });
+
   it('keeps the finding of each space it did not sign', async () => {
     mocks.dbSign.mockResolvedValue(
       ok({

@@ -412,7 +412,7 @@ describe('db sign', () => {
             code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
             severity: 'error',
             summary: OLDER_THAN_SUPPORTED,
-            why: 'No command changes this database until it provides what the contract requires. The live schema also differs: missing: public/users/email.',
+            why: '`db update`, `db init` and `db migrate` refuse this database until it provides what the contract requires. The live schema also differs: missing: public/users/email.',
             nextActions: [],
             meta: { space: 'app', schemaIssues: [DATABASE_NOT_PROVIDED, MISSING_COLUMN] },
           },
@@ -446,11 +446,11 @@ describe('db sign', () => {
             text: 'The database does not provide what the contract requires for space "app"; signed nothing',
           },
         ]);
-        expect(shown).not.toContain('db update');
+        expect(shown).not.toContain('prisma-test db update');
       });
     });
 
-    it('offers no drift advice for the drift of another space either, since every command that changes the database refuses it', async () => {
+    it('offers no drift advice for the drift of another space either, and says why, since db update, db init and db migrate refuse the database', async () => {
       const dir = await projectDir();
       mocks.dbSign.mockResolvedValue(
         ok({
@@ -463,9 +463,22 @@ describe('db sign', () => {
 
       const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
-      expect(diagnosticsOf(run).map(({ code, nextActions }) => ({ code, nextActions }))).toEqual([
-        { code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED', nextActions: [] },
-        { code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED', nextActions: [] },
+      expect(diagnosticsOf(run)).toEqual([
+        {
+          code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
+          severity: 'error',
+          summary: OLDER_THAN_SUPPORTED,
+          nextActions: [],
+          meta: { space: 'app', schemaIssues: [DATABASE_NOT_PROVIDED] },
+        },
+        {
+          code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
+          severity: 'error',
+          summary: 'Database schema does not satisfy contract',
+          why: '`db update`, `db init` and `db migrate` refuse this database until it provides what the contract of another space requires. The live schema differs: missing: public/users/email.',
+          nextActions: [],
+          meta: { space: 'pgvector', schemaIssues: [MISSING_COLUMN] },
+        },
       ]);
     });
   });

@@ -727,7 +727,7 @@ describe('db verify', () => {
           code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
           severity: 'error',
           summary: OLDER,
-          why: 'No command changes this database until it provides what the contract requires. The live schema also differs: missing: public/users/email.',
+          why: '`db update`, `db init` and `db migrate` refuse this database until it provides what the contract requires. The live schema also differs: missing: public/users/email.',
           nextActions: [],
           meta: { space: 'app', schemaIssues: [NOT_PROVIDED_ISSUE, MISSING_COLUMN] },
         },
@@ -744,7 +744,7 @@ describe('db verify', () => {
       });
     });
 
-    it('offers no drift advice for the drift of another space either', async () => {
+    it('offers no drift advice for the drift of another space either, and says why', async () => {
       const dir = await projectDir();
       mocks.dbVerify.mockResolvedValue(
         aggregateOk({
@@ -765,9 +765,22 @@ describe('db verify', () => {
 
       const run = await harness(ormConfig()).run(['db', 'verify', '--json'], { cwd: dir });
 
-      expect(diagnosticsOf(run).map(({ code, nextActions }) => ({ code, nextActions }))).toEqual([
-        { code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED', nextActions: [] },
-        { code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED', nextActions: [] },
+      expect(diagnosticsOf(run)).toEqual([
+        {
+          code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
+          severity: 'error',
+          summary: OLDER,
+          nextActions: [],
+          meta: { space: 'app', schemaIssues: [NOT_PROVIDED_ISSUE] },
+        },
+        {
+          code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
+          severity: 'error',
+          summary: 'Database schema does not satisfy contract (1 failure)',
+          why: '`db update`, `db init` and `db migrate` refuse this database until it provides what the contract of another space requires. The live schema differs: missing: public/users/email.',
+          nextActions: [],
+          meta: { space: 'pgvector', schemaIssues: [MISSING_COLUMN] },
+        },
       ]);
     });
   });

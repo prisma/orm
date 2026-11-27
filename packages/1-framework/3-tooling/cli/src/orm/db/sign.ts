@@ -44,6 +44,7 @@ import { appRefsDirFor, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
+  databaseRefusedInRun,
   driftIssues,
   includesDatabaseCapabilitiesNotProvided,
   issueNodes,
@@ -676,18 +677,20 @@ export function createDbSignCommand(
           }
         }
         const migrate = cliCommand(cliInvocation(ctx, args.flags.db), 'db migrate');
-        const databaseRefused = spaces.some(refusedForDatabaseCapabilities);
+        const databaseRefused = databaseRefusedInRun(
+          spaces.map((outcome) => failedSchemaOf(outcome)?.schema.issues ?? []),
+        );
         const verdictDiagnostic = (space: string, schema: VerifyDatabaseSchemaResult) =>
           schemaVerdictDiagnostic({
             result: schema,
             space,
-            nextActions: databaseRefused
-              ? []
-              : schemaDriftNextActions({
-                  verb: 'sign',
-                  contractRef,
-                  issues: schema.schema.issues,
-                }),
+            databaseRefused,
+            nextActions: schemaDriftNextActions({
+              verb: 'sign',
+              contractRef,
+              issues: schema.schema.issues,
+              databaseRefused,
+            }),
           });
         const diagnostics: Diagnostic[] = spaces.flatMap((outcome) => {
           switch (outcome.status) {
@@ -715,10 +718,7 @@ export function createDbSignCommand(
                   .filter((outcome) => outcome.status === 'failed' && failsSchema(outcome))
                   .map((outcome) => outcome.space),
                 lackingSpaces: spaces
-                  .filter(
-                    (outcome) =>
-                      outcome.status === 'failed' && refusedForDatabaseCapabilities(outcome),
-                  )
+                  .filter(refusedForDatabaseCapabilities)
                   .map((outcome) => outcome.space),
                 conflictSpaces: spaces
                   .filter((outcome) => outcome.status === 'conflict')
@@ -736,7 +736,7 @@ export function createDbSignCommand(
                 })),
                 advancedRefs: advanced.map(({ space, name, hash }) => ({ space, name, hash })),
                 rerunCommand: rerun,
-                migrateCommand: migrate,
+                migrateCommand: databaseRefused ? undefined : migrate,
                 diagnostics,
                 cause: unwritten[0]?.cause,
               }),
