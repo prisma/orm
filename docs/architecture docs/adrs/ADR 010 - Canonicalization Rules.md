@@ -106,7 +106,7 @@ Turning a section into the text that is hashed has two owners.
 - **Each family owns the normal form of its own content.** A family supplies one function, `normalizeStorage`. It leaves out the fields that the family defines as defaults, orders the lists whose order means nothing to the database, and keeps everything else as given.
 - **The framework sorts and encodes.** It does not know what any field means and reorders no list.
 
-The family's function is applied to `storage` both when a contract is written and whenever a storage hash is computed or checked. So `contract.json` holds the normal form, and the hash covers what the written `storage` holds. Two fields in the file are not hashed: the section's own `storageHash`, and each namespace's `kind` ("The whole computation" says why).
+The family's function is applied to `storage` both when a contract is written and whenever a storage hash is computed or checked. So `contract.json` holds the normal form, and the hash covers what the written `storage` holds. Two fields in the written `storage` are not hashed: the section's own `storageHash`, and each namespace's `kind` ("The whole computation" says why).
 
 Which sections each hash covers, and the rule that none of this changes within a major version, are in [ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md). This record says how a section becomes the text that is hashed and the file that is written.
 
@@ -126,7 +126,7 @@ The hard part is defaults, because a value's shape does not say whether it is on
 
 Only the family knows that an absent `many` means `false`. So a family leaves out a field only where the family has said that leaving the field out means the same as the value, and it lists each such field. Prisma's two families list theirs in this record, under "What a family does".
 
-Prisma does not know what the data a family carries without owning means, such as an index type's options, so it keeps that data exactly as given. The user chooses how to write it, and two ways of writing the same setting, such as no options and `{ "fastupdate": true }`, give two storage hashes. That is accepted, because it never makes two different contracts share a hash. Its cost falls on a user who switches between the two forms: the switch is planned as a migration that changes no setting. The worst case is an index whose name is derived from its content ([ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md)), where that migration renames or rebuilds the index.
+Some data in `storage` is owned by someone other than the family: a codec owns a column type's parameters, and a target or an extension owns an index type's options. The family carries that data without knowing what it means, so it keeps that data exactly as given. The user chooses how to write it, and two ways of writing the same setting, such as no options and `{ "fastupdate": true }`, give two storage hashes. That is accepted, because it never makes two different contracts share a hash. Its cost falls on a user who switches between the two forms: the switch is planned as a migration that changes no setting. The worst case is an index whose name is derived from its content ([ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md)), where that migration renames or rebuilds the index.
 
 ## The rules
 
@@ -171,7 +171,7 @@ Terms used in this section:
 - A column or a value object's field may carry `typeParams`, the parameters of its type, such as a `varchar`'s length. A field whose type is a union carries them on each member of the union.
 - `storage.types` holds named column types that columns refer to.
 
-A family's normal form does two things to `storage`, and the SQL family drops one obsolete flag besides.
+A family's normal form does two things to `storage`. The SQL family's list below also drops one obsolete flag, which is not a default.
 
 **It leaves out the family's own defaults.** Each family decides its own; the SQL family keeps an index's `unique: false`, for example, where the MongoDB family leaves it out.
 
@@ -204,7 +204,7 @@ The MongoDB family leaves out:
 
 For example, indexes listed as `[{ "name": "b_idx", … }, { "columns": ["x"] }, { "name": "a_idx", … }]` are hashed as the unnamed one, then `a_idx`, then `b_idx`. So reordering these lists in the contract source changes no hash. Lists whose order has meaning keep it: the columns of a composite key, the keys of a MongoDB index, the members of a value set. A table's columns are an object keyed by name, so the file records no column order and the hash covers none.
 
-**Everything else is kept exactly as given.** That includes the contents of data a family carries without owning: a type's parameters, an index's options, a MongoDB partial filter expression, a generator's parameters, the members of a value set, and every field of an entry that a target or an extension pack defines. A `false`, `[]` or `{}` inside any of these stays. The family owns the containers, though, so it may leave out an empty one as a whole: it does so for an empty `typeParams` and an empty SQL index `options`.
+**Everything else is kept exactly as given.** That includes the contents of data a family carries without owning: a type's parameters, an index's options, a MongoDB partial filter expression, a generator's parameters, the members of a value set, and every field of an entry that a target or an extension pack defines. A `false`, `[]` or `{}` inside any of these stays. The family owns the containers that hold this data, though, so it may leave out an empty container as a whole: it does so for an empty `typeParams` and an empty SQL index `options`.
 
 **The function.** A family supplies it as `normalizeStorage` on its contract serializer (`ContractSerializer.normalizeStorage`). It:
 
@@ -253,16 +253,16 @@ Every function that computes or checks a storage hash takes the family's `normal
 ## Consequences
 
 - A contract written in TypeScript and the same contract written in the Prisma schema language give the same file and the same hashes.
-- A family that forgets to name a default writes the default into every contract. That is visible in the file and in review, and it is harmless to the hash as long as the family always writes it. The opposite mistake, leaving out a value that is not a default, is the one that makes two contracts share a hash, and it is possible only through a rule a family writes on purpose.
+- A family that does not name one of its defaults keeps that field as given. That is harmless to the hash only if the family's authoring code always writes the field the same way; if it sometimes writes the default out and sometimes leaves it out, one meaning gets two hashes. The opposite mistake, leaving out a value that is not a default, is the one that makes two contracts share a hash, and it is possible only through a rule a family writes on purpose.
 - An author of a type, an extension pack or a target can rely on Prisma to keep a `false`, `[]` or `{}` that appears inside the data they own.
-- The rules, and each family's output for a given contract, do not change within a major version (ADR 332). A family may reorganise its normal form's code, but it must give the same output. So a family cannot start leaving out a field that existing contracts already write: those contracts would get a new hash. A field added for a new feature may have its default left out from the start.
+- The rules, and each family's output for a given contract, do not change within a major version (ADR 332). A family may reorganize its normal form's code, but it must give the same output. So a family cannot start leaving out a field that existing contracts already write: those contracts would get a new hash. A field added for a new feature may have its default left out from the start.
 - Each family's test, `hash-rules.fixed-answers.test.ts`, holds saved contracts to literal hashes. Among them are two contracts that differ only in that one has every named default written out and every list the family sorts in an unsorted order, and the other has the defaults left out and the lists sorted. Both must give the same storage hash.
 
 ## Alternatives considered
 
 - **Have the framework leave out every `false`, empty array and empty object, and let each family list the paths where they are kept.** Rejected, for the reasons under "Why": the framework cannot know which values are defaults, and every path left off the list loses a value from the file and the hash.
 - **Require that `false` and empty always mean absent inside data a family does not own.** Rejected. It puts a convention nothing checks on authors outside this repository, and a violation gives two different contracts one hash.
-- **Hand the framework content that each family has already normalised, with no function.** Rejected. A storage hash is also computed where no written file exists and checked against files read back, and every such place would have to remember to normalise first. With one required function, writing and hashing use the same normal form.
+- **Hand the framework content that each family has already normalized, with no function.** Rejected. A storage hash is also computed where no written file exists and checked against files read back, and every such place would have to remember to normalize first. With one required function, writing and hashing use the same normal form.
 - **Compact JSON, with no whitespace, as the hash input.** Rejected. Either encoding would serve; the indented one prints like `contract.json`, which is easier to compare by eye when a hash differs. Changing it now would change every hash, which cannot happen within a major version.
 - **Strict RFC 8785 (JSON Canonicalization Scheme) as the encoding.** Rejected. It would serve as well as the encoding chosen, but it differs from it: it prints with no whitespace and orders keys without putting array-index keys first. Adopting it would change every hash, which cannot happen within a major version. Defaults and list order would still be the family's job.
 - **A binary canonical format such as Protobuf or CBOR.** Rejected. A contract is read and reviewed by people and by tools that expect JSON.
