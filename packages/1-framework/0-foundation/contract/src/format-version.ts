@@ -417,12 +417,31 @@ const REMAKE_ADVICE: Readonly<
     ],
   },
   ref: {
-    fix: 'No release of Prisma wrote this file. Restore it from version control, or delete the file and set the ref again with `{bin} migration ref set <name> <contract>`.',
+    fix: 'No release of Prisma wrote this file. Restore it from version control. Or delete the file and write it again. For the db ref, which records the contract the database is at, run `{bin} db migrate --advance-ref db`, which applies any pending migrations to the configured database and then moves the db ref to the contract the database is at; when no migration ends at contract.json, run `{bin} db sign` instead, which checks that the configured database matches contract.json, records that in the database and moves the db ref to contract.json. For the head ref of an extension, run `{bin} contract emit`, which emits contract.json from the contract source and writes the head ref again from the installed extension. For any other ref, set it again to the contract it named with `{bin} migration ref set <name> <contract>`; whatever uses the ref, such as a deploy that migrates a database to it, uses the contract you name.',
     nextActions: [
       RESTORE_FROM_VERSION_CONTROL,
       {
         kind: 'run-command',
-        label: 'Or delete the file and set the ref again',
+        label:
+          'Or, for the db ref, delete the file and run this command, which applies any pending migrations to the configured database, then moves the db ref to the contract the database is at',
+        command: '{bin} db migrate --advance-ref db',
+      },
+      {
+        kind: 'run-command',
+        label:
+          'Or, for the db ref when no migration ends at contract.json, delete the file and run this command, which checks that the configured database matches contract.json and records that in the database, then moves the db ref to contract.json',
+        command: '{bin} db sign',
+      },
+      {
+        kind: 'run-command',
+        label:
+          'Or, for the head ref of an extension, delete the file and run this command, which emits contract.json from the contract source and writes the head ref again from the installed extension',
+        command: '{bin} contract emit',
+      },
+      {
+        kind: 'run-command',
+        label:
+          'Or, for any other ref, delete the file and set the ref again to the contract it named; whatever uses the ref, such as a deploy that migrates a database to it, uses the contract you name',
         command: '{bin} migration ref set <name> <contract>',
       },
     ],
