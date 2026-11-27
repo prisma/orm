@@ -68,9 +68,16 @@ export function mapDriverError(error: DriverError): MappedError {
     }
     case 547: {
       const index = error.message.split('.').at(0)?.split(' ').pop()?.split('"').at(1)
+      const constraint = index ? { index } : undefined
+      if (error.message.includes(' CHECK constraint ')) {
+        return {
+          kind: 'CheckConstraintViolation',
+          constraint,
+        }
+      }
       return {
         kind: 'ForeignKeyConstraintViolation',
-        constraint: index ? { index } : undefined,
+        constraint,
       }
     }
     case 1505: {

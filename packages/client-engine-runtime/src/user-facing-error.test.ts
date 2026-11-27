@@ -210,3 +210,23 @@ test('rethrowAsUserFacing forwards the violated table for unique constraint viol
     }),
   )
 })
+
+test('rethrowAsUserFacing maps a check constraint violation to P2004', () => {
+  const error = makeDriverAdapterError({
+    kind: 'CheckConstraintViolation',
+    constraint: { index: 't_sum_check' },
+    originalCode: '23514',
+    originalMessage: 'new row for relation "t" violates check constraint "t_sum_check"',
+  })
+
+  expect(() => rethrowAsUserFacing(error)).toThrow(UserFacingError)
+
+  try {
+    rethrowAsUserFacing(error)
+  } catch (e) {
+    const userFacing = e as UserFacingError
+    expect(userFacing.code).toBe('P2004')
+    expect(userFacing.message).toBe('Check constraint failed on the constraint: `t_sum_check`')
+    expect(userFacing.meta).toMatchObject({ driverAdapterError: error })
+  }
+})

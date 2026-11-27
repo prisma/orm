@@ -44,3 +44,29 @@ describe('unique constraint violations', () => {
     })
   })
 })
+
+describe('constraint conflicts (547)', () => {
+  test('a CHECK constraint conflict is a check constraint violation', () => {
+    const message =
+      'The INSERT statement conflicted with the CHECK constraint "t_sum_check". ' +
+      'The conflict occurred in database "db", table "dbo.t".'
+    expect(convertDriverError({ code: 'EREQUEST', number: 547, message })).toEqual({
+      kind: 'CheckConstraintViolation',
+      constraint: { index: 't_sum_check' },
+      originalCode: 'EREQUEST',
+      originalMessage: message,
+    })
+  })
+
+  test('a FOREIGN KEY constraint conflict is still a foreign key violation', () => {
+    const message =
+      'The INSERT statement conflicted with the FOREIGN KEY constraint "Post_authorId_fkey". ' +
+      'The conflict occurred in database "db", table "dbo.User", column \'id\'.'
+    expect(convertDriverError({ code: 'EREQUEST', number: 547, message })).toEqual({
+      kind: 'ForeignKeyConstraintViolation',
+      constraint: { index: 'Post_authorId_fkey' },
+      originalCode: 'EREQUEST',
+      originalMessage: message,
+    })
+  })
+})

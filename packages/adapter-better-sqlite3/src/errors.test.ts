@@ -4,7 +4,7 @@ import { convertDriverError } from './errors'
 
 describe('convertDriverError', () => {
   it.each([
-    ['SQLITE_CONSTRAINT_CHECK', 'CHECK constraint failed: age > 0'],
+    ['SQLITE_CONSTRAINT_DATATYPE', 'cannot store TEXT value in INTEGER column t.age'],
     ['SQLITE_MISMATCH', 'datatype mismatch'],
     ['SQLITE_ERROR', 'table t already exists'],
   ])('should map the unhandled code %s to a typed sqlite error', (code, message) => {
@@ -76,5 +76,18 @@ describe('convertDriverError', () => {
       thrown = e
     }
     expect(thrown).toBe(error)
+  })
+
+  it.each([
+    ['a named constraint', 'CHECK constraint failed: t_sum_check', 't_sum_check'],
+    ['an unnamed constraint', 'CHECK constraint failed: v > 0', 'v > 0'],
+  ])('should handle CheckConstraintViolation for %s', (_description, message, index) => {
+    const code = 'SQLITE_CONSTRAINT_CHECK'
+    expect(convertDriverError({ code, message })).toEqual({
+      kind: 'CheckConstraintViolation',
+      constraint: { index },
+      originalCode: code,
+      originalMessage: message,
+    })
   })
 })

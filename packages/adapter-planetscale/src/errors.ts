@@ -33,6 +33,14 @@ export function mapDriverError(error: ParsedDatabaseError): MappedError {
       }
     }
 
+    case 3819: {
+      const index = error.message.split("'").at(1)
+      return {
+        kind: 'CheckConstraintViolation',
+        constraint: index !== undefined ? { index } : undefined,
+      }
+    }
+
     case 1263: {
       const index = error.message.split(' ').pop()?.split("'").at(1)
       return {

@@ -96,6 +96,10 @@ export type MappedError =
       constraint?: { fields: string[] } | { index: string } | { foreignKey: {} }
     }
   | {
+      kind: 'CheckConstraintViolation'
+      constraint?: { index: string }
+    }
+  | {
       kind: 'RestrictViolation'
       constraint?: { fields: string[] } | { index: string } | { foreignKey: {} }
     }
