@@ -15,7 +15,7 @@ export function prismaSpaceRunnerFailureError(failure: MigrationRunnerFailure): 
   const { failedCheck } = failure.meta;
   const next =
     failedCheck !== undefined
-      ? `stopped because this database does not meet the requirement above. Do what it says, or follow the upgrade instructions at ${APP_UPGRADE_GUIDES_URL}, then run the command again.`
+      ? `stopped because this database does not meet the requirement above, which says what the database, or the role that runs the command, must be. The upgrade instructions at ${APP_UPGRADE_GUIDES_URL} say how to meet it; follow them, then run the command again.`
       : 'stopped there; correct the cause above and run the command again.';
   const fix = `${state} Prisma brings the records it keeps for itself up to date before anything else, and ${next}`;
   return new ActionableCliError(

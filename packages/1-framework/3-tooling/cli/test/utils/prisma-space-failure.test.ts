@@ -44,7 +44,7 @@ describe('prismaSpaceRunnerFailureError', () => {
       message:
         'The records Prisma keeps for itself in this database could not be brought up to date',
       why: ownershipCheck,
-      fix: `The database is unchanged. Prisma brings the records it keeps for itself up to date before anything else, and stopped because this database does not meet the requirement above. Do what it says, or follow the upgrade instructions at ${APP_UPGRADE_GUIDES_URL}, then run the command again.`,
+      fix: `The database is unchanged. Prisma brings the records it keeps for itself up to date before anything else, and stopped because this database does not meet the requirement above, which says what the database, or the role that runs the command, must be. The upgrade instructions at ${APP_UPGRADE_GUIDES_URL} say how to meet it; follow them, then run the command again.`,
       nextActions: [
         { kind: 'open-url', label: 'Follow the upgrade instructions', url: APP_UPGRADE_GUIDES_URL },
       ],
@@ -54,7 +54,7 @@ describe('prismaSpaceRunnerFailureError', () => {
 
   it('says what stays applied when the target could not roll the failure back', () => {
     expect(prismaSpaceRunnerFailureError(failedPrecheck(false)).fix).toBe(
-      `The operations that ran before the failure stay applied. Prisma brings the records it keeps for itself up to date before anything else, and stopped because this database does not meet the requirement above. Do what it says, or follow the upgrade instructions at ${APP_UPGRADE_GUIDES_URL}, then run the command again.`,
+      `The operations that ran before the failure stay applied. Prisma brings the records it keeps for itself up to date before anything else, and stopped because this database does not meet the requirement above, which says what the database, or the role that runs the command, must be. The upgrade instructions at ${APP_UPGRADE_GUIDES_URL} say how to meet it; follow them, then run the command again.`,
     );
   });
 
