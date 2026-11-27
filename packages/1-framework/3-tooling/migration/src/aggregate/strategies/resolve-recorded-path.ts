@@ -52,7 +52,11 @@ export interface ResolveRecordedPathInputs {
 }
 
 /** A refusal to read an operation that does not say which migration it is in, with that migration and space added. */
-function inMigration(error: StructuredError, dirName: string, spaceId: string): StructuredError {
+function namingTheMigration(
+  error: StructuredError,
+  dirName: string,
+  spaceId: string,
+): StructuredError {
   return structuredError(error.code, error.message, {
     why: `In migration "${dirName}" of space "${spaceId}": ${error.why ?? error.message}`,
     ...ifDefined('fix', error.fix),
@@ -77,7 +81,7 @@ function accessChangesOfMigration(
       error.code === 'MIGRATION.INVALID_OPERATION_ENTRY' &&
       error.meta?.['migration'] === undefined
     ) {
-      throw inMigration(error, pkg.dirName, spaceId);
+      throw namingTheMigration(error, pkg.dirName, spaceId);
     }
     throw error;
   }

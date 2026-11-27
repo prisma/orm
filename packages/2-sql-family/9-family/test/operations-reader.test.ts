@@ -151,7 +151,7 @@ describe('createSqlOperationsReader', () => {
         }),
       ),
     ).toBe(
-      'Operation 0 ("column.user.mood") of migration "20260201T0000_moods" in space "app" is not in a format this release of Prisma reads: target.unexpected must be removed.',
+      'In migration "20260201T0000_moods" of space "app": Operation 0 ("column.user.mood") is not in a format this release of Prisma reads: target.unexpected must be removed.',
     );
   });
 

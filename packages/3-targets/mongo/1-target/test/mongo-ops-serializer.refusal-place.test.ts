@@ -30,7 +30,7 @@ describe('a refused Mongo operation names where it is', () => {
     expect(() => deserializeMongoOps([fill, withUnknownIndexKey(index)], location)).toThrow(
       expect.objectContaining({
         code: 'MIGRATION.INVALID_OPERATION_ENTRY',
-        why: `Operation 0 ("${index.id}") of migration "20260102T0000_second" in space "app" is not in a format this release of Prisma reads: at execute[0].command: Invalid createIndex command: keys[0].zzz must be removed.`,
+        why: `In migration "20260102T0000_second" of space "app": Operation 0 ("${index.id}") is not in a format this release of Prisma reads: at execute[0].command: Invalid createIndex command: keys[0].zzz must be removed.`,
         fix: expect.stringContaining('restore it from version control'),
         meta: expect.objectContaining({
           index: 0,

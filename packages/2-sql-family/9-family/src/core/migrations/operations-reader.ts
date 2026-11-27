@@ -1,3 +1,4 @@
+import type { MigrationRunnerPerSpaceOptions } from '@internal/framework-components/control';
 import { blindCast } from '@internal/utils/casts';
 import { type Type, type } from 'arktype';
 import { sqlFamilyError } from '../errors';
@@ -21,7 +22,10 @@ export interface SqlTargetOperationsFormat {
 /** Which migrations the operations being read belong to, in order, so a refusal can name one. */
 export interface SqlOperationsLocation {
   readonly space?: string;
-  readonly migrations?: readonly { readonly dirName: string; readonly operationCount: number }[];
+  readonly migrations?: readonly Pick<
+    MigrationRunnerPerSpaceOptions['migrationEdges'][number],
+    'dirName' | 'operationCount'
+  >[];
 }
 
 /**
@@ -171,7 +175,7 @@ function inCurrentForm(
   };
 }
 
-function placeOf(
+function migrationPlaceOf(
   index: number,
   location: SqlOperationsLocation | undefined,
 ): { readonly position: number; readonly migration: string | undefined } {
@@ -206,18 +210,18 @@ export function createSqlOperationsReader<TTargetDetails>(
           'the schema checked the operation, and its target details against the target details schema'
         >(result);
       }
-      const { position, migration } = placeOf(index, location);
+      const { position, migration } = migrationPlaceOf(index, location);
       const operationId = operationIdOf(operation);
       const named = operationId === undefined ? '' : ` ("${operationId}")`;
       const inMigration =
         migration === undefined
           ? ''
-          : ` of migration "${migration}"${location?.space === undefined ? '' : ` in space "${location.space}"`}`;
+          : `In migration "${migration}"${location?.space === undefined ? '' : ` of space "${location.space}"`}: `;
       throw sqlFamilyError(
         'MIGRATION.INVALID_OPERATION_ENTRY',
         'Migration operation entry is malformed',
         {
-          why: `Operation ${position}${named}${inMigration} is not in a format this release of Prisma reads: ${result.summary}.`,
+          why: `${inMigration}Operation ${position}${named} is not in a format this release of Prisma reads: ${result.summary}.`,
           fix: "If the migration's migration.ts builds this operation, change it so the operation holds only the fields the format defines, and emit the migration again. If ops.json was edited by hand, restore it from version control. Otherwise Prisma wrote an operation it cannot read, which is a bug in Prisma: please report it with the operation.",
           meta: {
             index: position,
