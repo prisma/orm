@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import { executeDbInit, executeDbUpdate } from '@internal/cli/control-api';
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { SqlControlExtensionDescriptor } from '@internal/family-sql/control';
-import type { MigrationPlanOperation } from '@internal/framework-components/control';
+import {
+  type MigrationPlanOperation,
+  PRISMA_SPACE_ID,
+} from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { materialiseMigrationPackage } from '@internal/migration-tools/io';
@@ -243,11 +246,8 @@ describe('db init / db update aggregate pipeline (CLI) - postgres', { concurrent
   }, testTimeout);
 
   async function freshDriver(): Promise<PostgresControlDriver> {
-    if (driver) {
-      await resetDatabase(driver);
-      return driver;
-    }
-    driver = await createDriver(database.connectionString);
+    driver ??= await createDriver(database.connectionString);
+    await resetDatabase(driver);
     return driver;
   }
 
@@ -303,7 +303,9 @@ describe('db init / db update aggregate pipeline (CLI) - postgres', { concurrent
       const markers = await drv.query<{ space: string; core_hash: string }>(
         'select space, core_hash from _prisma.marker order by space',
       );
-      expect(markers.rows.map((r) => r.space).sort()).toEqual(['app', EXT_SPACE_ID].sort());
+      expect(markers.rows.map((r) => r.space).sort()).toEqual(
+        [PRISMA_SPACE_ID, 'app', EXT_SPACE_ID].sort(),
+      );
       expect(markers.rows.find((r) => r.space === 'app')!.core_hash).toBe(
         appContract.storage.storageHash,
       );
