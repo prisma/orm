@@ -718,3 +718,7 @@ Why deferred: the printed route is right, and the change is in how the framework
 The case: a `collMod` sets `{ $jsonSchema: X }`, and the collection already has `{ $jsonSchema: X, $expr: … }`. The postcheck compares `options.validator.$jsonSchema` only, so it holds, and the runner skips the `collMod`. The extra predicate stays, rejects writes the contract allows, and schema verification does not see it. The `createCollection` postcheck this branch adds compares the whole validator; the `collMod` postcheck still uses the body.
 
 Why deferred: changing it changes the checks of every `collMod` with a validator that `migration.ts` emits, and so the hash of migrations that hold one. That is a change of `main`'s postcheck rule, outside the stored-name renames. The fix is to compare `options.validator` whole, as the create postcheck now does, with a runner test of a collection whose validator adds a predicate.
+
+## `ops.json` stores an `ObjectId` as its hex string, so a filter "by `_id` values" matches nothing
+
+Found by the round 45 code review of the MongoDB stored-name renames (2026-11-27), older than that work and not run end to end. When a move's route says to select the moving models' documents by their `_id` values and those `_id`s are `ObjectId`s, the filter written in `migration.ts` is serialized into `ops.json` as hex strings. The copy and the delete then match no document. The route should say how to write such a filter so that it survives serialization, or the serializer should keep `ObjectId`s. Check it end to end before deciding.
