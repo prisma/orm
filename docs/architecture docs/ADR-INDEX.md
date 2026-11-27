@@ -184,6 +184,7 @@ Open this list before you propose a new feature or surface, or judge a feature r
 | 024 | Telemetry Schema | Defines telemetry schema and privacy controls for runtime observability | [ADR 024 - Telemetry Schema.md](adrs/ADR%20024%20-%20Telemetry%20Schema.md) |
 | 029 | Shadow DB preflight semantics | Superseded — the CLI never provisions a shadow database; diffing is fully offline against on-disk snapshots, and preflight is a database-extension hook | [ADR 029 - Shadow DB preflight semantics.md](adrs/ADR%20029%20-%20Shadow%20DB%20preflight%20semantics.md) |
 | 051 | PPg preflight-as-a-service contract | Superseded — the core preflight verb is abandoned; preflight is a database-extension hook, and Prisma Postgres will provide one | [ADR 051 - PPg preflight-as-a-service contract.md](adrs/ADR%20051%20-%20PPg%20preflight-as-a-service%20contract.md) |
+| 336 | CI finds breaking and accidental API changes against the last release | Three checks on every pull request: generated type tests ask TypeScript whether each export still fits where the last release's stood; the last release's example apps compile against the build; and a committed `api.txt` per package makes every API change visible, which the description must name. A break fails unless it is recorded as deliberate, with its reason | [ADR 336 - CI finds breaking and accidental API changes against the last release.md](adrs/ADR%20336%20-%20CI%20finds%20breaking%20and%20accidental%20API%20changes%20against%20the%20last%20release.md) |
 
 ## Extensions & Packs
 
