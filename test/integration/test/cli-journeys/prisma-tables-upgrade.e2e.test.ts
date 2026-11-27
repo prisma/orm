@@ -42,7 +42,12 @@ import {
 const PRISMA_TABLES_HEAD = postgresTargetDescriptor.contractSpace!.headRef.hash;
 const FIRST_PRISMA_TABLES_MIGRATION =
   postgresTargetDescriptor.contractSpace!.migrations[0]!.dirName;
-const EARLIER_RELEASE = 'CONTRACT.PRISMA_TABLES_FROM_EARLIER_RELEASE';
+const PRISMA_SPACE_BEHIND = 'CONTRACT.PRISMA_SPACE_BEHIND';
+const UPGRADE_INSTRUCTIONS =
+  'https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading/app';
+const BROUGHT_UP_TO_DATE = "Prisma's own tables in this database were brought up to date.";
+/** A space key in a command's JSON output that names the Prisma space. */
+const LISTS_PRISMA_SPACE = /"(space|spaceId|id)":\s*"_prisma"/;
 
 interface WrittenMigration {
   readonly dirName: string;
@@ -174,6 +179,7 @@ withTempDir(({ createTempDir }) => {
 
         const migrate = await runMigrate(ctx);
         expect(migrate.exitCode, `db migrate: ${migrate.stderr}`).toBe(0);
+        expect(migrate.stderr).toContain(BROUGHT_UP_TO_DATE);
 
         const expectedLedger = [
           {
@@ -214,6 +220,7 @@ withTempDir(({ createTempDir }) => {
 
         const again = await runMigrate(ctx);
         expect(again.exitCode, `second db migrate: ${again.stderr}`).toBe(0);
+        expect(again.stderr).not.toContain(BROUGHT_UP_TO_DATE);
         expect(await state()).toEqual(expectedState);
 
         const verify = await runDbVerify(ctx);
@@ -238,11 +245,12 @@ withTempDir(({ createTempDir }) => {
     const db = useDevDatabase();
 
     it(
-      'say an earlier release wrote the tables, name db migrate, and change nothing',
+      'say the tables are not up to date, name db migrate, and change nothing, even when db verify checks only the schema',
       async () => {
         const { ctx } = await releaseCandidateProject(db.connectionString, createTempDir);
 
         const verify = await runDbVerify(ctx, ['--json']);
+        const verifySchemaOnly = await runDbVerify(ctx, ['--schema-only', '--json']);
         const status = await runMigrationStatus(ctx, ['--json']);
         const log = await runMigrationLog(ctx, ['--json']);
         const initDryRun = await runDbInit(ctx, ['--dry-run', '--json']);
@@ -251,6 +259,7 @@ withTempDir(({ createTempDir }) => {
 
         for (const [name, run] of Object.entries({
           verify,
+          verifySchemaOnly,
           status,
           log,
           initDryRun,
@@ -258,7 +267,7 @@ withTempDir(({ createTempDir }) => {
           migrateShow,
         })) {
           expect(engineError(run), name).toMatchObject({
-            code: EARLIER_RELEASE,
+            code: PRISMA_SPACE_BEHIND,
             nextActions: [
               expect.objectContaining({
                 kind: 'run-command',
@@ -369,6 +378,114 @@ withTempDir(({ createTempDir }) => {
         expect(strict.exitCode, `db verify --strict: ${strict.stderr}`).toBe(0);
         const update = await runDbUpdate(ctx);
         expect(update.exitCode, `db update: ${update.stderr}`).toBe(0);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
+  describe('db init on a database a release candidate set up', () => {
+    const db = useDevDatabase();
+
+    it(
+      'renames the schema, keeps the application row, and says so',
+      async () => {
+        const { ctx, first } = await releaseCandidateProject(db.connectionString, createTempDir);
+
+        const init = await runDbInit(ctx);
+        expect(init.exitCode, `db init: ${init.stderr}`).toBe(0);
+
+        expect({
+          broughtUpToDate: init.stderr.includes(BROUGHT_UP_TO_DATE),
+          schemas: await schemas(db.connectionString),
+          markers: await markers(db.connectionString),
+        }).toEqual({
+          broughtUpToDate: true,
+          schemas: ['_prisma'],
+          markers: [
+            { space: PRISMA_SPACE_ID, core_hash: PRISMA_TABLES_HEAD },
+            { space: 'app', core_hash: first.to },
+          ],
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
+  describe('a database whose tables are in a form from before the release candidates', () => {
+    const db = useDevDatabase();
+
+    it(
+      'stops db migrate with an error that names the table and points at the upgrade instructions, and changes nothing',
+      async () => {
+        const { ctx } = await releaseCandidateProject(db.connectionString, createTempDir);
+        await sql(db.connectionString, 'ALTER TABLE prisma_contract.marker DROP COLUMN app_tag');
+
+        const migrate = await runMigrate(ctx, ['--json']);
+
+        expect(migrate.exitCode).not.toBe(0);
+        expect(engineError(migrate)).toMatchObject({
+          code: 'MIGRATION.PRECHECK_FAILED',
+          summary: "Prisma's own tables in this database could not be brought up to date",
+          why: expect.stringContaining('"prisma_contract"."marker"'),
+          fix: expect.stringContaining(UPGRADE_INSTRUCTIONS),
+          nextActions: [expect.objectContaining({ kind: 'open-url', url: UPGRADE_INSTRUCTIONS })],
+        });
+        expect(await schemas(db.connectionString)).toEqual(['prisma_contract']);
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'stops db sign the same way',
+      async () => {
+        const { ctx } = await releaseCandidateProject(db.connectionString, createTempDir);
+        await sql(
+          db.connectionString,
+          'ALTER TABLE prisma_contract.ledger ALTER COLUMN operations DROP NOT NULL',
+        );
+
+        const sign = await runDbSign(ctx, ['--json']);
+
+        expect(sign.exitCode).not.toBe(0);
+        expect(engineError(sign)).toMatchObject({
+          code: 'MIGRATION.PRECHECK_FAILED',
+          why: expect.stringContaining('"prisma_contract"."ledger"'),
+          fix: expect.stringContaining(UPGRADE_INSTRUCTIONS),
+        });
+        expect(await schemas(db.connectionString)).toEqual(['prisma_contract']);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
+  describe('commands that list spaces, on a database that has the Prisma space', () => {
+    const db = useDevDatabase();
+
+    it(
+      'do not list it',
+      async () => {
+        const ctx = setupJourney({ connectionString: db.connectionString, createTempDir });
+        expect((await runContractEmit(ctx)).exitCode, 'emit').toBe(0);
+        expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode, 'plan').toBe(
+          0,
+        );
+        const migrate = await runMigrate(ctx, ['--json']);
+        expect(migrate.exitCode, `db migrate: ${migrate.stderr}`).toBe(0);
+        const sign = await runDbSign(ctx, ['--json']);
+        expect(sign.exitCode, `db sign: ${sign.stderr}`).toBe(0);
+        const status = await runMigrationStatus(ctx, ['--json']);
+        expect(status.exitCode, `migration status: ${status.stderr}`).toBe(0);
+
+        expect((await markers(db.connectionString)).map((row) => row['space'])).toEqual([
+          PRISMA_SPACE_ID,
+          'app',
+        ]);
+        expect({
+          migrate: LISTS_PRISMA_SPACE.test(migrate.stdout),
+          sign: LISTS_PRISMA_SPACE.test(sign.stdout),
+          status: LISTS_PRISMA_SPACE.test(status.stdout),
+        }).toEqual({ migrate: false, sign: false, status: false });
+        expect(sign.stdout).toMatch(/"(space|spaceId)":\s*"app"/);
       },
       timeouts.spinUpPpgDev,
     );

@@ -27,6 +27,7 @@ import {
 } from '@internal/framework-components/control';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import { MigrationToolsError } from '@internal/migration-tools/errors';
 import {
   applyInstalledContractSpace,
   type InstalledContractSpaceApplied,
@@ -34,7 +35,7 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
-import { notOk, ok } from '@internal/utils/result';
+import { notOk, ok, type Result } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
 import { errorContractTypesModuleMissing } from '../utils/cli-errors';
 import { contractValidationMeta } from '../utils/contract-validation-meta';
@@ -389,7 +390,10 @@ class ControlClientImpl implements ControlClient {
       });
     }
 
-    if (options.mode === 'apply') await this.bringPrismaSpaceUpToDate();
+    if (options.mode === 'apply') {
+      const prismaSpace = await this.applyPrismaSpace(options.onPrismaSpaceApplied);
+      if (!prismaSpace.ok) return notOk(prismaSpace.failure);
+    }
     return executeDbInit({
       driver,
       invocation: options.invocation,
@@ -433,7 +437,10 @@ class ControlClientImpl implements ControlClient {
       });
     }
 
-    if (options.mode === 'apply') await this.bringPrismaSpaceUpToDate();
+    if (options.mode === 'apply') {
+      const prismaSpace = await this.applyPrismaSpace(options.onPrismaSpaceApplied);
+      if (!prismaSpace.ok) return notOk(prismaSpace.failure);
+    }
     return executeDbUpdate({
       driver,
       invocation: options.invocation,
@@ -475,7 +482,7 @@ class ControlClientImpl implements ControlClient {
       mode: options.strict ? 'strict' : 'lenient',
       skipSchema: options.skipSchema,
       skipMarker: options.skipMarker,
-      ...ifDefined('prismaTables', this.options.target.contractSpace),
+      ...ifDefined('prismaSpace', this.options.target.contractSpace),
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
@@ -486,7 +493,8 @@ class ControlClientImpl implements ControlClient {
     await this.connectWithProgress(options.connection, 'dbSign', onProgress);
     const { driver, familyInstance, frameworkComponents } = await this.ensureConnected();
 
-    await this.bringPrismaSpaceUpToDate();
+    const prismaSpace = await this.applyPrismaSpace(options.onPrismaSpaceApplied);
+    if (!prismaSpace.ok) return notOk(prismaSpace.failure);
     return executeDbSign({
       driver,
       familyInstance,
@@ -502,19 +510,40 @@ class ControlClientImpl implements ControlClient {
   }
 
   async bringPrismaSpaceUpToDate(): Promise<InstalledContractSpaceApplied | undefined> {
+    const applied = await this.applyPrismaSpace(undefined);
+    if (!applied.ok) throw applied.failure;
+    return applied.value;
+  }
+
+  /** The Prisma space brought up to date, with a failure returned rather than thrown, for the methods that return a `Result`. */
+  private async applyPrismaSpace(
+    onApplied: ((applied: InstalledContractSpaceApplied) => void) | undefined,
+  ): Promise<Result<InstalledContractSpaceApplied | undefined, CliStructuredError>> {
     const { driver, familyInstance, frameworkComponents } = await this.ensureConnected();
     const { target } = this.options;
-    if (target.contractSpace === undefined || !hasMigrations(target)) return undefined;
-    const applied = await applyInstalledContractSpace({
-      spaceId: PRISMA_SPACE_ID,
-      contractSpace: target.contractSpace,
-      driver,
-      familyInstance,
-      migrations: target.migrations,
-      frameworkComponents,
-    });
-    if (!applied.ok) throw prismaSpaceRunnerFailureError(applied.failure);
-    return applied.value;
+    if (target.contractSpace === undefined || !hasMigrations(target)) return ok(undefined);
+    let applied: Awaited<ReturnType<typeof applyInstalledContractSpace>>;
+    try {
+      applied = await applyInstalledContractSpace({
+        spaceId: PRISMA_SPACE_ID,
+        contractSpace: target.contractSpace,
+        driver,
+        familyInstance,
+        migrations: target.migrations,
+        frameworkComponents,
+      });
+    } catch (error) {
+      if (
+        error instanceof MigrationToolsError &&
+        error.code === 'MIGRATION.INSTALLED_SPACE_UNREACHABLE'
+      ) {
+        return notOk(error);
+      }
+      throw error;
+    }
+    if (!applied.ok) return notOk(prismaSpaceRunnerFailureError(applied.failure));
+    if (applied.value.outcome === 'applied') onApplied?.(applied.value);
+    return ok(applied.value);
   }
 
   async readMarker(): Promise<ContractMarkerRecord | null> {
@@ -560,7 +589,8 @@ class ControlClientImpl implements ControlClient {
       });
     }
 
-    await this.bringPrismaSpaceUpToDate();
+    const prismaSpace = await this.applyPrismaSpace(options.onPrismaSpaceApplied);
+    if (!prismaSpace.ok) return notOk(prismaSpace.failure);
     return executeMigrate({
       driver,
       invocation: options.invocation,

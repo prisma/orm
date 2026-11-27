@@ -191,10 +191,16 @@ export interface PlannerWarningsListener {
   readonly onPlannerWarnings?: (warnings: readonly MigrationPlannerConflict[]) => void;
 }
 
+/** Learns when a command brought the Prisma space up to date before doing anything else. */
+export interface PrismaSpaceListener {
+  /** Called when the command applied the Prisma space's migrations; not called when the space was already up to date. */
+  readonly onPrismaSpaceApplied?: (applied: InstalledContractSpaceApplied) => void;
+}
+
 /**
  * Options for the dbInit operation.
  */
-export interface DbInitOptions extends PlannerWarningsListener {
+export interface DbInitOptions extends PlannerWarningsListener, PrismaSpaceListener {
   /** The command line the advice of a failure repeats: its directory, `--config` and whether `--db` was given. */
   readonly invocation: CliInvocation;
   /** Contract or unvalidated JSON - validated at runtime via familyInstance.deserializeContract() */
@@ -225,7 +231,7 @@ export interface DbInitOptions extends PlannerWarningsListener {
 /**
  * Options for the dbUpdate operation.
  */
-export interface DbUpdateOptions extends PlannerWarningsListener {
+export interface DbUpdateOptions extends PlannerWarningsListener, PrismaSpaceListener {
   /** The command line the advice of a failure repeats: its directory, `--config` and whether `--db` was given. */
   readonly invocation: CliInvocation;
   /** Contract or unvalidated JSON - validated at runtime via familyInstance.deserializeContract() */
@@ -318,7 +324,7 @@ export interface DbVerifyOptions {
 /**
  * Options for the dbSign operation.
  */
-export interface DbSignOptions {
+export interface DbSignOptions extends PrismaSpaceListener {
   /** The app space's contract, already deserialized through the family seam. */
   readonly contract: Contract;
   /** The command line the advice of a refusal repeats: its directory, `--config` and whether `--db` was given. */
@@ -681,7 +687,7 @@ export type MigrateTarget =
  * just resolves the descriptor surface (config, refs, contract
  * envelope, app-space migration packages) and hands the inputs in.
  */
-export interface MigrateOptions {
+export interface MigrateOptions extends PrismaSpaceListener {
   /** The command line the advice of a failure repeats: its directory, `--config` and whether `--db` was given. */
   readonly invocation: CliInvocation;
   /** Already-validated app contract (the canonical "where we are heading" hash). */
@@ -936,7 +942,7 @@ export interface ControlClient {
   schemaVerify(options: SchemaVerifyOptions): Promise<VerifyDatabaseSchemaResult>;
 
   /**
-   * Initializes database schema from contract.
+   * Initializes database schema from contract. In apply mode it first brings the Prisma space up to date, as {@link ControlClient.bringPrismaSpaceUpToDate} does, and returns a failure of that as its failure.
    * Uses additive-only policy (no destructive changes).
    *
    * @param options.mode - 'plan' to preview, 'apply' to execute
@@ -946,7 +952,7 @@ export interface ControlClient {
   dbInit(options: DbInitOptions): Promise<DbInitResult>;
 
   /**
-   * Updates a database schema to match the current contract.
+   * Updates a database schema to match the current contract. In apply mode it first brings the Prisma space up to date, as {@link ControlClient.bringPrismaSpaceUpToDate} does, and returns a failure of that as its failure.
    * Creates the signature table if it does not exist. No preconditions required.
    * Allows additive, widening, and destructive operation classes.
    *
@@ -972,7 +978,7 @@ export interface ControlClient {
   dbVerify(options: DbVerifyOptions): Promise<ExecuteDbVerifyResult>;
 
   /**
-   * Verifies every contract space (app and extensions) against the live schema without strict mode, then signs every space that verified, in one transaction where the family supports one.
+   * First brings the Prisma space up to date, as {@link ControlClient.bringPrismaSpaceUpToDate} does, and returns a failure of that as its failure. Then verifies every contract space (app and extensions) against the live schema without strict mode, and signs every space that verified, in one transaction where the family supports one.
    *
    * @returns Result pattern: each space's outcome on success; structured CLI error on loader failure.
    * @throws If not connected or infrastructure failure
@@ -980,9 +986,9 @@ export interface ControlClient {
   dbSign(options: DbSignOptions): Promise<ExecuteDbSignResult>;
 
   /**
-   * Brings Prisma's own tables up to date with the installed target package, by applying the contract space its control descriptor carries, before anything else reads the database. `dbInit` and `dbUpdate` in apply mode, `dbSign` and `migrate` call it themselves; a caller that reads the database's rows before calling one of them calls it first. Resolves `undefined` when the target carries no such space.
+   * Brings the Prisma space up to date with the installed target package, by applying the contract space its control descriptor carries, before anything else reads the database. `dbInit` and `dbUpdate` in apply mode, `dbSign` and `migrate` do it themselves; a caller that reads the database's rows before calling one of them calls this first. Resolves `undefined` when the target carries no such space.
    *
-   * @throws A structured CLI error when the space's migrations fail, and `MIGRATION.INSTALLED_SPACE_UNREACHABLE` when the database records the space at a contract this release cannot reach
+   * @throws A structured CLI error when the space's migrations fail, and `MIGRATION.INSTALLED_SPACE_UNREACHABLE` when this release cannot use the database's row of the space
    */
   bringPrismaSpaceUpToDate(): Promise<InstalledContractSpaceApplied | undefined>;
 
@@ -1009,7 +1015,7 @@ export interface ControlClient {
   readLedger(space?: string): Promise<readonly LedgerEntryRecord[]>;
 
   /**
-   * Advances the database along the migration graph to the target contract, with full execution checks.
+   * First brings the Prisma space up to date, as {@link ControlClient.bringPrismaSpaceUpToDate} does, and returns a failure of that as its failure. Then advances the database along the migration graph to the target contract, with full execution checks.
    * On a target whose DDL is transactional a failure rolls back every space; otherwise the operations that already ran stay applied.
    * Resume-safe: re-running after failure picks up from the marker of each space.
    *

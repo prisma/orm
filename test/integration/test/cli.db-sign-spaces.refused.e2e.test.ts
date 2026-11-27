@@ -1,5 +1,6 @@
 import { existsSync, readdirSync } from 'node:fs';
-import { withDevDatabase } from '@repo/test-utils';
+import { PRISMA_SPACE_ID } from '@prisma/orm-framework/components/control';
+import { withClient, withDevDatabase } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { TEST_SPACE_ID } from './contract-space-fixture/constants';
@@ -14,12 +15,21 @@ import {
 } from './utils/db-sign-spaces-helpers';
 
 /**
- * A `db sign` that signs no space writes nothing: the app space fails verification and the test extension's space lacks the invariant its head ref requires.
+ * A `db sign` that signs no space writes no marker of a space it was asked to sign: the app space fails verification and the test extension's space lacks the invariant its head ref requires. It has still brought Prisma's own tables up to date, which every command that changes the database does before anything else.
  */
+async function prismaSpaceRow(connectionString: string) {
+  return withClient(connectionString, async (client) => {
+    const result = await client.query('SELECT space FROM _prisma.marker WHERE space = $1', [
+      PRISMA_SPACE_ID,
+    ]);
+    return result.rows;
+  });
+}
+
 withTempDir(({ createTempDir }) => {
   describe('db sign when no space can be signed', () => {
     it(
-      'writes no marker, no ref and no snapshot, and exits 4',
+      "writes no marker of its spaces, no ref and no snapshot, and exits 4, having still brought Prisma's own tables up to date",
       async () => {
         await withDevDatabase(async ({ connectionString }) => {
           const project = setupTestDirectoryFromFixtures(
@@ -45,6 +55,7 @@ withTempDir(({ createTempDir }) => {
             },
           ]);
           expect(await postgresMarkers(connectionString)).toEqual({});
+          expect(await prismaSpaceRow(connectionString)).toEqual([{ space: PRISMA_SPACE_ID }]);
           expect([
             existsSync(dbRefPath(project, 'app')),
             existsSync(dbRefPath(project, TEST_SPACE_ID)),

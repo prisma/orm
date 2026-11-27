@@ -42,6 +42,7 @@ import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { appRefsDirFor, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
+import { reportPrismaSpaceApplied } from '../prisma-space-report';
 import { controlProgressReporter } from '../progress';
 import {
   issueNodes,
@@ -614,6 +615,7 @@ export function createDbSignCommand(
           migrationsDir,
           invocation,
           connection: dbConnection,
+          onPrismaSpaceApplied: () => reportPrismaSpaceApplied(ctx.report),
           onProgress: controlProgressReporter(ctx.report),
         });
         if (!signed.ok) {

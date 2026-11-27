@@ -30,7 +30,9 @@ The first command that changes the database, `prisma db init`, `prisma db update
 
 For each database the project deploys to (development, staging, production), run the command the project already uses to change it, usually `prisma db migrate`, once with the new release. Do this before the application on the new release is deployed against that database.
 
-Commands that only read the database do not rename anything: `prisma db verify`, `prisma migration status`, `prisma migration log`, a dry run of a command, and the check the client runs when it is first used. Pointed at a database that still has `prisma_contract`, they say that Prisma's own tables were written by an earlier release and name `prisma db migrate`. Run that command, then run the read again.
+The command renames the schema first, before its own checks. So a command that the database's change policy then refuses, such as `prisma db update` on a database whose policy permits only `db migrate`, or a command the user cancels at a prompt, has still renamed the schema. This is harmless: the rename changes only Prisma's own tables, keeps every row, and is what the next command would do anyway.
+
+Commands that only read the database do not rename anything: `prisma db verify`, `prisma migration status`, `prisma migration log`, a dry run of a command, and the check the client runs when it is first used. Pointed at a database that still has `prisma_contract`, they stop with `CONTRACT.PRISMA_SPACE_BEHIND`, which says that Prisma's own tables are not up to date with the installed release and names `prisma db migrate`. This includes `prisma db verify --schema-only`. Run that command, then run the read again.
 
 ### When the command stops
 
@@ -53,7 +55,7 @@ There are two fixes. Ask the user which one to use, because both need a person w
 
 The migrating role also needs CREATE on the database. If it does not have it, grant it, or use the first fix.
 
-**Both `prisma_contract` and `_prisma` exist.** Prisma cannot tell which schema holds the tables to keep, so it changes nothing. This happens when a release candidate's command-line tool was run against a database that the new release had already brought up to date: the older tool creates a new, empty `prisma_contract` beside `_prisma`. Count the rows of `marker` in each schema. If `prisma_contract.marker` has no rows and `_prisma.marker` has rows, the older tool created `prisma_contract`, and after a backup it can be dropped with `DROP SCHEMA "prisma_contract" CASCADE`. In every other case, stop and ask the user, because one of the schemas holds rows that would be lost.
+**Both `prisma_contract` and `_prisma` exist, and Prisma's own row is not in `_prisma`.** The new release keeps its tables in `_prisma`; `prisma_contract` was created by a release candidate. Prisma cannot tell which schema holds the tables to keep, so it changes nothing. This happens, for example, when someone created a `_prisma` schema by hand. Do not drop either schema before you know which holds the records: count the rows of `marker` and `ledger` in each, and stop and ask the user, because a schema that is dropped loses its rows.
 
 **A table is in a form from before the release candidates.** Prisma checks the columns of each of its tables. A database set up by a `0.x` release can have tables in an older form, and those forms are not migrated. The command stops with an error that names the table and the column it expected. Stop and tell the user. Prisma's tables in such a database cannot be kept, but the application's own tables can: after a backup, drop the old schema (`DROP SCHEMA "prisma_contract" CASCADE`), then run `prisma db sign`, which checks that the database matches the contract and records it in a new `_prisma.marker`. The history of applied migrations in the old `ledger` is lost.
 
@@ -61,7 +63,15 @@ The migrating role also needs CREATE on the database. If it does not have it, gr
 
 A release candidate's application pointed at the database finds no marker in `prisma_contract`. It logs a warning and keeps running, so instances of the old application that run during a deploy keep working.
 
-A release candidate's command-line tool must not be used against the database again. It would create a new, empty `prisma_contract` schema beside `_prisma`, and the next command of the new release then stops, as described above. Upgrade the `prisma` command-line tool in every place that runs it against the database, such as continuous integration and deploy scripts, together with the application.
+A release candidate's command-line tool must not be used against the database again. It does not know `_prisma`: it creates a new `prisma_contract` schema beside it and writes its records there, and the new release neither reads those records nor reports them. Upgrade the `prisma` command-line tool in every place that runs it against the database, such as continuous integration and deploy scripts, together with the application.
+
+If a release candidate's tool may have run against the database after it was brought up to date, check whether a `prisma_contract` schema exists again:
+
+```sql
+SELECT count(*) FROM pg_namespace WHERE nspname = 'prisma_contract';
+```
+
+If it does, compare `prisma_contract.ledger` with `_prisma.ledger`: a migration recorded only in `prisma_contract` was applied by the older tool and is not in the new release's history. Stop and tell the user what you found before dropping anything.
 
 ## `name-the-prisma-schema`
 
@@ -96,4 +106,4 @@ await client.query('DROP SCHEMA IF EXISTS prisma_contract CASCADE');
 
 A test that creates Prisma's tables by hand must create them in `_prisma`.
 
-Prisma Studio reads these tables for its Migrations view. A version of Prisma Studio that reads `prisma_contract` does not find them once the database has been brought up to date. Update Prisma Studio to a version that reads `_prisma`.
+Prisma Studio reads these tables for its Migrations view. A version of Prisma Studio that reads `prisma_contract` does not find them once the database has been brought up to date. Use a Prisma Studio release that includes the change "Studio reads the migration ledger from the `_prisma` schema" (prisma/studio#1606).

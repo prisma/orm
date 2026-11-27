@@ -89,6 +89,7 @@ import { defineOrmCommand } from './define-command';
 import { dbFlag, permitPolicyChangeFlag } from './flags';
 import { displayPath, migrationsDirFor } from './migration/paths';
 import { normalizeError } from './normalize-error';
+import { reportPrismaSpaceApplied } from './prisma-space-report';
 import { controlProgressReporter } from './progress';
 
 /** What `migrate --show` reports. Read-only; no writes performed. */
@@ -588,7 +589,8 @@ export function createMigrateCommand(
       const diagnostics: Diagnostic[] = [];
       try {
         await client.connect(dbConnection);
-        await client.bringPrismaSpaceUpToDate();
+        const prismaSpace = await client.bringPrismaSpaceUpToDate();
+        if (prismaSpace?.outcome === 'applied') reportPrismaSpaceApplied(ctx.report);
         const appGraph = aggregate.app.graph();
         const markers = await client.readAllMarkers();
         const appMarker = markers.get(aggregate.app.spaceId) ?? null;
