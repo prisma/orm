@@ -139,7 +139,7 @@ In a package's first line, "forwarded names" are names the package re-exports fr
 
 ## An API that may still change
 
-An API that may still change starts its name with its maturity level: `ea_` (Early Access), `preview_` or `rc_` (Release Candidate). On a type or class the word is capitalised, as in `Ea_Search`. A break in such an export is listed as `break (maturity level, does not fail)` and never fails the job.
+An API that may still change starts its name with its maturity level: `ea_` (Early Access), `preview_` or `rc_` (Release Candidate). On a type or class the word is capitalised, as in `Ea_Search`. A break in such an export is listed as `break (maturity level, does not fail)` and does not fail the job, unless it is an old name kept after a promotion (below).
 
 When you promote an API, keep the old name as a deprecated second name for the same thing, until the next major version. Code written against the old name must keep working. From the release that has both names, the check treats the old name like any other export, so removing it fails. Write the old name in one of the three forms the check recognises:
 
