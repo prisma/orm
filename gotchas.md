@@ -43,7 +43,7 @@ $ pnpm prisma-next migrate --to prod --db $DB --config fixtures/diamond/prisma.c
        execution.mutations.defaults[0].ref.namespace must be a string (was missing)
 ```
 
-**Cause.** The contract serialization format moved under the fixtures (e.g. the database→namespace→table diff-tree restructure, #894), and the fixtures' committed predecessor contract snapshot in `migrations/snapshots/<hex>/contract.json` was emitted with the older shape. Offline commands (`migration graph`, `list`, `show`, `check`) never deserialize predecessor contracts, so the drift is invisible until someone runs `migrate` or `migration status` against a database.
+**Cause.** The contract serialization format moved under the fixtures (e.g. the database→namespace→table diff-tree restructure, #894), and the fixtures' committed predecessor contract snapshot in `migrations/snapshots/<hex>/contract.json` was emitted with the older shape. `migration graph`, `list` and `show` never deserialize predecessor contracts, so they still render the fixtures. `migration check` reads strictly the snapshot each ref names, the snapshot at the head, and each one no migration starts from, so it now reports `MIGRATION.CHECK_SNAPSHOT_UNPARSEABLE` for six of the seven fixtures (all but `skip-rollback`). No CI job runs `migration check` on them, and no script regenerates them: `scripts/regen-example-migrations.mjs` covers `examples/prisma-8-demo/migrations/app`, not `fixtures/`.
 
 **Workaround.** Treat the fixtures as offline-only (graph rendering) for now. For a live apply walkthrough, create a fresh fixture with the current CLI (`contract emit` + `migration plan`) instead of reusing the committed ones.
 
