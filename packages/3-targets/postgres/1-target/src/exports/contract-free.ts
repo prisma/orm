@@ -51,7 +51,10 @@ export {
   PRISMA_TABLES_MISSING_WHY,
   PRISMA_TABLES_SCHEMA,
   type PrismaTableName,
+  prismaTableLocation,
   prismaTablesMissingSummary,
   qualifiedPrismaTable,
+  RECORD_DATABASE_POLICIES_SQL,
+  RELEASE_CANDIDATE_MARKER_TABLE,
   RELEASE_CANDIDATE_PRISMA_TABLES_SCHEMA,
 } from '../core/prisma-tables';

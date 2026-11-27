@@ -39,6 +39,7 @@ import {
   failedPrecheckWhy,
   isPrismaSpace,
   schemaCheckWhy,
+  storedDatabasePolicies,
   withDatabaseUnchanged,
   withFailingSpace,
 } from '@internal/framework-components/control';
@@ -54,8 +55,10 @@ import { postgresError } from '../errors';
 import {
   PRISMA_TABLE_NAMES,
   PRISMA_TABLES_MISSING_WHY,
+  type PrismaTableName,
   prismaTablesMissingSummary,
   qualifiedPrismaTable,
+  RECORD_DATABASE_POLICIES_SQL,
 } from '../prisma-tables';
 import { type CapabilitiesByVersion, postgresCapabilitiesByVersion } from '../server-version';
 import { readPostgresServerVersionNumber } from '../server-version-number';
@@ -261,16 +264,17 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     const isSelfEdgeNoOp =
       isSelfEdge && applyValue.operationsExecuted === 0 && incomingIsSubsetOfExisting;
 
-    if (!isSelfEdgeNoOp || options.databasePolicies !== undefined) {
+    const onlyPolicies =
+      applyValue.operationsExecuted === 0 && markerAtDestination && incomingIsSubsetOfExisting
+        ? options.databasePolicies
+        : undefined;
+    if (onlyPolicies !== undefined) {
+      await this.recordDatabasePolicies(driver, onlyPolicies);
+    } else if (!isSelfEdgeNoOp) {
       const markerResult = await this.upsertMarker(driver, options, existingMarker, space);
       if (!markerResult.ok) return markerResult;
     }
-    const recordsPoliciesOnly =
-      options.databasePolicies !== undefined &&
-      applyValue.operationsExecuted === 0 &&
-      markerAtDestination &&
-      incomingIsSubsetOfExisting;
-    if (!isSelfEdgeNoOp && !recordsPoliciesOnly) {
+    if (!isSelfEdgeNoOp && onlyPolicies === undefined) {
       await this.recordLedgerEntries(
         driver,
         options,
@@ -439,20 +443,32 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
   }
 
   /**
-   * The target's `_prisma` contract space creates the marker and ledger tables. Without them a space's operations would run and its marker write would then fail, and on a database a release candidate set up, whose tables are in the schema `prisma_contract`, the runner would read no row and plan from an empty database.
+   * The target's `_prisma` contract space creates the tables the runner writes. Without them a space's operations would run and its signature write would then fail, and on a database a release candidate set up, whose tables are in the schema `prisma_contract`, the runner would read no row and plan from an empty database.
    */
   private async ensurePrismaTablesExist(
     driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
   ): Promise<Result<void, SqlMigrationRunnerFailure>> {
-    const found = await driver.query<{ readonly exists: boolean }>(
-      'SELECT to_regclass($1) IS NOT NULL AS "exists"',
-      [qualifiedPrismaTable(PRISMA_TABLE_NAMES.marker)],
+    const tables = Object.values(PRISMA_TABLE_NAMES);
+    const found = await driver.query<{ readonly table: PrismaTableName }>(
+      'SELECT "table" FROM unnest($1::text[], $2::text[]) AS t("table", "qualified") WHERE to_regclass("qualified") IS NULL',
+      [tables, tables.map((table) => qualifiedPrismaTable(table))],
     );
-    if (found.rows[0]?.exists === true) return okVoid();
-    return runnerFailure('MIGRATION.PRISMA_TABLES_MISSING', prismaTablesMissingSummary(), {
+    const missing = found.rows.map((row) => row.table);
+    if (missing.length === 0) return okVoid();
+    return runnerFailure('MIGRATION.PRISMA_TABLES_MISSING', prismaTablesMissingSummary(missing), {
       why: PRISMA_TABLES_MISSING_WHY,
       meta: { markerLocation: this.family.markerLocation },
     });
+  }
+
+  /** A run that changes only the database's policies records them and signs nothing. */
+  private async recordDatabasePolicies(
+    driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
+    policies: DatabasePolicies,
+  ): Promise<void> {
+    await driver.query(RECORD_DATABASE_POLICIES_SQL, [
+      JSON.stringify(storedDatabasePolicies(policies)),
+    ]);
   }
 
   private async runExpectationSteps(
