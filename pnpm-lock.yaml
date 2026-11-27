@@ -3335,6 +3335,9 @@ importers:
       '@internal/sql-contract':
         specifier: workspace:8.0.0-rc.25
         version: link:../1-core/contract
+      '@internal/sql-errors':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../1-core/errors
       '@internal/sql-operations':
         specifier: workspace:8.0.0-rc.25
         version: link:../1-core/operations
