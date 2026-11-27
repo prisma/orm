@@ -100,3 +100,24 @@ test('a function generic over contracts runs transaction() with its own contract
     Promise<ReturnType<typeof postgres<typeof withTheDriver>>['orm']>
   >();
 });
+
+// The capabilities a release candidate wrote into every contract: the adapter's fixed list, with flags nothing reads any more and no connection capabilities.
+type FromReleaseCandidate = Contract<SqlStorage> & {
+  readonly capabilities: {
+    readonly postgres: {
+      readonly distinctOn: true;
+      readonly orderBy: true;
+      readonly limit: true;
+      readonly 'pgvector.cosine': true;
+    };
+    readonly sql: { readonly returning: true; readonly enums: true };
+  };
+};
+
+test('a contract a release candidate emitted creates a client and runs transaction(): its retired flags are required of no one', async () => {
+  const contract = {} as FromReleaseCandidate;
+  const db = postgres({ contract, url });
+  expectTypeOf(db.transaction(async () => 1)).toEqualTypeOf<Promise<number>>();
+  const connection = await postgresServerless({ contract }).connect({ url });
+  expectTypeOf(connection.transaction(async () => 1)).toEqualTypeOf<Promise<number>>();
+});

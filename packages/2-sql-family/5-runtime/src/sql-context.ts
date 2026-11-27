@@ -82,6 +82,10 @@ export interface SqlRuntimeTargetDescriptor<
    * The capabilities that are facts about the target's database, whichever version it runs, each as `true`: the set of their names, not what one database provides. Signing checks the database for them, so a client does not ask its adapter or driver to provide them. A target that declares none leaves every capability to the adapter and the driver.
    */
   readonly databaseCapabilities?: Readonly<Record<string, Readonly<Record<string, true>>>>;
+  /**
+   * The capabilities an earlier release wrote into every contract and that nothing reads any more, each as `true`. A contract that release emitted still names them; the client's checks ignore them, and they leave the contract when it is emitted again.
+   */
+  readonly retiredCapabilities?: Readonly<Record<string, Readonly<Record<string, true>>>>;
 }
 
 export interface SqlRuntimeAdapterDescriptor<

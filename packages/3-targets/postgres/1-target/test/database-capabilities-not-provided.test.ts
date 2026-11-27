@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { postgresDatabaseCapabilitiesNotProvided } from '../src/core/database-capabilities-not-provided';
+import { postgresRetiredCapabilities } from '../src/core/retired-capabilities';
 import {
   type CapabilitiesByVersion,
   postgresCapabilitiesByVersion,
@@ -143,6 +144,23 @@ describe('what a PostgreSQL database does not provide of what a contract require
       database: 'PostgreSQL',
       findings: [{ kind: 'version-not-read', versionQuery: 'SHOW server_version_num' }],
     });
+  });
+
+  it('ignores the retired capabilities a release candidate wrote into every contract', () => {
+    const fromReleaseCandidate = {
+      postgres: {
+        ...postgresCapabilitiesByVersion[15].postgres,
+        ...postgresRetiredCapabilities.postgres,
+      },
+      sql: { ...postgresCapabilitiesByVersion[15].sql, ...postgresRetiredCapabilities.sql },
+    };
+    expect(
+      postgresDatabaseCapabilitiesNotProvided({
+        capabilities: fromReleaseCandidate,
+        table: postgresCapabilitiesByVersion,
+        serverVersionNumber: 150000,
+      }),
+    ).toBeUndefined();
   });
 });
 

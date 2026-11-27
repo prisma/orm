@@ -520,7 +520,7 @@ export default async function supabase<
         fn: (tx: SupabaseTransactionContext<TContract, TCollections>) => PromiseLike<R>,
         localOptions?: PostgresTransactionOptions,
       ): Promise<R> {
-        assertInteractiveTransactionsListed(context.contract);
+        assertInteractiveTransactionsListed(context.contract, postgresTarget.retiredCapabilities);
         const local = validateTransactionOptions(localOptions);
         const isolationLevel =
           local?.isolationLevel !== undefined

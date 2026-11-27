@@ -22,6 +22,7 @@ function contractRequiring(capabilities: Capabilities): Contract<SqlStorage> {
 
 function stackDeclaring(declared: {
   readonly database?: Record<string, Record<string, true>>;
+  readonly retired?: Record<string, Record<string, true>>;
   readonly adapter?: Capabilities;
   readonly driver?: Capabilities;
   readonly extension?: Capabilities;
@@ -30,6 +31,7 @@ function stackDeclaring(declared: {
     target: {
       ...createTestTargetDescriptor(),
       ...(declared.database === undefined ? {} : { databaseCapabilities: declared.database }),
+      ...(declared.retired === undefined ? {} : { retiredCapabilities: declared.retired }),
     },
     adapter: {
       ...createTestAdapterDescriptor(createStubAdapter()),
@@ -116,6 +118,19 @@ describe('capabilitiesNotProvided', () => {
     const stack = stackDeclaring({ extension: { pgvector: { hnsw: true } } });
 
     expect(capabilitiesNotProvided(contract, stack)).toEqual(['pgvector.hnsw']);
+  });
+
+  it('ignores a capability the target retired, which an earlier release wrote into every contract', () => {
+    const contract = contractRequiring({
+      postgres: { orderBy: true, distinctOn: true },
+      sql: { enums: true },
+    });
+    const stack = stackDeclaring({
+      database: { postgres: { distinctOn: true } },
+      retired: { postgres: { orderBy: true }, sql: { enums: true } },
+    });
+
+    expect(capabilitiesNotProvided(contract, stack)).toEqual([]);
   });
 
   it('treats a target that declares no database capabilities as providing none', () => {
@@ -205,11 +220,22 @@ describe('warnOfCapabilitiesNotProvided', () => {
 describe('assertInteractiveTransactionsListed', () => {
   it('accepts a contract that lists interactive transactions', () => {
     const contract = contractRequiring({ sql: { interactiveTransactions: true } });
-    expect(() => assertInteractiveTransactionsListed(contract)).not.toThrow();
+    expect(() => assertInteractiveTransactionsListed(contract, undefined)).not.toThrow();
+  });
+
+  it('accepts a contract an earlier release emitted, which names a retired capability: every client of that release offered transaction()', () => {
+    const contract = contractRequiring({ postgres: { orderBy: true }, sql: {} });
+    expect(() =>
+      assertInteractiveTransactionsListed(contract, { postgres: { orderBy: true } }),
+    ).not.toThrow();
   });
 
   it('refuses one that does not, naming the capability', () => {
-    expect(() => assertInteractiveTransactionsListed(contractRequiring({ sql: {} }))).toThrow(
+    expect(() =>
+      assertInteractiveTransactionsListed(contractRequiring({ sql: {} }), {
+        postgres: { orderBy: true },
+      }),
+    ).toThrow(
       expect.objectContaining({
         code: 'ORM.CAPABILITY_MISSING',
         message:

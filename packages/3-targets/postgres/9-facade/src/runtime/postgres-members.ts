@@ -32,6 +32,7 @@ import {
   withTransaction,
   withTransactionMembers,
 } from '@internal/sql-runtime';
+import postgresTarget from '@internal/target-postgres/runtime';
 import { ifDefined } from '@internal/utils/defined';
 import type { PostgresStaticContext } from '../static/postgres-static';
 import type { NamespacedNativeEnums } from './native-enums';
@@ -130,13 +131,13 @@ export interface PostgresRuntimeBoundMembers<
   ): Promise<R>;
 }
 
-/** The callback `transaction()` runs. For a contract that does not list interactive transactions, no callback satisfies it, and the type error names the capability. */
+/** The callback `transaction()` runs. For a contract that does not list interactive transactions, and that no release candidate emitted, no callback satisfies it, and the type error names the capability. */
 export type PostgresTransactionCallback<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses,
   R,
 > = ((tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>) &
-  InteractiveTransactionsListed<TContract>;
+  InteractiveTransactionsListed<TContract, (typeof postgresTarget)['retiredCapabilities']>;
 
 export interface PostgresLifecycleMembers {
   close(): Promise<void>;
@@ -231,7 +232,7 @@ export function buildPostgresRuntimeBoundMembers<
       fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
       localOptions?: PostgresTransactionOptions,
     ): Promise<R> {
-      assertInteractiveTransactionsListed(context.contract);
+      assertInteractiveTransactionsListed(context.contract, postgresTarget.retiredCapabilities);
       const local = validateTransactionOptions(localOptions);
       const isolationLevel =
         local?.isolationLevel !== undefined

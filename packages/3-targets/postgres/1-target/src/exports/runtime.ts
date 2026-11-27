@@ -9,6 +9,7 @@ import { postgresTargetDescriptorMetaRuntime } from '../core/descriptor-meta-run
 import { postgresFullTextMethods } from '../core/full-text-collection-method';
 import { decodePostgresListText } from '../core/list-decoder';
 import { postgresQueryOperations } from '../core/query-operations';
+import { postgresRetiredCapabilities } from '../core/retired-capabilities';
 import { postgresDatabaseCapabilities } from '../core/server-version';
 
 export { postgresNowGenerators } from '../core/date-time-now-generators';
@@ -46,9 +47,11 @@ const postgresRuntimeTargetDescriptor: RuntimeTargetDescriptor<
   readonly queryOperations: () => SqlOperationDescriptors;
   readonly collectionMethods: () => readonly CollectionMethodContribution[];
   readonly databaseCapabilities: typeof postgresDatabaseCapabilities;
+  readonly retiredCapabilities: typeof postgresRetiredCapabilities;
 } = {
   ...postgresTargetDescriptorMetaRuntime,
   databaseCapabilities: postgresDatabaseCapabilities,
+  retiredCapabilities: postgresRetiredCapabilities,
   codecs: () => [],
   listDecoder: () => decodePostgresListText,
   queryOperations: () => postgresQueryOperations(),

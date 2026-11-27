@@ -7,38 +7,22 @@ import staleContractJson from './fixtures/emitted-before-capabilities-by-version
   type: 'json',
 };
 
-// Emitted before a contract stated its database version: it lists flags nothing declares any more.
+// Emitted before a contract listed its required capabilities: it names flags nothing reads any more, and no connection capability.
 const staleContract = contractFromJson<Contract>(staleContractJson);
-const staleFlags = [
-  'postgres.jsonAgg',
-  'postgres.lateral',
-  'postgres.limit',
-  'postgres.orderBy',
-  'postgres.returning',
-  'sql.enums',
-] as const;
 
 describe('a contract emitted by an earlier Prisma version', () => {
-  it('warns when the client is created, naming the flags and saying to remove them', () => {
+  it('creates a client with no warning: the flags it names that nothing reads are retired', () => {
     const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-    // @ts-expect-error postgres.jsonAgg is required by the contract but not provided by this client's connection
     postgres({ contract: staleContract, url: 'postgres://localhost/db', log });
-    expect(log.warn.mock.calls).toEqual([
-      [
-        expect.objectContaining({
-          code: 'CONTRACT.CAPABILITIES_NOT_PROVIDED',
-          missing: [...staleFlags],
-          message: expect.stringContaining(
-            "Remove them from your contract's required capabilities, or connect with a driver that provides them.",
-          ),
-        }),
-      ],
-    ]);
+    expect(log.warn).not.toHaveBeenCalled();
   });
 
-  it('is a type error at creation that names each flag the stack does not provide', () => {
-    expectTypeOf<
-      keyof PostgresStackProvides<Contract>
-    >().toEqualTypeOf<`${(typeof staleFlags)[number]} is required by the contract but not provided by this client's connection`>();
+  it('is no type error at creation', () => {
+    expectTypeOf<PostgresStackProvides<Contract>>().toEqualTypeOf<unknown>();
+  });
+
+  it('may call transaction(), which every client of that version offered, though it names no interactive transactions', () => {
+    const db = postgres({ contract: staleContract, url: 'postgres://localhost/db' });
+    expectTypeOf(async () => 1).toExtend<Parameters<typeof db.transaction<number>>[0]>();
   });
 });

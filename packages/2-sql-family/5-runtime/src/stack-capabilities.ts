@@ -9,7 +9,7 @@ import type { SqlExecutionStackWithDriver } from './sql-context';
 import type { RuntimeExecutionOptions } from './sql-runtime';
 
 /*
- * What the stack provides: the target declares the database's capabilities, which signing checks, and the adapter and the driver declare the rest. Extensions declare none. The run-time function and the types below apply this one rule.
+ * What the stack provides: the target declares the database's capabilities, which signing checks, and the adapter and the driver declare the rest. Extensions declare none. A capability the target retired is required of no one. The run-time function and the types below apply this one rule.
  */
 
 type CapabilitySet = Readonly<Record<string, unknown>> | undefined;
@@ -19,13 +19,15 @@ function flagIn(set: CapabilitySet, namespace: string, flag: string): unknown {
   return typeof flags === 'object' && flags !== null ? Reflect.get(flags, flag) : undefined;
 }
 
-/** The capabilities `contract` requires, as `namespace.flag`, that are not the database's and that neither the adapter nor the driver provides. */
+/** The capabilities `contract` requires, as `namespace.flag`, that are not the database's, not retired, and that neither the adapter nor the driver provides. */
 export function capabilitiesNotProvided(
   contract: Contract<SqlStorage>,
   stack: SqlExecutionStackWithDriver,
 ): readonly string[] {
-  const isDatabaseCapability = (namespace: string, flag: string) =>
-    flagIn(stack.target.databaseCapabilities, namespace, flag) !== undefined;
+  const isLeftToSigningOrRetired = (namespace: string, flag: string) =>
+    [stack.target.databaseCapabilities, stack.target.retiredCapabilities].some(
+      (set) => flagIn(set, namespace, flag) !== undefined,
+    );
   const isProvided = (namespace: string, flag: string) =>
     [stack.adapter.capabilities, stack.driver.capabilities].some(
       (set) => flagIn(set, namespace, flag) === true,
@@ -35,7 +37,7 @@ export function capabilitiesNotProvided(
     Object.entries(flags)
       .filter(
         ([flag, required]) =>
-          required && !isDatabaseCapability(namespace, flag) && !isProvided(namespace, flag),
+          required && !isLeftToSigningOrRetired(namespace, flag) && !isProvided(namespace, flag),
       )
       .map(([flag]) => `${namespace}.${flag}`),
   );
@@ -91,18 +93,20 @@ type FlagNames<Set> = Set extends unknown
     }[keyof Known<Set> & string]
   : never;
 
-/** At type level, the capabilities `Capabilities` requires that are not `DatabaseCapabilities` and that neither the adapter's nor the driver's set provides. */
+/** At type level, the capabilities `Capabilities` requires that are not `DatabaseCapabilities`, not `RetiredCapabilities`, and that neither the adapter's nor the driver's set provides. */
 export type CapabilitiesNotProvided<
   Capabilities,
   DatabaseCapabilities,
   AdapterCapabilities,
   DriverCapabilities,
+  RetiredCapabilities = undefined,
 > =
   IsAny<Capabilities> extends true
     ? never
     : Exclude<
         EnabledFlagNames<Capabilities>,
         | FlagNames<DatabaseCapabilities>
+        | FlagNames<RetiredCapabilities>
         | EnabledFlagNames<AdapterCapabilities>
         | EnabledFlagNames<DriverCapabilities>
       >;
@@ -124,7 +128,10 @@ export type NoneMissing<
   : unknown;
 
 interface StackDescriptors {
-  readonly target: { readonly databaseCapabilities?: unknown };
+  readonly target: {
+    readonly databaseCapabilities?: unknown;
+    readonly retiredCapabilities?: unknown;
+  };
   readonly adapter: { readonly capabilities?: unknown };
   readonly driver: { readonly capabilities?: unknown };
 }
@@ -140,7 +147,8 @@ export type StackProvides<
     TContract['capabilities'],
     Stack['target']['databaseCapabilities'],
     Stack['adapter']['capabilities'],
-    Stack['driver']['capabilities']
+    Stack['driver']['capabilities'],
+    Stack['target']['retiredCapabilities']
   >,
   '',
   " is required by the contract but not provided by this client's connection"
@@ -151,23 +159,51 @@ export interface InteractiveTransactionsCapability {
   readonly sql: { readonly interactiveTransactions: true };
 }
 
-type InteractiveTransactionsNotListed<Capabilities> =
+// A contract that names a retired capability was emitted by a release that wrote it into every contract. That release listed no connection capabilities in contracts, and its clients offered `transaction()` to every contract.
+type EmittedByEarlierRelease<Capabilities, RetiredCapabilities> = [
+  Extract<EnabledFlagNames<Capabilities>, FlagNames<RetiredCapabilities>>,
+] extends [never]
+  ? false
+  : true;
+
+type InteractiveTransactionsNotListed<Capabilities, RetiredCapabilities> =
   IsAny<Capabilities> extends true
     ? never
     : Capabilities extends InteractiveTransactionsCapability
       ? never
-      : 'sql.interactiveTransactions';
+      : EmittedByEarlierRelease<Capabilities, RetiredCapabilities> extends true
+        ? never
+        : 'sql.interactiveTransactions';
 
-/** What a `transaction()` callback must also be: nothing for a contract that requires interactive transactions; for one that does not, a type no callback is, whose error names the capability. */
-export type InteractiveTransactionsListed<TContract extends Contract<SqlStorage>> = NoneMissing<
-  InteractiveTransactionsNotListed<TContract['capabilities']>,
+/** What a `transaction()` callback must also be: nothing for a contract that requires interactive transactions, or that an earlier release emitted (it names one of `RetiredCapabilities`); for any other, a type no callback is, whose error names the capability. */
+export type InteractiveTransactionsListed<
+  TContract extends Contract<SqlStorage>,
+  RetiredCapabilities = undefined,
+> = NoneMissing<
+  InteractiveTransactionsNotListed<TContract['capabilities'], RetiredCapabilities>,
   '`transaction()` is unavailable: your contract declares no dependency on `',
   '`'
 >;
 
-/** Refuses `transaction()` for a contract that does not require interactive transactions. */
-export function assertInteractiveTransactionsListed(contract: Contract<SqlStorage>): void {
+function namesRetiredCapability(
+  contract: Contract<SqlStorage>,
+  retiredCapabilities: CapabilitySet,
+): boolean {
+  return Object.entries(contract.capabilities).some(([namespace, flags]) =>
+    Object.entries(flags).some(
+      ([flag, required]) =>
+        required === true && flagIn(retiredCapabilities, namespace, flag) !== undefined,
+    ),
+  );
+}
+
+/** Refuses `transaction()` for a contract that does not require interactive transactions, unless an earlier release emitted it: it names one of `retiredCapabilities`. */
+export function assertInteractiveTransactionsListed(
+  contract: Contract<SqlStorage>,
+  retiredCapabilities: CapabilitySet,
+): void {
   if (contract.capabilities['sql']?.['interactiveTransactions'] === true) return;
+  if (namesRetiredCapability(contract, retiredCapabilities)) return;
   throw structuredError(
     'ORM.CAPABILITY_MISSING',
     capabilityUnavailableMessage('`transaction()`', ['sql.interactiveTransactions']),
