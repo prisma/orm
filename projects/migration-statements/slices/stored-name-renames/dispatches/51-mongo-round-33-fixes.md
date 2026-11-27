@@ -67,3 +67,27 @@ Write plain English, and keep it short. Give:
 - the result of the UUID check;
 - the commits;
 - each check, with its result.
+
+## Revised decision for item 1 (after the UUID check failed)
+
+The UUID check fails for time-series collections. On 8.2.6 their `listCollections` entry has no `info.uuid`. The buckets collection's UUID does change, but newer MongoDB versions remove the buckets collection, so nothing should be built on it.
+
+**Use document counts instead.** The route already requires writes to both collections to stop until the apply succeeds, so the counts can only change because of the copy.
+
+- **Before it runs a copy that `unionCopyOf` recognises,** the runner records two counts with `countDocuments`. It records nothing for any other operation.
+  - **N:** the target's document count. It is 0 when the target does not exist.
+  - **M:** the number of source documents that the copy's filters select. For a copy of the whole source, M is the source's count.
+- **When the copy is interrupted, the advice prints N, M, and the mongosh command to count the target now.**
+  - **The target holds N + M documents:** the copy finished. Give the current advice for a finished copy.
+  - **It holds N:** the copy did not finish. Delete nothing, and run the command again as it is.
+  - **Any other count:** something else wrote to the collections. Say so, and tell the user to delete nothing until they have found out what.
+  - **M is 0:** the copy has nothing to move. Say the command can run again as it is.
+- **If reading the counts fails,** the copy has not started, so the existing advice for a stop before the copy applies.
+- **The extra cost:** the two counts scan the same documents that the copy reads. The copy already rewrites the whole target, so the counts add little. Say this in a code comment only if the reason is not clear from the code.
+- **Live tests:**
+  - **An `_id` the target already holds:** the target holds a document with the same `_id` as a source document. Stop the copy before `$out` commits. The advice must say the copy did not finish.
+  - **A stop after the commit:** stop the copy after `$out` has committed. The advice must say it finished.
+
+  Use `wip/qa-mongo/proxy20.mjs` for both.
+
+Items 2 to 8 are unchanged.

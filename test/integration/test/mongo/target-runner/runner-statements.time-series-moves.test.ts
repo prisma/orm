@@ -6,6 +6,7 @@ import { MongoMigrationPlanner } from '@internal/target-mongo/control';
 import { dataTransform, deleteDocuments, rawAggregate } from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { outInterruptingClient } from './out-interruption-proxy';
 import { contract, NS, useStatementsDatabase } from './runner-statements-fixtures';
 
 const live = useStatementsDatabase('runner_statements_time_series_moves_test');
@@ -160,6 +161,97 @@ describe('MongoMigrationPlanner and runner - a move into a new time-series colle
         second: 'applied',
         ...moved,
       });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
+describe('MongoMigrationPlanner and runner - a move into a time-series collection whose copy loses its connection', () => {
+  /**
+   * Plans the move, creates collection measurements as the plan's create would, with a document
+   * whose _id an events document also has, and runs the copy and the rest of the plan through a
+   * connection that drops at the copy's $out request.
+   */
+  async function interruptedCopy(mode: 'beforeCommit' | 'afterCommit') {
+    const { before, after } = await routeAround();
+    const overlapping = await live.db().collection('events').findOne({ value: 1 });
+    if (overlapping === null) throw new Error('The events document with value 1 is missing');
+    await live.db().createCollection('measurements', { timeseries: { timeField: 'at' } });
+    await live.db().collection('measurements').insertOne({ _id: overlapping._id, at, value: 0 });
+    const setUp = before.filter((operation) => !operation.label.includes('measurements'));
+    const proxy = await outInterruptingClient(live.uri(), mode);
+    try {
+      const first = await live.runOperations([...setUp, copy, deletion, ...after], from, to, {
+        policy,
+        client: proxy.client,
+      });
+      return {
+        advice: first.ok ? undefined : first.failure.why,
+        count: await live.db().collection('measurements').countDocuments(),
+        rerun: [...setUp, copy, deletion, ...after],
+      };
+    } finally {
+      await proxy.close();
+    }
+  }
+
+  const counts =
+    'Before the copy, collection measurements held 1 document, and the copy was to add 2 documents of collection events. To tell whether it finished, count the documents of collection measurements, for example with db.getCollection("measurements").countDocuments() in mongosh. If it holds 3, the copy finished: before you run the command again, run that delete yourself';
+
+  it(
+    'says to delete nothing when the copy stopped before its $out committed, though the target already holds an _id of the source',
+    async () => {
+      const { advice, count, rerun } = await interruptedCopy('beforeCommit');
+      const second = await live.runOperations(rerun, from, to, { policy });
+
+      expect({
+        advice,
+        count,
+        second: second.ok ? 'applied' : second.failure,
+        measurements: await live.documents('measurements'),
+        events: await live.documents('events'),
+      }).toEqual({
+        advice: expect.stringContaining(
+          `${counts}, on collection events with the filter of its deleteDocuments call in the migration's migration.ts. The copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If it holds 1, the copy did not finish: delete nothing, and run the command again as it is.`,
+        ),
+        count: 1,
+        second: 'applied',
+        measurements: expect.arrayContaining([
+          { at, value: 0 },
+          { at, value: 1 },
+          { at, value: 2 },
+        ]),
+        events: [{ name: 'launch' }],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'says the copy finished when the connection dropped after its $out committed',
+    async () => {
+      const { advice, count, rerun } = await interruptedCopy('afterCommit');
+      await live.db().collection('events').deleteMany(filter);
+      const second = await live.runOperations(rerun, from, to, { policy });
+
+      expect({
+        advice,
+        count,
+        second: second.ok ? 'applied' : second.failure,
+        measurements: await live.documents('measurements'),
+        events: await live.documents('events'),
+      }).toEqual({
+        advice: expect.stringContaining(counts),
+        count: 3,
+        second: 'applied',
+        measurements: expect.arrayContaining([
+          { at, value: 0 },
+          { at, value: 1 },
+          { at, value: 2 },
+        ]),
+        events: [{ name: 'launch' }],
+      });
+      expect(await live.documents('measurements')).toHaveLength(3);
     },
     timeouts.spinUpMongoMemoryServer,
   );

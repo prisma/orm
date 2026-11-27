@@ -238,8 +238,10 @@ export function useStatementsDatabase(dbName: string) {
     options: {
       readonly policy?: MigrationOperationPolicy;
       readonly callbacks?: MigrationRunnerCallbacks;
+      readonly client?: MongoClient;
     } = {},
   ) {
+    const client = options.client ?? connected();
     const plan: MigrationPlan = {
       targetId: 'mongo',
       operations: JSON.parse(serializeMongoOps(operations)),
@@ -247,7 +249,9 @@ export function useStatementsDatabase(dbName: string) {
       destination: { storageHash: to.storage.storageHash },
     };
     return new MongoMigrationRunner(
-      controlAdapter.createRunnerDependencies(new MongoControlDriver(live(), connected())),
+      controlAdapter.createRunnerDependencies(
+        new MongoControlDriver(client.db(live().databaseName), client),
+      ),
     ).execute({
       plan,
       migrationEdges: [
@@ -288,8 +292,14 @@ export function useStatementsDatabase(dbName: string) {
       .toArray();
   }
 
+  const uri = (): string => {
+    if (replSet === undefined) throw new Error('The database is not started');
+    return replSet.getUri();
+  };
+
   return {
     db: live,
+    uri,
     createClosed,
     planAndRun,
     initMarker,

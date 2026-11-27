@@ -35,14 +35,18 @@ describe('MongoMigrationRunner, a create whose collection already exists', () =>
     );
   });
 
-  it('says to write ops.json again for a create written before creations had an after-check, since no run skips it', async () => {
+  it('says the runner cannot tell who made the collection when the create has no after-check, and gives the three ways on', async () => {
     const harness = makeHarness();
     harness.inspectionExecutor.collections = [{ name: 'orders' }];
 
     const result = await execute(harness, [{ ...createCollection('orders'), postcheck: [] }]);
 
-    expect(failureFields(result.assertNotOk()).why).toBe(
-      "If orders holds nothing you need, drop it, then run the command again; operations that already ran are skipped. Otherwise run this migration's migration.ts with node, which writes its ops.json again: it was written before a creation had the after-check that lets a run skip it, so no run skips this one. Do that only if no other database has applied this migration, since it changes the migration's hash. Then give orders the options the createCollection call of this migration's migration.ts sets, and no validator, since that call sets none, and run the command again: the creation is then skipped. The failed apply changed nothing.",
-    );
+    expect(failureFields(result.assertNotOk())).toEqual({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      message:
+        "Operation collection.orders.create stopped: collection orders already exists, and this migration's create has no after-check that lets a run skip it",
+      why: "This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection orders. If no other database has applied this migration, run its migration.ts with node, which writes its ops.json again with the after-check and changes the migration's hash, then run the command again: the creation is then skipped if orders has the options the createCollection call of this migration's migration.ts sets, and no validator, since that call sets none. If orders holds nothing you need, drop it, then run the command again; operations that already ran are skipped. Otherwise leave the migration as it is, and apply the operations of this migration that did not run by hand. The failed apply changed nothing.",
+      meta: { operationId: 'collection.orders.create', databaseUnchanged: true },
+    });
   });
 });

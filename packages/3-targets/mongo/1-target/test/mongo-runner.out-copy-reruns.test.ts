@@ -1,5 +1,7 @@
+import { ListCollectionsCommand } from '@internal/mongo-query-ast/control';
+import { MongoFieldFilter } from '@internal/mongo-query-ast/execution';
 import { InternalError } from '@internal/utils/internal-error';
-import { MongoServerError } from 'mongodb';
+import { MongoServerError, MongoWriteConcernError } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import {
   dataTransform,
@@ -13,6 +15,7 @@ import {
   makeHarness,
   makeRunPlan,
   NOOP_MARKER_OPS,
+  type Row,
 } from './mongo-runner-harness';
 
 const FILTER = { at: { $exists: true } };
@@ -41,7 +44,9 @@ const badValue = new MongoServerError({
   codeName: 'BadValue',
   errmsg: 'bad value',
 });
-const copyAndDelete = [[], [{ _id: 1 }], [], []];
+const COPY_COUNTS: Row[][] = [[], []];
+const LOST = new Error('connection 3 to 127.0.0.1:27017 closed');
+const copyAndDelete = [...COPY_COUNTS, [], [{ _id: 1 }], [], []];
 const stopsAtCheckedTransform = [...copyAndDelete, [{ _id: 1 }], []];
 
 const DUPLICATES = `To find them, group collection measurements by _id and keep each _id that appears more than once, for example with db.getCollection("measurements").aggregate([{ $group: { _id: '$_id', n: { $sum: 1 } } }, { $match: { n: { $gt: 1 } } }]) in mongosh.`;
@@ -62,8 +67,7 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
 
   it('says the same when the delete itself fails', async () => {
     const harness = makeHarness();
-    harness.driver.queueResponse([]);
-    harness.driver.queueResponse([{ _id: 1 }]);
+    for (const rows of [...COPY_COUNTS, [], [{ _id: 1 }]]) harness.driver.queueResponse(rows);
     harness.driver.failUpdateManyWith(badValue);
 
     const result = await execute(harness, [unionCopy, deletion]);
@@ -77,8 +81,7 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
 
   it('gives the same advice when the delete throws, as a lost connection does', async () => {
     const harness = makeHarness();
-    harness.driver.queueResponse([]);
-    harness.driver.queueResponse([{ _id: 1 }]);
+    for (const rows of [...COPY_COUNTS, [], [{ _id: 1 }]]) harness.driver.queueResponse(rows);
     harness.driver.failUpdateManyWith(new Error('connection 3 to 127.0.0.1:27017 closed'));
 
     const result = await execute(harness, [unionCopy, deletion]);
@@ -153,7 +156,9 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     });
     const otherDeletion = deleteDocuments({ collection: 'events', filter: other });
     const harness = makeHarness();
-    for (const rows of [[], [], [{ _id: 1 }], [], []]) harness.driver.queueResponse(rows);
+    for (const rows of [...COPY_COUNTS, [], ...COPY_COUNTS, [], [{ _id: 1 }], [], []]) {
+      harness.driver.queueResponse(rows);
+    }
     harness.driver.failUpdateManyWith(badValue);
 
     const result = await execute(harness, [unionCopy, readingsCopy, deletion, otherDeletion]);
@@ -196,7 +201,7 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     });
     const sampleDeletion = deleteDocuments({ collection: 'events', filter: sample });
     const harness = makeHarness();
-    for (const rows of stopsAtCheckedTransform) harness.driver.queueResponse(rows);
+    for (const rows of [[], ...stopsAtCheckedTransform]) harness.driver.queueResponse(rows);
 
     const result = await execute(harness, [groupsCopy, deletion, checkedTransform, sampleDeletion]);
 
@@ -346,7 +351,7 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
 
   it('says nothing about a copy of the whole source once its drop has run', async () => {
     const harness = makeHarness();
-    for (const rows of [[], [{ _id: 1 }], []]) harness.driver.queueResponse(rows);
+    for (const rows of [...COPY_COUNTS, [], [{ _id: 1 }], []]) harness.driver.queueResponse(rows);
 
     const result = await execute(harness, [
       renameCopy,
@@ -360,31 +365,155 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     });
   });
 
-  it('says a copy that threw while it ran may have finished, and how to tell, when its delete has not run', async () => {
+  it('says how to tell from the counts whether a copy that threw while it ran finished, when its delete has not run', async () => {
     const harness = makeHarness();
-    harness.driver.failAggregateWith(new Error('connection 3 to 127.0.0.1:27017 closed'));
+    harness.driver.queueResponse([{ documents: 3 }]);
+    harness.driver.queueResponse([{ documents: 2 }]);
+    harness.driver.failAggregateWith(LOST, COPY_COUNTS.length);
 
     const result = await execute(harness, [unionCopy, deletion]);
 
     expect(failureFields(result.assertNotOk())).toMatchObject({
       code: 'MIGRATION.EXECUTION_FAILED',
       message: `Operation ${unionCopy.id} failed: connection 3 to 127.0.0.1:27017 closed`,
-      why: `Fix what the error names, then run the command again; operations that already ran are skipped. Operation ${unionCopy.id} was copying documents into collection measurements with an $out stage when the apply stopped, and the copy may have finished: the error does not show whether the $out stage replaced collection measurements. Operation ${deletion.id}, which deletes them from collection events, has not run. To tell, look in collection measurements for the _id of a document of collection events that the filter of its deleteDocuments call selects. If the copy finished, before you run the command again, run that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts: the copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If the copy did not finish, run the command again as it is. If the copy finished and the command was already run again before the delete finished, collection measurements holds some of the moved documents two or more times, under the same _id. ${DUPLICATES} The operations that ran before the failure stay applied.`,
+      why: `Fix what the error names, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again. Operation ${unionCopy.id} was copying documents of collection events into collection measurements with an $out stage when the apply stopped. The error does not show whether the copy finished. Operation ${deletion.id}, which deletes them from collection events, has not run. Before the copy, collection measurements held 3 documents, and the copy was to add 2 documents of collection events. To tell whether it finished, count the documents of collection measurements, for example with db.getCollection("measurements").countDocuments() in mongosh. If it holds 5, the copy finished: before you run the command again, run that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts. The copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If it holds 3, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to collection measurements or collection events, or the command was already run again: delete nothing until you have found out which. If the command was already run again after the copy finished, collection measurements holds some of the moved documents two or more times, under the same _id. ${DUPLICATES} The operations that ran before the failure stay applied.`,
       meta: { operationId: unionCopy.id, databaseUnchanged: false },
     });
   });
 
-  it('says a copy of the whole source that threw while it ran may have finished, when its drop has not run', async () => {
+  it('counts the documents each filter of the copy selects', async () => {
+    const sample = { kind: 'sample' };
+    const groupsCopy = dataTransform('move Measurement and Sample to measurements', {
+      run: () =>
+        rawAggregate('measurements', [
+          { $unionWith: { coll: 'events', pipeline: [{ $match: FILTER }] } },
+          { $unionWith: { coll: 'events', pipeline: [{ $match: sample }] } },
+          { $out: 'measurements' },
+        ]),
+    });
+    const sampleDeletion = deleteDocuments({ collection: 'events', filter: sample });
     const harness = makeHarness();
-    harness.driver.failAggregateWith(new Error('connection 3 to 127.0.0.1:27017 closed'));
+    for (const documents of [1, 2, 4]) harness.driver.queueResponse([{ documents }]);
+    harness.driver.failAggregateWith(LOST, 3);
+
+    const result = await execute(harness, [groupsCopy, deletion, sampleDeletion]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      `Operations ${deletion.id} and ${sampleDeletion.id}, which delete them from collection events, have not run. Before the copy, collection measurements held 1 document, and the copy was to add 6 documents of collection events.`,
+    );
+    expect(harness.adapter.loweredPlans.slice(0, 3).map(({ command }) => command)).toEqual([
+      expect.objectContaining({ collection: 'measurements', pipeline: [{ $count: 'documents' }] }),
+      expect.objectContaining({
+        collection: 'events',
+        pipeline: [{ $match: FILTER }, { $count: 'documents' }],
+      }),
+      expect.objectContaining({
+        collection: 'events',
+        pipeline: [{ $match: sample }, { $count: 'documents' }],
+      }),
+    ]);
+  });
+
+  it('says how to tell whether a copy of the whole source that threw while it ran finished, when its drop has not run', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([]);
+    harness.driver.queueResponse([{ documents: 4 }]);
+    harness.driver.failAggregateWith(LOST, COPY_COUNTS.length);
     const drop = dropCollection('readings');
 
     const result = await execute(harness, [renameCopy, drop]);
 
     expect(failureFields(result.assertNotOk()).why).toContain(
-      `Operation ${renameCopy.id} was copying the documents of collection readings into collection measurements with an $out stage when the apply stopped, and the copy may have finished: the error does not show whether the $out stage replaced collection measurements. Operation ${drop.id}, which drops collection readings, has not run. To tell, look in collection measurements for the _id of a document of collection readings. If the copy finished, before you run the command again, delete the documents of collection readings or drop it yourself:`,
+      `Operation ${renameCopy.id} was copying the documents of collection readings into collection measurements with an $out stage when the apply stopped. The error does not show whether the copy finished. Operation ${drop.id}, which drops collection readings, has not run. Before the copy, collection measurements held 0 documents, and the copy was to add 4 documents of collection readings. To tell whether it finished, count the documents of collection measurements, for example with db.getCollection("measurements").countDocuments() in mongosh. If it holds 4, the copy finished: before you run the command again, delete the documents of collection readings or drop it yourself. The copy has no check, so it runs again, and it would add the documents of collection readings to collection measurements a second time.`,
     );
   });
+
+  it('says the command can run again as it is when the copy that threw had no document to copy', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([{ documents: 3 }]);
+    harness.driver.failAggregateWith(LOST, COPY_COUNTS.length);
+
+    const result = await execute(harness, [unionCopy, deletion]);
+
+    expect(failureFields(result.assertNotOk()).why).toBe(
+      `Fix what the error names, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again. Operation ${unionCopy.id} was copying documents of collection events into collection measurements with an $out stage when the apply stopped. Collection events held no document for it to copy, so the command can run again as it is. The operations that ran before the failure stay applied.`,
+    );
+  });
+
+  it('gives no copy advice when reading the counts before the copy fails, since the copy has not started', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(LOST);
+
+    await expect(execute(harness, [unionCopy, deletion])).rejects.toBe(LOST);
+  });
+
+  it('treats a write-concern error on the copy as a copy that may have finished', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([{ documents: 3 }]);
+    harness.driver.queueResponse([{ documents: 2 }]);
+    harness.driver.failAggregateWith(
+      new MongoWriteConcernError({
+        ok: 1,
+        writeConcernError: {
+          code: 64,
+          codeName: 'WriteConcernFailed',
+          errmsg: 'waiting for replication timed out',
+        },
+      }),
+      COPY_COUNTS.length,
+    );
+
+    const result = await execute(harness, [unionCopy, deletion]);
+
+    const { why, meta } = failureFields(result.assertNotOk());
+    expect(why).toContain('If it holds 5, the copy finished');
+    expect(why).not.toContain('is as it was');
+    expect(meta).toMatchObject({ databaseUnchanged: false });
+  });
+
+  it('says a drop of the source that threw may not have finished', async () => {
+    const harness = makeHarness({ ddlError: LOST });
+    harness.inspectionExecutor.collections = [{ name: 'readings' }];
+    const drop = dropCollection('readings');
+
+    const result = await execute(harness, [renameCopy, drop]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      `Operation ${renameCopy.id} copied the documents of collection readings into collection measurements with an $out stage, and operation ${drop.id}, which drops collection readings, was running when the apply stopped and may not have finished. Before you run the command again, if collection readings still exists, delete its documents or drop it yourself:`,
+    );
+  });
+
+  it.each([
+    { drop: 'runs', operation: dropCollection('readings') },
+    {
+      drop: 'is skipped, since its after-check finds collection readings gone',
+      operation: {
+        ...dropCollection('readings'),
+        postcheck: [
+          {
+            description: 'collection readings does not exist',
+            source: new ListCollectionsCommand(),
+            filter: MongoFieldFilter.eq('name', 'readings'),
+            expect: 'notExists' as const,
+          },
+        ],
+      },
+    },
+  ])(
+    'throws the error of a callback after the drop of the source as it is, when the drop $drop',
+    async ({ operation }) => {
+      const harness = makeHarness();
+      const broke = new Error('the progress display broke');
+
+      await expect(
+        execute(harness, [renameCopy, operation], undefined, {
+          onOperationComplete: (completed) => {
+            if (completed.id === operation.id) throw broke;
+          },
+        }),
+      ).rejects.toBe(broke);
+    },
+  );
 
   it('keeps the advice for a copy that finished when the callback after it throws', async () => {
     const harness = makeHarness();
@@ -405,7 +534,7 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
 
   it('calls a failed $out copy a copy, which wrote nothing', async () => {
     const harness = makeHarness();
-    harness.driver.failAggregateWith(badValue);
+    harness.driver.failAggregateWith(badValue, COPY_COUNTS.length);
 
     const result = await execute(harness, [unionCopy, deletion]);
 

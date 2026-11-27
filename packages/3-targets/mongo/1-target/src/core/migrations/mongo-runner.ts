@@ -96,8 +96,9 @@ import {
   unrewritableFieldNameReason,
   unrewritableKeyReason,
 } from './migration-factories';
+import type { ApplyProgress, CopyCounts } from './mongo-apply-progress';
 import { deserializeMongoOps } from './mongo-ops-serializer';
-import { outCopyRerunText, type StopOutcome } from './mongo-out-copy-reruns';
+import { outCopyRerunText, type UnionCopy, unionCopyOf } from './mongo-out-copy-reruns';
 import { byHandRenamePlacement } from './mongo-plan-text';
 import { type RewriteCollection, rewriteRefusals } from './mongo-rewrite-refusals';
 import { storedKeyFieldAt } from './mongo-stored-key-fills';
@@ -212,13 +213,6 @@ export type MongoMigrationRunnerResult = Result<
   MongoSpaceSuccessValue,
   MongoMigrationRunnerFailure
 >;
-
-/** The operations of an apply, the index of the one it stopped at (the count of operations when it stopped after them all), and how that one ended. */
-interface ApplyProgress {
-  operations: readonly AnyMongoMigrationOperation[];
-  stoppedAt: number;
-  outcome: StopOutcome;
-}
 
 /** The same failure, with `advice` at the end of its why. */
 function withAdvice(
@@ -420,6 +414,23 @@ function renameTargetExistsRefusal(
   );
 }
 
+/** The `createCollection` call of `op`, when its before-check that the collection is absent failed. */
+function failedCreateOf(
+  op: MongoMigrationPlanOperation,
+  failed: MongoMigrationCheck,
+): CreateCollectionCommand | undefined {
+  const create = op.execute.find(
+    (step) => step.command instanceof CreateCollectionCommand,
+  )?.command;
+  return create instanceof CreateCollectionCommand && failed.expect === 'notExists'
+    ? create
+    : undefined;
+}
+
+function createOptionsText(create: CreateCollectionCommand): string {
+  return `the options the createCollection call of this migration's migration.ts sets, ${create.validator === undefined ? 'and no validator, since that call sets none' : 'its validator among them'}`;
+}
+
 /**
  * The failure when a create's before-check finds a collection of that name, which the create's
  * after-check did not take as the one it makes: made another way, with other options.
@@ -429,23 +440,38 @@ function createTargetExistsRefusal(
   failed: MongoMigrationCheck,
   before: Ran,
 ): MongoMigrationRunnerResult | undefined {
-  const create = op.execute.find(
-    (step) => step.command instanceof CreateCollectionCommand,
-  )?.command;
-  if (!(create instanceof CreateCollectionCommand) || failed.expect !== 'notExists') {
-    return undefined;
-  }
+  const create = failedCreateOf(op, failed);
+  if (create === undefined || op.postcheck.length === 0) return undefined;
   const name = create.collection;
-  const options = `the options the createCollection call of this migration's migration.ts sets, ${create.validator === undefined ? 'and no validator, since that call sets none' : 'its validator among them'}`;
-  const otherwise =
-    op.postcheck.length === 0
-      ? `Otherwise run this migration's migration.ts with node, which writes its ops.json again: it was written before a creation had the after-check that lets a run skip it, so no run skips this one. Do that only if no other database has applied this migration, since it changes the migration's hash. Then give ${name} ${options}, and run the command again${before.skips ? ': the creation is then skipped.' : ' with postchecks and idempotency checks on: only they skip the creation.'}`
-      : `Otherwise give it ${options}, ${before.skips ? 'and run the command again: the creation is then skipped.' : 'and run the command again with postchecks and idempotency checks on: only they skip the creation.'}`;
   return runnerFailure(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: collection ${name} already exists without the options this migration creates it with`,
     {
-      why: `${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} ${otherwise}`,
+      why: `${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} Otherwise give it ${createOptionsText(create)}, ${before.skips ? 'and run the command again: the creation is then skipped.' : 'and run the command again with postchecks and idempotency checks on: only they skip the creation.'}`,
+      meta: { operationId: op.id },
+    },
+  );
+}
+
+/**
+ * The failure when the before-check of a create with no after-check, as migrations emitted before
+ * creates had one carry, finds a collection of that name. Nothing lets a run skip this create, so
+ * the runner cannot tell whether an earlier run of the migration made the collection.
+ */
+function uncheckedCreateTargetExistsRefusal(
+  op: MongoMigrationPlanOperation,
+  failed: MongoMigrationCheck,
+  before: Ran,
+): MongoMigrationRunnerResult | undefined {
+  const create = failedCreateOf(op, failed);
+  if (create === undefined || op.postcheck.length > 0) return undefined;
+  const name = create.collection;
+  const skipped = `the creation is then skipped if ${name} has ${createOptionsText(create)}`;
+  return runnerFailure(
+    'MIGRATION.PRECHECK_FAILED',
+    `Operation ${op.id} stopped: collection ${name} already exists, and this migration's create has no after-check that lets a run skip it`,
+    {
+      why: `This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection ${name}. If no other database has applied this migration, run its migration.ts with node, which writes its ops.json again with the after-check and changes the migration's hash, then run the command again${before.skips ? `: ${skipped}.` : ` with postchecks and idempotency checks on, since only they skip it: ${skipped}.`} ${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} Otherwise leave the migration as it is, and apply the operations of this migration that did not run by hand.`,
       meta: { operationId: op.id },
     },
   );
@@ -1488,6 +1514,22 @@ function copyRejectedWhy(
 }
 
 /**
+ * Whether `error` is a write-concern error, as the driver reports one: the primary applied the
+ * write, then could not confirm it was replicated as asked.
+ */
+function isWriteConcernError(error: object): boolean {
+  if (Reflect.get(error, 'name') === 'MongoWriteConcernError') return true;
+  const result: unknown = Reflect.get(error, 'result');
+  const reported: unknown = Reflect.get(error, 'writeConcernError');
+  return (
+    (typeof reported === 'object' && reported !== null) ||
+    (typeof result === 'object' &&
+      result !== null &&
+      typeof Reflect.get(result, 'writeConcernError') === 'object')
+  );
+}
+
+/**
  * The failure when a rewrite fails after MongoDB began it: documents it reached may already be
  * rewritten. A planner cast that meets a value `$convert` cannot cast names the field, which the
  * advice reads to offer `--convert`. A data transform's update is the user's own, so its failure
@@ -1538,6 +1580,7 @@ function rewriteFailure(
       );
     }
     const copy = copyTargetOf(plan);
+    if (copy?.stage === '$out' && isWriteConcernError(error)) return undefined;
     if (copy !== undefined) {
       const name =
         copy.database === undefined ? copy.collection : `${copy.database}.${copy.collection}`;
@@ -1654,10 +1697,13 @@ export class MongoMigrationRunner {
 
   async execute(options: MongoMigrationRunnerExecuteOptions): Promise<MongoMigrationRunnerResult> {
     let changedDatabase = false;
-    const progress: ApplyProgress = { operations: [], stoppedAt: 0, outcome: 'refused' };
-    const advice = () =>
-      outCopyRerunText(progress.operations, { at: progress.stoppedAt, outcome: progress.outcome });
-    let interrupted = false;
+    const progress: ApplyProgress = {
+      operations: [],
+      finished: 0,
+      inFlight: false,
+      copyCounts: undefined,
+    };
+    const advice = () => outCopyRerunText(progress);
     let result: Result<MigrationRunnerPerSpaceSuccessValue, MongoMigrationRunnerFailure>;
     try {
       result = await this.apply(
@@ -1670,14 +1716,13 @@ export class MongoMigrationRunner {
     } catch (error) {
       if (isInternalError(error)) throw error;
       const text = advice();
-      const stopped = progress.operations[progress.stoppedAt];
+      const { operations, finished, inFlight } = progress;
+      const stopped = operations[inFlight ? finished : finished - 1];
       if (text === undefined || stopped === undefined) throw error;
       if (isStructuredError(error)) throw withStructuredAdvice(error, text);
-      const finished = progress.outcome === 'finished';
-      interrupted = progress.outcome === 'interrupted';
       result = notOk(
-        thrownFailure(stopped, error, finished, {
-          operations: progress.operations.slice(0, progress.stoppedAt + (finished ? 1 : 0)),
+        thrownFailure(stopped, error, !inFlight, {
+          operations: operations.slice(0, finished + (inFlight ? 1 : 0)),
           skips: runSkips(options.executionChecks),
         }),
       );
@@ -1687,7 +1732,7 @@ export class MongoMigrationRunner {
       : notOk(
           withDatabaseUnchanged(
             withAdvice(result.failure, advice()),
-            options.databaseChangedBefore !== true && !changedDatabase && !interrupted,
+            options.databaseChangedBefore !== true && !changedDatabase && !progress.inFlight,
           ),
         );
   }
@@ -1731,11 +1776,15 @@ export class MongoMigrationRunner {
     let operationsExecuted = 0;
 
     for (const [operationIndex, operation] of operations.entries()) {
-      progress.stoppedAt = operationIndex;
-      progress.outcome = 'refused';
+      progress.copyCounts = undefined;
       options.callbacks?.onOperationStart?.(operation);
       try {
         if (isMongoDmlOperation(operation)) {
+          const copy = unionCopyOf(operation);
+          const [plan] = operation.run;
+          if (copy !== undefined && plan !== undefined) {
+            progress.copyCounts = await this.copyCounts(plan, copy);
+          }
           const result = await this.executeDmlOperation(
             operation,
             adapter,
@@ -1749,7 +1798,7 @@ export class MongoMigrationRunner {
           );
           if (result.failure) return result.failure;
           if (result.executed) operationsExecuted += 1;
-          progress.outcome = 'finished';
+          progress.finished = operationIndex + 1;
           continue;
         }
 
@@ -1760,7 +1809,7 @@ export class MongoMigrationRunner {
             filterEvaluator,
           );
           if (allSatisfied) {
-            progress.outcome = 'finished';
+            progress.finished = operationIndex + 1;
             continue;
           }
         }
@@ -1776,6 +1825,7 @@ export class MongoMigrationRunner {
             return (
               renameTargetExistsRefusal(operation, failing, ran(operationIndex)) ??
               createTargetExistsRefusal(operation, failing, ran(operationIndex)) ??
+              uncheckedCreateTargetExistsRefusal(operation, failing, ran(operationIndex)) ??
               (await this.documentsFailingValidatorRefusal(
                 operation,
                 failing,
@@ -1838,16 +1888,15 @@ export class MongoMigrationRunner {
         }
 
         operationsExecuted += 1;
-        progress.outcome = 'finished';
+        progress.finished = operationIndex + 1;
       } catch (error) {
-        progress.outcome = 'interrupted';
+        progress.inFlight = true;
         throw error;
       } finally {
         options.callbacks?.onOperationComplete?.(operation);
       }
     }
 
-    progress.stoppedAt = operations.length;
     const destination = options.plan.destination;
     const profileHash = options.destinationContract.profileHash ?? destination.storageHash;
 
@@ -2456,6 +2505,24 @@ export class MongoMigrationRunner {
           : [],
       ),
     );
+  }
+
+  /** The counts that show afterwards whether `copy` finished, read before it runs: first the target's, then the source's for each of its filters. */
+  private async copyCounts(plan: MongoQueryPlan, copy: UnionCopy): Promise<CopyCounts> {
+    const count = async (collection: string, pipeline: readonly Record<string, unknown>[]) => {
+      const row = await this.firstRow({
+        ...plan,
+        collection,
+        command: new RawAggregateCommand(collection, [...pipeline, { $count: 'documents' }]),
+      });
+      return Number(row?.['documents'] ?? 0);
+    };
+    const target = await count(copy.into, []);
+    let selected = 0;
+    for (const filter of copy.filters.length === 0 ? [undefined] : copy.filters) {
+      selected += await count(copy.source, filter === undefined ? [] : [{ $match: filter }]);
+    }
+    return { target, selected };
   }
 
   private async firstRow(plan: MongoQueryPlan): Promise<Record<string, unknown> | undefined> {
