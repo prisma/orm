@@ -66,6 +66,7 @@ import type {
   OnControlProgress,
   PerSpaceExecutionEntry,
 } from '../types';
+import { mapContractAtError } from './contract-at-errors';
 import {
   type BuildAggregateInputs,
   buildContractSpaceAggregate,
@@ -380,6 +381,15 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     );
   }
 
+  const unreadSnapshot = await refuseUnreadableDestinationSnapshots(
+    aggregate,
+    perSpacePlans,
+    applyOrder,
+  );
+  if (unreadSnapshot !== undefined) {
+    return notOk(unreadSnapshot);
+  }
+
   const unfilled = await migrationWithUnfilledPlaceholders(
     perSpacePlans,
     applyOrder,
@@ -589,6 +599,29 @@ async function runPolicyOnly<TFamilyId extends string, TTargetId extends string>
     }),
     databasePoliciesUpdated: policiesToWrite.differences,
   });
+}
+
+/**
+ * The refusal of the first contract snapshot a migration to apply ends at that the family does not read, or undefined. The runner records each such snapshot in the database, so it is read through the family's contract reader first; a migration without one is applied without it.
+ */
+async function refuseUnreadableDestinationSnapshots(
+  aggregate: ContractSpaceAggregate,
+  perSpacePlans: ReadonlyMap<string, PerSpacePlan>,
+  applyOrder: readonly string[],
+): Promise<CliStructuredError | undefined> {
+  for (const spaceId of applyOrder) {
+    const space = aggregate.space(spaceId);
+    for (const edge of perSpacePlans.get(spaceId)?.migrationEdges ?? []) {
+      if (space === undefined || edge.destinationContractJson === undefined) continue;
+      try {
+        await space.contractAt(edge.to);
+      } catch (error) {
+        const mapped = mapContractAtError(error, { artifactRole: 'to' });
+        if (!mapped.ok) return mapped.failure;
+      }
+    }
+  }
+  return undefined;
 }
 
 /**

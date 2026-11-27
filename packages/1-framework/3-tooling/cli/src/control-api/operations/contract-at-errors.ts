@@ -29,9 +29,10 @@ export function mapContractAtError(
           typeof error.meta?.['filePath'] === 'string' ? error.meta['filePath'] : 'unknown';
         const message =
           typeof error.meta?.['message'] === 'string' ? error.meta['message'] : error.message;
+        const role = options?.artifactRole ?? 'from';
         return notOk(
           errorContractValidationFailed(
-            `Predecessor contract at ${filePath} failed to deserialize: ${message}`,
+            `${role === 'to' ? 'Target' : 'Predecessor'} contract at ${filePath} failed to deserialize: ${message}`,
             { where: { path: filePath }, cause: error, meta: contractValidationMeta(error) },
           ),
         );
