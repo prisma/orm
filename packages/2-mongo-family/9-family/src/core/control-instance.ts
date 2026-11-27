@@ -34,6 +34,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
+import { assertFieldTypeParams } from './contract-type-params';
 import type {
   MongoControlAdapter,
   MongoControlAdapterDescriptor,
@@ -298,10 +299,15 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
     },
 
     deserializeContract(contractJson: unknown): Contract {
+      const contract = deserializeMongoContract(contractJson);
+      assertFieldTypeParams(contract, {
+        codecLookup: controlStack.codecLookup,
+        dataTypeLookup: controlStack.dataTypes.lookup,
+      });
       return blindCast<
         Contract,
         'a deserialized Mongo contract is a framework Contract whose storage is Mongo storage'
-      >(deserializeMongoContract(contractJson));
+      >(contract);
     },
 
     async verify(options): Promise<VerifyDatabaseResult> {
