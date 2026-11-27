@@ -25,13 +25,6 @@
 (not exported) interface PostgresLifecycleMembers
 (not exported) interface PostgresLifecycleMembers, required method [Symbol.asyncDispose](): Promise<void>
 (not exported) interface PostgresLifecycleMembers, required method close(): Promise<void>
-(not exported) interface PostgresQueryMembersOptions, readonly required property collections: TCollections | undefined
-(not exported) interface PostgresQueryMembersOptions, readonly required property context: ExecutionContext<TContract>
-(not exported) interface PostgresQueryMembersOptions, readonly required property prepareRuntime: Pick<Runtime, 'prepare'>
-(not exported) interface PostgresQueryMembersOptions, readonly required property raw: RawLane<TContract>
-(not exported) interface PostgresQueryMembersOptions, readonly required property sql: Db<TContract>
-(not exported) interface PostgresQueryMembersOptions, readonly required property toSql: ToSqlMember['toSql']
-(not exported) interface PostgresQueryMembersOptions<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses>
 (not exported) interface PostgresRuntimeBoundMembers, readonly required property orm: OrmClient<TContract, TCollections>
 (not exported) interface PostgresRuntimeBoundMembers, required method runtime(): Runtime
 (not exported) interface PostgresRuntimeBoundMembers, required method transaction<R>(fn: PostgresTransactionCallback<TContract, TCollections, R>, options?: PostgresTransactionOptions): Promise<R>
@@ -275,7 +268,6 @@
 ./family-contract/validators: everything from @prisma/orm-family-sql/contract/validators
 ./family-contract/value-set-derivation-hook: everything from @prisma/orm-family-sql/contract/value-set-derivation-hook
 ./family-contract: everything from @prisma/orm-family-sql/contract
-./family-runtime/internal/prepared-query: everything from @prisma/orm-family-sql/runtime/internal/prepared-query
 ./family-runtime: everything from @prisma/orm-family-sql/runtime
 ./family/control-adapter: everything from @prisma/orm-family-sql/family/control-adapter
 ./family/control: everything from @prisma/orm-family-sql/family/control
@@ -292,24 +284,6 @@
 ./family/verify: everything from @prisma/orm-family-sql/family/verify
 ./family: export default from @prisma/orm-family-sql/family/pack
 ./init: export default = const contribution: InitContribution
-./internal/options: function connectWithBinding(driver: { connect(binding: @prisma/orm-target-postgres.PostgresBinding): Promise<void>; }, binding: PostgresBinding, options: { readonly poolOptions?: PostgresPoolOptions | undefined; }): Promise<void>
-./internal/options: function resolveOptionalPostgresBinding(options: PostgresBindingFields, rules: PostgresBindingRules): PostgresBinding | undefined
-./internal/options: function toDriverCursorOptions(cursor: PostgresCursorOptions | undefined): PostgresDriverCursorOptions
-./internal/options: function validateCursorOptions(cursor: PostgresCursorOptions | undefined, helper: string): PostgresCursorOptions | undefined
-./internal/options: function validateTransactionOptions(options: PostgresTransactionOptions | undefined): PostgresTransactionOptions | undefined
-./internal/options: interface PostgresBindingRules
-./internal/options: interface PostgresBindingRules, readonly required property extension: string
-./internal/options: interface PostgresBindingRules, readonly required property kinds: Readonly<Partial<Record<BindingKind, true>>>
-./internal/static-context: function buildPostgresStaticContext<TContract extends Contract<SqlStorage>>(contract: TContract, context: ExecutionContext<TContract>, stack: SqlExecutionStack<PostgresTargetId>): PostgresStaticContext<TContract>
-./internal/static-context: interface PostgresStaticContext, readonly required property context: ExecutionContext<TContract>
-./internal/static-context: interface PostgresStaticContext, readonly required property contract: TContract
-./internal/static-context: interface PostgresStaticContext, readonly required property enums: NamespacedEnums<TContract>
-./internal/static-context: interface PostgresStaticContext, readonly required property nativeEnums: NamespacedNativeEnums<TContract>
-./internal/static-context: interface PostgresStaticContext, readonly required property raw: RawLane<TContract>
-./internal/static-context: interface PostgresStaticContext, readonly required property sql: Db<TContract>
-./internal/static-context: interface PostgresStaticContext<TContract extends Contract<SqlStorage>> extends ToSqlMember
-./internal/transaction-members: function buildPostgresQueryMembers<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses>(options: PostgresQueryMembersOptions<TContract, TCollections>, txCtx: TransactionContext): Omit<PostgresQueryMembers<TContract, TCollections>, keyof RuntimeScope>
-./internal/validate-contract: function validatePostgresContract<TContract extends Contract<SqlStorage>>(contract: TContract): TContract
 ./migration-tools/aggregate: everything from @prisma/orm-toolchain/migration-tools/aggregate
 ./migration-tools/contract-snapshot-store: everything from @prisma/orm-toolchain/migration-tools/contract-snapshot-store
 ./migration-tools/hash: everything from @prisma/orm-toolchain/migration-tools/hash
@@ -330,8 +304,8 @@
 ./relational-core/query-lane-context: everything from @prisma/orm-family-sql/relational-core/query-lane-context
 ./relational-core/types: everything from @prisma/orm-family-sql/relational-core/types
 ./relational-core: everything from @prisma/orm-family-sql/relational-core
-./runtime: class PostgresRuntimeImpl, protected required method getListDecoder(): PostgresListDecoder_2
-./runtime: class PostgresRuntimeImpl<TContract extends Contract<SqlStorage> = Contract<SqlStorage>> extends SqlRuntimeBase<TContract>
+./runtime: class Ea_PostgresRuntimeImpl, protected required method getListDecoder(): PostgresListDecoder_2
+./runtime: class Ea_PostgresRuntimeImpl<TContract extends Contract<SqlStorage> = Contract<SqlStorage>> extends SqlRuntimeBase<TContract>
 ./runtime: const isPgClient: (pg: Client | Pool) => pg is Client
 ./runtime: const isPgPool: (pg: Client | Pool) => pg is Pool
 ./runtime: export IsolationLevel = postgresIsolationLevels from @prisma/orm-target-postgres/target/runtime
@@ -339,6 +313,22 @@
 ./runtime: export type InteractiveTransactionsCapability from @prisma/orm-family-sql/runtime
 ./runtime: export type PostgresFullTextMethods from @prisma/orm-target-postgres/target/full-text
 ./runtime: function buildNamespacedNativeEnums(storage: SqlStorage, domain: Contract['domain']): Record<string, Record<string, EnumAccessor>>
+./runtime: function ea_buildPostgresQueryMembers<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses>(options: Ea_PostgresQueryMembersOptions<TContract, TCollections>, txCtx: TransactionContext): Omit<PostgresQueryMembers<TContract, TCollections>, keyof RuntimeScope>
+./runtime: function ea_connectWithBinding(driver: { connect(binding: @prisma/orm-target-postgres.PostgresBinding): Promise<void>; }, binding: PostgresBinding, options: { readonly poolOptions?: PostgresPoolOptions | undefined; }): Promise<void>
+./runtime: function ea_resolveOptionalPostgresBinding(options: PostgresBindingFields, rules: Ea_PostgresBindingRules): PostgresBinding | undefined
+./runtime: function ea_toDriverCursorOptions(cursor: PostgresCursorOptions | undefined): PostgresDriverCursorOptions
+./runtime: function ea_validateCursorOptions(cursor: PostgresCursorOptions | undefined, helper: string): PostgresCursorOptions | undefined
+./runtime: function ea_validateTransactionOptions(options: PostgresTransactionOptions | undefined): PostgresTransactionOptions | undefined
+./runtime: interface Ea_PostgresBindingRules
+./runtime: interface Ea_PostgresBindingRules, readonly required property extension: string
+./runtime: interface Ea_PostgresBindingRules, readonly required property kinds: Readonly<Partial<Record<BindingKind, true>>>
+./runtime: interface Ea_PostgresQueryMembersOptions, readonly required property collections: TCollections | undefined
+./runtime: interface Ea_PostgresQueryMembersOptions, readonly required property context: ExecutionContext<TContract>
+./runtime: interface Ea_PostgresQueryMembersOptions, readonly required property prepareRuntime: Pick<Runtime, 'prepare'>
+./runtime: interface Ea_PostgresQueryMembersOptions, readonly required property raw: RawLane<TContract>
+./runtime: interface Ea_PostgresQueryMembersOptions, readonly required property sql: Db<TContract>
+./runtime: interface Ea_PostgresQueryMembersOptions, readonly required property toSql: ToSqlMember['toSql']
+./runtime: interface Ea_PostgresQueryMembersOptions<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses>
 ./runtime: interface PostgresBindingOptions
 ./runtime: interface PostgresBindingOptions, readonly optional property binding?: PostgresBinding
 ./runtime: interface PostgresBindingOptions, readonly optional property pg?: Client | Pool
@@ -385,6 +375,8 @@
 ./serverless: type PostgresServerlessOptions<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = PostgresServerlessOptionsBase & { readonly contract: TContract; readonly collections?: TCollections; }
 ./static: export default = function postgresStatic<TContract extends Contract<SqlStorage>>(options: { readonly contract: TContract; readonly extensions?: readonly SqlRuntimeExtensionDescriptor<PostgresTargetId>[]; }): PostgresStaticContext<TContract>
 ./static: function contractFromJson<TContract extends Contract<SqlStorage>>(json: unknown): TContract
+./static: function ea_buildPostgresStaticContext<TContract extends Contract<SqlStorage>>(contract: TContract, context: ExecutionContext<TContract>, stack: SqlExecutionStack<PostgresTargetId>): PostgresStaticContext<TContract>
+./static: function ea_validatePostgresContract<TContract extends Contract<SqlStorage>>(contract: TContract): TContract
 ./static: interface PostgresStaticContext, readonly required property context: ExecutionContext<TContract>
 ./static: interface PostgresStaticContext, readonly required property contract: TContract
 ./static: interface PostgresStaticContext, readonly required property enums: NamespacedEnums<TContract>

@@ -118,7 +118,6 @@
     "./relational-core/query-lane-context": "./dist/relational-core__query-lane-context.mjs",
     "./relational-core/types": "./dist/relational-core__types.mjs",
     "./runtime": "./dist/runtime.mjs",
-    "./runtime/internal/prepared-query": "./dist/runtime__internal__prepared-query.mjs",
     "./schema-ir": "./dist/schema-ir.mjs",
     "./schema-ir/naming": "./dist/schema-ir__naming.mjs",
     "./schema-ir/types": "./dist/schema-ir__types.mjs",

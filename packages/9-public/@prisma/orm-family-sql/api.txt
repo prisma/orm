@@ -349,6 +349,8 @@
 (not exported) interface TemporaryColumnValue, readonly required property column: string
 (not exported) interface TemporaryColumnValue, readonly required property table: string
 (not exported) interface TemporaryColumnValue, readonly required property value: string
+(not exported) interface TransactionStart
+(not exported) interface TransactionStart, required property refusedBeforeBegin: boolean
 (not exported) interface WithAlias, required method as<Alias extends string>(newAlias: Alias): JoinSource<RowType, Alias>
 (not exported) interface WithAlias<RowType extends Record<string, ScopeField>>
 (not exported) interface WithBuild, required method build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>>
@@ -6309,29 +6311,6 @@
 ./relational-core: type TraitExpression<Traits extends readonly string[], Nullable extends boolean, CT extends Record<string, { readonly input: unknown; }>> = CodecExpression<CodecIdsWithTrait<CT, Traits>, Nullable, CT>
 ./relational-core: type WhereArg = AnyExpression | ToWhereExpr
 ./relational-core: type WindowFn = 'dense_rank' | 'rank' | 'row_number'
-./runtime/internal/prepared-query: const preparedStatementExecute: unique symbol
-./runtime/internal/prepared-query: const preparedStatementQuery: unique symbol
-./runtime/internal/prepared-query: const transactionSettlement: unique symbol
-./runtime/internal/prepared-query: const transactionStart: unique symbol
-./runtime/internal/prepared-query: function createTransactionStart(): TransactionStart
-./runtime/internal/prepared-query: function settlementOf(transaction: object): TransactionSettlementState | undefined
-./runtime/internal/prepared-query: function wasRefusedBeforeBegin(connection: object): boolean
-./runtime/internal/prepared-query: interface PreparedStatementExecuteTarget extends RuntimeScope
-./runtime/internal/prepared-query: interface PreparedStatementExecuteTarget, required method [preparedStatementExecute]<Params>(statement: PreparedExecution<Params>, params: Params, options?: RuntimeExecuteOptions): Promise<SqlStatementStats>
-./runtime/internal/prepared-query: interface PreparedStatementQueryTarget extends RuntimeScope
-./runtime/internal/prepared-query: interface PreparedStatementQueryTarget, required method [preparedStatementQuery]<Params, Row>(statement: PreparedStatement<Params, Row>, params: Params, options?: RuntimeExecuteOptions): AsyncIterableResult<Row>
-./runtime/internal/prepared-query: interface SettledTransactionTarget
-./runtime/internal/prepared-query: interface SettledTransactionTarget, readonly required property [transactionSettlement]: TransactionSettlementState
-./runtime/internal/prepared-query: interface TransactionSettlementState
-./runtime/internal/prepared-query: interface TransactionSettlementState, readonly required property closed: boolean
-./runtime/internal/prepared-query: interface TransactionSettlementState, readonly required property committed: boolean
-./runtime/internal/prepared-query: interface TransactionSettlementState, readonly required property rolledBack: boolean
-./runtime/internal/prepared-query: interface TransactionSettlementState, required method abandon(): Promise<void>
-./runtime/internal/prepared-query: interface TransactionSettlementState, required method logDroppedError(error: unknown): void
-./runtime/internal/prepared-query: interface TransactionStart
-./runtime/internal/prepared-query: interface TransactionStart, required property refusedBeforeBegin: boolean
-./runtime/internal/prepared-query: interface TransactionStartTarget
-./runtime/internal/prepared-query: interface TransactionStartTarget, readonly required property [transactionStart]: TransactionStart
 ./runtime: abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Contract<SqlStorage>> extends RuntimeCore<SqlQueryPlan, SqlExecutionPlan, SqlMiddleware> implements Runtime
 ./runtime: class PreparedExecutionImpl, constructor(internals: PreparedStatementInternals)
 ./runtime: class PreparedExecutionImpl, readonly required property ast: AnyQueryAst
@@ -6353,9 +6332,9 @@
 ./runtime: class PreparedStatementImpl<Params, Row> implements PreparedStatement<Params, Row>, PreparedStatementInternals
 ./runtime: class SqlRuntimeBase, constructor(options: RuntimeOptions<TContract>)
 ./runtime: class SqlRuntimeBase, protected required method acquireRawConnection(options?: Pick<ActivityExecuteOptions, 'activityParent'>): Promise<SqlConnection>
-./runtime: class SqlRuntimeBase, protected required method beginTransactionOn(connection: SqlConnection, owner: TransactionStartTarget, parent: ActivityParent | undefined, options?: RuntimeTransactionOptions): Promise<RuntimeTransaction>
-./runtime: class SqlRuntimeBase, protected required method connectionActivitySource(connection: SqlConnection, owner: () => TransactionStartTarget): ActivitySource
-./runtime: class SqlRuntimeBase, protected required method connectionRoute(connection: SqlConnection, owner: TransactionStartTarget): ActivityRoute
+./runtime: class SqlRuntimeBase, protected required method beginTransactionOn(connection: SqlConnection, owner: Ea_TransactionStartTarget, parent: ActivityParent | undefined, options?: RuntimeTransactionOptions): Promise<RuntimeTransaction>
+./runtime: class SqlRuntimeBase, protected required method connectionActivitySource(connection: SqlConnection, owner: () => Ea_TransactionStartTarget): ActivitySource
+./runtime: class SqlRuntimeBase, protected required method connectionRoute(connection: SqlConnection, owner: Ea_TransactionStartTarget): ActivityRoute
 ./runtime: class SqlRuntimeBase, protected required method executeStatisticsAgainstQueryable(plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>, queryable: SqlQueryable, options?: ActivityExecuteOptions): Promise<SqlStatementStats>
 ./runtime: class SqlRuntimeBase, protected required method getListDecoder(): ListDecoder
 ./runtime: class SqlRuntimeBase, protected required method lower(plan: SqlQueryPlan, ctx: SqlCodecCallContext): Promise<SqlExecutionPlan>
@@ -6368,8 +6347,8 @@
 ./runtime: class SqlRuntimeBase, protected required method runPreparedQueryAgainstQueryable<P, Row>(ps: PreparedStatementImpl<P, Row>, userParams: unknown, queryable: SqlQueryable, options?: ActivityExecuteOptions): AsyncIterableResult<Row>
 ./runtime: class SqlRuntimeBase, protected required method startActivityOnRoute<K extends ClientActivityKind>(route: ActivityRoute, activity: StartActivity<K>, parent: ActivityParent | undefined): Promise<ActivityHandle<K>>
 ./runtime: class SqlRuntimeBase, readonly required property [activitySource]: ActivitySource
-./runtime: class SqlRuntimeBase, required method [preparedStatementExecute]<Params>(ps: PreparedExecution<Params>, params: Params, options?: RuntimeExecuteOptions): Promise<SqlStatementStats>
-./runtime: class SqlRuntimeBase, required method [preparedStatementQuery]<Params, Row>(ps: PreparedStatement<Params, Row>, params: Params, options?: RuntimeExecuteOptions): AsyncIterableResult<Row>
+./runtime: class SqlRuntimeBase, required method [ea_preparedStatementExecute]<Params>(ps: PreparedExecution<Params>, params: Params, options?: RuntimeExecuteOptions): Promise<SqlStatementStats>
+./runtime: class SqlRuntimeBase, required method [ea_preparedStatementQuery]<Params, Row>(ps: PreparedStatement<Params, Row>, params: Params, options?: RuntimeExecuteOptions): AsyncIterableResult<Row>
 ./runtime: class SqlRuntimeBase, required method close(): Promise<void>
 ./runtime: class SqlRuntimeBase, required method connection(options?: Pick<ActivityExecuteOptions, 'activityParent'>): Promise<RuntimeConnection>
 ./runtime: class SqlRuntimeBase, required method execute(plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>, options?: RuntimeExecuteOptions): Promise<SqlStatementStats>
@@ -6377,6 +6356,9 @@
 ./runtime: class SqlRuntimeBase, required method query<Row>(plan: (SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>) & { readonly _row?: Row; }, options?: RuntimeExecuteOptions): AsyncIterableResult<Row>
 ./runtime: class SqlRuntimeBase, required method telemetry(): RuntimeTelemetryEvent | null
 ./runtime: const activitySource: unique symbol
+./runtime: const ea_preparedStatementExecute: unique symbol
+./runtime: const ea_preparedStatementQuery: unique symbol
+./runtime: const ea_transactionStart: unique symbol
 ./runtime: export type Activity from @prisma/orm-framework/components/runtime
 ./runtime: export type ActivityEndedResult from @prisma/orm-framework/components/runtime
 ./runtime: export type ActivityFinalizedResult from @prisma/orm-framework/components/runtime
@@ -6406,6 +6388,7 @@
 ./runtime: function delegatingActivitySource(target: () => RuntimeScope): ActivitySource
 ./runtime: function delegatingRuntime(getRuntime: () => Runtime): DelegatingRuntime
 ./runtime: function deriveParamMetadata(ast: AnyQueryAst): readonly ParamMetadata[]
+./runtime: function ea_createTransactionStart(): TransactionStart
 ./runtime: function encodeParamsWithMetadata(values: readonly unknown[], metadata: readonly ParamMetadata[], ctx: SqlCodecCallContext, contractCodecs?: ContractCodecRegistry): Promise<readonly unknown[]>
 ./runtime: function extractCodecIds(contract: Contract<SqlStorage>): Set<string>
 ./runtime: function findActivitySource(target: RuntimeScope): ActivitySource | undefined
@@ -6453,7 +6436,13 @@
 ./runtime: interface BudgetsOptions, readonly optional property severities?: { readonly rowCount?: 'error' | 'warn'; readonly latency?: 'error' | 'warn'; }
 ./runtime: interface BudgetsOptions, readonly optional property tableRows?: Record<string, number>
 ./runtime: interface ConnectionProvider
-./runtime: interface ConnectionProvider, required method connection(options?: Pick<ActivityExecuteOptions, 'activityParent'>): Promise<Pick<RuntimeConnection, 'destroy' | 'release' | 'transaction'> & Partial<TransactionStartTarget>>
+./runtime: interface ConnectionProvider, required method connection(options?: Pick<ActivityExecuteOptions, 'activityParent'>): Promise<Pick<RuntimeConnection, 'destroy' | 'release' | 'transaction'> & Partial<Ea_TransactionStartTarget>>
+./runtime: interface Ea_PreparedStatementExecuteTarget extends RuntimeScope
+./runtime: interface Ea_PreparedStatementExecuteTarget, required method [ea_preparedStatementExecute]<Params>(statement: PreparedExecution<Params>, params: Params, options?: RuntimeExecuteOptions): Promise<SqlStatementStats>
+./runtime: interface Ea_PreparedStatementQueryTarget extends RuntimeScope
+./runtime: interface Ea_PreparedStatementQueryTarget, required method [ea_preparedStatementQuery]<Params, Row>(statement: PreparedStatement<Params, Row>, params: Params, options?: RuntimeExecuteOptions): AsyncIterableResult<Row>
+./runtime: interface Ea_TransactionStartTarget
+./runtime: interface Ea_TransactionStartTarget, readonly required property [ea_transactionStart]: TransactionStart
 ./runtime: interface ExecutionContext, readonly optional property collectionMethods?: ReadonlyArray<CollectionMethodContribution>
 ./runtime: interface ExecutionContext, readonly optional property rawCodecInferer?: RawCodecInferer
 ./runtime: interface ExecutionContext, readonly required property aggregateDescriptors: SqlAggregateDescriptorRegistry
