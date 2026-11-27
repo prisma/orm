@@ -132,7 +132,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "6ff832e7a965926f",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). It also takes the option `tolerateUnreadableRefs`, which loads the migrations with an unreadable ref file left for the caller to report, as `migration check` does; without it, a ref file that is refused now fails the load (prisma/orm#31200)."
   },
   {
     "path": "./cli/control-api",
