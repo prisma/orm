@@ -211,7 +211,11 @@ describe('emitContractSpaceArtifacts', () => {
 
   it.each([
     ['written by a newer release', { formatVersion: 2 }, 'MIGRATION.FORMAT_VERSION_NEWER'],
-    ['with no format version', {}, 'MIGRATION.FORMAT_VERSION_MISSING'],
+    [
+      'with the old schemaVersion field',
+      { schemaVersion: '1' },
+      'MIGRATION.FORMAT_VERSION_MISSING',
+    ],
   ])('refuses, and leaves alone, a refs/head.json %s', async (_label, version, code) => {
     const headPath = join(migrationsDir, 'pgvector', 'refs', 'head.json');
     const content = JSON.stringify({ ...version, hash: HASH_V1, invariants: [] });

@@ -1,6 +1,8 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
-import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
-import { carriesFormatVersion } from '@internal/contract/internal/format-version';
+import {
+  carriesFormatVersion,
+  convertContractDocument,
+} from '@internal/contract/internal/format-version';
 import {
   type Contract,
   ContractExecutionSectionSchema,
@@ -1151,8 +1153,7 @@ export interface ValidateSqlContractFullyOptions {
  * validated flat-data shape; IR class hydration happens in the SPI
  * base on top of this helper.
  *
- * A value that carries `formatVersion` or the old `schemaVersion` is a stored file, and is refused
- * unless its format version is one this release reads. A value with neither is an in-memory contract.
+ * A value that carries `formatVersion` or the old `schemaVersion` is a stored file: it is read through its format version, and converted to the newest one, before it is validated. A value with neither is an in-memory contract.
  */
 export function validateSqlContractFully<T extends Contract<SqlStorage>>(
   value: unknown,
@@ -1161,17 +1162,16 @@ export function validateSqlContractFully<T extends Contract<SqlStorage>>(
   const stripped =
     typeof value === 'object' && value !== null
       ? (() => {
-          if (carriesFormatVersion(value)) {
-            readFormatVersion(value, { kind: 'contract', knownVersions: CONTRACT_FORMAT_VERSIONS });
-          }
           const {
             formatVersion: _,
             _generated: _g,
             ...rest
-          } = blindCast<
-            Record<string, unknown>,
-            'non-null object read only to omit wire metadata before structural validation'
-          >(value);
+          } = carriesFormatVersion(value)
+            ? convertContractDocument(value)
+            : blindCast<
+                Record<string, unknown>,
+                'non-null object read only to omit wire metadata before structural validation'
+              >(value);
           return rest;
         })()
       : value;

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
+import { convertContractDocument } from '@internal/contract/internal/format-version';
 import { CONTRACT_SNAPSHOTS_DIRNAME, storageHashHex } from '@internal/framework-components/control';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { blindCast } from '@internal/utils/casts';
@@ -180,17 +180,14 @@ export async function writeContractSnapshot(
   input: ContractSnapshotInput,
 ): Promise<{ readonly written: boolean; readonly dir: string }> {
   const dir = contractSnapshotDir(migrationsDir, storageHash);
-  readFormatVersion(input.contractJson, {
-    kind: 'contract',
-    knownVersions: CONTRACT_FORMAT_VERSIONS,
-  });
+  const contractJson = convertContractDocument(input.contractJson);
 
   // contractJson is unknown JSON; only storage.storageHash is read, to check
   // it against the hash the snapshot is being written under.
   const contractStorage = blindCast<
     { storage?: { storageHash?: unknown } },
     'contractJson is unknown JSON; only the storage.storageHash field is read here'
-  >(input.contractJson);
+  >(contractJson);
   const actualStorageHash = contractStorage.storage?.storageHash;
   if (actualStorageHash !== storageHash) {
     throw errorContractSnapshotHashMismatch(
@@ -211,7 +208,7 @@ export async function writeContractSnapshot(
   );
   await mkdir(tmpDir, { recursive: true });
 
-  const files = contractSnapshotFiles(input);
+  const files = contractSnapshotFiles({ ...input, contractJson });
 
   try {
     await writeFile(join(tmpDir, CONTRACT_JSON_FILE), files.contractJson);
@@ -260,13 +257,9 @@ export async function readContractSnapshotJson(
   } catch (e) {
     throw errorInvalidJson(jsonPath, e instanceof Error ? e.message : String(e));
   }
-  readFormatVersion(parsed, {
-    kind: 'contract',
-    knownVersions: CONTRACT_FORMAT_VERSIONS,
-    path: jsonPath,
-  });
-  verifyContent?.assertSnapshotContentMatches(parsed, storageHash, jsonPath);
-  return parsed;
+  const contractJson = convertContractDocument(parsed, { path: jsonPath, snapshot: true });
+  verifyContent?.assertSnapshotContentMatches(contractJson, storageHash, jsonPath);
+  return contractJson;
 }
 
 /**
@@ -314,13 +307,9 @@ export async function readContractSnapshotJsonTolerant(
   if (parsed === null) {
     return undefined;
   }
-  readFormatVersion(parsed, {
-    kind: 'contract',
-    knownVersions: CONTRACT_FORMAT_VERSIONS,
-    path: jsonPath,
-  });
+  const contractJson = convertContractDocument(parsed, { path: jsonPath, snapshot: true });
   try {
-    verifyContent?.assertSnapshotContentMatches(parsed, storageHash, jsonPath);
+    verifyContent?.assertSnapshotContentMatches(contractJson, storageHash, jsonPath);
   } catch (error) {
     if (
       MigrationToolsError.is(error) &&
@@ -330,7 +319,7 @@ export async function readContractSnapshotJsonTolerant(
     }
     throw error;
   }
-  return parsed;
+  return contractJson;
 }
 
 export function snapshotsImportPathFrom(packageDir: string, migrationsDir: string): string {

@@ -3958,9 +3958,31 @@
 ./contract/hashing: type PreserveEmptyPredicate = (path: readonly string[]) => boolean
 ./contract/hashing: type SerializeContract = (contract: Contract) => JsonObject
 ./contract/hashing: type StorageSort = (storage: unknown) => unknown
+./contract/internal/format-version: const CONTRACT_FORMAT: StoredFormat<typeof CONTRACT_FORMAT_VERSIONS_READ>
+./contract/internal/format-version: const CONTRACT_FORMAT_VERSIONS_READ: readonly [0, 1]
+./contract/internal/format-version: const NEWEST_CONTRACT_FORMAT_VERSION: NewestContractFormatVersion
 ./contract/internal/format-version: function carriesFormatVersion(value: unknown): boolean
+./contract/internal/format-version: function convertContractDocument(document: unknown, location?: ContractFileLocation): StoredDocument
 ./contract/internal/format-version: function formatVersionErrorAt(error: StructuredError, path: string): StructuredError
 ./contract/internal/format-version: function isContractBuiltInMemory(value: unknown): boolean
+./contract/internal/format-version: function readStoredDocument<TVersions extends FormatVersionList>(document: unknown, format: StoredFormat<TVersions>, location?: StoredFileLocation): StoredDocumentInNewestVersion<TVersions>
+./contract/internal/format-version: interface ContractFileLocation extends StoredFileLocation
+./contract/internal/format-version: interface ContractFileLocation, readonly optional property snapshot?: boolean | undefined
+./contract/internal/format-version: interface StoredDocumentInNewestVersion, readonly required property document: StoredDocument
+./contract/internal/format-version: interface StoredDocumentInNewestVersion, readonly required property formatVersion: NewestFormatVersion<TVersions>
+./contract/internal/format-version: interface StoredDocumentInNewestVersion<TVersions extends FormatVersionList>
+./contract/internal/format-version: interface StoredFileLocation
+./contract/internal/format-version: interface StoredFileLocation, readonly optional property bundledIn?: string | undefined
+./contract/internal/format-version: interface StoredFileLocation, readonly optional property path?: string | undefined
+./contract/internal/format-version: interface StoredFormat, readonly required property conversions: Readonly<Record<Exclude<TVersions[number], TVersions[0]>, StoredConversion>> & Readonly<Partial<Record<TVersions[0], never>>>
+./contract/internal/format-version: interface StoredFormat, readonly required property kind: StoredFileKind
+./contract/internal/format-version: interface StoredFormat, readonly required property versions: TVersions
+./contract/internal/format-version: interface StoredFormat<TVersions extends FormatVersionList>
+./contract/internal/format-version: type FormatVersionList = readonly [number, ...number[]]
+./contract/internal/format-version: type NewestContractFormatVersion = NewestFormatVersion<typeof CONTRACT_FORMAT_VERSIONS_READ>
+./contract/internal/format-version: type NewestFormatVersion<TVersions extends FormatVersionList> = TVersions extends readonly [...unknown[], infer TNewest extends number] ? TNewest : never
+./contract/internal/format-version: type StoredConversion = (document: StoredDocument) => StoredDocument
+./contract/internal/format-version: type StoredDocument = Readonly<Record<string, unknown>>
 ./contract/is-plain-record: function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>>
 ./contract/resolve-domain-model: function resolveDomainModel(domain: ApplicationDomain, modelName: string): ResolvedDomainModel | undefined
 ./contract/resolve-domain-model: interface ResolvedDomainModel

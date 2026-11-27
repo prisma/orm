@@ -106,6 +106,17 @@ describe('buildReadAggregate', () => {
     expect(result.value.aggregate.app.contract().storage.storageHash).toBe(CONTRACT_HASH);
   });
 
+  it('reads a contract.json a release candidate wrote', async () => {
+    await writeContractFile(contractPath, CONTRACT_HASH, { schemaVersion: '1' });
+    await writeAppMigration(migrationsDir);
+
+    const result = await buildReadAggregate(makeConfig(contractPath), { migrationsDir });
+
+    expect(result.ok ? result.value.aggregate.app.contract().storage.storageHash : result).toBe(
+      CONTRACT_HASH,
+    );
+  });
+
   it('falls back to the identity-only stand-in contract when contract.json is missing', async () => {
     await writeAppMigration(migrationsDir);
 
@@ -127,7 +138,7 @@ describe('buildReadAggregate', () => {
 
   it.each([
     ['written by a newer release', { formatVersion: 2 }, 'CONTRACT.FORMAT_VERSION_NEWER'],
-    ['a pre-release wrote', { schemaVersion: '1' }, 'CONTRACT.FORMAT_VERSION_MISSING'],
+    ['with no version field', {}, 'CONTRACT.FORMAT_VERSION_MISSING'],
   ])(
     'reports a contract.json %s instead of falling back to the stand-in',
     async (_label, version, code) => {

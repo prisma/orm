@@ -1,6 +1,5 @@
-import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
 import type { PreserveEmptyPredicate, StorageSort } from '@internal/contract/hashing';
-import { blindCast } from '@internal/utils/casts';
+import { convertContractDocument } from '@internal/contract/internal/format-version';
 import { ifDefined } from '@internal/utils/defined';
 import { errorDescriptorHeadHashMismatch } from './errors';
 import { recomputePublishedStorageHash } from './hash';
@@ -42,20 +41,14 @@ export interface DescriptorSelfConsistencyInputs {
  * clear remediation hint without re-deriving them.
  */
 export function assertDescriptorSelfConsistency(inputs: DescriptorSelfConsistencyInputs): void {
-  readFormatVersion(inputs.contractJson, {
-    kind: 'contract',
-    knownVersions: CONTRACT_FORMAT_VERSIONS,
+  const contract = convertContractDocument(inputs.contractJson, {
     path: 'contract.json',
     bundledIn: inputs.extensionId,
   });
-  const contract = blindCast<
-    { readonly target?: unknown; readonly targetFamily?: unknown; readonly storage?: unknown },
-    'readFormatVersion accepted the document, so it is an object; only the fields the hash covers are read'
-  >(inputs.contractJson);
   const recomputed = recomputePublishedStorageHash({
-    target: contract.target,
-    targetFamily: contract.targetFamily,
-    storage: contract.storage,
+    target: contract['target'],
+    targetFamily: contract['targetFamily'],
+    storage: contract['storage'],
     hooks: {
       ...ifDefined('shouldPreserveEmpty', inputs.shouldPreserveEmpty),
       ...ifDefined('sortStorage', inputs.sortStorage),

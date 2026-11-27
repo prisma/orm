@@ -86,8 +86,16 @@ describe('readContractSpaceHeadRef', () => {
       });
     });
 
-    it('refuses a head ref with no format version', async () => {
+    it('reads a head ref a release candidate wrote with no format version', async () => {
       await writeHead({ hash: 'abc', invariants: [] });
+      expect(await readContractSpaceHeadRef(migrationsDir, 'cipherstash')).toEqual({
+        hash: 'abc',
+        invariants: [],
+      });
+    });
+
+    it('refuses a head ref with the old schemaVersion field', async () => {
+      await writeHead({ schemaVersion: '1', hash: 'abc', invariants: [] });
       await expect(readContractSpaceHeadRef(migrationsDir, 'cipherstash')).rejects.toMatchObject({
         code: 'MIGRATION.FORMAT_VERSION_MISSING',
       });

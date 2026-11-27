@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { PrismaConfig } from '@internal/config/config-types';
-import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
-import { castAs } from '@internal/utils/casts';
+import { convertContractDocument } from '@internal/contract/internal/format-version';
 import { ifDefined } from '@internal/utils/defined';
 import type { CliStructuredError, Result } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
@@ -56,13 +55,8 @@ export async function readContractDocument(
     );
   }
   try {
-    const document = castAs<Record<string, unknown>>(JSON.parse(content));
-    readFormatVersion(document, {
-      kind: 'contract',
-      knownVersions: CONTRACT_FORMAT_VERSIONS,
-      path: contractPath,
-    });
-    return ok(document);
+    const document = convertContractDocument(JSON.parse(content), { path: contractPath });
+    return ok({ ...document });
   } catch (error) {
     const formatFailure = formatVersionFailure(error, contractPath);
     if (formatFailure !== undefined) return notOk(normalizeError(formatFailure));

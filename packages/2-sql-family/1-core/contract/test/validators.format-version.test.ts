@@ -33,8 +33,15 @@ describe('validateSqlContractFully and the format version', () => {
     );
   });
 
-  it('refuses a contract file a pre-release wrote, with schemaVersion', () => {
-    expect(() => validateSqlContractFully({ schemaVersion: '1', ...contract })).toThrowError(
+  it('reads a contract file a release candidate wrote, with schemaVersion, without the field', () => {
+    const validated = validateSqlContractFully({ schemaVersion: '1', ...contract });
+    expect(validated).not.toHaveProperty('schemaVersion');
+    expect(validated).not.toHaveProperty('formatVersion');
+    expect(validated.storage.storageHash).toBe(contract.storage.storageHash);
+  });
+
+  it('refuses a contract file with a schemaVersion no release wrote', () => {
+    expect(() => validateSqlContractFully({ schemaVersion: '2', ...contract })).toThrowError(
       expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' }) as unknown as Error,
     );
   });

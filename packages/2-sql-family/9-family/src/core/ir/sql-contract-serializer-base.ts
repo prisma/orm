@@ -1,9 +1,10 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import {
-  CONTRACT_FORMAT_VERSIONS,
-  type ContractFormatVersion,
-  readFormatVersion,
-} from '@internal/contract/format-version';
+  CONTRACT_FORMAT,
+  NEWEST_CONTRACT_FORMAT_VERSION,
+  type NewestContractFormatVersion,
+  readStoredDocument,
+} from '@internal/contract/internal/format-version';
 import { isPlainRecord } from '@internal/contract/is-plain-record';
 import type { Contract } from '@internal/contract/types';
 import { withDerivedToOneRelationNullability } from '@internal/contract-authoring';
@@ -116,7 +117,7 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
   }
 
   private readonly contractFormats: Readonly<
-    Record<ContractFormatVersion, SqlContractFormat<TContract>>
+    Record<NewestContractFormatVersion, SqlContractFormat<TContract>>
   > = {
     1: {
       parse: (document) => this.parseContractV1(document),
@@ -125,18 +126,15 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
   };
 
   deserializeContract<T extends TContract = TContract>(json: unknown): T {
-    const formatVersion = readFormatVersion(json, {
-      kind: 'contract',
-      knownVersions: CONTRACT_FORMAT_VERSIONS,
-    });
+    const { formatVersion, document } = readStoredDocument(json, CONTRACT_FORMAT);
     return blindCast<
       T,
       'target serializer constructTargetContract returns the requested contract subtype'
-    >(this.contractFormats[formatVersion].parse(json));
+    >(this.contractFormats[formatVersion].parse(document));
   }
 
   serializeContract(contract: TContract): JsonObject {
-    return this.contractFormats[1].print(contract);
+    return this.contractFormats[NEWEST_CONTRACT_FORMAT_VERSION].print(contract);
   }
 
   protected parseContractV1(document: unknown): TContract {

@@ -51,8 +51,19 @@ describe('readContractEnvelope', () => {
     });
   });
 
-  it('refuses a contract a pre-release wrote', async () => {
+  it('reads a contract a release candidate wrote, in the newest format version', async () => {
     await writeContract({ schemaVersion: '1' });
+    expect(await readContractEnvelope({ contract: { output: contractPath } })).toEqual({
+      formatVersion: 1,
+      storageHash: STORAGE_HASH,
+      target: 'postgres',
+      targetFamily: 'sql',
+      storage: { storageHash: STORAGE_HASH },
+    });
+  });
+
+  it('refuses a contract with no version field', async () => {
+    await writeContract({});
     await expect(
       readContractEnvelope({ contract: { output: contractPath } }),
     ).rejects.toMatchObject({

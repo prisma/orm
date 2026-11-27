@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { migrationMetadataV1FromV0 } from '../../src/formats/migration-metadata/v1';
 import {
   parseMigrationMetadataDocument,
   printMigrationMetadataDocument,
@@ -47,15 +48,6 @@ describe('migration.json format version 1', () => {
     });
   });
 
-  it('refuses a file with no format version', () => {
-    expect(
-      caught(() => parseMigrationMetadataDocument(metadata, '/m/migration.json')),
-    ).toMatchObject({
-      code: 'MIGRATION.FORMAT_VERSION_MISSING',
-      where: { path: '/m/migration.json' },
-    });
-  });
-
   it('refuses a file with the old schemaVersion field', () => {
     expect(
       caught(() =>
@@ -71,5 +63,27 @@ describe('migration.json format version 1', () => {
     );
     expect(result.ok).toBe(false);
     expect(result.ok ? undefined : result.failure).toContain('labels');
+  });
+});
+
+describe('migration.json format version 0, which a release candidate wrote', () => {
+  it('converts to the version 1 document the format script writes, and parses into the same metadata', () => {
+    expect(migrationMetadataV1FromV0({ ...metadata })).toEqual({ formatVersion: 1, ...metadata });
+    expect(parseMigrationMetadataDocument(metadata, '/m/migration.json').assertOk()).toEqual(
+      metadata,
+    );
+  });
+
+  it('is refused when it holds a field a migration.json does not have', () => {
+    const result = parseMigrationMetadataDocument(
+      { ...metadata, labels: ['x'] },
+      '/m/migration.json',
+    );
+    expect(result.ok ? undefined : result.failure).toContain('labels');
+  });
+
+  it('is refused when a field it needs is missing', () => {
+    const { createdAt: _, ...withoutCreatedAt } = metadata;
+    expect(parseMigrationMetadataDocument(withoutCreatedAt, '/m/migration.json').ok).toBe(false);
   });
 });

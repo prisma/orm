@@ -570,8 +570,13 @@ describe('ref file format version', () => {
     });
   });
 
-  it('readRefs refuses a ref with no format version', async () => {
+  it('readRefs reads a ref a release candidate wrote with no format version', async () => {
     await writeRefFile('staging', { ...ENTRY_A });
+    expect(await readRefs(refsDir)).toEqual({ staging: ENTRY_A });
+  });
+
+  it('readRefs refuses a ref with the old schemaVersion field', async () => {
+    await writeRefFile('staging', { schemaVersion: '1', ...ENTRY_A });
     await expect(readRefs(refsDir)).rejects.toMatchObject({
       code: 'MIGRATION.FORMAT_VERSION_MISSING',
     });

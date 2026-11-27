@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { convertContractDocument } from '@internal/contract/internal/format-version';
 import {
   contractSnapshotFiles,
   readContractSnapshotJson,
@@ -137,58 +138,57 @@ describe('the extension package after the script', () => {
     ).not.toThrow();
   });
 
-  it('was refused as a bundled contract space before', () => {
-    expect(() => bundledSpace('before')).toThrow(
-      expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' }),
+  it('is read before the script as the same bundled contract space, in the newest format version', () => {
+    expect(bundledSpace('before')).toEqual(bundledSpace('after'));
+  });
+});
+
+describe.each(Object.entries(projects))(
+  'the %s project before the script, which a release candidate wrote',
+  (_name, project) => {
+    it('has a contract each reader converts to the document the script writes', () => {
+      const before = readJson('before', project.contract);
+      const after = readJson('after', project.contract);
+      expect({
+        document: convertContractDocument(before),
+        deserialized: new PostgresContractSerializer().deserializeContract(before),
+      }).toEqual({
+        document: after,
+        deserialized: new PostgresContractSerializer().deserializeContract(after),
+      });
+    });
+
+    it('has migration packages this release reads as the script writes them, each with its migrationHash verified', async () => {
+      for (const dir of migrationDirs('before', project.spaceDir)) {
+        const read = async (side: Side) => {
+          const pkg = await readMigrationPackage(path(side, join(project.spaceDir, dir)), {
+            migrationsDir: path(side, project.migrationsDir),
+          });
+          return { metadata: pkg.metadata, ops: pkg.ops, verified: verifyMigrationHash(pkg).ok };
+        };
+        expect(await read('before')).toEqual({ ...(await read('after')), verified: true });
+      }
+    });
+
+    it('has snapshots this release reads as the script writes them, and leaves each file as it is', async () => {
+      for (const hash of snapshotHashes('before', project.migrationsDir)) {
+        const file = join(project.migrationsDir, 'snapshots', hash, 'contract.json');
+        expect({
+          read: await readContractSnapshotJson(path('before', project.migrationsDir), hash),
+          onDisk: readFileSync(path('before', file), 'utf8'),
+        }).toEqual({ read: readJson('after', file), onDisk: fixtureTree('before')[file] });
+      }
+    });
+  },
+);
+
+describe('the app project before the script', () => {
+  it('has ref files this release reads as the script writes them', async () => {
+    expect(await readRefs(path('before', 'app/migrations/app/refs'))).toEqual(
+      await readRefs(path('after', 'app/migrations/app/refs')),
     );
   });
 });
-
-describe('the app project before the script', () => {
-  const app = projects.app;
-
-  it('is refused by every reader for having no format version', async () => {
-    const migrationDir = migrationDirs('before', app.spaceDir)[0] ?? '';
-    const snapshot = snapshotHashes('before', app.migrationsDir)[0] ?? '';
-    expect({
-      contract: codeOf(() =>
-        new PostgresContractSerializer().deserializeContract(readJson('before', app.contract)),
-      ),
-      migration: await rejectionCodeOf(
-        readMigrationPackage(path('before', join(app.spaceDir, migrationDir)), {
-          migrationsDir: path('before', app.migrationsDir),
-        }),
-      ),
-      refs: await rejectionCodeOf(readRefs(path('before', 'app/migrations/app/refs'))),
-      snapshot: await rejectionCodeOf(
-        readContractSnapshotJson(path('before', app.migrationsDir), snapshot),
-      ),
-    }).toEqual({
-      contract: 'CONTRACT.FORMAT_VERSION_MISSING',
-      migration: 'MIGRATION.FORMAT_VERSION_MISSING',
-      refs: 'MIGRATION.FORMAT_VERSION_MISSING',
-      snapshot: 'CONTRACT.FORMAT_VERSION_MISSING',
-    });
-  });
-});
-
-function codeOf(run: () => unknown): unknown {
-  try {
-    run();
-    return undefined;
-  } catch (error) {
-    return (error as { code?: unknown }).code;
-  }
-}
-
-async function rejectionCodeOf(promise: Promise<unknown>): Promise<unknown> {
-  try {
-    await promise;
-    return undefined;
-  } catch (error) {
-    return (error as { code?: unknown }).code;
-  }
-}
 
 describe.each(Object.entries(GUIDE_PATHS))('the %s guide detection', (_audience, guide) => {
   const patterns = detectionPatterns(guide, 'stored-files-format-version');

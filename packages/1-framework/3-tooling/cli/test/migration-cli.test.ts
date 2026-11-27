@@ -430,6 +430,29 @@ describe('MigrationCLI.run', () => {
     expect(manifest.migrationHash).toMatch(/^/);
   });
 
+  it('preserves createdAt from a migration.json a release candidate wrote, and writes it in the newest format version', async () => {
+    loadConfigMock.mockResolvedValue(ok(okConfig));
+    createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
+    const createdAt = '2026-01-15T10:00:00.000Z';
+    writeFileSync(
+      join(workDir, 'migration.json'),
+      JSON.stringify({ from: 'from', to: 'to', migrationHash: null, createdAt }),
+    );
+
+    const exitCode = await MigrationCLI.run(pathToFileURL(migrationFile).href, FakeMigration, {
+      argv: entrypointArgv(),
+      stdout: new BufferStream(),
+      stderr: new BufferStream(),
+    });
+
+    const manifest = JSON.parse(readFileSync(join(workDir, 'migration.json'), 'utf-8'));
+    expect({
+      exitCode,
+      formatVersion: manifest.formatVersion,
+      createdAt: manifest.createdAt,
+    }).toEqual({ exitCode: 0, formatVersion: 1, createdAt });
+  });
+
   it('exits non-zero with MIGRATION.INVALID_JSON when migration.json is unparseable', async () => {
     loadConfigMock.mockResolvedValue(ok(okConfig));
     createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
@@ -457,8 +480,8 @@ describe('MigrationCLI.run', () => {
 
   it.each([
     [
-      'a pre-release wrote, with no format version',
-      { from: null, to: 'sha256:x', createdAt: '2026-01-01T00:00:00.000Z' },
+      'with the old schemaVersion field',
+      { schemaVersion: '1', from: null, to: 'sha256:x', createdAt: '2026-01-01T00:00:00.000Z' },
       'MIGRATION.FORMAT_VERSION_MISSING',
     ],
     [

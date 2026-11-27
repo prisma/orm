@@ -2,7 +2,7 @@
 changes:
   - id: stored-files-format-version
     summary: |
-      Every file Prisma stores in a project now names its format version. A `contract.json`, and each contract snapshot under `migrations/snapshots/<hash>/`, has `"formatVersion": 1` where it had `"schemaVersion": "1"`. Every `migration.json` and every ref file under `migrations/<space>/refs/` starts with `"formatVersion": 1`. This release refuses a file without it, with `CONTRACT.FORMAT_VERSION_MISSING` or `MIGRATION.FORMAT_VERSION_MISSING`. Run the colocated script on the project: it adds the version to each file and changes nothing else. No hash changes.
+      Every file Prisma stores in a project now names its format version. A `contract.json`, and each contract snapshot under `migrations/snapshots/<hash>/`, has `"formatVersion": 1` where it had `"schemaVersion": "1"`. Every `migration.json` and every ref file under `migrations/<space>/refs/` starts with `"formatVersion": 1`. Until `8.0.0`, a release still reads a file without it, as the format a release candidate wrote, and changes nothing on disk. `8.0.0` refuses such a file, with `CONTRACT.FORMAT_VERSION_MISSING` or `MIGRATION.FORMAT_VERSION_MISSING`. Run the colocated script on the project before you upgrade to `8.0.0`: it adds the version to each file and changes nothing else. No hash changes.
     detection:
       glob: "**/*.json"
       matches:
@@ -16,7 +16,7 @@ changes:
 
 ## `stored-files-format-version`
 
-Each file Prisma writes into your repository now says which version of its format it is in, so a later release can tell an old file from a new one and refuse a file written by a newer release instead of misreading it:
+Each file Prisma writes into your repository now says which version of its format it is in, so a later release can tell an old file from a new one and refuse a file written by a newer release instead of misreading it. Prisma writes the new form from this release on:
 
 ```jsonc
 // contract.json, before
@@ -30,7 +30,7 @@ Each file Prisma writes into your repository now says which version of its forma
 { "formatVersion": 1, "from": null, "to": "...", ... }
 ```
 
-This release reads only files that have it. Without it, `prisma db migrate`, `prisma db update`, `prisma migration plan` and the other commands stop with `CONTRACT.FORMAT_VERSION_MISSING` (for a contract or a snapshot) or `MIGRATION.FORMAT_VERSION_MISSING` (for a `migration.json` or a ref file), naming the file. So does a client given a `contract.json` that lacks it. A contract that Prisma built in memory, by the TypeScript contract builder or by `contractFromJson`, has no format version and needs none.
+This release, and every release candidate after it, still reads a file a release candidate wrote without it: it converts the file in memory and leaves it on disk as it is, so you need not run the script now. It reads such a file as the newest release candidate wrote it. A file from an earlier release candidate still needs the other upgrade steps of each release since the one that wrote it; the command that reads the file names the step for content it no longer accepts. `8.0.0` reads only files that have it. Without it, `prisma db migrate`, `prisma db update`, `prisma migration plan` and the other commands stop with `CONTRACT.FORMAT_VERSION_MISSING` (for a contract or a snapshot) or `MIGRATION.FORMAT_VERSION_MISSING` (for a `migration.json` or a ref file), naming the file. So does a client given a `contract.json` that lacks it. Run the script before you upgrade to `8.0.0`. A contract that Prisma built in memory, by the TypeScript contract builder or by `contractFromJson`, has no format version and needs none.
 
 Commit your work first, so the script's changes can be reviewed and undone with git. Then run the script from the project root:
 
@@ -45,11 +45,11 @@ Node 24 or later runs the TypeScript script directly; it needs no `tsx`. It read
 
 It edits each file in place and keeps the rest of its bytes and layout. It prints each file it changed. A project already in the new form is left unchanged, and the script says nothing changed.
 
-A ref file may have fields a ref does not have, for example a note added by hand. Earlier releases ignored such a field when they read the ref, and dropped it when they wrote the ref again. This release refuses the file, so the script drops the field and lists each field it dropped.
+A ref file may have fields a ref does not have, for example a note added by hand. Earlier releases ignored such a field when they read the ref, and dropped it when they wrote the ref again. A ref file with `formatVersion` and such a field is refused, so the script drops the field and lists each field it dropped.
 
 The script leaves a file unchanged, says what is wrong with it and what to do, and exits 1 when it cannot tell the file is one a release of Prisma wrote: a `contract.json`, `migration.json` or ref file it cannot read or parse; a ref file in a migrations folder it recognises without a `hash` or an `invariants` list; a `migration.json` next to an `ops.json` with a field the format does not have or without one it has; a contract with both `formatVersion` and `schemaVersion`; a `contract.json` holding a contract with neither; and a directory it cannot list. It still changes every other file. Fix each reported file by hand as the report says, then run the script again.
 
-Outside a migrations folder the script recognises, it cannot tell a broken ref from another tool's file, so it leaves alone, without a report, any file in a `refs` folder that does not have a ref's content. If a command still refuses a ref file after the script ran, that ref was already invalid, and earlier releases refused it too. Restore it from version control, or set it again with `prisma migration ref set <name> <contract>`.
+Outside a migrations folder the script recognises, it cannot tell a broken ref from another tool's file, so it leaves alone, without a report, any file in a `refs` folder that does not have a ref's content. If a command still refuses a ref file after the script ran, that ref was already invalid, and earlier releases refused it too. Restore it from version control, or delete it and set it again with `prisma migration ref set <name> <contract>`.
 
 The script does not follow symbolic links. A link to a file or folder inside the project leads to files it reaches anyway, and a link to the project folder or a folder above it leads back to the project; the script ignores both. A link to a file or folder outside the project, such as a migrations folder shared between packages, that holds a stored file the script would change or report is reported, and the script exits 1: run the script on that folder too.
 

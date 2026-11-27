@@ -2,7 +2,7 @@
 changes:
   - id: stored-files-format-version
     summary: |
-      Every file Prisma stores now names its format version. An extension's bundled `contract.json`, and each contract snapshot under `migrations/snapshots/<hash>/`, has `"formatVersion": 1` where it had `"schemaVersion": "1"`. Every `migration.json` and `migrations/refs/head.json` starts with `"formatVersion": 1`. This release refuses a bundled file without it, with `CONTRACT.FORMAT_VERSION_MISSING` or `MIGRATION.FORMAT_VERSION_MISSING`, so an extension published before it fails to load. Run the colocated script on the extension package, rebuild and republish. No hash changes.
+      Every file Prisma stores now names its format version. An extension's bundled `contract.json`, and each contract snapshot under `migrations/snapshots/<hash>/`, has `"formatVersion": 1` where it had `"schemaVersion": "1"`. Every `migration.json` and `migrations/refs/head.json` starts with `"formatVersion": 1`. Until `8.0.0`, a release still reads a bundled file without it, as the format a release candidate wrote. `8.0.0` refuses such a file, with `CONTRACT.FORMAT_VERSION_MISSING` or `MIGRATION.FORMAT_VERSION_MISSING`, so an extension published without it fails to load there. Run the colocated script on the extension package, rebuild and republish before `8.0.0`. No hash changes.
     detection:
       glob: "**/*.json"
       matches:
@@ -19,7 +19,7 @@ changes:
         - '\bassertDescriptorSelfConsistency\s*\('
   - id: contract-space-from-json-reads-stored-files
     summary: |
-      `contractSpaceFromJson`, from `@prisma/orm-postgres/migration-tools/spaces` (and the same path in the other facades and `@prisma/orm-toolchain`), takes the extension's id as `spaceId`, which its errors name, and reads its `contractJson`, each migration's `metadata` and its `headRef` as the stored files they are: each must carry `formatVersion`, and a `migration.json` or head ref with a field it does not know is refused. `headRef` is typed `unknown`; pass the imported `refs/head.json`, not an object built in code.
+      `contractSpaceFromJson`, from `@prisma/orm-postgres/migration-tools/spaces` (and the same path in the other facades and `@prisma/orm-toolchain`), takes the extension's id as `spaceId`, which its errors name, and reads its `contractJson`, each migration's `metadata` and its `headRef` as the stored files they are: each is read through its `formatVersion` (until `8.0.0`, a file a release candidate wrote without it is still read), and a `migration.json` or head ref in format version 1 with a field it does not know is refused. `headRef` is typed `unknown`; pass the imported `refs/head.json`, not an object built in code.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -44,7 +44,7 @@ changes:
 
 ## `stored-files-format-version`
 
-Each file Prisma stores now says which version of its format it is in, so a later release can refuse a file written by a newer release instead of misreading it. An extension bundles stored files: its emitted `src/contract.json`, the `migration.json` of each of its migrations, `migrations/refs/head.json` and its contract snapshots. A descriptor imports them, and this release reads each one's version first. An extension built before this release therefore fails to load with `CONTRACT.FORMAT_VERSION_MISSING` (for the contract) or `MIGRATION.FORMAT_VERSION_MISSING` (for a `migration.json` or the head ref). The error names the extension and the file, and tells the application's developer to upgrade the extension, or to ask its author to republish it: the application cannot fix a file inside the extension's package.
+Each file Prisma stores now says which version of its format it is in, so a later release can refuse a file written by a newer release instead of misreading it. An extension bundles stored files: its emitted `src/contract.json`, the `migration.json` of each of its migrations, `migrations/refs/head.json` and its contract snapshots. A descriptor imports them, and this release reads each one's version first. Until `8.0.0`, a file a release candidate wrote without it is still read, converted in memory. It reads such a file as the newest release candidate wrote it. A file from an earlier release candidate still needs the other upgrade steps of each release since the one that wrote it; the command that reads the file names the step for content it no longer accepts. From `8.0.0`, an extension built without it fails to load with `CONTRACT.FORMAT_VERSION_MISSING` (for the contract) or `MIGRATION.FORMAT_VERSION_MISSING` (for a `migration.json` or the head ref). The error names the extension and the file, and tells the application's developer to upgrade the extension, or to ask its author to republish it: the application cannot fix a file inside the extension's package.
 
 ```jsonc
 // contract.json, before

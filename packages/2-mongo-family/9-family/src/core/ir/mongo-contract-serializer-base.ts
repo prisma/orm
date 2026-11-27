@@ -1,8 +1,9 @@
 import {
-  CONTRACT_FORMAT_VERSIONS,
-  type ContractFormatVersion,
-  readFormatVersion,
-} from '@internal/contract/format-version';
+  CONTRACT_FORMAT,
+  NEWEST_CONTRACT_FORMAT_VERSION,
+  type NewestContractFormatVersion,
+  readStoredDocument,
+} from '@internal/contract/internal/format-version';
 import type { ContractModel } from '@internal/contract/types';
 import {
   removedDomainKeyProblems,
@@ -99,7 +100,7 @@ export abstract class MongoContractSerializerBase<TContract>
   }
 
   private readonly contractFormats: Readonly<
-    Record<ContractFormatVersion, MongoContractFormat<TContract>>
+    Record<NewestContractFormatVersion, MongoContractFormat<TContract>>
   > = {
     1: {
       parse: (document) => this.parseContractV1(document),
@@ -108,17 +109,14 @@ export abstract class MongoContractSerializerBase<TContract>
   };
 
   deserializeContract<T extends TContract = TContract>(json: unknown): T {
-    const formatVersion = readFormatVersion(json, {
-      kind: 'contract',
-      knownVersions: CONTRACT_FORMAT_VERSIONS,
-    });
+    const { formatVersion, document } = readStoredDocument(json, CONTRACT_FORMAT);
     return blindCast<T, 'targets construct the contract subtype their callers request'>(
-      this.contractFormats[formatVersion].parse(json),
+      this.contractFormats[formatVersion].parse(document),
     );
   }
 
   serializeContract(contract: TContract): JsonObject {
-    return this.contractFormats[1].print(contract);
+    return this.contractFormats[NEWEST_CONTRACT_FORMAT_VERSION].print(contract);
   }
 
   protected parseContractV1(document: unknown): TContract {
