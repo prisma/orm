@@ -14,7 +14,7 @@ import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { Contract } from '@internal/contract/types';
 import postgresDriver from '@internal/driver-postgres/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
@@ -63,7 +63,7 @@ async function withRuntime(
   contract: Contract<SqlStorage>,
   connectionString: string,
   use: (session: {
-    readonly runtime: PostgresRuntimeImpl;
+    readonly runtime: Ea_PostgresRuntimeImpl;
     readonly context: ReturnType<typeof createExecutionContext>;
     readonly client: Client;
   }) => Promise<void>,
@@ -84,7 +84,12 @@ async function withRuntime(
   await client.connect();
   try {
     await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
-    const runtime = new PostgresRuntimeImpl({ context, adapter, driver, closeRefusal: undefined });
+    const runtime = new Ea_PostgresRuntimeImpl({
+      context,
+      adapter,
+      driver,
+      closeRefusal: undefined,
+    });
     try {
       await use({ runtime, context, client });
     } finally {

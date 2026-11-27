@@ -6,17 +6,6 @@ import type {
   AsyncIterableResult,
   RuntimeExecuteOptions,
 } from '@internal/framework-components/runtime';
-import {
-  connectWithBinding,
-  type PostgresBindingRules,
-  resolveOptionalPostgresBinding,
-  toDriverCursorOptions,
-  validateCursorOptions,
-  validateTransactionOptions,
-} from '@internal/postgres/internal/options';
-import { buildPostgresStaticContext } from '@internal/postgres/internal/static-context';
-import { buildPostgresQueryMembers } from '@internal/postgres/internal/transaction-members';
-import { validatePostgresContract } from '@internal/postgres/internal/validate-contract';
 import type {
   NamespacedNativeEnums,
   PostgresBinding,
@@ -27,7 +16,20 @@ import type {
   PostgresTransactionContext,
   PostgresTransactionOptions,
 } from '@internal/postgres/runtime';
-import { isPgClient } from '@internal/postgres/runtime';
+import {
+  type Ea_PostgresBindingRules,
+  ea_buildPostgresQueryMembers,
+  ea_connectWithBinding,
+  ea_resolveOptionalPostgresBinding,
+  ea_toDriverCursorOptions,
+  ea_validateCursorOptions,
+  ea_validateTransactionOptions,
+  isPgClient,
+} from '@internal/postgres/runtime';
+import {
+  ea_buildPostgresStaticContext,
+  ea_validatePostgresContract,
+} from '@internal/postgres/static';
 import type { Db } from '@internal/sql-builder/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
@@ -53,17 +55,15 @@ import {
   createExecutionContext,
   createSqlExecutionStack,
   delegatingRuntime,
+  type Ea_PreparedStatementExecuteTarget,
+  type Ea_PreparedStatementQueryTarget,
+  ea_preparedStatementExecute,
+  ea_preparedStatementQuery,
   toRuntimeOptions,
   warnOfCapabilitiesNotProvided,
   withTransaction,
   withTransactionMembers,
 } from '@internal/sql-runtime';
-import {
-  type PreparedStatementExecuteTarget,
-  type PreparedStatementQueryTarget,
-  preparedStatementExecute,
-  preparedStatementQuery,
-} from '@internal/sql-runtime/internal/prepared-query';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -94,8 +94,8 @@ export interface RoleBoundDb<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
 > extends PostgresQueryMembers<TContract, TCollections>,
-    PreparedStatementQueryTarget,
-    PreparedStatementExecuteTarget {
+    Ea_PreparedStatementQueryTarget,
+    Ea_PreparedStatementExecuteTarget {
   readonly enums: NamespacedEnums<TContract>;
   readonly nativeEnums: NamespacedNativeEnums<TContract>;
   transaction<R>(
@@ -282,7 +282,7 @@ const supabaseBindingKinds: Readonly<Record<SupabaseBinding['kind'], true>> = {
   pgPool: true,
 };
 
-const supabaseBindingRules: PostgresBindingRules = {
+const supabaseBindingRules: Ea_PostgresBindingRules = {
   extension: 'supabase',
   kinds: supabaseBindingKinds,
 };
@@ -311,7 +311,7 @@ function resolveSupabaseBinding(options: SupabaseBindingOptions): SupabaseBindin
       },
     );
   }
-  const binding = resolveOptionalPostgresBinding(options, supabaseBindingRules);
+  const binding = ea_resolveOptionalPostgresBinding(options, supabaseBindingRules);
   if (binding?.kind === 'pgClient') {
     throw new InternalError('a pg.Client is refused before the database input is resolved');
   }
@@ -365,10 +365,10 @@ export default async function supabase<
   options: SupabaseOptions<TContract, TCollections> & SupabaseStackProvides<TContract>,
 ): Promise<SupabaseDb<TContract, TCollections>> {
   const keyMaterial = resolveKeyMaterial(options);
-  const cursor = validateCursorOptions(options.cursor, 'supabase');
-  const transactionOptions = validateTransactionOptions(options.transactionOptions);
+  const cursor = ea_validateCursorOptions(options.cursor, 'supabase');
+  const transactionOptions = ea_validateTransactionOptions(options.transactionOptions);
   const binding = resolveSupabaseBinding(options);
-  const contract = validatePostgresContract(options.contract);
+  const contract = ea_validatePostgresContract(options.contract);
 
   const stack = createSqlExecutionStack({
     target: postgresTarget,
@@ -388,7 +388,7 @@ export default async function supabase<
     toSql,
     enums,
     nativeEnums,
-  } = buildPostgresStaticContext(contract, context, stack);
+  } = ea_buildPostgresStaticContext(contract, context, stack);
 
   // The Supabase-internal contract (auth/storage) as a separate secondary root.
   // It is contract-bound: a plan built against it carries the extension's
@@ -399,7 +399,7 @@ export default async function supabase<
   // marker, so its hashes must not be checked against the DB marker.
   const extContract = buildExtensionContract();
   const extContext = createExecutionContext({ contract: extContract, stack });
-  const extStatic = buildPostgresStaticContext(extContract, extContext, stack);
+  const extStatic = ea_buildPostgresStaticContext(extContract, extContext, stack);
 
   let runtimes: SupabaseRuntimes<TContract> | undefined;
   let connectError: { readonly error: unknown } | undefined;
@@ -418,7 +418,7 @@ export default async function supabase<
 
     const driverDescriptor = stack.driver;
     const adapter = stack.adapter.create(stack);
-    const driver = driverDescriptor.create({ cursor: toDriverCursorOptions(cursor) });
+    const driver = driverDescriptor.create({ cursor: ea_toDriverCursorOptions(cursor) });
     const sharedOptions = {
       adapter,
       driver,
@@ -437,7 +437,7 @@ export default async function supabase<
     });
 
     if (binding !== undefined) {
-      connectWithBinding(driver, binding, options).catch((err: unknown) => {
+      ea_connectWithBinding(driver, binding, options).catch((err: unknown) => {
         connectError = { error: err };
       });
     }
@@ -483,7 +483,7 @@ export default async function supabase<
       txCtx: TransactionContext,
     ): SupabaseTransactionContext<TContract, TCollections> {
       return withTransactionMembers(txCtx, {
-        ...buildPostgresQueryMembers<TContract, TCollections>(
+        ...ea_buildPostgresQueryMembers<TContract, TCollections>(
           {
             context,
             collections: options.collections,
@@ -514,14 +514,14 @@ export default async function supabase<
       },
       query: role.query,
       execute: role.execute,
-      [preparedStatementQuery]: role[preparedStatementQuery],
-      [preparedStatementExecute]: role[preparedStatementExecute],
+      [ea_preparedStatementQuery]: role[ea_preparedStatementQuery],
+      [ea_preparedStatementExecute]: role[ea_preparedStatementExecute],
       async transaction<R>(
         fn: (tx: SupabaseTransactionContext<TContract, TCollections>) => PromiseLike<R>,
         localOptions?: PostgresTransactionOptions,
       ): Promise<R> {
         assertInteractiveTransactionsListed(context.contract, postgresTarget.retiredCapabilities);
-        const local = validateTransactionOptions(localOptions);
+        const local = ea_validateTransactionOptions(localOptions);
         const isolationLevel =
           local?.isolationLevel !== undefined
             ? local.isolationLevel

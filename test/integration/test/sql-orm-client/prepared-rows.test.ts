@@ -10,7 +10,7 @@ import sqliteDriver from '@internal/driver-sqlite/runtime';
 import pgvector from '@internal/extension-pgvector/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import type { AsyncIterableResult } from '@internal/framework-components/runtime';
-import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import { Collection, createPreparedRowQuery } from '@internal/sql-orm-client';
 import type { Preparable } from '@internal/sql-relational-core/plan';
 import {
@@ -74,7 +74,7 @@ async function postgresEnvironment(name: string): Promise<Environment> {
   await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
   const lower = vi.fn(instance.adapter.lower.bind(instance.adapter));
   const driverQuery = vi.spyOn(driver, 'query');
-  const runtime = new PostgresRuntimeImpl({
+  const runtime = new Ea_PostgresRuntimeImpl({
     closeRefusal: undefined,
     context,
     adapter: { ...instance.adapter, lower },

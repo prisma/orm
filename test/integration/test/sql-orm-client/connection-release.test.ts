@@ -10,7 +10,7 @@ import {
   postgresDriver,
   rel,
 } from '@internal/postgres/contract-builder';
-import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -50,7 +50,7 @@ async function withPooledRuntime(
     max: 1,
     connectionTimeoutMillis: timeouts.default,
   });
-  let runtime: PostgresRuntimeImpl | undefined;
+  let runtime: Ea_PostgresRuntimeImpl | undefined;
   try {
     const setup = await createPooledRuntime(pool, strategy);
     runtime = setup.runtime;
@@ -88,7 +88,7 @@ async function createPooledRuntime(pool: Pool, strategy: IncludeStrategy) {
   const instance = instantiateExecutionStack(stack);
   if (!instance.adapter || !instance.driver) throw new Error('Missing adapter or driver');
   await instance.driver.connect({ kind: 'pgPool', pool, ownedByDriver: true });
-  const runtime = new PostgresRuntimeImpl({
+  const runtime = new Ea_PostgresRuntimeImpl({
     closeRefusal: undefined,
     context,
     adapter: instance.adapter,

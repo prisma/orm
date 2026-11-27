@@ -9,7 +9,7 @@ import sqlFamilyControl, { INIT_ADDITIVE_POLICY } from '@internal/family-sql/con
 import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
-import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
@@ -104,7 +104,7 @@ async function pushAndVerify(contract: Contract<SqlStorage>, connectionString: s
 async function withRuntime(
   contract: Contract<SqlStorage>,
   connectionString: string,
-  fn: (runtime: PostgresRuntimeImpl, client: Client) => Promise<void>,
+  fn: (runtime: Ea_PostgresRuntimeImpl, client: Client) => Promise<void>,
 ): Promise<void> {
   const client = new Client({ connectionString });
   await client.connect();
@@ -123,7 +123,7 @@ async function withRuntime(
     throw new Error('the Postgres execution stack has no adapter or driver');
   }
   await instance.driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
-  const runtime = new PostgresRuntimeImpl({
+  const runtime = new Ea_PostgresRuntimeImpl({
     closeRefusal: undefined,
     context: createExecutionContext({ contract, stack }),
     adapter: instance.adapter,

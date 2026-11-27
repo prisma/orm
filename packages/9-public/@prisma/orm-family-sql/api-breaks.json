@@ -565,5 +565,14 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "2464de5bee58a3ee",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./runtime/internal/prepared-query",
+    "export": "*",
+    "test": "path",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "The internal prepared-query entry is removed; an extension imports ea_preparedStatementQuery, ea_preparedStatementExecute, ea_transactionStart, ea_createTransactionStart and their Ea_ target types from ./runtime; its other names (settlementOf, transactionSettlement, wasRefusedBeforeBegin, SettledTransactionTarget, TransactionSettlementState, TransactionStart) are no longer exported."
   }
 ]

@@ -1,6 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
-import { type PostgresRuntime, PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl, type PostgresRuntime } from '@internal/postgres/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type {
   SqlConnection,
@@ -13,6 +13,9 @@ import type {
   ActivityExecuteOptions,
   ActivityRoute,
   ActivitySourceTarget,
+  Ea_PreparedStatementExecuteTarget,
+  Ea_PreparedStatementQueryTarget,
+  Ea_TransactionStartTarget,
   PreparedExecution,
   PreparedExecutionImpl,
   PreparedStatement,
@@ -22,18 +25,14 @@ import type {
   RuntimeTransaction,
   RuntimeTransactionOptions,
 } from '@internal/sql-runtime';
-import { activitySource, withTransaction } from '@internal/sql-runtime';
-import type {
-  PreparedStatementExecuteTarget,
-  PreparedStatementQueryTarget,
-  TransactionStartTarget,
-} from '@internal/sql-runtime/internal/prepared-query';
 import {
-  createTransactionStart,
-  preparedStatementExecute,
-  preparedStatementQuery,
-  transactionStart,
-} from '@internal/sql-runtime/internal/prepared-query';
+  activitySource,
+  ea_createTransactionStart,
+  ea_preparedStatementExecute,
+  ea_preparedStatementQuery,
+  ea_transactionStart,
+  withTransaction,
+} from '@internal/sql-runtime';
 import { blindCast } from '@internal/utils/casts';
 import type { SupabaseRole } from '../contract/roles';
 
@@ -45,13 +44,15 @@ export interface SupabaseRuntime extends PostgresRuntime {
 /** The operations of a Supabase runtime under one role. */
 export interface SupabaseRoleScope
   extends RuntimeQueryable,
-    PreparedStatementQueryTarget,
-    PreparedStatementExecuteTarget {
+    Ea_PreparedStatementQueryTarget,
+    Ea_PreparedStatementExecuteTarget {
   /** Opens a session bound to the role; the caller releases it. */
   connection(): Promise<RoleSession>;
 }
 
-type BoundSession = RoleSession & PreparedStatementQueryTarget & PreparedStatementExecuteTarget;
+type BoundSession = RoleSession &
+  Ea_PreparedStatementQueryTarget &
+  Ea_PreparedStatementExecuteTarget;
 
 export interface SupabaseRoleBinding {
   readonly role: SupabaseRole;
@@ -84,7 +85,7 @@ export function roleScope<C extends Contract<SqlStorage>>(
 
 export class SupabaseRuntimeImpl<
   TContract extends Contract<SqlStorage> = Contract<SqlStorage>,
-> extends PostgresRuntimeImpl<TContract> {
+> extends Ea_PostgresRuntimeImpl<TContract> {
   /**
    * Opens a raw connection and applies role + JWT claims via session-scoped set_config. On bind failure, destroys the connection before rethrowing — no leaked connections. Every operation of `forRole(binding)` runs on a session opened here.
    */
@@ -97,7 +98,7 @@ export class SupabaseRuntimeImpl<
     options?: Pick<ActivityExecuteOptions, 'activityParent'>,
   ): Promise<{
     readonly conn: SqlConnection;
-    readonly session: BoundSession & TransactionStartTarget;
+    readonly session: BoundSession & Ea_TransactionStartTarget;
   }> {
     const parent = options?.activityParent;
     const conn = await this.acquireRawConnection(options);
@@ -119,11 +120,11 @@ export class SupabaseRuntimeImpl<
     const self = this;
 
     const session: RoleSession &
-      TransactionStartTarget &
+      Ea_TransactionStartTarget &
       ActivitySourceTarget &
-      PreparedStatementQueryTarget &
-      PreparedStatementExecuteTarget = {
-      [transactionStart]: createTransactionStart(),
+      Ea_PreparedStatementQueryTarget &
+      Ea_PreparedStatementExecuteTarget = {
+      [ea_transactionStart]: ea_createTransactionStart(),
       [activitySource]: self.connectionActivitySource(conn, () => session),
       query<Row>(
         plan: (SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>) & { readonly _row?: Row },
@@ -140,14 +141,14 @@ export class SupabaseRuntimeImpl<
           scope: 'connection',
         });
       },
-      [preparedStatementQuery]<Params, Row>(
+      [ea_preparedStatementQuery]<Params, Row>(
         prepared: PreparedStatement<Params, Row>,
         params: Params,
         options?: ActivityExecuteOptions,
       ): AsyncIterableResult<Row> {
         return self.runPreparedQueryAgainstRoleQueryable(prepared, params, conn, options);
       },
-      [preparedStatementExecute]<Params>(
+      [ea_preparedStatementExecute]<Params>(
         prepared: PreparedExecution<Params>,
         params: Params,
         options?: ActivityExecuteOptions,
@@ -198,22 +199,22 @@ export class SupabaseRuntimeImpl<
         execute(plan: SqlOrmPlan, options?: ActivityExecuteOptions): Promise<SqlStatementStats> {
           return executeOnSession(open(options), (session) => session.execute(plan, options));
         },
-        [preparedStatementQuery]<Params, Row>(
+        [ea_preparedStatementQuery]<Params, Row>(
           statement: PreparedStatement<Params, Row>,
           params: Params,
           options?: ActivityExecuteOptions,
         ): AsyncIterableResult<Row> {
           return streamOnSession<Row>(open(options), (session) =>
-            session[preparedStatementQuery](statement, params, options),
+            session[ea_preparedStatementQuery](statement, params, options),
           );
         },
-        [preparedStatementExecute]<Params>(
+        [ea_preparedStatementExecute]<Params>(
           statement: PreparedExecution<Params>,
           params: Params,
           options?: ActivityExecuteOptions,
         ): Promise<SqlStatementStats> {
           return executeOnSession(open(options), (session) =>
-            session[preparedStatementExecute](statement, params, options),
+            session[ea_preparedStatementExecute](statement, params, options),
           );
         },
         connection: (options?: ActivityExecuteOptions) => open(options)(),
@@ -232,9 +233,9 @@ export class SupabaseRuntimeImpl<
         query: (plan, options) => scope.query(plan, options),
         execute: (plan, options) => scope.execute(plan, options),
         preparedQuery: (statement, params, options) =>
-          scope[preparedStatementQuery](statement, params, options),
+          scope[ea_preparedStatementQuery](statement, params, options),
         preparedExecute: (statement, params, options) =>
-          scope[preparedStatementExecute](statement, params, options),
+          scope[ea_preparedStatementExecute](statement, params, options),
         transaction: (parent, fn, options) => withTransaction(scope, fn, options, parent),
       };
       return scope;

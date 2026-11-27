@@ -7,7 +7,7 @@ import {
   instantiateExecutionStack,
   type RuntimeDriverInstance,
 } from '@internal/framework-components/execution';
-import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import { sql } from '@internal/sql-builder/runtime';
 import { param } from '@internal/sql-relational-core/expression';
 import type { SqlParamRefMutator } from '@internal/sql-relational-core/middleware';
@@ -145,7 +145,7 @@ describe('integration: rawSql expression in typed builder', {
   });
 
   function buildRuntime(middleware?: readonly SqlMiddleware[]): Runtime {
-    return new PostgresRuntimeImpl({
+    return new Ea_PostgresRuntimeImpl({
       closeRefusal: undefined,
       context,
       adapter: stackInstance.adapter,

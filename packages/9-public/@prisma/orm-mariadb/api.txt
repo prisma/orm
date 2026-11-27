@@ -95,7 +95,6 @@
 ./family-contract/validators: everything from @prisma/orm-family-sql/contract/validators
 ./family-contract/value-set-derivation-hook: everything from @prisma/orm-family-sql/contract/value-set-derivation-hook
 ./family-contract: everything from @prisma/orm-family-sql/contract
-./family-runtime/internal/prepared-query: everything from @prisma/orm-family-sql/runtime/internal/prepared-query
 ./family-runtime: everything from @prisma/orm-family-sql/runtime
 ./family/control-adapter: everything from @prisma/orm-family-sql/family/control-adapter
 ./family/control: everything from @prisma/orm-family-sql/family/control

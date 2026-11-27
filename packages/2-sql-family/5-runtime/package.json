@@ -54,7 +54,6 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": "./dist/index.mjs",
-    "./internal/prepared-query": "./dist/internal/prepared-query.mjs",
     "./test/utils": "./dist/test/utils.mjs",
     "./package.json": "./package.json"
   },

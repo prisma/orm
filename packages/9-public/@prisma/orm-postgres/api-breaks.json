@@ -27,21 +27,12 @@
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   },
   {
-    "path": "./internal/static-context",
-    "export": "PostgresStaticContext",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "23ad978bb2ee1eba",
-    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
-  },
-  {
     "path": "./runtime",
     "export": "PostgresClient",
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "bb1d22b22934d620",
+    "fingerprint": "1f4b468d34f0c48c",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
   },
   {
@@ -68,8 +59,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "790e0da79ee6b705",
-    "reason": "`transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
+    "fingerprint": "1f4ab6bf328c9dcd",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
   },
   {
     "path": "./serverless",
@@ -77,7 +68,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "2f920346c3e79fa6",
+    "fingerprint": "0b4f573303f377f5",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
   },
   {
@@ -86,7 +77,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "c0db335ffd26a776",
+    "fingerprint": "239bb38c52102f8d",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
   },
   {
@@ -95,7 +86,97 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "23ad978bb2ee1eba",
+    "fingerprint": "3afab01cf706deb8",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./family-runtime/internal/prepared-query",
+    "export": "*",
+    "test": "path",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "The internal prepared-query entry is removed; an extension imports ea_preparedStatementQuery, ea_preparedStatementExecute, ea_transactionStart, ea_createTransactionStart and their Ea_ target types from ./family-runtime; its other names (settlementOf, transactionSettlement, wasRefusedBeforeBegin, SettledTransactionTarget, TransactionSettlementState, TransactionStart) are no longer exported."
+  },
+  {
+    "path": "./internal/options",
+    "export": "*",
+    "test": "path",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "The internal options entry is removed; an extension imports ea_connectWithBinding, ea_resolveOptionalPostgresBinding, Ea_PostgresBindingRules, ea_validateTransactionOptions, ea_validateCursorOptions and ea_toDriverCursorOptions from ./runtime."
+  },
+  {
+    "path": "./internal/static-context",
+    "export": "*",
+    "test": "path",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "The internal static-context entry is removed; an extension imports ea_buildPostgresStaticContext and PostgresStaticContext from ./static."
+  },
+  {
+    "path": "./internal/transaction-members",
+    "export": "*",
+    "test": "path",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "The internal transaction-members entry is removed; an extension imports ea_buildPostgresQueryMembers from ./runtime."
+  },
+  {
+    "path": "./internal/validate-contract",
+    "export": "*",
+    "test": "path",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "The internal validate-contract entry is removed; an extension imports ea_validatePostgresContract from ./static."
+  },
+  {
+    "path": "./runtime",
+    "export": "PostgresRuntimeImpl",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Renamed to Ea_PostgresRuntimeImpl, an Early Access name, because only an extension subclasses it; an extension imports Ea_PostgresRuntimeImpl from ./runtime."
+  },
+  {
+    "path": "./runtime",
+    "export": "PostgresRuntimeImpl",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Renamed to Ea_PostgresRuntimeImpl, an Early Access name, because only an extension subclasses it; an extension imports Ea_PostgresRuntimeImpl from ./runtime."
+  },
+  {
+    "path": "./runtime",
+    "export": "PostgresRuntimeImpl",
+    "test": "constructor",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Renamed to Ea_PostgresRuntimeImpl, an Early Access name, because only an extension subclasses it; an extension imports Ea_PostgresRuntimeImpl from ./runtime."
+  },
+  {
+    "path": "./serverless",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9bd6890cc832c690",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./static",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9e8d7465f17831c0",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
   }
 ]

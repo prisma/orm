@@ -7,7 +7,7 @@ import type {
   AsyncIterableResult,
   RuntimeExecuteOptions,
 } from '@internal/framework-components/runtime';
-import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { RuntimeQueryable } from '@internal/sql-orm-client';
 import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
@@ -17,6 +17,8 @@ import {
   activitySource,
   createExecutionContext,
   createSqlExecutionStack,
+  ea_preparedStatementExecute,
+  ea_preparedStatementQuery,
   findActivitySource,
   type PreparedStatement,
   type RuntimeConnection,
@@ -25,10 +27,6 @@ import {
   type SqlRuntimeExtensionDescriptor,
   type RuntimeQueryable as SqlRuntimeQueryable,
 } from '@internal/sql-runtime';
-import {
-  preparedStatementExecute,
-  preparedStatementQuery,
-} from '@internal/sql-runtime/internal/prepared-query';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { Client } from 'pg';
@@ -160,7 +158,7 @@ export async function createPgIntegrationRuntime(
       }
       await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
 
-      const realRuntime = new PostgresRuntimeImpl({
+      const realRuntime = new Ea_PostgresRuntimeImpl({
         closeRefusal: undefined,
         context,
         adapter: stackInstance.adapter,
@@ -300,8 +298,8 @@ export function withPlanRecording<T extends SqlRuntimeQueryable>(
 ): T {
   const source = findActivitySource(target);
   const transaction: unknown = Reflect.get(target, 'transaction');
-  const preparedQuery: unknown = Reflect.get(target, preparedStatementQuery);
-  const preparedExecute: unknown = Reflect.get(target, preparedStatementExecute);
+  const preparedQuery: unknown = Reflect.get(target, ea_preparedStatementQuery);
+  const preparedExecute: unknown = Reflect.get(target, ea_preparedStatementExecute);
   const commit: unknown = Reflect.get(target, 'commit');
   const recording = {
     query<Row>(
@@ -338,7 +336,7 @@ export function withPlanRecording<T extends SqlRuntimeQueryable>(
           }),
     ...(typeof preparedQuery === 'function'
       ? {
-          [preparedStatementQuery]: (
+          [ea_preparedStatementQuery]: (
             statement: PreparedStatement<unknown, unknown>,
             params: unknown,
             options?: RuntimeExecuteOptions,
@@ -350,7 +348,7 @@ export function withPlanRecording<T extends SqlRuntimeQueryable>(
       : {}),
     ...(typeof preparedExecute === 'function'
       ? {
-          [preparedStatementExecute]: (
+          [ea_preparedStatementExecute]: (
             statement: PreparedStatement<unknown, unknown>,
             params: unknown,
             options?: RuntimeExecuteOptions,
