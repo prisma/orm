@@ -2,7 +2,7 @@
 changes:
   - id: contract-hash-inputs
     summary: |
-      Every storage, profile and execution hash takes a new value, once: each now covers only the target, the family and its own section of the contract, and the rules that compute them do not change again within Prisma 8. Before upgrading, deploy every pending migration, the application's and every extension's, to every database with the release you are on: the upgrade assumes every database is at the newest contract. Then upgrade Prisma in a release of its own: run the colocated script on the project, which rewrites every hash in the emitted contract, `contract.d.ts`, the snapshot directories, each `migration.json` and `ops.json`, each ref file and each `migration.ts`, then `prisma contract emit`, and commit. If the emitted contract's storage hash then differs from the one the script wrote, because the contract source holds a `false`, `[]` or `{}` that the earlier release left out of `contract.json`, plan a migration for it in the same release. That release's deploy runs `prisma db sign --no-advance-ref` (signed at the directory of the migration before that new one, if there is one; with `--force` where the change policy permits only migrations) and then `prisma db migrate` against every database that existed before it; a database created later needs only `prisma db migrate`. A database still behind on the application's migrations only is signed at the directory of the migration it is at.
+      Every storage, profile and execution hash takes a new value, once: each now covers only the target, the family and its own section of the contract, and the rules that compute them do not change again within Prisma 8. Before upgrading, deploy every pending migration, the application's and every extension's, to every database with the release you are on: the upgrade assumes every database is at the newest contract. Then upgrade Prisma in a release of its own: run the colocated script on the project, which rewrites every hash in the emitted contract, `contract.d.ts`, the snapshot directories, each `migration.json` and `ops.json`, each ref file and each `migration.ts`, then `prisma contract emit`, and commit. If the emitted contract's storage hash then differs from the one the script wrote, because the contract source holds a `false`, `[]` or `{}` that the earlier release left out of `contract.json`, plan a migration for it in the same release. That release's deploy runs `prisma db sign --no-advance-ref` (signed at the directory of the migration before that new one, if there is one; with `--force` where the change policy permits only migrations) and then `prisma db migrate` against every database that existed before it; a database created later needs only `prisma db migrate`. A database with at least one of the application's migrations, and none of an extension's, still pending is signed at the directory of the migration it is at; a database with nothing pending is signed with plain `prisma db sign --no-advance-ref`, never at a directory.
     script: ./scripts/contract-hash-inputs/contract-hash-inputs.ts
 ---
 
@@ -93,11 +93,11 @@ esac
 prisma db migrate
 ```
 
-Remove the `db sign` line once the release is deployed. Later deploys run `prisma db migrate` alone.
+After the deploy, `prisma db verify --marker-only` passes against every database, because each marker then holds the emitted contract's storage and profile hash. Remove the `db sign` line once the release is deployed. Later deploys run `prisma db migrate` alone.
 
 #### A database that is still behind
 
-A database that did not get every migration before the upgrade is behind the newest contract. If only the application's migrations are pending on it, sign it at the contract it is at instead, then let `db migrate` apply the rest:
+A database that did not get every migration before the upgrade is behind the newest contract. If at least one of the application's migrations, and none of an extension's, is pending on it, sign it at the contract it is at instead, then let `db migrate` apply the rest:
 
 ```sh
 prisma db sign --no-advance-ref <migration directory>
@@ -110,6 +110,10 @@ The directory must be that of the migration that brought the database to the con
 
 - `prisma migration status` warns "Database marker <hash> is not in the on-disk migration graph". That hash, shortened, is the contract the database is at, under the old hash rules.
 - `prisma migration log` lists the migrations the database applied, oldest first, each with its directory name and the contracts it moved the database from and to, under the old hashes and shortened to their first 7 characters. It shows a Space column only when more than one space has run migrations on the database; without it, every row is the application's. Take the directory of the last application row whose second hash is the first 7 characters of the marker's.
+
+If that directory is the application's last migration, the one whose `migration.json` has as its `to` the `storageHash` in the emitted `contract.json`, nothing is pending on the database and it is not behind. Sign it with the two lines at the top of this step, which sign the emitted contract, and not at that directory. On PostgreSQL, signing it at the directory gives the marker the wrong profile hash. The script gave each snapshot the profile hash of the capabilities that snapshot lists, which are your earlier release's, while step 4 wrote this release's list, and its profile hash, into the emitted contract. `prisma db verify` then fails with `CONTRACT.MARKER_MISMATCH`, "Contract profileHash does not match database marker", and `prisma db migrate` says "Already up to date" and leaves the marker as it is, because it has nothing to apply. When at least one migration is pending, `db migrate` applies it and writes the emitted contract's hashes into the marker, so the route ends with both hashes right.
+
+To put right a database signed at a directory with nothing pending, run `prisma db sign --no-advance-ref` against it (with `--force` where the change policy permits only migrations). It signs the emitted contract and writes its profile hash into the marker. `prisma db verify` then passes.
 
 If no application row ends at the marker's hash, the database was moved at some point by `prisma db update` or `prisma db sign`, and its ledger of applied migrations does not show the contract it is at. Do not guess a directory: `db sign` ignores tables and columns the contract does not have, so it accepts a migration the database has already moved past, and `db migrate` then runs migrations the database already has.
 
