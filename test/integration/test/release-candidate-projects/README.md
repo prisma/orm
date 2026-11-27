@@ -1,6 +1,6 @@
 # Projects a release candidate wrote
 
-`fixtures/8.0.0-rc.25/` holds two projects, `postgres-app` and `mongo-app`, whose stored files the `8.0.0-rc.25` CLI wrote, in format version 0: no file has `formatVersion`, and each contract has `"schemaVersion": "1"`. Their hashes are the ones the release candidate computes: the storage and execution hashes from the content, and, for PostgreSQL, the profile hash of no declared capabilities, as `8.0.0-rc.25` computed it. `rc-25.test.ts` checks that this release reads every file and that the recorded storage and execution hashes match the contracts. Formatting and linting are off for the fixtures, so the files keep their bytes.
+`fixtures/8.0.0-rc.25/` holds two projects, `postgres-app` and `mongo-app`, exactly as the `8.0.0-rc.25` CLI wrote them, in format version 0: no file has `formatVersion`, and each contract has `"schemaVersion": "1"`. Every hash in them is the one the release candidate computed: the storage, execution and profile hashes, each `migrationHash`, and the hashes in `migration.json` and the refs. `rc-25.test.ts` checks that this release reads every file, that each hash is still the literal value the release candidate wrote, and that the recorded storage and execution hashes match what this release computes from the contracts. Formatting and linting are off for the fixtures, so the files keep their bytes; never emit or plan into them again.
 
 ## How they were made
 
@@ -8,6 +8,10 @@
 2. Copy `prisma.config.ts` and the first version of the contract source (without `body` in Postgres, without `bio` and the `title` index in MongoDB). Run `contract emit`, then `migration plan --name init`.
 3. Set the `db` ref to the first contract (`migration ref set db <hash>`), add the field (and, in MongoDB, the index), run `contract emit` and `migration plan` again (`add_post_body`, `add_title_index`), and set the `production` ref to the first contract.
 4. Copy `prisma.config.ts`, `src/` and `migrations/` here.
+
+## How we know they are the release candidate's output
+
+The files were written by one run of the steps above on 2026-11-26. On 2026-11-27 the steps were run again with the same `8.0.0-rc.25` packages, in a new folder. Every file came out identical except each migration's folder name and `createdAt`, and so its `migrationHash`, which covers `createdAt`. The `8.0.0-rc.25` `verifyMigrationHash` accepts each `migrationHash` here. So the profile hashes (`3916f444…` for PostgreSQL and `251b3ce2…` for MongoDB) are the values the release candidate computes, not values derived from its source.
 
 ## At 8.0.0
 
