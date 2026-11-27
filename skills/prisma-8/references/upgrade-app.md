@@ -4,13 +4,11 @@ This reference upgrades a project that **consumes** Prisma 8 via the public pack
 
 The per-transition instructions this reference reads live under [`../upgrading/app/upgrades/`](../upgrading/app/upgrades/).
 
-## Step 0 — At each step, use the instructions of the release just installed
+## Step 0 — Upgrade to the newest instructions, then re-read
 
-The upgrade instructions ship inside the installed Prisma packages, so the copy on disk describes the version currently installed, not the version being upgraded to. `prisma skills sync` copies the instructions from the installed packages into the project. It is the only way they are updated.
+The upgrade instructions ship inside the installed Prisma packages, so the copy on disk describes the version currently installed — not the version being upgraded *to*. Bug fixes to *old* per-transition instructions ship with each release as part of the cumulative set, so the newest copy is the one to run.
 
-So at each step, do the version bump and the install first (steps 1 and 2 of the per-step flow below), run `prisma skills sync`, and re-read this reference and that step's instructions before applying any code change. If the agent runtime supports an in-session refresh, perform it after the sync; otherwise finish the session's reasoning against the re-read files.
-
-A published package never changes, so an entry that was added to a step's instructions after that release was published is not in the copy you read at that step. Such an entry is repeated in the instructions of the next release. An upgrade to the newest release therefore picks it up one step later.
+Do the version bump first (step 1 of the per-step flow below), re-sync the skills from the newly installed packages (`prisma skills sync`), and re-read this reference and the per-transition instructions before applying any code translation. If the agent runtime supports an in-session refresh, perform it after the sync; otherwise finish the session's reasoning against the re-read files.
 
 ## Pre-flight — extension compatibility
 
@@ -131,26 +129,6 @@ For each `(from, to)` step in the chain:
    (Or the project's own commit-message convention.) Never squash steps. The user may squash on merge; the in-flight history must be per-step so a failed step is bisectable.
 
 Then move on to the next step.
-
-## When the project cannot install the releases in between
-
-Some projects depend on a package that is not an extension and that requires one exact Prisma release. A deployment tool that lists `@prisma/orm-postgres` as a peer dependency at an exact version is an example. Such a project can only install the Prisma releases that some version of that package requires, so it cannot take every step of the chain.
-
-**How to notice it.** Before the first step, look through the project's dependencies for a package, other than the extensions the pre-flight covers, whose `peerDependencies` name an `@prisma/orm-*` package at an exact version. Read them from the installed copy, `node_modules/<name>/package.json`; `pnpm view <name>@<version> peerDependencies --json` shows them for any other version. If there is none, use the per-step flow.
-
-If there is one, list the Prisma release each of its published versions requires.
-
-- If it has a version for every release in the chain, use the per-step flow, and at each step set that package to its version for the step. Write the Prisma packages it names at the exact versions it requires, with no caret and no tilde: a range could install a later fix, which its exact requirement does not accept.
-- If the last release of the chain is not among them, tell the user which releases are possible and stop.
-- Otherwise replace the per-step flow with the steps below. This is the one exception to the rule that no step is skipped.
-
-1. Bump once. Write every Prisma entry as the bump step gives it for the last step of the chain. Set each extension published by someone else to the release the pre-flight noted for the last step. Set the package that requires an exact release to its version for that release, and write the Prisma packages it names at the exact versions it requires, with no caret and no tilde.
-2. Install once, run `prisma skills sync`, and commit the bump with the lockfile. The synced instructions now hold every step of the chain.
-3. Apply each step's instructions in order, with one commit for each. Install again only where the instructions tell you to add or change a package.
-4. After a step that is not the last, do not run the typecheck or the tests: they are expected to fail, because the installed types are those of the last release. Go on to the next step. A script or a Prisma command that the instructions tell you to run must succeed. If one fails, halt and tell the user which step and which command.
-5. After the last step, run the full validation from the per-step flow. It must pass.
-
-Tell the user that the releases in between were never installed, so a failure may come from any of the steps.
 
 ## When the chain is done
 

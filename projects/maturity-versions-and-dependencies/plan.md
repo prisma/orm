@@ -100,14 +100,13 @@ Agreed with the operator on 2026-11-25, through the stream. From the next releas
 
 **Two pull requests, in this order.**
 
-1. **Small corrections to the upgrade flow and the release policy.** In review. It fixes a rule in the application flow that let an install jump past a step, states the policy on fixes, and records how a corrected guide reaches users (below).
+1. **Small corrections to the upgrade flow and the release policy.** In review. It fixes a rule in the application flow that let an install jump past a step, and states the policy on fixes.
 2. **Cutting `8.0.1`:** the command that leaves the release candidates, the list of old release candidates to deprecate, the written procedure, and how long a major receives fixes.
 **Not built: a fix to one package, and a release of an older major.** Decided by the operator on 2026-11-27: the team works on the expectation that anything on `main` can be released at any time, so a fix ships in the next release, cut early when it cannot wait. A fix to one package would need a branch per minor, because a fix published from `main` carries whatever else has merged; that machinery is revisited only if the expectation about `main` changes. The bullets below that describe a fix to one package, a release of an older major, their dry runs, and a correction shipped as a fix release are therefore not built. Two small parts of them move to the second pull request: `check-upgrade-coverage.mjs` stops requiring a guide for every release after `8.0.1`, and the skills say that such a step may have no guide.
 
 What the first pull request found, which changes the bullets below:
 
-- **A corrected upgrade guide reaches the user by a convention, not a mechanism.** Decided by the operator on 2026-11-27: `prisma skills sync` is the only thing that moves skill files into a project, so no second way of fetching them is built. A correction to the guide of a released step is also added to the pending guide of the next release, which every upgrade to the newest release reads. The bullets below about where the guides are read from, reading before installing, and the test with two packed releases are therefore not built. `skills/DEVELOPING.md` states the convention.
-- **Corrections already made to earlier release-candidate guides** are repeated in the guide of the step that enters `8.0.1`. That is a step of the procedure in the second pull request.
+- **Nothing is built for a guide corrected after its release.** Decided by the operator on 2026-11-27: `prisma skills sync` is the only thing that moves skill files into a project, and the problem is not worth a mechanism or a process. The answer is to write the guides correctly. The bullets below about where the guides are read from, reading before installing, projects that cannot install the releases in between, and the test with two packed releases are therefore not built.
 - **The procedure for `8.0.1` goes in `docs/oss/releasing.md`,** not `versioning.md`: slice 2 moved the maintainers' procedures there.
 - **How long a major receives fixes is a section of ADR 330,** not a new record: the draft's number was taken by the record on peers.
 - **Where ParadeDB's removal comes in the order of release `8.0`** is settled in the second pull request: the design says to remove it before GA, and the levels file still publishes it.

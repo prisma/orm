@@ -6,13 +6,11 @@ If the project you are upgrading is a consumer **app** (it depends on a database
 
 The per-transition instructions this reference reads live under [`../upgrading/extension/upgrades/`](../upgrading/extension/upgrades/).
 
-## Step 0 — At each step, use the instructions of the release just installed
+## Step 0 — Upgrade to the newest instructions, then re-read
 
-The upgrade instructions ship inside the installed Prisma packages, so the copy on disk describes the version currently installed, not the version being upgraded to. `prisma skills sync` copies the instructions from the installed packages into the project. It is the only way they are updated.
+The upgrade instructions ship inside the installed Prisma packages, so the copy on disk describes the version currently installed — not the version being upgraded *to*. Bug fixes to *old* per-transition instructions ship with each release as part of the cumulative set, so the newest copy is the one to run.
 
-So at each step, do the version bump and the install first (steps 1 and 2 of the per-step flow below), run `prisma skills sync`, and re-read this reference and that step's instructions before applying any code change. If the agent runtime supports an in-session refresh, perform it after the sync; otherwise finish the session's reasoning against the re-read files.
-
-A published package never changes, so an entry that was added to a step's instructions after that release was published is not in the copy you read at that step. Such an entry is repeated in the instructions of the next release. An upgrade to the newest release therefore picks it up one step later.
+Do the version bump first (step 1 of the per-step flow below), re-sync the skills from the newly installed packages (`prisma skills sync`), and re-read this reference and the per-transition instructions before applying any code translation.
 
 ## Role detection
 
