@@ -1,13 +1,27 @@
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { executeContractEmit } from '@internal/cli/control-api';
 import type { PrismaConfig } from '@internal/config/config-types';
+import type { CapabilityMatrix } from '@internal/framework-components/components';
+import { prismaContract } from '@internal/sql-contract-psl/provider';
+import { typescriptContract } from '@internal/sql-contract-ts/config-types';
+import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';
+import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
+import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import { ifDefined } from '@internal/utils/defined';
 import { join, resolve } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
-import { postgres17, postgres18, postgresDriver } from '../../src/contract/contract-capabilities';
+import {
+  postgres17,
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '../../src/contract/contract-capabilities';
+import { defineContract } from '../../src/contract/define-contract';
 import { createPostgresControlClient } from '../../src/exports/control';
 import { scratchDir } from '../support/scratch';
+import { contract as unlisted } from './fixtures/unlisted-contract';
 
 const removedFlags = {
   postgres: ['orderBy', 'limit', 'lateral', 'jsonAgg', 'returning'],
@@ -158,34 +172,30 @@ describe('contract emit', () => {
 });
 
 describe('contract emit for a contract that lists no required capabilities', () => {
-  const notListed = (where: string, module: string) =>
-    `Your contract does not list the capabilities it requires, so it requires those of the newest PostgreSQL version and of the driver. Add \`requiredCapabilities: [...postgres18, ...postgresDriver]\` ${where}, with \`import { postgres18, postgresDriver } from '${module}';\`. Prisma 8.0 removes this default and requires the list.`;
+  const notListed = (where: string, line: string, imports: string) =>
+    `Your contract does not list the capabilities it requires, so it requires those of the newest PostgreSQL version and of the driver. Prisma 8.0 removes this default and requires the list. Write this ${where}, with its import:\n\n${line}\n\n${imports}`;
+  const configImports = "import { postgres18, postgresDriver } from '@internal/postgres/config';";
 
   it.each([
     ['a bare path', (schemaPath: string) => schemaPath],
     ['an entry without the list', (schemaPath: string) => ({ path: schemaPath })],
   ])(
-    'writes the newest version’s list and the driver’s for a Prisma schema given as %s, and warns once with what to add',
+    'writes the newest version’s list and the driver’s for a Prisma schema given as %s, and warns once with the entry to write',
     async (_, contractOf) => {
       const { dir, schemaPath } = await schemaDir();
 
       const result = await emitted(defineConfig({ contract: contractOf(schemaPath) }), dir);
 
+      const line = `contract: {\n  path: ${JSON.stringify(schemaPath)},\n  requiredCapabilities: [...postgres18, ...postgresDriver],\n}`;
       expect(result).toEqual({
         capabilities: withTheDriver,
         warnings: [
           {
             code: 'CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED',
-            message: notListed(
-              `beside the contract path '${schemaPath}' in the config, as \`contract: { path, requiredCapabilities }\``,
-              '@internal/postgres/config',
-            ),
+            message: notListed('as the contract entry in the config', line, configImports),
             sourceId: schemaPath,
             severity: 'warning',
-            data: {
-              line: 'requiredCapabilities: [...postgres18, ...postgresDriver]',
-              imports: "import { postgres18, postgresDriver } from '@internal/postgres/config';",
-            },
+            data: { line, imports: configImports },
           },
         ],
       });
@@ -203,7 +213,11 @@ describe('contract emit for a contract that lists no required capabilities', () 
     expect(result.warnings).toEqual([
       expect.objectContaining({
         code: 'CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED',
-        message: notListed('in defineContract', '@internal/postgres/contract-builder'),
+        message: notListed(
+          'in defineContract',
+          'requiredCapabilities: [...postgres18, ...postgresDriver]',
+          "import { postgres18, postgresDriver } from '@internal/postgres/contract-builder';",
+        ),
         sourceId: contractPath,
       }),
     ]);
@@ -218,6 +232,91 @@ describe('contract emit for a contract that lists no required capabilities', () 
     );
 
     expect(result.warnings).toEqual([]);
+  });
+});
+
+describe('contract emit for a ready contract source given no required capabilities, as a release candidate’s docs built it', () => {
+  const prismaSchemaSource = (schemaPath: string, capabilities?: CapabilityMatrix) =>
+    prismaContract(schemaPath, {
+      target: postgresPackRef,
+      createNamespace: postgresCreateNamespace,
+      enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
+      ...ifDefined('capabilities', capabilities),
+    });
+
+  it('writes the newest version’s list and the driver’s for prismaContract, and warns once with the option to add', async () => {
+    const { dir, schemaPath } = await schemaDir();
+
+    const result = await emitted(defineConfig({ contract: prismaSchemaSource(schemaPath) }), dir);
+
+    const line = 'capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])';
+    const imports =
+      "import { postgres18, postgresContractCapabilities, postgresDriver } from '@internal/postgres/config';";
+    expect(result).toEqual({
+      capabilities: withTheDriver,
+      warnings: [
+        {
+          code: 'CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED',
+          message: `Your contract does not list the capabilities it requires, so it requires those of the newest PostgreSQL version and of the driver. Prisma 8.0 removes this default and requires the list. Write this in the options of the contract source given to defineConfig, with its import:\n\n${line}\n\n${imports}`,
+          sourceId: schemaPath,
+          severity: 'warning',
+          data: { line, imports },
+        },
+      ],
+    });
+  });
+
+  it('writes exactly the capabilities prismaContract is given, and warns nothing', async () => {
+    const { dir, schemaPath } = await schemaDir();
+
+    const result = await emitted(
+      defineConfig({
+        contract: prismaSchemaSource(
+          schemaPath,
+          postgresContractCapabilities([...postgres17, ...postgresDriver]),
+        ),
+      }),
+      dir,
+    );
+
+    expect(result).toEqual({
+      capabilities: {
+        ...postgresCapabilitiesByVersion[17],
+        sql: { ...postgresCapabilitiesByVersion[17].sql, interactiveTransactions: true },
+      },
+      warnings: [],
+    });
+  });
+
+  it('writes the default for typescriptContract of a contract built without the list, and warns with the import of the contract builder', async () => {
+    const dir = await scratchDir('postgres-required-capabilities-');
+    tempDirs.push(dir);
+
+    const result = await emitted(defineConfig({ contract: typescriptContract(unlisted) }), dir);
+
+    expect(result).toEqual({
+      capabilities: withTheDriver,
+      warnings: [
+        expect.objectContaining({
+          code: 'CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED',
+          message: `Your contract does not list the capabilities it requires, so it requires those of the newest PostgreSQL version and of the driver. Prisma 8.0 removes this default and requires the list. Write this in defineContract, with its import:\n\nrequiredCapabilities: [...postgres18, ...postgresDriver]\n\nimport { postgres18, postgresDriver } from '@internal/postgres/contract-builder';`,
+        }),
+      ],
+    });
+  });
+
+  it('warns nothing for typescriptContract of a contract that lists them', async () => {
+    const dir = await scratchDir('postgres-required-capabilities-');
+    tempDirs.push(dir);
+
+    const result = await emitted(
+      defineConfig({
+        contract: typescriptContract(defineContract({ requiredCapabilities: postgres17 })),
+      }),
+      dir,
+    );
+
+    expect(result).toEqual({ capabilities: postgresCapabilitiesByVersion[17], warnings: [] });
   });
 });
 

@@ -22,8 +22,14 @@ import {
 } from '../contract/contract-capabilities';
 import { postgresError } from '../errors';
 import { contractBuilderModule, contractTypesModule, controlComponents } from './components';
-import { configModule, moduleBase } from './module-base';
-import { warnWhenRequiredCapabilitiesDefaulted } from './required-capabilities-not-listed';
+import { PrismaSchemaContractEntry } from './contract-entry-nodes';
+import { moduleBase } from './module-base';
+import {
+  asTheContractEntry,
+  defaultRequiredCapabilitiesOfReadySource,
+  inDefineContract,
+  warnWhenRequiredCapabilitiesDefaulted,
+} from './required-capabilities-not-listed';
 
 /**
  * The contract entry of a PostgreSQL config: a Prisma schema (`.prisma`, a glob or a directory) lists the capabilities it requires here, in `requiredCapabilities`; a TypeScript contract (`.ts`) lists them in `defineContract`, so its entry takes none.
@@ -38,7 +44,7 @@ export type PostgresContractEntry<Path extends string = string> = {
 
 /** The options of the PostgreSQL `defineConfig`. */
 export interface PostgresConfigOptions<Path extends string = string> {
-  /** The contract entry, a contract path, or a ready `ContractConfig` such as `prisma7Schema(...)`. A ready `ContractConfig` writes the capabilities it was given and no others. */
+  /** The contract entry, a contract path, or a ready `ContractConfig` such as `prisma7Schema(...)`. A ready `ContractConfig` writes the capabilities it was given; one given none requires the newest PostgreSQL version's list and the driver's, and `prisma contract emit` warns, until Prisma 8.0 removes that default. */
   readonly contract: string | PostgresContractEntry<Path> | ContractConfig;
   readonly output?: string;
   readonly db?: {
@@ -73,7 +79,7 @@ function contractConfigFromEntry(entry: UntypedEntry, output: string): ContractC
     }
     return warnWhenRequiredCapabilitiesDefaulted(
       typescriptContractFromPath(entry.path, output, postgresContractTarget),
-      { where: 'in defineContract', module: contractBuilderModule, path: entry.path },
+      inDefineContract(entry.path),
       hasDefaultRequiredCapabilities,
     );
   }
@@ -93,11 +99,7 @@ function contractConfigFromEntry(entry: UntypedEntry, output: string): ContractC
   });
   return warnWhenRequiredCapabilitiesDefaulted(
     config,
-    {
-      where: `${where}, as \`contract: { path, requiredCapabilities }\``,
-      module: configModule,
-      path: entry.path,
-    },
+    asTheContractEntry(new PrismaSchemaContractEntry(entry.path), entry.path),
     () => entry.requiredCapabilities === undefined,
   );
 }
@@ -119,7 +121,9 @@ function resolveContractConfig(options: {
     contract.output ??
     (firstInput !== undefined ? defaultContractOutputPath(firstInput) : undefined);
   return {
-    ...refuseOtherTargetOnLoad(contract, postgresContractTarget),
+    ...defaultRequiredCapabilitiesOfReadySource(
+      refuseOtherTargetOnLoad(contract, postgresContractTarget),
+    ),
     ...ifDefined('output', output),
   };
 }

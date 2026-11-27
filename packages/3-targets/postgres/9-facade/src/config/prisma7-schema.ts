@@ -6,8 +6,11 @@ import {
   type RequiredCapabilities,
   requiredCapabilitiesFor,
 } from '../contract/contract-capabilities';
-import { configModule } from './module-base';
-import { warnWhenRequiredCapabilitiesDefaulted } from './required-capabilities-not-listed';
+import { Prisma7SchemaContractEntry } from './contract-entry-nodes';
+import {
+  asTheContractEntry,
+  warnWhenRequiredCapabilitiesDefaulted,
+} from './required-capabilities-not-listed';
 
 /** What a Prisma 7 schema contract requires of its database and its connection. */
 export interface Prisma7SchemaOptions {
@@ -32,7 +35,7 @@ export function prisma7Schema(schemaPath: string, options?: Prisma7SchemaOptions
   );
   return warnWhenRequiredCapabilitiesDefaulted(
     prisma7Contract(schemaPath, { binding: prisma7PostgresBinding, capabilities }),
-    { where, module: configModule, path: schemaPath },
+    asTheContractEntry(new Prisma7SchemaContractEntry(schemaPath), schemaPath),
     () => listed === undefined,
   );
 }

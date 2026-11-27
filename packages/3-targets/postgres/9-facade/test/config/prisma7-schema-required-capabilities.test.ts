@@ -38,13 +38,17 @@ describe('prisma7Schema', () => {
       ...postgresCapabilitiesByVersion[18],
       sql: { ...postgresCapabilitiesByVersion[18].sql, interactiveTransactions: true },
     });
+    const line = `contract: prisma7Schema(\n  ${JSON.stringify(schemaPath)},\n  { requiredCapabilities: [...postgres18, ...postgresDriver] },\n)`;
+    const imports =
+      "import { postgres18, postgresDriver, prisma7Schema } from '@internal/postgres/config';";
     expect(result.sourceWarnings).toEqual([
-      expect.objectContaining({
+      {
         code: 'CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED',
-        message: expect.stringContaining(
-          `Add \`requiredCapabilities: [...postgres18, ...postgresDriver]\` in the options of prisma7Schema('${schemaPath}')`,
-        ),
-      }),
+        message: `Your contract does not list the capabilities it requires, so it requires those of the newest PostgreSQL version and of the driver. Prisma 8.0 removes this default and requires the list. Write this as the contract entry in the config, with its import:\n\n${line}\n\n${imports}`,
+        sourceId: schemaPath,
+        severity: 'warning',
+        data: { line, imports },
+      },
     ]);
   });
 
