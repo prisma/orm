@@ -322,6 +322,25 @@ describe('migration check on a file it cannot read', () => {
     expect(failures[0]?.why).toContain('zzz must be removed');
   });
 
+  it.each([
+    ['migration.json', ['MIGRATION.CHECK_FILE_MISSING']],
+    ['ops.json', ['MIGRATION.CHECK_FILE_MISSING', 'MIGRATION.CHECK_PACKAGE_UNLOADABLE']],
+  ])('reports a missing %s and no finding that only follows from it', async (fileName, codes) => {
+    const dir = await projectDir();
+    const migrationsDir = join(dir, 'migrations');
+    const first = await seedMigration(migrationsDir);
+    await seedMigration(migrationsDir, { dirName: '20250102T0000_next', from: HASH_A, to: HASH_B });
+    await writeRef(join(migrationsDir, 'app', 'refs'), 'db', { hash: HASH_B, invariants: [] });
+    await rm(join(first, fileName));
+
+    const run = await harness(strictFamilyConfig()).run(['migration', 'check', '--json'], {
+      cwd: dir,
+    });
+
+    expect(run.exitCode).toBe(4);
+    expect(failuresOf(run).map(({ code }) => code)).toEqual(codes);
+  });
+
   it('reports an unreadable migration.json when no contract has been emitted yet', async () => {
     const dir = await projectDir();
     const migrationsDir = join(dir, 'migrations');

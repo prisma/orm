@@ -384,9 +384,10 @@ async function checkSpace(space: CheckSpace): Promise<readonly CheckFailure[]> {
   const snapshotFailures = await Promise.all(
     space.packages.map((pkg) => checkSnapshotConsistency(space, pkg, space.projectMigrationsDir)),
   );
-  const graphReadInFull = space.unreadableMigrations.length === 0;
+  const missingFiles = checkManifestFilesPresent(space);
+  const graphReadInFull = space.unreadableMigrations.length === 0 && missingFiles.length === 0;
   return [
-    ...checkManifestFilesPresent(space),
+    ...missingFiles,
     ...snapshotFailures.filter((f): f is CheckFailure => f !== null),
     ...(graphReadInFull ? [...checkReachability(space), ...checkDanglingRefs(space)] : []),
   ];
