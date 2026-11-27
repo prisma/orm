@@ -405,6 +405,7 @@
 ./target/control: interface MongoMigrationRunnerExecuteOptions, readonly optional property context?: OperationContext
 ./target/control: interface MongoMigrationRunnerExecuteOptions, readonly optional property databaseChangedBefore?: boolean
 ./target/control: interface MongoMigrationRunnerExecuteOptions, readonly optional property executionChecks?: MigrationRunnerExecutionChecks
+./target/control: interface MongoMigrationRunnerExecuteOptions, readonly optional property policiesInForce?: DatabasePolicies
 ./target/control: interface MongoMigrationRunnerExecuteOptions, readonly optional property scopeVerifyResult?: (result: VerifyDatabaseSchemaResult) => VerifyDatabaseSchemaResult
 ./target/control: interface MongoMigrationRunnerExecuteOptions, readonly optional property strictVerification?: boolean
 ./target/control: interface MongoMigrationRunnerExecuteOptions, readonly required property destinationContract: MongoContract
@@ -690,6 +691,7 @@
 ./target: interface MongoMigrationRunnerExecuteOptions, readonly optional property context?: OperationContext
 ./target: interface MongoMigrationRunnerExecuteOptions, readonly optional property databaseChangedBefore?: boolean
 ./target: interface MongoMigrationRunnerExecuteOptions, readonly optional property executionChecks?: MigrationRunnerExecutionChecks
+./target: interface MongoMigrationRunnerExecuteOptions, readonly optional property policiesInForce?: DatabasePolicies
 ./target: interface MongoMigrationRunnerExecuteOptions, readonly optional property scopeVerifyResult?: (result: VerifyDatabaseSchemaResult) => VerifyDatabaseSchemaResult
 ./target: interface MongoMigrationRunnerExecuteOptions, readonly optional property strictVerification?: boolean
 ./target: interface MongoMigrationRunnerExecuteOptions, readonly required property destinationContract: MongoContract

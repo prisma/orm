@@ -17,44 +17,38 @@ import { joinedList } from './mongo-plan-text';
  * reads its target, adds documents of one source with `$unionWith` stages, and writes them all back
  * with `$out`. `filters` holds the `$match` of each `$unionWith` pipeline, one for each group of
  * models; it is empty for a copy of every document of the source, as the rename route prints.
- * `pipelines` holds each `$unionWith` pipeline whole, in the same order, or one empty pipeline for
- * a copy of every document.
  */
 export interface UnionCopy {
   readonly id: string;
   readonly into: string;
   readonly source: string;
   readonly filters: readonly Record<string, unknown>[];
-  readonly pipelines: readonly (readonly unknown[])[];
 }
 
 interface Union {
   readonly coll: string;
   readonly filter: Record<string, unknown> | undefined;
   readonly whole: boolean;
-  readonly pipeline: readonly unknown[];
 }
 
 function unionOf(stage: unknown): Union | undefined {
   if (typeof stage !== 'object' || stage === null) return undefined;
   const union: unknown = Reflect.get(stage, '$unionWith');
-  if (typeof union === 'string')
-    return { coll: union, filter: undefined, whole: true, pipeline: [] };
+  if (typeof union === 'string') return { coll: union, filter: undefined, whole: true };
   if (typeof union !== 'object' || union === null) return undefined;
   const coll: unknown = Reflect.get(union, 'coll');
   if (typeof coll !== 'string') return undefined;
   const pipeline: unknown = Reflect.get(union, 'pipeline');
-  if (pipeline === undefined) return { coll, filter: undefined, whole: true, pipeline: [] };
+  if (pipeline === undefined) return { coll, filter: undefined, whole: true };
   if (!Array.isArray(pipeline)) return undefined;
   const [first]: unknown[] = pipeline;
-  if (first === undefined) return { coll, filter: undefined, whole: true, pipeline: [] };
+  if (first === undefined) return { coll, filter: undefined, whole: true };
   const match: unknown =
     typeof first === 'object' && first !== null ? Reflect.get(first, '$match') : undefined;
   return {
     coll,
     filter: typeof match === 'object' && match !== null ? { ...match } : undefined,
     whole: false,
-    pipeline,
   };
 }
 
@@ -81,23 +75,12 @@ export function unionCopyOf(operation: AnyMongoMigrationOperation): UnionCopy | 
   const source = first.coll;
   if (source === into) return undefined;
   if (first.whole) {
-    return unions.length === 1
-      ? { id: operation.id, into, source, filters: [], pipelines: [[]] }
-      : undefined;
+    return unions.length === 1 ? { id: operation.id, into, source, filters: [] } : undefined;
   }
-  const groups = unions.flatMap((union) =>
-    union?.coll === source && !union.whole && union.filter !== undefined
-      ? [{ filter: union.filter, pipeline: union.pipeline }]
-      : [],
+  const filters = unions.flatMap((union) =>
+    union?.coll === source && !union.whole && union.filter !== undefined ? [union.filter] : [],
   );
-  if (groups.length !== unions.length) return undefined;
-  return {
-    id: operation.id,
-    into,
-    source,
-    filters: groups.map(({ filter }) => filter),
-    pipelines: groups.map(({ pipeline }) => pipeline),
-  };
+  return filters.length === unions.length ? { id: operation.id, into, source, filters } : undefined;
 }
 
 function dropsSource(operation: AnyMongoMigrationOperation, copy: UnionCopy): boolean {
@@ -158,45 +141,16 @@ function documentsText(count: number): string {
 }
 
 /**
- * The mongosh query that lists the documents of `copy`'s source that one of its groups copied:
- * those whose result through the group's `$unionWith` pipeline the target holds whole, under the
- * same `_id`. The comparison ignores the order of top-level fields.
+ * What to do when the user cannot tell which documents of `copy`'s two collections are which: no
+ * comparison of documents can prove that one was copied, so the user settles it by hand.
  */
-function copiedQuery(copy: UnionCopy, pipeline: readonly unknown[]): string {
-  const sameDocument = {
-    $setEquals: [{ $objectToArray: '$$ROOT' }, { $objectToArray: '$$copied' }],
-  };
-  const stages = [
-    ...pipeline,
-    {
-      $lookup: {
-        from: copy.into,
-        localField: '_id',
-        foreignField: '_id',
-        let: { copied: '$$ROOT' },
-        pipeline: [{ $match: { $expr: sameDocument } }],
-        as: 'inTarget',
-      },
-    },
-    { $match: { inTarget: { $ne: [] } } },
-    { $project: { _id: 1 } },
-  ];
-  return `db.getCollection(${JSON.stringify(copy.source)}).aggregate(${JSON.stringify(stages)})`;
+function settleByHandText(copy: UnionCopy): string {
+  return `delete nothing from either collection, and do not run the command again, until you have compared collections ${copy.into} and ${copy.source} by hand and settled which documents each should keep: only you can tell which of their documents are which.`;
 }
 
-/** How to find the documents of `copy`'s source that it copied, so that only those are deleted by hand. */
-function comparisonText(copy: UnionCopy): string {
-  const { into, source } = copy;
-  const groups = copy.filters.length;
-  const queries = joinedList(copy.pipelines.map((pipeline) => copiedQuery(copy, pipeline)));
-  const rule =
-    groups === 0
-      ? `a document of collection ${source} was copied when collection ${into} holds the same document, whole and under the same _id. List those with ${queries} in mongosh.`
-      : `a document of collection ${source} that ${groups === 1 ? "the copy's $match filter selects" : "one of the copy's $match filters selects"} was copied when collection ${into} holds, whole and under the same _id, the document the copy's stages make of it. List those with ${queries}${groups === 1 ? '' : ', one query for each $unionWith stage of the copy,'} in mongosh.`;
-  return `compare the two collections: ${rule} Delete only the listed documents from collection ${source} yourself, by their _id, then run the command again. A document that is not listed was not copied, or changed after the copy: the run copies it, and if collection ${into} already holds its earlier form under the same _id, it then holds both, so delete the earlier one there yourself. A document whose copied form is identical to one collection ${into} already held is listed as copied: its content is there under the same _id, so deleting it loses only a second identical copy. If you must keep such identical documents, keep collection ${source} as it is and reconcile the two collections by hand.`;
-}
+const UNCHANGED = 'nothing wrote to or deleted from either collection since the apply stopped';
 
-/** Why writes to both collections of `copy` must still be stopped before its source is emptied by hand, and what to do when that cannot be known. */
+/** Why writes to both collections of `copy` must still be stopped before its source is emptied by hand. */
 function writesStoppedText(copy: UnionCopy, single: boolean): string {
   const { into, source } = copy;
   const removal =
@@ -205,7 +159,12 @@ function writesStoppedText(copy: UnionCopy, single: boolean): string {
       : single
         ? 'that delete also removes'
         : 'those deletes also remove';
-  return `Writes to collections ${into} and ${source} must still be stopped: ${removal} any document written to collection ${source} since the copy, which the copy did not take. If you cannot be sure that nothing wrote to either collection since the apply stopped, keep collection ${source} as it is and ${comparisonText(copy)} Otherwise`;
+  return `Writes to collections ${into} and ${source} must still be stopped: ${removal} any document written to collection ${source} since the copy, which the copy did not take.`;
+}
+
+/** {@link writesStoppedText}, then what to do when the user cannot be sure that nothing wrote to either collection, leading into what to do otherwise. */
+function writesStoppedUnlessUnsureText(copy: UnionCopy, single: boolean): string {
+  return `${writesStoppedText(copy, single)} If you cannot be sure that ${UNCHANGED}, ${settleByHandText(copy)} Otherwise`;
 }
 
 function unfinishedDeleteText(copy: UnionCopy, deleteIds: readonly string[]): string {
@@ -217,15 +176,15 @@ function unfinishedDeleteText(copy: UnionCopy, deleteIds: readonly string[]): st
   const finish = one
     ? `finish that delete yourself, on collection ${source} with the filter of its deleteDocuments call in the migration's migration.ts`
     : `finish those deletes yourself, on collection ${source}, each with the filter of its deleteDocuments call in the migration's migration.ts`;
-  return `Operation ${id} copied documents into collection ${into} with an $out stage, and ${deletes}. ${writesStoppedText(copy, one)}, before you run the command again, ${finish}: the copy has no check, so it runs again, and it would add the documents still in collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the command was already run again before the ${one ? 'delete' : 'deletes'} finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
+  return `Operation ${id} copied documents into collection ${into} with an $out stage, and ${deletes}. ${writesStoppedUnlessUnsureText(copy, one)}, before you run the command again, ${finish}: the copy has no check, so it runs again, and it would add the documents still in collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the command was already run again before the ${one ? 'delete' : 'deletes'} finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
 /** `running` when the drop was running when the apply stopped, so it may or may not have dropped the source. */
 function undroppedText(copy: UnionCopy, dropId: string, running: boolean): string {
   const { id, into, source } = copy;
   const drop = running
-    ? `was running when the apply stopped and may not have finished. If collection ${source} is gone, run the command again. ${writesStoppedText(copy, true)}, before you run the command again, delete the documents of collection ${source} or drop it yourself`
-    : `has not run. ${writesStoppedText(copy, true)}, before you run the command again, delete the documents of collection ${source} or drop it yourself`;
+    ? `was running when the apply stopped and may not have finished. If collection ${source} is gone, run the command again. ${writesStoppedUnlessUnsureText(copy, true)}, before you run the command again, delete the documents of collection ${source} or drop it yourself`
+    : `has not run. ${writesStoppedUnlessUnsureText(copy, true)}, before you run the command again, delete the documents of collection ${source} or drop it yourself`;
   return `Operation ${id} copied the documents of collection ${source} into collection ${into} with an $out stage, and operation ${dropId}, which drops collection ${source}, ${drop}: the copy has no check, so it runs again, and it would add the documents of collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the command was already run again before collection ${source} was dropped, its documents are in collection ${into} more than once: each of them is there two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
@@ -255,7 +214,7 @@ function interruptedCopyText(
     : one
       ? `run that delete yourself, on collection ${source} with the filter of its deleteDocuments call in the migration's migration.ts`
       : `run those deletes yourself, on collection ${source}, each with the filter of its deleteDocuments call in the migration's migration.ts`;
-  return `${stopped} The error does not show whether the copy finished. ${removals}. Before the copy, collection ${into} held ${documentsText(counts.target)}, and the copy was to add ${documentsText(counts.selected)} of collection ${source}. To tell whether it finished, count the documents of collection ${into}, for example with db.getCollection(${JSON.stringify(into)}).countDocuments() in mongosh. If it holds ${counts.target + counts.selected}, the copy finished. ${writesStoppedText(copy, one)}, before you run the command again, ${finish}. The copy has no check, so it runs again, and it would add ${whole ? 'the documents of' : 'the documents still in'} collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If it holds ${counts.target}, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to or deleted from collection ${into}, or the command was already run again. Delete nothing from collection ${source} until you ${comparisonText(copy)} If the command was already run again after the copy finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
+  return `${stopped} The error does not show whether the copy finished. ${removals}. Before the copy, collection ${into} held ${documentsText(counts.target)}, and the copy was to add ${documentsText(counts.selected)} of collection ${source}. To tell whether it finished, count the documents of collection ${into}, for example with db.getCollection(${JSON.stringify(into)}).countDocuments() in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${settleByHandText(copy)} If it holds ${counts.target + counts.selected}, and ${UNCHANGED}, the copy finished. ${writesStoppedText(copy, one)} Before you run the command again, ${finish}. The copy has no check, so it runs again, and it would add ${whole ? 'the documents of' : 'the documents still in'} collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If it holds ${counts.target}, and ${UNCHANGED}, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to or deleted from collection ${into}, or the command was already run again: ${settleByHandText(copy)} If the command was already run again after the copy finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
 /**

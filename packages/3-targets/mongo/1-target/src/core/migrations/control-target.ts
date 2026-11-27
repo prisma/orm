@@ -142,6 +142,7 @@ export const mongoTargetDescriptor: MongoControlTargetDescriptor<MongoTargetCont
               ...runnerOptions,
               scopeVerifyResult,
               databaseChangedBefore: changedDatabase,
+              ...ifDefined('policiesInForce', expectedDatabasePolicies),
               ...(space === APP_SPACE_ID
                 ? ifDefined('checkedPolicies', expectedDatabasePolicies)
                 : {}),

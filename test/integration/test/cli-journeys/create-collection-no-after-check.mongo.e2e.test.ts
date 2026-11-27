@@ -1,8 +1,8 @@
 /**
  * Journey (MongoDB): a migration emitted before a create had an after-check stops at a collection
- * that already exists, and its by-hand route is followed to the end: the operations that did not
- * run are applied by hand, and `db sign` records the migration's contract. On a database whose
- * change policy permits only migrations, the advice offers no such route.
+ * that already exists, and both routes that keep its documents are followed to the end: applying
+ * the operations that did not run by hand and signing with `db sign`, and, on a database whose
+ * change policy permits only migrations, moving the collection aside so the migration runs.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -14,6 +14,7 @@ import {
   latestMigrationDirName,
   parseJsonOutput,
   runDbSign,
+  runDbVerify,
   runMigrate,
   runMigrationPlan,
   runMigrationStatus,
@@ -116,7 +117,7 @@ describe('Journey (MongoDB): a create with no after-check finds its collection',
     }).toEqual({
       stopped: 2,
       advice: expect.stringContaining(
-        "Otherwise leave the migration as it is, apply the operations of this migration that did not run by hand, then run db sign with the name of this migration's directory. db sign checks the collections, their validators and their indexes against the contract this migration leads to, not the documents, so first check yourself that the documents are as the operations you applied leave them. It then records the database at that contract, so the next run starts after this migration. migration status then shows the database as up to date, but does not mark this migration as applied, since no run of it is recorded.",
+        "Or, without moving the documents, leave the migration as it is, apply the operations of this migration that did not run by hand, then run db sign with the name of this migration's directory. db sign checks the collections, their validators and their indexes against the contract this migration leads to, not the documents, so first check yourself that the documents are as the operations you applied leave them. It then records the database at that contract, so the next run starts after this migration. migration status then shows the database as up to date, but does not mark this migration as applied, since no run of it is recorded.",
       ),
       unsigned:
         "Operation collection.items.create stopped: collection items already exists, and this migration's create has no after-check that lets a run skip it",
@@ -128,7 +129,7 @@ describe('Journey (MongoDB): a create with no after-check finds its collection',
     await expectSettled(journey, 'L1.03');
   });
 
-  it('L2: on a database whose change policy permits only migrations, the advice offers no db sign route and says no recovery remains when the first two do not apply', async () => {
+  it('L2: on a database whose change policy permits only migrations, the collection is moved aside, db migrate runs the migration, and the documents are copied back', async () => {
     const journey = project('l2_migrate_only');
     const { ctx, db } = journey;
     await useSchema(journey, notePsl, 'L2.01');
@@ -162,18 +163,44 @@ describe('Journey (MongoDB): a create with no after-check finds its collection',
 
     const stopped = await runMigrate(ctx, ['--json']);
     const advice = engineError(stopped)?.why;
+    await db.collection('items').rename('items_kept');
+    const migrated = await runMigrate(ctx, ['--json']);
+    await db
+      .collection('items_kept')
+      .aggregate([{ $merge: { into: 'items' } }])
+      .toArray();
+    await db.collection('items_kept').drop();
+    const status = parseJsonOutput<{
+      readonly summary: string;
+      readonly spaces: readonly { readonly migrations: readonly { readonly status: unknown }[] }[];
+    }>(await runMigrationStatus(ctx, ['--json']));
+    const verified = await runDbVerify(ctx, ['--json']);
 
     expect({
       stopped: stopped.exitCode,
       advice,
+      migrated: migrated.exitCode,
+      status: {
+        summary: status.summary,
+        marks: status.spaces[0]?.migrations.map((migration) => migration.status),
+      },
+      verified: verified.exitCode,
+      collections: (await db.listCollections({}, { nameOnly: true }).toArray())
+        .map(({ name }) => name)
+        .filter((collection) => !collection.startsWith('_prisma'))
+        .sort(),
       items: await documents(db, 'items'),
     }).toEqual({
       stopped: 2,
       advice: expect.stringContaining(
-        "If items holds nothing you need, drop it, then run the command again; operations that already ran are skipped. This database's change policy permits only migrations, so it cannot be signed past this create by hand. When neither of those two ways applies, this database's change policy permits no recovery for this create.",
+        'If items holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If items holds documents you need, rename it in mongosh, for example with db.getCollection("items").renameCollection("items_kept"), and run the command again: the create makes collection items with this migration\'s options, and the rest of the migration runs. Then copy the documents back, for example with db.getCollection("items_kept").aggregate([{ $merge: { into: "items" } }]), and drop collection items_kept. The documents you copy back must satisfy any validator collection items has after the run. If an operation of this migration after the create changes documents of collection items, it ran while the collection was empty, so make the same change to the documents you copy back.',
       ),
+      migrated: 0,
+      status: { summary: 'Up to date', marks: ['applied', 'applied'] },
+      verified: 0,
+      collections: ['items', 'notes'],
       items: [{ t: 'keep' }],
     });
-    expect(advice).not.toMatch(/db sign|permit-policy-change|reconcile/);
+    expect(advice).not.toMatch(/db sign|permit-policy-change|reconcile|policy/);
   });
 });

@@ -151,6 +151,7 @@ function runSpaces(
     readonly databasePolicies?: DatabasePolicies;
   }>,
   expectedDatabasePolicies: DatabasePolicies,
+  executionChecks = { prechecks: false, postchecks: false, idempotencyChecks: false },
 ) {
   const family = {
     createRunnerDependencies: () => dependencies,
@@ -165,7 +166,7 @@ function runSpaces(
       policy: ALL_POLICY,
       frameworkComponents: [],
       strictVerification: false,
-      executionChecks: { prechecks: false, postchecks: false, idempotencyChecks: false },
+      executionChecks,
     })),
     expectedDatabasePolicies,
   });
@@ -456,5 +457,34 @@ describe('MongoMigrationRunner database policies', () => {
         },
       ],
     });
+  });
+
+  it("gives an extension space's refusal the ways the database's policies permit, as the application space's", async () => {
+    const store = new MarkerStore(markerAt('start', { policies: MIGRATE_ONLY }));
+    const inspection = new StubInspectionExecutor();
+    inspection.collections = [{ name: 'audit_log' }];
+
+    const result = await runSpaces(
+      makeDependencies(store, inspection),
+      [
+        {
+          space: 'audit',
+          plan: {
+            ...makePlan([{ ...createCollection('audit_log'), postcheck: [] }], 'start'),
+            spaceId: 'audit',
+          },
+          migrationEdges: [edge('start', DEST, '001_audit')],
+        },
+      ],
+      MIGRATE_ONLY,
+      { prechecks: true, postchecks: true, idempotencyChecks: true },
+    );
+
+    const failure = result.assertNotOk();
+    expect(failure).toMatchObject({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      why: expect.stringContaining('rename it in mongosh'),
+    });
+    expect(failure.why).not.toContain('db sign');
   });
 });

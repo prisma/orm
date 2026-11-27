@@ -13,8 +13,10 @@ import {
 
 const FIRST_TWO_WAYS =
   "This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection orders. If no other database has applied this migration, run its migration.ts with node, which writes its ops.json again with the after-check and changes the migration's hash, then run the command again: the creation is then skipped if orders has the options the createCollection call of this migration's migration.ts sets, and no validator, since that call sets none. If orders holds nothing you need, drop it, then run the command again; operations that already ran are skipped.";
+const MOVED_ASIDE =
+  'If orders holds documents you need, rename it in mongosh, for example with db.getCollection("orders").renameCollection("orders_kept"), and run the command again: the create makes collection orders with this migration\'s options, and the rest of the migration runs. Then copy the documents back, for example with db.getCollection("orders_kept").aggregate([{ $merge: { into: "orders" } }]), and drop collection orders_kept. The documents you copy back must satisfy any validator collection orders has after the run. If an operation of this migration after the create changes documents of collection orders, it ran while the collection was empty, so make the same change to the documents you copy back.';
 const SIGNED_BY_HAND =
-  "Otherwise leave the migration as it is, apply the operations of this migration that did not run by hand, then run db sign with the name of this migration's directory. db sign checks the collections, their validators and their indexes against the contract this migration leads to, not the documents, so first check yourself that the documents are as the operations you applied leave them. It then records the database at that contract, so the next run starts after this migration. migration status then shows the database as up to date, but does not mark this migration as applied, since no run of it is recorded.";
+  "Or, without moving the documents, leave the migration as it is, apply the operations of this migration that did not run by hand, then run db sign with the name of this migration's directory. db sign checks the collections, their validators and their indexes against the contract this migration leads to, not the documents, so first check yourself that the documents are as the operations you applied leave them. It then records the database at that contract, so the next run starts after this migration. migration status then shows the database as up to date, but does not mark this migration as applied, since no run of it is recorded.";
 
 async function executeUnderChange(change: readonly ('migrate' | 'reconcile')[]) {
   const harness = makeHarness();
@@ -26,7 +28,7 @@ async function executeUnderChange(change: readonly ('migrate' | 'reconcile')[]) 
     destinationContract: makeContract('dest'),
     policy: ALL_POLICY,
     frameworkComponents: [],
-    checkedPolicies: { ...DEFAULT_DATABASE_POLICIES, change },
+    policiesInForce: { ...DEFAULT_DATABASE_POLICIES, change },
   });
 }
 
@@ -73,7 +75,7 @@ describe('MongoMigrationRunner, a create whose collection already exists', () =>
       code: 'MIGRATION.PRECHECK_FAILED',
       message:
         "Operation collection.orders.create stopped: collection orders already exists, and this migration's create has no after-check that lets a run skip it",
-      why: `${FIRST_TWO_WAYS} ${SIGNED_BY_HAND} The failed apply changed nothing.`,
+      why: `${FIRST_TWO_WAYS} ${MOVED_ASIDE} ${SIGNED_BY_HAND} The failed apply changed nothing.`,
       meta: { operationId: 'collection.orders.create', databaseUnchanged: true },
     });
   });
@@ -82,17 +84,15 @@ describe('MongoMigrationRunner, a create whose collection already exists', () =>
     const result = await executeUnderChange(['migrate', 'reconcile']);
 
     expect(failureFields(result.assertNotOk()).why).toBe(
-      `${FIRST_TWO_WAYS} ${SIGNED_BY_HAND} The failed apply changed nothing.`,
+      `${FIRST_TWO_WAYS} ${MOVED_ASIDE} ${SIGNED_BY_HAND} The failed apply changed nothing.`,
     );
   });
 
-  it('says no way past the create remains on a database whose change policy permits only migrations, when the first two do not apply', async () => {
+  it('gives the move-aside way and leaves out the db sign way on a database whose change policy permits only migrations', async () => {
     const result = await executeUnderChange(['migrate']);
 
     const { why } = failureFields(result.assertNotOk());
-    expect(why).toBe(
-      `${FIRST_TWO_WAYS} This database's change policy permits only migrations, so it cannot be signed past this create by hand. When neither of those two ways applies, this database's change policy permits no recovery for this create. The failed apply changed nothing.`,
-    );
-    expect(why).not.toMatch(/db sign|permit-policy-change|reconcile/);
+    expect(why).toBe(`${FIRST_TWO_WAYS} ${MOVED_ASIDE} The failed apply changed nothing.`);
+    expect(why).not.toMatch(/db sign|permit-policy-change|reconcile|policy/);
   });
 });
