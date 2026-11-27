@@ -12,7 +12,7 @@ This document defines the two **execution-layer roles** in the Drive framework �
 
 **Reviewers** use this document as the standard against which workflow-skill and atomic-skill compliance is evaluated. A skill that lacks the required prose sections, or a diff that adds direct execution calls to a workflow skill body, constitutes a compliance gap against this document.
 
-> **Companion doc:** `docs/drive/principles/roles-and-personas.md` covers **process roles** (project owner / implementer / reviewer / orchestrator hat) — who owns what across a project's lifecycle. This document covers **execution-layer roles** — what structural constraint an agent is under when running inside a Drive workflow. The two layers are complementary: an Executor can wear the project-owner process role, and an Orchestrator can wear the tech-lead persona. Neither doc replaces the other.
+> **Scope:** This document covers **execution-layer roles** — what structural constraint an agent is under when running inside a Drive workflow. **Process roles** (project owner / implementer / reviewer / orchestrator hat) — who owns what across a project's lifecycle — are a separate, complementary layer: an Executor can wear the project-owner process role, and an Orchestrator can wear the tech-lead persona.
 
 ---
 
@@ -95,8 +95,6 @@ Roles constrain **what** an actor does (structural). Personas frame **how** an a
 Loading a persona does **not** change the actor's role. An Orchestrator that loads the `tech-lead` persona is still an Orchestrator — it must still delegate execution. A Reviewer that loads `principal-engineer` is still an Executor — it still owns a bounded reading task. Personas are bias-frames worn on top of a fixed structural role, not a replacement for it.
 
 The practical consequence: when an Orchestrator dispatches a Specialist to run `drive-specify-project`, the dispatch brief should specify both the **role** ("You are running as an Executor/Specialist") and the **persona** ("Adopt the `tech-lead` persona from `drive-agent-personas/SKILL.md`"). The role constrains the structural boundaries of what the Executor does; the persona shapes how it reasons within those boundaries. Omitting the role and specifying only the persona risks the Executor treating the persona as a license to range widely — a `tech-lead` persona without a role constraint might decide to do reconnaissance "because a tech lead would", collapsing the Executor into a second Orchestrator.
-
-The complementary doc `docs/drive/principles/roles-and-personas.md` — which covers the *process roles* (project owner, implementer, reviewer, orchestrator hat) — also notes the role-vs-persona distinction, but from the process side: "the agile-orchestrator hat is about orientation, not seniority or model tier." Both docs are expressing the same underlying principle from different vantage points.
 
 ---
 
@@ -410,8 +408,7 @@ The layered convention approach is strictly more portable and nearly as strong a
 
 ## Related reading
 
-- `docs/drive/principles/roles-and-personas.md` — process roles (project owner / implementer / reviewer / orchestrator hat). Covers *who owns what across a project lifecycle*, not the execution-layer structural constraint.
-- `docs/drive/principles/decomposition-and-cost.md` — sub-agent continuity and role-variant design: the *why* (context preservation, cost optimization, named-roles-make-dispatch-reproducible). This doc covers the *how* (registry shape, ID-resumption mechanics, escape-hatch).
+- [`drive-build-workflow` § Subagent continuity](https://github.com/prisma/ignite/blob/main/skills/.pilot/drive-build-workflow/SKILL.md#subagent-continuity) — the *why* of sub-agent continuity (context preservation, findings that stay calibrated across rounds). This doc covers the *how* (registry shape, ID-resumption mechanics, escape-hatch).
 - [`drive-agent-personas/SKILL.md`](https://github.com/prisma/ignite/blob/main/skills/.pilot/drive-agent-personas/SKILL.md) — persona library. Roles and personas are orthogonal; see the role-vs-persona table above for the interaction.
 - [`drive/triage/README.md`](../triage/README.md) — triage heuristics and ticket-shape patterns. Triage determines which workflow skill runs, which determines which role the agent enters.
 - [Linear: TML-2587](https://linear.app/prisma-data/issue/TML-2587) — the project ticket that introduced this vocabulary.
