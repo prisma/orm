@@ -71,7 +71,9 @@ The author writes the list of every capability the contract requires, where the 
 
 The list must be a list, not empty, and each entry a capability key that is not retired; otherwise `CONTRACT.ARGUMENT_INVALID` says which of the four it is.
 
-Until Prisma 8.0, the list may be left out, as a contract written for a release candidate leaves it out: in `defineContract`, in the config's contract entry (or a bare `.prisma` path), in `prisma7Schema`, and in a contract source the config builds itself and passes to the PostgreSQL `defineConfig`, such as `prismaContract(...)` without `capabilities` or `typescriptContract(contract)`. Such a contract requires the newest version's list and the driver's, `[...postgres18, ...postgresDriver]`, the list `prisma orm init` writes, and its type knows those keys. The commands that load the contract source, `prisma contract emit` and `prisma contract print` among them, report the warning `CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED` with what to write and its import, and emit's exit code does not change. Building a TypeScript contract anywhere else prints nothing. `postgresContractCapabilities` has no default. Prisma 8.0 removes the default and requires the list. To leave a capability out, filter it out or write the keys yourself:
+Until Prisma 8.0, the list may be left out, as a contract written for a release candidate leaves it out: in `defineContract`, in the config's contract entry (or a bare `.prisma` path), in `prisma7Schema`, and in a contract source the config builds itself and passes to the PostgreSQL `defineConfig`, such as `prismaContract(...)` without `capabilities` or `typescriptContract(contract)`. Such a contract requires the newest version's list and the driver's, `[...postgres18, ...postgresDriver]`, the list `prisma orm init` writes, and its type knows those keys. The commands that load the contract source, `prisma contract emit` and `prisma contract print` among them, report the warning `CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED` with what to write and its import, and emit's exit code does not change. A Prisma schema source given no `capabilities` is read with the default, so a scalar list (`String[]`) or `@@check` works. Building a TypeScript contract anywhere else prints nothing. `postgresContractCapabilities` has no default. Prisma 8.0 removes the default and requires the list.
+
+To leave a capability out, filter it out or write the keys yourself:
 
 ```typescript
 requiredCapabilities: [
@@ -79,6 +81,8 @@ requiredCapabilities: [
   ...postgresDriver,
 ]
 ```
+
+A config built with the core `defineConfig`, which names the target, adapter and driver itself, gets no default and no warning: only the PostgreSQL `defineConfig` knows it. After the next `prisma contract emit`, a source given no `capabilities` writes a contract that lists no capabilities. The client then refuses everything that needs a capability: `transaction()` is a type error and throws `ORM.CAPABILITY_MISSING`, and row locks, `distinctOn` and skip-on-conflict writes are refused with the same code. A schema with a scalar list (`String[]`) or `@@check` does not emit at all. Add `capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])` to its source, imported from `@prisma/orm-postgres/config`, before emitting.
 
 A list without `postgresDriver` does not require `sql.interactiveTransactions`, so `transaction()` is unavailable to it. Spreads of these lists, a filter by comparison and keys written out all stay literal in the contract's type, so the type-level checks below see each key. A list typed as `RequiredCapabilities` names no key in the type.
 

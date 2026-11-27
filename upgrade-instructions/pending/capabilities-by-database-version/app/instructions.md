@@ -9,7 +9,7 @@ changes:
         - '@prisma/orm-postgres/(?:config|contract-builder)[''"]'
   - id: postgres-config-without-define-config-passes-capabilities
     summary: |
-      A config that builds a PostgreSQL contract source itself, with `prismaContract` or `prisma7Contract`, passes the source `capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])` from `@prisma/orm-postgres/config`. Without it, a source passed to the PostgreSQL `defineConfig` requires the newest version's list and the driver's and `prisma contract emit` warns, until Prisma 8.0; a config built without the PostgreSQL `defineConfig` writes a contract that lists no capabilities.
+      A config that builds a PostgreSQL contract source itself, with `prismaContract` or `prisma7Contract`, passes the source `capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])` from `@prisma/orm-postgres/config`. Without it, a source passed to the PostgreSQL `defineConfig` requires the newest version's list and the driver's and `prisma contract emit` warns, until Prisma 8.0. A config built with the core `defineConfig`, which names the target, adapter and driver itself, gets no default: after its next `prisma contract emit` the contract lists no capabilities, so `transaction()` and the other features that need a capability are refused, and a schema with a scalar list or `@@check` does not emit. Add the `capabilities` line before emitting.
     detection:
       glob: "**/*.{ts,mts,cts,js,mjs,cjs}"
       matches:
@@ -229,7 +229,11 @@ contract: prismaContract('./prisma/contract.prisma', {
 }),
 ```
 
-A source given no `capabilities` and passed to the PostgreSQL `defineConfig`, as `contract: prismaContract(...)`, still works until Prisma 8.0: its contract requires the newest version's list and the driver's, and `prisma contract emit` warns and shows the `capabilities` line above with its import. A source given no `capabilities` in a config that names the target, adapter and driver itself, without the PostgreSQL `defineConfig`, writes a contract that lists none, with no warning: only the PostgreSQL `defineConfig` knows the default, and `postgresContractCapabilities` refuses a missing list. Then emit and sign, as in steps 3 and 4 above.
+A source given no `capabilities` and passed to the PostgreSQL `defineConfig`, as `contract: prismaContract(...)`, still works until Prisma 8.0, a schema with a scalar list or `@@check` included: it is read with the newest version's list and the driver's, its contract requires them, and `prisma contract emit` warns and shows the `capabilities` line above with its import.
+
+A config built with the core `defineConfig`, from `@prisma/orm-toolchain/cli/config-types` or `@prisma/orm-framework/config/config-types`, which names the target, adapter and driver itself, gets no default, because only the PostgreSQL `defineConfig` knows it. Its `contract.json` from the release candidate keeps working until it is emitted again. After the next `prisma contract emit`, a source given no `capabilities` writes a contract that lists no capabilities, with no warning. The client then refuses everything that needs a capability: `transaction()` is a type error and throws `ORM.CAPABILITY_MISSING`, and row locks, `distinctOn` and skip-on-conflict writes are refused with the same code. A schema with a scalar list (`String[]`) or `@@check` does not emit at all. So add `capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])` to the source, and `import { postgres18, postgresContractCapabilities, postgresDriver } from '@prisma/orm-postgres/config';` to the config, before emitting. `postgresContractCapabilities` refuses a missing list.
+
+Then emit and sign, as in steps 3 and 4 above.
 
 ## `postgres-emitted-contract-is-emitted-again`
 
