@@ -337,7 +337,7 @@ function missingInvariantsDiagnostic(
     code: 'MIGRATION.SIGN_INVARIANTS_MISSING',
     severity: 'error',
     summary: `Space "${outcome.space}" requires invariants its marker does not record`,
-    why: `The head ref of space "${outcome.space}" requires ${required}. An invariant records that a migration ran, and db sign never runs migrations, so it did not sign this space.${refusal === undefined ? '' : ` ${refusal}`}`,
+    why: `The head ref of space "${outcome.space}" requires ${required}. An invariant records that a migration ran, and \`db sign\` never runs migrations, so it did not sign this space.${refusal === undefined ? '' : ` ${refusal}`}`,
     nextActions:
       refusal === undefined
         ? [

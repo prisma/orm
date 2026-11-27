@@ -70,7 +70,7 @@ describe('db sign refusing a space whose marker lacks a required invariant', () 
         code: 'MIGRATION.SIGN_INVARIANTS_MISSING',
         severity: 'error',
         summary: 'Space "pgvector" requires invariants its marker does not record',
-        why: `The head ref of space "pgvector" requires the invariant "${INSTALL_VECTOR}", which the database marker does not record. An invariant records that a migration ran, and db sign never runs migrations, so it did not sign this space.`,
+        why: `The head ref of space "pgvector" requires the invariant "${INSTALL_VECTOR}", which the database marker does not record. An invariant records that a migration ran, and \`db sign\` never runs migrations, so it did not sign this space.`,
         nextActions: [
           {
             kind: 'run-command',
@@ -196,6 +196,14 @@ describe('db sign refusing a space whose database also does not provide what its
       { code: 'MIGRATION.SIGN_INVARIANTS_MISSING', nextActions: [] },
       { code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED', nextActions: [] },
     ]);
+    expect(diagnosticsOf(run)[0]).toEqual({
+      code: 'MIGRATION.SIGN_INVARIANTS_MISSING',
+      severity: 'error',
+      summary: 'Space "pgvector" requires invariants its marker does not record',
+      why: `The head ref of space "pgvector" requires the invariant "${INSTALL_VECTOR}", which the database marker does not record. An invariant records that a migration ran, and \`db sign\` never runs migrations, so it did not sign this space. \`db update\`, \`db init\` and \`db migrate\` refuse this database until it provides what the contract requires.`,
+      nextActions: [],
+      meta: { space: 'pgvector', missingInvariants: [INSTALL_VECTOR] },
+    });
   });
 
   it('says the database does not provide what the contract requires, in the summary and the label, with no schema issue under it', async () => {
@@ -250,7 +258,7 @@ describe('db sign refusing a space that lacks invariants beside another space wh
         code: 'MIGRATION.SIGN_INVARIANTS_MISSING',
         severity: 'error',
         summary: 'Space "pgvector" requires invariants its marker does not record',
-        why: `The head ref of space "pgvector" requires the invariant "${INSTALL_VECTOR}", which the database marker does not record. An invariant records that a migration ran, and db sign never runs migrations, so it did not sign this space. \`db update\`, \`db init\` and \`db migrate\` refuse this database until it provides what the contract of another space requires.`,
+        why: `The head ref of space "pgvector" requires the invariant "${INSTALL_VECTOR}", which the database marker does not record. An invariant records that a migration ran, and \`db sign\` never runs migrations, so it did not sign this space. \`db update\`, \`db init\` and \`db migrate\` refuse this database until it provides what the contract of another space requires.`,
         nextActions: [],
         meta: { space: 'pgvector', missingInvariants: [INSTALL_VECTOR] },
       },
