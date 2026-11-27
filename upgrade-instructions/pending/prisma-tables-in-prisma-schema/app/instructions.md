@@ -32,7 +32,7 @@ For each database the project deploys to (development, staging, production), run
 
 The command renames the schema first, before its own checks. So a command that the database's change policy then refuses, such as `prisma db update` on a database whose policy permits only `db migrate`, or a command the user cancels at a prompt, has still renamed the schema. This is harmless: the rename changes only Prisma's own tables, keeps every row, and is what the next command would do anyway.
 
-Commands that only read the database do not rename anything: `prisma db verify`, `prisma migration status`, `prisma migration log`, a dry run of a command, and the check the client runs when it is first used. Pointed at a database that still has `prisma_contract`, they stop with `CONTRACT.PRISMA_SPACE_BEHIND`, which says that Prisma's own tables are not up to date with the installed release and names `prisma db migrate`. This includes `prisma db verify --schema-only`. Run that command, then run the read again.
+Commands that only read the database do not rename anything: `prisma db verify`, `prisma migration status`, `prisma migration log`, a dry run of a command, and the check the client runs when it is first used. Pointed at a database that still has `prisma_contract`, they stop with `CONTRACT.PRISMA_SPACE_BEHIND`, which says that the records Prisma keeps for itself are not up to date with the installed release and names `prisma db migrate`. This includes `prisma db verify --schema-only`. Run that command, then run the read again.
 
 ### When the command stops
 

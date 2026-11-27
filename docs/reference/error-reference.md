@@ -688,10 +688,10 @@ An RLS policy declaration is invalid: it targets a model in another contract spa
 
 ### CONTRACT.PRISMA_SPACE_BEHIND
 
-Prisma's own tables in the database are not up to date with the installed release of Prisma. Every command that changes the database (`db init`, `db update`, `db migrate`, `db sign`) brings them up to date before it does anything else, so the fix is always to run one of them, usually `prisma db migrate`. Two situations raise it, and the `why` says which:
+The records Prisma keeps for itself in the database are not up to date with the installed release of Prisma. Every command that changes the database (`db init`, `db update`, `db migrate`, `db sign`) brings them up to date before it does anything else, so the fix is always to run one of them, usually `prisma db migrate`. Two situations raise it, and the `why` says which:
 
 - On PostgreSQL, the tables are in the schema `prisma_contract`, where the release candidates of Prisma 8 kept them, and there is no `_prisma.marker`. A command that only reads the database (`db verify`, including `db verify --schema-only`, `migration status`, `migration log`, `db migrate --show`, or a dry run of `db init` or `db update`) cannot read which contract the database matches, so it stops with this error instead of reporting an unsigned database. Payload: `spaceId`, `schema`.
-- `db verify` found the row of the `_prisma` space, which records the form of Prisma's own tables, at a contract that the installed release's migrations of that space lead on from: Prisma was upgraded and no command that changes the database has run since. Reported as a finding on a completed run that exits `4`. Payload: `spaceId`, `markerHash`, `headRefHash`.
+- `db verify` found the row of the `_prisma` space, which records the form of what Prisma keeps for itself in the database, at a contract that the installed release's migrations of that space lead on from: Prisma was upgraded and no command that changes the database has run since. Reported as a finding on a completed run that exits `4`. Payload: `spaceId`, `markerHash`, `headRefHash`.
 
 The runtime's marker check reports the same code as a warning, and runs. `db verify` judges the row exactly as the commands that change the database do: a row a later release of the same major version wrote is not reported, and a row this release cannot use is reported as `MIGRATION.INSTALLED_SPACE_UNREACHABLE`.
 
@@ -1840,9 +1840,9 @@ A contract hash the user supplied (or that a ref resolved to) is not a node in t
 
 ### MIGRATION.INSTALLED_SPACE_UNREACHABLE
 
-The database records the `_prisma` space, which holds the form of Prisma's own tables, at a contract that the installed Prisma packages' migrations of that space never reach, and this release cannot use the tables. Raised by every command that changes the database, before it does anything else, and reported by `db verify` as a finding. The payload's `reason` says why:
+The database records the `_prisma` space, which holds the form of what Prisma keeps for itself in the database, at a contract that the installed Prisma packages' migrations of that space never reach, and this release cannot use those records. Raised by every command that changes the database, before it does anything else, and reported by `db verify` as a finding. The payload's `reason` says why:
 
-- `laterMajor`: the row records an invariant that no migration of the installed packages provides. Only a release of a later major version of Prisma writes one, when it changes these tables in a way an earlier major version cannot read. Use that release, or a newer one, for every command against the database.
+- `laterMajor`: the row records an invariant that no migration of the installed packages provides. Only a release of a later major version of Prisma writes one, when it changes these records in a way an earlier major version cannot read. Use that release, or a newer one, for every command against the database.
 - `unknownContract`: the row's contract is unknown and the space's ledger never recorded the installed head, so no release of this major version brought the database there from this release's form; a release of another major version, or a change by hand, did. Use the release that last changed the database, or a newer one.
 
 A row at an unknown contract whose invariants the installed migrations all provide, and whose ledger recorded the installed head, was written by a later release of the same major version, which only adds to these tables; this release then applies nothing and carries on. Payload: `spaceId`, `markerHash`, `headRefHash`, `reason`.
