@@ -143,7 +143,6 @@ export function setupIntegrationTest() {
     context = createExecutionContext({
       contract: sqlContract,
       stack,
-      driver: cursorDisabledDriver,
     });
     const driver = stackInstance.driver!;
     adapter = blindCast<

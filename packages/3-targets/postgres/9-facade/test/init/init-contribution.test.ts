@@ -1,9 +1,15 @@
 import { readFileSync } from 'node:fs';
-import type { ReadmeInput } from '@internal/cli/init-contribution';
+import type { ContractEntryInput, ReadmeInput } from '@internal/cli/init-contribution';
 import type { ContractSourceFormat } from '@internal/config/config-types';
-import { POSTGRES_MIN_SERVER_VERSION } from '@internal/target-postgres/server-version';
+import {
+  POSTGRES_MIN_SERVER_VERSION,
+  POSTGRES_NEWEST_VERSION,
+} from '@internal/target-postgres/server-version-range';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { prisma7Schema } from '../../src/config/prisma7-schema';
+import { postgres18, postgresDriver } from '../../src/contract/contract-capabilities';
+import * as configModuleExports from '../../src/exports/config';
 import contribution from '../../src/exports/init';
 
 const INIT_DIR = join(import.meta.dirname, '../../src/init');
@@ -27,6 +33,13 @@ function quickReferenceFor(mode: ContractSourceFormat, schemaPath: string): stri
     cliCommand: 'pnpm prisma',
     requirements: REQUIREMENTS,
   });
+}
+
+function contractEntryOf(input: ContractEntryInput) {
+  if (contribution.contractEntry === undefined) {
+    throw new Error('the contribution gives no contract entry');
+  }
+  return contribution.contractEntry(input);
 }
 
 function npmRun(script: string): string {
@@ -54,6 +67,173 @@ describe('templates', () => {
 
   it('imports defineConfig from its own config entrypoint', () => {
     expect(contribution.configModule).toBe('@internal/postgres/config');
+  });
+
+  describe('contractEntry', () => {
+    const required = `requiredCapabilities: [...postgres${POSTGRES_NEWEST_VERSION}, ...postgresDriver]`;
+    const capabilityImports = [
+      {
+        moduleSpecifier: '@internal/postgres/config',
+        symbol: `postgres${POSTGRES_NEWEST_VERSION}`,
+      },
+      { moduleSpecifier: '@internal/postgres/config', symbol: 'postgresDriver' },
+    ];
+
+    it('lists the newest PostgreSQL version’s and the driver’s capabilities beside a Prisma schema contract', () => {
+      const entry = contractEntryOf({
+        kind: 'starter',
+        mode: 'psl',
+        path: './prisma/contract.prisma',
+      });
+
+      expect(entry.renderTypeScript()).toBe(
+        `{\n  path: "./prisma/contract.prisma",\n  ${required},\n}`,
+      );
+      expect(entry.importRequirements()).toEqual(capabilityImports);
+      expect(entry.contractValue(configModuleExports)).toEqual({
+        path: './prisma/contract.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      });
+    });
+
+    it('is the path of a TypeScript contract, which lists its required capabilities in defineContract', () => {
+      const entry = contractEntryOf({
+        kind: 'starter',
+        mode: 'typescript',
+        path: './prisma/contract.ts',
+      });
+
+      expect(entry.renderTypeScript()).toBe('"./prisma/contract.ts"');
+      expect(entry.importRequirements()).toEqual([]);
+      expect(entry.contractValue(configModuleExports)).toBe('./prisma/contract.ts');
+      expect(contribution.starterContract('typescript')).toContain(
+        `import { defineContract, now, postgres${POSTGRES_NEWEST_VERSION}, postgresDriver } from '@internal/postgres/contract-builder';\n\nexport const contract = defineContract({ ${required} }`,
+      );
+    });
+
+    it('calls prisma7Schema from its config module, and builds the config the call builds', () => {
+      const entry = contractEntryOf({ kind: 'prisma7-schema', path: 'prisma/schema.prisma' });
+
+      expect(entry.renderTypeScript()).toBe(
+        `prisma7Schema(\n  "prisma/schema.prisma",\n  { ${required} },\n)`,
+      );
+      expect(entry.importRequirements()).toEqual([
+        { moduleSpecifier: '@internal/postgres/config', symbol: 'prisma7Schema' },
+        ...capabilityImports,
+      ]);
+      expect(JSON.stringify(entry.contractValue(configModuleExports))).toEqual(
+        JSON.stringify(
+          prisma7Schema('prisma/schema.prisma', {
+            requiredCapabilities: [...postgres18, ...postgresDriver],
+          }),
+        ),
+      );
+    });
+
+    it('builds its value from the exports it imports, by the names its text imports them by', () => {
+      const exports = {
+        prisma7Schema: (path: string, options: object) => ({ path, options }),
+        [`postgres${POSTGRES_NEWEST_VERSION}`]: ['sql.fromTheVersion'],
+        postgresDriver: ['sql.fromTheDriver'],
+      };
+
+      expect(
+        contractEntryOf({ kind: 'prisma7-schema', path: 'prisma/schema.prisma' }).contractValue(
+          exports,
+        ),
+      ).toEqual({
+        path: 'prisma/schema.prisma',
+        options: { requiredCapabilities: ['sql.fromTheVersion', 'sql.fromTheDriver'] },
+      });
+    });
+
+    it('refuses to build its value from a config module that lacks an export its text imports', () => {
+      const entry = contractEntryOf({
+        kind: 'starter',
+        mode: 'psl',
+        path: './prisma/contract.prisma',
+      });
+
+      expect(() => entry.contractValue({ postgresDriver: [] })).toThrow(
+        expect.objectContaining({
+          message: `@internal/postgres/config exports no postgres${POSTGRES_NEWEST_VERSION}, which the config's contract entry imports.`,
+        }),
+      );
+      expect(() =>
+        contractEntryOf({ kind: 'prisma7-schema', path: 'prisma/schema.prisma' }).contractValue({}),
+      ).toThrow(
+        expect.objectContaining({
+          message:
+            "@internal/postgres/config exports no prisma7Schema, which the config's contract entry imports.",
+        }),
+      );
+    });
+
+    it('refuses to build its value from a config module whose export is of the wrong kind', () => {
+      const newestList = `postgres${POSTGRES_NEWEST_VERSION}`;
+      const entry = contractEntryOf({
+        kind: 'starter',
+        mode: 'psl',
+        path: './prisma/contract.prisma',
+      });
+
+      expect(() => entry.contractValue({ [newestList]: 'x', postgresDriver: [] })).toThrow(
+        expect.objectContaining({
+          message: `@internal/postgres/config exports a ${newestList} that is not a list.`,
+        }),
+      );
+      expect(() =>
+        contractEntryOf({ kind: 'prisma7-schema', path: 'prisma/schema.prisma' }).contractValue({
+          prisma7Schema: 1,
+          [newestList]: [],
+          postgresDriver: [],
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          message: '@internal/postgres/config exports a prisma7Schema that is not a function.',
+        }),
+      );
+    });
+  });
+
+  describe('the quick references show the config init writes', () => {
+    const configImports = [
+      `import { defineConfig as ormConfig, postgres${POSTGRES_NEWEST_VERSION}, postgresDriver } from '@internal/postgres/config';`,
+      "import { definePrismaConfig } from '@prisma/cli-engine';",
+    ].join('\n');
+
+    it.each(['psl', 'typescript'] as const)('for a %s starter', (mode) => {
+      const schemaPath = mode === 'psl' ? 'src/prisma/contract.prisma' : 'src/prisma/contract.ts';
+      const entry = contractEntryOf({ kind: 'starter', mode, path: `./${schemaPath}` });
+      const reference = quickReferenceFor(mode, schemaPath);
+
+      expect(reference).toContain(
+        `\n    contract: ${entry.renderTypeScript().replaceAll('\n', '\n    ')},\n`,
+      );
+      if (mode === 'psl') expect(reference).toContain(configImports);
+    });
+
+    it('for a Prisma 7 schema', () => {
+      const reference = contribution.prisma7QuickReference?.({
+        schemaPath: 'prisma/schema.prisma',
+        outputDir: 'src/prisma',
+        cliCommand: 'pnpm prisma',
+        requirements: REQUIREMENTS,
+        prisma7Config: undefined,
+      });
+
+      expect(reference).toContain(
+        `import { defineConfig as ormConfig, postgres${POSTGRES_NEWEST_VERSION}, postgresDriver, prisma7Schema } from '@internal/postgres/config';`,
+      );
+      expect(reference).toContain(
+        [
+          '    contract: prisma7Schema(',
+          '      "prisma/schema.prisma",',
+          `      { requiredCapabilities: [...postgres${POSTGRES_NEWEST_VERSION}, ...postgresDriver] },`,
+          '    ),',
+        ].join('\n'),
+      );
+    });
   });
 
   describe('starterContract', () => {
@@ -102,11 +282,15 @@ describe('templates', () => {
       }
     });
 
-    it('uses the callback-factory defineContract signature', () => {
+    it('uses the callback-factory defineContract signature, requiring the newest PostgreSQL version’s and the driver’s capabilities', () => {
       const schema = contribution.starterContract('typescript');
 
+      expect(POSTGRES_NEWEST_VERSION).toBe(18);
+      expect(schema).toContain(
+        "import { defineContract, now, postgres18, postgresDriver } from '@internal/postgres/contract-builder';",
+      );
       expect(schema).toMatch(
-        /defineContract\(\s*\{\s*\},\s*\(\{ field, model, rel(, gen)?, type \}\) => [({]/,
+        /defineContract\(\s*\{ requiredCapabilities: \[\.\.\.postgres18, \.\.\.postgresDriver\] \},\s*\(\{ field, model, rel(, gen)?, type \}\) => [({]/,
       );
       expect(schema).not.toMatch(/\{ family:/);
       expect(schema).toContain('models: {');
@@ -266,7 +450,8 @@ describe('templates', () => {
           'dbImportPath',
           'pkgRun',
           'pkg',
-          'configEntrypoint',
+          'configImports',
+          'contractEntry',
           'schemaSample',
           'idType',
           'requirements',
@@ -298,7 +483,8 @@ describe('templates', () => {
           'dbImportPath',
           'pkgRun',
           'pkg',
-          'configEntrypoint',
+          'configImports',
+          'contractEntry',
           'requirements',
           'prisma7ConfigSentence',
           'prisma7ConfigRow',

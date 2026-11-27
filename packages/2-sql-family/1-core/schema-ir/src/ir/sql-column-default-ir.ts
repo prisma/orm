@@ -1,6 +1,6 @@
 import type { ColumnDefault, JsonValue } from '@internal/contract/types';
 import type { CodecRef, DataTypeValue } from '@internal/framework-components/codec';
-import type { DiffableNode, MismatchExplanation } from '@internal/framework-components/control';
+import type { DiffableNode, NodeMismatchExplanation } from '@internal/framework-components/control';
 import { freezeNode } from '@internal/framework-components/ir';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { blindCast } from '@internal/utils/casts';
@@ -145,7 +145,7 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
    * in a form of its own. Otherwise why the column's codec could not read the database's default, or
    * the value each side holds.
    */
-  explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined {
+  explainMismatch(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined {
     if (!(actual instanceof SqlColumnDefaultIR)) return undefined;
     if (actual.unreadable !== undefined) return { text: actual.unreadable, cause: 'differs' };
     return (
@@ -156,7 +156,7 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
     );
   }
 
-  private storedExpressionForm(actual: SqlColumnDefaultIR): MismatchExplanation | undefined {
+  private storedExpressionForm(actual: SqlColumnDefaultIR): NodeMismatchExplanation | undefined {
     if (this.resolved?.kind !== 'function' || actual.resolved?.kind !== 'function')
       return undefined;
     const literalFor = this.sqlExpressionLiteralFor;

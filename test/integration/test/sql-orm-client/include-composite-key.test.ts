@@ -1,10 +1,18 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import postgresAdapter from '@internal/adapter-postgres/runtime';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import {
   expectPerRelationStatements,
   timeouts,
@@ -41,13 +49,16 @@ const Customer = CustomerBase.relations({
   orders: rel.hasMany(() => Order, { by: ['tenantId', 'customerId'] }),
 }).sql({ table: 'composite_customers' });
 
-const contract = defineContract({ models: { Customer, Order } });
+const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Customer, Order },
+});
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
-    contract,
+    contract: withIncludeStrategy(contract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
     }),
   });
 }

@@ -1,4 +1,5 @@
 import { postgresCodecRegistry } from '@internal/target-postgres/codecs';
+import { postgresAdapterCapabilities } from './capabilities';
 import { postgresAdapterContractContributions } from './contract-contributions';
 import { targetModuleBase } from './target-module-base';
 
@@ -10,7 +11,7 @@ export const postgresAdapterDescriptorMeta = {
   targetId: 'postgres',
   id: 'postgres',
   version: '0.0.1',
-  capabilities: postgresAdapterContractContributions.capabilities,
+  capabilities: postgresAdapterCapabilities,
   types: {
     aggregateDescriptors: postgresAdapterContractContributions.types.aggregateDescriptors,
     codecTypes: {

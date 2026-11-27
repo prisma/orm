@@ -39,11 +39,11 @@ The concept: the pack registers the Supabase contract space so your contract can
 // prisma.config.ts
 import { definePrismaConfig } from '@prisma/cli-engine';
 import supabasePack from '@prisma/orm-extension-supabase/pack';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './src/contract.prisma',
+    contract: { path: './src/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] },
     extensions: [supabasePack],
     migrations: { dir: 'migrations' },
   }),

@@ -5,15 +5,23 @@ import {
   intervalPartsColumn,
   numericStringColumn,
 } from '@internal/adapter-postgres/column-types';
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { vector } from '@internal/extension-pgvector/column-types';
 import pgvector from '@internal/extension-pgvector/pack';
 import pgvectorRuntime from '@internal/extension-pgvector/runtime';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import {
   expectPerRelationStatements,
   timeouts,
@@ -72,15 +80,16 @@ const ReadingWithStations = Reading.relations({
 }).sql({ table: 'canonical_readings' });
 
 const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   extensions: { pgvector },
   models: { Reading: ReadingWithStations, Station },
 });
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
-    contract,
+    contract: withIncludeStrategy(contract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
       extensions: [pgvectorRuntime],
     }),
   });

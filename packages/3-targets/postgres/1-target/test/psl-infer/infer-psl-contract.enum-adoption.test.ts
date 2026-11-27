@@ -94,7 +94,7 @@ function tree(namespaces: Record<string, PostgresNamespaceSchemaNode>) {
     namespaces,
     roles: [],
     existingSchemas: Object.keys(namespaces),
-    pgVersion: '',
+    serverVersionNumber: undefined,
   });
 }
 

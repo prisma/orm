@@ -12,6 +12,10 @@ import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
 import { basename, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type {
+  ContractEntryInput,
+  InitContribution,
+} from '../../src/commands/init/init-contribution';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { type ImportFromProject, importFromProject } from '../../src/orm/project-modules';
@@ -111,6 +115,32 @@ async function targetConfigWith(
   });
 }
 
+/** The facade's real init contribution, whose Prisma 7 contract entry builds `contractValue(schemaPath)`. */
+function initWithContractValue(contractValue: (schemaPath: string) => unknown): ImportFromProject {
+  return async (cwd, specifier) => {
+    const real = await importFromProject(cwd, specifier);
+    if (real.kind !== 'loaded') return real;
+    const contribution = real.module['default'] as InitContribution;
+    return {
+      kind: 'loaded',
+      module: {
+        ...real.module,
+        default: {
+          ...contribution,
+          contractEntry: (input: ContractEntryInput) => {
+            const entry = contribution.contractEntry?.(input);
+            return {
+              renderTypeScript: () => entry?.renderTypeScript() ?? '',
+              importRequirements: () => entry?.importRequirements() ?? [],
+              contractValue: () => contractValue(input.path),
+            };
+          },
+        },
+      },
+    };
+  };
+}
+
 function refusingSource(schemaPath: string) {
   return {
     source: {
@@ -162,7 +192,7 @@ describe('the Prisma 7 check before init changes the project', () => {
     'refuses with the source diagnostics and leaves the project unchanged',
     async () => {
       copyFixture();
-      loadTargetConfig = await targetConfigWith(refusingSource);
+      loadInit = initWithContractValue(refusingSource);
 
       const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
@@ -202,7 +232,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       const manifest = JSON.parse(projectFile('package.json'));
       manifest.dependencies = { ...manifest.dependencies, dotenv: '^17.0.0' };
       writeFileSync(join(projectDir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-      loadTargetConfig = await targetConfigWith(refusingSource);
+      loadInit = initWithContractValue(refusingSource);
 
       const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
@@ -349,7 +379,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       'the source throws',
       'CONTRACT.SOURCE_LOAD_FAILED',
       () =>
-        targetConfigWith((schemaPath) => ({
+        initWithContractValue((schemaPath) => ({
           source: {
             format: 'psl',
             inputs: [schemaPath],
@@ -363,7 +393,7 @@ describe('the Prisma 7 check before init changes the project', () => {
     'names the packages it installed when %s',
     async (_case, code, loader) => {
       copyFixture();
-      loadTargetConfig = await loader();
+      loadInit = loader();
 
       const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
@@ -410,7 +440,7 @@ describe('the Prisma 7 check before init changes the project', () => {
     async () => {
       copyFixture();
       writeFileSync(join(projectDir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
-      loadTargetConfig = await targetConfigWith(refusingSource);
+      loadInit = initWithContractValue(refusingSource);
 
       const run = await harness('pnpm').run([...prisma7Argv(), '--json'], { cwd: projectDir });
 

@@ -20,6 +20,8 @@ import {
   field,
   member,
   model,
+  postgres18,
+  postgresDriver,
 } from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import postgresTargetControl from '@internal/target-postgres/control';
@@ -124,6 +126,7 @@ function contractWith(
   extensions: Partial<typeof extensionPacks> = extensionPacks,
 ) {
   return defineContract({
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     extensions,
     enums,
     models: Object.fromEntries(

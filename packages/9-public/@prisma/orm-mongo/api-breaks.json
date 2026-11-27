@@ -1,5 +1,23 @@
 [
   {
+    "path": "./config",
+    "export": "defineConfig",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5e19d627ba75a187",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./control",
+    "export": "createMongoControlClient",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "ba2f4a77c9784772",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
     "path": "./runtime",
     "export": "MongoPrepareMember",
     "test": "type",

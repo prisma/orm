@@ -436,22 +436,16 @@ type ContractBase = Omit<
       readonly distinctOn: true;
       readonly forKeyShare: true;
       readonly forNoKeyUpdate: true;
-      readonly jsonAgg: true;
-      readonly lateral: true;
-      readonly limit: true;
-      readonly orderBy: true;
-      readonly 'paradedb/bm25': true;
-      readonly returning: true;
     };
     readonly sql: {
       readonly checkConstraint: true;
       readonly defaultInInsert: true;
-      readonly enums: true;
       readonly forShare: true;
       readonly forUpdate: true;
       readonly insertOnConflictSkip: true;
       readonly insertOnConflictTarget: true;
       readonly insertOnConflictWithoutTarget: true;
+      readonly interactiveTransactions: true;
       readonly jsonAgg: true;
       readonly jsonAggWithoutTruncation: true;
       readonly lateral: true;
@@ -465,7 +459,6 @@ type ContractBase = Omit<
   };
   readonly extensions: {
     readonly paradedb: {
-      readonly capabilities: { readonly postgres: { readonly 'paradedb/bm25': true } };
       readonly familyId: 'sql';
       readonly id: 'paradedb';
       readonly kind: 'extension';

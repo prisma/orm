@@ -24,7 +24,13 @@ import {
 import postgresAdapter from '@prisma/orm-postgres/adapter/control';
 import { createDataTypeLookup } from '@prisma/orm-postgres/components/codec';
 import { extractCodecLookup } from '@prisma/orm-postgres/components/control';
-import { autoincrement, defineContract, now } from '@prisma/orm-postgres/contract-builder';
+import {
+  autoincrement,
+  defineContract,
+  now,
+  postgres18,
+  postgresDriver,
+} from '@prisma/orm-postgres/contract-builder';
 import postgresTargetPack from '@prisma/orm-postgres/target/pack';
 import { type } from 'arktype';
 
@@ -40,7 +46,11 @@ const profileSchema = type({
 });
 
 export const contract = defineContract(
-  { codecLookup: postgresCodecLookup, dataTypeLookup: postgresDataTypeLookup },
+  {
+    requiredCapabilities: [...postgres18, ...postgresDriver],
+    codecLookup: postgresCodecLookup,
+    dataTypeLookup: postgresDataTypeLookup,
+  },
   ({ field, model, rel, gen, type }) => {
     const UserBase = model('User', {
       fields: {

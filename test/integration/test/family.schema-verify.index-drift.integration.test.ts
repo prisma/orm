@@ -14,7 +14,7 @@
  * contract and verify reports the index not-equal.
  */
 
-import { sql } from '@internal/postgres/contract-builder';
+import { postgres18, postgresDriver, sql } from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 import {
   defineContract,
@@ -49,6 +49,7 @@ describe('index drift', () => {
         });
 
         const contract = defineContract({
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           models: {
             User: model('User', {
               fields: {
@@ -95,25 +96,28 @@ describe('index drift', () => {
           await client.query('CREATE INDEX "user_email_btree_73653512" ON "user" ("email")');
         });
 
-        const contract = defineContract({}, ({ field: packField, model: packModel }) => ({
-          models: {
-            User: packModel('User', {
-              fields: {
-                id: packField.column(int4Column).id(),
-                email: packField.column(textColumn),
-              },
-            }).sql(({ cols, constraints }) => ({
-              table: 'user',
-              indexes: [
-                constraints.index([cols.email], {
-                  name: 'user_email_btree',
-                  type: 'btree',
-                  options: {},
-                }),
-              ],
-            })),
-          },
-        }));
+        const contract = defineContract(
+          { requiredCapabilities: [...postgres18, ...postgresDriver] },
+          ({ field: packField, model: packModel }) => ({
+            models: {
+              User: packModel('User', {
+                fields: {
+                  id: packField.column(int4Column).id(),
+                  email: packField.column(textColumn),
+                },
+              }).sql(({ cols, constraints }) => ({
+                table: 'user',
+                indexes: [
+                  constraints.index([cols.email], {
+                    name: 'user_email_btree',
+                    type: 'btree',
+                    options: {},
+                  }),
+                ],
+              })),
+            },
+          }),
+        );
 
         const result = await runSchemaVerify(getConnectionString(), contract);
         expect(result.schema.issues).toEqual([]);
@@ -139,6 +143,7 @@ describe('index drift', () => {
         });
 
         const contract = defineContract({
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           models: {
             User: model('User', {
               fields: {

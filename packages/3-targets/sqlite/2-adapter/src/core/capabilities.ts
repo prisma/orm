@@ -12,5 +12,6 @@ export const sqliteAdapterCapabilities = Object.freeze({
     insertOnConflictSkip: true,
     insertOnConflictWithoutTarget: true,
     insertOnConflictTarget: true,
+    interactiveTransactions: true,
   },
 } as const);

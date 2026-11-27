@@ -9,13 +9,20 @@
  */
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import paradedbPack from '@internal/extension-paradedb/pack';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 describe('paradedb bm25 narrowing in TS authoring DSL', () => {
   it('typechecks and accepts a well-formed bm25 index via the helpers factory', () => {
     const contract = defineContract(
       {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         extensions: { paradedb: paradedbPack },
       },
       ({ model: helperModel, field: helperField }) => {
@@ -53,6 +60,7 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
     expect(() =>
       defineContract(
         {
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           extensions: { paradedb: paradedbPack },
         },
         ({ model: helperModel, field: helperField }) => {
@@ -81,6 +89,7 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
     expect(() =>
       defineContract(
         {
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           extensions: { paradedb: paradedbPack },
         },
         ({ model: helperModel, field: helperField }) => {
@@ -109,6 +118,7 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
     expect(() =>
       defineContract(
         {
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           extensions: { paradedb: paradedbPack },
         },
         ({ model: helperModel, field: helperField }) => {
@@ -137,6 +147,7 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
     expect(() =>
       defineContract(
         {
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           extensions: { paradedb: paradedbPack },
         },
         ({ model: helperModel, field: helperField }) => {
@@ -176,9 +187,7 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
     }));
 
     expect(() =>
-      defineContract({
-        models: { Doc },
-      }),
+      defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver], models: { Doc } }),
     ).toThrow(/unregistered index type "made-up"/);
   });
 
@@ -194,14 +203,13 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
     }));
     expectTypeOf<typeof Doc.__indexTypes>().toEqualTypeOf<Record<never, never>>();
 
-    defineContract({
-      models: { Doc },
-    });
+    defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver], models: { Doc } });
   });
 
   it("helpers-bound model() carries the merged packs' index-type map", () => {
     defineContract(
       {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         extensions: { paradedb: paradedbPack },
       },
       ({ model: helperModel, field: helperField }) => {

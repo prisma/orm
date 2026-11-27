@@ -13,7 +13,13 @@
  * pattern) is preferable to a full example-app round trip.
  */
 
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import { createDevDatabase, timeouts, withClient } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import supabasePack from '../src/exports/pack';
@@ -31,6 +37,7 @@ function buildAppContract() {
   }).sql({ table: 'item' });
 
   return defineContract({
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     extensions: { supabase: supabasePack },
     models: { Item },
   });

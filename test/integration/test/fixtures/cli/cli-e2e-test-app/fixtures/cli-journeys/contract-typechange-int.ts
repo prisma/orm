@@ -1,5 +1,11 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 
 /**
  * Type-change *to*-state: the `score` column, previously `text`
@@ -10,6 +16,7 @@ import { defineContract, field, model } from '@internal/postgres/contract-builde
  * `using` is a placeholder the user fills with the conversion.
  */
 export const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     User: model('User', {
       fields: {

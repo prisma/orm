@@ -122,7 +122,7 @@ function liveSchema(
     },
     roles: [],
     existingSchemas: [schemaName],
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 
@@ -220,7 +220,7 @@ describe('Postgres planner with names every object has as a property', () => {
         },
         roles: [],
         existingSchemas: ['public', schemaName],
-        pgVersion: 'unknown',
+        serverVersionNumber: undefined,
       });
       const result = createPostgresMigrationPlanner(stubLowerer).plan({
         contract: withEnumOnlySchema,

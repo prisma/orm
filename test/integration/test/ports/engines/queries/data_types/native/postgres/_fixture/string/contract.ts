@@ -1,4 +1,11 @@
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import {
   pgBitColumn,
   pgCharColumn,
@@ -40,6 +47,7 @@ const Child = ChildBase.relations({
 });
 
 export const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     Parent,
     Child,

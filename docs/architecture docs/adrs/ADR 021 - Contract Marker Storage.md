@@ -1,6 +1,6 @@
 # ADR 021 — Contract marker storage & verification modes
 
-**Status:** Accepted. [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) adds `meta.policies`, the policies in force, and requires every marker write to preserve the `meta` keys it does not own.
+**Status:** Accepted. [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) adds `meta.policies`, the policies in force, and requires every marker write to preserve the `meta` keys it does not own. [ADR 333](ADR%20333%20-%20The%20runtime's%20marker%20check%20only%20warns.md) supersedes what this record says the runtime does when the marker cannot be read or decoded, and its strict-mode refusals: the runtime's check only warns.
 
 ## Context
 

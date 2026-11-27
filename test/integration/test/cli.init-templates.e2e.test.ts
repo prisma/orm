@@ -11,7 +11,7 @@ import postgresContribution from '@internal/postgres/init';
 import sqliteContribution from '@internal/sqlite/init';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { configFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
+import { initConfigFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/contract-entry';
 import {
   defaultTsConfig,
   mergeTsConfig,
@@ -58,7 +58,16 @@ function writeInitFiles(
   writeFileSync(join(testDir, schemaPath), contribution.starterContract(authoring), 'utf-8');
 
   const configPath = join(testDir, 'prisma.config.ts');
-  writeFileSync(configPath, configFile(`./${schemaPath}`, contribution.configModule), 'utf-8');
+  writeFileSync(
+    configPath,
+    initConfigFile({
+      contribution,
+      input: { kind: 'starter', mode: authoring, path: `./${schemaPath}` },
+      owner: { packageName: target, unlisted: false },
+      output: undefined,
+    }),
+    'utf-8',
+  );
 
   writeFileSync(join(testDir, schemaDir, 'db.ts'), contribution.databaseFile(), 'utf-8');
   writeFileSync(join(testDir, 'tsconfig.json'), tsconfig, 'utf-8');

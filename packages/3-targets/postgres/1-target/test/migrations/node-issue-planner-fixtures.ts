@@ -50,7 +50,7 @@ export function emptyRoot(): PostgresDatabaseSchemaNode {
     namespaces: {},
     roles: [],
     existingSchemas: ['public'],
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 
@@ -75,7 +75,7 @@ export function rootOf(
     },
     roles: [],
     existingSchemas: ['public'],
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 

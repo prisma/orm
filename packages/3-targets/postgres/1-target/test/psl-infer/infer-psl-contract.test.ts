@@ -309,7 +309,7 @@ describe('inferPostgresPslContract', () => {
       namespaces: { public: thingNode('public'), auth: thingNode('auth') },
       roles: [],
       existingSchemas: ['public', 'auth'],
-      pgVersion: '',
+      serverVersionNumber: undefined,
     });
 
     // The same table name in two schemas has no unambiguous single-bucket model:

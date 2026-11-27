@@ -14,6 +14,8 @@ import {
   member,
   model,
   now,
+  postgres18,
+  postgresDriver,
   rel,
 } from '@internal/postgres/contract-builder';
 
@@ -58,6 +60,7 @@ const Post = model('Post', {
   }));
 
 export const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   enums,
   models: {
     User,

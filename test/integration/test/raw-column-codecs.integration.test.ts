@@ -1,10 +1,19 @@
-import { defineContract, field, model, nativeEnum, pg } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  nativeEnum,
+  pg,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import postgresStatic from '@internal/postgres/static';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withPushedContractRuntime } from './sql-orm-client/integration-helpers';
 
 const Status = nativeEnum('Status', 'draft', 'published').map('sample_status');
 const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     Sample: model('Sample', {
       fields: {

@@ -2,6 +2,7 @@
  * Storage no model maps stays out of every ORM read and write: `users.legacy_key` and `posts.internal_note` are columns the contract's tables hold but no field maps. They come from table nodes in the contract definition, so the database built from the contract has them.
  */
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { Contract } from '@internal/contract/types';
 import sqlFamilyPack from '@internal/family-sql/pack';
 import { assembleDataTypes } from '@internal/framework-components/codec';
@@ -20,7 +21,7 @@ import postgresPack from '@internal/target-postgres/pack';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
@@ -69,10 +70,10 @@ const contract = defineContractWithTables({ User, Post }, [
 ]);
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
-    contract,
+    contract: withIncludeStrategy(contract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
     }),
   });
 }
