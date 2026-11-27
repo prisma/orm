@@ -2,6 +2,7 @@
 // type: the members of every union are sorted, and `import("…").Name` becomes `Name`.
 
 import ts from 'typescript';
+import { compareCodeUnits } from './api-lines.mjs';
 
 export class TypeTextError extends Error {}
 
@@ -35,8 +36,6 @@ function checkSpecifier(specifier) {
 function leftmostName(name) {
   return ts.isQualifiedName(name) ? leftmostName(name.left) : name;
 }
-
-export const compareCodeUnits = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 const CONTAINER_DECLARATION = /^(abstract class|class|const enum|enum|namespace|module) /;
 
