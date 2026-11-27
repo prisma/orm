@@ -76,30 +76,34 @@ describe('createSnapshotContentVerifier', () => {
 
   it('names a skipped upgrade as a cause and advises remedies that rewrite the snapshot', () => {
     const { contractJson, storageHash } = genuineContract({ namespaces: {} });
-    const tampered = {
-      ...contractJson,
-      storage: { ...contractJson.storage, namespaces: { sneaky: { entries: {} } } },
-    };
+    const tamperedStorage = { namespaces: { sneaky: { entries: {} } } };
+    const tampered = { ...contractJson, storage: { ...tamperedStorage, storageHash } };
+    const { storageHash: computedHash } = genuineContract(tamperedStorage);
+    const rewriteSteps =
+      "For an app-space migration planned to the emitted contract, emit that contract again and re-run the `migration plan` that wrote the migration ending at this hash, with its `--from` and no `--to`, then delete the new migration directory it writes, which repeats the existing migration. For an extension's snapshot in an application, run `prisma contract emit` without `--output-path`, which writes the head snapshot of each installed extension again; a snapshot of an earlier version of the extension can only be restored from version control. In an extension package, re-run its contract-space build.";
 
     const verifier = createSnapshotContentVerifier(storageAsGiven);
-    let thrown: unknown;
-    try {
-      verifier.assertSnapshotContentMatches(tampered, storageHash, '/store/abc/contract.json');
-    } catch (error) {
-      thrown = error;
-    }
 
-    const error = thrown as MigrationToolsError;
-    expect(error.why).toContain('upgraded from an earlier release of Prisma 8');
-    expect(error.fix).toContain(APP_UPGRADE_GUIDES_URL);
-    expect(error.fix).toContain('delete "/store/abc"');
-    expect(error.fix).toContain('no command replaces a snapshot directory that exists');
-    expect(error.fix).not.toContain('to regenerate the snapshot');
-    expect(error.nextActions).toEqual([
-      expect.objectContaining({ kind: 'open-url', url: APP_UPGRADE_GUIDES_URL }),
-      expect.objectContaining({ kind: 'user-choice', label: expect.stringContaining('Restore') }),
-      expect.objectContaining({ kind: 'user-choice', label: expect.stringContaining('Delete') }),
-    ]);
+    expect(() =>
+      verifier.assertSnapshotContentMatches(tampered, storageHash, '/store/abc/contract.json'),
+    ).toThrow(
+      expect.objectContaining({
+        why: `The contract snapshot at "/store/abc/contract.json" is addressed by storage hash ${storageHash}, but its content recomputes to ${computedHash}. Either the project was upgraded from an earlier release of Prisma 8 without following the upgrade instructions of each release since, which rewrite the snapshots, or the file has been edited or corrupted since it was written.`,
+        fix: `If you just upgraded Prisma, follow the app upgrade instructions of each release since the one you upgraded from: ${APP_UPGRADE_GUIDES_URL}. Otherwise restore "/store/abc" from version control, or delete "/store/abc" and write it again; no command replaces a snapshot directory that exists. ${rewriteSteps}`,
+        nextActions: [
+          {
+            kind: 'open-url',
+            label: 'If you just upgraded Prisma, follow the app upgrade instructions',
+            url: APP_UPGRADE_GUIDES_URL,
+          },
+          { kind: 'user-choice', label: 'Restore "/store/abc" from version control' },
+          {
+            kind: 'user-choice',
+            label: `Delete "/store/abc" and write it again. ${rewriteSteps}`,
+          },
+        ],
+      }),
+    );
   });
 
   it('re-verifies on every assertion, so content mutated after a clean pass is caught', () => {
