@@ -55,7 +55,7 @@ This replaces the recorded position that capabilities are reported by the adapte
 
 - The verification shared by `db verify`, `db sign` and the signing in `db migrate` checks that the connected database provides every capability the contract requires that the target's table knows. It signs only if it does. A capability the installed table does not know is checked by the client instead, because signing cannot tell it from one the application's driver provides.
 - The adapter reads what it needs from the database: the server version, and settings that change behaviour, such as MySQL's `sql_mode`.
-- A failure states the cause in the user's terms, with both remedies. The failure reaches the CLI as data, and the CLI gives no drift advice for it, nor for other differences in the same run while it stands, because every command that changes the database is refused too:
+- A failure states the cause in the user's terms, with both remedies. The failure reaches the CLI as data, and the CLI gives no drift advice for it, nor for other differences in the same run while it stands, because `db update`, `db init` and `db migrate` are refused too:
 
   > Your contract requires database capabilities first available in PostgreSQL 17 (sql.mergeReturning), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove them from your contract's required capabilities.
 
