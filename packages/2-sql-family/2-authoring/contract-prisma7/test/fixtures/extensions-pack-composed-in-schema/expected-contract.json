@@ -22,8 +22,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}
@@ -47,39 +46,8 @@
       "version": "0.0.1"
     }
   },
-  "capabilities": {
-    "postgres": {
-      "distinctOn": true,
-      "forKeyShare": true,
-      "forNoKeyUpdate": true,
-      "jsonAgg": true,
-      "lateral": true,
-      "limit": true,
-      "orderBy": true,
-      "pgvector.cosine": true,
-      "returning": true
-    },
-    "sql": {
-      "checkConstraint": true,
-      "defaultInInsert": true,
-      "enums": true,
-      "forShare": true,
-      "forUpdate": true,
-      "insertOnConflictSkip": true,
-      "insertOnConflictTarget": true,
-      "insertOnConflictWithoutTarget": true,
-      "jsonAgg": true,
-      "jsonAggWithoutTruncation": true,
-      "lateral": true,
-      "lockNowait": true,
-      "lockOf": true,
-      "lockSkipLocked": true,
-      "outerReferencesInDerivedTables": true,
-      "returning": true,
-      "scalarList": true
-    }
-  },
-  "profileHash": "05fee026a2eb255ad9dc9df83725541c32dedb96fec1dea5ea51715c03c45ff2",
+  "capabilities": {},
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
     "storageHash": "091d0544d66a5717fdb9008a63b1412960dce78bf56ad81f2ef92edc9bff2fad",

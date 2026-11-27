@@ -34,32 +34,28 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "email": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "nickname": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               },
               "region": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "aliases": {
                 "type": {
@@ -105,16 +101,14 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "authorEmail": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {
@@ -151,16 +145,14 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "authorEmail": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}
@@ -193,32 +185,28 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "literal": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "expr": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "none": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "list": {
                 "type": {
@@ -264,38 +252,8 @@
       "version": "0.0.1"
     }
   },
-  "capabilities": {
-    "postgres": {
-      "distinctOn": true,
-      "forKeyShare": true,
-      "forNoKeyUpdate": true,
-      "jsonAgg": true,
-      "lateral": true,
-      "limit": true,
-      "orderBy": true,
-      "returning": true
-    },
-    "sql": {
-      "checkConstraint": true,
-      "defaultInInsert": true,
-      "enums": true,
-      "forShare": true,
-      "forUpdate": true,
-      "insertOnConflictSkip": true,
-      "insertOnConflictTarget": true,
-      "insertOnConflictWithoutTarget": true,
-      "jsonAgg": true,
-      "jsonAggWithoutTruncation": true,
-      "lateral": true,
-      "lockNowait": true,
-      "lockOf": true,
-      "lockSkipLocked": true,
-      "outerReferencesInDerivedTables": true,
-      "returning": true,
-      "scalarList": true
-    }
-  },
-  "profileHash": "833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174",
+  "capabilities": {},
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
     "storageHash": "29ae96a1e05ac7e0c184df89ee0e52fdcebbedb1e66fdf13df0ae2aeca0a51a2",

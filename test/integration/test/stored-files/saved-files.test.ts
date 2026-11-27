@@ -19,10 +19,16 @@ const contractReaders: Readonly<Record<string, (json: unknown) => unknown>> = {
 };
 
 const upgrade = 'test/integration/test/upgrade-instructions';
-const telemetrySnapshots = [
+const snapshotFiles = (hashes: readonly string[]) =>
+  hashes.map((hash) => `migrations/snapshots/${hash}/contract.json`);
+const telemetrySnapshots = snapshotFiles([
+  '293361018b39f7c997459413d43e9b68895a39d39cffa42200f831f7e77c717a',
+  '63d3e6e892a4f2d8a1cbd6887aad9111841663597f16f92a1bd5e4f6069785c1',
+]);
+const telemetrySnapshotsBeforeTheHashScript = snapshotFiles([
   '269d0430c7c70fa502e75feb52d9219c0339daa041c6cc9fb4ecb5ad8d0373b6',
   '2c0677a6b6e5b60bb328a78d882483d8a00804e00c1e05fba259ff8304882558',
-].map((hash) => `migrations/snapshots/${hash}/contract.json`);
+]);
 
 /**
  * Saved files that no reader of this release is meant to read, each by name. Every other saved
@@ -46,10 +52,14 @@ const notRead: readonly { readonly path: string; readonly why: string }[] = [
     path: `${upgrade}/stored-files-format-version/fixtures/before/`,
     why: 'the files before the format version script, as release candidates wrote them',
   },
-  ...telemetrySnapshots.map((file) => ({
+  ...telemetrySnapshotsBeforeTheHashScript.map((file) => ({
     path: `${upgrade}/stored-files-format-version/fixtures/after/app/${file}`,
-    why: 'copies of the telemetry backend snapshots below',
+    why: 'copies of the telemetry backend snapshots below, under the names they had before the contract hash script',
   })),
+  {
+    path: `${upgrade}/contract-hash-inputs/fixtures/`,
+    why: 'the fixtures of the contract hash script: copies of the migration graph examples below, and contracts that hold every default a family leaves out, written only to be hashed',
+  },
   ...telemetrySnapshots.map((file) => ({
     path: `apps/telemetry-backend/${file}`,
     why: 'snapshots in a contract shape from before 8.0.0-rc.1, which no reader of 8.0 reads',
@@ -66,6 +76,10 @@ const notRead: readonly { readonly path: string; readonly why: string }[] = [
     path: `examples/prisma-8-demo/fixtures/${graph}/`,
     why: 'migration graph examples in a contract shape from before 8.0.0-rc.1 (see gotchas.md)',
   })),
+  {
+    path: 'test/integration/test/fixtures/cli/cli-e2e-test-app/fixtures/cli-journeys/prisma7-rc18-stored/',
+    why: 'the files 8.0.0-rc.18 stored, which a journey reads only after running every upgrade step since',
+  },
   {
     path: 'packages/2-mongo-family/7-runtime/test/fixtures/contract.json',
     why: 'a type test fixture: only its contract.d.ts is used',
