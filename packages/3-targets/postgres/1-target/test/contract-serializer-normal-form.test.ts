@@ -1,7 +1,7 @@
 import { canonicalizeContractToObject, computeStorageHash } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import { createSnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
@@ -23,14 +23,8 @@ const STORAGE_WITH_RESTRICTIVE_POLICY = {
 describe('PostgresContractSerializer normal form of storage', () => {
   const serializer = new PostgresContractSerializer();
 
-  it("is the SQL family's, and snapshots are verified by their content", () => {
-    expect({
-      normalizeStorage: serializer.normalizeStorage,
-      skipsSnapshotContentVerification: serializer.skipsSnapshotContentVerification,
-    }).toEqual({
-      normalizeStorage: normalizeSqlStorage,
-      skipsSnapshotContentVerification: undefined,
-    });
+  it("is the SQL family's", () => {
+    expect(serializer.normalizeStorage).toBe(normalizeSqlStorage);
   });
 
   it("covers a restrictive policy's permissive: false in the hash", () => {

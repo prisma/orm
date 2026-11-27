@@ -23,11 +23,8 @@ import {
   resolveMongoToOneRelationFields,
   validateMongoStorage,
 } from '@internal/mongo-contract';
-import {
-  normalizeMongoDomain,
-  normalizeMongoStorage,
-} from '@internal/mongo-contract/canonicalization-hooks';
 import { composeMongoEntityKinds } from '@internal/mongo-contract/entity-kinds';
+import { normalizeMongoDomain, normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import { blindCast } from '@internal/utils/casts';
 import type { JsonObject, JsonValue } from '@internal/utils/json';
 import { structuredError } from '@internal/utils/structured-error';
@@ -150,9 +147,6 @@ export abstract class MongoContractSerializerBase<TContract>
   }
 
   readonly normalizeStorage = normalizeMongoStorage;
-
-  /** Snapshots written before ADR 317 were rewritten in place with index names and keep their old hash, which markers, the ledger and migration `from`/`to` name, so a content check would reject them. */
-  readonly skipsSnapshotContentVerification = true;
 
   /**
    * Family-shared structural validation: parse against the Mongo

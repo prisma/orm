@@ -46,9 +46,4 @@ export interface ContractSerializer<TContract> {
    * The family's normal form of `storage`, which the framework applies both when it writes `storage` and when it computes or checks a storage hash, so the written section and the hash input are one form. The family leaves out the fields it defines as equal to their absence and orders its storage arrays; the framework itself leaves out nothing. A family with neither passes a function that returns the storage it is given. A target does not override its family's function.
    */
   readonly normalizeStorage: NormalizeStorage;
-
-  /**
-   * True when the target's migration snapshots are read without recomputing their storage hash from their content.
-   */
-  readonly skipsSnapshotContentVerification?: boolean;
 }
