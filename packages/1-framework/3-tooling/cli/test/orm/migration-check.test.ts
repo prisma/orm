@@ -255,8 +255,8 @@ describe('migration check', () => {
         {
           kind: 'run-command',
           label:
-            'Or, if no database has applied this migration, delete the folder migrations/app/20250102T0000_broken and the folders of the migrations that start where it ends, and plan again',
-          command: 'prisma-test migration plan',
+            'Or, if no database has applied this migration and no ref names where it or a later migration ends, delete the folder migrations/app/20250102T0000_broken and the folders of the migrations after it, then plan again from the contract it started from: the hash of the start snapshot its migration.ts imports, or @empty when it imports none',
+          command: 'prisma-test migration plan --from <hash>',
         },
       ]);
     });

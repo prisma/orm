@@ -27,8 +27,8 @@ describe('migrationPackageRepairActions', () => {
   const appActions = () => migrationPackageRepairActions({ spaceId: 'app', packageDir, cwd });
   const replan = {
     kind: 'run-command',
-    label: `Or, if no database has applied this migration, delete the folder migrations/app/${DIR_NAME} and the folders of the migrations that start where it ends, and plan again`,
-    command: '{bin} migration plan',
+    label: `Or, if no database has applied this migration and no ref names where it or a later migration ends, delete the folder migrations/app/${DIR_NAME} and the folders of the migrations after it, then plan again from the contract it started from: the hash of the start snapshot its migration.ts imports, or @empty when it imports none`,
+    command: '{bin} migration plan --from <hash>',
   };
 
   it('advises running migration.ts when migration.json keeps its createdAt, so the migration keeps its hash', async () => {

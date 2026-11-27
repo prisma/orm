@@ -276,14 +276,14 @@ describe('readFormatVersion', () => {
 
     describe('in a migration.json or ref file no release wrote', () => {
       const migrationAdvice = {
-        fix: 'No release of Prisma wrote this file. Restore it from version control. If the migration has not been applied to any database, you can instead delete its folder and plan it again with `{bin} migration plan`.',
+        fix: 'No release of Prisma wrote this file. Restore it from version control. If no database has applied the migration and no ref names where it or a later migration ends, you can instead delete its folder and the folders of the migrations after it, then plan again from the contract it started from with `{bin} migration plan --from <hash>`, where the hash is that of the start snapshot its migration.ts imports, or @empty when it imports none.',
         nextActions: [
           { kind: 'user-choice', label: 'Restore the file from version control' },
           {
             kind: 'run-command',
             label:
-              'Or, if the migration has not been applied to any database, delete its folder and plan it again',
-            command: '{bin} migration plan',
+              'Or, if no database has applied the migration and no ref names where it or a later migration ends, delete its folder and those of the migrations after it, then plan again from the contract it started from',
+            command: '{bin} migration plan --from <hash>',
           },
         ],
       };

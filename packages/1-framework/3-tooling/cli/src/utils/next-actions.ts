@@ -72,8 +72,8 @@ export function migrationPackageRepairActions(place: MigrationPackagePlace): Nex
 
 function replanAction(packageDir: string): NextAction {
   return runCommandAction(
-    `Or, if no database has applied this migration, delete the folder ${packageDir} and the folders of the migrations that start where it ends, and plan again`,
-    '{bin} migration plan',
+    `Or, if no database has applied this migration and no ref names where it or a later migration ends, delete the folder ${packageDir} and the folders of the migrations after it, then plan again from the contract it started from: the hash of the start snapshot its migration.ts imports, or @empty when it imports none`,
+    '{bin} migration plan --from <hash>',
   );
 }
 
