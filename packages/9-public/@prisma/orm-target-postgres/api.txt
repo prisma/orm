@@ -416,6 +416,7 @@
 (not exported) type Branded<T, Shape extends Record<string, unknown>> = T & { readonly [K in keyof Shape]: Shape[K]; }
 (not exported) type BrandedString<Shape extends Record<string, unknown>> = Branded<string, Shape>
 (not exported) type CallMigrationStrategy = (issues: readonly SchemaDiffIssue[], context: StrategyContext) => { kind: 'match'; issues: readonly SchemaDiffIssue[]; calls: readonly PostgresOpFactoryCall[]; recipe?: boolean; conflicts?: readonly SqlPlannerConflict[]; } | { kind: 'no_match'; }
+(not exported) type CapabilitiesByVersion = Readonly<Record<number, Readonly<Record<string, Readonly<Record<string, boolean>>>>>>
 (not exported) type CodecContributor = Pick<ComponentMetadata, 'types'>
 (not exported) type CodecDescriptorMap = typeof codecDescriptorMap
 (not exported) type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown; }>
@@ -2146,10 +2147,7 @@
 ./target/server-version-range: const POSTGRES_NEWEST_VERSION: 18
 ./target/server-version-range: type PostgresVersion = (typeof postgresVersions)[number]
 ./target/server-version: const postgresCapabilitiesByVersion: { readonly 15: { readonly postgres: { readonly distinctOn: true; readonly forNoKeyUpdate: true; readonly forKeyShare: true; }; readonly sql: { readonly returning: true; readonly defaultInInsert: true; readonly lateral: true; readonly scalarList: true; readonly checkConstraint: true; readonly insertOnConflictSkip: true; readonly insertOnConflictWithoutTarget: true; readonly insertOnConflictTarget: true; readonly forUpdate: true; readonly forShare: true; readonly lockOf: true; readonly lockNowait: true; readonly lockSkipLocked: true; readonly jsonAgg: true; readonly outerReferencesInDerivedTables: true; readonly jsonAggWithoutTruncation: true; }; }; readonly 16: { readonly postgres: { readonly distinctOn: true; readonly forNoKeyUpdate: true; readonly forKeyShare: true; }; readonly sql: { readonly returning: true; readonly defaultInInsert: true; readonly lateral: true; readonly scalarList: true; readonly checkConstraint: true; readonly insertOnConflictSkip: true; readonly insertOnConflictWithoutTarget: true; readonly insertOnConflictTarget: true; readonly forUpdate: true; readonly forShare: true; readonly lockOf: true; readonly lockNowait: true; readonly lockSkipLocked: true; readonly jsonAgg: true; readonly outerReferencesInDerivedTables: true; readonly jsonAggWithoutTruncation: true; }; }; readonly 17: { readonly postgres: { readonly distinctOn: true; readonly forNoKeyUpdate: true; readonly forKeyShare: true; }; readonly sql: { readonly returning: true; readonly defaultInInsert: true; readonly lateral: true; readonly scalarList: true; readonly checkConstraint: true; readonly insertOnConflictSkip: true; readonly insertOnConflictWithoutTarget: true; readonly insertOnConflictTarget: true; readonly forUpdate: true; readonly forShare: true; readonly lockOf: true; readonly lockNowait: true; readonly lockSkipLocked: true; readonly jsonAgg: true; readonly outerReferencesInDerivedTables: true; readonly jsonAggWithoutTruncation: true; }; }; readonly 18: { readonly postgres: { readonly distinctOn: true; readonly forNoKeyUpdate: true; readonly forKeyShare: true; }; readonly sql: { readonly returning: true; readonly defaultInInsert: true; readonly lateral: true; readonly scalarList: true; readonly checkConstraint: true; readonly insertOnConflictSkip: true; readonly insertOnConflictWithoutTarget: true; readonly insertOnConflictTarget: true; readonly forUpdate: true; readonly forShare: true; readonly lockOf: true; readonly lockNowait: true; readonly lockSkipLocked: true; readonly jsonAgg: true; readonly outerReferencesInDerivedTables: true; readonly jsonAggWithoutTruncation: true; }; }; }
-./target/server-version: function postgresCapabilitiesForVersion<const Version extends PostgresVersion>(version: Version): (typeof postgresCapabilitiesByVersion)[Version]
-./target/server-version: function postgresCapabilitiesForVersionIn<const Table extends CapabilitiesByVersion, const Version extends keyof Table & number>(table: Table, version: Version): Table[Version]
 ./target/server-version: function readPostgresServerVersionNumber(driver: SqlControlDriverInstance<string>): Promise<number | undefined>
-./target/server-version: type CapabilitiesByVersion = Readonly<Record<number, Readonly<Record<string, Readonly<Record<string, boolean>>>>>>
 ./target/sql-utils: const CONTROL_PLANE_LC_MONETARY = "C"
 ./target/sql-utils: const DEFAULT_FULL_TEXT_SEARCH_LANGUAGE = "english"
 ./target/sql-utils: function escapeLiteral(value: string): string
@@ -3815,8 +3813,6 @@
 ./target: function planIssues(options: IssuePlannerOptions): Result<IssuePlannerValue, readonly SqlPlannerConflict[]>
 ./target: function policyInputFromSerialized(flat: SerializedRlsPolicy): PostgresRlsPolicyInput
 ./target: function policyRoleList(roles: readonly string[]): readonly string[]
-./target: function postgresCapabilitiesForVersion<const Version extends PostgresVersion>(version: Version): (typeof postgresCapabilitiesByVersion)[Version]
-./target: function postgresCapabilitiesForVersionIn<const Table extends CapabilitiesByVersion, const Version extends keyof Table & number>(table: Table, version: Version): Table[Version]
 ./target: function postgresCodec<D extends AnyCodecDescriptorTemplate & { readonly jsonType: JsonType; }>(descriptor: D, options: PostgresCodecOptions<DescriptorParams<D>, DescriptorCodec<D>>): AdaptedPostgresCodecDescriptor<D>
 ./target: function postgresCodecTraitsOf(codecId: string): readonly string[] | undefined
 ./target: function postgresCreateNamespace(input: SqlNamespaceInput): PostgresSchema
@@ -4035,7 +4031,6 @@
 ./target: type AnyAlterTableAction = AddColumnAction | AddConstraintAction | AlterColumnTypeAction | DropDefaultAction
 ./target: type AnyPostgresDdlNode = PostgresAlterIndexRename | PostgresAlterPolicyRename | PostgresAlterSchemaRename | PostgresAlterTable | PostgresAlterTableSetSchema | PostgresCreateIndex | PostgresCreatePolicy | PostgresCreateSchema | PostgresCreateTable | PostgresCreateType | PostgresDisableRowLevelSecurity | PostgresDropIndex | PostgresDropPolicy | PostgresDropSchema | PostgresDropType
 ./target: type Bit<N extends number> = BrandedString<{ __bitLength: N; }>
-./target: type CapabilitiesByVersion = Readonly<Record<number, Readonly<Record<string, Readonly<Record<string, boolean>>>>>>
 ./target: type Char<N extends number> = BrandedString<{ __charLength: N; }>
 ./target: type CodecTypes = Resolve<ExtractedCodecTypes>
 ./target: type ColumnTypeCheck = { readonly kind: 'catalog-text'; readonly text: string; } | { readonly kind: 'identity'; readonly typeName: string; readonly many: boolean; }
