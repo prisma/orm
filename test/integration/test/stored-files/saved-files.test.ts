@@ -1,11 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { deserializeMongoOps } from '@internal/target-mongo/control';
 import { MysqlContractSerializer } from '@internal/target-mysql/runtime';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { SqliteContractSerializer } from '@internal/target-sqlite/runtime';
-import { join } from 'pathe';
+import { dirname, join, relative } from 'pathe';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = join(import.meta.dirname, '../../../..');
@@ -95,13 +95,30 @@ function refusalOf(read: () => unknown): string | undefined {
 
 const contractFiles = savedFiles('contract.json');
 
+/** The family of the contract snapshot the migration of `opsFile` ends at, when the repository holds it. */
+function familyOfMigration(opsFile: string): string | undefined {
+  const manifest = join(repoRoot, dirname(opsFile), 'migration.json');
+  if (!existsSync(manifest)) return undefined;
+  const to = String(Reflect.get(Object(readJson(relative(repoRoot, manifest))), 'to'));
+  for (let dir = dirname(dirname(opsFile)); dir !== '.'; dir = dirname(dir)) {
+    const snapshot = join(dir, 'snapshots', to, 'contract.json');
+    if (existsSync(join(repoRoot, snapshot))) {
+      return String(Reflect.get(Object(readJson(snapshot)), 'targetFamily'));
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Each saved `ops.json` with operations: a MongoDB one when the snapshot its migration ends at is a MongoDB contract, or, when the repository holds no such snapshot, when no operation has the `target` that every SQL operation has.
+ */
 const mongoOpsFiles = savedFiles('ops.json').filter((file) => {
   const operations = readJson(file);
-  return (
-    Array.isArray(operations) &&
-    operations.length > 0 &&
-    operations.every((operation) => !Reflect.has(Object(operation), 'target'))
-  );
+  if (!Array.isArray(operations) || operations.length === 0) return false;
+  const family = familyOfMigration(file);
+  return family === undefined
+    ? operations.every((operation) => !Reflect.has(Object(operation), 'target'))
+    : family === 'mongo';
 });
 
 describe('the stored files saved in the repository', () => {

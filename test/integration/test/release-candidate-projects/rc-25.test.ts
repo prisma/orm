@@ -26,6 +26,7 @@ interface Project {
     | typeof mongoContractCanonicalizationHooks;
   readonly deserializeContract: (json: unknown) => Contract;
   readonly writtenHashes: Readonly<Record<string, Readonly<Record<string, string | null>>>>;
+  readonly writtenTypeScriptHashes: Readonly<Record<string, readonly string[]>>;
 }
 
 const postgres = new PostgresContractSerializer();
@@ -72,6 +73,32 @@ const projects: readonly Project[] = [
         hash: 'b2a214eb94165a0088bb177d54215ccdf70f183dc6056f0b7cdf06733ca6129e',
       },
     },
+    writtenTypeScriptHashes: {
+      'migrations/app/20261126T1044_add_post_body/migration.ts': [
+        '2086eab7650a25284216465448157b277b4996ca09fc9fddd3c1591fed4fb2aa',
+        'b2a214eb94165a0088bb177d54215ccdf70f183dc6056f0b7cdf06733ca6129e',
+      ],
+      'migrations/app/20261126T1044_init/migration.ts': [
+        'b2a214eb94165a0088bb177d54215ccdf70f183dc6056f0b7cdf06733ca6129e',
+      ],
+      'migrations/snapshots/2086eab7650a25284216465448157b277b4996ca09fc9fddd3c1591fed4fb2aa/contract.d.ts':
+        [
+          '16a4fd61ef456e94cc8d4d061f14f5bfded380cd3268455cebf3e970f257eba4',
+          '2086eab7650a25284216465448157b277b4996ca09fc9fddd3c1591fed4fb2aa',
+          '3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2',
+        ],
+      'migrations/snapshots/b2a214eb94165a0088bb177d54215ccdf70f183dc6056f0b7cdf06733ca6129e/contract.d.ts':
+        [
+          '16a4fd61ef456e94cc8d4d061f14f5bfded380cd3268455cebf3e970f257eba4',
+          '3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2',
+          'b2a214eb94165a0088bb177d54215ccdf70f183dc6056f0b7cdf06733ca6129e',
+        ],
+      'src/prisma/contract.d.ts': [
+        '16a4fd61ef456e94cc8d4d061f14f5bfded380cd3268455cebf3e970f257eba4',
+        '2086eab7650a25284216465448157b277b4996ca09fc9fddd3c1591fed4fb2aa',
+        '3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2',
+      ],
+    },
   },
   {
     name: 'mongo-app',
@@ -110,8 +137,37 @@ const projects: readonly Project[] = [
         hash: '5be8fe387d72487fb21ac5a87a61984f3e4085b406b8decdab2499ef44522ce8',
       },
     },
+    writtenTypeScriptHashes: {
+      'migrations/app/20261126T1044_add_title_index/migration.ts': [
+        '5be8fe387d72487fb21ac5a87a61984f3e4085b406b8decdab2499ef44522ce8',
+        'b036dd0e7c135036292da82f8cd40937d3e210159f4dc43b3a96b48fe50a72e5',
+      ],
+      'migrations/app/20261126T1044_init/migration.ts': [
+        '5be8fe387d72487fb21ac5a87a61984f3e4085b406b8decdab2499ef44522ce8',
+      ],
+      'migrations/snapshots/5be8fe387d72487fb21ac5a87a61984f3e4085b406b8decdab2499ef44522ce8/contract.d.ts':
+        [
+          '251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3',
+          '5be8fe387d72487fb21ac5a87a61984f3e4085b406b8decdab2499ef44522ce8',
+        ],
+      'migrations/snapshots/b036dd0e7c135036292da82f8cd40937d3e210159f4dc43b3a96b48fe50a72e5/contract.d.ts':
+        [
+          '251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3',
+          'b036dd0e7c135036292da82f8cd40937d3e210159f4dc43b3a96b48fe50a72e5',
+        ],
+      'src/contract.d.ts': [
+        '251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3',
+        'b036dd0e7c135036292da82f8cd40937d3e210159f4dc43b3a96b48fe50a72e5',
+      ],
+    },
   },
 ];
+
+function typeScriptFiles(dir: string): string[] {
+  return readdirSync(dir, { recursive: true, encoding: 'utf8' })
+    .filter((file) => file.endsWith('.d.ts') || file.endsWith('/migration.ts'))
+    .sort();
+}
 
 function jsonFiles(dir: string): string[] {
   return readdirSync(dir, { recursive: true, encoding: 'utf8' })
@@ -187,6 +243,16 @@ describe.each(projects)('the $name project, as the 8.0.0-rc.25 CLI wrote it', (p
         .filter(([, hashes]) => Object.keys(hashes).length > 0),
     );
     expect(recorded).toEqual(project.writtenHashes);
+  });
+
+  it('holds every hash 8.0.0-rc.25 wrote, unchanged, in its contract.d.ts and migration.ts files', () => {
+    const recorded = Object.fromEntries(
+      typeScriptFiles(root).map((file): [string, string[]] => [
+        file,
+        [...new Set(readFileSync(join(root, file), 'utf8').match(/[0-9a-f]{64}/g) ?? [])].sort(),
+      ]),
+    );
+    expect(recorded).toEqual(project.writtenTypeScriptHashes);
   });
 
   it('records, in its contract and every snapshot, the storage and execution hashes computed from the contract', () => {
