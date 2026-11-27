@@ -72,7 +72,7 @@ describe('tx.transaction on postgres', () => {
     await db.close();
     await pool.end();
     await database.close();
-  });
+  }, timeouts.spinUpPpgDev);
 
   beforeEach(async () => {
     await db.execute(db.raw.sql`DELETE FROM nested_rows`.affectedCount().build());

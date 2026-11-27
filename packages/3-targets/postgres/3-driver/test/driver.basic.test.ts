@@ -4,6 +4,7 @@ import { Client as PgClient, Pool as PgPool } from 'pg';
 import { newDb } from 'pg-mem';
 import { afterEach, describe, expect, it } from 'vitest';
 import postgresRuntimeDriverDescriptor from '../src/exports/runtime';
+import { memPgPool } from './pg-mem-pool';
 import { executeSql, queryRows } from './sql-queryable-test-utils';
 
 describe('@internal/driver-postgres', () => {
@@ -27,9 +28,7 @@ describe('@internal/driver-postgres', () => {
     readonly cursor?: { readonly batchSize?: number; readonly disabled?: boolean };
     readonly autoCleanup?: boolean;
   }) {
-    const db = newDb();
-    const { Pool } = db.adapters.createPg();
-    const pool = new Pool();
+    const pool = memPgPool();
     const driver = postgresRuntimeDriverDescriptor.create(
       options?.cursor ? { cursor: options.cursor } : undefined,
     );
@@ -40,7 +39,7 @@ describe('@internal/driver-postgres', () => {
       };
     }
 
-    await driver.connect({ kind: 'pgPool', pool: pool as unknown as Pool, ownedByDriver: true });
+    await driver.connect({ kind: 'pgPool', pool, ownedByDriver: true });
     return driver;
   }
 
