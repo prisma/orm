@@ -40,3 +40,7 @@ ADR 207 calls an optional method on a family instance a capability (`SchemaViewC
 ## ADR 065's schema and the subsystem docs' older capability examples
 
 ADR 065's "Capability schema" section and its profile hash formula describe an earlier design: a versioned schema with `schemaVersion` and enum and number values. A contract stores `Record<string, Record<string, boolean>>`, and the profile hash is ADR 004's. `5. Adapters & Targets.md` still lists keys that exist nowhere (`join.lateral`, `index.partial` and others, in its examples after the capability list) and a "Capability stability contract" with reserved namespaces that the code does not have. Done is each describing what the code does, edited in place. Found by the review of this project's documentation; outside what this project changes.
+
+## What the profile hash covers, once prisma/orm#31203 merges
+
+`5. Adapters & Targets.md` says the SQL `profileHash` is computed from an empty capability set, which is true today. prisma/orm#31203 makes it cover the contract's capability list and does not edit that file. Done is both sentences (in "Target alignment" and in the notes of "Adapter capabilities and discovery") saying what the hash covers once it merges.
