@@ -1600,6 +1600,18 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     const expectedProfileHash = this.contract.profileHash ?? null;
     const expected = { storageHash: expectedStorageHash, profileHash: expectedProfileHash };
 
+    if (readResult.kind === 'earlier-release') {
+      this.sqlCtx.log.warn({
+        code: 'CONTRACT.PRISMA_TABLES_FROM_EARLIER_RELEASE',
+        scope: 'marker-verification',
+        expected,
+        actual: null,
+        message:
+          "Prisma's own tables in this database were written by an earlier release of Prisma, so the contract the database matches cannot be read. Run `prisma db migrate` to bring them up to date.",
+      });
+      return;
+    }
+
     if (readResult.kind !== 'present') {
       this.sqlCtx.log.warn({
         code: 'CONTRACT.MARKER_MISSING',

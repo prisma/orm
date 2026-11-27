@@ -29,6 +29,9 @@ import { encodeControlQueryParams } from './control-codecs';
 /** The schema the Postgres target keeps Prisma's own tables in, which the first migration of its `_prisma` contract space creates. */
 export const PRISMA_TABLES_SCHEMA = '_prisma';
 
+/** The schema the release candidates of Prisma 8 kept Prisma's own tables in, which the first migration of the `_prisma` contract space renames to {@link PRISMA_TABLES_SCHEMA}. */
+export const EARLIER_RELEASE_PRISMA_TABLES_SCHEMA = 'prisma_contract';
+
 export const marker = pgTable(
   { name: 'marker', schema: PRISMA_TABLES_SCHEMA },
   {

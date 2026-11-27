@@ -129,6 +129,10 @@ import { adapterError } from './adapter-errors';
 import { postgresAdapterCapabilities } from './capabilities';
 import { encodeControlQueryParams } from './control-codecs';
 import {
+  errorPrismaTablesFromEarlierRelease,
+  prismaTablesFromEarlierRelease,
+} from './earlier-release-tables';
+import {
   execute,
   infoSchemaTables,
   ledger,
@@ -321,6 +325,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     space: string,
   ): Promise<ContractMarkerRecord | null> {
     const result = await this.readMarkerDiscriminated(driver, space);
+    if (result.kind === 'earlier-release') throw errorPrismaTablesFromEarlierRelease();
     return result.kind === 'present' ? result.record : null;
   }
 
@@ -359,6 +364,9 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       .build();
     const exists = await execute(lower, driver, probe);
     if (exists.length === 0) {
+      if (await prismaTablesFromEarlierRelease(lower, driver, undefined)) {
+        throw errorPrismaTablesFromEarlierRelease();
+      }
       return new Map();
     }
 
@@ -425,6 +433,9 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       .build();
     const exists = await execute(lower, driver, probe);
     if (exists.length === 0) {
+      if (await prismaTablesFromEarlierRelease(lower, driver, space)) {
+        throw errorPrismaTablesFromEarlierRelease();
+      }
       return [];
     }
 
@@ -646,7 +657,11 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       )
       .build();
     const exists = await execute(lower, driver, probe);
-    if (exists.length === 0) return { kind: 'no-table' as const };
+    if (exists.length === 0) {
+      return (await prismaTablesFromEarlierRelease(lower, driver, space))
+        ? { kind: 'earlier-release' as const }
+        : { kind: 'no-table' as const };
+    }
 
     const fetch = marker
       .select(

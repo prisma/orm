@@ -250,6 +250,23 @@ describe('verifyMarker', () => {
     );
   });
 
+  it('warns that an earlier release wrote the tables when the adapter finds them in that form', async () => {
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const runtime = buildRuntime({ markerResult: { kind: 'earlier-release' }, log });
+
+    await runtime.query(createPlan()).toArray();
+
+    expect(log.warn).toHaveBeenCalledOnce();
+    expect(log.warn).toHaveBeenCalledWith({
+      code: 'CONTRACT.PRISMA_TABLES_FROM_EARLIER_RELEASE',
+      scope: 'marker-verification',
+      expected: { storageHash: 'test', profileHash: 'test-profile' },
+      actual: null,
+      message:
+        "Prisma's own tables in this database were written by an earlier release of Prisma, so the contract the database matches cannot be read. Run `prisma db migrate` to bring them up to date.",
+    });
+  });
+
   it('emits no log when the marker record matches the contract', async () => {
     const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const runtime = buildRuntime({
