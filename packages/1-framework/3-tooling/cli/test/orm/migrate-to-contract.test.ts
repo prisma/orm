@@ -36,6 +36,7 @@ const commands = createBinCommands(
   () =>
     ({
       connect: mocks.connect,
+      bringPrismaTablesUpToDate: async () => undefined,
       readAllMarkers: mocks.readAllMarkers,
       migrate: mocks.migrate,
       renderContractDts: async () => ok({ contractDts: '' }),

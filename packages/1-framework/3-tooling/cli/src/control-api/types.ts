@@ -34,6 +34,7 @@ import type {
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggregate';
 import type { NamedRef } from '@internal/migration-tools/refs';
+import type { InstalledContractSpaceApplied } from '@internal/migration-tools/spaces';
 import type { Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../utils/cli-errors';
 import type { DataProtectionKey } from '../utils/policy-settings';
@@ -977,6 +978,13 @@ export interface ControlClient {
    * @throws If not connected or infrastructure failure
    */
   dbSign(options: DbSignOptions): Promise<ExecuteDbSignResult>;
+
+  /**
+   * Brings Prisma's own tables up to date with the installed target package, by applying the contract space its control descriptor carries, before anything else reads the database. `dbInit` and `dbUpdate` in apply mode, `dbSign` and `migrate` call it themselves; a caller that reads the database's rows before calling one of them calls it first. Resolves `undefined` when the target carries no such space.
+   *
+   * @throws A structured CLI error when the space's migrations fail, and `MIGRATION.INSTALLED_SPACE_UNREACHABLE` when the database records the space at a contract this release cannot reach
+   */
+  bringPrismaTablesUpToDate(): Promise<InstalledContractSpaceApplied | undefined>;
 
   /**
    * Reads the contract marker from the database.

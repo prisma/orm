@@ -29,6 +29,7 @@ const commands = createBinCommands(
   () =>
     ({
       connect: mocks.connect,
+      bringPrismaTablesUpToDate: async () => undefined,
       readAllMarkers: mocks.readAllMarkers,
       readLedger: mocks.readLedger,
       migrate: mocks.migrate,

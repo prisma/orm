@@ -10,6 +10,7 @@ import type {
 } from '@internal/framework-components/control';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
+import type { InstalledContractSpaceApplied } from '@internal/migration-tools/spaces';
 import { ok } from '@internal/utils/result';
 import type { ExecuteDbSignResult } from '../operations/db-sign';
 import type { ExecuteDbVerifyResult } from '../operations/db-verify';
@@ -57,6 +58,7 @@ export interface ControlClientFixtures {
   readonly dbUpdate: DbUpdateResult;
   readonly dbVerify: ExecuteDbVerifyResult;
   readonly dbSign: ExecuteDbSignResult;
+  readonly bringPrismaTablesUpToDate: InstalledContractSpaceApplied | undefined;
   readonly readMarker: ContractMarkerRecord | null;
   readonly readAllMarkers: ReadonlyMap<string, ContractMarkerRecord>;
   readonly readLedger: readonly LedgerEntryRecord[];
@@ -171,6 +173,7 @@ export function defaultControlClientFixtures(): ControlClientFixtures {
         },
       ],
     }),
+    bringPrismaTablesUpToDate: undefined,
     readMarker: fixtureMarker(),
     readAllMarkers: new Map([[APP_SPACE_ID, fixtureMarker()]]),
     readLedger: [
@@ -307,6 +310,14 @@ class FixtureControlClientImpl implements FixtureControlClient {
 
   async dbSign(options: DbSignOptions): Promise<ExecuteDbSignResult> {
     return this.recordConnected('dbSign', options, this.fixtures.dbSign);
+  }
+
+  async bringPrismaTablesUpToDate(): Promise<InstalledContractSpaceApplied | undefined> {
+    return this.recordConnected(
+      'bringPrismaTablesUpToDate',
+      undefined,
+      this.fixtures.bringPrismaTablesUpToDate,
+    );
   }
 
   async readMarker(): Promise<ContractMarkerRecord | null> {

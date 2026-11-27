@@ -49,6 +49,7 @@ function driverConfig(project: OfflineProject): {
         ...(base['family'] as Record<string, unknown>),
         create: () => ({
           deserializeContract: (json: unknown) => json,
+          bringPrismaTablesUpToDate: async () => undefined,
           readAllMarkers: async () => new Map(),
           readLedger: async () => [],
         }),
