@@ -159,7 +159,7 @@ export interface InteractiveTransactionsCapability {
   readonly sql: { readonly interactiveTransactions: true };
 }
 
-// A contract that names a retired capability was emitted by a release that wrote it into every contract. That release listed no connection capabilities in contracts, and its clients offered `transaction()` to every contract.
+// A target that declares retired capabilities declares that a contract naming one was emitted before contracts listed connection capabilities, when clients offered `transaction()` to every contract.
 type EmittedByEarlierRelease<Capabilities, RetiredCapabilities> = [
   Extract<EnabledFlagNames<Capabilities>, FlagNames<RetiredCapabilities>>,
 ] extends [never]
@@ -197,13 +197,23 @@ function namesRetiredCapability(
   );
 }
 
-/** Refuses `transaction()` for a contract that does not require interactive transactions, unless an earlier release emitted it: it names one of `retiredCapabilities`. */
+/** Whether `transaction()` is available for `contract`: it requires interactive transactions, or an earlier release emitted it (it names one of `retiredCapabilities`). */
+export function interactiveTransactionsAvailable(
+  contract: Contract<SqlStorage>,
+  retiredCapabilities: CapabilitySet,
+): boolean {
+  return (
+    contract.capabilities['sql']?.['interactiveTransactions'] === true ||
+    namesRetiredCapability(contract, retiredCapabilities)
+  );
+}
+
+/** Refuses `transaction()` for a contract for which `interactiveTransactionsAvailable` is false. */
 export function assertInteractiveTransactionsListed(
   contract: Contract<SqlStorage>,
   retiredCapabilities: CapabilitySet,
 ): void {
-  if (contract.capabilities['sql']?.['interactiveTransactions'] === true) return;
-  if (namesRetiredCapability(contract, retiredCapabilities)) return;
+  if (interactiveTransactionsAvailable(contract, retiredCapabilities)) return;
   throw structuredError(
     'ORM.CAPABILITY_MISSING',
     capabilityUnavailableMessage('`transaction()`', ['sql.interactiveTransactions']),

@@ -112,6 +112,7 @@ export {
   assertInteractiveTransactionsListed,
   type InteractiveTransactionsCapability,
   type InteractiveTransactionsListed,
+  interactiveTransactionsAvailable,
   type StackProvides,
   warnOfCapabilitiesNotProvided,
 } from '../stack-capabilities';

@@ -12,6 +12,10 @@ import {
 } from '@better-auth/core/db/adapter';
 import { BetterAuthError } from '@better-auth/core/error';
 import { capabilityUnavailableMessage } from '@prisma/orm-family-sql/contract/capability-messages';
+import {
+  interactiveTransactionsAvailable,
+  type SqlRuntimeTargetDescriptor,
+} from '@prisma/orm-family-sql/runtime';
 import { blindCast } from '@prisma/orm-framework/utils/casts';
 import { createModelCollections, type ModelCollections } from './collections';
 import { compareContract } from './contract/compare';
@@ -34,6 +38,10 @@ import { callMethod, hasMethod, type OrmCollection, type Row } from './orm';
 export interface PrismaClientLike {
   readonly contract: SqlContract;
   readonly orm: object;
+  /** The client's stack, whose target names the capabilities it retired. */
+  readonly stack?: {
+    readonly target: Pick<SqlRuntimeTargetDescriptor, 'retiredCapabilities'>;
+  };
 }
 
 /** A client that runs interactive transactions, which the `transaction` option needs. */
@@ -51,10 +59,6 @@ export type PrismaClientLikeFor<Options extends PrismaAdapterOptions> =
 
 function hasTransaction(db: PrismaClientLike): db is TransactionalPrismaClientLike {
   return 'transaction' in db && typeof db.transaction === 'function';
-}
-
-function listsInteractiveTransactions(contract: SqlContract): boolean {
-  return contract.capabilities['sql']?.['interactiveTransactions'] === true;
 }
 
 const supportedTargets = ['postgres', 'sqlite'];
@@ -79,7 +83,7 @@ function assertClient(db: PrismaClientLike, adapterOptions: PrismaAdapterOptions
       "The transaction option runs Better Auth transactions through the client's transaction(), which this object does not have. Pass the Prisma client, or turn the option off.",
     );
   }
-  if (!listsInteractiveTransactions(contract)) {
+  if (!interactiveTransactionsAvailable(contract, db.stack?.target.retiredCapabilities)) {
     throw new BetterAuthError(
       capabilityUnavailableMessage(
         'The transaction option',
