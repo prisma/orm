@@ -167,7 +167,7 @@ function copyEndedText(into: string): string {
   return `first check that it is no longer running: MongoDB keeps running an aggregate that ends in $out after the connection that sent it drops. In mongosh, connected to this database, ${runningCopyQuery(into)} lists the copy while it runs. Wait until it lists nothing, or end the copy with db.killOp(<the opid it lists>) and run the query again until it lists nothing: killOp only marks the copy to end, and it can run on for a moment.`;
 }
 
-const UNCHANGED = 'nothing wrote to or deleted from either collection since the apply stopped';
+const UNCHANGED = 'nothing wrote to or deleted from either collection since the apply started';
 
 /** Why writes to both collections of `copy` must still be stopped before its source is emptied by hand. */
 function writesStoppedText(copy: UnionCopy, single: boolean): string {

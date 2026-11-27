@@ -470,23 +470,46 @@ function movedAsideText(name: string, migration: MigrationOfOperation): string {
     ? `db migrate --to ${migration.dirName ?? "<the name of this migration's directory>"}`
     : 'the command again';
   const part = app ? '' : ", with its part for an extension's migration";
-  return `If ${name} holds documents you need, you can keep them by moving the collection aside: stop the application's writes to it, move it to ${name}_kept, run ${command} so this migration creates ${name} with its options, and copy the documents back.${alsoExistingText(migration.alsoExisting, command)} Follow every step under "Moving a MongoDB collection aside" in the error reference for MIGRATION.PRECHECK_FAILED${part}, which keep the documents until the copy back is checked.`;
+  return `If ${name} holds documents you need, you can keep them by moving the collection aside: stop the application's writes to it, move it to ${name}_kept, run ${command} so this migration creates ${name} with its options, and copy the documents back. Follow every step under "Moving a MongoDB collection aside" in the error reference for MIGRATION.PRECHECK_FAILED${part}, which keep the documents until the copy back is checked.`;
 }
 
-/** The other collections the migration creates with no after-check that exist already: each would stop the run again. */
-function alsoExistingText(names: readonly string[], command: string): string {
-  const [only] = names;
-  if (only === undefined) return '';
-  if (names.length === 1) {
-    return ` This migration also creates collection ${only}, which already exists too: before you run ${command}, move it aside the same way if it holds documents you need, or drop it if it holds nothing you need, so the run does not stop again at it.`;
-  }
-  return ` This migration also creates collections ${joinedList(names)}, which already exist too: before you run ${command}, move each of them aside the same way if it holds documents you need, or drop it if it holds nothing you need, so the run does not stop again at them.`;
+/**
+ * The other collections the next run stops at the same way, whichever way the user takes with
+ * `name`: those an earlier create with no after-check of the run that stopped made, and those a
+ * later one creates that exist already.
+ */
+function otherStopsText(name: string, migration: MigrationOfOperation): string {
+  const { madeByRun, alsoExisting } = migration;
+  if (madeByRun.length === 0 && alsoExisting.length === 0) return '';
+  const collections = (names: readonly string[]) =>
+    names.length === 1 ? `collection ${names[0]}` : `collections ${joinedList(names)}`;
+  const later =
+    migration.space === APP_SPACE_ID
+      ? 'this migration also creates'
+      : 'this migration or a later one of the extension also creates';
+  const stops = [
+    ...(madeByRun.length === 0
+      ? []
+      : [
+          `${collections(madeByRun)}, which the run that stopped created in this migration or an earlier one, so ${madeByRun.length === 1 ? 'it holds' : 'they hold'} only documents written since`,
+        ]),
+    ...(alsoExisting.length === 0
+      ? []
+      : [
+          `${collections(alsoExisting)}, which ${later} and which already ${alsoExisting.length === 1 ? 'exists' : 'exist'}`,
+        ]),
+  ];
+  return ` Whether you drop ${name} or move it aside, the next run would also stop at the create of ${stops.join(', and at the create of ')}. Before that run, move each of them aside as below if it holds documents you need, or drop it if it holds nothing you need.`;
 }
 
-/** The space of the migration an operation belongs to, its directory name when the run knows it, and the other collections it creates that already exist. */
+/**
+ * The space of the migration an operation belongs to, its directory name when the run knows it, and
+ * the other collections the next run stops at the same way.
+ */
 interface MigrationOfOperation {
   readonly space: string;
   readonly dirName: string | undefined;
+  readonly madeByRun: readonly string[];
   readonly alsoExisting: readonly string[];
 }
 
@@ -510,13 +533,15 @@ function migrationAt(
   return { dirName: undefined, end: operationTotal };
 }
 
-/** The collection a create with no after-check makes, for an operation that is one. */
-function uncheckedCreateOf(operation: AnyMongoMigrationOperation): string | undefined {
+/** The `createCollection` call of a create with no after-check, which no run can skip, for an operation that is one. */
+function uncheckedCreateOf(
+  operation: AnyMongoMigrationOperation,
+): CreateCollectionCommand | undefined {
   if (isMongoDmlOperation(operation) || operation.postcheck.length > 0) return undefined;
   const create = operation.execute.find(
     (step) => step.command instanceof CreateCollectionCommand,
   )?.command;
-  return create instanceof CreateCollectionCommand ? create.collection : undefined;
+  return create instanceof CreateCollectionCommand ? create : undefined;
 }
 
 /**
@@ -536,13 +561,11 @@ function signedByHandText(policies: DatabasePolicies | undefined): string {
  */
 function uncheckedCreateTargetExistsRefusal(
   op: MongoMigrationPlanOperation,
-  failed: MongoMigrationCheck,
+  create: CreateCollectionCommand,
   before: Ran,
   policies: DatabasePolicies | undefined,
   migration: MigrationOfOperation,
-): MongoMigrationRunnerResult | undefined {
-  const create = failedCreateOf(op, failed);
-  if (create === undefined || op.postcheck.length > 0) return undefined;
+): MongoMigrationRunnerResult {
   const name = create.collection;
   const skipped = `the creation is then skipped if ${name} has ${createOptionsText(create)}`;
   const emittedAgain =
@@ -553,7 +576,7 @@ function uncheckedCreateTargetExistsRefusal(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: collection ${name} already exists, and this migration's create has no after-check that lets a run skip it`,
     {
-      why: `This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection ${name}. ${emittedAgain} ${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} ${movedAsideText(name, migration)}${signedByHandText(policies)}`,
+      why: `This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection ${name}. ${emittedAgain} ${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)}${otherStopsText(name, migration)} ${movedAsideText(name, migration)}${signedByHandText(policies)}`,
       meta: { operationId: op.id },
     },
   );
@@ -2495,10 +2518,12 @@ export class MongoMigrationRunner {
   }
 
   /**
-   * The collection as the database has it now: its validator, and what a rewrite's refusals read of
-   * it, whether it is a time-series collection and its validator's `$jsonSchema`.
+   * {@link uncheckedCreateTargetExistsRefusal}, for a create with no after-check whose before-check
+   * found its collection. The next run starts again from the marker, so it also stops at every
+   * create with no after-check that ran before this one, and at every later one whose collection
+   * exists, up to where that run ends: the end of this migration for the application, where `--to`
+   * stops it, and the end of the space's plan for an extension.
    */
-  /** {@link uncheckedCreateTargetExistsRefusal}, with the migration the create belongs to read from the plan and the database. */
   private async uncheckedCreateRefusal(
     op: MongoMigrationPlanOperation,
     failed: MongoMigrationCheck,
@@ -2510,12 +2535,22 @@ export class MongoMigrationRunner {
       readonly operationIndex: number;
     },
   ): Promise<MongoMigrationRunnerResult | undefined> {
-    if (failedCreateOf(op, failed) === undefined || op.postcheck.length > 0) return undefined;
-    const { operations, operationIndex } = at;
-    const { dirName, end } = migrationAt(options.migrationEdges, operationIndex, operations.length);
-    const later = operations
-      .slice(operationIndex + 1, end)
-      .flatMap((operation) => uncheckedCreateOf(operation) ?? []);
+    const create = uncheckedCreateOf(op);
+    if (create === undefined || failed.expect !== 'notExists') return undefined;
+    const { operations, operationIndex, space } = at;
+    const migration = migrationAt(options.migrationEdges, operationIndex, operations.length);
+    const end = space === APP_SPACE_ID ? migration.end : operations.length;
+    const createdBy = (ops: readonly AnyMongoMigrationOperation[]) => [
+      ...new Set(
+        ops
+          .flatMap((operation) => uncheckedCreateOf(operation)?.collection ?? [])
+          .filter((name) => name !== create.collection),
+      ),
+    ];
+    const madeByRun = createdBy(operations.slice(0, operationIndex));
+    const later = createdBy(operations.slice(operationIndex + 1, end)).filter(
+      (name) => !madeByRun.includes(name),
+    );
     const existing =
       later.length === 0
         ? new Set<unknown>()
@@ -2524,13 +2559,18 @@ export class MongoMigrationRunner {
               (info) => info['name'],
             ),
           );
-    return uncheckedCreateTargetExistsRefusal(op, failed, before, options.policiesInForce, {
-      space: at.space,
-      dirName,
+    return uncheckedCreateTargetExistsRefusal(op, create, before, options.policiesInForce, {
+      space,
+      dirName: migration.dirName,
+      madeByRun,
       alsoExisting: later.filter((name) => existing.has(name)),
     });
   }
 
+  /**
+   * The collection as the database has it now: its validator, and what a rewrite's refusals read of
+   * it, whether it is a time-series collection and its validator's `$jsonSchema`.
+   */
   private async collectionInPlace(
     collection: string,
   ): Promise<{ readonly validator: unknown; readonly rewrite: RewriteCollection }> {

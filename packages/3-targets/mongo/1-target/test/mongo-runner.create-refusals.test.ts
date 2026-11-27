@@ -121,37 +121,69 @@ describe('MongoMigrationRunner, a create whose collection already exists', () =>
     );
   });
 
-  it('names every other collection this migration creates that already exists, so the run does not stop again at the next one', async () => {
+  const unchecked = (name: string) => ({ ...createCollection(name), postcheck: [] });
+  const OTHER_STOPS = (stops: string) =>
+    `Whether you drop orders or move it aside, the next run would also stop at the create of ${stops}. Before that run, move each of them aside as below if it holds documents you need, or drop it if it holds nothing you need.`;
+
+  async function executeMigrations(
+    migrations: readonly (readonly ReturnType<typeof unchecked>[])[],
+    existing: readonly string[],
+    spaceId?: string,
+  ) {
     const harness = makeHarness();
-    harness.inspectionExecutor.collections = [
-      { name: 'orders' },
-      { name: 'items' },
-      { name: 'archive' },
-    ];
-    const unchecked = (name: string) => ({ ...createCollection(name), postcheck: [] });
-    const plan = makePlan([
-      unchecked('orders'),
-      unchecked('users'),
-      unchecked('items'),
-      unchecked('archive'),
-    ]);
+    harness.inspectionExecutor.collections = existing.map((name) => ({ name }));
+    const plan = { ...makePlan(migrations.flat()), ...ifDefined('spaceId', spaceId) };
     const [edge] = synthEdges(plan);
     if (edge === undefined) throw new Error('synthEdges made no edge');
-
-    const result = await harness.runner.execute({
+    return harness.runner.execute({
       plan,
-      migrationEdges: [
-        { ...edge, dirName: '20261127T0000_orders', operationCount: 3 },
-        { ...edge, dirName: '20261127T0001_archive', operationCount: 1 },
-      ],
+      migrationEdges: migrations.map((operations, index) => ({
+        ...edge,
+        dirName: `20261127T000${index}_m${index}`,
+        operationCount: operations.length,
+      })),
       destinationContract: makeContract('dest'),
       policy: ALL_POLICY,
       frameworkComponents: [],
       policiesInForce: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
     });
+  }
+
+  it('names every other collection this migration creates that already exists, so the run does not stop again at the next one', async () => {
+    const result = await executeMigrations(
+      [[unchecked('orders'), unchecked('users'), unchecked('items')], [unchecked('archive')]],
+      ['orders', 'items', 'archive'],
+    );
 
     expect(failureFields(result.assertNotOk()).why).toBe(
-      `${FIRST_TWO_WAYS} ${MOVED_ASIDE('20261127T0000_orders').replace(` ${SECTION}`, '')} This migration also creates collection items, which already exists too: before you run db migrate --to 20261127T0000_orders, move it aside the same way if it holds documents you need, or drop it if it holds nothing you need, so the run does not stop again at it. ${SECTION} The failed apply changed nothing.`,
+      `${FIRST_TWO_WAYS} ${OTHER_STOPS('collection items, which this migration also creates and which already exists')} ${MOVED_ASIDE('20261127T0000_m0')} The failed apply changed nothing.`,
+    );
+  });
+
+  it('names the collections the run that stopped created, in this migration and an earlier one, since the next run starts again from the marker and stops at them too', async () => {
+    const result = await executeMigrations(
+      [
+        [unchecked('users'), unchecked('tags')],
+        [unchecked('notes'), unchecked('orders'), unchecked('items'), unchecked('logs')],
+        [unchecked('archive')],
+      ],
+      ['orders', 'items', 'archive'],
+    );
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      `${OTHER_STOPS('collections users, tags, and notes, which the run that stopped created in this migration or an earlier one, so they hold only documents written since, and at the create of collection items, which this migration also creates and which already exists')} ${MOVED_ASIDE('20261127T0001_m1')}`,
+    );
+  });
+
+  it("names the existing collections that a later migration of an extension's space creates, since the command run again goes on to the end of that space's plan", async () => {
+    const result = await executeMigrations(
+      [[unchecked('orders')], [unchecked('users'), unchecked('items')]],
+      ['orders', 'items'],
+      'audit',
+    );
+
+    expect(failureFields(result.assertNotOk()).why).toBe(
+      `${EXTENSION_FIRST_TWO_WAYS} ${OTHER_STOPS('collection items, which this migration or a later one of the extension also creates and which already exists')} ${EXTENSION_MOVED_ASIDE} The failed apply changed nothing.`,
     );
   });
 });

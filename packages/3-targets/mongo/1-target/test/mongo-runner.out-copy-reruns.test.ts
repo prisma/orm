@@ -59,14 +59,14 @@ const RERUN_COPIES = (source: string) =>
 const SETTLE_BY_HAND = (source: string) =>
   `delete nothing from either collection, and do not run the command again, until you have compared collections measurements and ${source} by hand and settled which documents each should keep: only you can tell which of their documents are which. ${RERUN_COPIES(source)}`;
 const UNSURE = (source: string) =>
-  `If you cannot be sure that nothing wrote to or deleted from either collection since the apply stopped, ${SETTLE_BY_HAND(source)} Otherwise`;
+  `If you cannot be sure that nothing wrote to or deleted from either collection since the apply started, ${SETTLE_BY_HAND(source)} Otherwise`;
 const WRITES_STOPPED_EVENTS =
   'Writes to collections measurements and events must still be stopped: that delete also removes any document written to collection events since the copy, which the copy did not take.';
 const WRITES_STOPPED_READINGS =
   'Writes to collections measurements and readings must still be stopped: deleting the documents of collection readings or dropping it also removes any document written to collection readings since the copy, which the copy did not take.';
 const STOPPED_EVENTS = `${WRITES_STOPPED_EVENTS} ${UNSURE('events')}`;
 const STOPPED_READINGS = `${WRITES_STOPPED_READINGS} ${UNSURE('readings')}`;
-const UNCHANGED = 'nothing wrote to or deleted from either collection since the apply stopped';
+const UNCHANGED = 'nothing wrote to or deleted from either collection since the apply started';
 const COPY_ENDED =
   'first check that it is no longer running: MongoDB keeps running an aggregate that ends in $out after the connection that sent it drops. In mongosh, connected to this database, db.getSiblingDB("admin").aggregate([{ $currentOp: { allUsers: true } }, { $match: { "command.$db": db.getName(), $expr: { $let: { vars: { last: { $arrayElemAt: [{ $objectToArray: { $last: "$command.pipeline" } }, 0] } }, in: { $and: [{ $in: ["$$last.k", [{ $literal: "$out" }, { $literal: "$merge" }]] }, { $in: ["measurements", ["$$last.v", "$$last.v.coll", "$$last.v.into", "$$last.v.into.coll"]] }] } } } } }]) lists the copy while it runs. Wait until it lists nothing, or end the copy with db.killOp(<the opid it lists>) and run the query again until it lists nothing: killOp only marks the copy to end, and it can run on for a moment.';
 
@@ -509,7 +509,7 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
 
     const { why, meta } = failureFields(result.assertNotOk());
     expect(why).toContain(
-      'If it holds 5, and nothing wrote to or deleted from either collection since the apply stopped, the copy finished',
+      'If it holds 5, and nothing wrote to or deleted from either collection since the apply started, the copy finished',
     );
     expect(why).not.toContain('is as it was');
     expect(meta).toMatchObject({ databaseUnchanged: false });

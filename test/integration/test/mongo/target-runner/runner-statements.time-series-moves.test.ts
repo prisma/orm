@@ -39,7 +39,7 @@ const copy = dataTransform('move Measurement documents to measurements', {
     ]),
 });
 const deletion = deleteDocuments({ collection: 'events', filter });
-const UNCHANGED = 'nothing wrote to or deleted from either collection since the apply stopped';
+const UNCHANGED = 'nothing wrote to or deleted from either collection since the apply started';
 /** What the next run does with the source: readings is copied whole and dropped, events only by the copy's filter. */
 const RERUN_COPIES = (source: string) =>
   source === 'readings'
@@ -424,6 +424,49 @@ describe('MongoMigrationPlanner and runner - a move into a time-series collectio
         second: 'applied',
         ...moved,
       });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'lists a copy whose command is over 1 KB in full, which the currentOp command cuts down to a string without its database or pipeline',
+    async () => {
+      await live
+        .db()
+        .collection('events')
+        .insertMany([
+          { at, value: 1 },
+          { at, value: 2 },
+        ]);
+      const pad = 'x'.repeat(2000);
+      const copying = live
+        .db()
+        .collection('events')
+        .aggregate([
+          { $match: filter },
+          slowStage,
+          { $addFields: { pad } },
+          { $unset: ['slow', 'pad'] },
+          { $out: 'measurements' },
+        ])
+        .toArray();
+      let running = await runningCopies();
+      while (running.length === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        running = await runningCopies();
+      }
+      const { inprog } = await live.db().admin().command({ currentOp: 1, $all: true });
+      const cutDown = (inprog as readonly { ns?: string; command?: object }[]).find((op) =>
+        String(op.ns).startsWith(`${live.db().databaseName}.tmp.agg_out.`),
+      );
+      await copying;
+
+      expect({
+        running: running.length,
+        size: JSON.stringify(running).length > 2000,
+        cutDown: Object.keys(cutDown?.command ?? {}),
+        afterwards: await runningCopies(),
+      }).toEqual({ running: 1, size: true, cutDown: ['$truncated'], afterwards: [] });
     },
     timeouts.spinUpMongoMemoryServer,
   );
