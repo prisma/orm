@@ -56,7 +56,7 @@ CI checks every pull request for changes that would break code written against t
 
 Four rules complete the decision:
 
-- **The last release** is the newest release tag at or below the version in the root `package.json` of the branch the pull request merges into. Development builds do not count, and the registry's `latest` tag is not consulted. Each package is compared with the version that release published it at, read from the package's `package.json` at the release's tag. From release 8.0 that version can differ from the release's: it shows the package's maturity level, as in `8.0.1-ea.0`, or it is a version of the package's own.
+- **The last release** is the newest release tag at or below the version in the root `package.json` of the branch the pull request merges into. Development builds do not count, and the registry's `latest` tag is not consulted. Each package is compared with its version at the release's tag, read from its `package.json` there. From release 8.0 that version can differ from the root version: it shows the package's maturity level, as in `8.0.1-ea.0`, or it is a version of the package's own. The publish workflow refuses a release whose committed versions differ from the ones it is about to publish, so the version at the tag is the version on the registry.
 - **A break fails unless it is recorded as deliberate,** with a reason, in a file beside the package. The record stops applying when the export changes again.
 - **An API whose name carries a maturity level may break.** A break in an export named `ea_…`, `preview_…` or `rc_…` is listed and never fails, with one exception described under [Names that carry a level](#names-that-carry-a-level).
 - **A check that could not compare fails.** A registry that cannot be reached, or a package that cannot be read, must not look like a pass.
@@ -185,7 +185,7 @@ A check like this can pass because it compared nothing. Three safeguards prevent
 
 A database's package, such as `@prisma/orm-postgres`, re-exports most of what it offers from the packages it is built on (`export … from '@prisma/orm-family-sql/orm-client'`). The job's report calls these forwarded names. A forwarded name is only checked to still exist (`exists`). Its type is compared once, in the package that declares it.
 
-This relies on every package being compared at one release. Each release publishes every package, so it holds, even though from release 8.0 the [versioning policy](../../oss/versioning.md#version-numbers) gives each package a version that shows its maturity level, or a version of its own. If packages were released at different times, a break in `Collection` would be judged by the family package's last release, not by that of the package the user imports it from, and this rule would have to work per package.
+This relies on every package being compared at one tag, which holds because all packages are released together. From release 8.0 the [versioning policy](../../oss/versioning.md#version-numbers) gives each package a version that shows its maturity level, but the versions all come from the same tag. If one package were ever released alone, a break in `Collection` would be judged by the family package's last release, not by that of the package the user imports it from, and this rule would have to work per package.
 
 ### Names that carry a level
 

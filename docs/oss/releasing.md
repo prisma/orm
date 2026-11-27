@@ -39,7 +39,7 @@ node scripts/print-release-plan.ts 8.1.0      # the plan for another root versio
 
 The command reads the workspace and writes nothing. Its option `--ever-ga <name,...>` names the packages that have already had a GA version, which decides the tag of a version below GA. The publish workflow works that list out from the npm registry: a package has had a GA version if a plain version, with no suffix, is published there. `0.x` versions do not count. [`scripts/fixtures/release-plan/`](../../scripts/fixtures/release-plan/) holds the expected output for the current root version, for `8.0.1` and for `8.1.0`, and `pnpm test:scripts` compares the real output with them.
 
-[`scripts/set-version.ts`](../../scripts/set-version.ts) writes the plan into the `package.json` files. Nobody writes a version or a range between our packages by hand.
+[`scripts/set-version.ts`](../../scripts/set-version.ts) writes the plan into the `package.json` files. Nobody writes a version or a range between our packages by hand. The release pull request commits the versions it writes. The publish workflow runs it again before publishing and stops if any package's version would change, so the versions in the `package.json` files at a release's tag are the ones on the registry. The `API compatibility` job relies on that.
 
 Three things about the plan are worth knowing:
 

@@ -1,8 +1,8 @@
-// Installs each package at the version the last release published it at, beside the current
-// build, in a folder with a workspace of its own so that the repository's lockfile never changes. The release's third-party
-// dependencies get the versions the current build resolves, which come from the repository's
-// lockfile: with different versions on the two sides, every type from such a dependency would
-// differ, and each would show up as a break.
+// Installs each package at its version at the last release's tag, beside the current build, in a
+// folder with a workspace of its own so that the repository's lockfile never changes. Our packages
+// are pinned to their versions at the tag. The release's third-party dependencies get the versions
+// the current build resolves, which come from the repository's lockfile: with different versions on
+// the two sides, every type from such a dependency would differ, and each would show up as a break.
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
