@@ -86,7 +86,7 @@ This record accepts the check on these terms:
 ## Consequences
 
 - A request no longer fails, or waits with no limit, because the pool handed the driver a connection that died while it sat idle for a second or more.
-- A connection that died silently and is used again within the second is not checked, so the caller's statement still fails, or waits with no limit. The one second is a known limit: it is what keeps a busy application from paying for a check.
+- A connection that died silently and is used again within the second is not checked, unless a clock moved backwards or an earlier failed check already evicts it, so the caller's statement still fails, or waits with no limit. The one second is a known limit: it is what keeps a busy application from paying for a check.
 - A busy application pays nothing: a connection used within the last second, by both clocks, is used without a check. A clock that moved backwards forces a check, and a connection last used before another connection's failed check started is evicted without one.
 - A connection that fails between the check and the statement still fails that statement. The application sees it as `SqlConnectionError` and decides what to do.
 - The Postgres driver's README lists each statement the driver sends on its own account, so the extra round trips are documented and bounded.
