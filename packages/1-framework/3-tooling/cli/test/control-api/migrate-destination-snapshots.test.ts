@@ -1,4 +1,4 @@
-import { readFile, rm } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
 import type {
@@ -210,5 +210,77 @@ describe('executeMigrate records the snapshots of the migrations it applies as t
       ok: true,
       edges: [1],
     });
+  });
+});
+
+function markerAt(storageHash: string): ReadonlyMap<string, ContractMarkerRecord> {
+  return new Map([
+    [
+      'app',
+      {
+        storageHash,
+        profileHash: '',
+        contractJson: null,
+        canonicalVersion: null,
+        updatedAt: new Date(0),
+        appTag: null,
+        meta: {},
+        invariants: [],
+      },
+    ],
+  ]);
+}
+
+describe('executeMigrate reports each migration it applies whose snapshot it cannot read', () => {
+  async function migrationsDirWithMiddleSnapshotNotJson(): Promise<string> {
+    const { migrationsDir } = await migrationsDirWithUnreadableMiddleSnapshot();
+    await writeFile(join(contractSnapshotDir(migrationsDir, MIDDLE), 'contract.json'), '{ nope');
+    return migrationsDir;
+  }
+
+  async function reported(markers?: ReadonlyMap<string, ContractMarkerRecord>) {
+    const migrationsDir = await migrationsDirWithMiddleSnapshotNotJson();
+    const unrecorded: unknown[] = [];
+    const result = await executeMigrate({
+      ...migrateOptions(migrationsDir, recordingMigrations().migrations, markers),
+      onUnrecordedSnapshot: (each) => unrecorded.push(each),
+    });
+    return { ok: result.ok, unrecorded, migrationsDir };
+  }
+
+  it('reports a migration on the path whose snapshot is not JSON', async () => {
+    const { ok: succeeded, unrecorded, migrationsDir } = await reported();
+
+    expect({ ok: succeeded, unrecorded }).toEqual({
+      ok: true,
+      unrecorded: [
+        {
+          spaceId: 'app',
+          dirName: '20260101T0000_initial',
+          path: join(contractSnapshotDir(migrationsDir, MIDDLE), 'contract.json'),
+          reason: expect.stringContaining('Failed to parse'),
+        },
+      ],
+    });
+  });
+
+  it('reports nothing for a migration the database already applied', async () => {
+    expect(await reported(markerAt(MIDDLE))).toMatchObject({ ok: true, unrecorded: [] });
+  });
+
+  it('reports nothing when the database is up to date', async () => {
+    expect(await reported(markerAt(APP_HEAD))).toMatchObject({ ok: true, unrecorded: [] });
+  });
+
+  it('reports nothing for a snapshot the family refuses, which is still recorded as stored', async () => {
+    const { migrationsDir } = await migrationsDirWithUnreadableMiddleSnapshot();
+    const unrecorded: unknown[] = [];
+
+    await executeMigrate({
+      ...migrateOptions(migrationsDir, recordingMigrations().migrations),
+      onUnrecordedSnapshot: (each) => unrecorded.push(each),
+    });
+
+    expect(unrecorded).toEqual([]);
   });
 });

@@ -73,7 +73,6 @@ import {
   dbUpdateRerun,
   rerunFlags,
 } from '../../utils/printed-command';
-import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag, permitPolicyChangeFlag } from '../flags';
 import { displayPath, migrationsDirFor } from '../migration/paths';
@@ -84,7 +83,7 @@ import { dbUpdateStatementVerbs } from '../statement-verbs';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
 import { plannerWarningsCollector } from './planner-warnings';
 import { prepareMigrationRun } from './prepare';
-import { warnUnrecordedSnapshots } from './unrecorded-snapshots';
+import { unrecordedSnapshotWarning } from './unrecorded-snapshots';
 
 function updatePresentations(inputs: {
   readonly document: MigrationCommandResult;
@@ -464,13 +463,6 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
       try {
         await client.connect(dbConnection);
 
-        await warnUnrecordedSnapshots({
-          report: ctx.report,
-          migrationsDir,
-          verifySnapshotContent: snapshotVerifierFor(ctx.config),
-          command: 'db update',
-          cwd: ctx.cwd,
-        });
         const plannerWarnings = plannerWarningsCollector(ctx.report);
         const statementArgs = [
           ...planned,
@@ -478,6 +470,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           ...unansweredConsents(ctx.statements),
         ].map(statementFlag);
         const result = await client.dbUpdate({
+          onUnrecordedSnapshot: unrecordedSnapshotWarning(ctx.report, 'db update', ctx.cwd),
           contract: contractJson,
           mode,
           migrationsDir,

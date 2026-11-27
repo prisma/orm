@@ -403,6 +403,7 @@ class ControlClientImpl implements ControlClient {
       driver,
       invocation: options.invocation,
       ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
+      ...ifDefined('onUnrecordedSnapshot', options.onUnrecordedSnapshot),
       adapter,
       familyInstance,
       contract,
@@ -447,6 +448,7 @@ class ControlClientImpl implements ControlClient {
       driver,
       invocation: options.invocation,
       ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
+      ...ifDefined('onUnrecordedSnapshot', options.onUnrecordedSnapshot),
       ...ifDefined('onUnreadableOrigin', options.onUnreadableOrigin),
       adapter,
       familyInstance,
@@ -566,6 +568,7 @@ class ControlClientImpl implements ControlClient {
       ...ifDefined('target', options.target),
       ...ifDefined('permitPolicyChange', options.permitPolicyChange),
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
+      ...ifDefined('onUnrecordedSnapshot', options.onUnrecordedSnapshot),
       ...ifDefined('onProgress', onProgress),
     });
   }

@@ -85,7 +85,7 @@ import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { dataLine } from './data-lines';
 import { perSpaceBlocks } from './db/migration-blocks';
 import { prepareMigrationRun } from './db/prepare';
-import { warnUnrecordedSnapshots } from './db/unrecorded-snapshots';
+import { unrecordedSnapshotWarning } from './db/unrecorded-snapshots';
 import { defineOrmCommand } from './define-command';
 import { dbFlag, permitPolicyChangeFlag } from './flags';
 import { displayPath, migrationsDirFor } from './migration/paths';
@@ -724,14 +724,8 @@ export function createMigrateCommand(
           }
         }
 
-        await warnUnrecordedSnapshots({
-          report: ctx.report,
-          migrationsDir,
-          verifySnapshotContent: snapshotVerifierFor(ctx.config),
-          command: 'db migrate',
-          cwd: ctx.cwd,
-        });
         const applied = await client.migrate({
+          onUnrecordedSnapshot: unrecordedSnapshotWarning(ctx.report, 'db migrate', ctx.cwd),
           contract: applyContract,
           migrationsDir,
           invocation: {

@@ -1,8 +1,5 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { asNamespaceId } from '@internal/contract/types';
-import { computeMigrationHash } from '@internal/migration-tools/hash';
-import { writeMigrationPackage } from '@internal/migration-tools/io';
-import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { writeRef } from '@internal/migration-tools/refs';
 import { ok } from '@internal/utils/result';
 import type { StreamEvent } from '@prisma/cli-engine';
@@ -51,17 +48,6 @@ const DESCRIPTOR = { familyId: 'sql', targetId: 'postgres', version: '1.0.0', cr
 const DEST_HASH = 'd'.repeat(64);
 const MARKER_HASH = 'a'.repeat(64);
 const CONNECTION = 'postgres://user:secret@localhost:5432/appdb';
-
-const INIT_BASE = {
-  from: null,
-  to: MARKER_HASH,
-  providedInvariants: [],
-  createdAt: '2026-01-01T00:00:00.000Z',
-};
-const INIT_METADATA: MigrationMetadata = {
-  ...INIT_BASE,
-  migrationHash: computeMigrationHash(INIT_BASE, []),
-};
 
 let projectDir: string;
 const projectDirs: string[] = [];
@@ -414,30 +400,25 @@ describe('db update questions', () => {
     });
   });
 
-  it('warns about a migration whose snapshot it cannot read, since the database records no contract for it', async () => {
-    mocks.dbUpdate.mockImplementation(async (options: DbUpdateOptions) =>
-      ok(applySuccess(options.mode)),
-    );
-    const migrationsDir = join(projectDir, 'migrations');
-    await writeMigrationPackage(
-      join(migrationsDir, 'app', '20260101T0000_init'),
-      INIT_METADATA,
-      [],
-    );
-    mkdirSync(join(migrationsDir, 'snapshots', MARKER_HASH), { recursive: true });
-    writeFileSync(join(migrationsDir, 'snapshots', MARKER_HASH, 'contract.json'), '{ not json');
+  it('warns about a migration the run applies whose snapshot it cannot read, since the database records no contract for it', async () => {
+    const snapshotPath = join(projectDir, 'migrations', 'snapshots', MARKER_HASH, 'contract.json');
+    mocks.dbUpdate.mockImplementation(async (options: DbUpdateOptions) => {
+      options.onUnrecordedSnapshot?.({
+        spaceId: 'pgvector',
+        dirName: '20260101T0000_init',
+        path: snapshotPath,
+        reason: 'not JSON',
+      });
+      return ok(applySuccess(options.mode));
+    });
 
-    const run = await harness().run(['db', 'update', '--dry-run', '--json'], { cwd: projectDir });
+    const run = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
 
     expect(run.exitCode).toBe(0);
     expect(run.events).toContainEqual({
       kind: 'message',
       severity: 'warn',
-      text: expect.stringMatching(
-        new RegExp(
-          `^Could not read the contract snapshot migrations/snapshots/${MARKER_HASH}/contract\\.json, where the migration app/20260101T0000_init ends: .+\\. When db update applies that migration, the database records no contract for it\\. Restore the file from version control\\.$`,
-        ),
-      ),
+      text: `Could not read the contract snapshot migrations/snapshots/${MARKER_HASH}/contract.json, where the migration pgvector/20260101T0000_init ends: not JSON. db update applies that migration, but the database records no contract for it. Restore the file from version control.`,
     });
   });
 
