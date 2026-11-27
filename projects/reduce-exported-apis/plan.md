@@ -36,6 +36,7 @@ Each slice is one pull request.
 
 - The PostgreSQL target, the toolchain, the SQL family and the framework stop publishing the audit's "remove" rows.
 - `utils/internal-error` and `InternalError`, `isInternalError` and `isPrismaInternalError` get names without the word. So do `SqlParamRefMutatorInternal`, `MongoParamRefMutatorInternal`, `PreparedStatementInternals` and `SupabaseInternalDb`.
+- The SQL family's `SqlRuntimeBase` and `ConnectionProvider` are GA, but slice 1 left their prepared-statement members keyed by `ea_preparedStatementQuery`, `ea_preparedStatementExecute` and `ea_transactionStart`, and typed with `Ea_TransactionStartTarget`. The API check judges a member like its class, so those Early Access names cannot change without a recorded GA break. Before 8.0, either those members get the same Early Access level (the whole extension seam of `SqlRuntimeBase` is below GA), or the names are promoted to GA. Decide from what an outside SQL target needs to subclass `SqlRuntimeBase`; this sits beside the `PreparedStatementInternals` rename.
 - The package `@internal/extension-author-tools` is deleted. Its one tool checks exact versions of `@internal/*` names that no extension lists any more; from release 8.0 version ranges replace exact versions, and the package manager reports a mismatch at install.
 - Status: not started.
 

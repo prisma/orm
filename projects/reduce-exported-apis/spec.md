@@ -76,5 +76,5 @@ Settled with the operator on 2026-11-26. This project does not reopen them witho
 - Composer, the `prisma` tool, the control plane and create-prisma each have a pull request or a ticket that stands alone for every path they import that this project removes or renames.
 - prisma/prisma-cli has a ticket for the GA release of `@prisma/cli-engine`.
 - The upgrade instructions and the upgrade skill say what a user's imports change to.
-- The decision record on the published packages and the versions design each state the Supabase exception.
+- The decision record on the published packages (ADR 242) and the record on packages naming each other as peers (ADR 329) each state the Supabase exception.
 - Every pull request has passed a drive code review and merged, and carries the plan and status updates for its own work.

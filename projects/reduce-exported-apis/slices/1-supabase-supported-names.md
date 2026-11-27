@@ -23,7 +23,7 @@ import { ea_buildPostgresStaticContext, ea_validatePostgresContract } from '@pri
 import { ea_preparedStatementQuery } from '@prisma/orm-family-sql/runtime'
 ```
 
-These functions are the seams inside `postgres()`, cut out so Supabase could reuse them. Exported at GA they would freeze the client's internal structure until Prisma 9. With the prefix they may change in any release, and they are promoted once a second caller shows which of them hold up.
+These functions are the seams inside `postgres()`, cut out so Supabase could reuse them. Exported at GA they would freeze the client's internal structure until Prisma 9. With the prefix they may change in any release, and they are promoted once a second caller shows which of them hold up. One exception: the prepared-query names also key members of the SQL family's GA class `SqlRuntimeBase`, so changing them is still a GA break until slice 3 settles that class's level.
 
 ## What changes
 
