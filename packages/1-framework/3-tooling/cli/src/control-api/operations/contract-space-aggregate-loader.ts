@@ -477,7 +477,12 @@ export async function buildReadAggregate(
     const formatFailure = formatVersionFailure(error);
     if (formatFailure !== undefined) return notOk(formatFailure);
     if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
-      envelopeRefusal = error instanceof Error ? error.message : String(error);
+      envelopeRefusal =
+        error instanceof SyntaxError
+          ? `${resolveContractPath(config)} is not valid JSON: ${error.message}`
+          : error instanceof Error
+            ? error.message
+            : String(error);
     }
   }
 
@@ -500,7 +505,7 @@ export async function buildReadAggregate(
         const formatFailure = formatVersionFailure(error, resolveContractPath(config));
         if (formatFailure !== undefined) return notOk(formatFailure);
         if (isInternalError(error)) throw error;
-        contractRefusal = error instanceof Error ? error.message : String(error);
+        contractRefusal = `${resolveContractPath(config)}: ${error instanceof Error ? error.message : String(error)}`;
       }
     }
 

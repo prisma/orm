@@ -317,7 +317,13 @@ describe('a listing meets a contract.json that is not JSON', () => {
 
       expect({ exitCode: run.exitCode, diagnostics: run.presented?.diagnostics }).toEqual({
         exitCode: 0,
-        diagnostics: [expect.objectContaining({ code: 'CONTRACT.UNREADABLE', severity: 'warn' })],
+        diagnostics: [
+          expect.objectContaining({
+            code: 'CONTRACT.UNREADABLE',
+            severity: 'warn',
+            summary: expect.stringContaining(`${project.contractPath} is not valid JSON`),
+          }),
+        ],
       });
     },
   );

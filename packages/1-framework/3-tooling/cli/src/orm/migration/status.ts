@@ -426,7 +426,9 @@ export const migrationStatusCommand = defineOrmCommand({
       if (contractRefusal !== undefined) findings.push(contractUnreadableFinding(contractRefusal));
     } catch (error) {
       findings.push(
-        contractUnreadableFinding(error instanceof Error ? error.message : 'unknown error'),
+        contractUnreadableFinding(
+          contractRefusal ?? (error instanceof Error ? error.message : 'unknown error'),
+        ),
       );
     }
 
