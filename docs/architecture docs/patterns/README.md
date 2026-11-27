@@ -5,7 +5,7 @@ This catalogue is the single place to learn **which structural shapes the Prisma
 The catalogue is distinct from its neighbours:
 
 - **ADRs** ([`../adrs/`](../adrs/)) record one-time decisions. The catalogue records the recurring shapes those decisions instantiate.
-- **Cursor rules** ([`../../../.cursor/rules/`](../../../.cursor/rules/)) are tactical do/don'ts. The catalogue records the structural rationale a rule enforces.
+- **Cursor rules** ([`../../../.agents/rules/`](../../../.agents/rules/)) are tactical do/don'ts. The catalogue records the structural rationale a rule enforces.
 - **Reference docs** ([`../../reference/`](../../reference/)) are subsystem how-to guides. The catalogue records cross-subsystem shapes; subsystem-specific shapes stay in the reference docs.
 
 ## v1 entries
