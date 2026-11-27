@@ -14,7 +14,7 @@ import {
   type Namespace,
   UNBOUND_NAMESPACE_ID,
 } from '@internal/framework-components/ir';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { sqlContractSerializationPreserveEmpty } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlNamespaceInput, SqlStorage } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
@@ -138,7 +138,7 @@ export class PostgresContractSerializer extends SqlContractSerializerBase<Contra
     super(storageTypesHydrators, entityKinds);
     const preserveRequired = requiredEntityFieldsSurviveDefaults(entityKinds);
     this.shouldPreserveEmpty = (path) =>
-      preserveRequired(path) || sqlContractCanonicalizationHooks.shouldPreserveEmpty(path);
+      preserveRequired(path) || sqlContractSerializationPreserveEmpty(path);
   }
 
   protected override hydrateSqlNamespaceEntry(

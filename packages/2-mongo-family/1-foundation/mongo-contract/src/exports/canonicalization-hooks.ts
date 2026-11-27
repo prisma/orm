@@ -1,1 +1,4 @@
-export { mongoContractCanonicalizationHooks } from '../canonicalization-hooks';
+export {
+  mongoContractCanonicalizationHooks,
+  mongoContractSerializationPreserveEmpty,
+} from '../canonicalization-hooks';

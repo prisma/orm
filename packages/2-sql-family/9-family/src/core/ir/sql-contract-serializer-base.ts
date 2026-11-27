@@ -9,7 +9,10 @@ import {
   hydrateNamespaceEntities,
   type Namespace,
 } from '@internal/framework-components/ir';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import {
+  sqlContractCanonicalizationHooks,
+  sqlContractSerializationPreserveEmpty,
+} from '@internal/sql-contract/canonicalization-hooks';
 import { composeSqlEntityKinds } from '@internal/sql-contract/entity-kinds';
 import {
   isMaterializedSqlNamespace,
@@ -119,7 +122,7 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
     >(contract);
   }
 
-  shouldPreserveEmpty = sqlContractCanonicalizationHooks.shouldPreserveEmpty;
+  shouldPreserveEmpty = sqlContractSerializationPreserveEmpty;
 
   sortStorage = sqlContractCanonicalizationHooks.sortStorage;
 

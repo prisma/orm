@@ -167,6 +167,51 @@ describe('PostgresContractSerializer', () => {
     ).not.toHaveProperty('kind');
   });
 
+  it('keeps false, [] and {} inside a column typeParams when it writes the contract', () => {
+    const serializer = new PostgresContractSerializer();
+    const typeParams = { jsonIr: [{ unit: false }, { unit: true }], options: {}, list: [] };
+    const contract = blindCast<Contract, 'test contract shape is structurally a Contract'>(
+      createSqlContract({
+        storage: {
+          namespaces: {
+            [UNBOUND_NAMESPACE_ID]: {
+              id: UNBOUND_NAMESPACE_ID,
+              entries: {
+                table: {
+                  setting: {
+                    columns: {
+                      flag: {
+                        dataType: 'pg/jsonb',
+                        codecId: 'arktype/json@1',
+                        nullable: false,
+                        typeParams,
+                      },
+                    },
+                    primaryKey: { columns: ['flag'] },
+                    uniques: [],
+                    indexes: [],
+                    foreignKeys: [],
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    );
+    const canonical = canonicalizeContractToObject(contract, {
+      serializeContract: (c) => serializer.serializeContract(blindCast<never, 'test'>(c)),
+      shouldPreserveEmpty: serializer.shouldPreserveEmpty,
+      sortStorage: serializer.sortStorage,
+    });
+    const reread = serializer.deserializeContract(JSON.parse(JSON.stringify(canonical)));
+    const table = reread.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['table'];
+    expect(
+      blindCast<Record<string, StorageTable>, 'the namespace holds tables'>(table)['setting']
+        ?.columns['flag']?.typeParams,
+    ).toEqual(typeParams);
+  });
+
   it('hydrates storage.types entries via the family registry dispatch path', () => {
     const sentinel: StorageTypeInstance = toStorageTypeInstance({
       codecId: 'test/fake-test-entity@1',

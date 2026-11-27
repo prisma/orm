@@ -1747,6 +1747,7 @@
 ./contract/authored-check-naming: function lowerAuthoredCheck(tableName: string, authored: AuthoredCheckInput, warnings?: AuthoringWarningSink): CheckConstraintInput
 ./contract/authored-check-naming: type AuthoredCheckInput = { readonly expression: string; readonly map: string | undefined; readonly name: string | undefined; }
 ./contract/canonicalization-hooks: const sqlContractCanonicalizationHooks: { readonly shouldPreserveEmpty: PreserveEmptyPredicate; readonly sortStorage: StorageSort; }
+./contract/canonicalization-hooks: const sqlContractSerializationPreserveEmpty: PreserveEmptyPredicate
 ./contract/capability-messages: function capabilityKeysText(capabilities: readonly string[]): string
 ./contract/capability-messages: function capabilityUnavailableMessage(feature: string, capabilities: readonly string[], reason?: string): string
 ./contract/check-expressions: function discriminatorValueSet(baseModelName: string, discriminatorField: string, variantValues: readonly string[]): { readonly name: string; readonly values: readonly string[]; }
@@ -2329,6 +2330,7 @@
 ./contract: const StorageValueSetSchema: ObjectType<{ kind: "valueSet"; values: readonly (Record<string, unknown> | boolean | null | number | string | unknown[])[]; }, {}>
 ./contract: const generatedIdColumnAliases: { readonly UuidString: { readonly kind: "typeAlias"; readonly documentation: "Fixed-length text of 36 characters, the column a UUID is stored in as text."; readonly output: { readonly type: { readonly codecId: "sql/char@1"; readonly typeParams: { readonly length: 36; }; }; }; }; readonly Ulid: { readonly kind: "typeAlias"; readonly documentation: "Fixed-length text of 26 characters, the column a ULID is stored in."; readonly output: { readonly type: { readonly codecId: "sql/char@1"; readonly typeParams: { readonly length: 26; }; }; }; }; readonly Nanoid: { readonly kind: "typeAlias"; readonly documentation: "Fixed-length text of 21 characters, the column a nanoid of the default size is stored in."; readonly output: { readonly type: { readonly codecId: "sql/char@1"; readonly typeParams: { readonly length: 21; }; }; }; }; readonly Cuid2: { readonly kind: "typeAlias"; readonly documentation: "Fixed-length text of 24 characters, the column a CUID2 is stored in."; readonly output: { readonly type: { readonly codecId: "sql/char@1"; readonly typeParams: { readonly length: 24; }; }; }; }; readonly Ksuid: { readonly kind: "typeAlias"; readonly documentation: "Fixed-length text of 27 characters, the column a KSUID is stored in."; readonly output: { readonly type: { readonly codecId: "sql/char@1"; readonly typeParams: { readonly length: 27; }; }; }; }; }
 ./contract: const sqlContractCanonicalizationHooks: { readonly shouldPreserveEmpty: PreserveEmptyPredicate; readonly sortStorage: StorageSort; }
+./contract: const sqlContractSerializationPreserveEmpty: PreserveEmptyPredicate
 ./contract: const sqlExpressionAuthoringEntry: DataTypeAuthoringEntry
 ./contract: const sqlExpressionDataType: DataType
 ./contract: const sqlExpressionRegistration: SqlExpressionRegistration

@@ -31,6 +31,26 @@ const shouldPreserveEmpty: PreserveEmptyPredicate = (path) =>
   isUnconstrainedFieldSchema(path) ||
   matchesPreserveEmptyPattern(path);
 
+// A codec's type parameters are the codec's own data: `false`, `[]` and `{}`
+// inside them are what the codec is rebuilt from at runtime. They sit on a
+// field type, `type.typeParams`, and on a union member, `members.typeParams`.
+const isInsideCodecTypeParams = (path: readonly string[]): boolean =>
+  path.some(
+    (segment, index) =>
+      segment === 'typeParams' &&
+      index < path.length - 1 &&
+      (path[index - 1] === 'type' || path[index - 1] === 'members'),
+  );
+
+/**
+ * Preserve-empty predicate for writing a Mongo contract to disk: the hashing
+ * predicate, plus everything inside a codec's type parameters. The storage
+ * hash goes on omitting those (it uses `mongoContractCanonicalizationHooks`),
+ * so writing them changes no hash.
+ */
+export const mongoContractSerializationPreserveEmpty: PreserveEmptyPredicate = (path) =>
+  isInsideCodecTypeParams(path) || shouldPreserveEmpty(path);
+
 export const mongoContractCanonicalizationHooks: {
   readonly shouldPreserveEmpty: PreserveEmptyPredicate;
 } = {

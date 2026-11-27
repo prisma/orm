@@ -3,7 +3,10 @@ import type { Contract } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
 import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';
-import { mongoContractCanonicalizationHooks } from '../src/canonicalization-hooks';
+import {
+  mongoContractCanonicalizationHooks,
+  mongoContractSerializationPreserveEmpty,
+} from '../src/canonicalization-hooks';
 
 const { shouldPreserveEmpty } = mongoContractCanonicalizationHooks;
 
@@ -133,5 +136,76 @@ describe('canonicalization of model storage', () => {
     });
 
     expect(result['domain']).toEqual({ namespaces: { app: { models: { Epic: epic } } } });
+  });
+});
+
+describe('canonicalization of codec type parameters', () => {
+  const typeParams = { schema: [{ unit: false }], options: {}, list: [] };
+  const scalar = { kind: 'scalar', codecId: 'acme/json@1', typeParams };
+  const fields = {
+    flag: { nullable: false, type: scalar },
+    either: { nullable: false, type: { kind: 'union', members: [scalar] } },
+  };
+  const contract: Contract = blindCast({
+    targetFamily: 'mongo',
+    target: 'mongo',
+    profileHash: 'test-profile',
+    roots: {},
+    domain: {
+      namespaces: {
+        app: {
+          models: {
+            Setting: { fields, relations: {}, storage: { collection: 'settings', fields: {} } },
+          },
+        },
+      },
+    },
+    storage: {
+      namespaces: { app: { id: 'app', entries: { valueObject: { Prefs: { fields } } } } },
+    },
+    extensions: {},
+    capabilities: {},
+    meta: {},
+  });
+
+  const canonicalize = (preserve: (path: readonly string[]) => boolean) =>
+    canonicalizeContractToObject(contract, {
+      serializeContract: (c) =>
+        blindCast<JsonObject, 'test contract literal is already plain JSON data'>(c),
+      shouldPreserveEmpty: preserve,
+    });
+
+  it('keeps false, [] and {} inside typeParams when a contract is written', () => {
+    const result = canonicalize(mongoContractSerializationPreserveEmpty);
+    expect({ domain: result['domain'], storage: result['storage'] }).toEqual({
+      domain: {
+        namespaces: {
+          app: {
+            models: {
+              Setting: { fields, relations: {}, storage: { collection: 'settings', fields: {} } },
+            },
+          },
+        },
+      },
+      storage: {
+        namespaces: { app: { id: 'app', entries: { valueObject: { Prefs: { fields } } } } },
+      },
+    });
+  });
+
+  it('leaves the hashing predicate unchanged, so no storage hash changes', () => {
+    const storage = blindCast<
+      {
+        namespaces: {
+          app: { entries: { valueObject: { Prefs: { fields: { flag: { type: unknown } } } } } };
+        };
+      },
+      'canonicalization keeps the shape of the test contract'
+    >(canonicalize(shouldPreserveEmpty)['storage']);
+    expect(storage.namespaces.app.entries.valueObject.Prefs.fields.flag.type).toEqual({
+      kind: 'scalar',
+      codecId: 'acme/json@1',
+      typeParams: { schema: [{}] },
+    });
   });
 });
