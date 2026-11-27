@@ -4,11 +4,11 @@ import { CrossReferenceSchema, crossRef } from '../src/cross-reference';
 
 describe('crossRef', () => {
   it('defaults the namespace to __unbound__ when omitted', () => {
-    expect(crossRef('User')).toEqual({ namespace: '__unbound__', model: 'User' });
+    expect(crossRef('User')).toStrictEqual({ namespace: '__unbound__', model: 'User' });
   });
 
   it('uses the provided namespace when supplied', () => {
-    expect(crossRef('User', 'auth')).toEqual({ namespace: 'auth', model: 'User' });
+    expect(crossRef('User', 'auth')).toStrictEqual({ namespace: 'auth', model: 'User' });
   });
 
   it('carries the contract space when supplied', () => {
