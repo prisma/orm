@@ -52,7 +52,7 @@ CI checks every pull request for changes that would break code written against t
 | --- | --- | --- | --- |
 | Type tests | A changed declaration: an export removed, a parameter narrowed, a required member added to an interface users implement | For each export of the last release, a generated test asks TypeScript whether the current export can stand where the old one stood | On a break nobody has recorded |
 | The last release's example apps | A changed query result type, which is computed from the user's contract and can change while no declaration does | The apps under `examples/`, as they were at the last release, are compiled against the current build | On an error nobody has recorded |
-| The API list and the description | A new or changed export, including one made by accident | Each package commits a generated `api.txt`. A pull request that changes one must name each changed export in its description, with a reason | Always |
+| The API list and the description | A new or changed export, including one made by accident | Each package commits a generated `api.txt`. A pull request that changes one must name each changed export in its description, with a reason | Until the description names each change |
 
 Four rules complete the decision:
 
@@ -74,13 +74,13 @@ A comparison in the type tests ends in one of four ways. The rest of this record
 
 ## Why
 
-Prisma 8's compatibility policy promises that, from `8.0.0`, an application upgrades to any later `8.x` release without changing its code. Each part of the policy is in force from the first release candidate after the pull request that brings it merges. Before `8.0.0` a break is still possible, but only as a decision someone has made and written down, with upgrade instructions. So the checks fail on a break from the start, and a record is how a break is decided. This is also how the checks are proven before anyone relies on them.
+Prisma 8's compatibility policy promises that, from `8.0.0`, an application that uses only APIs without a maturity level upgrades to any later `8.x` release without changing its code. A record of kind `break` is then an exception to that promise, which the release notes must name. A release candidate makes users no such promise. But a break in one should still be a decision someone made, so the checks apply to every release, release candidates included, and a record is how the decision is written down. That also proves the checks on real changes.
 
-Three kinds of change break code without anyone meaning to, and each needs a different check.
+Three kinds of change go unnoticed without a check, and each needs a different one.
 
 - **A changed declaration** stops existing code compiling. The compiler is the best judge of that, given the old declarations and the new ones.
 - **A changed result type.** The type of a query's result is computed from the user's contract and the query. It can change while every exported declaration stays the same, so only real code against a real contract shows it. The example apps are that code.
-- **An accidental export.** Once a release exports something, users can depend on it, and from `8.0.0` it stays until the next major version. An addition breaks nothing, so no test against the last release can find it. A person has to see it, and the list makes it visible.
+- **An accidental export.** Once a release exports something, users can depend on it, and removing it later is a break. An addition breaks nothing, so no test against the last release can find it. A person has to see it, and the list makes it visible.
 
 ## How the type tests work
 
@@ -167,7 +167,7 @@ So a failure is checked before it counts. A second copy of the last release's de
 | 1. TypeScript compares the build with the release | Pass | Go to step 2 |
 | 2. The same test, between the release and its copy | The failure in step 1 is real: **break** | TypeScript cannot compare this type across copies. Go to step 3 |
 | 3. The structural comparison: a second comparison, written for this check, that compares the two types member by member through a mapped type | Proves nothing, because it fills type parameters with their constraints. Go to step 4 | **Break** |
-| 4. Steps 1 to 3 again, for each member of the type | When every member passes step 1: pass, reported as "decided member by member" | A break in that member, or **undecided** when a member cannot be settled either |
+| 4. Steps 1 to 3 again, for each member of the type | When every member passes step 1, and the type has no call, construct or index signature or symbol key, which this step cannot compare: pass, reported as "decided member by member". Otherwise undecided | A break in that member, or **undecided** when a member cannot be settled either |
 
 A type that has no members to split into, such as a function or a union, stops after step 3 as undecided. So does anything that is too deep for TypeScript to finish.
 
@@ -207,10 +207,10 @@ A similar name does not count. An `ea_createClient` with its own declaration, be
 Under each break, the job prints a record. The author pastes it into the package's `api-breaks.json` and writes the reason:
 
 ```json
-{"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"A cache always needs a store; see the upgrade instructions."}
+{"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"A cache always needs a store; see the release notes."}
 ```
 
-`kind` is `break` for a deliberate break, which the release's upgrade instructions must name. It is `allowed` for a change the policy permits and the check reports anyway: either the change is safe for users, or it breaks only an API with a level that the check cannot recognise as one. The fingerprint covers the export's lines in `api.txt` and the lines of every type of the same package that they use. When any of them changes, the record stops applying and the break is reported again, so a record cannot hide a later, different break. A record whose export no longer breaks fails the job, so it cannot outlive its break either. Changing a record file is itself an API change, which the description must name.
+`kind` is `break` for a deliberate break, which the release notes must name. It is `allowed` for a change the policy permits and the check reports anyway: either the change is safe for users, or it breaks only an API with a level that the check cannot recognise as one. The fingerprint covers the export's lines in `api.txt` and the lines of every type of the same package that they use. When any of them changes, the record stops applying and the break is reported again, so a record cannot hide a later, different break. A record whose export no longer breaks fails the job, so it cannot outlive its break either. Changing a record file is itself an API change, which the description must name.
 
 ## How the example apps cover result types
 
@@ -239,7 +239,7 @@ Reviewers, people and agents, then judge what CI cannot: whether each addition i
 ## Consequences
 
 - Where the checks are required, a break cannot merge unless someone records why, and a new export cannot merge unless the description names it.
-- The upgrade instructions must name each record of kind `break`. No check enforces that.
+- The release notes must name each record of kind `break`. No check enforces that.
 - Some reported breaks are permitted by the policy, and someone has to record them as `allowed`.
 - Some changed lines in an `api.txt` are not API changes, and the description must still name their package.
 - The type tests install a release on every run, so they need the registry. A full run takes several minutes, and several gigabytes of memory for the largest packages.
@@ -254,7 +254,7 @@ Reviewers, people and agents, then judge what CI cannot: whether each addition i
 - **Generic types.** A generic type, interface or class is compared only with its type parameters' defaults, or `never`. A change that shows only for other type arguments is not seen, and a type that evaluates to `never` is not compared at all.
 - **Some other type changes:** a property made `readonly`, and a change to a type inside a namespace that holds only types, which is listed as not compared.
 - **A method users override.** If a class's method is not abstract, a subclass users write can still override it. A narrower return type on that method stops their override compiling. The check does not see it, because it treats a class as something users call, not something they extend, except for abstract members.
-- **A level on a member.** Only an export's own name is read, so a member named with a level, such as `Client.preview_run`, is checked like its export. Its break is permitted and still reported, and is recorded as `allowed`.
+- **A level on a member.** Only an export's own name is read, so a member named with a level, such as `Client.preview_run`, is checked like its export. Its break fails like any other, and is recorded as `allowed`.
 - **Third-party types.** Both sides use the same versions of third-party packages, so a dependency upgrade that changes what our packages expose is not seen.
 - **The `exports` field.** Each package's `exports` is written by the build and committed. One that is out of date is not seen.
 

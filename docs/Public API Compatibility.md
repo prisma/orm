@@ -71,6 +71,7 @@ The `API compatibility` job installs the last release of each package beside you
 @prisma/orm-extension-middleware-cache: 16 exports on 1 paths; 16 comparisons, and 0 forwarded names checked only for existence (they are compared in the package that declares them); breaks 1, undecided 0, not compared 0, recorded 0; 0.9 s, 588 MB — FAILS
   break  @prisma/orm-extension-middleware-cache: createCacheMiddleware (value): Type 'undefined' is not assignable to type 'CacheMiddlewareOptions<TMeta>'.
     to record it: {"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"…"}
+    the fingerprint is taken from the package’s api.txt as it is on disk: run pnpm build and pnpm api:update first, or it will not match
 ```
 
 The break line names the package and import path, the export, the test that failed in brackets, and TypeScript's message.
@@ -111,7 +112,7 @@ Do not run it over all packages on your machine: by default it compares three pa
 
 Besides breaks, the report lists these entries. Only `problem` fails the job.
 
-**`problem`** means the check could not do its work, or a record no longer matches a break and must be removed. It fails the job at any version.
+**`problem`** means the check could not do its work, or a record no longer matches a break and must be removed. It always fails the job.
 
 **`undecided`** means TypeScript could not settle the comparison, so it neither passed nor failed. The word in brackets says where it stopped:
 
@@ -161,7 +162,7 @@ A level on a member, such as a method named `preview_run` on a class, is not rea
 
 ## Recording a break you mean
 
-A deliberate break needs a reason a user would accept, and the release's upgrade instructions must name it.
+A deliberate break needs a reason a user would accept, and the release notes must name it.
 
 1. Run `pnpm build` and `pnpm api:update`, so that the fingerprint in the printed record is taken from the lists you will commit.
 2. Copy the record the job prints under the break (`to record it: …`) into the package's `api-breaks.json`, which is a JSON array beside its `api.txt`.
@@ -169,7 +170,7 @@ A deliberate break needs a reason a user would accept, and the release's upgrade
 4. Name the package in your description's `## API changes` section. The `API changes named` job treats a changed record as an API change.
 
 ```json
-[{"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"A cache always needs a store; see the upgrade instructions."}]
+[{"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"A cache always needs a store; see the release notes."}]
 ```
 
 `kind` is `break` for a deliberate break. It is `allowed` for a change the policy permits and the check reports anyway. There are two such cases:
