@@ -14,7 +14,7 @@ Six slices, one pull request each, in this order. PostgreSQL comes first because
 | 2. PostgreSQL: split the marker into signatures and configuration | Not started |
 | 3. Rename the concept from "marker" to "signature" | Not started |
 | 4. SQLite, MySQL, MariaDB and MongoDB | Not started |
-| 5. Prisma Studio reads the new names | [prisma/studio#1606](https://github.com/prisma/studio/pull/1606) open, reviewed twice, waiting for a Studio maintainer. Console (`prisma/pdp-control-plane`) then needs that Studio release |
+| 5. Prisma Studio reads the new names | [prisma/studio#1606](https://github.com/prisma/studio/pull/1606) merged on 2026-11-27. Not yet published: Studio publishes when its maintainers merge the "version packages" pull request. Console (`prisma/pdp-control-plane`) then needs that Studio release |
 | 6. Decide whether PostgreSQL's contract table becomes a documented feature | Not started |
 
 ## Slice 1. PostgreSQL: the `_prisma` contract space, applied first, and the schema rename
