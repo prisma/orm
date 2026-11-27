@@ -213,7 +213,7 @@ function parsedDeclarations<F extends ContractSourceFile>(
         `${file.path} does not parse: ${first.message} (line ${first.range.start.line + 1}).`,
       );
     }
-    collectDeclarations(file, document, comparison.defaultNamespace, declarations);
+    collectDeclarations(file, document, comparison.support.defaultNamespace, declarations);
   }
   return declarations;
 }
@@ -299,7 +299,7 @@ function modelConflicts(
   const { physicalName, table } = block;
   if (physicalName === undefined || table === undefined) return;
   const lookedUp = new Set(modelNameCandidates(physicalName));
-  const newNamespace = comparison.namespace ?? comparison.defaultNamespace;
+  const newNamespace = comparison.namespace ?? comparison.support.defaultNamespace;
   for (const { file, namespaceId, declaration } of models) {
     const name = declaration.name()?.name();
     if (name === undefined) continue;
@@ -489,7 +489,7 @@ export function editContractSource<F extends ContractSourceFile>(
       storedUnderAnotherName.map(storedUnderAnotherNameReason).join(' '),
     );
   }
-  const newNamespace = comparison.namespace ?? comparison.defaultNamespace;
+  const newNamespace = comparison.namespace ?? comparison.support.defaultNamespace;
   for (const block of added) {
     const other = others.find(
       ({ namespaceId, name }) => namespaceId === newNamespace && name === block.modelName,
@@ -543,7 +543,7 @@ export function editContractSource<F extends ContractSourceFile>(
   const rejected = firstNewDiagnostic(
     files,
     files.map((candidate) => (candidate === file ? { path: file.path, text: code } : candidate)),
-    comparison.defaultNamespace,
+    comparison.support.defaultNamespace,
     insertions.map(({ offset, text }) => ({ path: file.path, offset, length: text.length })),
   );
   if (rejected !== undefined) {

@@ -72,8 +72,7 @@ export interface ContractComparison {
   readonly problems: readonly ContractProblem[];
   readonly idStrategy: IdStrategy;
   readonly namespace: string | undefined;
-  /** The namespace a model printed outside a `namespace` block belongs to. */
-  readonly defaultNamespace: string;
+  /** The target's support, whose `defaultNamespace` is the namespace of a model printed outside a `namespace` block. */
   readonly support: TargetSupport;
   /** Contract models that Better Auth's foreign keys reference but that are not among the models it expects, by physical model name. */
   readonly referencedModels: ReadonlyMap<string, FoundModel>;
@@ -272,7 +271,6 @@ function invalidNameProblems(models: readonly BetterAuthModel[]): ContractProble
 export function compareContract(input: ComparisonInput): ContractComparison {
   const { contract, betterAuthOptions, namespace, support } = input;
   const idStrategy = idStrategyOf(betterAuthOptions);
-  const defaultNamespace = support.defaultNamespace;
   const expectedModelList = managedModels(input.tables, input);
   const nameProblems: ContractProblem[] = [
     ...invalidNameProblems(expectedModelList),
@@ -289,7 +287,6 @@ export function compareContract(input: ComparisonInput): ContractComparison {
       uuidKeyedModels: new Set(),
       idStrategy,
       namespace,
-      defaultNamespace,
       support,
     };
   }
@@ -342,7 +339,6 @@ export function compareContract(input: ComparisonInput): ContractComparison {
       : new Set(),
     idStrategy,
     namespace,
-    defaultNamespace,
     support,
   };
 }

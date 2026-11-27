@@ -85,7 +85,7 @@ function printedModelFor(
     case 'missing':
       return {
         name: upperFirst(model.expected.physicalName),
-        namespaceId: comparison.namespace ?? comparison.defaultNamespace,
+        namespaceId: comparison.namespace ?? comparison.support.defaultNamespace,
         existing: false,
         physicalName: model.expected.physicalName,
         table: model.expected.physicalName,
