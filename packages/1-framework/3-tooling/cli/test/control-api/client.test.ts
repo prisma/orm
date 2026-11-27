@@ -1172,21 +1172,21 @@ describe('ControlClient progress emission', () => {
       timeouts.databaseOperation,
     );
 
-    it("canonicalises with the target's preserve-empty hook before the family re-reads the contract", async () => {
+    it("canonicalises with the target's normalizeStorage hook before the family re-reads the contract", async () => {
       const { mockFamily, mockTarget, mockAdapter, mockFamilyInstance } = createMockComponents();
       const target = {
         ...mockTarget,
         contractSerializer: {
           ...mockTarget.contractSerializer,
-          shouldPreserveEmpty: (path: readonly string[]) => path.at(-1) === 'tables',
+          normalizeStorage: (storage: unknown) => ({
+            ...(storage as Record<string, unknown>),
+            normalized: true,
+          }),
         },
       } as unknown as typeof mockTarget;
+      const readStorages: unknown[] = [];
       mockFamilyInstance.deserializeContract = (json: unknown) => {
-        const tables = (json as { storage: { namespaces: { app: { tables?: unknown } } } }).storage
-          .namespaces.app.tables;
-        if (tables === undefined) {
-          throw new Error('storage.namespaces.app.tables must be an object (was missing)');
-        }
+        readStorages.push((json as { storage: unknown }).storage);
         return json as Contract;
       };
       const client = createControlClient({ family: mockFamily, target, adapter: mockAdapter });
@@ -1197,7 +1197,10 @@ describe('ControlClient progress emission', () => {
       });
       await client.close();
 
-      expect(rendered.ok).toBe(true);
+      expect({ ok: rendered.ok, lastRead: readStorages.at(-1) }).toMatchObject({
+        ok: true,
+        lastRead: { normalized: true },
+      });
     });
 
     it('reports a contract the family rejects as CONTRACT_VALIDATION_FAILED', async () => {

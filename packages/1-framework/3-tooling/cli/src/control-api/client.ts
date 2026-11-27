@@ -799,8 +799,7 @@ class ControlClientImpl implements ControlClient {
       serializeContract: (c) => contractSerializer.serializeContract(c),
       deserializeContract: (json) => familyInstance.deserializeContract(json),
       typesModule,
-      ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
-      ...ifDefined('sortStorage', contractSerializer.sortStorage),
+      ...ifDefined('normalizeStorage', contractSerializer.normalizeStorage),
       ...ifDefined('supportsNamespaces', this.options.target.supportsNamespaces),
     });
   }

@@ -16,8 +16,8 @@ function storageWithProtoCollection(payload: Record<string, unknown>) {
   };
 }
 
-function hashOf(storage: Record<string, unknown>, sortStorage = createStorageSort([])) {
-  return computeStorageHash({ target: 'mongo', targetFamily: 'mongo', storage, sortStorage });
+function hashOf(storage: Record<string, unknown>, normalizeStorage = createStorageSort([])) {
+  return computeStorageHash({ target: 'mongo', targetFamily: 'mongo', storage, normalizeStorage });
 }
 
 describe('storage hash of names every object has as a property', () => {
@@ -28,11 +28,11 @@ describe('storage hash of names every object has as a property', () => {
   });
 
   it('hashes what they hold through a storage sort that walks every entry', () => {
-    const sortStorage = createStorageSort([
+    const normalizeStorage = createStorageSort([
       { path: ['namespaces', '*', 'entries', 'collection', '*'], arrayKeys: ['indexes'] },
     ]);
-    expect(hashOf(storageWithProtoCollection({ a: 1 }), sortStorage)).not.toBe(
-      hashOf(storageWithProtoCollection({ b: 2 }), sortStorage),
+    expect(hashOf(storageWithProtoCollection({ a: 1 }), normalizeStorage)).not.toBe(
+      hashOf(storageWithProtoCollection({ b: 2 }), normalizeStorage),
     );
   });
 });

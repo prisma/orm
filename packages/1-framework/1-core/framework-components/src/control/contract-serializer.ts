@@ -1,4 +1,4 @@
-import type { PreserveEmptyPredicate, StorageSort } from '@internal/contract/hashing';
+import type { NormalizeStorage } from '@internal/contract/hashing';
 import type { JsonObject } from '@internal/utils/json';
 
 /**
@@ -43,39 +43,14 @@ export interface ContractSerializer<TContract> {
   serializeContract(contract: TContract): JsonObject;
 
   /**
-   * Optional family-contributed preserve-empty predicate for the
-   * framework canonicalizer. When present, the canonicalizer calls this
-   * inside its default-omission walk to let the family veto the stripping
-   * of empty objects/arrays/`false` values at family-specific storage paths.
-   * Families whose storage has no such special-case paths omit this hook.
+   * Optional family-contributed normal form of `storage` for the framework canonicalizer, which applies it to the serialized `storage` before the final key sort. The family leaves out the fields it defines as equal to their absence and orders its storage arrays; the framework itself leaves out nothing.
    */
-  readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
+  readonly normalizeStorage?: NormalizeStorage;
 
   /**
-   * Optional family-contributed storage sort hook for the framework
-   * canonicalizer. When present, the canonicalizer applies this to the
-   * serialized `storage` subtree after the omission walk and before the
-   * final key sort. Families that need deterministic ordering of storage
-   * arrays (e.g. SQL `indexes`/`uniques`) supply this hook.
-   */
-  readonly sortStorage?: StorageSort;
-
-  /**
-   * The canonicalization hooks the family's emit pipeline computes storage
-   * hashes with. Distinct from {@link shouldPreserveEmpty} /
-   * {@link sortStorage}: those govern on-disk serialization and may be
-   * broader per target (Postgres preserves required entity-kind fields at
-   * default values so the persisted contract re-deserializes), while a hash
-   * recompute must reproduce the exact canonical form the published
-   * `storageHash` was derived from. Integrity checks that recompute storage
-   * hashes (snapshot content verification, descriptor self-consistency)
-   * must use these hooks, never the serialization pair. A family whose hash
-   * input is not the persisted storage shape (Mongo hashes a projection)
-   * must not publish hooks; its snapshots then read without content
-   * verification.
+   * The canonicalization hooks storage hashes are recomputed with, the same hooks the family writes `storage` with. Integrity checks that recompute storage hashes (snapshot content verification, descriptor self-consistency) use these. A family whose hash input is not the persisted storage shape (Mongo hashes a projection) must not publish them; its snapshots then read without content verification.
    */
   readonly hashCanonicalizationHooks?: {
-    readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
-    readonly sortStorage?: StorageSort;
+    readonly normalizeStorage?: NormalizeStorage;
   };
 }

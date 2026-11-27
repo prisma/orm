@@ -1717,7 +1717,8 @@
 ./contract-ts: type TypeScriptContractFromPathOptions = (ConfigTarget & TypeScriptContractSpecifierOptions) | (ConfigTarget & { readonly defaultControlPolicy?: never; readonly createNamespace?: never; })
 ./contract/authored-check-naming: function lowerAuthoredCheck(tableName: string, authored: AuthoredCheckInput, warnings?: AuthoringWarningSink): CheckConstraintInput
 ./contract/authored-check-naming: type AuthoredCheckInput = { readonly expression: string; readonly map: string | undefined; readonly name: string | undefined; }
-./contract/canonicalization-hooks: const sqlContractCanonicalizationHooks: { readonly shouldPreserveEmpty: PreserveEmptyPredicate; readonly sortStorage: StorageSort; }
+./contract/canonicalization-hooks: const sqlContractCanonicalizationHooks: { readonly normalizeStorage: NormalizeStorage; }
+./contract/canonicalization-hooks: function normalSqlDomain(domain: unknown): unknown
 ./contract/check-expressions: function discriminatorValueSet(baseModelName: string, discriminatorField: string, variantValues: readonly string[]): { readonly name: string; readonly values: readonly string[]; }
 ./contract/check-expressions: function reachesAny(storage: Pick<StorageBase, 'namespaces'>, from: EntityCoordinate<'storage', 'valueObject'>, targets: ReadonlySet<string>): boolean
 ./contract/check-expressions: function referenceKey(reference: EntityCoordinate<'storage', 'valueObject'>): string
@@ -2297,7 +2298,7 @@
 ./contract: const StorageTableSchema: ObjectType<{ columns: { [x: string]: { dataType: string; codecId: string; nullable: boolean; many?: false | { elementNullable: boolean; }; typeParams?: Record<string, unknown>; default?: ColumnDefaultFunction | ColumnDefaultLiteral; control?: "external" | "managed" | "observed" | "tolerated"; valueSet?: { plane: "storage"; namespaceId: string; entityKind: "valueSet"; entityName: string; spaceId?: string; }; }; }; uniques: readonly UniqueConstraintInput[]; indexes: readonly { name: string; unique: boolean; prefix?: string; columns?: readonly string[]; expression?: string; where?: string; type?: string; options?: Record<string, unknown>; }[]; foreignKeys: readonly ForeignKeyInput[]; primaryKey?: PrimaryKeyInput; control?: "external" | "managed" | "observed" | "tolerated"; checks?: readonly { name: string; expression: string; prefix?: string; }[]; }, {}>
 ./contract: const StorageValueSetSchema: ObjectType<{ kind: "valueSet"; values: readonly (Record<string, unknown> | boolean | null | number | string | unknown[])[]; }, {}>
 ./contract: const generatedIdColumnAliases: { readonly UuidString: { readonly kind: "typeAlias"; readonly documentation: "Fixed-length text of 36 characters, the column a UUID is stored in as text."; readonly output: { readonly type: { readonly codecId: "sql/char@1"; readonly typeParams: { readonly length: 36; }; }; }; }; readonly Ulid: { readonly kind: "typeAlias"; readonly documentation: "Fixed-length text of 26 characters, the column a ULID is stored in."; readonly output: { readonly type: { readonly codecId: "sql/char@1"; readonly typeParams: { readonly length: 26; }; }; }; }; readonly Nanoid: { readonly kind: "typeAlias"; readonly documentation: "Fixed-length text of 21 characters, the column a nanoid of the default size is stored in."; readonly output: { readonly type: { readonly codecId: "sql/char@1"; readonly typeParams: { readonly length: 21; }; }; }; }; readonly Cuid2: { readonly kind: "typeAlias"; readonly documentation: "Fixed-length text of 24 characters, the column a CUID2 is stored in."; readonly output: { readonly type: { readonly codecId: "sql/char@1"; readonly typeParams: { readonly length: 24; }; }; }; }; readonly Ksuid: { readonly kind: "typeAlias"; readonly documentation: "Fixed-length text of 27 characters, the column a KSUID is stored in."; readonly output: { readonly type: { readonly codecId: "sql/char@1"; readonly typeParams: { readonly length: 27; }; }; }; }; }
-./contract: const sqlContractCanonicalizationHooks: { readonly shouldPreserveEmpty: PreserveEmptyPredicate; readonly sortStorage: StorageSort; }
+./contract: const sqlContractCanonicalizationHooks: { readonly normalizeStorage: NormalizeStorage; }
 ./contract: const sqlExpressionAuthoringEntry: DataTypeAuthoringEntry
 ./contract: const sqlExpressionDataType: DataType
 ./contract: const sqlExpressionRegistration: SqlExpressionRegistration
@@ -2357,6 +2358,7 @@
 ./contract: function model(tableName: string, fields: Record<string, SqlModelFieldStorage>, relations?: Record<string, unknown>, namespaceId?: string): { storage: SqlModelStorage; fields: Record<string, { readonly nullable: boolean; readonly type: ScalarFieldType; readonly many: false; }>; relations: Record<string, unknown>; }
 ./contract: function nameIsCatalogText<Params extends SqlTypeParams>(type: SqlDataType<Params>): boolean
 ./contract: function nonEmptyTypeParams(typeParams: Record<string, unknown> | undefined): Record<string, unknown> | undefined
+./contract: function normalSqlDomain(domain: unknown): unknown
 ./contract: function pk(...columns: readonly string[]): PrimaryKey
 ./contract: function printSqlExpressionLiteral(text: string): string
 ./contract: function providesEntityHandleLowering(authoring: unknown): authoring is SqlEntityHandleLoweringContribution
@@ -3289,9 +3291,8 @@
 ./family/ir: class SqlContractSerializerBase, protected required method serializeNamespaceEntries(entries: Readonly<Record<string, Readonly<Record<string, unknown>>>>): Record<string, Record<string, JsonObject>>
 ./family/ir: class SqlContractSerializerBase, required method deserializeContract<T extends TContract = TContract>(json: unknown): T
 ./family/ir: class SqlContractSerializerBase, required method serializeContract(contract: TContract): JsonObject
-./family/ir: class SqlContractSerializerBase, required property hashCanonicalizationHooks: { readonly shouldPreserveEmpty: PreserveEmptyPredicate; readonly sortStorage: StorageSort; }
-./family/ir: class SqlContractSerializerBase, required property shouldPreserveEmpty: PreserveEmptyPredicate
-./family/ir: class SqlContractSerializerBase, required property sortStorage: StorageSort
+./family/ir: class SqlContractSerializerBase, required property hashCanonicalizationHooks: { readonly normalizeStorage: NormalizeStorage; }
+./family/ir: class SqlContractSerializerBase, required property normalizeStorage: NormalizeStorage
 ./family/ir: class SqlSchemaVerifierBase, abstract protected required method verifyCommonSqlSchema(options: SchemaVerifyOptions<TContract, TSchema>): readonly SchemaDiffIssue[]
 ./family/ir: class SqlSchemaVerifierBase, abstract protected required method verifyTargetExtensions(options: SchemaVerifyOptions<TContract, TSchema>): readonly SchemaDiffIssue[]
 ./family/ir: class SqlSchemaVerifierBase, required method verifySchema(options: SchemaVerifyOptions<TContract, TSchema>): SchemaVerifyResult
@@ -3392,9 +3393,8 @@
 ./family: class SqlContractSerializerBase, protected required method serializeNamespaceEntries(entries: Readonly<Record<string, Readonly<Record<string, unknown>>>>): Record<string, Record<string, JsonObject>>
 ./family: class SqlContractSerializerBase, required method deserializeContract<T extends TContract = TContract>(json: unknown): T
 ./family: class SqlContractSerializerBase, required method serializeContract(contract: TContract): JsonObject
-./family: class SqlContractSerializerBase, required property hashCanonicalizationHooks: { readonly shouldPreserveEmpty: PreserveEmptyPredicate; readonly sortStorage: StorageSort; }
-./family: class SqlContractSerializerBase, required property shouldPreserveEmpty: PreserveEmptyPredicate
-./family: class SqlContractSerializerBase, required property sortStorage: StorageSort
+./family: class SqlContractSerializerBase, required property hashCanonicalizationHooks: { readonly normalizeStorage: NormalizeStorage; }
+./family: class SqlContractSerializerBase, required property normalizeStorage: NormalizeStorage
 ./family: class SqlSchemaVerifierBase, abstract protected required method verifyCommonSqlSchema(options: SchemaVerifyOptions<TContract, TSchema>): readonly SchemaDiffIssue[]
 ./family: class SqlSchemaVerifierBase, abstract protected required method verifyTargetExtensions(options: SchemaVerifyOptions<TContract, TSchema>): readonly SchemaDiffIssue[]
 ./family: class SqlSchemaVerifierBase, required method verifySchema(options: SchemaVerifyOptions<TContract, TSchema>): SchemaVerifyResult

@@ -14,7 +14,10 @@ import {
   hydrateNamespaceEntities,
   type Namespace,
 } from '@internal/framework-components/ir';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import {
+  normalSqlDomain,
+  sqlContractCanonicalizationHooks,
+} from '@internal/sql-contract/canonicalization-hooks';
 import { composeSqlEntityKinds } from '@internal/sql-contract/entity-kinds';
 import {
   isMaterializedSqlNamespace,
@@ -120,7 +123,17 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
   > = {
     1: {
       parse: (document) => this.parseContractV1(document),
-      print: (contract) => ({ formatVersion: 1, ...this.printContractV1(contract) }),
+      print: (contract) => {
+        const printed = this.printContractV1(contract);
+        return {
+          formatVersion: 1,
+          ...printed,
+          domain: blindCast<
+            JsonValue,
+            'the domain normal form only leaves fields out of the printed JSON domain'
+          >(normalSqlDomain(printed['domain'])),
+        };
+      },
     },
   };
 
@@ -152,9 +165,7 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
     >(contract);
   }
 
-  shouldPreserveEmpty = sqlContractCanonicalizationHooks.shouldPreserveEmpty;
-
-  sortStorage = sqlContractCanonicalizationHooks.sortStorage;
+  normalizeStorage = sqlContractCanonicalizationHooks.normalizeStorage;
 
   hashCanonicalizationHooks = sqlContractCanonicalizationHooks;
 

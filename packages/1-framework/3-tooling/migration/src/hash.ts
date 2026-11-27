@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { PreserveEmptyPredicate, StorageSort } from '@internal/contract/hashing';
+import type { NormalizeStorage } from '@internal/contract/hashing';
 import { computeStorageHash } from '@internal/contract/hashing';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { blindCast } from '@internal/utils/casts';
@@ -8,16 +8,10 @@ import type { MigrationMetadata } from './metadata';
 import type { MigrationOps, OnDiskMigrationPackage } from './package';
 
 /**
- * The canonicalization hooks a family's emit pipeline computes storage
- * hashes with. Sourced from the target serializer's
- * `hashCanonicalizationHooks` — never from its serialization-preserve
- * hooks, which may be broader (Postgres preserves required entity-kind
- * fields at default values on disk that the published hash canonicalized
- * away).
+ * The canonicalization hooks a family's emit pipeline computes storage hashes with, sourced from the target serializer's `hashCanonicalizationHooks`.
  */
 export interface SnapshotCanonicalizationHooks {
-  readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
-  readonly sortStorage?: StorageSort;
+  readonly normalizeStorage?: NormalizeStorage;
 }
 
 /**
@@ -43,8 +37,7 @@ export function recomputePublishedStorageHash(args: {
     target: typeof args.target === 'string' ? args.target : '',
     targetFamily: typeof args.targetFamily === 'string' ? args.targetFamily : '',
     storage: storageWithoutHash,
-    ...ifDefined('shouldPreserveEmpty', args.hooks?.shouldPreserveEmpty),
-    ...ifDefined('sortStorage', args.hooks?.sortStorage),
+    ...ifDefined('normalizeStorage', args.hooks?.normalizeStorage),
   });
 }
 

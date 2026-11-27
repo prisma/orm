@@ -1,8 +1,6 @@
-import { isArrayEqual } from '@internal/utils/array-equal';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
-import { matchesPathPattern, type PathPattern } from './canonicalization-path-match';
 import type { Contract } from './contract-types';
 
 /**
@@ -10,59 +8,15 @@ import type { Contract } from './contract-types';
  * this to convert an in-memory contract (which may carry class-instance
  * IR nodes whose runtime-only fields must not appear in the on-disk
  * envelope) into a plain JsonObject before applying the family-agnostic
- * canonical-key ordering / default-omission / sort steps. Targets whose
+ * canonical-key ordering and sort steps. Targets whose
  * contract is JSON-clean by construction return the contract unchanged.
  */
 export type SerializeContract = (contract: Contract) => JsonObject;
 
 /**
- * Family-contributed predicate for the default-omission walk. Called when
- * a value at `path` is a default (empty object/array or `false`); if this
- * returns `true` the value is kept rather than stripped.
- *
- * The framework only calls the predicate inside the `isDefaultValue` branch,
- * so there is no need to guard against non-default values.
+ * Family-contributed normal form of the `storage` section. The framework applies it to `storage` before it sorts keys, both when it writes a contract and when it hashes storage, so the written section and the hash input are one form. The framework itself leaves out no value; a family leaves out the fields it defines as equal to their absence, and orders the storage arrays whose order carries no meaning.
  */
-export type PreserveEmptyPredicate = (path: readonly string[]) => boolean;
-
-/**
- * Family-contributed storage sort. Applied to the serialized `storage`
- * subtree after the default-omission walk; the result replaces the
- * `storage` field before the final key sort. Use to establish a
- * deterministic order for storage arrays (indexes, uniques) that the
- * family-agnostic `sortObjectKeys` pass cannot handle.
- */
-export type StorageSort = (storage: unknown) => unknown;
-
-const DOMAIN_NAMESPACE_SLOT_PATTERN = ['domain', 'namespaces', '*'] as const satisfies PathPattern;
-const DOMAIN_MODELS_CONTAINER_PATTERN = [
-  'domain',
-  'namespaces',
-  '*',
-  'models',
-] as const satisfies PathPattern;
-const DOMAIN_MODEL_RELATIONS_PATTERN = [
-  'domain',
-  'namespaces',
-  '*',
-  'models',
-  '*',
-  'relations',
-] as const satisfies PathPattern;
-const DOMAIN_MODEL_STORAGE_PATTERN = [
-  'domain',
-  'namespaces',
-  '*',
-  'models',
-  '*',
-  'storage',
-] as const satisfies PathPattern;
-const STORAGE_NAMESPACE_ENTRIES_PATTERN = [
-  'storage',
-  'namespaces',
-  '*',
-  'entries',
-] as const satisfies PathPattern;
+export type NormalizeStorage = (storage: unknown) => unknown;
 
 const TOP_LEVEL_ORDER = [
   'formatVersion',
@@ -79,105 +33,6 @@ const TOP_LEVEL_ORDER = [
   'defaultControlPolicy',
   'meta',
 ] as const;
-
-function isDefaultValue(value: unknown): boolean {
-  if (value === false) return true;
-  if (value === null) return false;
-  if (Array.isArray(value) && value.length === 0) return true;
-  if (typeof value === 'object' && value !== null) {
-    const keys = Object.keys(value);
-    return keys.length === 0;
-  }
-  return false;
-}
-
-function omitDefaults(
-  obj: unknown,
-  path: readonly string[],
-  shouldPreserveEmpty: PreserveEmptyPredicate | undefined,
-): unknown {
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
-  }
-
-  if (Array.isArray(obj)) {
-    return obj.map((item) => omitDefaults(item, path, shouldPreserveEmpty));
-  }
-
-  const result: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(obj)) {
-    const currentPath = [...path, key];
-
-    if (key === '_generated') {
-      continue;
-    }
-
-    if (key === 'generated' && value === false) {
-      continue;
-    }
-
-    if ((key === 'onDelete' || key === 'onUpdate') && value === 'noAction') {
-      continue;
-    }
-
-    if (isDefaultValue(value)) {
-      const isRequiredDomainNamespaces = isArrayEqual(currentPath, ['domain', 'namespaces']);
-      const isDomainNamespaceSlot = matchesPathPattern(currentPath, DOMAIN_NAMESPACE_SLOT_PATTERN);
-      const isRequiredDomainModels = matchesPathPattern(
-        currentPath,
-        DOMAIN_MODELS_CONTAINER_PATTERN,
-      );
-      const isRequiredStorageNamespaces = isArrayEqual(currentPath, ['storage', 'namespaces']);
-      const isStorageNamespaceEntries = matchesPathPattern(
-        currentPath,
-        STORAGE_NAMESPACE_ENTRIES_PATTERN,
-      );
-      const isRequiredRoots = isArrayEqual(currentPath, ['roots']);
-      const isRequiredExtensions = isArrayEqual(currentPath, ['extensions']);
-      const isRequiredCapabilities = isArrayEqual(currentPath, ['capabilities']);
-      const isRequiredMeta = isArrayEqual(currentPath, ['meta']);
-      const isRequiredExecutionDefaults = isArrayEqual(currentPath, [
-        'execution',
-        'mutations',
-        'defaults',
-      ]);
-      const isExtensionNamespace = currentPath.length === 2 && currentPath[0] === 'extensions';
-      const isModelRelations = matchesPathPattern(currentPath, DOMAIN_MODEL_RELATIONS_PATTERN);
-      const isModelStorage = matchesPathPattern(currentPath, DOMAIN_MODEL_STORAGE_PATTERN);
-
-      const isNullableField = key === 'nullable';
-      const isManyElementNullable = key === 'elementNullable' && path.at(-1) === 'many';
-
-      const isFamilyPreserved = shouldPreserveEmpty?.(currentPath) ?? false;
-
-      if (
-        !isRequiredDomainNamespaces &&
-        !isDomainNamespaceSlot &&
-        !isRequiredDomainModels &&
-        !isRequiredStorageNamespaces &&
-        !isStorageNamespaceEntries &&
-        !isRequiredRoots &&
-        !isRequiredExtensions &&
-        !isRequiredCapabilities &&
-        !isRequiredMeta &&
-        !isRequiredExecutionDefaults &&
-        !isExtensionNamespace &&
-        !isModelRelations &&
-        !isModelStorage &&
-        !isNullableField &&
-        !isManyElementNullable &&
-        !isFamilyPreserved
-      ) {
-        continue;
-      }
-    }
-
-    defineOwn(result, key, omitDefaults(value, currentPath, shouldPreserveEmpty));
-  }
-
-  return result;
-}
 
 /** Stores `value` as an own key of `target`, so a key named `__proto__` is a key rather than the prototype. */
 function defineOwn(target: Record<string, unknown>, key: string, value: unknown): void {
@@ -243,21 +98,8 @@ export interface CanonicalizeContractOptions {
    * the per-target serializer not putting them in the JSON shape.
    */
   readonly serializeContract: SerializeContract;
-  /**
-   * Family-contributed preserve-empty predicate. When the walk encounters a
-   * default value (empty object/array or `false`) at `path`, calling this
-   * with the full path allows the family to veto the omission. If absent,
-   * only the framework's family-agnostic required-slot rules apply.
-   */
-  readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
-  /**
-   * Family-contributed storage sort. Applied to the serialized `storage`
-   * subtree after the default-omission walk, before the final key sort.
-   * SQL family uses this to impose a deterministic order on `indexes` and
-   * `uniques` arrays within each namespace table. Families that require no
-   * special storage ordering omit this hook.
-   */
-  readonly sortStorage?: StorageSort;
+  /** The family's normal form of `storage`. Families whose storage has no defaults to leave out and no arrays to order omit it. */
+  readonly normalizeStorage?: NormalizeStorage;
 }
 
 /**
@@ -288,21 +130,18 @@ export function canonicalizeContractToObject(
 }
 
 /**
- * Applies the canonicalization rules to top-level contract sections, keyed by their contract names (`storage`, `capabilities`, `execution`, ...): defaults dropped, the family's `shouldPreserveEmpty` and `sortStorage` applied, and every key sorted.
+ * Applies the canonicalization rules to top-level contract sections, keyed by their contract names (`storage`, `capabilities`, `execution`, ...): the family's `normalizeStorage` applied to `storage`, then every key sorted. No value is left out.
  */
 export function canonicalizeSections(
   sections: Record<string, unknown>,
-  hooks: Pick<CanonicalizeContractOptions, 'shouldPreserveEmpty' | 'sortStorage'>,
+  hooks: Pick<CanonicalizeContractOptions, 'normalizeStorage'>,
 ): Record<string, unknown> {
-  const withDefaultsOmitted = blindCast<
-    Record<string, unknown>,
-    'canonicalization starts from a record and preserves its outer object shape'
-  >(omitDefaults(sections, [], hooks.shouldPreserveEmpty));
-  const withSortedStorage = hooks.sortStorage
-    ? { ...withDefaultsOmitted, storage: hooks.sortStorage(withDefaultsOmitted['storage']) }
-    : withDefaultsOmitted;
+  const withNormalStorage =
+    hooks.normalizeStorage && sections['storage'] !== undefined
+      ? { ...sections, storage: hooks.normalizeStorage(sections['storage']) }
+      : sections;
   return blindCast<Record<string, unknown>, 'sorting a record preserves its outer object shape'>(
-    sortObjectKeys(withSortedStorage),
+    sortObjectKeys(withNormalStorage),
   );
 }
 

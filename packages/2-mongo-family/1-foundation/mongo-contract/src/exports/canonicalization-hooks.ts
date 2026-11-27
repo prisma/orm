@@ -1,1 +1,1 @@
-export { mongoContractCanonicalizationHooks } from '../canonicalization-hooks';
+export { mongoContractCanonicalizationHooks, normalMongoDomain } from '../canonicalization-hooks';

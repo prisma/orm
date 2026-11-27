@@ -1,50 +1,8 @@
-import type { PreserveEmptyPredicate, StorageSort } from '@internal/contract/hashing';
-import {
-  createPreserveEmptyPredicate,
-  createStorageSort,
-  matchesPathPattern,
-  type NamedArraySortTarget,
-  type PathPattern,
-} from '@internal/contract/hashing-utils';
+import type { NormalizeStorage } from '@internal/contract/hashing';
+import { createStorageSort, type NamedArraySortTarget } from '@internal/contract/hashing-utils';
+import { isPlainRecord } from '@internal/contract/is-plain-record';
 
-const preserveEmptyPatterns = [
-  ['storage', 'namespaces', '*', 'entries', 'table'],
-  ['storage', 'namespaces', '*', 'entries', 'table', '*'],
-  ['storage', 'namespaces', '*', 'entries', 'table', '*', ['uniques', 'indexes', 'foreignKeys']],
-  // An index's `unique` flag is a required boolean: `unique: false` must
-  // survive the default-omission walk or the emitted contract fails its own
-  // IndexSchema validation on the next read.
-  ['storage', 'namespaces', '*', 'entries', 'table', '*', 'indexes', 'unique'],
-  // A column default's literal payload is data, not shape — `{ kind:
-  // 'literal', value: false }` (or `value: []`) must survive the
-  // default-omission walk or the emitted contract fails its own
-  // validation on the next read (CONTRACT.VALIDATION_FAILED on `Boolean @default(false)`).
-  ['storage', 'namespaces', '*', 'entries', 'table', '*', 'columns', '*', 'default', 'value'],
-  // A model's `fields` and its storage `fields` are required: a variant with no fields of its own has `fields: {}` in both.
-  ['domain', 'namespaces', '*', 'models', '*', 'fields'],
-  ['domain', 'namespaces', '*', 'models', '*', 'storage', 'fields'],
-] as const satisfies readonly PathPattern[];
-
-// A literal column default's value is user data, not omittable structure:
-// `@default(false)` (and empty objects/arrays at any depth inside the value)
-// must survive canonicalization, or the emitted contract fails the runtime's
-// structural validation with `default.value … (was missing)`.
-const columnDefaultValuePrefix = [
-  'storage',
-  'namespaces',
-  '*',
-  'entries',
-  'table',
-  '*',
-  'columns',
-  '*',
-  'default',
-  'value',
-] as const satisfies PathPattern;
-
-const isColumnDefaultValuePath = (path: readonly string[]): boolean =>
-  path.length >= columnDefaultValuePrefix.length &&
-  matchesPathPattern(path.slice(0, columnDefaultValuePrefix.length), columnDefaultValuePrefix);
+type JsonRecord = Readonly<Record<string, unknown>>;
 
 const sortTargets = [
   {
@@ -53,17 +11,134 @@ const sortTargets = [
   },
 ] as const satisfies readonly NamedArraySortTarget[];
 
-const matchesPreserveEmptyPattern = createPreserveEmptyPredicate(preserveEmptyPatterns);
+const sortStorage = createStorageSort(sortTargets);
 
-const shouldPreserveEmpty: PreserveEmptyPredicate = (path) =>
-  isColumnDefaultValuePath(path) || matchesPreserveEmptyPattern(path);
+const isEmptyRecord = (value: unknown): boolean =>
+  isPlainRecord(value) && Object.keys(value).length === 0;
 
-const sortStorage: StorageSort = createStorageSort(sortTargets);
+const isEmptyList = (value: unknown): boolean => Array.isArray(value) && value.length === 0;
+
+function without(
+  record: JsonRecord,
+  leaveOut: (key: string, value: unknown) => boolean,
+): JsonRecord {
+  return Object.fromEntries(Object.entries(record).filter(([key, value]) => !leaveOut(key, value)));
+}
+
+function mapValues(value: unknown, map: (entry: JsonRecord) => JsonRecord): unknown {
+  if (!isPlainRecord(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [key, isPlainRecord(entry) ? map(entry) : entry]),
+  );
+}
+
+function mapList(value: unknown, map: (entry: JsonRecord) => JsonRecord): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.map((entry: unknown) => (isPlainRecord(entry) ? map(entry) : entry));
+}
+
+const withoutSingleValueMany = (field: JsonRecord): JsonRecord =>
+  without(field, (key, value) => key === 'many' && value === false);
+
+function normalIndex(index: JsonRecord): JsonRecord {
+  return without(
+    index,
+    (key, value) =>
+      (key === 'columns' && isEmptyList(value)) || (key === 'options' && isEmptyRecord(value)),
+  );
+}
+
+function normalForeignKey(foreignKey: JsonRecord): JsonRecord {
+  return without(
+    foreignKey,
+    (key, value) =>
+      (key === 'index' && value === false) ||
+      ((key === 'onDelete' || key === 'onUpdate') && value === 'noAction'),
+  );
+}
+
+function normalTable(table: JsonRecord): JsonRecord {
+  const kept = without(table, (key, value) => key === 'checks' && isEmptyList(value));
+  return {
+    ...kept,
+    ...(kept['columns'] !== undefined
+      ? { columns: mapValues(kept['columns'], withoutSingleValueMany) }
+      : {}),
+    ...(kept['indexes'] !== undefined ? { indexes: mapList(kept['indexes'], normalIndex) } : {}),
+    ...(kept['foreignKeys'] !== undefined
+      ? { foreignKeys: mapList(kept['foreignKeys'], normalForeignKey) }
+      : {}),
+  };
+}
+
+function normalValueObject(valueObject: JsonRecord): JsonRecord {
+  return valueObject['fields'] === undefined
+    ? valueObject
+    : { ...valueObject, fields: mapValues(valueObject['fields'], withoutSingleValueMany) };
+}
+
+function normalEntries(entries: JsonRecord): JsonRecord {
+  const kept = without(entries, (key, value) => key !== 'table' && isEmptyRecord(value));
+  return {
+    ...kept,
+    ...(kept['table'] !== undefined ? { table: mapValues(kept['table'], normalTable) } : {}),
+    ...(kept['valueObject'] !== undefined
+      ? { valueObject: mapValues(kept['valueObject'], normalValueObject) }
+      : {}),
+  };
+}
+
+function normalNamespace(namespace: JsonRecord): JsonRecord {
+  return isPlainRecord(namespace['entries'])
+    ? { ...namespace, entries: normalEntries(namespace['entries']) }
+    : namespace;
+}
+
+function normalStorageType(storageType: JsonRecord): JsonRecord {
+  return without(storageType, (key, value) => key === 'typeParams' && isEmptyRecord(value));
+}
+
+/**
+ * The SQL family's normal form of `storage`. It leaves out the fields the family defines as equal to their absence, each named here: `many: false` on a column or a value-object field, an empty `checks` list, an index's empty `columns` and empty `options`, a foreign key's `index: false` and its `onDelete`/`onUpdate` of `noAction`, a storage type's empty `typeParams`, and a namespace's empty entity-kind slot other than `table`. Every other value, including the contents of type parameters, index options and every entry a pack contributes, is kept as given. It then orders each table's `checks`, `indexes` and `uniques` by name.
+ */
+const normalizeStorage: NormalizeStorage = (storage) => {
+  const plain: unknown = storage === undefined ? storage : JSON.parse(JSON.stringify(storage));
+  if (!isPlainRecord(plain)) return sortStorage(plain);
+  return sortStorage({
+    ...plain,
+    ...(plain['namespaces'] !== undefined
+      ? { namespaces: mapValues(plain['namespaces'], normalNamespace) }
+      : {}),
+    ...(plain['types'] !== undefined
+      ? { types: mapValues(plain['types'], normalStorageType) }
+      : {}),
+  });
+};
+
+/**
+ * The SQL family's normal form of the domain section: a model field's `many: false` is left out, as the family's readers restore it.
+ */
+export function normalSqlDomain(domain: unknown): unknown {
+  if (!isPlainRecord(domain)) return domain;
+  return {
+    ...domain,
+    namespaces: mapValues(domain['namespaces'], (namespace) =>
+      namespace['models'] === undefined
+        ? namespace
+        : {
+            ...namespace,
+            models: mapValues(namespace['models'], (model) =>
+              model['fields'] === undefined
+                ? model
+                : { ...model, fields: mapValues(model['fields'], withoutSingleValueMany) },
+            ),
+          },
+    ),
+  };
+}
 
 export const sqlContractCanonicalizationHooks: {
-  readonly shouldPreserveEmpty: PreserveEmptyPredicate;
-  readonly sortStorage: StorageSort;
+  readonly normalizeStorage: NormalizeStorage;
 } = {
-  shouldPreserveEmpty,
-  sortStorage,
+  normalizeStorage,
 };

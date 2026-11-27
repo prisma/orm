@@ -1,13 +1,5 @@
-import type {
-  CanonicalizeContractOptions,
-  PreserveEmptyPredicate,
-} from '@internal/contract/hashing';
-import {
-  createPreserveEmptyPredicate,
-  createStorageSort,
-  type NamedArraySortTarget,
-  type PathPattern,
-} from '@internal/contract/hashing-utils';
+import type { CanonicalizeContractOptions } from '@internal/contract/hashing';
+import { createStorageSort, type NamedArraySortTarget } from '@internal/contract/hashing-utils';
 import type { Contract, CrossReference } from '@internal/contract/types';
 import type { EmissionSpi } from '@internal/framework-components/emission';
 import type { JsonObject } from '@internal/utils/json';
@@ -31,25 +23,15 @@ const identityDeserialize = (json: Record<string, unknown>): Contract => {
   return contract;
 };
 
-const sqlPreserveEmptyPatterns = [
-  ['storage', 'namespaces', '*', 'entries', 'table'],
-  ['storage', 'namespaces', '*', 'entries', 'table', '*'],
-  ['storage', 'namespaces', '*', 'entries', 'table', '*', 'columns', '*', 'many'],
-  ['storage', 'namespaces', '*', 'entries', 'table', '*', ['uniques', 'indexes', 'foreignKeys']],
-  ['storage', 'namespaces', '*', 'entries', 'table', '*', 'foreignKeys', ['constraint', 'index']],
-] as const satisfies readonly PathPattern[];
-
 const sqlSortTargets = [
   { path: ['namespaces', '*', 'entries', 'table', '*'], arrayKeys: ['indexes', 'uniques'] },
 ] as const satisfies readonly NamedArraySortTarget[];
 
-const sqlPreserveEmpty = createPreserveEmptyPredicate(sqlPreserveEmptyPatterns);
 const sqlSortStorage = createStorageSort(sqlSortTargets);
 
 const SQL_EMIT_HOOKS = {
-  shouldPreserveEmpty: sqlPreserveEmpty satisfies PreserveEmptyPredicate,
-  sortStorage: sqlSortStorage,
-} satisfies Pick<CanonicalizeContractOptions, 'shouldPreserveEmpty' | 'sortStorage'>;
+  normalizeStorage: sqlSortStorage,
+} satisfies Pick<CanonicalizeContractOptions, 'normalizeStorage'>;
 
 export const TEST_TYPES_MODULE = '@acme/orm-db/contract-types';
 

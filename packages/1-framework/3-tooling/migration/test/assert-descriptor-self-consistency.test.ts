@@ -1,5 +1,4 @@
 import { computeStorageHash } from '@internal/contract/hashing';
-import { createPreserveEmptyPredicate, type PathPattern } from '@internal/contract/hashing-utils';
 import { describe, expect, it } from 'vitest';
 import { assertDescriptorSelfConsistency } from '../src/assert-descriptor-self-consistency';
 import { MigrationToolsError } from '../src/errors';
@@ -21,15 +20,7 @@ const STORAGE_BODY = {
 const TARGET = 'postgres';
 const FAMILY = 'sql';
 
-const sqlPreserveEmptyPatterns = [
-  ['storage', 'namespaces', '*', 'tables'],
-  ['storage', 'namespaces', '*', 'tables', '*'],
-  ['storage', 'namespaces', '*', 'tables', '*', ['uniques', 'indexes', 'foreignKeys']],
-] as const satisfies readonly PathPattern[];
-
-const sqlPreserveEmpty = createPreserveEmptyPredicate(sqlPreserveEmptyPatterns);
-
-const SQL_HOOKS = { shouldPreserveEmpty: sqlPreserveEmpty };
+const SQL_HOOKS = { normalizeStorage: (storage: unknown) => storage };
 const REAL_HASH = computeStorageHash({
   target: TARGET,
   targetFamily: FAMILY,

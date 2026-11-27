@@ -3,9 +3,8 @@ export {
   type CanonicalizeContractOptions,
   canonicalizeContract,
   canonicalizeContractToObject,
-  type PreserveEmptyPredicate,
+  type NormalizeStorage,
   type SerializeContract,
-  type StorageSort,
 } from '../canonicalization';
 export {
   type AssertContractHashesOptions,

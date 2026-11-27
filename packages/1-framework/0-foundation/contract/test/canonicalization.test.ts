@@ -12,7 +12,6 @@ import {
   canonicalizeContractToObject as canonicalizeContractToObjectRaw,
   orderTopLevel,
 } from '../src/canonicalization';
-import { createPreserveEmptyPredicate, type PathPattern } from '../src/canonicalization-path-match';
 import { createStorageSort, type NamedArraySortTarget } from '../src/canonicalization-storage-sort';
 import type { Contract } from '../src/contract-types';
 import type { ContractModelBase } from '../src/domain-types';
@@ -39,22 +38,10 @@ function canonicalizeContract(
   return canonicalizeContractRaw(contract, { ...identityOptions, ...options });
 }
 
-// `constraint`/`index` below are illustrative boolean fields exercising the
-// generic empty-value preservation mechanism — not a claim about the real
-// SQL contract's `ForeignKey` shape, which (post FK1) never carries them.
-const sqlPreserveEmptyPatterns = [
-  ['storage', 'namespaces', '*', 'entries', 'table'],
-  ['storage', 'namespaces', '*', 'entries', 'table', '*'],
-  ['storage', 'namespaces', '*', 'entries', 'table', '*', ['uniques', 'indexes', 'foreignKeys']],
-  ['storage', 'namespaces', '*', 'entries', 'table', '*', 'foreignKeys', ['constraint', 'index']],
-  ['storage', 'namespaces', '*', 'entries', 'table', '*', 'columns', '*', 'default', 'value'],
-] as const satisfies readonly PathPattern[];
-
 const sqlSortTargets = [
   { path: ['namespaces', '*', 'entries', 'table', '*'], arrayKeys: ['indexes', 'uniques'] },
 ] as const satisfies readonly NamedArraySortTarget[];
 
-const sqlPreserveEmpty = createPreserveEmptyPredicate(sqlPreserveEmptyPatterns);
 const sqlSortStorage = createStorageSort(sqlSortTargets);
 
 function minimal(overrides?: Record<string, unknown>): Contract {
@@ -134,51 +121,6 @@ describe('canonicalizeContractToObject', () => {
       'extensions',
       'meta',
     ]);
-  });
-
-  it('preserves additionalProperties:false when a family preserve-empty hook opts in', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        targetFamily: 'mongo',
-        target: 'mongo',
-        storage: {
-          storageHash: 'stub',
-          namespaces: {
-            [UNBOUND]: {
-              id: UNBOUND,
-              entries: {
-                collection: {
-                  users: {
-                    validator: {
-                      jsonSchema: {
-                        bsonType: 'object',
-                        properties: { _id: { bsonType: 'objectId' } },
-                        additionalProperties: false,
-                      },
-                      validationLevel: 'strict',
-                      validationAction: 'error',
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      }),
-      { shouldPreserveEmpty: (path) => path[path.length - 1] === 'additionalProperties' },
-    );
-    const jsonSchema = drill(
-      result,
-      'storage',
-      'namespaces',
-      UNBOUND,
-      'entries',
-      'collection',
-      'users',
-      'validator',
-      'jsonSchema',
-    );
-    expect(jsonSchema['additionalProperties']).toBe(false);
   });
 
   it('puts the format version the serializer prints first', () => {
@@ -275,79 +217,68 @@ describe('canonicalizeContractToObject', () => {
   });
 });
 
-describe('default omission', () => {
-  it('strips _generated key from nested objects', () => {
+describe('values the canonicalizer keeps', () => {
+  it('keeps false, empty arrays and empty objects at every depth', () => {
     const result = canonicalizeContractToObject(
       minimal({
-        meta: { _generated: 'should be removed', kept: 'yes' } as Record<string, unknown>,
-      }),
-    );
-    const meta = result['meta'] as Record<string, unknown>;
-    expect(meta).not.toHaveProperty('_generated');
-    expect(meta['kept']).toBe('yes');
-  });
-
-  it('preserves nullable: false on fields (ADR 172: always explicit)', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        models: {
-          User: {
-            fields: { id: { type: { kind: 'scalar', codecId: 'int' }, nullable: false } },
-            storage: { namespaceId: '__unbound__', table: 'users', fields: {} },
-            relations: {},
-          },
-        },
-      }),
-    );
-    const idField = drillDomainModel(result, 'User', 'fields', 'id');
-    expect(idField['nullable']).toBe(false);
-  });
-
-  it('strips generated: false', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        models: {
-          User: {
-            fields: {
-              id: { type: { kind: 'scalar', codecId: 'int' }, nullable: false, generated: false },
-            },
-            storage: { namespaceId: '__unbound__', table: 'users', fields: {} },
-            relations: {},
-          },
-        },
-      }),
-    );
-    const idField = drillDomainModel(result, 'User', 'fields', 'id');
-    expect(idField).not.toHaveProperty('generated');
-  });
-
-  it('preserves a strict nested list descriptor', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        models: {
-          User: {
-            fields: {
-              tags: {
-                type: { kind: 'scalar', codecId: 'text' },
+        storage: unboundStorage({
+          task: {
+            columns: {
+              done: {
+                codecId: 'pg/bool@1',
                 nullable: false,
-                many: { elementNullable: false },
+                many: false,
+                typeParams: { strict: false, tags: [], extra: {} },
               },
             },
-            storage: { namespaceId: '__unbound__', table: 'users', fields: {} },
-            relations: {},
+            checks: [],
+            indexes: [{ name: 'task_idx', columns: [], unique: false, options: {} }],
+            foreignKeys: [{ columns: ['user_id'], index: false, onDelete: 'noAction' }],
+          },
+        }),
+        execution: {
+          executionHash: 'exec',
+          mutations: {
+            defaults: [{ onCreate: { kind: 'generator', id: 'nanoid', params: { upper: false } } }],
           },
         },
+        capabilities: { sql: { returning: false }, mongo: {} },
+        extensions: { paradedb: { capabilities: {} } },
+        meta: { flag: false, list: [], map: {} },
       }),
     );
-    const tagsField = drillDomainModel(result, 'User', 'fields', 'tags');
-    expect(tagsField).toEqual({
-      type: { kind: 'scalar', codecId: 'text' },
-      nullable: false,
-      many: { elementNullable: false },
+    expect(drill(unboundTables(result), 'task')).toEqual({
+      columns: {
+        done: {
+          codecId: 'pg/bool@1',
+          nullable: false,
+          many: false,
+          typeParams: { strict: false, tags: [], extra: {} },
+        },
+      },
+      checks: [],
+      indexes: [{ name: 'task_idx', columns: [], unique: false, options: {} }],
+      foreignKeys: [{ columns: ['user_id'], index: false, onDelete: 'noAction' }],
+    });
+    expect({
+      execution: result['execution'],
+      capabilities: result['capabilities'],
+      extensions: result['extensions'],
+      meta: result['meta'],
+    }).toEqual({
+      execution: {
+        executionHash: 'exec',
+        mutations: {
+          defaults: [{ onCreate: { kind: 'generator', id: 'nanoid', params: { upper: false } } }],
+        },
+      },
+      capabilities: { sql: { returning: false }, mongo: {} },
+      extensions: { paradedb: { capabilities: {} } },
+      meta: { flag: false, list: [], map: {} },
     });
   });
 
-  it('omits many: false on non-list model and value-object fields', () => {
+  it('keeps many: false on domain fields', () => {
     const result = canonicalizeContractToObject(
       minimal({
         models: {
@@ -359,275 +290,39 @@ describe('default omission', () => {
             relations: {},
           },
         },
-        valueObjects: {
-          Address: {
-            fields: {
-              city: { type: { kind: 'scalar', codecId: 'text' }, nullable: false, many: false },
-            },
-          },
-        },
       }),
     );
-    const nameField = drillDomainModel(result, 'User', 'fields', 'name');
-    expect(nameField).not.toHaveProperty('many');
-    const cityField = drill(
-      result,
-      'storage',
-      'namespaces',
-      UNBOUND,
-      'entries',
-      'valueObject',
-      'Address',
-      'fields',
-      'city',
-    );
-    expect(cityField).not.toHaveProperty('many');
+    expect(drillDomainModel(result, 'User', 'fields', 'name')['many']).toBe(false);
   });
 
-  it('preserves a literal false column default value via the family hook', () => {
+  it('keeps a key named _generated', () => {
     const result = canonicalizeContractToObject(
-      minimal({
-        storage: unboundStorage({
-          task: {
-            columns: {
-              done: {
-                codecId: 'pg/bool@1',
-                dataType: 'pg/bool',
-                nullable: false,
-                default: { kind: 'literal', value: false },
-              },
-            },
-          },
-        }),
-      }),
-      { shouldPreserveEmpty: sqlPreserveEmpty },
+      minimal({ meta: { _generated: 'kept', kept: 'yes' } as Record<string, unknown> }),
     );
-    const done = drill(unboundTables(result), 'task', 'columns', 'done');
-    expect(done['default']).toEqual({ kind: 'literal', value: false });
+    expect(result['meta']).toEqual({ _generated: 'kept', kept: 'yes' });
   });
 
-  it('preserves a literal empty-array column default value via the family hook', () => {
+  it('keeps null values', () => {
     const result = canonicalizeContractToObject(
-      minimal({
-        storage: unboundStorage({
-          task: {
-            columns: {
-              labels: {
-                codecId: 'pg/text_array@1',
-                dataType: 'pg/text-array',
-                nullable: false,
-                default: { kind: 'literal', value: [] },
-              },
-            },
-          },
-        }),
-      }),
-      { shouldPreserveEmpty: sqlPreserveEmpty },
+      minimal({ meta: { value: null } as Record<string, unknown> }),
     );
-    const labels = drill(unboundTables(result), 'task', 'columns', 'labels');
-    expect(labels['default']).toEqual({ kind: 'literal', value: [] });
+    expect(result['meta']).toEqual({ value: null });
   });
 
-  it('strips onDelete: noAction and onUpdate: noAction', () => {
+  it('applies the family normalizeStorage to storage only', () => {
     const result = canonicalizeContractToObject(
-      minimal({
-        storage: unboundStorage({
-          posts: {
-            foreignKeys: {
-              fk_user: { onDelete: 'noAction', onUpdate: 'noAction', columns: ['user_id'] },
-            },
-          },
-        }),
-      }),
+      minimal({ meta: { flag: false } as Record<string, unknown> }),
+      { normalizeStorage: () => ({ normalized: true }) },
     );
-    const fk = drill(unboundTables(result), 'posts', 'foreignKeys', 'fk_user');
-    expect(fk).not.toHaveProperty('onDelete');
-    expect(fk).not.toHaveProperty('onUpdate');
-  });
-
-  it('preserves required empty objects at top level', () => {
-    const result = canonicalizeContractToObject(minimal());
-    expect(drill(result, 'domain', 'namespaces', UNBOUND, 'models')).toEqual({});
-    expect(result['extensions']).toEqual({});
-    expect(result['capabilities']).toEqual({});
-    expect(result['meta']).toEqual({});
-  });
-
-  it('strips empty storage.namespaces[X].entries.table without a shouldPreserveEmpty hook', () => {
-    const result = canonicalizeContractToObject(minimal({ storage: unboundStorage({}) }));
-    const ns = drill(result, 'storage', 'namespaces', UNBOUND) as Record<string, unknown>;
-    expect(ns).not.toHaveProperty('tables');
-  });
-
-  it('preserves empty storage.namespaces[].entries.table when shouldPreserveEmpty hook returns true', () => {
-    const result = canonicalizeContractToObject(minimal({ storage: unboundStorage({}) }), {
-      shouldPreserveEmpty: sqlPreserveEmpty,
+    expect({ storage: result['storage'], meta: result['meta'] }).toEqual({
+      storage: { normalized: true },
+      meta: { flag: false },
     });
-    expect(unboundTables(result)).toEqual({});
-  });
-
-  it('preserves empty roots', () => {
-    const result = canonicalizeContractToObject(minimal({ roots: {} }));
-    expect(result['roots']).toEqual({});
-  });
-
-  it('preserves empty model relations', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        models: {
-          User: {
-            fields: { id: { type: { kind: 'scalar', codecId: 'int' }, nullable: false } },
-            storage: { namespaceId: '__unbound__', table: 'users', fields: {} },
-            relations: {},
-          },
-        },
-      }),
-    );
-    const user = drillDomainModel(result, 'User');
-    expect(user['relations']).toEqual({});
-  });
-
-  it('preserves empty table uniques, indexes, and foreignKeys when shouldPreserveEmpty hook provided', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        storage: unboundStorage({
-          users: { columns: {}, uniques: [], indexes: [], foreignKeys: {} },
-        }),
-      }),
-      { shouldPreserveEmpty: sqlPreserveEmpty },
-    );
-    const table = drill(unboundTables(result), 'users');
-    expect(table['uniques']).toEqual([]);
-    expect(table['indexes']).toEqual([]);
-    expect(table['foreignKeys']).toEqual({});
-  });
-
-  it('strips false-valued FK boolean fields without shouldPreserveEmpty hook', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        storage: unboundStorage({
-          posts: {
-            foreignKeys: {
-              fk_user: { columns: ['user_id'], constraint: false, index: false },
-            },
-          },
-        }),
-      }),
-    );
-    const fk = drill(unboundTables(result), 'posts', 'foreignKeys', 'fk_user');
-    expect(fk).not.toHaveProperty('constraint');
-    expect(fk).not.toHaveProperty('index');
-  });
-
-  it('preserves false-valued FK boolean fields in array-form foreignKeys when hook provided', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        storage: unboundStorage({
-          posts: {
-            columns: {},
-            foreignKeys: [{ columns: ['user_id'], constraint: false, index: false }],
-          },
-        }),
-      }),
-      { shouldPreserveEmpty: sqlPreserveEmpty },
-    );
-    const table = drill(unboundTables(result), 'posts');
-    const fks = table['foreignKeys'] as Array<Record<string, unknown>>;
-    expect(fks[0]?.['constraint']).toBe(false);
-    expect(fks[0]?.['index']).toBe(false);
-  });
-
-  it('preserves empty execution.mutations.defaults', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        execution: { executionHash: 'exec', mutations: { defaults: [] } },
-      }),
-    );
-    const mutations = drill(result, 'execution', 'mutations');
-    expect(mutations['defaults']).toEqual([]);
-  });
-
-  it('preserves empty extension namespace entries', () => {
-    const result = canonicalizeContractToObject(minimal({ extensions: { paradedb: {} } }));
-    expect(drill(result, 'extensions')['paradedb']).toEqual({});
-  });
-
-  it('preserves empty per-namespace table entries when shouldPreserveEmpty hook provided', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        storage: unboundStorage({ tasks: {} }),
-      }),
-      { shouldPreserveEmpty: sqlPreserveEmpty },
-    );
-    expect(unboundTables(result)['tasks']).toEqual({});
-  });
-
-  it('preserves empty model storage (embedded documents)', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        models: {
-          Address: {
-            fields: { street: { type: { kind: 'scalar', codecId: 'string' }, nullable: false } },
-            storage: {},
-            relations: {},
-            owner: 'User',
-          },
-        },
-      }),
-    );
-    const address = drillDomainModel(result, 'Address');
-    expect(address['storage']).toEqual({});
-  });
-
-  it('strips non-required empty objects', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        models: {
-          User: {
-            fields: {
-              id: { type: { kind: 'scalar', codecId: 'int' }, nullable: false, extra: {} },
-            },
-            storage: { namespaceId: '__unbound__', table: 'users', fields: {} },
-            relations: {},
-          },
-        },
-      }),
-    );
-    const idField = drillDomainModel(result, 'User', 'fields', 'id');
-    expect(idField).not.toHaveProperty('extra');
-  });
-
-  it('preserves ISO date strings in meta', () => {
-    const isoString = '2024-01-01T00:00:00.000Z';
-    const result = canonicalizeContractToObject(
-      minimal({
-        meta: { createdAt: isoString } as Record<string, unknown>,
-      }),
-    );
-    expect(drill(result, 'meta')['createdAt']).toBe(isoString);
-  });
-
-  it('preserves null values (not treated as default)', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        models: {
-          User: {
-            fields: {
-              id: { type: { kind: 'scalar', codecId: 'int' }, nullable: false, default: null },
-            },
-            storage: { namespaceId: '__unbound__', table: 'users', fields: {} },
-            relations: {},
-          },
-        },
-      }),
-    );
-    const idField = drillDomainModel(result, 'User', 'fields', 'id');
-    expect(idField['default']).toBeNull();
   });
 });
 
 describe('index and unique sorting', () => {
-  it('sorts indexes by name when sortStorage hook provided', () => {
+  it('sorts indexes by name when normalizeStorage hook provided', () => {
     const result = canonicalizeContractToObject(
       minimal({
         storage: unboundStorage({
@@ -637,14 +332,14 @@ describe('index and unique sorting', () => {
           },
         }),
       }),
-      { sortStorage: sqlSortStorage },
+      { normalizeStorage: sqlSortStorage },
     );
     const table = drill(unboundTables(result), 'users');
     const indexes = table['indexes'] as Array<{ name: string }>;
     expect(indexes.map((i) => i.name)).toEqual(['idx_a', 'idx_m', 'idx_z']);
   });
 
-  it('sorts uniques by name when sortStorage hook provided', () => {
+  it('sorts uniques by name when normalizeStorage hook provided', () => {
     const result = canonicalizeContractToObject(
       minimal({
         storage: unboundStorage({
@@ -654,7 +349,7 @@ describe('index and unique sorting', () => {
           },
         }),
       }),
-      { sortStorage: sqlSortStorage },
+      { normalizeStorage: sqlSortStorage },
     );
     const table = drill(unboundTables(result), 'users');
     const uniques = table['uniques'] as Array<{ name: string }>;
@@ -672,7 +367,7 @@ describe('index and unique sorting', () => {
           },
         }),
       }),
-      { sortStorage: sqlSortStorage },
+      { normalizeStorage: sqlSortStorage },
     );
     const table = drill(unboundTables(result), 'users');
     expect(table['primaryKey']).toEqual({ columns: ['second', 'first'] });
@@ -712,7 +407,7 @@ describe('index and unique sorting', () => {
           },
         }),
       }),
-      { sortStorage: sqlSortStorage },
+      { normalizeStorage: sqlSortStorage },
     );
     const table = drill(unboundTables(result), 'users');
     const indexes = table['indexes'] as Array<{ name?: string }>;
@@ -730,7 +425,7 @@ describe('index and unique sorting', () => {
           },
         }),
       }),
-      { sortStorage: sqlSortStorage },
+      { normalizeStorage: sqlSortStorage },
     );
     const table = drill(unboundTables(result), 'users');
     const uniques = table['uniques'] as Array<{ name?: string }>;
@@ -762,7 +457,7 @@ describe('index and unique sorting', () => {
     expect((storage['namespaces'] as Record<string, unknown>)['broken']).toBeNull();
   });
 
-  it('passes namespaces without a table slot through unchanged (e.g. Mongo)', () => {
+  it('passes namespaces without a table slot through unchanged', () => {
     const result = canonicalizeContractToObject(
       minimal({
         storage: {
@@ -779,7 +474,7 @@ describe('index and unique sorting', () => {
     const ns = drill(result, 'storage', 'namespaces', UNBOUND);
     expect(ns).not.toHaveProperty('tables');
     expect(ns).not.toHaveProperty('collections');
-    expect(drill(ns, 'entries', 'collection')).toEqual({ posts: {} });
+    expect(drill(ns, 'entries', 'collection')).toEqual({ posts: { columns: {} } });
   });
 });
 
@@ -859,48 +554,6 @@ describe('domain plane', () => {
   });
 });
 
-describe('typeParams canonicalization', () => {
-  it('strips empty storage.types[].typeParams even when SQL shouldPreserveEmpty hook is provided', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        storage: { storageHash: 'stub', types: { MyType: { typeParams: {} } } },
-      }),
-      { shouldPreserveEmpty: sqlPreserveEmpty },
-    );
-    const myType = drill(result, 'storage', 'types', 'MyType');
-    expect(myType).not.toHaveProperty('typeParams');
-  });
-
-  it('strips empty storage.types[].typeParams without shouldPreserveEmpty hook', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        storage: {
-          storageHash: 'stub',
-          namespaces: {},
-          types: { MyType: { typeParams: {} } },
-        },
-      }),
-    );
-    const myType = drill(result, 'storage', 'types', 'MyType');
-    expect(myType).not.toHaveProperty('typeParams');
-  });
-
-  it('preserves non-empty storage.types[].typeParams', () => {
-    const result = canonicalizeContractToObject(
-      minimal({
-        storage: {
-          storageHash: 'stub',
-          namespaces: {},
-          types: { MyType: { typeParams: { length: 10 } } },
-        },
-      }),
-      { shouldPreserveEmpty: sqlPreserveEmpty },
-    );
-    const myType = drill(result, 'storage', 'types', 'MyType');
-    expect(myType['typeParams']).toEqual({ length: 10 });
-  });
-});
-
 describe('array sort with nullish entries', () => {
   it('sorts indexes containing nullish entries without throwing', () => {
     const result = canonicalizeContractToObject(
@@ -912,7 +565,7 @@ describe('array sort with nullish entries', () => {
           },
         }),
       }),
-      { sortStorage: sqlSortStorage },
+      { normalizeStorage: sqlSortStorage },
     );
     const table = drill(unboundTables(result), 'users');
     const indexes = table['indexes'] as Array<unknown>;
@@ -929,7 +582,7 @@ describe('array sort with nullish entries', () => {
           },
         }),
       }),
-      { sortStorage: sqlSortStorage },
+      { normalizeStorage: sqlSortStorage },
     );
     const table = drill(unboundTables(result), 'users');
     const uniques = table['uniques'] as Array<unknown>;
@@ -965,6 +618,10 @@ describe('framework canonicalizer has no SQL/Mongo storage path knowledge', () =
       'isRequiredNamespaceTables',
       'isStorageTypeTypeParams',
       'isFkBooleanField',
+      'omitDefaults',
+      'isDefaultValue',
+      'noAction',
+      'nullable',
     ];
     for (const token of forbiddenIdentifiers) {
       expect(source, `framework canonicalizer must not reference ${token}`).not.toContain(token);

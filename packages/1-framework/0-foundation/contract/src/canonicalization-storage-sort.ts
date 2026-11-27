@@ -1,4 +1,4 @@
-import type { StorageSort } from './canonicalization';
+import type { NormalizeStorage } from './canonicalization';
 import { isPlainRecord } from './is-plain-record';
 
 export type PathSegment = string | '*';
@@ -77,7 +77,7 @@ function walkAndSort(
 export function createStorageSort(
   targets: readonly NamedArraySortTarget[],
   compare: (a: unknown, b: unknown) => number = compareByNameProperty,
-): StorageSort {
+): NormalizeStorage {
   return (storage) => {
     if (!isPlainRecord(storage)) {
       return storage;

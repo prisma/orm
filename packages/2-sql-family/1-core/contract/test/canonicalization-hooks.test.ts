@@ -1,215 +1,348 @@
-import { canonicalizeContractToObject } from '@internal/contract/hashing';
+import { canonicalizeContractToObject, computeStorageHash } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
 import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';
-import { sqlContractCanonicalizationHooks } from '../src/canonicalization-hooks';
+import { normalSqlDomain, sqlContractCanonicalizationHooks } from '../src/canonicalization-hooks';
 
-describe('sqlContractCanonicalizationHooks.shouldPreserveEmpty', () => {
-  it('preserves a column default literal payload (false / empty-array defaults)', () => {
-    // `{ kind: 'literal', value: false }` reaches the default-omission walk
-    // as a default value; without this veto the emitted contract fails its
-    // own validation on the next read (CONTRACT.VALIDATION_FAILED on Boolean @default(false)).
-    expect(
-      sqlContractCanonicalizationHooks.shouldPreserveEmpty([
-        'storage',
-        'namespaces',
-        'unbound',
-        'entries',
-        'table',
-        'task',
-        'columns',
-        'done',
-        'default',
-        'value',
-      ]),
-    ).toBe(true);
+type Table = Record<string, unknown>;
+
+const column = (extra: Record<string, unknown> = {}) => ({
+  codecId: 'pg/text@1',
+  dataType: 'pg/text',
+  nullable: false,
+  ...extra,
+});
+
+const tableWith = (extra: Table = {}): Table => ({
+  columns: { id: column() },
+  uniques: [],
+  indexes: [],
+  foreignKeys: [],
+  ...extra,
+});
+
+const storageWith = (
+  entries: Record<string, unknown>,
+  types?: Record<string, unknown>,
+): Record<string, unknown> => ({
+  namespaces: { public: { id: 'public', entries: { table: { t: tableWith() }, ...entries } } },
+  ...(types === undefined ? {} : { types }),
+});
+
+const storageWithTable = (table: Table): Record<string, unknown> =>
+  storageWith({ table: { t: table } });
+
+const hashOf = (storage: Record<string, unknown>): string =>
+  computeStorageHash({
+    target: 'postgres',
+    targetFamily: 'sql',
+    storage,
+    ...sqlContractCanonicalizationHooks,
   });
 
-  it('preserves an index unique: false flag', () => {
-    // `unique` is a required boolean on every index entry; without this veto
-    // the default-omission walk drops `unique: false` and the emitted
-    // contract fails IndexSchema validation on the next read.
-    expect(
-      sqlContractCanonicalizationHooks.shouldPreserveEmpty([
-        'storage',
-        'namespaces',
-        'unbound',
-        'entries',
-        'table',
-        'task',
-        'indexes',
-        'unique',
-      ]),
-    ).toBe(true);
+const written = (storage: Record<string, unknown>): unknown => {
+  const contract: Contract = blindCast({
+    targetFamily: 'sql',
+    target: 'postgres',
+    profileHash: 'test-profile',
+    roots: {},
+    domain: { namespaces: {} },
+    storage,
+    extensions: {},
+    capabilities: {},
+    meta: {},
+  });
+  return canonicalizeContractToObject(contract, {
+    serializeContract: (c) =>
+      blindCast<JsonObject, 'test contract literal is already plain JSON data'>(c),
+    ...sqlContractCanonicalizationHooks,
+  })['storage'];
+};
+
+const writtenTable = (storage: Record<string, unknown>): Table =>
+  blindCast<{ namespaces: { public: { entries: { table: { t: Table } } } } }, 'test shape'>(
+    written(storage),
+  ).namespaces.public.entries.table.t;
+
+describe('SQL storage values the family does not own', () => {
+  const pairs: ReadonlyArray<readonly [string, Record<string, unknown>, Record<string, unknown>]> =
+    [
+      [
+        'a column type parameter that is false',
+        storageWithTable(
+          tableWith({ columns: { id: column({ typeParams: { strict: false, length: 3 } }) } }),
+        ),
+        storageWithTable(tableWith({ columns: { id: column({ typeParams: { length: 3 } }) } })),
+      ],
+      [
+        'column type parameters of false and of an empty list',
+        storageWithTable(tableWith({ columns: { id: column({ typeParams: { strict: false } }) } })),
+        storageWithTable(tableWith({ columns: { id: column({ typeParams: { tags: [] } }) } })),
+      ],
+      [
+        'a storage type parameter that is false',
+        storageWith(
+          {},
+          {
+            T: {
+              kind: 'codec-instance',
+              codecId: 'c',
+              dataType: 'd',
+              typeParams: { strict: false, length: 3 },
+            },
+          },
+        ),
+        storageWith(
+          {},
+          { T: { kind: 'codec-instance', codecId: 'c', dataType: 'd', typeParams: { length: 3 } } },
+        ),
+      ],
+      [
+        'an index option that is false',
+        storageWithTable(
+          tableWith({
+            indexes: [
+              {
+                name: 'i',
+                columns: ['id'],
+                unique: false,
+                type: 'gin',
+                options: { fastupdate: false, fillfactor: 70 },
+              },
+            ],
+          }),
+        ),
+        storageWithTable(
+          tableWith({
+            indexes: [
+              {
+                name: 'i',
+                columns: ['id'],
+                unique: false,
+                type: 'gin',
+                options: { fillfactor: 70 },
+              },
+            ],
+          }),
+        ),
+      ],
+      [
+        'a value set member that is an object holding false',
+        storageWith({ valueSet: { V: { kind: 'valueSet', values: [{ a: false }] } } }),
+        storageWith({ valueSet: { V: { kind: 'valueSet', values: [{}] } } }),
+      ],
+      [
+        "a restrictive policy's permissive: false",
+        storageWith({ policy: { p: { table: 't', using: 'true', permissive: false, roles: [] } } }),
+        storageWith({ policy: { p: { table: 't', using: 'true' } } }),
+      ],
+      [
+        "an empty map inside a pack's own entry",
+        storageWith({ 'custom-block': { e: { values: {}, attributes: { a: false } } } }),
+        storageWith({ 'custom-block': { e: { attributes: {} } } }),
+      ],
+    ];
+
+  it.each(pairs)('gives contracts that differ in %s different hashes', (_, left, right) => {
+    expect(hashOf(left)).not.toBe(hashOf(right));
   });
 
-  it('does not preserve arbitrary domain-side values', () => {
-    expect(
-      sqlContractCanonicalizationHooks.shouldPreserveEmpty([
-        'domain',
-        'namespaces',
-        'unbound',
-        'models',
-        'Task',
-        'fields',
-        'done',
-      ]),
-    ).toBe(false);
+  it.each(pairs)('writes %s as given', (_, left) => {
+    expect(written(left)).toEqual(left);
   });
 });
 
-describe('sqlContractCanonicalizationHooks.sortStorage', () => {
-  const tableWith = (arrays: Record<string, ReadonlyArray<{ name: string }>>): unknown => ({
-    namespaces: { public: { entries: { table: { sample: arrays } } } },
+describe('SQL storage defaults the family leaves out', () => {
+  const pairs: ReadonlyArray<readonly [string, Record<string, unknown>, Record<string, unknown>]> =
+    [
+      [
+        'a column many: false',
+        storageWithTable(tableWith({ columns: { id: column({ many: false }) } })),
+        storageWithTable(tableWith()),
+      ],
+      ['empty checks', storageWithTable(tableWith({ checks: [] })), storageWithTable(tableWith())],
+      [
+        "an index's empty columns and empty options",
+        storageWithTable(
+          tableWith({
+            indexes: [
+              { name: 'i', expression: 'lower(id)', unique: false, columns: [], options: {} },
+            ],
+          }),
+        ),
+        storageWithTable(
+          tableWith({ indexes: [{ name: 'i', expression: 'lower(id)', unique: false }] }),
+        ),
+      ],
+      [
+        "a foreign key's index: false and noAction actions",
+        storageWithTable(
+          tableWith({
+            foreignKeys: [
+              {
+                source: { namespaceId: 'public', tableName: 't', columns: ['id'] },
+                target: { namespaceId: 'public', tableName: 't', columns: ['id'] },
+                index: false,
+                onDelete: 'noAction',
+                onUpdate: 'noAction',
+              },
+            ],
+          }),
+        ),
+        storageWithTable(
+          tableWith({
+            foreignKeys: [
+              {
+                source: { namespaceId: 'public', tableName: 't', columns: ['id'] },
+                target: { namespaceId: 'public', tableName: 't', columns: ['id'] },
+              },
+            ],
+          }),
+        ),
+      ],
+      [
+        "a storage type's empty typeParams",
+        storageWith(
+          {},
+          { T: { kind: 'codec-instance', codecId: 'c', dataType: 'd', typeParams: {} } },
+        ),
+        storageWith({}, { T: { kind: 'codec-instance', codecId: 'c', dataType: 'd' } }),
+      ],
+      [
+        'a value-object field many: false',
+        storageWith({
+          valueObject: {
+            Address: {
+              fields: {
+                city: {
+                  nullable: false,
+                  type: { kind: 'scalar', codecId: 'pg/text@1' },
+                  many: false,
+                },
+              },
+            },
+          },
+        }),
+        storageWith({
+          valueObject: {
+            Address: {
+              fields: { city: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } } },
+            },
+          },
+        }),
+      ],
+      ['an empty entity-kind slot', storageWith({ policy: {} }), storageWith({})],
+    ];
+
+  it.each(pairs)('gives a contract with %s written and left out one hash', (_, left, right) => {
+    expect(hashOf(left)).toBe(hashOf(right));
   });
 
-  const namesOf = (sorted: unknown, key: string): readonly string[] => {
-    const storage = blindCast<
-      {
-        namespaces: {
-          public: {
-            entries: { table: { sample: Record<string, ReadonlyArray<{ name: string }>> } };
-          };
-        };
-      },
-      'the sort hook returns the same shape it was handed'
-    >(sorted);
-    return (storage.namespaces.public.entries.table.sample[key] ?? []).map((entry) => entry.name);
-  };
+  it.each(pairs)('writes the same file whether %s is written or left out', (_, left, right) => {
+    expect(written(left)).toEqual(written(right));
+  });
 
+  it('keeps the required empty table lists, an empty table slot and index unique: false', () => {
+    const storage = storageWith({
+      table: { t: tableWith({ indexes: [{ name: 'i', columns: ['id'], unique: false }] }) },
+    });
+    expect(writtenTable(storage)).toEqual({
+      columns: { id: column() },
+      uniques: [],
+      indexes: [{ name: 'i', columns: ['id'], unique: false }],
+      foreignKeys: [],
+    });
+    expect(written(storageWith({ table: {} }))).toEqual(storageWith({ table: {} }));
+  });
+
+  it('keeps a literal column default of false, an empty object and an empty list', () => {
+    const columns = {
+      flag: column({ default: { kind: 'literal', value: false } }),
+      obj: column({ default: { kind: 'literal', value: {} } }),
+      arr: column({ default: { kind: 'literal', value: [] } }),
+    };
+    expect(writtenTable(storageWithTable(tableWith({ columns })))['columns']).toEqual(columns);
+  });
+});
+
+describe('sqlContractCanonicalizationHooks.normalizeStorage ordering', () => {
   it('orders checks, indexes, and uniques by physical name', () => {
-    const sorted = sqlContractCanonicalizationHooks.sortStorage(
-      tableWith({
-        checks: [{ name: 'sample_z_check_00000002' }, { name: 'sample_a_check_00000001' }],
-        indexes: [{ name: 'z_idx' }, { name: 'a_idx' }],
-        uniques: [{ name: 'z_key' }, { name: 'a_key' }],
-      }),
+    const table = writtenTable(
+      storageWithTable(
+        tableWith({
+          checks: [
+            { name: 'z_check', expression: 'true' },
+            { name: 'a_check', expression: 'true' },
+          ],
+          indexes: [
+            { name: 'z_idx', columns: ['id'], unique: false },
+            { name: 'a_idx', columns: ['id'], unique: false },
+          ],
+          uniques: [
+            { name: 'z_key', columns: ['id'] },
+            { name: 'a_key', columns: ['id'] },
+          ],
+        }),
+      ),
     );
+    const names = (key: string) =>
+      blindCast<ReadonlyArray<{ name: string }>, 'test shape'>(table[key]).map((e) => e.name);
     expect({
-      checks: namesOf(sorted, 'checks'),
-      indexes: namesOf(sorted, 'indexes'),
-      uniques: namesOf(sorted, 'uniques'),
+      checks: names('checks'),
+      indexes: names('indexes'),
+      uniques: names('uniques'),
     }).toEqual({
-      checks: ['sample_a_check_00000001', 'sample_z_check_00000002'],
+      checks: ['a_check', 'z_check'],
       indexes: ['a_idx', 'z_idx'],
       uniques: ['a_key', 'z_key'],
     });
   });
 });
 
-describe('canonicalization of literal column defaults', () => {
-  const { shouldPreserveEmpty } = sqlContractCanonicalizationHooks;
-
-  const contractWithDefaults = (defaults: Record<string, unknown>): Contract =>
-    blindCast({
-      targetFamily: 'sql',
-      target: 'postgres',
-      profileHash: 'test-profile',
-      roots: {},
-      domain: { namespaces: {} },
-      storage: {
-        namespaces: {
-          public: {
-            id: 'public',
-            kind: 'postgres-schema',
-            entries: {
-              table: {
-                sample: {
-                  columns: Object.fromEntries(
-                    Object.entries(defaults).map(([name, value]) => [
-                      name,
-                      {
-                        codecId: 'pg/bool@1',
-                        dataType: 'pg/bool',
-                        nullable: false,
-                        default: { kind: 'literal', value },
-                      },
-                    ]),
-                  ),
-                  primaryKey: { columns: ['flag'] },
-                },
-              },
-            },
-          },
-        },
-      },
-      extensions: {},
-      capabilities: {},
-      meta: {},
-    });
-
-  const canonicalize = (contract: Contract) =>
-    canonicalizeContractToObject(contract, {
-      serializeContract: (c) =>
-        blindCast<JsonObject, 'test contract literal is already plain JSON data'>(c),
-      shouldPreserveEmpty,
-    });
-
-  const columnDefault = (result: Record<string, unknown>, column: string): unknown => {
-    const storage = result['storage'] as {
-      namespaces: {
-        public: {
-          entries: { table: { sample: { columns: Record<string, { default?: unknown }> } } };
-        };
-      };
-    };
-    return storage.namespaces.public.entries.table.sample.columns[column]?.default;
-  };
-
-  it('keeps value: false in the canonical JSON', () => {
-    const result = canonicalize(contractWithDefaults({ flag: false }));
-    expect(columnDefault(result, 'flag')).toEqual({ kind: 'literal', value: false });
-  });
-
-  it('keeps empty object and array literal default values', () => {
-    const result = canonicalize(contractWithDefaults({ obj: {}, arr: [] }));
-    expect(columnDefault(result, 'obj')).toEqual({ kind: 'literal', value: {} });
-    expect(columnDefault(result, 'arr')).toEqual({ kind: 'literal', value: [] });
-  });
-});
-
-describe('canonicalization of model storage', () => {
-  it('keeps the empty fields and storage fields of a variant with no fields of its own', () => {
-    const contract: Contract = blindCast({
-      targetFamily: 'sql',
-      target: 'sqlite',
-      profileHash: 'test-profile',
-      roots: {},
-      domain: {
-        namespaces: {
-          app: {
-            models: {
-              Epic: {
-                fields: {},
-                relations: {},
-                base: { namespace: 'app', model: 'Task' },
-                storage: { table: 'task', namespaceId: 'app', fields: {} },
-              },
-            },
-          },
-        },
-      },
-      storage: { namespaces: {} },
-      extensions: {},
-      capabilities: {},
-      meta: {},
-    });
-
-    const result = canonicalizeContractToObject(contract, {
-      serializeContract: (c) =>
-        blindCast<JsonObject, 'test contract literal is already plain JSON data'>(c),
-      shouldPreserveEmpty: sqlContractCanonicalizationHooks.shouldPreserveEmpty,
-    });
-
-    expect(result['domain']).toEqual({
+describe('normalSqlDomain', () => {
+  it("leaves out a model field's many: false and keeps everything else", () => {
+    const domain = {
       namespaces: {
         app: {
           models: {
-            Epic: {
-              fields: {},
+            Task: {
+              fields: {
+                title: {
+                  nullable: false,
+                  type: { kind: 'scalar', codecId: 'text', typeParams: { strict: false } },
+                  many: false,
+                },
+                tags: {
+                  nullable: false,
+                  type: { kind: 'scalar', codecId: 'text' },
+                  many: { elementNullable: false },
+                },
+              },
               relations: {},
-              base: { namespace: 'app', model: 'Task' },
+              storage: { table: 'task', namespaceId: 'app', fields: {} },
+            },
+          },
+        },
+      },
+    };
+    expect(normalSqlDomain(domain)).toEqual({
+      namespaces: {
+        app: {
+          models: {
+            Task: {
+              fields: {
+                title: {
+                  nullable: false,
+                  type: { kind: 'scalar', codecId: 'text', typeParams: { strict: false } },
+                },
+                tags: {
+                  nullable: false,
+                  type: { kind: 'scalar', codecId: 'text' },
+                  many: { elementNullable: false },
+                },
+              },
+              relations: {},
               storage: { table: 'task', namespaceId: 'app', fields: {} },
             },
           },

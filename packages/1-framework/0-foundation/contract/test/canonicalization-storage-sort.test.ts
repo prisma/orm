@@ -10,7 +10,7 @@ const sqlSortTargets = [
 ] as const satisfies readonly NamedArraySortTarget[];
 
 describe('createStorageSort', () => {
-  const sortStorage = createStorageSort(sqlSortTargets);
+  const normalizeStorage = createStorageSort(sqlSortTargets);
 
   it('sorts indexes and uniques by name within each table', () => {
     const storage = {
@@ -30,15 +30,15 @@ describe('createStorageSort', () => {
       },
     };
 
-    const sorted = sortStorage(storage) as typeof storage;
+    const sorted = normalizeStorage(storage) as typeof storage;
     const table = sorted.namespaces.__unbound__.entries.table.users;
     expect(table.indexes.map((i) => i.name)).toEqual(['idx_a', 'idx_z']);
     expect(table.uniques.map((u) => u.name)).toEqual(['uq_a', 'uq_z']);
   });
 
   it('returns non-object storage unchanged', () => {
-    expect(sortStorage(null)).toBe(null);
-    expect(sortStorage('x')).toBe('x');
+    expect(normalizeStorage(null)).toBe(null);
+    expect(normalizeStorage('x')).toBe('x');
   });
 
   it('passes through namespaces without a table slot', () => {
@@ -50,7 +50,7 @@ describe('createStorageSort', () => {
         },
       },
     };
-    expect(sortStorage(storage)).toEqual(storage);
+    expect(normalizeStorage(storage)).toEqual(storage);
   });
 
   it('passes non-object namespace and table entries through unchanged', () => {
@@ -63,7 +63,7 @@ describe('createStorageSort', () => {
         },
       },
     };
-    const sorted = sortStorage(storage) as typeof storage;
+    const sorted = normalizeStorage(storage) as typeof storage;
     expect(sorted.namespaces.broken).toBeNull();
     expect(sorted.namespaces.__unbound__.entries.table.bad).toBeNull();
   });
@@ -84,7 +84,7 @@ describe('createStorageSort', () => {
         },
       },
     };
-    const sorted = sortStorage(storage) as typeof storage;
+    const sorted = normalizeStorage(storage) as typeof storage;
     const indexes = sorted.namespaces.__unbound__.entries.table.users.indexes;
     expect(indexes[0]).toEqual({ columns: ['b'] });
     expect(indexes[1]).toEqual({ name: 'idx_a', columns: ['a'] });

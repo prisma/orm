@@ -845,9 +845,8 @@
 ./emitter: function serializeValue(value: unknown): string
 ./emitter: function typesImportRequirements(imports: ReadonlyArray<TypesImportSpec>): ImportRequirement[]
 ./emitter: interface EmitOptions
+./emitter: interface EmitOptions, readonly optional property normalizeStorage?: NormalizeStorage
 ./emitter: interface EmitOptions, readonly optional property outputJsonPath?: string
-./emitter: interface EmitOptions, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./emitter: interface EmitOptions, readonly optional property sortStorage?: StorageSort
 ./emitter: interface EmitOptions, readonly optional property supportsNamespaces?: boolean
 ./emitter: interface EmitOptions, readonly required property deserializeContract: (json: Record<string, unknown>) => Contract
 ./emitter: interface EmitOptions, readonly required property serializeContract: SerializeContract
@@ -1013,8 +1012,7 @@
 ./migration-tools/contract-snapshot-store: interface ContractSnapshotInput, readonly required property contractDts: string
 ./migration-tools/contract-snapshot-store: interface ContractSnapshotInput, readonly required property contractJson: unknown
 ./migration-tools/contract-snapshot-store: interface SnapshotCanonicalizationHooks
-./migration-tools/contract-snapshot-store: interface SnapshotCanonicalizationHooks, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./migration-tools/contract-snapshot-store: interface SnapshotCanonicalizationHooks, readonly optional property sortStorage?: StorageSort
+./migration-tools/contract-snapshot-store: interface SnapshotCanonicalizationHooks, readonly optional property normalizeStorage?: NormalizeStorage
 ./migration-tools/contract-snapshot-store: interface SnapshotContentVerifier
 ./migration-tools/contract-snapshot-store: interface SnapshotContentVerifier, required method assertSnapshotContentMatches(contractJson: unknown, storageHash: string, jsonPath: string): void
 ./migration-tools/errors: class MigrationToolsError extends CliStructuredError
@@ -1235,8 +1233,7 @@
 ./migration-tools/spaces: interface ContractSpaceHeadRecord, readonly required property hash: string
 ./migration-tools/spaces: interface ContractSpaceHeadRecord, readonly required property invariants: readonly string[]
 ./migration-tools/spaces: interface DescriptorSelfConsistencyInputs
-./migration-tools/spaces: interface DescriptorSelfConsistencyInputs, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./migration-tools/spaces: interface DescriptorSelfConsistencyInputs, readonly optional property sortStorage?: StorageSort
+./migration-tools/spaces: interface DescriptorSelfConsistencyInputs, readonly optional property normalizeStorage?: NormalizeStorage
 ./migration-tools/spaces: interface DescriptorSelfConsistencyInputs, readonly required property contractJson: unknown
 ./migration-tools/spaces: interface DescriptorSelfConsistencyInputs, readonly required property extensionId: string
 ./migration-tools/spaces: interface DescriptorSelfConsistencyInputs, readonly required property headRefHash: string
@@ -1461,8 +1458,7 @@
 ./migration-tools: interface DeclaredExtensionEntry, readonly required property id: string
 ./migration-tools: interface DeclaredExtensionEntry, readonly required property targetId: string
 ./migration-tools: interface DescriptorSelfConsistencyInputs
-./migration-tools: interface DescriptorSelfConsistencyInputs, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./migration-tools: interface DescriptorSelfConsistencyInputs, readonly optional property sortStorage?: StorageSort
+./migration-tools: interface DescriptorSelfConsistencyInputs, readonly optional property normalizeStorage?: NormalizeStorage
 ./migration-tools: interface DescriptorSelfConsistencyInputs, readonly required property contractJson: unknown
 ./migration-tools: interface DescriptorSelfConsistencyInputs, readonly required property extensionId: string
 ./migration-tools: interface DescriptorSelfConsistencyInputs, readonly required property headRefHash: string
@@ -1605,8 +1601,7 @@
 ./migration-tools: interface SchemaCheckSection, readonly required property perSpace: ReadonlyMap<string, VerifyDatabaseSchemaResult>
 ./migration-tools: interface SchemaCheckSection, readonly required property unclaimed: readonly string[]
 ./migration-tools: interface SnapshotCanonicalizationHooks
-./migration-tools: interface SnapshotCanonicalizationHooks, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./migration-tools: interface SnapshotCanonicalizationHooks, readonly optional property sortStorage?: StorageSort
+./migration-tools: interface SnapshotCanonicalizationHooks, readonly optional property normalizeStorage?: NormalizeStorage
 ./migration-tools: interface SnapshotContentVerifier
 ./migration-tools: interface SnapshotContentVerifier, required method assertSnapshotContentMatches(contractJson: unknown, storageHash: string, jsonPath: string): void
 ./migration-tools: interface SpaceApplyInput, readonly required property currentMarkerHash: null | string

@@ -1,5 +1,5 @@
 import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
-import type { PreserveEmptyPredicate, StorageSort } from '@internal/contract/hashing';
+import type { NormalizeStorage } from '@internal/contract/hashing';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { errorDescriptorHeadHashMismatch } from './errors';
@@ -16,8 +16,7 @@ export interface DescriptorSelfConsistencyInputs {
   /** The extension's bundled `contract.json`, as the descriptor imports it. */
   readonly contractJson: unknown;
   readonly headRefHash: string;
-  readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
-  readonly sortStorage?: StorageSort;
+  readonly normalizeStorage?: NormalizeStorage;
 }
 
 /**
@@ -57,8 +56,7 @@ export function assertDescriptorSelfConsistency(inputs: DescriptorSelfConsistenc
     targetFamily: contract.targetFamily,
     storage: contract.storage,
     hooks: {
-      ...ifDefined('shouldPreserveEmpty', inputs.shouldPreserveEmpty),
-      ...ifDefined('sortStorage', inputs.sortStorage),
+      ...ifDefined('normalizeStorage', inputs.normalizeStorage),
     },
   });
   if (recomputed !== inputs.headRefHash) {

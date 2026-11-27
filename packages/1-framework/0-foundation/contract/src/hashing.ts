@@ -1,11 +1,7 @@
 import { createHash } from 'node:crypto';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import {
-  canonicalizeSections,
-  type PreserveEmptyPredicate,
-  type StorageSort,
-} from './canonicalization';
+import { canonicalizeSections, type NormalizeStorage } from './canonicalization';
 import { contractError } from './contract-errors';
 import { isPlainRecord } from './is-plain-record';
 import type { ExecutionHashBase, ProfileHashBase, StorageHashBase } from './types';
@@ -38,8 +34,7 @@ function sha256(content: string): string {
 }
 
 interface CanonicalizationHooks {
-  readonly shouldPreserveEmpty?: PreserveEmptyPredicate | undefined;
-  readonly sortStorage?: StorageSort | undefined;
+  readonly normalizeStorage?: NormalizeStorage | undefined;
 }
 
 function hashSection(
@@ -48,8 +43,7 @@ function hashSection(
 ): string {
   const asJson = castAs<Record<string, unknown>>(JSON.parse(JSON.stringify(input)));
   const canonical = canonicalizeSections(asJson, {
-    ...ifDefined('shouldPreserveEmpty', hooks.shouldPreserveEmpty),
-    ...ifDefined('sortStorage', hooks.sortStorage),
+    ...ifDefined('normalizeStorage', hooks.normalizeStorage),
   });
   return sha256(JSON.stringify(canonical, null, 2));
 }
@@ -58,8 +52,7 @@ export type ComputeStorageHashArgs = {
   target: string;
   targetFamily: string;
   storage: Record<string, unknown>;
-  readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
-  readonly sortStorage?: StorageSort;
+  readonly normalizeStorage?: NormalizeStorage;
 };
 
 export function computeStorageHash(args: ComputeStorageHashArgs): StorageHashBase<string> {
@@ -124,8 +117,7 @@ export interface ExpectedContractHashes {
 
 export interface AssertContractHashesOptions {
   readonly contracts: readonly ExpectedContractHashes[];
-  readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
-  readonly sortStorage?: StorageSort;
+  readonly normalizeStorage?: NormalizeStorage;
 }
 
 /**
@@ -169,8 +161,7 @@ function contractHashDifferences(
       target: contract.target,
       targetFamily: contract.targetFamily,
       storage,
-      ...ifDefined('shouldPreserveEmpty', options.shouldPreserveEmpty),
-      ...ifDefined('sortStorage', options.sortStorage),
+      ...ifDefined('normalizeStorage', options.normalizeStorage),
     }),
     expected.storageHash,
   );

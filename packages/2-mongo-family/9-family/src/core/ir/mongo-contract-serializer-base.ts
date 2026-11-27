@@ -23,10 +23,13 @@ import {
   resolveMongoToOneRelationFields,
   validateMongoStorage,
 } from '@internal/mongo-contract';
-import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
+import {
+  mongoContractCanonicalizationHooks,
+  normalMongoDomain,
+} from '@internal/mongo-contract/canonicalization-hooks';
 import { composeMongoEntityKinds } from '@internal/mongo-contract/entity-kinds';
 import { blindCast } from '@internal/utils/casts';
-import type { JsonObject } from '@internal/utils/json';
+import type { JsonObject, JsonValue } from '@internal/utils/json';
 import { structuredError } from '@internal/utils/structured-error';
 import { type as arktypeType, type Type } from 'arktype';
 
@@ -103,7 +106,17 @@ export abstract class MongoContractSerializerBase<TContract>
   > = {
     1: {
       parse: (document) => this.parseContractV1(document),
-      print: (contract) => ({ formatVersion: 1, ...this.printContractV1(contract) }),
+      print: (contract) => {
+        const printed = this.printContractV1(contract);
+        return {
+          formatVersion: 1,
+          ...printed,
+          domain: blindCast<
+            JsonValue,
+            'the domain normal form only leaves fields out of the printed JSON domain'
+          >(normalMongoDomain(printed['domain'])),
+        };
+      },
     },
   };
 
@@ -136,13 +149,7 @@ export abstract class MongoContractSerializerBase<TContract>
     );
   }
 
-  /**
-   * Preserve empty `collections` maps and per-collection payloads. Mongo
-   * collections legitimately serialize empty (a declared collection with no
-   * schema is valid); SQL tables never do — that asymmetry lives here rather
-   * than in the family-agnostic canonicalizer.
-   */
-  shouldPreserveEmpty = mongoContractCanonicalizationHooks.shouldPreserveEmpty;
+  normalizeStorage = mongoContractCanonicalizationHooks.normalizeStorage;
 
   // No hashCanonicalizationHooks: the Mongo emit pipeline hashes a projection
   // of storage (`{ id, collections }` per namespace), not the persisted

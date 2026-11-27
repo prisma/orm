@@ -1,4 +1,4 @@
-import type { PreserveEmptyPredicate, StorageSort } from '@internal/contract/hashing';
+import type { NormalizeStorage } from '@internal/contract/hashing';
 import {
   computeExecutionHash,
   computeProfileHash,
@@ -34,8 +34,7 @@ type ContractOverrides<TStorage extends StorageBase = StorageBase> = {
   execution?: Omit<ExecutionSection, 'executionHash'>;
   profileHash?: ProfileHashBase<string>;
   meta?: Record<string, unknown>;
-  shouldPreserveEmpty?: PreserveEmptyPredicate;
-  sortStorage?: StorageSort;
+  normalizeStorage?: NormalizeStorage;
 };
 
 const DUMMY_HASH = coreHash('test');
@@ -93,8 +92,7 @@ export function createContract<TStorage extends StorageBase = StorageBase>(
     target,
     targetFamily,
     storage: rawStorage as Record<string, unknown>,
-    ...ifDefined('shouldPreserveEmpty', overrides.shouldPreserveEmpty),
-    ...ifDefined('sortStorage', overrides.sortStorage),
+    ...ifDefined('normalizeStorage', overrides.normalizeStorage),
   });
 
   const storage = Object.assign(new InMemoryStorage(), rawStorage, { storageHash }) as TStorage;

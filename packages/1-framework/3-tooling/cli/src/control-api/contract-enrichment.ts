@@ -79,7 +79,7 @@ function extractExtensionPackMeta(
     targetId: component.targetId,
     version,
   };
-  if (capabilities) {
+  if (capabilities && Object.keys(capabilities).length > 0) {
     base['capabilities'] = capabilities;
   }
   const carried = Object.entries(types ?? {}).flatMap(([key, value]) => {

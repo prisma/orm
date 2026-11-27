@@ -1,5 +1,5 @@
 import { ifDefined } from '@internal/utils/defined';
-import type { PreserveEmptyPredicate, StorageSort } from '../../src/canonicalization';
+import type { NormalizeStorage } from '../../src/canonicalization';
 import type { Contract } from '../../src/contract-types';
 import type { CrossReference } from '../../src/cross-reference';
 import type { ApplicationDomainNamespace } from '../../src/domain-envelope';
@@ -23,8 +23,7 @@ type ContractOverrides<TStorage extends StorageBase = StorageBase> = {
   execution?: Omit<ExecutionSection, 'executionHash'>;
   profileHash?: ProfileHashBase<string>;
   meta?: Record<string, unknown>;
-  shouldPreserveEmpty?: PreserveEmptyPredicate;
-  sortStorage?: StorageSort;
+  normalizeStorage?: NormalizeStorage;
 };
 
 const DUMMY_HASH = coreHash('test');
@@ -61,8 +60,7 @@ export function createContract<TStorage extends StorageBase = StorageBase>(
     target,
     targetFamily,
     storage: rawStorage as Record<string, unknown>,
-    ...ifDefined('shouldPreserveEmpty', overrides.shouldPreserveEmpty),
-    ...ifDefined('sortStorage', overrides.sortStorage),
+    ...ifDefined('normalizeStorage', overrides.normalizeStorage),
   });
 
   const storage = {

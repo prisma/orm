@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import type { PreserveEmptyPredicate, StorageSort } from '../src/canonicalization';
+import type { NormalizeStorage } from '../src/canonicalization';
 import {
   assertContractHashes,
   computeExecutionHash,
@@ -13,19 +13,9 @@ const sha256OfJsonText = (value: unknown): string =>
     .update(JSON.stringify(value, null, 2))
     .digest('hex');
 
-const sqlPreserveEmpty: PreserveEmptyPredicate = (path) => {
-  const len = path.length;
-  if (len < 2 || path[0] !== 'storage') return false;
-  if (path[1] === 'namespaces') {
-    if (len === 5 && path[3] === 'entries' && path[4] === 'table') return true;
-    if (len === 6 && path[3] === 'entries' && path[4] === 'table') return true;
-  }
-  return false;
-};
+const sqlSortStorage: NormalizeStorage = (storage) => storage;
 
-const sqlSortStorage: StorageSort = (storage) => storage;
-
-const SQL_HOOKS = { shouldPreserveEmpty: sqlPreserveEmpty, sortStorage: sqlSortStorage };
+const SQL_HOOKS = { normalizeStorage: sqlSortStorage };
 
 const emptyNamespacedStorage = () => ({
   namespaces: {
@@ -225,6 +215,49 @@ describe('computeExecutionHash', () => {
   });
 });
 
+describe('values the hashes keep', () => {
+  it('gives generator params that differ only in a false value different execution hashes', () => {
+    const executionWith = (params: Record<string, unknown>) =>
+      computeExecutionHash({
+        target: 'postgres',
+        targetFamily: 'sql',
+        execution: {
+          mutations: {
+            defaults: [
+              {
+                ref: { table: 'user', column: 'id' },
+                onCreate: { kind: 'generator', id: 'nanoid', params },
+              },
+            ],
+          },
+        },
+      });
+    expect(executionWith({ size: 21, upper: false })).not.toBe(executionWith({ size: 21 }));
+  });
+
+  it('gives storage that differs only in a false, empty array or empty object different hashes', () => {
+    const storageWith = (column: Record<string, unknown>) =>
+      computeStorageHash({
+        target: 'postgres',
+        targetFamily: 'sql',
+        storage: {
+          namespaces: {
+            public: { id: 'public', entries: { table: { t: { columns: { c: column } } } } },
+          },
+        },
+      });
+    const base = { codecId: 'pg/text@1', nullable: false };
+    expect(
+      new Set([
+        storageWith(base),
+        storageWith({ ...base, flag: false }),
+        storageWith({ ...base, list: [] }),
+        storageWith({ ...base, map: {} }),
+      ]).size,
+    ).toBe(4);
+  });
+});
+
 describe('the hash input', () => {
   it('is the family, the target and the storage, with keys sorted', () => {
     expect(
@@ -248,11 +281,11 @@ describe('the hash input', () => {
       computeProfileHash({
         target: 'postgres',
         targetFamily: 'sql',
-        capabilities: { postgres: { jsonAgg: true, lateral: false }, sql: {} },
+        capabilities: { postgres: { lateral: false, jsonAgg: true }, sql: {} },
       }),
     ).toBe(
       sha256OfJsonText({
-        capabilities: { postgres: { jsonAgg: true } },
+        capabilities: { postgres: { jsonAgg: true, lateral: false }, sql: {} },
         target: 'postgres',
         targetFamily: 'sql',
       }),
