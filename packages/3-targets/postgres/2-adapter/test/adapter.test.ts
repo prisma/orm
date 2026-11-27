@@ -713,7 +713,7 @@ describe('Postgres adapter', () => {
     expect(typeof adapter.profile.readMarker).toBe('function');
   });
 
-  it('readMarker returns no-table when the information_schema probe yields no rows', async () => {
+  it('readMarker returns no-table when neither the _prisma nor the release-candidate marker table exists', async () => {
     const calls: Array<{ sql: string; params: readonly unknown[] | undefined }> = [];
     const queryable: SqlQueryable = {
       execute: async () => ({ affectedRows: 0 }),
@@ -726,9 +726,29 @@ describe('Postgres adapter', () => {
     const result = await adapter.profile.readMarker(queryable);
 
     expect(result).toEqual({ kind: 'no-table' });
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     expect(calls[0]?.sql).toContain('"information_schema"."tables"');
     expect(calls[0]?.params).toEqual(['_prisma', 'marker']);
+    expect(calls[1]?.sql).toContain('"information_schema"."tables"');
+    expect(calls[1]?.params).toEqual(['prisma_contract', 'marker']);
+  });
+
+  it('readMarker returns earlier-release when only the release-candidate marker table exists', async () => {
+    let call = 0;
+    const queryable: SqlQueryable = {
+      execute: async () => ({ affectedRows: 0 }),
+      async *query<Row>() {
+        call += 1;
+        const rows = call === 2 ? [{ '1': 1 }] : [];
+        for (const row of rows) {
+          yield row as Row;
+        }
+      },
+    };
+
+    const result = await adapter.profile.readMarker(queryable);
+
+    expect(result).toEqual({ kind: 'earlier-release' });
   });
 
   it('readMarker returns absent when the table exists but holds no row for this space', async () => {
