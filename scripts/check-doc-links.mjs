@@ -10,7 +10,8 @@
  *
  * Files not scanned (links pointing into them are still checked):
  * - projects/<project>/**: transient project files, deleted when the project closes.
- * - src/init/ folders under packages/: templates `init` writes into a new project; links resolve there.
+ * - src/init/ folders under packages/: templates `init` writes into a new project; links resolve
+ *   there.
  * - skills-contrib/<skill>/assets/**: templates a skill copies into another repository.
  *
  * Link forms read: inline links and images, including link text that wraps lines or holds
@@ -18,11 +19,10 @@
  * Links to https://github.com/prisma/orm/(blob|tree)/main/ are checked as repository paths. Other
  * absolute URLs, links pinned to a tag or commit, `...` and `{{placeholder}}` are skipped.
  *
- * Known differences from GitHub's renderer: a code span that wraps lines is not recognised, an
- * html comment that spans a blank line is read as text, a list item's own indented code block is
- * read as text, links inside a `<pre>` block are read, an unquoted `href=x` is not read, an
- * `href=` inside another attribute's value is read, and `id` attributes on elements other than
- * `<a>` are not anchors.
+ * Known differences from GitHub's renderer: a code span that wraps lines is not recognised, a
+ * list item's own indented code block is read as text, links inside a `<pre>` block are read, an
+ * unquoted `href=x` is not read, an `href=` inside another attribute's value is read, and `id`
+ * attributes on elements other than `<a>` are not anchors.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -41,6 +41,7 @@ const FENCE = /^\s*(`{3,}|~{3,})/;
 const LIST_ITEM = /^\s*([-*+]|\d+[.)])\s/;
 const INDENTED = /^( {4}|\t)/;
 const BLOCKQUOTE = /^ {0,3}(>\s?)+/;
+const BLOCK_START = /^(?: {0,3}>\s?)* {0,3}$/;
 const DEFINITION = /^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\n]*)>|(\S+))/;
 const HTML_LINK = /<(?:a|img|source)\b[^>]*?\s(?:href|src)\s*=\s*["']([^"']*)["']/gi;
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
@@ -59,6 +60,31 @@ function blankCodeSpans(line) {
   return line.replace(/(`+)(?:(?!\1)[\s\S])*?\1/g, (span) => ' '.repeat(span.length));
 }
 
+function blankComments(line, startsInComment) {
+  const code = blankCodeSpans(line);
+  const blank = (from, to) => ' '.repeat(to - from);
+  let text = '';
+  let at = 0;
+  if (startsInComment) {
+    const close = line.indexOf('-->');
+    if (close === -1) return { text: blank(0, line.length), inComment: true };
+    text = blank(0, close + 3);
+    at = close + 3;
+  }
+  while (at < line.length) {
+    const open = code.indexOf('<!--', at);
+    if (open === -1) break;
+    const close = line.indexOf('-->', open + 4);
+    if (close === -1) {
+      if (!BLOCK_START.test(line.slice(0, open))) break;
+      return { text: text + line.slice(at, open) + blank(open, line.length), inComment: true };
+    }
+    text += line.slice(at, open) + blank(open, close + 3);
+    at = close + 3;
+  }
+  return { text: text + line.slice(at), inComment: false };
+}
+
 function* proseLines(content) {
   const lines = content.split(/\r?\n/);
   let start = 0;
@@ -67,31 +93,43 @@ function* proseLines(content) {
     if (end > 0) start = end + 1;
   }
   let fence = null;
+  let fenceQuoted = false;
   let inList = false;
   let inIndentedCode = false;
   let previousBlank = true;
+  let inComment = false;
+  let commentQuoted = false;
   for (let i = start; i < lines.length; i++) {
-    const line = lines[i];
+    const raw = lines[i];
+    const unquoted = raw.replace(BLOCKQUOTE, '');
+    if (fence !== null && fenceQuoted && !BLOCKQUOTE.test(raw)) fence = null;
     if (fence !== null) {
-      const closing = FENCE.exec(line);
+      const closing = FENCE.exec(unquoted);
       if (
         closing &&
         closing[1][0] === fence[0] &&
         closing[1].length >= fence.length &&
-        line.trim() === closing[1]
+        unquoted.trim() === closing[1]
       ) {
         fence = null;
       }
       continue;
     }
-    if (line.trim() === '') {
+    if (inComment && commentQuoted && !BLOCKQUOTE.test(raw)) inComment = false;
+    const uncommented = blankComments(raw, inComment);
+    if (uncommented.inComment && !inComment) commentQuoted = BLOCKQUOTE.test(raw);
+    inComment = uncommented.inComment;
+    const line = uncommented.text;
+    if (line.replace(BLOCKQUOTE, '').trim() === '') {
       previousBlank = true;
       yield { text: '', line: i + 1 };
       continue;
     }
-    const opening = FENCE.exec(line);
-    if (opening) {
+    const fenceLine = line.replace(BLOCKQUOTE, '');
+    const opening = FENCE.exec(fenceLine);
+    if (opening && !(opening[1][0] === '`' && fenceLine.slice(opening[0].length).includes('`'))) {
       fence = opening[1];
+      fenceQuoted = fenceLine !== line;
       previousBlank = false;
       yield { text: '', line: i + 1 };
       continue;
@@ -195,7 +233,10 @@ export function extractLinks(content) {
     const definition =
       paragraph.length === 0 && DEFINITION.exec(entry.text.replace(BLOCKQUOTE, ''));
     if (definition) {
-      links.push({ target: definition[1] ?? definition[2], line: entry.line });
+      links.push({
+        target: (definition[1] ?? definition[2]).replace(/\\(.)/g, '$1'),
+        line: entry.line,
+      });
       continue;
     }
     if (entry.text === '' || LIST_ITEM.test(entry.text) || ATX_HEADING.test(entry.text)) flush();

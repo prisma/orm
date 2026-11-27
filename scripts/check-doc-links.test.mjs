@@ -187,6 +187,10 @@ describe('extractLinks', () => {
     deepStrictEqual(targets('````\n```\n[a](inside.md)\n````\n[b](real.md)'), ['real.md']);
   });
 
+  it('ignores links inside a fenced code block in a blockquote', () => {
+    deepStrictEqual(targets('> ```\n> [a](inside.md)\n> ```\n\n[b](real.md)'), ['real.md']);
+  });
+
   it('ignores links inside an indented code block', () => {
     deepStrictEqual(targets('Text\n\n    [a](inside.md)\n\n[b](real.md)'), ['real.md']);
   });
@@ -257,6 +261,14 @@ describe('extractLinks', () => {
     deepStrictEqual(targets('The fields are:\n[name]: the user name'), []);
   });
 
+  it('unescapes a reference definition destination', () => {
+    deepStrictEqual(targets('[g][g]\n\n[g]: foo\\(bar\\).md'), ['foo(bar).md']);
+  });
+
+  it('ignores links inside an html comment that spans blank lines', () => {
+    deepStrictEqual(targets('<!--\n\n[a](gone.md)\n\n-->\n[b](real.md)'), ['real.md']);
+  });
+
   it('reads a reference definition inside a blockquote', () => {
     deepStrictEqual(extractLinks('> [r]: missing.md'), [{ target: 'missing.md', line: 1 }]);
   });
@@ -321,6 +333,55 @@ describe('collectAnchors', () => {
 
   it('drops the closing hashes of a heading', () => {
     deepStrictEqual([...collectAnchors('## Usage ##')], ['usage']);
+  });
+
+  it('reads the rest of the file after an unclosed comment in the middle of a line', () => {
+    const content = 'The <!-- marker opens a comment.\n\n## After\n\n[a](a.md)';
+    deepStrictEqual([targets(content), [...collectAnchors(content)]], [['a.md'], ['after']]);
+  });
+
+  it('does not carry a comment that opens mid-line past the end of its paragraph', () => {
+    deepStrictEqual(targets('Text <!-- open\n\n--> [a](a.md)'), ['a.md']);
+  });
+
+  it('ends a comment at the first closing marker, backticks or not', () => {
+    deepStrictEqual(
+      targets('<!-- a ` b --> c `\n\n[x](x.md)\n\n<!--\na ` b --> c `\n\n[y](y.md)'),
+      ['x.md', 'y.md'],
+    );
+  });
+
+  it('ends a fence opened in a blockquote with the blockquote', () => {
+    const content = '> ```\n> code\n\nAfter [a](a.md)\n\n## After';
+    deepStrictEqual([targets(content), [...collectAnchors(content)]], [['a.md'], ['after']]);
+    deepStrictEqual(targets('> ```\n> [h](h.md)\n> ```\n> after [b](b.md)'), ['b.md']);
+  });
+
+  it('ends a comment opened in a blockquote with the blockquote', () => {
+    const content = '> <!-- note\n\n## After\n\n[a](a.md)';
+    deepStrictEqual([targets(content), [...collectAnchors(content)]], [['a.md'], ['after']]);
+  });
+
+  it('reads a definition in a blockquote after a quoted blank line', () => {
+    deepStrictEqual(targets('> [x][r]\n>\n> [r]: missing.md'), ['missing.md']);
+  });
+
+  it('does not open a fence on a line with more backticks', () => {
+    deepStrictEqual(targets('```js``` inline\n\n> ```x``` y\n\n[a](a.md)'), ['a.md']);
+  });
+
+  it('ignores comment markers inside inline code', () => {
+    deepStrictEqual(
+      targets('Write `<!--` to open.\n\n[b](real.md)\n\nUse `<!--` [c](c.md) `-->`.'),
+      ['real.md', 'c.md'],
+    );
+  });
+
+  it('ignores anchors and headings inside html comments', () => {
+    deepStrictEqual(
+      [...collectAnchors('<!-- <a id="hidden"></a> -->\n\n<!--\n## Hidden\n-->\n\n## Real')],
+      ['real'],
+    );
   });
 
   it('reads a heading inside a blockquote', () => {
