@@ -40,7 +40,15 @@ Capabilities are dependencies: a database version or a connection provides them,
 
 ## `init`
 
-`init` must write `requiredCapabilities: [...postgres18, ...postgresDriver]`. The init contribution's contract entry is data (a JSON value, or a call with JSON arguments), and a spread of an imported name is neither. **Do not change `packages/1-framework` for this.** Leave `init` writing what it writes now if that still compiles, or report exactly what it needs; the orchestrator is asking the operator.
+`init` writes `requiredCapabilities: [...postgres18, ...postgresDriver]` into the new project's config, with its imports.
+
+Use the tools migration files already use to write TypeScript: a `TsExpression` node (`renderTypeScript()` and `importRequirements()`, in `packages/1-framework/1-core/ts-render`) and `renderImports`. The targets' migration operation nodes are the model (`packages/3-targets/postgres/1-target/src/core/migrations/op-factory-call.ts`): one node that renders itself and can also be run.
+
+This branch built something else beside that pattern, and it is deleted: the `ContractEntryExpression` union (`{ value } | { call }`) in `packages/1-framework/3-tooling/cli/src/commands/init/init-contribution.ts`, the CLI code that prints it and that imports a module by name to call an export (`runContractEntry`, `importCallModule`), and the checks that exist only because the CLI assembled source from strings a package supplied.
+
+In its place, the package's `contractEntry(input)` returns a `TsExpression` node the PostgreSQL package defines, with one more method that returns the entry's real value. The CLI writes the config with `renderTypeScript()` and `importRequirements()`, and the check of a kept Prisma 7 schema calls the node's own method, so the CLI imports nothing by name. The quick reference renders the same node.
+
+Under `packages/1-framework` this changes only the init member's type and the CLI code that uses it. The contribution is loaded from the user's installed package, so the CLI must rely on the node's methods, not on `instanceof`.
 
 ## Stale text to fix in the same change
 
