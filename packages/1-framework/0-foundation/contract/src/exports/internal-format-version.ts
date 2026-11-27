@@ -14,6 +14,7 @@ export {
   type StoredConversion,
   type StoredDocument,
   type StoredDocumentInNewestVersion,
+  type StoredFileKind,
   type StoredFileLocation,
   type StoredFormat,
 } from '../format-version';

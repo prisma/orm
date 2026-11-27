@@ -1,8 +1,9 @@
 export {
-  CONTRACT_FORMAT_VERSIONS,
-  type ContractFormatVersion,
+  type ContractFileLocation,
+  convertContractDocument,
   isFormatVersionError,
-  type ReadFormatVersionOptions,
-  readFormatVersion,
-  type StoredFileKind,
+  NEWEST_CONTRACT_FORMAT_VERSION,
+  type NewestContractFormatVersion,
+  type StoredDocument,
+  type StoredFileLocation,
 } from '../format-version';

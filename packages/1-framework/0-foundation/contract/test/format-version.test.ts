@@ -2,7 +2,6 @@ import { InternalError } from '@internal/utils/internal-error';
 import { UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { describe, expect, it } from 'vitest';
 import {
-  CONTRACT_FORMAT_VERSIONS,
   carriesFormatVersion,
   convertContractDocument,
   formatVersionErrorAt,
@@ -27,7 +26,7 @@ describe('readFormatVersion', () => {
         { formatVersion: 1, other: 'ignored here' },
         {
           kind: 'contract',
-          knownVersions: CONTRACT_FORMAT_VERSIONS,
+          knownVersions: [1],
         },
       ),
     ).toBe(1);

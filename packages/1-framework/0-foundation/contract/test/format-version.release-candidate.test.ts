@@ -3,7 +3,6 @@ import { join } from 'pathe';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   CONTRACT_FORMAT,
-  CONTRACT_FORMAT_VERSIONS,
   convertContractDocument,
   readFormatVersion,
   readStoredDocument,
@@ -86,14 +85,10 @@ describe('format version 0, which only a release candidate wrote', () => {
     },
   );
 
-  it('is refused by a reader that does not know version 0, such as one given the published version list', () => {
-    expect(CONTRACT_FORMAT_VERSIONS).toEqual([1]);
+  it('is refused by a reader that does not know version 0', () => {
     expect(
       caught(() =>
-        readFormatVersion(releaseCandidateContract, {
-          kind: 'contract',
-          knownVersions: CONTRACT_FORMAT_VERSIONS,
-        }),
+        readFormatVersion(releaseCandidateContract, { kind: 'contract', knownVersions: [1] }),
       ),
     ).toMatchObject({ code: 'CONTRACT.FORMAT_VERSION_MISSING' });
   });

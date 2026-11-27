@@ -13,11 +13,6 @@ import { isPlainRecord } from './is-plain-record';
 /** The kinds of file Prisma writes into a repository and reads back, each of which says which version of its format it is in. */
 export type StoredFileKind = 'contract' | 'migration' | 'ref';
 
-/** The values `contract.json` (and each contract snapshot) can give in `formatVersion`, oldest first. This release also reads version 0, which a release candidate wrote and which has no `formatVersion`, so this is not every version it reads. */
-export const CONTRACT_FORMAT_VERSIONS = [1] as const;
-
-export type ContractFormatVersion = (typeof CONTRACT_FORMAT_VERSIONS)[number];
-
 export interface ReadFormatVersionOptions<TVersion extends number> {
   readonly kind: StoredFileKind;
   /** Every version this release reads, with no gap from the oldest to the newest. */
@@ -25,6 +20,8 @@ export interface ReadFormatVersionOptions<TVersion extends number> {
   readonly path?: string | undefined;
   /** The extension whose package ships the file, for a file the application cannot change itself. */
   readonly bundledIn?: string | undefined;
+  /** Whether the file is a contract snapshot, which the error advice treats apart. */
+  readonly snapshot?: boolean | undefined;
 }
 
 type FormatVersionProblem =
@@ -77,24 +74,13 @@ const FORMAT_VERSION_ERROR_CODES: ReadonlySet<string> = new Set(
 const FACTS = Symbol('formatVersionErrorFacts');
 
 /**
- * The format version of a stored file's parsed JSON, read before anything else in it. Throws `*.FORMAT_VERSION_NEWER` for a version higher than any in `knownVersions`, and `*.FORMAT_VERSION_MISSING` for a file with no format version, with the old `schemaVersion` field, or with a value that is not a positive integer. Nothing else in the file is looked at, and the document is not converted: a caller that reads more than the version must read the document in the version this returns.
+ * The format version of a stored file's parsed JSON, read before anything else in it, as the first step of {@link readStoredDocument}. Throws `*.FORMAT_VERSION_NEWER` for a version higher than any in `knownVersions`, and `*.FORMAT_VERSION_MISSING` for a file with no format version, with the old `schemaVersion` field, or with a value that is not a positive integer.
  *
- * Version 0 is a file a release candidate wrote, which has no `formatVersion`: a contract with `"schemaVersion": "1"`, or a `migration.json` or ref file without either field. It is returned only when `knownVersions` has 0. Prisma's own readers read version 0 until `8.0.0`, so a caller that passes `CONTRACT_FORMAT_VERSIONS` refuses a contract that Prisma reads.
+ * Version 0 is a file a release candidate wrote, which has no `formatVersion`: a contract with `"schemaVersion": "1"`, or a `migration.json` or ref file without either field. It is returned only when `knownVersions` has 0.
  */
 export function readFormatVersion<TVersion extends number>(
   document: unknown,
   options: ReadFormatVersionOptions<TVersion>,
-): TVersion {
-  return readVersionOf(document, { ...options, snapshot: false });
-}
-
-interface VersionReadOptions<TVersion extends number> extends ReadFormatVersionOptions<TVersion> {
-  readonly snapshot: boolean;
-}
-
-function readVersionOf<TVersion extends number>(
-  document: unknown,
-  options: VersionReadOptions<TVersion>,
 ): TVersion {
   if (isJsonObject(document)) {
     const written = writtenFormatVersion(document, options.kind);
@@ -106,7 +92,7 @@ function readVersionOf<TVersion extends number>(
     knownVersions: options.knownVersions,
     path: options.path,
     bundledIn: options.bundledIn,
-    snapshot: options.snapshot,
+    snapshot: options.snapshot === true,
     problem: problemOf(document, options.knownVersions),
   });
 }
@@ -189,7 +175,7 @@ function convertStoredDocument<TVersions extends FormatVersionList>(
   location: StoredFileLocation,
   snapshot: boolean,
 ): StoredDocumentInNewestVersion<TVersions> {
-  const written = readVersionOf(document, {
+  const written = readFormatVersion(document, {
     kind: format.kind,
     knownVersions: format.versions,
     path: location.path,
@@ -222,8 +208,8 @@ function contractV1FromV0(document: StoredDocument): StoredDocument {
   return { formatVersion: 1, ...contract };
 }
 
-/** The contract format versions this release reads, oldest first: those a contract file can declare, and version 0, which a release candidate wrote, until `8.0.0`. */
-export const CONTRACT_FORMAT_VERSIONS_READ = [0, ...CONTRACT_FORMAT_VERSIONS] as const;
+/** The contract format versions this release reads, oldest first. Version 0 is what a release candidate wrote, which has no `formatVersion`; it is read until `8.0.0`. */
+export const CONTRACT_FORMAT_VERSIONS_READ = [0, 1] as const;
 
 /** How each format version of a contract becomes the next. Version 0 is what a release candidate wrote; it is read until `8.0.0`, and only here. Version 1 changed only the version field, which every family's contract shares. */
 export const CONTRACT_FORMAT: StoredFormat<typeof CONTRACT_FORMAT_VERSIONS_READ> = {
@@ -234,12 +220,14 @@ export const CONTRACT_FORMAT: StoredFormat<typeof CONTRACT_FORMAT_VERSIONS_READ>
 
 export type NewestContractFormatVersion = NewestFormatVersion<typeof CONTRACT_FORMAT_VERSIONS_READ>;
 
-/** The contract format version this release writes. */
+/** The contract format version this release writes, and the version of every document {@link convertContractDocument} returns. A family's serializer writes it as `formatVersion`. */
 export const NEWEST_CONTRACT_FORMAT_VERSION: NewestContractFormatVersion = newestFormatVersion(
   CONTRACT_FORMAT_VERSIONS_READ,
 );
 
-/** A stored contract's parsed JSON in the newest format version, converted from the version it was written in. */
+/**
+ * A stored contract's parsed JSON in the newest format version, converted from the version it was written in. Every reader of a stored contract, Prisma's own included, reads it this way, and only then parses the document. Throws the errors {@link isFormatVersionError} tests for, before anything else in the file is read.
+ */
 export function convertContractDocument(
   document: unknown,
   location: ContractFileLocation = {},
@@ -283,7 +271,7 @@ export function isContractBuiltInMemory(value: unknown): boolean {
   return typeof storage === 'object' && storage !== null && !isPlainRecord(storage);
 }
 
-/** Whether `error` is one that {@link readFormatVersion} throws. */
+/** Whether `error` is one that {@link convertContractDocument} throws for a format version it does not read. */
 export function isFormatVersionError(error: unknown): error is StructuredError {
   return isStructuredError(error) && FORMAT_VERSION_ERROR_CODES.has(error.code);
 }

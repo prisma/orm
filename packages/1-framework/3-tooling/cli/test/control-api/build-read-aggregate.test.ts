@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { PrismaConfig } from '@internal/config/config-types';
-import { readFormatVersion } from '@internal/contract/format-version';
+import { convertContractDocument } from '@internal/contract/format-version';
 import type { Contract } from '@internal/contract/types';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
@@ -158,8 +158,7 @@ describe('buildReadAggregate', () => {
     await writeAppMigration(migrationsDir);
     const config = makeConfig(contractPath);
     vi.mocked(config.family.create).mockReturnValue({
-      deserializeContract: () =>
-        readFormatVersion({ formatVersion: 2 }, { kind: 'contract', knownVersions: [1] }),
+      deserializeContract: () => convertContractDocument({ formatVersion: 2 }),
     } as unknown as ReturnType<PrismaConfig['family']['create']>);
 
     const result = await buildReadAggregate(config, { migrationsDir });
