@@ -43,7 +43,7 @@ Each capability is documented with a short description, references, and conforma
 
 ### Surfacing capabilities
 
-Each capability is declared by the component that knows the fact ([ADR 335](ADR%20335%20-%20A%20contract's%20capabilities%20follow%20from%20the%20database%20version%20its%20author%20states.md)):
+Each capability is declared by the component that knows the fact ([ADR 335](ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md)):
 
 - **The target** declares what each database version provides, in a table by version
   - Example: PostgreSQL has lateral joins in every supported version; a capability that arrives with a later version is in that version's row and the rows after it

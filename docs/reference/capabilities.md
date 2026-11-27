@@ -13,7 +13,7 @@ A capability is a fact that a database version or a connection provides, and tha
 
 The query builder and the ORM client offer a feature only when the contract lists its flag as `true`. The list is fixed when the contract is emitted. Nothing adds to it at run time, and the client does not ask the database.
 
-The decision record is [ADR 335](../architecture%20docs/adrs/ADR%20335%20-%20A%20contract's%20capabilities%20follow%20from%20the%20database%20version%20its%20author%20states.md).
+The decision record is [ADR 335](../architecture%20docs/adrs/ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md).
 
 ## Who declares a capability
 
@@ -118,6 +118,6 @@ An extension pack's flags go under its own namespace, such as `pgvector`, so the
 
 ## References
 
-- [ADR 335: A contract's capabilities follow from the database version its author states](../architecture%20docs/adrs/ADR%20335%20-%20A%20contract's%20capabilities%20follow%20from%20the%20database%20version%20its%20author%20states.md)
+- [ADR 335: A contract lists the capabilities it requires](../architecture%20docs/adrs/ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md)
 - [Capability gating](../architecture%20docs/patterns/capability-gating.md)
 - [Extensions Glossary](./extensions-glossary.md)

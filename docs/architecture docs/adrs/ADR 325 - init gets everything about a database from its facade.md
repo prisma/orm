@@ -67,7 +67,7 @@ The CLI holds no template, connection string or server check for any target. Aft
 | --- | --- |
 | `label` | Shows it as the target's name in the quick reference |
 | `configModule` | Writes `prisma.config.ts` importing `defineConfig` from it |
-| `contractEntry(input)` | Optional. Writes what it returns as the config's `contract:` entry. See [The config's contract entry](#the-configs-contract-entry) |
+| `contractEntry(input)` | Optional. Writes the node it returns as the config's `contract:` entry. See [The config's contract entry](#the-configs-contract-entry) |
 | `peerPackages` | Installs these driver packages into the application |
 | `authoringModes` | Offers these ways to write the contract: PSL, TypeScript or both |
 | `starterContract(mode)` | Writes it as the starter contract |
@@ -86,20 +86,21 @@ Two facts are shared by the CLI and every contribution, and the `InitContributio
 
 ### The config's contract entry
 
-A facade may need more in the config's `contract:` entry than the path, such as the PostgreSQL facade's required `databaseVersion`. `contractEntry(input)` returns the entry as data, in one of two forms: a JSON value, or a call of a function a module exports, with JSON arguments. `input` says which contract source the project has: a contract file and its authoring mode, or a Prisma 7 schema.
+A facade may need more in the config's `contract:` entry than the path, such as the PostgreSQL facade's list of required capabilities. `contractEntry(input)` returns the entry as a node of the kind migration files are written with: it renders itself as TypeScript and lists the imports it needs (`renderTypeScript()` and `importRequirements()`, the two methods of `TsExpression`). `input` says which contract source the project has: a contract file and its authoring mode, or a Prisma 7 schema.
+
+For a Prisma schema, the PostgreSQL facade's node writes this entry, and its imports go in the config's one import block:
 
 ```ts
-contractEntry: (input) =>
-  input.kind === 'prisma7-schema'
-    ? { call: { moduleSpecifier: '@prisma/orm-postgres/config', symbol: 'prisma7Schema', args: [input.path, { databaseVersion: 18 }] } }
-    : { value: { path: input.path, databaseVersion: 18 } },
+contract: { path: "./prisma/contract.prisma", requiredCapabilities: [...postgres18, ...postgresDriver] },
 ```
 
-The example shows a Prisma schema contract. A TypeScript contract states its version in `defineContract`, so PostgreSQL's entry for one is its path.
+A TypeScript contract lists its required capabilities in `defineContract`, so PostgreSQL's entry for one is its path.
 
-The CLI writes the entry into `prisma.config.ts`, a call with its import in the file's one import block, and knows nothing about what the arguments mean. Before writing anything for a project that keeps its Prisma 7 schema, `init` runs the same call to check that the facade can read the schema. One description serves both, so what the check runs is exactly what the config says. The entry is data, not an object of the framework's classes, because the CLI that loads the contribution may be a different installed copy of the framework, so it checks the entry's shape and never its class. Without the member, the entry is the path, or `prisma7Schema(<path>)` from `configModule`.
+The node has a third method, `contractValue(configModule)`, which returns the entry's real value, as a migration's operation call can also build the operation to run. Before writing anything for a project that keeps its Prisma 7 schema, `init` calls it to check that the facade can read the schema. The CLI passes the exports of the facade's config module, which it has already loaded to look for `prisma7Schema`. The node takes the functions and lists it calls from those exports, by the names its text imports, so the text and the value cannot use different ones, and the node imports nothing itself.
 
-`init` finds the entrypoint as the project itself would: Node resolves `<package>/init` from the project folder. The CLI then imports that file. Because of that, the `init` entrypoint may import types from the framework but no framework code that runs. The CLI that loads it can be a different installed copy of the framework from the one the facade depends on, and two copies in one process do not recognise each other's values.
+The CLI knows nothing about what the entry means. Without the member, the entry is the path, or `prisma7Schema(<path>)` from `configModule`.
+
+`init` finds the entrypoint as the project itself would: Node resolves `<package>/init` from the project folder. The CLI then imports that file. The CLI that loads it can be a different installed copy of the framework from the one the facade depends on, and two copies in one process do not recognise each other's values. So the CLI accepts a node by its three methods and never by its class, and the `init` entrypoint loads no framework code that runs, with one exception: the package that renders TypeScript (`ts-render`), which the node is built from and which holds no state the two copies could disagree about.
 
 A probe reports one of four results: the server's version, a driver that is missing, a driver that is installed but fails to load, or a connection that worked whose version could not be read. It rejects only when it cannot connect. `init` gives every probe a deadline. At the deadline it aborts `signal` and reports that the probe did not finish, which it treats like a failed connection. `--probe-db` reads `DATABASE_URL` from the shell's environment, not from `.env`.
 
@@ -217,11 +218,11 @@ In place of the `prisma7Schema` function, the contribution would return the full
 
 ### A member for each option the config needs
 
-The contribution would return option values, such as `{ databaseVersion: 18 }`, and the CLI would add them beside the path. Rejected because each new option a facade needs, or a new place to put one, would add another member to the contribution.
+The contribution would return option values, such as a list of required capabilities, and the CLI would add them beside the path. Rejected because each new option a facade needs, or a new place to put one, would add another member to the contribution.
 
-### The contract entry as an object that renders itself
+### The contract entry as data the CLI prints and runs
 
-The contribution would return an object that renders itself as TypeScript and lists its imports, as a migration's operation calls do. On its own that cannot be run, and the check for a Prisma 7 schema runs the entry before anything is written. A migration's operation call also has a second method that builds the operation to run. A second method here would work, but the text the config holds and the value the check builds would then come from two pieces of the facade's code, which can disagree. Rejected for data, from which the CLI produces both.
+The contribution would return a JSON value, or a call of a module's export with JSON arguments, and the CLI would print it as TypeScript and, for the check, import the module and call the export. Built first. It was a second way of writing TypeScript beside the one migration files use, it needed its own checks that the printed text would compile, and it could not express an entry that names an import, such as `[...postgres18, ...postgresDriver]`.
 
 ### Package names only, with no list
 

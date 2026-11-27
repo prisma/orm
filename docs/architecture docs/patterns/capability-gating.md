@@ -65,7 +65,7 @@ The capability is **a key, not a code path** — gates are explicit, namespaced 
 
 ## Related ADRs
 
-- [ADR 335 — A contract's capabilities follow from the database version its author states](../adrs/ADR%20335%20-%20A%20contract's%20capabilities%20follow%20from%20the%20database%20version%20its%20author%20states.md) — who declares which capability, how a PostgreSQL contract gets its list, and where each check happens.
+- [ADR 335 — A contract lists the capabilities it requires](../adrs/ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md) — who declares which capability, how a PostgreSQL contract gets its list, and where each check happens.
 - [ADR 005 — Thin Core Fat Targets](../adrs/ADR%20005%20-%20Thin%20Core%20Fat%20Targets.md) — the framing principle; capabilities are how a thin core composes with fat targets.
 - [ADR 031 — Adapter capability discovery & negotiation](../adrs/ADR%20031%20-%20Adapter%20capability%20discovery%20&%20negotiation.md) — the earlier negotiation design; ADR 335 says how capabilities reach the contract and are checked today.
 - [ADR 065 — Adapter capability schema & negotiation v1](../adrs/ADR%20065%20-%20Adapter%20capability%20schema%20&%20negotiation%20v1.md) — the shape of a capability set.
