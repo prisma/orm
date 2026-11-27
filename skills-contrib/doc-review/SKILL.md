@@ -4,7 +4,7 @@ description: >-
   Review documentation with two independent readers before it is called done: a
   cold reader who has only the file, and a fact checker who checks every claim
   against the repository. Use whenever you write or rewrite an ADR, a page under
-  docs/, a README or a skill reference, when the user asks to review, improve or
+  docs/, a README, a skill or a rule, when the user asks to review, improve or
   take a fresh-eyes pass on a doc, and when you review a pull request that
   changes docs.
 ---
@@ -13,32 +13,53 @@ description: >-
 
 ## Why two readers who are not you
 
-The author of a doc cannot judge it. They know what each term means and what was decided, so the text reads as clear to them when it is not. They also wrote the facts from memory, and memory is often of a spec or a draft that the code no longer matches.
+The author of a doc cannot judge it. They know what each term means and what was decided, so the text reads as clear to them when it is not. They also wrote the facts from memory, and the memory is often of a spec or a draft that the code no longer matches.
 
 On one pull request in this repository, an agent wrote two decision records and changed fifty other docs, and judged them clear. Readers who were given only the files found four kinds of fault, again and again:
 
-- **The mechanism came before the problem.** A record explained a private field before the reader knew why two copies of a package could exist.
-- **Terms were used before they were defined,** and some were a private vocabulary: "names", "admits", "holds".
-- **Rules were stated and never shown.** One sentence said a range "does not move the lines without the facade". It took a table of what an update installs, line by line, before anyone could follow it.
-- **Facts were wrong.** An error said to appear on the first query appears only when a default value is read. A warning said to be printed is not printed by one package manager.
+- **The mechanism came before the problem.** A record opened by explaining how the framework marks its values, before the reader knew what could go wrong or why they should care.
+- **Terms were used before they were defined,** and some were the author's own shorthand. A package "names" another, where the reader needed "lists it as a peer dependency". A version range "admits" a version, where they needed "accepts".
+- **Rules were stated and never shown.** One sentence said that an application "has a tilde even on its GA lines, so that an update does not move them without the facade". Nobody could follow it. What worked was a table with one row per line of `package.json`, showing what an update installs for each.
+- **Facts were wrong.** The text said an error appears on the first query. It appears only when a default value is read. The text said every package manager prints a warning. One of them prints none.
 
-A reader without your context finds the first three. Only a check against the code finds the fourth. So a doc gets both, from two agents that have not seen your session.
+A reader without your context finds the first three. Only a check against the code finds the fourth. So a doc gets both, from agents that have not seen your session.
+
+## When a change needs this
+
+The question is whether the change adds or alters something a reader has to understand or rely on: an explanation, a rule, a statement of behaviour, a code sample, a command, a number.
+
+| The change | What it needs |
+| --- | --- |
+| New or rewritten explanation, rule, example or claim, however short | Both reviews. One changed sentence can state a wrong fact. |
+| A typo, formatting, a moved or renamed file, a fixed link | `pnpm lint:doc-links` only. |
+| The same mechanical edit across many files, such as a renamed term | `pnpm lint:doc-links`, and one cold reader on two or three of the files, to check that the edit reads right in context. |
+| A generated doc | Review the generator or its template, not the output. |
+| One section of a long doc | Both reviewers read the whole file, because the section has to fit it. You fix what they find in your section. A fault elsewhere you fix if it is small, and report if it is not. |
+| A working file under `projects/` (spec, plan, notes) | Nothing. It has to be correct, but it is not documentation. |
 
 ## The procedure
 
 1. **Write or rewrite the doc.**
-2. **Start the two reviewers,** as separate fresh agents, in parallel. Give each its brief below, word for word, with the file paths filled in. Give the cold reader nothing else: if it needs your explanation to understand the doc, that is the finding.
-3. **Fix what they find.** Fix the doc, not the reviewer's understanding. When a finding shows the doc's reasoning has a gap, close the gap or say plainly that it is there.
-4. **Send the files back** to fresh agents with the same briefs, until both find nothing that matters. Expect two or three rounds for a long doc.
-5. **Report that both ran,** and what they found.
+2. **Start a cold reader and a fact checker,** as separate fresh agents, in parallel. Fill in the brief below for each and hand it over as it stands. Give the cold reader nothing else: if it needs your explanation to understand the doc, that is the finding.
+3. **Fix what they find.**
+   - For the cold reader's findings, fix the doc, never the reviewer's understanding. You may decline a finding that is only a matter of taste; say that you did.
+   - For the fact checker's findings, look at the code it cites before you change the text. A reviewer can be wrong too.
+   - When a finding shows that the doc's reasoning has a gap, close the gap, or say plainly in the doc that it is there.
+4. **Go round again.** Give the next round's cold read to a new agent, because the previous one now knows what the text means, as you do. Send the fact checker you already have the fixes to check; it does not need to check everything again.
+5. **Stop when neither finds anything that would keep a reader from understanding the doc or acting on it correctly.** A cold reader can always find something, so that judgement is yours. A long doc usually takes two or three rounds. If a doc is still gaining real findings after four, its structure is wrong: rewrite it instead of patching it.
+6. **Report that both ran,** what they found, and anything you declined.
 
-Several docs can go to one reviewer, but give a long one, such as an ADR, a reviewer of its own.
+**How many agents.** Several short docs can share one cold reader and one fact checker. Give a doc its own pair when it is the main explanation of something, such as an ADR or a policy page. Thirty changed docs do not need thirty pairs: group them, and use the table above to leave out the ones that teach and claim nothing.
+
+**Claims the repository cannot settle.** Some statements are about another tool: what a package manager does, what a database returns. The fact checker will report them as not checkable. Then you either point to evidence, such as a test in the repository, a recorded trial or the tool's own documentation, or you take the claim out.
 
 ## Brief for the cold reader
 
-> Read this document with fresh eyes, as a member of my team who has none of our context: a capable engineer who knows the language and the common tools, but has never worked on this project. Read only the file or files named below. Open nothing else and run no commands.
+Fill in the three lines at the end. For "Kind", say what the doc is for, because the right shape depends on it: a decision record or an explanation should start with a concrete example and build up step by step; a reference page, an index or a checklist should be easy to scan and complete; guidance for agents, such as a rule or a skill, should say what went wrong and why before it says what to do.
+
+> Read the document below with fresh eyes, as one of its intended readers who has none of the author's context. Read only the file or files named. Open nothing else and run no commands.
 >
-> The document should start with a concrete example, a code sample or a diagram, then state what it decides or describes, then build the topic up step by step, explaining each term where it is first used. A decision record leads with the decision and ends with the alternatives.
+> Judge it as the kind of document it is. A term counts as explained if the document explains it or links to its definition.
 >
 > Report, most important first:
 >
@@ -47,36 +68,43 @@ Several docs can go to one reviewer, but give a long one, such as an ADR, a revi
 > 3. Every claim that seems wrong, or that contradicts another part of the file or of the other files named here. Work through each example yourself.
 > 4. Every place where the order makes you hold a question for more than a paragraph, and every rule that is stated without an example that shows it.
 > 5. Every passage that is still a wall of text and should be a list, a table or shorter.
+> 6. Anything you would not know how to do after reading it, if the document is meant to be acted on.
 >
 > Say plainly which sections read well and need no change. Do not invent problems. Reply with the list only, and write no files.
 >
+> Readers: …
+> Kind of document: …
 > Files: …
 
 ## Brief for the fact checker
 
-> Check every factual claim in the documents named below against this repository. Work read-only. Do not run builds, installs, typechecks, lint or test suites; reading the code, `git`, and a one-line script are enough.
+Fill in the lines at the end. "Checkout" is the folder that holds the code the doc describes, including changes that are not committed yet. "Earlier version" is the commit before your rewrite, or "none" for a new doc.
+
+> Check every factual claim in the documents named below against the repository checkout named below. Work read-only. Do not run builds, installs, typechecks, lint or test suites; reading the code, `git`, and a one-line script are enough.
 >
 > For each document, check:
 >
-> - every name of a package, file, function, type, field, flag, command and error code, against the source;
-> - every code sample, command and example output, against what the code does;
+> - every name that the document presents as this repository's: a package, file, function, type, field, flag, command, script or error code;
+> - every code sample, command and example output, by reading the code it uses;
 > - every statement of behaviour ("when X, the tool does Y"), by reading the code that does it;
 > - every number, version and range;
 > - every link and `#anchor`, by resolving it;
 > - every statement that something is checked, enforced or printed, by finding the check.
 >
-> A project spec or plan is not a source: names change while the work is built. A claim you cannot check from the repository is reported as not checkable, with what would be needed.
+> A project spec or plan is not a source: names change while the work is built. Report a claim you cannot check from the repository, such as the behaviour of another tool, as not checkable, with what would settle it.
 >
-> If the document replaces an earlier version, read that too (`git show <commit>:<path>`) and list every rule or fact the new text dropped or changed.
+> If an earlier version is named, read it (`git show <commit>:<path>`) and list every rule or fact that the new text dropped or changed.
 >
 > Report a numbered list: the passage, what the code actually does with file and line, and the correction. Say plainly which claims you checked and found correct. Reply with the list only, and write no files.
 >
+> Checkout: …
+> Earlier version: …
 > Files: …
 
 ## What a decision record must not contain
 
-A decision record is read for years. It has no ticket numbers, no pull request numbers, no project milestones, and no account of states the system passed through on the way ("before this refactor", "we used to"). A design that was replaced is an alternative considered, stated as a fact. History stays only where it explains something permanent, such as versions that remain published.
+A decision record is read for years. It has no ticket numbers, no pull request numbers, no project milestones, and no account of states the system passed through on the way ("before this refactor", "we used to"). A design that was replaced is an alternative considered, stated as a fact. History stays only where it explains something permanent, such as versions that remain published and constrain the numbering.
 
 ## When you are reviewing someone else's pull request
 
-Run the same two briefs on the docs it changes. A doc change is not reviewed until someone without the author's context has read it and someone has checked its facts.
+A doc change is not reviewed until someone without the author's context has read it and someone has checked its facts. If you did not write the docs and have not been following the work, you can be the cold reader yourself. Check the facts as the fact checker brief says, or hand that to an agent. Use the table above to decide which changed docs need it: a contributor's typo fix does not.
