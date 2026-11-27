@@ -13,6 +13,55 @@ describe('LibSQL error handling', () => {
     })
   })
 
+  describe('remote errors without a numeric code', () => {
+    const remote = (message: string) => ({
+      code: 'SQLITE_CONSTRAINT',
+      message: `SQLITE_CONSTRAINT: SQLITE_CONSTRAINT: SQLite error: ${message}`,
+      cause: { code: 'SQLITE_CONSTRAINT' },
+    })
+
+    test.each([
+      [
+        'unique',
+        'UNIQUE constraint failed: User.email',
+        { kind: 'UniqueConstraintViolation', constraint: { fields: ['email'] }, table: 'User' },
+      ],
+      [
+        'primary key',
+        'UNIQUE constraint failed: User.id',
+        { kind: 'UniqueConstraintViolation', constraint: { fields: ['id'] }, table: 'User' },
+      ],
+      [
+        'not null',
+        'NOT NULL constraint failed: User.name',
+        { kind: 'NullConstraintViolation', constraint: { fields: ['name'] } },
+      ],
+      [
+        'foreign key',
+        'FOREIGN KEY constraint failed',
+        { kind: 'ForeignKeyConstraintViolation', constraint: { foreignKey: {} } },
+      ],
+    ])('%s violation is mapped from the message', (_name, message, expected) => {
+      const error = remote(message)
+      expect(convertDriverError(error)).toEqual({
+        ...expected,
+        originalCode: undefined,
+        originalMessage: error.message,
+      })
+    })
+
+    test('other remote errors keep the generic code', () => {
+      const error = { code: 'SQLITE_ERROR', message: 'SQLITE_ERROR: SQLite error: near "SELEC": syntax error' }
+      expect(convertDriverError(error)).toEqual({
+        kind: 'sqlite',
+        extendedCode: 1,
+        message: error.message,
+        originalCode: undefined,
+        originalMessage: error.message,
+      })
+    })
+  })
+
   test('unique constraint violation reports the fields and the table', () => {
     const dbError = convertDriverError({
       code: 'SQLITE_CONSTRAINT_UNIQUE',
