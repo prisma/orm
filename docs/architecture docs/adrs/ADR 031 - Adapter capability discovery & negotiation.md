@@ -49,9 +49,8 @@ Each capability is declared by the component that knows the fact ([ADR 335](ADR%
   - Example: PostgreSQL has lateral joins in every supported version; a capability that arrives with a later version is in that version's row and the rows after it
 - **The driver** declares what the connection provides
   - Example: interactive transactions
-- **The adapter** declares what it can write as a query
 
-On PostgreSQL the contract's author states the database version, and the contract lists that version's capabilities plus the connection's. The other targets' contracts take a fixed list from their adapter until each gets its own table.
+On PostgreSQL the contract's author writes the list of capabilities the contract requires, from the list the target exports for each database version and the list the driver exports for its connection. The other targets' contracts take a fixed list from their adapter until each gets its own table.
 
 ### Verification (pinned profile)
 
@@ -62,22 +61,15 @@ On PostgreSQL, during verification (`prisma db verify`, `prisma db sign`, and be
 
 When a client is created, the capabilities the contract requires of the connection are compared with what the adapter and driver declare. The runtime does not probe the database.
 
-### Turning capabilities on and off
+### Leaving a capability out
 
-On PostgreSQL the contract's author can state a `capabilities` list beside the database version. It is an array of capability sets, merged in order over the version's capabilities; a later set overrides an earlier one, and `false` turns a flag off:
+The author's list is everything the contract requires, with no default. A capability is removed by leaving it out:
 
 ```typescript
 defineContract({
-  databaseVersion: 17,
-  capabilities: [...defaultConnectionCapabilities, { sql: { jsonAgg: false } }],
+  requiredCapabilities: [...postgres17.filter((key) => key !== 'sql.jsonAgg'), ...postgresDriver],
   // models…
 })
-```
-
-The contract's set is:
-
-```
-contract capabilities = flags that are on in (version's row, then each set of the list in order)
 ```
 
 ### Profile hash
@@ -113,8 +105,8 @@ Stable error codes per ADR 027:
 
 ### Uses of the list
 
-- Turn off `jsonAgg` where it regresses performance, so the ORM client loads relations with one query per relation
-- State the capabilities of a driver other than the default one
+- Leave out `jsonAgg` where it regresses performance, so the ORM client loads relations with one query per relation
+- Leave out a capability the connection does not provide, such as interactive transactions behind a pooler in transaction mode
 
 ## Deterministic lowering requirement
 

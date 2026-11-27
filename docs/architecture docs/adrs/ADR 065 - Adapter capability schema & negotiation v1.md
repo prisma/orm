@@ -3,7 +3,7 @@
 ## Decision
 
 Define a versioned capability schema and a discovery flow where:
-- The target, the driver and the adapter each declare the capabilities they know, in one schema; on PostgreSQL a contract lists the capabilities its author's stated database version and connection provide, and the other targets' contracts take a fixed list from their adapter ([ADR 335](ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md))
+- The target, the driver and the adapter each declare the capabilities they know, in one schema; on PostgreSQL a contract lists the capabilities its author writes, from the lists exported for each database version and for the driver's connection, and the other targets' contracts take a fixed list from their adapter ([ADR 335](ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md))
 - Compile profiles (target-specific lowerers, e.g. `sql/pg`) consume capabilities to choose deterministic lowering strategies
 - Lanes and plugins branch on capabilities, never on target strings
 - The runtime goes by the contract's capabilities; they change only when the contract is emitted again
@@ -80,7 +80,7 @@ Capabilities are a JSON-serializable object with stable key ordering:
 ## How capabilities are checked
 
 1. **Authoring** (PostgreSQL)
-   - The contract's author states the database version; the facade writes that version's capabilities, plus the connection's, into the contract
+   - The contract's author writes the list of required capabilities, from the list for a database version and the list for the driver's connection
 
 2. **Signing** (PostgreSQL)
    - Verification reads the server's version and refuses a database that does not provide what the contract requires of it
