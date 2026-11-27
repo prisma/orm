@@ -1,59 +1,11 @@
-import type { ContractEntryExpression, ContractEntryInput } from '@internal/cli/init-contribution';
 import type { ContractSourceFormat } from '@internal/config/config-types';
-import {
-  POSTGRES_MIN_SERVER_VERSION,
-  POSTGRES_NEWEST_VERSION,
-} from '@internal/target-postgres/server-version-range';
-import type { JsonValue } from '@internal/utils/json';
+import { POSTGRES_MIN_SERVER_VERSION } from '@internal/target-postgres/server-version-range';
 import { moduleBase } from '../config/module-base';
+import { requiredCapabilitiesSource, requiredCapabilityLists } from './contract-entry';
 
-export const configModule = `${moduleBase}/config`;
 const builder = `${moduleBase}/contract-builder`;
-
-/** The config's `contract:` entry, stating the newest PostgreSQL version the target knows; a TypeScript contract states it in `defineContract`. */
-export function contractEntry(input: ContractEntryInput): ContractEntryExpression {
-  if (input.kind === 'prisma7-schema') {
-    return {
-      call: {
-        moduleSpecifier: configModule,
-        symbol: 'prisma7Schema',
-        args: [input.path, { databaseVersion: POSTGRES_NEWEST_VERSION }],
-      },
-    };
-  }
-  return input.mode === 'typescript'
-    ? { value: input.path }
-    : { value: { path: input.path, databaseVersion: POSTGRES_NEWEST_VERSION } };
-}
-
-function sampleSource(value: JsonValue): string {
-  if (typeof value === 'string') {
-    return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
-  }
-  if (value === null || typeof value !== 'object') {
-    return String(value);
-  }
-  if (isJsonArray(value)) {
-    return `[${value.map(sampleSource).join(', ')}]`;
-  }
-  const entries = Object.entries(value).map(
-    ([key, item]) =>
-      `${/^[A-Za-z_$][\w$]*$/.test(key) ? key : sampleSource(key)}: ${sampleSource(item)}`,
-  );
-  return `{ ${entries.join(', ')} }`;
-}
-
-function isJsonArray(value: JsonValue): value is readonly JsonValue[] {
-  return Array.isArray(value);
-}
-
-/** The contract entry as the quick reference shows it, in the quick reference's own quoting. */
-export function contractEntrySample(input: ContractEntryInput): string {
-  const entry = contractEntry(input);
-  return 'value' in entry
-    ? sampleSource(entry.value)
-    : `${entry.call.symbol}(${entry.call.args.map(sampleSource).join(', ')})`;
-}
+const requiredCapabilities = `requiredCapabilities: ${requiredCapabilitiesSource()}`;
+const capabilityImports = requiredCapabilityLists.join(', ');
 
 export function starterContract(mode: ContractSourceFormat): string {
   return mode === 'typescript' ? starterContractTs() : starterContractPsl();
@@ -81,10 +33,10 @@ model User {
 
 function contractSampleTs(): string {
   return `\`\`\`typescript
-import { defineContract } from '${builder}';
+import { defineContract, ${capabilityImports} } from '${builder}';
 
 export const contract = defineContract(
-  { databaseVersion: ${POSTGRES_NEWEST_VERSION} },
+  { ${requiredCapabilities} },
   ({ field, model, gen, type }) => ({
     models: {
       User: model('User', {
@@ -127,9 +79,9 @@ model Post {
 }
 
 function starterContractTs(): string {
-  return `import { defineContract, now } from '${builder}';
+  return `import { defineContract, now, ${capabilityImports} } from '${builder}';
 
-export const contract = defineContract({ databaseVersion: ${POSTGRES_NEWEST_VERSION} }, ({ field, model, rel, gen, type }) => {
+export const contract = defineContract({ ${requiredCapabilities} }, ({ field, model, rel, gen, type }) => {
   const User = model('User', {
     fields: {
       id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),

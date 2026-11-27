@@ -2,8 +2,13 @@ import {
   type ContractSourceFormat,
   DEFAULT_CONTRACT_SOURCE_DIR,
 } from '@internal/config/config-types';
-import { type ImportRequirement, jsonToTsSource, renderImports } from '@internal/ts-render';
-import type { ContractEntryExpression, ContractEntryInput } from '../init-contribution';
+import {
+  type ImportRequirement,
+  jsonToTsSource,
+  renderImports,
+  TsExpression,
+} from '@internal/ts-render';
+import type { ContractEntryInput } from '../init-contribution';
 
 export function defaultSchemaPath(authoring: ContractSourceFormat): string {
   if (authoring === 'typescript') {
@@ -23,35 +28,51 @@ function escapedForSingleQuotes(requirement: ImportRequirement): ImportRequireme
   };
 }
 
-/** The config's `contract:` entry for a contribution that gives none. */
+/** What `prisma.config.ts` writes as its `contract:` entry, with the imports it needs. */
+export type RenderedContractEntry = Pick<TsExpression, 'renderTypeScript' | 'importRequirements'>;
+
+class ContractPathEntry extends TsExpression {
+  constructor(private readonly path: string) {
+    super();
+  }
+
+  renderTypeScript(): string {
+    return jsonToTsSource(this.path);
+  }
+
+  importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+}
+
+class Prisma7SchemaEntry extends TsExpression {
+  constructor(
+    private readonly configModule: string,
+    private readonly path: string,
+  ) {
+    super();
+  }
+
+  renderTypeScript(): string {
+    return `prisma7Schema(${jsonToTsSource(this.path)})`;
+  }
+
+  importRequirements(): readonly ImportRequirement[] {
+    return [{ moduleSpecifier: this.configModule, symbol: 'prisma7Schema' }];
+  }
+}
+
+/** The config's `contract:` entry for a contribution that gives none: the path, or `prisma7Schema(<path>)` from `configModule`. */
 export function defaultContractEntry(
   configModule: string,
   input: ContractEntryInput,
-): ContractEntryExpression {
-  if (input.kind === 'prisma7-schema') {
-    return { call: { moduleSpecifier: configModule, symbol: 'prisma7Schema', args: [input.path] } };
-  }
-  return { value: input.path };
+): RenderedContractEntry {
+  return input.kind === 'prisma7-schema'
+    ? new Prisma7SchemaEntry(configModule, input.path)
+    : new ContractPathEntry(input.path);
 }
 
-function contractSource(entry: ContractEntryExpression): string {
-  if ('value' in entry) {
-    return jsonToTsSource(entry.value);
-  }
-  return `${entry.call.symbol}(${entry.call.args.map(jsonToTsSource).join(', ')})`;
-}
-
-function contractImports(entry: ContractEntryExpression): readonly ImportRequirement[] {
-  return 'call' in entry
-    ? [{ moduleSpecifier: entry.call.moduleSpecifier, symbol: entry.call.symbol }]
-    : [];
-}
-
-/** The globals the config reads; an import of the same name would hide them. */
-export const CONFIG_FILE_GLOBALS: readonly string[] = ['process'];
-
-/** The imports the config always has; the names they bind cannot be taken by the contract entry. */
-export function configFileImports(configModule: string): readonly ImportRequirement[] {
+function configFileImports(configModule: string): readonly ImportRequirement[] {
   return [
     { moduleSpecifier: '@prisma/cli-engine', symbol: 'definePrismaConfig' },
     { moduleSpecifier: configModule, symbol: 'defineConfig', alias: 'ormConfig' },
@@ -64,11 +85,11 @@ export function configFileImports(configModule: string): readonly ImportRequirem
  */
 export function configFile(options: {
   readonly configModule: string;
-  readonly contract: ContractEntryExpression;
+  readonly contract: RenderedContractEntry;
   readonly output: string | undefined;
 }): string {
   const imports = renderImports(
-    [...configFileImports(options.configModule), ...contractImports(options.contract)].map(
+    [...configFileImports(options.configModule), ...options.contract.importRequirements()].map(
       escapedForSingleQuotes,
     ),
   );
@@ -79,7 +100,7 @@ ${imports}
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: ${contractSource(options.contract)},${output}
+    contract: ${options.contract.renderTypeScript()},${output}
     db: {
       connection: process.env['DATABASE_URL']!,
     },

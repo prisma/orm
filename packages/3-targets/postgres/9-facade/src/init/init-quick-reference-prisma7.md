@@ -29,8 +29,7 @@ const user = await db.orm.public.User
 
 ```typescript
 import 'dotenv/config';
-import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig, prisma7Schema } from '{{configEntrypoint}}';
+{{configImports}}
 
 export default definePrismaConfig({
   orm: ormConfig({

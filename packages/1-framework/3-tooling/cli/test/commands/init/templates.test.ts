@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { ContractEntryExpression } from '../../../src/commands/init/init-contribution';
 import {
   configFile,
   defaultContractEntry,
+  type RenderedContractEntry,
 } from '../../../src/commands/init/templates/code-templates';
 import { requirementsBlock } from '../../../src/commands/init/templates/quick-reference';
 
@@ -57,40 +57,14 @@ describe('templates', () => {
       expect(importLines).toHaveLength(1);
     });
 
-    it('writes a value entry as a literal and adds no import', () => {
-      const contract: ContractEntryExpression = {
-        value: { path: './prisma/contract.acme', level: 3, tags: ['a'], strict: true },
+    it("writes the entry node's source and merges its imports with its own", () => {
+      const sameModule: RenderedContractEntry = {
+        renderTypeScript: () => 'acmeContract("./prisma/contract.acme", { level: 3 })',
+        importRequirements: () => [{ moduleSpecifier: 'acme-db/config', symbol: 'acmeContract' }],
       };
-
-      expect(configFile({ configModule: 'acme-db/config', contract, output: undefined })).toBe(
-        [
-          "import 'dotenv/config';",
-          "import { definePrismaConfig } from '@prisma/cli-engine';",
-          "import { defineConfig as ormConfig } from 'acme-db/config';",
-          '',
-          'export default definePrismaConfig({',
-          '  orm: ormConfig({',
-          '    contract: { path: "./prisma/contract.acme", level: 3, tags: ["a"], strict: true },',
-          '    db: {',
-          "      connection: process.env['DATABASE_URL']!,",
-          '    },',
-          '  }),',
-          '});',
-          '',
-        ].join('\n'),
-      );
-    });
-
-    it('writes a call entry and merges its import with its own', () => {
-      const sameModule: ContractEntryExpression = {
-        call: {
-          moduleSpecifier: 'acme-db/config',
-          symbol: 'acmeContract',
-          args: ['./prisma/contract.acme', { level: 3 }],
-        },
-      };
-      const otherModule: ContractEntryExpression = {
-        call: { moduleSpecifier: 'acme-db/levels', symbol: 'levelled', args: [] },
+      const otherModule: RenderedContractEntry = {
+        renderTypeScript: () => 'levelled()',
+        importRequirements: () => [{ moduleSpecifier: 'acme-db/levels', symbol: 'levelled' }],
       };
 
       expect(

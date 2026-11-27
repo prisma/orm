@@ -1,6 +1,6 @@
 export type {
-  ContractEntryExpression,
   ContractEntryInput,
+  ContractEntryNode,
   InitContribution,
   InitProbeResult,
   Prisma7QuickReferenceInput,

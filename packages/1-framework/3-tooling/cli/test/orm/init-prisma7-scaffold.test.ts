@@ -175,7 +175,7 @@ describe('the Prisma 7 scaffold', () => {
         }),
       );
       expect(readProjectFile('prisma.config.ts')).toContain(
-        "import { defineConfig as ormConfig, prisma7Schema } from '@internal/postgres/config';",
+        "import { defineConfig as ormConfig, postgres18, postgresDriver, prisma7Schema } from '@internal/postgres/config';",
       );
       expect(readProjectFile('src/prisma/db.ts')).toContain(
         "import type { Contract } from './contract.d.js';",

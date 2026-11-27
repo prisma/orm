@@ -1,5 +1,5 @@
 import type { ContractSourceFormat } from '@internal/config/config-types';
-import type { JsonValue } from '@internal/utils/json';
+import type { TsExpression } from '@internal/ts-render';
 
 /**
  * What the config's `contract:` entry points at: the starter contract `init` wrote, or the project's
@@ -12,18 +12,13 @@ export type ContractEntryInput =
   | { readonly kind: 'prisma7-schema'; readonly path: string };
 
 /**
- * The config's `contract:` entry as data, so `init` can both write it and run it: a JSON value, or
- * a call of a function a module exports, with JSON arguments.
+ * The config's `contract:` entry as a TypeScript expression node, as a migration's operation calls are: it renders itself and the imports it needs into `prisma.config.ts`, and builds the value that expression computes, so `init` can run the entry to check a Prisma 7 schema before it writes anything. The package that returns it may depend on another installed copy of the framework, so `init` calls these methods and never checks the node's class.
  */
-export type ContractEntryExpression =
-  | { readonly value: JsonValue }
-  | {
-      readonly call: {
-        readonly moduleSpecifier: string;
-        readonly symbol: string;
-        readonly args: readonly JsonValue[];
-      };
-    };
+export interface ContractEntryNode
+  extends Pick<TsExpression, 'renderTypeScript' | 'importRequirements'> {
+  /** The value the rendered expression computes in `prisma.config.ts`. */
+  contractValue(): Promise<unknown>;
+}
 
 export interface QuickReferenceInput {
   readonly mode: ContractSourceFormat;
@@ -118,5 +113,5 @@ export interface InitContribution {
    * this member, the entry is the path, or a call of `prisma7Schema` from `configModule` with the
    * path.
    */
-  readonly contractEntry?: (input: ContractEntryInput) => ContractEntryExpression;
+  readonly contractEntry?: (input: ContractEntryInput) => ContractEntryNode;
 }

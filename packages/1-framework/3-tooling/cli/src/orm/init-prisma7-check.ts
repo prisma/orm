@@ -1,12 +1,12 @@
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
 import { buildLoadedConfig, requireConfigSections } from '@internal/config-loader';
-import { contractEntryFor } from '../commands/init/contract-entry';
+import { contributedContractEntry } from '../commands/init/contract-entry';
 import {
   errorInitContributionUnavailable,
   errorInitPrisma7SchemaRefused,
   errorInitPrisma7SourceUnavailable,
 } from '../commands/init/errors';
-import type { ContractEntryExpression, InitContribution } from '../commands/init/init-contribution';
+import type { InitContribution } from '../commands/init/init-contribution';
 import { loadContractSource } from '../control-api/operations/load-contract-source';
 import type { ImportFromProject } from './project-modules';
 
@@ -24,12 +24,7 @@ export type CheckPrisma7Source = (request: {
 }) => Promise<Prisma7SourceCheck>;
 
 /**
- * Finds out whether the installed facade can read the Prisma 7 schema before init changes
- * the project: loads the package's config module as the project resolves it and runs the
- * contribution's contract entry for the schema, the one init then writes, without writing. The CLI
- * carries no target code, so the installed package is the only one that can answer. A
- * `prisma7Schema` export from the config module is still the only sign that a package takes a
- * Prisma 7 schema, and such a package must give `prisma7QuickReference`.
+ * Finds out whether the installed facade can read the Prisma 7 schema before init changes the project: loads the package's config module as the project resolves it and computes the contract entry init then writes, without writing: the contribution's node builds its own value, and the CLI's own entry calls the config module's `prisma7Schema`. The CLI carries no target code, so the installed package is the only one that can answer. A `prisma7Schema` export from the config module is still the only sign that a package takes a Prisma 7 schema, and such a package must give `prisma7QuickReference`.
  */
 export function createPrisma7SourceCheck(ctx: {
   readonly cwd: string;
@@ -83,21 +78,15 @@ export function createPrisma7SourceCheck(ctx: {
       throw missing;
     }
 
-    const entry = contractEntryFor(
-      contribution,
-      { kind: 'prisma7-schema', path: schemaPath },
-      { packageName, unlisted: false },
-    );
-    const section: unknown = defineConfig({
-      contract: await runContractEntry(entry, {
-        cwd: ctx.cwd,
-        importFromProject: ctx.importFromProject,
-        loaded: { module: contribution.configModule, namespace: imported.module },
-        packageName,
-        schemaPath,
-      }),
-      output: DEFAULT_CONTRACT_SOURCE_DIR,
-    });
+    const contract =
+      contribution.contractEntry === undefined
+        ? prisma7Schema(schemaPath)
+        : await contributedContractEntry(
+            contribution.contractEntry,
+            { kind: 'prisma7-schema', path: schemaPath },
+            { packageName, unlisted: false },
+          ).contractValue();
+    const section: unknown = defineConfig({ contract, output: DEFAULT_CONTRACT_SOURCE_DIR });
     const loaded = buildLoadedConfig(isRecord(section) ? section : {}, ctx.cwd);
     const required = requireConfigSections(loaded, ['family', 'target', 'adapter', 'contract']);
     if (!required.ok) {
@@ -114,71 +103,6 @@ export function createPrisma7SourceCheck(ctx: {
     }
     return { outcome: 'readable', quickReference };
   };
-}
-
-/**
- * The contract entry's value as the written config would compute it: the value itself, or the
- * result of calling the export with the arguments, imported as the project resolves it.
- */
-async function runContractEntry(
-  entry: ContractEntryExpression,
-  ctx: {
-    readonly cwd: string;
-    readonly importFromProject: ImportFromProject;
-    readonly loaded: { readonly module: string; readonly namespace: Record<string, unknown> };
-    readonly packageName: string;
-    readonly schemaPath: string;
-  },
-): Promise<unknown> {
-  if ('value' in entry) {
-    return entry.value;
-  }
-  const { call } = entry;
-  const namespace =
-    call.moduleSpecifier === ctx.loaded.module
-      ? ctx.loaded.namespace
-      : await importCallModule(call.moduleSpecifier, ctx);
-  const callee = namespace[call.symbol];
-  if (typeof callee !== 'function') {
-    throw errorInitContributionUnavailable({
-      packageName: ctx.packageName,
-      reason: 'invalid-shape',
-      detail: `its contractEntry calls ${call.symbol} from ${call.moduleSpecifier}, which exports no function of that name`,
-      unlisted: false,
-      missingPeers: [],
-      missingPeersCommand: undefined,
-    });
-  }
-  return Reflect.apply(callee, undefined, [...call.args]);
-}
-
-async function importCallModule(
-  module: string,
-  ctx: {
-    readonly cwd: string;
-    readonly importFromProject: ImportFromProject;
-    readonly packageName: string;
-    readonly schemaPath: string;
-  },
-): Promise<Record<string, unknown>> {
-  const imported = await ctx.importFromProject(ctx.cwd, module);
-  if (imported.kind === 'loaded') {
-    return imported.module;
-  }
-  throw imported.kind === 'unloadable'
-    ? errorInitPrisma7SourceUnavailable({
-        schemaPath: ctx.schemaPath,
-        packageName: ctx.packageName,
-        reason: 'unloadable',
-        module,
-        cause: imported.cause instanceof Error ? imported.cause.message : String(imported.cause),
-      })
-    : errorInitPrisma7SourceUnavailable({
-        schemaPath: ctx.schemaPath,
-        packageName: ctx.packageName,
-        reason: 'not-resolvable',
-        module,
-      });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
