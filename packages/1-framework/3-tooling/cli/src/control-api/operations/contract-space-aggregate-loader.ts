@@ -217,11 +217,7 @@ export interface BuildAggregateInputs<TFamilyId extends string, TTargetId extend
   readonly appContract: Contract;
   readonly extensions: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
   readonly deserializeContract: (contractJson: unknown) => Contract;
-  /**
-   * Content check for contract snapshots resolved through the aggregate;
-   * build it with `snapshotVerifierFor(config)` so the recompute uses the
-   * target's canonicalization hooks.
-   */
+  /** Content check for contract snapshots resolved through the aggregate; build it with `snapshotVerifierFor(config)` so the recompute uses the family's `normalizeStorage`. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
   /**
    * Load with a ref file that exists but is refused left out of the aggregate, instead of

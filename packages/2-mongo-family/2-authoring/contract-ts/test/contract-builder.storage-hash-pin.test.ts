@@ -5,7 +5,7 @@ import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 // Pins the storageHash computed for a representative authored contract.
 // The hash fingerprints the constructed storage body the builder feeds
 // into computeStorageHash; a builder-internal refactor that drifts that
-// input (key shape, normalization, canonicalization hooks) fails here
+// input (key shape, the family's normal form of storage) fails here
 // instead of surfacing later as a fixtures:check diff.
 describe('mongo builder storageHash pin', () => {
   it('computes the pinned hash for a representative contract', () => {

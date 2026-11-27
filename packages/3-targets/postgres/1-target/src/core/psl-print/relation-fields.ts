@@ -335,9 +335,7 @@ export function resolvePinnedRelations(
 }
 
 /**
- * Relation fields in the order their foreign keys appear in storage, so the
- * `foreignKeys` the PSL source derives come back in the same order. A relation
- * that owns no foreign key keeps its place at the end.
+ * Relation fields in the order their foreign keys appear in storage, which a written contract holds by name and then by content. A relation that owns no foreign key keeps its place at the end. The order of the printed fields does not reach a hash: the family orders the `foreignKeys` the PSL source derives by name, whatever order they are derived in.
  */
 function orderedByForeignKey(
   entry: ModelWithTable,
