@@ -1,5 +1,9 @@
 import type { NormalizeStorage } from '@internal/contract/hashing';
-import { createStorageSort, type NamedArraySortTarget } from '@internal/contract/hashing-utils';
+import {
+  compareCodeUnits,
+  createStorageSort,
+  type NamedArraySortTarget,
+} from '@internal/contract/hashing-utils';
 import { isPlainRecord } from '@internal/contract/is-plain-record';
 
 type JsonRecord = Readonly<Record<string, unknown>>;
@@ -7,11 +11,29 @@ type JsonRecord = Readonly<Record<string, unknown>>;
 const sortTargets = [
   {
     path: ['namespaces', '*', 'entries', 'table', '*'],
-    arrayKeys: ['checks', 'indexes', 'uniques'],
+    arrayKeys: ['checks', 'foreignKeys', 'indexes', 'uniques'],
   },
 ] as const satisfies readonly NamedArraySortTarget[];
 
-const sortStorage = createStorageSort(sortTargets);
+const nameOf = (entry: unknown): string =>
+  isPlainRecord(entry) && typeof entry['name'] === 'string' ? entry['name'] : '';
+
+function withSortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withSortedKeys);
+  if (!isPlainRecord(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort(compareCodeUnits)
+      .map((key) => [key, withSortedKeys(value[key])]),
+  );
+}
+
+const contentOf = (entry: unknown): string => JSON.stringify(withSortedKeys(entry));
+
+const compareByNameThenContent = (a: unknown, b: unknown): number =>
+  compareCodeUnits(nameOf(a), nameOf(b)) || compareCodeUnits(contentOf(a), contentOf(b));
+
+const sortStorage = createStorageSort(sortTargets, compareByNameThenContent);
 
 const isEmptyRecord = (value: unknown): boolean =>
   isPlainRecord(value) && Object.keys(value).length === 0;
@@ -37,8 +59,21 @@ function mapList(value: unknown, map: (entry: JsonRecord) => JsonRecord): unknow
   return value.map((entry: unknown) => (isPlainRecord(entry) ? map(entry) : entry));
 }
 
-const withoutSingleValueMany = (field: JsonRecord): JsonRecord =>
+const withoutManyFalse = (field: JsonRecord): JsonRecord =>
   without(field, (key, value) => key === 'many' && value === false);
+
+const withoutEmptyTypeParams = (record: JsonRecord): JsonRecord =>
+  without(record, (key, value) => key === 'typeParams' && isEmptyRecord(value));
+
+const normalColumn = (column: JsonRecord): JsonRecord =>
+  withoutEmptyTypeParams(withoutManyFalse(column));
+
+function normalValueObjectField(field: JsonRecord): JsonRecord {
+  const kept = withoutManyFalse(field);
+  return isPlainRecord(kept['type'])
+    ? { ...kept, type: withoutEmptyTypeParams(kept['type']) }
+    : kept;
+}
 
 function normalIndex(index: JsonRecord): JsonRecord {
   return without(
@@ -52,7 +87,7 @@ function normalForeignKey(foreignKey: JsonRecord): JsonRecord {
   return without(
     foreignKey,
     (key, value) =>
-      (key === 'index' && value === false) ||
+      (key === 'index' && typeof value === 'boolean') ||
       ((key === 'onDelete' || key === 'onUpdate') && value === 'noAction'),
   );
 }
@@ -61,9 +96,7 @@ function normalTable(table: JsonRecord): JsonRecord {
   const kept = without(table, (key, value) => key === 'checks' && isEmptyList(value));
   return {
     ...kept,
-    ...(kept['columns'] !== undefined
-      ? { columns: mapValues(kept['columns'], withoutSingleValueMany) }
-      : {}),
+    ...(kept['columns'] !== undefined ? { columns: mapValues(kept['columns'], normalColumn) } : {}),
     ...(kept['indexes'] !== undefined ? { indexes: mapList(kept['indexes'], normalIndex) } : {}),
     ...(kept['foreignKeys'] !== undefined
       ? { foreignKeys: mapList(kept['foreignKeys'], normalForeignKey) }
@@ -74,7 +107,7 @@ function normalTable(table: JsonRecord): JsonRecord {
 function normalValueObject(valueObject: JsonRecord): JsonRecord {
   return valueObject['fields'] === undefined
     ? valueObject
-    : { ...valueObject, fields: mapValues(valueObject['fields'], withoutSingleValueMany) };
+    : { ...valueObject, fields: mapValues(valueObject['fields'], normalValueObjectField) };
 }
 
 function normalEntries(entries: JsonRecord): JsonRecord {
@@ -94,14 +127,10 @@ function normalNamespace(namespace: JsonRecord): JsonRecord {
     : namespace;
 }
 
-function normalStorageType(storageType: JsonRecord): JsonRecord {
-  return without(storageType, (key, value) => key === 'typeParams' && isEmptyRecord(value));
-}
-
 /**
- * The SQL family's normal form of `storage`. It leaves out the fields the family defines as equal to their absence, each named here: `many: false` on a column or a value-object field, an empty `checks` list, an index's empty `columns` and empty `options`, a foreign key's `index: false` and its `onDelete`/`onUpdate` of `noAction`, a storage type's empty `typeParams`, and a namespace's empty entity-kind slot other than `table`. Every other value, including the contents of type parameters, index options and every entry a pack contributes, is kept as given. It then orders each table's `checks`, `indexes` and `uniques` by name.
+ * The SQL family's normal form of `storage`. It leaves out the fields the family defines as equal to their absence, each named here: `many: false` on a column or a value-object field, an empty `typeParams` on a column, a value-object field's type or a storage type, an empty `checks` list, an index's empty `columns` and empty `options`, a foreign key's `true` or `false` `index` (the flag of contracts emitted before 0.16, which reads as absent) and its `onDelete`/`onUpdate` of `noAction`, and a namespace's empty entity-kind slot other than `table`. Every other value, including the contents of type parameters, index options and every entry a pack contributes, is kept as given. It then orders each table's `checks`, `foreignKeys`, `indexes` and `uniques` by name, and entries with no name, or the same name, by their content.
  */
-const normalizeStorage: NormalizeStorage = (storage) => {
+export const normalizeSqlStorage: NormalizeStorage = (storage) => {
   const plain: unknown = storage === undefined ? storage : JSON.parse(JSON.stringify(storage));
   if (!isPlainRecord(plain)) return sortStorage(plain);
   return sortStorage({
@@ -110,7 +139,7 @@ const normalizeStorage: NormalizeStorage = (storage) => {
       ? { namespaces: mapValues(plain['namespaces'], normalNamespace) }
       : {}),
     ...(plain['types'] !== undefined
-      ? { types: mapValues(plain['types'], normalStorageType) }
+      ? { types: mapValues(plain['types'], withoutEmptyTypeParams) }
       : {}),
   });
 };
@@ -118,7 +147,7 @@ const normalizeStorage: NormalizeStorage = (storage) => {
 /**
  * The SQL family's normal form of the domain section: a model field's `many: false` is left out, as the family's readers restore it.
  */
-export function normalSqlDomain(domain: unknown): unknown {
+export function normalizeSqlDomain(domain: unknown): unknown {
   if (!isPlainRecord(domain)) return domain;
   return {
     ...domain,
@@ -130,15 +159,9 @@ export function normalSqlDomain(domain: unknown): unknown {
             models: mapValues(namespace['models'], (model) =>
               model['fields'] === undefined
                 ? model
-                : { ...model, fields: mapValues(model['fields'], withoutSingleValueMany) },
+                : { ...model, fields: mapValues(model['fields'], withoutManyFalse) },
             ),
           },
     ),
   };
 }
-
-export const sqlContractCanonicalizationHooks: {
-  readonly normalizeStorage: NormalizeStorage;
-} = {
-  normalizeStorage,
-};

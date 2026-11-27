@@ -3,7 +3,7 @@ import type { Contract } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
 import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';
-import { normalSqlDomain, sqlContractCanonicalizationHooks } from '../src/canonicalization-hooks';
+import { normalizeSqlDomain, normalizeSqlStorage } from '../src/canonicalization-hooks';
 
 type Table = Record<string, unknown>;
 
@@ -11,6 +11,18 @@ const column = (extra: Record<string, unknown> = {}) => ({
   codecId: 'pg/text@1',
   dataType: 'pg/text',
   nullable: false,
+  ...extra,
+});
+
+const reference = (columns: readonly string[] = ['id']) => ({
+  namespaceId: 'public',
+  tableName: 't',
+  columns,
+});
+
+const foreignKey = (extra: Record<string, unknown> = {}) => ({
+  source: reference(),
+  target: reference(),
   ...extra,
 });
 
@@ -38,7 +50,7 @@ const hashOf = (storage: Record<string, unknown>): string =>
     target: 'postgres',
     targetFamily: 'sql',
     storage,
-    ...sqlContractCanonicalizationHooks,
+    normalizeStorage: normalizeSqlStorage,
   });
 
 const written = (storage: Record<string, unknown>): unknown => {
@@ -56,7 +68,7 @@ const written = (storage: Record<string, unknown>): unknown => {
   return canonicalizeContractToObject(contract, {
     serializeContract: (c) =>
       blindCast<JsonObject, 'test contract literal is already plain JSON data'>(c),
-    ...sqlContractCanonicalizationHooks,
+    normalizeStorage: normalizeSqlStorage,
   })['storage'];
 };
 
@@ -126,6 +138,16 @@ describe('SQL storage values the family does not own', () => {
             ],
           }),
         ),
+      ],
+      [
+        'a column type parameter that is an empty object',
+        storageWithTable(tableWith({ columns: { id: column({ typeParams: { options: {} } }) } })),
+        storageWithTable(tableWith({ columns: { id: column({ typeParams: { length: 3 } }) } })),
+      ],
+      [
+        'foreign keys with the same columns and different actions',
+        storageWithTable(tableWith({ foreignKeys: [foreignKey({ onDelete: 'cascade' })] })),
+        storageWithTable(tableWith({ foreignKeys: [foreignKey()] })),
       ],
       [
         'a value set member that is an object holding false',
@@ -232,6 +254,66 @@ describe('SQL storage defaults the family leaves out', () => {
           },
         }),
       ],
+      [
+        "a foreign key's index: true from before foreign keys named their index",
+        storageWithTable(tableWith({ foreignKeys: [foreignKey({ index: true })] })),
+        storageWithTable(tableWith({ foreignKeys: [foreignKey()] })),
+      ],
+      [
+        "a column's empty typeParams",
+        storageWithTable(tableWith({ columns: { id: column({ typeParams: {} }) } })),
+        storageWithTable(tableWith()),
+      ],
+      [
+        "a value-object field's empty typeParams",
+        storageWith({
+          valueObject: {
+            Address: {
+              fields: {
+                city: {
+                  nullable: false,
+                  type: { kind: 'scalar', codecId: 'pg/text@1', typeParams: {} },
+                },
+              },
+            },
+          },
+        }),
+        storageWith({
+          valueObject: {
+            Address: {
+              fields: { city: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } } },
+            },
+          },
+        }),
+      ],
+      [
+        'foreign keys in another order',
+        storageWithTable(
+          tableWith({
+            foreignKeys: [
+              foreignKey({ name: 'z_fkey' }),
+              foreignKey({ source: reference(['b']) }),
+              foreignKey({ name: 'a_fkey' }),
+              foreignKey({ source: reference(['a']) }),
+            ],
+          }),
+        ),
+        storageWithTable(
+          tableWith({
+            foreignKeys: [
+              foreignKey({ source: reference(['a']) }),
+              foreignKey({ source: reference(['b']) }),
+              foreignKey({ name: 'a_fkey' }),
+              foreignKey({ name: 'z_fkey' }),
+            ],
+          }),
+        ),
+      ],
+      [
+        'unnamed uniques in another order',
+        storageWithTable(tableWith({ uniques: [{ columns: ['b'] }, { columns: ['a'] }] })),
+        storageWithTable(tableWith({ uniques: [{ columns: ['a'] }, { columns: ['b'] }] })),
+      ],
       ['an empty entity-kind slot', storageWith({ policy: {} }), storageWith({})],
     ];
 
@@ -266,7 +348,28 @@ describe('SQL storage defaults the family leaves out', () => {
   });
 });
 
-describe('sqlContractCanonicalizationHooks.normalizeStorage ordering', () => {
+describe('normalizeSqlStorage ordering', () => {
+  it('orders foreign keys by name, then unnamed ones by their columns and target', () => {
+    const table = writtenTable(
+      storageWithTable(
+        tableWith({
+          foreignKeys: [
+            foreignKey({ name: 'z_fkey' }),
+            foreignKey({ source: reference(['b']) }),
+            foreignKey({ name: 'a_fkey' }),
+            foreignKey({ source: reference(['a']) }),
+          ],
+        }),
+      ),
+    );
+    expect(table['foreignKeys']).toEqual([
+      foreignKey({ source: reference(['a']) }),
+      foreignKey({ source: reference(['b']) }),
+      foreignKey({ name: 'a_fkey' }),
+      foreignKey({ name: 'z_fkey' }),
+    ]);
+  });
+
   it('orders checks, indexes, and uniques by physical name', () => {
     const table = writtenTable(
       storageWithTable(
@@ -300,7 +403,7 @@ describe('sqlContractCanonicalizationHooks.normalizeStorage ordering', () => {
   });
 });
 
-describe('normalSqlDomain', () => {
+describe('normalizeSqlDomain', () => {
   it("leaves out a model field's many: false and keeps everything else", () => {
     const domain = {
       namespaces: {
@@ -326,7 +429,7 @@ describe('normalSqlDomain', () => {
         },
       },
     };
-    expect(normalSqlDomain(domain)).toEqual({
+    expect(normalizeSqlDomain(domain)).toEqual({
       namespaces: {
         app: {
           models: {
