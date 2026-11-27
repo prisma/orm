@@ -32,11 +32,11 @@ Compose the pack into your application contract via `extensions`. The pack's con
 
 ```ts
 // prisma.config.ts
-import { defineConfig } from '@internal/postgres/config';
+import { defineConfig, postgres17, postgresDriver } from '@internal/postgres/config';
 import supabasePack from '@internal/extension-supabase/pack';
 
 export default defineConfig({
-  contract: { path: './src/contract.prisma', databaseVersion: 17 },
+  contract: { path: './src/contract.prisma', requiredCapabilities: [...postgres17, ...postgresDriver] },
   extensions: [supabasePack],
 });
 ```

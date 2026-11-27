@@ -19,11 +19,11 @@ PostgreSQL `citext` extension pack for Prisma 8. Published as the `/citext` entr
 ```typescript
 import { definePrismaConfig } from 'prisma/config';
 import citext from '@prisma/orm-postgres-contrib/citext/control';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: { path: './src/prisma/contract.prisma', databaseVersion: 18 },
+    contract: { path: './src/prisma/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] },
     extensions: [citext],
   }),
 });

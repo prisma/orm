@@ -34,7 +34,10 @@ postgresCapabilitiesByVersion[18] = {
 // The driver's set: what the connection provides.
 postgresDriverCapabilities = { sql: { interactiveTransactions: true } }
 
-// The contract: the stated version's row, then the capabilities list, fixed at emit.
+// What the author writes: every capability the contract requires, as keys.
+requiredCapabilities: [...postgres18, ...postgresDriver]
+
+// The contract: those keys, fixed at emit.
 contract.capabilities = {
   sql: { returning: true, lateral: true, interactiveTransactions: true, … },
   postgres: { distinctOn: true, … },
@@ -56,7 +59,7 @@ The capability is **a key, not a code path** — gates are explicit, namespaced 
 | Framework capability surfaces | [`packages/1-framework/1-core/framework-components/src/control/control-capabilities.ts`](../../../packages/1-framework/1-core/framework-components/src/control/control-capabilities.ts) | The framework-side capability discriminators (`hasMigrations`, `hasSchemaView`, `hasPslContractInfer`) — capability checks as type guards on the family / target descriptor. |
 | PostgreSQL table of versions | [`packages/3-targets/postgres/1-target/src/core/server-version.ts`](../../../packages/3-targets/postgres/1-target/src/core/server-version.ts) (`postgresCapabilitiesByVersion`) | The database's capabilities, declared by the target per version; namespaced under `postgres` and `sql`. |
 | PostgreSQL driver capabilities | [`packages/3-targets/postgres/3-driver/src/core/capabilities.ts`](../../../packages/3-targets/postgres/3-driver/src/core/capabilities.ts) | What the connection provides: `sql.interactiveTransactions`. |
-| PostgreSQL contract capabilities | [`packages/3-targets/postgres/9-facade/src/contract/contract-capabilities.ts`](../../../packages/3-targets/postgres/9-facade/src/contract/contract-capabilities.ts) | The facade merges the version's row and the capabilities list into the contract's list. |
+| PostgreSQL contract capabilities | [`packages/3-targets/postgres/9-facade/src/contract/contract-capabilities.ts`](../../../packages/3-targets/postgres/9-facade/src/contract/contract-capabilities.ts) | The lists of keys a version and the driver provide (`postgres15` to `postgres18`, `postgresDriver`), and the refusal of a list that is missing or empty. The keys become the contract's nested flags with `capabilitiesFromKeys` from the SQL family's TypeScript authoring package. |
 | Capability namespace catalogue | [`docs/reference/capabilities.md`](../../reference/capabilities.md) | The catalogue of actual capability keys and their semantics. The pattern entry links forward; this catalogue entry does not duplicate. |
 | Conflict skipping on `createAll` | [`packages/3-extensions/sql-orm-client/src/collection-contract.ts`](../../../packages/3-extensions/sql-orm-client/src/collection-contract.ts) (search for `assertInsertConflictSkipCapability`) | Two keys for one feature: `sql.insertOnConflictSkip` says the adapter can skip colliding rows at all, `sql.insertOnConflictWithoutTarget` says it can do so without a named constraint. PostgreSQL and SQLite contracts list both; SQL Server will report only the first. The optional `conflictOn` argument exists so a target that needs a key can require it through the second capability, with no API change. |
 

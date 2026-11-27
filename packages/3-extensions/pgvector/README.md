@@ -37,11 +37,11 @@ The pack declares the extension in the unbound namespace, so it is found through
 Add the extension to your `prisma.config.ts`:
 
 ```typescript
-import { defineConfig } from '@internal/postgres/config';
+import { defineConfig, postgres18, postgresDriver } from '@internal/postgres/config';
 import pgvector from '@internal/extension-pgvector/control';
 
 export default defineConfig({
-  contract: { path: './prisma/schema.prisma', databaseVersion: 18 },
+  contract: { path: './prisma/schema.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] },
   extensions: [pgvector],
 });
 ```

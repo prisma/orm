@@ -29,11 +29,11 @@ A complete five-step example — see [`examples/prisma-8-postgis-demo`](../../..
 **1. Register the extension in `prisma.config.ts`:**
 
 ```typescript
-import { defineConfig } from '@internal/postgres/config';
+import { defineConfig, postgres18, postgresDriver } from '@internal/postgres/config';
 import postgis from '@internal/extension-postgis/control';
 
 export default defineConfig({
-  contract: { path: './prisma/schema.prisma', databaseVersion: 18 },
+  contract: { path: './prisma/schema.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] },
   extensions: [postgis],
 });
 ```

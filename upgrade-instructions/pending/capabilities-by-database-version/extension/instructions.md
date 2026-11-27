@@ -1,8 +1,8 @@
 ---
 changes:
-  - id: extension-contract-states-oldest-postgres-version
+  - id: extension-contract-lists-required-capabilities
     summary: |
-      A PostgreSQL contract now states the version of the database it runs on. An extension's shipped contract states the oldest PostgreSQL version the extension supports: `defineContract({ databaseVersion: 15, ... })`, or `capabilities: postgresContractCapabilities({ databaseVersion: 15 })` for a `prismaContract` source. Then run `prisma contract emit` and sign each test database again with `prisma db sign`.
+      A PostgreSQL contract now lists every capability it requires. An extension's shipped contract requires what the oldest PostgreSQL version the extension supports provides, and the driver's: `defineContract({ requiredCapabilities: [...postgres15, ...postgresDriver], ... })`, or `capabilities: postgresContractCapabilities([...postgres15, ...postgresDriver])` for a `prismaContract` source. Then run `prisma contract emit` and sign each test database again with `prisma db sign`.
     detection:
       glob: "**/*.{ts,mts,cts,js,mjs,cjs}"
       matches:
@@ -26,7 +26,7 @@ changes:
         - 'pgvector\.cosine|postgis\.geometry|paradedb/bm25'
   - id: extension-client-goes-by-the-contract
     summary: |
-      The SQL runtime no longer adds the target's, adapter's, driver's and extensions' capabilities to the contract's. `createExecutionContext` takes no `driver` option. A contract built by hand, as in a test, lists every capability the code uses, and `transaction()` needs `sql.interactiveTransactions` in it.
+      The SQL runtime no longer adds the target's, adapter's, driver's and extensions' capabilities to the contract's. `createExecutionContext` takes no `driver` option. A contract built by hand, as in a test, lists every capability the code uses, and `transaction()` needs it to require `sql.interactiveTransactions`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -43,19 +43,19 @@ changes:
         - '\bpgVersion\b'
 ---
 
-# A PostgreSQL contract states its database version
+# A PostgreSQL contract lists the capabilities it requires
 
 These changes apply to an extension for PostgreSQL. Do them in the order below.
 
-## `extension-contract-states-oldest-postgres-version`
+## `extension-contract-lists-required-capabilities`
 
-A contract lists the capabilities it requires. They used to come from the adapter. Now the contract states the PostgreSQL version of its database, and requires the capabilities that version provides, plus those of the connection. The supported versions are 15, 16, 17 and 18, written as a number.
+A capability is a fact that a database version or a connection provides, and that a contract requires. A contract's capabilities used to come from the adapter. Now the contract lists every capability it requires, and nothing is added to it. `@prisma/orm-postgres/contract-builder` and `@prisma/orm-postgres/config` export what each supported PostgreSQL version provides, `postgres15` to `postgres18`, and what the driver's connection provides, `postgresDriver`. Each is a list of capability keys such as `sql.returning`.
 
-An extension's shipped contract (its contract space) runs on every database its users have. So state the oldest version the extension supports, usually 15. `prisma db migrate`, `prisma db update` and `prisma db init` check every contract space's contract against the database before they change it, and refuse a database that lacks what a contract requires. Today all four versions provide the same capabilities, so no supported database is refused. A contract that states a newer version than it needs would refuse users on older databases once a release adds a version with new features.
+An extension's shipped contract (its contract space) runs on every database its users have. So require what the oldest version the extension supports provides, usually `postgres15`. `prisma db migrate`, `prisma db update` and `prisma db init` check every contract space's contract against the database before they change it, and refuse a database that lacks what a contract requires. Today all four versions provide the same capabilities, so no supported database is refused. A contract that requires a newer version's capabilities than it needs would refuse users on older databases once a release adds a version with new features.
 
-### 1. State the version
+### 1. Write the list
 
-A contract written in TypeScript states it in `defineContract`, from `@prisma/orm-postgres/contract-builder`. Before:
+A contract written in TypeScript lists them in `defineContract`, from `@prisma/orm-postgres/contract-builder`. Before:
 
 ```ts
 export const contract = defineContract({ codecLookup, dataTypeLookup }, () => ({
@@ -66,16 +66,21 @@ export const contract = defineContract({ codecLookup, dataTypeLookup }, () => ({
 After:
 
 ```ts
-export const contract = defineContract({ databaseVersion: 15, codecLookup, dataTypeLookup }, () => ({
-  // ...
-}));
+import { defineContract, postgres15, postgresDriver } from '@prisma/orm-postgres/contract-builder';
+
+export const contract = defineContract(
+  { requiredCapabilities: [...postgres15, ...postgresDriver], codecLookup, dataTypeLookup },
+  () => ({
+    // ...
+  }),
+);
 ```
 
-Without a version, `defineContract` is a type error, and at run time it throws:
+Without the list, `defineContract` is a type error. A list that is missing or empty throws at run time:
 
-> State the PostgreSQL version your database runs in defineContract, for example defineContract({ databaseVersion: 18, ... }). The supported versions are 15, 16, 17, 18.
+> State the capabilities your contract requires in requiredCapabilities in defineContract. The list is missing or empty.
 
-A contract written in the Prisma schema language, whose config builds the source with `prismaContract` from `@prisma/orm-family-sql/contract-psl/provider`, passes the source its capabilities. The target, adapter and driver in the config no longer add any, so a source given no `capabilities` writes a contract that lists none. Take them from `postgresContractCapabilities` in `@prisma/orm-postgres/config`. Before:
+A contract written in the Prisma schema language, whose config builds the source with `prismaContract` from `@prisma/orm-family-sql/contract-psl/provider`, passes the source its capabilities. The target, adapter and driver in the config no longer add any, so a source given no `capabilities` writes a contract that lists none. Take them from `postgresContractCapabilities` in `@prisma/orm-postgres/config`, which takes the same list. Before:
 
 ```ts
 contract: {
@@ -89,11 +94,15 @@ contract: {
 After:
 
 ```ts
-import { postgresContractCapabilities } from '@prisma/orm-postgres/config';
+import {
+  postgres15,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@prisma/orm-postgres/config';
 
 contract: {
   ...prismaContract('src/contract.prisma', {
-    capabilities: postgresContractCapabilities({ databaseVersion: 15 }),
+    capabilities: postgresContractCapabilities([...postgres15, ...postgresDriver]),
     target: postgres,
     createNamespace: postgresCreateNamespace,
   }),
@@ -102,7 +111,7 @@ contract: {
 
 The config is not shipped code, so add `@prisma/orm-postgres` to `devDependencies` if the extension does not list it yet, at the same exact version as its other `@prisma/orm-*` packages. `prisma7Contract` from `@prisma/orm-family-sql/contract-prisma7/provider` takes the same `capabilities` option.
 
-A config built with the PostgreSQL `defineConfig` from `@prisma/orm-postgres/config`, such as a test application's, states the version in its contract entry. Before:
+A config built with the PostgreSQL `defineConfig` from `@prisma/orm-postgres/config`, such as a test application's, lists them in its contract entry. Before:
 
 ```ts
 contract: './prisma/contract.prisma',
@@ -111,18 +120,21 @@ contract: './prisma/contract.prisma',
 After:
 
 ```ts
-contract: { path: './prisma/contract.prisma', databaseVersion: 15 },
+contract: {
+  path: './prisma/contract.prisma',
+  requiredCapabilities: [...postgres15, ...postgresDriver],
+},
 ```
 
 Without it, loading the config fails with:
 
-> State the PostgreSQL version your database runs beside the contract path, for example contract: { path: './prisma/contract.prisma', databaseVersion: 18 }. The supported versions are 15, 16, 17, 18.
+> State the capabilities your contract requires in requiredCapabilities beside the contract path './prisma/contract.prisma' in the config. The list is missing or empty.
 
-A `.ts` contract path in that entry does not change, and the config refuses a `databaseVersion` beside it. A Prisma 7 schema read with `prisma7Schema` takes it as a second argument: `prisma7Schema('prisma/schema.prisma')` becomes `prisma7Schema('prisma/schema.prisma', { databaseVersion: 15 })`.
+A `.ts` contract path in that entry does not change, and the config refuses `requiredCapabilities` beside it. A Prisma 7 schema read with `prisma7Schema` takes the list in a second argument: `prisma7Schema('prisma/schema.prisma')` becomes `prisma7Schema('prisma/schema.prisma', { requiredCapabilities: [...postgres15, ...postgresDriver] })`.
 
-### 2. Leave out `capabilities`, unless you need it
+### 2. Leave out what the extension does not use, if you need to
 
-`defineContract`, the contract entry, `prisma7Schema` and `postgresContractCapabilities` also take an optional `capabilities` list beside `databaseVersion`. It holds the capabilities the connection provides, one set per component, merged over the version's in order. A later set's flag replaces an earlier one's, and `false` turns a flag off. When it is left out, it is `defaultConnectionCapabilities`, the sets of the PostgreSQL client's adapter and driver, which today adds `sql.interactiveTransactions`. A stated list replaces the default. To keep the default and change one flag, spread it: `capabilities: [...defaultConnectionCapabilities, { sql: { insertOnConflictTarget: false } }]`.
+The list is exactly what the contract requires. To leave a capability out, filter it out or write the keys yourself: `[...postgres15.filter((capability) => capability !== 'sql.insertOnConflictTarget'), ...postgresDriver]`. A list without `postgresDriver` does not require `sql.interactiveTransactions`, so `transaction()` is unavailable to it.
 
 ### 3. Emit the contract
 
@@ -209,11 +221,11 @@ After:
 const context = createExecutionContext({ contract, stack });
 ```
 
-A contract the extension builds by hand, for example in a test, must list every capability the code under test uses. Take the flags from a contract emitted for the same version, or from `postgresCapabilitiesByVersion[15]` in `@prisma/orm-target-postgres/target/server-version` plus `{ sql: { interactiveTransactions: true } }`.
+A contract the extension builds by hand, for example in a test, must list every capability the code under test uses. Take the flags from a contract emitted with the same list.
 
-`transaction()` on the PostgreSQL client, a serverless connection or a Supabase role-bound client needs the contract to list `sql.interactiveTransactions`. Without it, the callback is a type error that names the flag, and the call throws `ORM.CAPABILITY_MISSING`:
+`transaction()` on the PostgreSQL client, a serverless connection or a Supabase role-bound client needs the contract to require `sql.interactiveTransactions`. Without it, the callback is a type error that names the flag, and the call throws `ORM.CAPABILITY_MISSING`:
 
-> transaction() requires capability sql.interactiveTransactions. A contract lists the capabilities its database and connection provide; the database package's documentation says how to state them.
+> `transaction()` is unavailable: your contract declares no dependency on `sql.interactiveTransactions`. To enable it, add `sql.interactiveTransactions` to your contract's required capabilities.
 
 Extension code that runs transactions through an application's client should check the flag in `contract.capabilities.sql.interactiveTransactions` before it calls `transaction()`, as `@prisma/orm-better-auth` does for its `transaction` option.
 
@@ -226,7 +238,7 @@ Change these, if the extension has them:
 | Before | After |
 | --- | --- |
 | `postgresAdapterCapabilities` from `@prisma/orm-target-postgres/adapter/adapter` | `postgresAdapterCapabilities` from `@prisma/orm-target-postgres/adapter/capabilities` |
-| The flags that `postgresAdapterCapabilities` listed | `postgresCapabilitiesByVersion` (one row per version) or `postgresCapabilitiesForVersion(version)` from `@prisma/orm-target-postgres/target/server-version` |
+| The flags that `postgresAdapterCapabilities` listed | `postgres15` to `postgres18` from `@prisma/orm-postgres/contract-builder` or `@prisma/orm-postgres/config`, or the table they are built from, `postgresCapabilitiesByVersion` (one row per version) from `@prisma/orm-target-postgres/target/server-version` |
 | `renderLoweredSql(ast, contract, codecs, dataTypeLookup, capabilities)` from `@prisma/orm-target-postgres/adapter/sql-renderer` | `renderLoweredSql(ast, contract, codecs, dataTypeLookup)`: drop the last argument |
 | `POSTGRES_MIN_SERVER_VERSION` from `@prisma/orm-target-postgres/target/server-version` (or `@prisma/orm-postgres/target/server-version`) | `POSTGRES_MIN_SERVER_VERSION` from `@prisma/orm-target-postgres/target/server-version-range` (or `@prisma/orm-postgres/target/server-version-range`) |
 | `pgVersion` (text) on `PostgresDatabaseSchemaNode` and `PostgresDatabaseSchemaNodeInput` from `@prisma/orm-target-postgres/target/types` | `serverVersionNumber`: the server's `server_version_num` as a number, such as `150004` for 15.4, or `undefined` when it could not be read |

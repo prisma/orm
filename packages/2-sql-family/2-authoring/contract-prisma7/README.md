@@ -14,17 +14,17 @@ Reads a Prisma 7 `schema.prisma` as a Prisma 8 contract source for the SQL famil
 
 ```ts
 import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig, prisma7Schema } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver, prisma7Schema } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: prisma7Schema('prisma/schema.prisma', { databaseVersion: 18 }),
+    contract: prisma7Schema('prisma/schema.prisma', { requiredCapabilities: [...postgres18, ...postgresDriver] }),
     db: { connection: process.env['DATABASE_URL']! },
   }),
 });
 ```
 
-The package itself is target-neutral: everything specific to a database comes from the target binding, which the Postgres facade passes in. The provider, `prisma7Contract`, also takes the contract's `capabilities`; `prisma7Schema` resolves them from the PostgreSQL version stated in `databaseVersion`.
+The package itself is target-neutral: everything specific to a database comes from the target binding, which the Postgres facade passes in. The provider, `prisma7Contract`, also takes the contract's `capabilities`; `prisma7Schema` passes it the capabilities listed in `requiredCapabilities`.
 
 ## Rule table, in short
 

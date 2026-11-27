@@ -1,6 +1,6 @@
 # Capabilities Reference
 
-A capability is a feature a contract may use, such as `RETURNING` or interactive transactions. The contract lists the capabilities it requires in `contract.capabilities`, as flags grouped by namespace:
+A capability is a fact that a database version or a connection provides, and that a contract requires, such as `RETURNING` or interactive transactions. The author lists the capabilities the contract requires as keys, such as `sql.returning`, and `contract.json` stores them in `contract.capabilities`, as flags grouped by namespace:
 
 ```json
 {
@@ -62,26 +62,25 @@ The PostgreSQL adapter declares no capabilities. The PostgreSQL driver declares 
 
 ### How a contract gets its list
 
-The author states the PostgreSQL version where the contract is written. There is no default.
+The author writes the list of every capability the contract requires, where the contract is written. There is no default, and nothing is added to it. The facade exports what each supported version provides, `postgres15` to `postgres18`, built from the table above, and what the driver's connection provides, `postgresDriver`, from `@prisma/orm-postgres/contract-builder` and `@prisma/orm-postgres/config`. Each is a list of capability keys as messages print them.
 
-- A TypeScript contract states it in `defineContract`: `defineContract({ databaseVersion: 18 }, …)`.
-- A Prisma schema states it in the config's contract entry: `contract: { path: './prisma/contract.prisma', databaseVersion: 18 }`. A `.prisma` path given as a bare string is refused, and a `.ts` path with `databaseVersion` or `capabilities` beside it is refused.
-- A Prisma 7 schema states it in `prisma7Schema('prisma/schema.prisma', { databaseVersion: 18 })`.
-- A config that builds its contract source itself, with `prismaContract` or `prisma7Contract`, passes `capabilities: postgresContractCapabilities({ databaseVersion: 18 })` to the source.
+- A TypeScript contract lists them in `defineContract`: `defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }, …)`.
+- A Prisma schema lists them in the config's contract entry: `contract: { path: './prisma/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] }`. A `.prisma` path given as a bare string is refused, and a `.ts` path with `requiredCapabilities` beside it is refused.
+- A Prisma 7 schema lists them in `prisma7Schema('prisma/schema.prisma', { requiredCapabilities: [...postgres18, ...postgresDriver] })`.
+- A config that builds its contract source itself, with `prismaContract` or `prisma7Contract`, passes `capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])` to the source.
 
-Each of these also takes an optional `capabilities` list. The facade then builds the contract's list in this order:
-
-1. The row of the stated version.
-2. Each set of the `capabilities` list, in order. A later set's flag replaces an earlier one's, and `false` turns a flag off.
-3. Only the flags that are on are kept.
-
-The `capabilities` list holds what the connection provides. It defaults to `defaultConnectionCapabilities`, exported from `@prisma/orm-postgres/config` and `@prisma/orm-postgres/contract-builder`: the sets of the adapter and the driver the facade's client runs with, `[{}, { sql: { interactiveTransactions: true } }]`. A list you write replaces the default. To keep interactive transactions, start it from the default:
+The list must be present and not empty. To leave a capability out, filter it out or write the keys yourself:
 
 ```typescript
-capabilities: [...defaultConnectionCapabilities, { sql: { insertOnConflictTarget: false } }]
+requiredCapabilities: [
+  ...postgres18.filter((capability) => capability !== 'sql.insertOnConflictTarget'),
+  ...postgresDriver,
+]
 ```
 
-Extensions listed in `extensions` add their own flags. The contract stores the flags and never the version.
+A list without `postgresDriver` does not require `sql.interactiveTransactions`, so `transaction()` is unavailable to it. Spreads of these lists, a filter by comparison and keys written out all stay literal in the contract's type, so the type-level checks below see each key. A list typed as `RequiredCapabilities` names no key in the type.
+
+Extensions listed in `extensions` add their own flags. `contract.json` stores the flags as a nested object, namespace by namespace, and never a version.
 
 ### Where each check happens
 
@@ -96,7 +95,7 @@ Extensions listed in `extensions` add their own flags. The contract stores the f
 | `db verify`, `db sign` | The database's flags against the server's version (`server_version_num`) | `CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED`; nothing is signed |
 | `db migrate`, `db update`, `db init` | The same, for every contract space, before anything runs | `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED`; nothing is changed |
 
-Only the flags in the target's table are checked against the database. A flag no row names, such as one a newer release added, is left to the client, which reports it with the flags its adapter and driver lack. A server older than PostgreSQL 15 is always refused. A server newer than the last row is treated as the last row. The refusal names the first version that provides each missing capability, and the version to state instead. The CLI offers no `db update` for it, since that cannot upgrade a server. [Error reference](./error-reference.md) has each code.
+Only the flags in the target's table are checked against the database. A flag no row names, such as one a newer release added, is left to the client, which reports it with the flags its adapter and driver lack. A server older than PostgreSQL 15 is always refused. A server newer than the last row is treated as the last row. The refusal names the first version that provides each missing capability. The CLI offers no `db update` for it, since that cannot upgrade a server. [Error reference](./error-reference.md) has each code.
 
 ## MySQL, MariaDB, SQLite and MongoDB
 

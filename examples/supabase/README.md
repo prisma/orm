@@ -13,10 +13,10 @@ The canonical runnable Prisma 8 + Supabase app, and the walking skeleton the [`e
 
 ## The stack
 
-[`prisma.config.ts`](prisma.config.ts) states the contract and the PostgreSQL version it is written for, and composes the Supabase pack:
+[`prisma.config.ts`](prisma.config.ts) states the contract and the capabilities it requires, and composes the Supabase pack:
 
 ```ts
-contract: { path: './src/contract.prisma', databaseVersion: 18 },
+contract: { path: './src/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] },
 extensions: [supabasePack],
 ```
 

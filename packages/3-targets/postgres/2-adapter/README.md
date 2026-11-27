@@ -203,9 +203,9 @@ export default defineConfig({
 
 The adapter declares no capabilities: `postgresAdapterCapabilities` is `{}`, exported from `@internal/adapter-postgres/capabilities`. Every PostgreSQL flag today is a fact about the database, so the target declares it, by version, in `postgresCapabilitiesByVersion`. The driver declares `sql.interactiveTransactions`.
 
-The runtime adapter reaches a contract only through the facade's default `capabilities` list, `defaultConnectionCapabilities`, which holds the adapter's and the driver's sets. The control adapter declares no capabilities, since it is the adapter that migrates the database, not the one the application runs with.
+A contract's capabilities are only what its author lists in `requiredCapabilities`; the adapter adds none. The control adapter declares no capabilities either, since it is the adapter that migrates the database, not the one the application runs with.
 
-The renderer reads the contract's capabilities. A locking clause the contract does not list a capability for fails with `RUNTIME.AST_UNSUPPORTED`.
+The renderer reads the contract's capabilities. A locking clause whose capability the contract does not require fails with `RUNTIME.AST_UNSUPPORTED`.
 
 See [`docs/reference/capabilities.md`](../../../../docs/reference/capabilities.md).
 
