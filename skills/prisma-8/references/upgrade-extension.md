@@ -4,35 +4,38 @@ This reference upgrades a project that **is** a Prisma 8 extension — a package
 
 If the project you are upgrading is a consumer **app** (it depends on a database package, `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` or `@prisma/orm-mariadb`, from its application code), use [`upgrade-app.md`](upgrade-app.md) instead — or both, if the repo contains both a consumer app and an extension package, in which case run the app flow first then this one in the same session.
 
-Each step's guide is under `upgrading/extension/upgrades/` in the copy of this skill that [Step 0](#step-0--fetch-the-newest-copy-of-this-skill-and-continue-from-it) fetches.
+Each step's guide is under `upgrading/extension/upgrades/` in the copy of this skill that [Step 0](#step-0--fetch-the-newest-copy-of-this-skill-and-follow-that-copy) fetches.
 
-## Step 0 — Fetch the newest copy of this skill, and continue from it
+## Step 0 — Fetch the newest copy of this skill, and follow that copy
 
-This skill is installed with the Prisma packages, so the copy you are reading belongs to the release that is installed now. That copy is not the one to follow, for this reason. Each step of an upgrade has a guide: a file `instructions.md` in a folder named `<from>-to-<to>`. Every Prisma release carries the guides for every step so far, and a guide is sometimes corrected after its release. A published package never changes, so the corrected guide exists only in later releases. The whole upgrade is therefore run from the newest published copy of the skill.
+**If this file is inside a folder named `.prisma-upgrade-guides`,** you are already reading the fetched copy. `<skill>` is the `prisma-8` folder that holds this file's `references/` folder. Skip the rest of this step and go on to the next section.
 
-From the project root, the folder whose `package.json` lists the Prisma packages, run:
+Otherwise you are reading the copy that was installed with the Prisma packages, which belongs to the release installed now. Do not follow it past this step, for this reason. Each step of an upgrade has a guide: a file `instructions.md` in a folder named `<from>-to-<to>`. Every Prisma release carries the guides for every step so far, and a guide is sometimes corrected after its release. A published package never changes, so the corrected guide exists only in later releases. The whole upgrade is therefore run from the newest published copy of the skill.
+
+From the folder whose `package.json` lists the Prisma packages, run:
 
 ```bash
 node <installed skill>/scripts/fetch-upgrade-guides.mjs <database package>
 ```
 
-- `<installed skill>` is the `prisma-8` folder that holds this file's `references/` folder.
-- `<database package>` is the database package your extension's tests run against, such as `@prisma/orm-postgres`. Each of the five database packages carries the guides for extensions.
+- `<installed skill>` is the `prisma-8` folder that holds this file's `references/` folder. If it has no `scripts/` folder, use the copy inside the installed database package, `node_modules/<database package>/skills/prisma-8`.
+- `<database package>` is any one of `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` and `@prisma/orm-mariadb`. Each of them carries the guides for extensions. Use the one your extension's tests run against if there is one, and `@prisma/orm-postgres` otherwise.
 
-The script downloads the newest published release of that package without installing it. It does not change `package.json`, the lockfile or any installed package. It extracts that release's copy of this skill into a folder `.prisma-upgrade-guides/` in the project root, which git ignores, and prints one line: the path of the extracted `prisma-8` folder.
+The script downloads the newest published Prisma 8 version of that package without installing it. It does not change `package.json`, the lockfile or any installed package. It creates a folder `.prisma-upgrade-guides/` in the current folder, with a `.gitignore` of its own so that git ignores it, and extracts that version's copy of this skill into it. It prints the path of the extracted `prisma-8` folder, which contains the version in its name, such as `.prisma-upgrade-guides/prisma-orm-postgres-8.3.0/prisma-8`.
 
-From here on, `<skill>` means the folder the script printed.
+Now open `references/upgrade-extension.md` in the printed folder and follow that file from its start. It, not this file, is the one to follow for the rest of the upgrade.
 
-1. Open `<skill>/references/upgrade-extension.md` and continue from its section "Role detection". Do not run Step 0 again.
-2. Read every step's guide from `<skill>/upgrading/extension/upgrades/<from>-to-<to>/instructions.md`.
-3. When a guide names a script as `<skill>/...`, as `<guide>/...` or as a path beside the guide, run the one in the fetched copy, never the installed one.
+**If the script fails,** stop. Tell the user what it reported, and do not continue with the installed copy: its guides may be uncorrected. A registry that needs a login is the usual cause. The script downloads with `npm` when that is installed, so a login that `npm` can use from this folder is enough.
 
-If `.prisma-upgrade-guides/` is deleted during the upgrade, run the script again. Delete the folder when the upgrade is finished.
+## How to use the fetched copy
 
-**If the script fails,** tell the user why, and ask whether to continue with the installed copy. With the installed copy, a guide that was corrected after its release may be followed in its uncorrected form. If the user agrees:
+`<skill>` means the fetched `prisma-8` folder from here on.
 
-- `<skill>` is the installed copy, which `prisma skills sync` refreshes from the installed packages;
-- a step's guide exists only after that step's install, so in the per-step flow do the bump and the install first, run `prisma skills sync`, and then read the guide.
+- A step's guide is `<skill>/upgrading/extension/upgrades/<from>-to-<to>/instructions.md`.
+- A guide may name a script as `<skill>/...`, as `<guide>/...` (the folder the guide is in), by a path beside the guide, or by a path into a synced copy such as `.claude/skills/prisma-8/...`. In every case run the file in the fetched copy.
+- Installing a newer release also installs a newer copy of this skill. Ignore it: keep following the fetched copy until the upgrade is finished.
+- If `.prisma-upgrade-guides/` is deleted during the upgrade, run the script again.
+- When the upgrade is finished and you have reported to the user, delete `.prisma-upgrade-guides/`.
 
 ## Role detection
 
@@ -79,14 +82,12 @@ For each `(from, to)` step in the chain:
 
 2. **Bump `@prisma/orm-*` deps.** What to write depends on the release:
    - **On the `8.0.0` release candidates,** rewrite every `@prisma/orm-*` entry in the extension's `package.json` to the exact `<to>` version, such as `"8.0.0-rc.11"`: no caret, no tilde, no range, and no `workspace:` specifier. The exact-pin rule below says why. All entries move to the same version. That includes another extension published from the Prisma repository, such as `@prisma/orm-extension-pgvector`: every `@prisma/orm-*` package is published at every release, and each lists the others at that release's version.
-   - **From release 8.0,** write the ranges that [the last section](#from-release-80-number-your-package-and-declare-ranges) gives.
+   - **From release 8.0,** write the ranges that [the last section](#from-release-80-number-your-package-and-declare-ranges) gives under `peerDependencies`. Under `devDependencies`, a caret would let the install take a release later than `<to>`, whose guides have not been applied. So unless `<to>` is the newest published release, write a tilde on the same version there, such as `~8.1.0`, which stays within `<to>`.
 
    Where each entry goes is the same on every release:
    - A package that the extension's shipped code imports belongs under `peerDependencies`, and again under `devDependencies`, at the same version.
    - A package that only the extension's tests use, such as a database package the tests run against, belongs under `devDependencies` alone, at the same version.
    - Move any entry that is still under `dependencies` or `optionalDependencies`. An extension written for an earlier release had the framework, the family and the toolchain as ordinary dependencies.
-
-   The skill itself ships inside the Prisma packages, so bumping them is what updates it. There is no separate skill package to bump.
 
 3. **Install.** Run `pnpm install` (or the project's lockfile-managing command). The extension's source is now broken against the new SPI — the upgrade instructions for `<from> → <to>` exist to fix it.
 
@@ -165,7 +166,7 @@ The convention has two costs. A feature of yours that needs no newer Prisma rele
 
 ## When the chain is done
 
-Report back to the user: the number of steps applied, the SHAs of the commits you made, and any open follow-ups.
+Report back to the user: the number of steps applied, the SHAs of the commits you made, the version whose copy of the skill you followed (it is in the name of the fetched folder), and any open follow-ups. Then delete `.prisma-upgrade-guides/`.
 
 ## Failure surfaces
 

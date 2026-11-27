@@ -2,35 +2,38 @@
 
 This reference upgrades a project that **consumes** Prisma 8 via the public package API (a database package, `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` or `@prisma/orm-mariadb`, the contract files in `prisma/`, etc.). Package names below are the published `@prisma/orm-*` names, which is what `package.json`, the lockfile, and the registry use. The other references in this skill use the same names. If the project is itself a Prisma 8 *extension*, use [`upgrade-extension.md`](upgrade-extension.md) instead — or both, if the repo contains both an app and an extension package.
 
-Each step's guide is under `upgrading/app/upgrades/` in the copy of this skill that [Step 0](#step-0--fetch-the-newest-copy-of-this-skill-and-continue-from-it) fetches.
+Each step's guide is under `upgrading/app/upgrades/` in the copy of this skill that [Step 0](#step-0--fetch-the-newest-copy-of-this-skill-and-follow-that-copy) fetches.
 
-## Step 0 — Fetch the newest copy of this skill, and continue from it
+## Step 0 — Fetch the newest copy of this skill, and follow that copy
 
-This skill is installed with the Prisma packages, so the copy you are reading belongs to the release that is installed now. That copy is not the one to follow, for this reason. Each step of an upgrade has a guide: a file `instructions.md` in a folder named `<from>-to-<to>`. Every Prisma release carries the guides for every step so far, and a guide is sometimes corrected after its release. A published package never changes, so the corrected guide exists only in later releases. The whole upgrade is therefore run from the newest published copy of the skill.
+**If this file is inside a folder named `.prisma-upgrade-guides`,** you are already reading the fetched copy. `<skill>` is the `prisma-8` folder that holds this file's `references/` folder. Skip the rest of this step and go on to the next section.
 
-From the project root, the folder whose `package.json` lists the Prisma packages, run:
+Otherwise you are reading the copy that was installed with the Prisma packages, which belongs to the release installed now. Do not follow it past this step, for this reason. Each step of an upgrade has a guide: a file `instructions.md` in a folder named `<from>-to-<to>`. Every Prisma release carries the guides for every step so far, and a guide is sometimes corrected after its release. A published package never changes, so the corrected guide exists only in later releases. The whole upgrade is therefore run from the newest published copy of the skill.
+
+From the folder whose `package.json` lists the Prisma packages, run:
 
 ```bash
 node <installed skill>/scripts/fetch-upgrade-guides.mjs <database package>
 ```
 
-- `<installed skill>` is the `prisma-8` folder that holds this file's `references/` folder.
+- `<installed skill>` is the `prisma-8` folder that holds this file's `references/` folder. If it has no `scripts/` folder, use the copy inside the installed database package, `node_modules/<database package>/skills/prisma-8`.
 - `<database package>` is the application's own: `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` or `@prisma/orm-mariadb`.
 
-The script downloads the newest published release of that package without installing it. It does not change `package.json`, the lockfile or any installed package. It extracts that release's copy of this skill into a folder `.prisma-upgrade-guides/` in the project root, which git ignores, and prints one line: the path of the extracted `prisma-8` folder.
+The script downloads the newest published Prisma 8 version of that package without installing it. It does not change `package.json`, the lockfile or any installed package. It creates a folder `.prisma-upgrade-guides/` in the current folder, with a `.gitignore` of its own so that git ignores it, and extracts that version's copy of this skill into it. It prints the path of the extracted `prisma-8` folder, which contains the version in its name, such as `.prisma-upgrade-guides/prisma-orm-postgres-8.3.0/prisma-8`.
 
-From here on, `<skill>` means the folder the script printed.
+Now open `references/upgrade-app.md` in the printed folder and follow that file from its start. It, not this file, is the one to follow for the rest of the upgrade.
 
-1. Open `<skill>/references/upgrade-app.md` and continue from its section "Pre-flight — extension compatibility". Do not run Step 0 again.
-2. Read every step's guide from `<skill>/upgrading/app/upgrades/<from>-to-<to>/instructions.md`.
-3. When a guide names a script as `<skill>/...`, as `<guide>/...` or as a path beside the guide, run the one in the fetched copy, never the installed one.
+**If the script fails,** stop. Tell the user what it reported, and do not continue with the installed copy: its guides may be uncorrected. A registry that needs a login is the usual cause. The script downloads with `npm` when that is installed, so a login that `npm` can use from this folder is enough.
 
-If `.prisma-upgrade-guides/` is deleted during the upgrade, run the script again. Delete the folder when the upgrade is finished.
+## How to use the fetched copy
 
-**If the script fails,** tell the user why, and ask whether to continue with the installed copy. With the installed copy, a guide that was corrected after its release may be followed in its uncorrected form. If the user agrees:
+`<skill>` means the fetched `prisma-8` folder from here on.
 
-- `<skill>` is the installed copy, which `prisma skills sync` refreshes from the installed packages;
-- a step's guide exists only after that step's install, so in the per-step flow do the bump and the install first, run `prisma skills sync`, and then read the guide.
+- A step's guide is `<skill>/upgrading/app/upgrades/<from>-to-<to>/instructions.md`.
+- A guide may name a script as `<skill>/...`, as `<guide>/...` (the folder the guide is in), by a path beside the guide, or by a path into a synced copy such as `.claude/skills/prisma-8/...`. In every case run the file in the fetched copy.
+- Installing a newer release also installs a newer copy of this skill. Ignore it: keep following the fetched copy until the upgrade is finished.
+- If `.prisma-upgrade-guides/` is deleted during the upgrade, run the script again.
+- When the upgrade is finished and you have reported to the user, delete `.prisma-upgrade-guides/`.
 
 ## Pre-flight — extension compatibility
 
@@ -79,7 +82,7 @@ If the repository also holds an extension, in a `package.json` of its own, run *
   - **On the `8.0.0` release candidates,** compare the full version strings, including the part after the hyphen. `8.0.0-rc.10` and `8.0.0-rc.11` are different versions, and different steps in the chain below.
   - **From release 8.0,** each package has its own patch number or level suffix, and a step is named by the release, which is the major and minor: `8.0-to-8.1`. So the from-version is the release that the database package's version belongs to. `8.0.1-ea.0`, `8.0.1` and `8.0.2` all belong to release `8.0`.
   - If the lockfile shows the application's Prisma packages on different releases, which is already a broken state, the **lowest** is the from-version. Leave `@prisma/orm-extension-paradedb` out of that comparison: it has version numbers of its own (`0.18.0`), which name no step.
-- **To-version.** Either the version the user specified, or whatever `npm view @prisma/orm-postgres dist-tags.latest` reports. Do not assume that is a stable version: while Prisma 8 is a release candidate, `latest` tracks the newest release, `8.0.0-rc.N` included. If the user wants a stable version specifically, they must name it.
+- **To-version.** Either the version the user specified, or the newest published version of the application's own database package. That is the version in the name of the folder Step 0 fetched. Do not assume that is a stable version: while Prisma 8 is a release candidate, `latest` tracks the newest release, `8.0.0-rc.N` included. If the user wants a stable version specifically, they must name it.
 
 Report both back to the user before continuing.
 
@@ -112,11 +115,11 @@ For each `(from, to)` step in the chain:
 
    **What to write, on the `8.0.0` release candidates.** Rewrite every entry to the exact `<to>` version, with no caret and no tilde. All entries move to the same version.
 
-   **What to write, from release 8.0.** The entries no longer share one version. Each moves to its own package's first version in the `<to>` release: the plain `X.Y.0` for a GA package and `X.Y.0-<level>.0` for one below GA. At release 8.0 those are `8.0.1` and `8.0.1-ea.0`. `pnpm view <name> versions --json` lists a package's versions. Which range goes in front depends on the database package, as [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#what-an-application-writes) describes:
+   **What to write, from release 8.0.** The entries no longer share one version. Each moves to its own package's first version in the `<to>` release. From release 8.1 on, that is the plain `X.Y.0` for a GA package and `X.Y.0-<level>.0` for one below GA. At release 8.0 it is `8.0.1` and `8.0.1-ea.0`. `pnpm view <name> versions --json` lists a package's versions. Which range goes in front depends on the database package, as [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#what-an-application-writes) describes:
    - beside a GA database package, a GA entry gets a caret and an entry below GA gets a tilde;
    - beside a database package below GA, every entry gets a tilde.
 
-   Write those ranges at the last step of the chain only. At an earlier step, write each entry as its exact version, with no caret and no tilde. A caret written at an earlier step would let the install take a later release than the step's.
+   **Write a caret only when `<to>` is the newest published release.** A caret accepts later releases, so at any other step the install would take a release later than `<to>`, whose guides have not been applied. This covers every step before the last one, and the last one too when the user's target is older than the newest release. At such a step write a tilde in place of the caret: a tilde stays within `<to>` and still takes its fixes. If the upgrade ends on a release that is not the newest, say in the final report that those entries have a tilde where [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#what-an-application-writes) gives a caret.
 
    **`@prisma/orm-extension-paradedb`** has version numbers of its own. Set it to the release the pre-flight noted for this step, as for an extension published by someone else.
 
@@ -125,8 +128,6 @@ For each `(from, to)` step in the chain:
    **Extensions published by someone else.** Set each one to the release the pre-flight noted for this step: the one whose every Prisma entry accepts that package's version at the step. If an extension has no such release, halt before this step's install. The project stays at the last step that worked, and the user gets the pre-flight's message for that extension and step.
 
    **A database package below GA, moving to the next minor.** No range follows a package below GA into the next minor, so edit every Prisma line by hand: `~8.3.0-ea.0` becomes `~8.4.0-ea.0`, and `~8.3.0` becomes `~8.4.0`. Do not use the package manager's update command for this. `pnpm update` rewrites a tilde on a pre-release as an exact version, and Yarn's command that updates to the latest version writes a caret. If a line was rewritten like that earlier, restore the tilde.
-
-   The skill itself ships inside the Prisma packages, so bumping them is what updates it. There is no separate skill package to bump.
 
 3. **Install.** Run `pnpm install` (or the project's lockfile-managing command). The project's code is now broken against the new types — the upgrade instructions for `<from> → <to>` exist to fix it.
 
@@ -156,20 +157,24 @@ Then move on to the next step.
 
 ## When the project cannot install the releases in between
 
-Use this section only in one case: a package that is not an extension requires one exact Prisma release, so the releases between the project's release and the target cannot be installed beside it. A deployment tool that lists `@prisma/orm-postgres` as a peer dependency at an exact version is an example. The project then moves in one install from the release that tool's current version requires to the release its new version requires.
+Some projects depend on a package that is not an extension and that requires one exact Prisma release. A deployment tool that lists `@prisma/orm-postgres` as a peer dependency at an exact version is an example. Such a project can only install the Prisma releases that some version of that package requires, so it cannot take every step of the chain.
 
-In that case, replace the per-step flow with this:
+**How to notice it.** Before the first step, look through the project's dependencies for a package, other than the extensions the pre-flight covers, whose `peerDependencies` name an `@prisma/orm-*` package at an exact version. `pnpm view <name> peerDependencies --json` shows them. If there is none, use the per-step flow.
+
+If there is one, the last release of the chain must be one that a published version of that package requires. If the user's target is not, tell the user which releases are possible and stop. Otherwise replace the per-step flow with this:
 
 1. Read the guide of every step in the chain.
-2. Bump every Prisma entry once, to the last release of the chain, together with the package that requires it, and install once. For an extension published by someone else, write the release the pre-flight noted for the last step.
-3. Apply each step's guide in order. Commit after each one. Do not install again between them.
-4. A typecheck after a guide that is not the last may fail, because the installed types are those of the last release. Go on to the next guide. After the last guide, run the full validation from the per-step flow; that one must pass.
+2. Bump once. Write every Prisma entry as the bump step gives it for the last step of the chain, and set the package that requires an exact release to its version for that release. Also make every change to `package.json` that any of the guides asks for before its install.
+3. Install once, and commit the bump with the lockfile.
+4. Apply each step's guide in order, with one commit for each. Do not install again between them.
+5. After a guide that is not the last, a failing typecheck is expected, because the installed types are those of the last release. Go on to the next guide. Anything else that fails, such as a script or a Prisma command the guide tells you to run, is a halt: tell the user which guide and which command.
+6. After the last guide, run the full validation from the per-step flow. It must pass.
 
 Tell the user that the releases in between were never installed, so a failure may come from any of the guides.
 
 ## When the chain is done
 
-Report back to the user: the number of steps applied, the SHAs of the commits you made, the release whose copy of the skill you followed (the script printed it), and any open follow-ups (e.g. tests that were already red before the upgrade and still are).
+Report back to the user: the number of steps applied, the SHAs of the commits you made, the version whose copy of the skill you followed (it is in the name of the fetched folder), and any open follow-ups (e.g. tests that were already red before the upgrade and still are).
 
 ## Failure surfaces
 
