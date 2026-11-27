@@ -1,11 +1,19 @@
 import type { ContractSourceFormat } from '@internal/config/config-types';
 import { POSTGRES_MIN_SERVER_VERSION } from '@internal/target-postgres/server-version-range';
+import { renderImports, tsObjectSource } from '@internal/ts-render';
 import { moduleBase } from '../config/module-base';
-import { requiredCapabilitiesSource, requiredCapabilityLists } from './contract-entry';
+import { RequiredCapabilitiesList } from './contract-entry';
 
 const builder = `${moduleBase}/contract-builder`;
-const requiredCapabilities = `requiredCapabilities: ${requiredCapabilitiesSource()}`;
-const capabilityImports = requiredCapabilityLists.join(', ');
+const required = new RequiredCapabilitiesList(builder);
+const contractOptions = tsObjectSource([['requiredCapabilities', required.renderTypeScript()]]);
+
+function builderImports(...symbols: readonly string[]): string {
+  return renderImports([
+    ...symbols.map((symbol) => ({ moduleSpecifier: builder, symbol })),
+    ...required.importRequirements(),
+  ]);
+}
 
 export function starterContract(mode: ContractSourceFormat): string {
   return mode === 'typescript' ? starterContractTs() : starterContractPsl();
@@ -33,10 +41,10 @@ model User {
 
 function contractSampleTs(): string {
   return `\`\`\`typescript
-import { defineContract, ${capabilityImports} } from '${builder}';
+${builderImports('defineContract')}
 
 export const contract = defineContract(
-  { ${requiredCapabilities} },
+  ${contractOptions},
   ({ field, model, gen, type }) => ({
     models: {
       User: model('User', {
@@ -79,9 +87,9 @@ model Post {
 }
 
 function starterContractTs(): string {
-  return `import { defineContract, now, ${capabilityImports} } from '${builder}';
+  return `${builderImports('defineContract', 'now')}
 
-export const contract = defineContract({ ${requiredCapabilities} }, ({ field, model, rel, gen, type }) => {
+export const contract = defineContract(${contractOptions}, ({ field, model, rel, gen, type }) => {
   const User = model('User', {
     fields: {
       id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),

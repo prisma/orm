@@ -29,6 +29,11 @@ function configImports(entry: ContractEntryNode): string {
   ]);
 }
 
+/** The contract entry as the quick reference's config shows it, its lines after the first indented to the entry's depth. */
+function entrySource(entry: ContractEntryNode): string {
+  return entry.renderTypeScript().replaceAll('\n', '\n    ');
+}
+
 function quickReference(input: QuickReferenceInput): string {
   const entry = contractEntry({
     kind: 'starter',
@@ -43,7 +48,7 @@ function quickReference(input: QuickReferenceInput): string {
     pkgRun: input.cliCommand,
     pkg: moduleBase,
     configImports: configImports(entry),
-    contractEntry: entry.renderTypeScript(),
+    contractEntry: entrySource(entry),
     schemaSample: contractSample(input.mode),
     idType: starterIdType(input.mode),
     requirements: input.requirements,
@@ -59,7 +64,7 @@ function prisma7QuickReference(input: Prisma7QuickReferenceInput): string {
     pkgRun: input.cliCommand,
     pkg: moduleBase,
     configImports: configImports(entry),
-    contractEntry: entry.renderTypeScript(),
+    contractEntry: entrySource(entry),
     requirements: input.requirements,
     prisma7ConfigSentence:
       input.prisma7Config === undefined

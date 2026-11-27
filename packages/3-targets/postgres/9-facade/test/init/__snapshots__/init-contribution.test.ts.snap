@@ -112,7 +112,10 @@ import { definePrismaConfig } from '@prisma/cli-engine';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: { path: "./src/prisma/contract.prisma", requiredCapabilities: [...postgres18, ...postgresDriver] },
+    contract: {
+      path: "./src/prisma/contract.prisma",
+      requiredCapabilities: [...postgres18, ...postgresDriver],
+    },
     db: {
       connection: process.env['DATABASE_URL']!,
     },
