@@ -1,5 +1,6 @@
 import { once } from 'node:events';
 import { createConnection, createServer, type Server, type Socket } from 'node:net';
+import { Client } from 'pg';
 
 /**
  * How a proxied connection dies. It dies only when its client next writes, so the pool keeps it
@@ -198,16 +199,17 @@ export async function startDyingConnectionsProxy(target: {
 }
 
 /** A connection string like `connectionString`, through the proxy on `port`. */
+/** A connection string like `connectionString`, through the proxy on `port`. It drops `host` and `port` query parameters, which pg would let override the proxy's address. */
 export function throughProxy(connectionString: string, port: number): string {
   const url = new URL(connectionString);
   url.host = `127.0.0.1:${port}`;
+  url.searchParams.delete('host');
+  url.searchParams.delete('port');
   return url.toString();
 }
 
-const POSTGRES_DEFAULT_PORT = 5432;
-
-/** The host and port `connectionString` names, with PostgreSQL's default port when it names none, as pg does. */
+/** The host and port pg connects to for `connectionString`, read from a pg client, so pg's own rules apply: query parameters, `PGHOST` and `PGPORT`, and its defaults. The client never connects. */
 export function targetOf(connectionString: string): { host: string; port: number } {
-  const url = new URL(connectionString);
-  return { host: url.hostname, port: url.port === '' ? POSTGRES_DEFAULT_PORT : Number(url.port) };
+  const client = new Client({ connectionString });
+  return { host: client.host, port: client.port };
 }
