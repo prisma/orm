@@ -31,6 +31,8 @@ Six slices, one pull request each, in this order. PostgreSQL comes first because
 
 **Builds on** slice 1's phase, which is what makes moving the policies safe: the tables are in their new form before any command reads a policy.
 
+**For whoever prepares the release that contains slice 1:** its release notes must name the API breaks recorded in the `api-breaks.json` files of prisma/orm#31234 (the two removed PostgreSQL bootstrap builders, `markerLocation`'s type, `MarkerReadResult`'s new kind, the runner's new error code and `ControlClient`'s new method); the extension upgrade instructions under `upgrade-instructions/pending/prisma-tables-in-prisma-schema/` list them with what to do.
+
 **Must ship in the same release as slice 1, and before `8.0.0`.** Every release finds the Prisma space's own row in the marker table before it knows which form the tables are in, so the table that holds that row, and its columns, cannot change after a release has written the row. If slice 1 ships first in a release candidate, slice 2's reader must also find the row where slice 1 left it.
 
 ## Slice 3. Rename the concept from "marker" to "signature"
