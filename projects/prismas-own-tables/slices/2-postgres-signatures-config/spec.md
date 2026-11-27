@@ -13,18 +13,17 @@ This slice is a pull request stacked on slice 1's branch (`own-tables-contract-s
 2. **A database created by a release candidate is brought up to date with no manual step.** The first migration renames `prisma_contract` to `_prisma` as slice 1 does, then moves each `marker` row into `signatures` (hashes, invariants, `updated_at` as `signed_at`), moves the application row's `meta.policies`, when present, into `config`, and drops `marker`. Every earlier row is kept. Each step is skipped when its result already holds, so a second command racing the first does no harm.
 3. **The Prisma space's own row is read from `_prisma.signatures`** by the phase, by `db verify`, and by every reader. This is the place every later release of Prisma 8 and later majors look for it (ADR 339, "One thing must stay fixed"), so it must be right now.
 4. **The policies are read from and written to `_prisma.config` on PostgreSQL** by every command that reads or writes them today: `db migrate`, `db update`, `db init`, `db sign`, `db migrate --show`, `migration status`. The runner's check that the policies did not change under it, while it holds its lock, reads `config`. A run that changes only the policies writes `config` and no signature. SQLite, MySQL, MariaDB and MongoDB keep `meta.policies` in their marker until slice 4.
-5. **Messages name the right table.** A corrupt signature row names `_prisma.signatures`; corrupt policies name `_prisma.config`. A database whose tables are missing is told about the tables that are missing. Nothing on PostgreSQL tells a user to correct `meta.policies` in a marker.
+5. **Messages name the right table.** A corrupt signature row names `_prisma.signatures`. Corrupt policies are still reported through the framework's marker message until the next slice. A database whose tables are missing is told about the tables that are missing. Nothing on PostgreSQL tells a user to correct `meta.policies` in a marker.
 6. **Commands that only read** still report `CONTRACT.PRISMA_SPACE_BEHIND` for a release candidate's database; the probe of `prisma_contract.marker` stays, since that is the release candidate's form.
 7. **The SQL client's check on first use** reads `_prisma.signatures`.
 
 ## How the policies reach the commands
 
-Today the framework reads the policies from the application space's marker record (`databasePoliciesOf(marker)` reads `marker.meta.policies`; `databasePoliciesInForce` and six callers in the command line; `checkDatabasePoliciesHeld` and the sign path's conflict check in the SQL family). Two ways to make PostgreSQL read them from `config`:
+Today the framework reads the policies from the application space's marker record (`databasePoliciesOf(marker)` reads `marker.meta.policies`; `databasePoliciesInForce` and six callers in the command line; `checkDatabasePoliciesHeld` and the sign path's conflict check in the SQL family).
 
-- **A, target only.** The PostgreSQL control adapter reads `config` beside `signatures` and returns the application row with `meta: { policies }` made up from it. No framework change. The framework's messages ("correct meta.policies in the marker") stay wrong for PostgreSQL, and in slice 4 every target would make up the same field.
-- **B, a channel of its own.** The family instance gains `readDatabasePolicies`, `databasePoliciesOf` takes the recorded value instead of a marker, the callers read through it, and the corrupt-policies error takes the location it names. SQLite, MySQL and MongoDB implement it from their marker's `meta.policies`, moving today's code, not adding to it. The write side needs no framework change: `MarkerDestination.databasePolicies` stays, and each target decides where it stores them.
+**Decided on 2026-11-28: in this slice, the PostgreSQL control adapter reads `_prisma.config` beside `_prisma.signatures` and returns the application space's record with `meta: { policies }` taken from the `config` row.** No framework change. Every reader of the policies (the commands, the runner's check under its lock, the sign path's check) then reads `config` on PostgreSQL. Known and accepted until the next slice: the framework's messages about corrupt policies still say "meta.policies in the marker" and name `_prisma.signatures`.
 
-Recommended: B. It is the operator's call, because it changes framework interfaces. Until it is decided, build everything else.
+The next slice makes the commands read the policies through a channel of their own, with its design worked out with the operator first. Recorded in [the plan](../../plan.md).
 
 ## The first migration
 
@@ -40,7 +39,7 @@ Rewritten in place: `packages/3-targets/postgres/1-target/migrations/20261126T12
 
 - Only PostgreSQL's tables change. Other targets behave exactly as before.
 - No user-visible "marker" word is renamed outside the PostgreSQL packages' table names and the messages in point 5; the concept's rename is slice 3. Lock names stay.
-- Framework changes: none unless option B is agreed, and then only the list under B.
+- No framework changes.
 - prisma/orm#31203 and #31200 will change the space's files once more; whichever merges last re-emits them (slice 1's spec says how).
 
 ## Docs this slice writes
