@@ -1,6 +1,6 @@
 # Definition of Ready — overlays at every scope
 
-Canonical DoR (the shape) lives in [`docs/drive/principles/definition-of-ready.md`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/definition-of-ready.md). This file holds the **team's overlays** — the concrete items the agile orchestrator checks at pickup time, in addition to the canonical items each scope already requires.
+Canonical DoR (the shape) lives in [`drive-build-workflow` § Pre-flight: per-dispatch DoR](https://github.com/prisma/ignite/blob/main/skills/.pilot/drive-build-workflow/SKILL.md#1-pre-flight-per-dispatch-dor). This file holds the **team's overlays** — the concrete items the agile orchestrator checks at pickup time, in addition to the canonical items each scope already requires.
 
 Overlays grow by retro accretion (per [`README.md § Maintenance discipline`](./README.md#maintenance-discipline)): a retro reveals a pickup-time gap, the matching scope's overlay grows by one item. The canonical protocol layer stays small; the team's overlays grow.
 

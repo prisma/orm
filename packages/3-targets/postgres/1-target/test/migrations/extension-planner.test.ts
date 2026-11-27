@@ -95,7 +95,7 @@ function liveDatabase(
         }),
     ),
     existingSchemas,
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 

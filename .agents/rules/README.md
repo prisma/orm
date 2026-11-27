@@ -124,13 +124,11 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 
 ## Architecture
 - `adr-writing.mdc` — ADR writing guidelines (clarity, flow, examples)
-- `adr-examples-must-match-code.mdc` — ADR examples should be copy/pasteable and reflect real APIs
 - `contract-default-values.mdc` — Validate emitted column defaults
 - `config-validation-and-normalization.mdc` — Config validation and normalization patterns using Arktype
 - `control-plane-descriptors.mdc` — Control plane descriptor pattern (Control*Descriptor types, driver requirement)
 - `family-instance-domain-actions.mdc` — Family instance domain actions (inline core logic, import helper functions)
 - `storage-type-hooks.mdc` — Codec-owned storage type hooks (avoid enum fields in shared IR)
-- `capabilities-ownership.mdc` — Capabilities are adapter-reported; contracts declare requirements
 - `tsdown-config-package-source-only.mdc` — Keep `@repo/tsdown` exports source-only (no `.js` workaround files)
 
 ## Git, CI & workflow
@@ -141,6 +139,7 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 - `no-linear-sub-issues.mdc` — Never create Linear sub-issues; use projects/milestones/relations/labels
 
 ## Docs & review writing
+- `doc-changes-get-two-independent-reviews.mdc` — A doc change that teaches or claims something is reviewed by fresh agents before it is done
 - `mermaid-compat.mdc` — Mermaid diagram syntax that renders on GitHub
 - `review-scope-overrides.mdc` — When writing review artifacts, honor user-specified base branches
 - `cursor-markdown-file-links.mdc` — Path-only repo-relative links in review markdown (Cursor does not resolve `:line` in link targets)

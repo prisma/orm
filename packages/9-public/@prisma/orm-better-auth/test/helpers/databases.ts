@@ -1,8 +1,12 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { defineConfig as postgresConfig } from '@prisma/orm-postgres/config';
+import {
+  postgres18,
+  defineConfig as postgresConfig,
+  postgresDriver,
+} from '@prisma/orm-postgres/config';
 import { createPostgresControlClient } from '@prisma/orm-postgres/control';
-import postgres from '@prisma/orm-postgres/runtime';
+import postgres, { type InteractiveTransactionsCapability } from '@prisma/orm-postgres/runtime';
 import { contractFromJson as postgresContractFromJson } from '@prisma/orm-postgres/static';
 import { defineConfig as sqliteConfig } from '@prisma/orm-sqlite/config';
 import { createSqliteControlClient } from '@prisma/orm-sqlite/control';
@@ -44,7 +48,9 @@ export interface EmittedContract {
 function configFor(target: TargetName, contractPath: string) {
   return target === 'sqlite'
     ? sqliteConfig({ contract: contractPath })
-    : postgresConfig({ contract: contractPath });
+    : postgresConfig({
+        contract: { path: contractPath, requiredCapabilities: [...postgres18, ...postgresDriver] },
+      });
 }
 
 function controlClientFor(target: TargetName, connection?: string) {
@@ -134,8 +140,13 @@ export function openSqliteClient(json: unknown, path: string) {
   return sqlite({ contract: sqliteContractFromJson<SqlContract>(json), path });
 }
 
+// The tests emit their contracts requiring the driver's capabilities, which include interactive transactions.
+type PostgresTestContract = SqlContract & {
+  readonly capabilities: InteractiveTransactionsCapability;
+};
+
 export function openPostgresClient(json: unknown, url: string) {
-  return postgres({ contract: postgresContractFromJson<SqlContract>(json), url });
+  return postgres({ contract: postgresContractFromJson<PostgresTestContract>(json), url });
 }
 
 /** Drops every schema the tests may have created and recreates an empty `public`. */

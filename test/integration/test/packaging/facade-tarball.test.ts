@@ -77,8 +77,8 @@ describe('an application that lists the Postgres facade and its platform shells'
 
   it('names its own published modules in the config its defineConfig returns', () => {
     const script = [
-      `const { defineConfig } = await import('${facade}/config');`,
-      "const config = defineConfig({ contract: './prisma/contract.prisma' });",
+      `const { defineConfig, postgres18, postgresDriver } = await import('${facade}/config');`,
+      "const config = defineConfig({ contract: { path: './prisma/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] } });",
       'console.log(JSON.stringify([config.contract.typesModule, config.migrations.module]));',
     ].join('\n');
     expect(JSON.parse(runInScratch(scratch, script))).toEqual([

@@ -80,7 +80,7 @@ Not a conflict with reconstruction:
 
 - **Default**: reconstruct graph from edge file manifests in-memory
 - `findPath(graph, from, to)` uses BFS to compute minimal-hop paths over adjacency list. Complexity O(V+E).
-- `findPathWithInvariants(graph, from, to, required)` extends the BFS to invariant-aware routing — returns the shortest path whose edges' `invariants` sets collectively cover `required`, or `null`. State-level dedup over `(node, coveredSubset)` is required for correctness; node-only dedup misses paths whose first arrival covered the wrong subset. The covered subset is a `Set<string>` of invariant ids; the dedup key is `${node}\0${[...covered].sort().join('\0')}`. When `required = ∅` the implementation delegates to `findPath` so behaviour is byte-identical for callers that don't thread invariants. See [ADR 208](ADR%20208%20-%20Invariant-aware%20migration%20routing.md) for performance characterisation and the full algorithm.
+- `findPathWithInvariants(graph, from, to, required)` extends the BFS to invariant-aware routing — returns the shortest path whose edges' `invariants` sets collectively cover `required`, or `null`. State-level dedup over `(node, coveredSubset)` is required for correctness; node-only dedup misses paths whose first arrival covered the wrong subset. The state also records the rank of the last self-edge taken since arriving at the node, or `-1`, and the dedup key is `JSON.stringify([node, [...covered].sort(), lastSelfEdgeRank])`. The search prunes states that cannot reach the goal without changing the returned path. When `required = ∅` the implementation delegates to `findPath` so behaviour is byte-identical for callers that don't thread invariants. See [ADR 208](ADR%20208%20-%20Invariant-aware%20migration%20routing.md) for the pruning rules, why they leave the path unchanged, and their cost.
 - Neighbour ordering is owned by neighbour generation, not by a separate sort step — invariant-aware ordering depends on the source state's still-needed set, and that dependency can't be separated from where neighbours are produced. When `required ≠ ∅`, edges that cover at least one still-needed invariant are explored before edges that don't, with the deterministic tie-break below as the secondary key. When `required = ∅`, ordering matches `findPath` exactly.
 - With squash-first policy (ADR 102), typical V+E < 50, making this trivial
 - Optional index pre-materializes adjacency for performance at scale
@@ -91,12 +91,14 @@ Neighbor ordering is deterministic whether using reconstruction or index. Metada
 
 Neighbor processing order is stable by a sort key tuple:
 1. (Invariant-aware BFS only, when `required ≠ ∅`) edge's `invariants` overlap the still-needed set: covering edges first
-2. Label priority: `main < default < feature`
+2. Label priority: `main < default < feature` (not implemented)
 3. `createdAt` ascending
 4. `to` lexicographic
 5. `migrationHash` lexicographic
 
-If labels are absent the order falls back to the remaining keys. Key (1) applies only inside `findPathWithInvariants`; structural `findPath` ignores it (preserving byte-for-byte routing parity for callers that don't thread invariants).
+Keys 3 to 5 compare strings by character code, not by the machine's locale, so every machine orders them the same way. If labels are absent the order falls back to the remaining keys. Key (1) applies only inside `findPathWithInvariants`; structural `findPath` ignores it (preserving byte-for-byte routing parity for callers that don't thread invariants).
+
+`findPathWithInvariants` ranks the self-edges at each contract with `compareTieBreak` (keys 3 to 5 above; label priority is not implemented) and prunes by that rank, so that comparator must give a fixed order per contract that does not depend on the search's progress. When a route runs several self-edges on one contract, they run in this order. This is current behaviour, not a decided rule; see [ADR 208](ADR%20208%20-%20Invariant-aware%20migration%20routing.md) § Which route runs when several qualify.
 
 ### Graph version and caching
 

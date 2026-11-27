@@ -2,8 +2,8 @@
 
 exports[`templates > per-cell snapshots (FR5.4) > mongo + psl > configFile is stable 1`] = `
 "import 'dotenv/config';
-import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '@internal/mongo/config';
+import { definePrismaConfig } from '@prisma/cli-engine';
 
 export default definePrismaConfig({
   orm: ormConfig({
@@ -18,8 +18,8 @@ export default definePrismaConfig({
 
 exports[`templates > per-cell snapshots (FR5.4) > mongo + typescript > configFile is stable 1`] = `
 "import 'dotenv/config';
-import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '@internal/mongo/config';
+import { definePrismaConfig } from '@prisma/cli-engine';
 
 export default definePrismaConfig({
   orm: ormConfig({
@@ -34,8 +34,8 @@ export default definePrismaConfig({
 
 exports[`templates > per-cell snapshots (FR5.4) > postgres + psl > configFile is stable 1`] = `
 "import 'dotenv/config';
-import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '@internal/postgres/config';
+import { definePrismaConfig } from '@prisma/cli-engine';
 
 export default definePrismaConfig({
   orm: ormConfig({
@@ -50,8 +50,8 @@ export default definePrismaConfig({
 
 exports[`templates > per-cell snapshots (FR5.4) > postgres + typescript > configFile is stable 1`] = `
 "import 'dotenv/config';
-import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '@internal/postgres/config';
+import { definePrismaConfig } from '@prisma/cli-engine';
 
 export default definePrismaConfig({
   orm: ormConfig({

@@ -337,7 +337,7 @@ describe('e2e: sql-builder on SQLite', { timeout: timeouts.databaseOperation }, 
         const table = db[UNBOUND_NAMESPACE_ID].users;
         // @ts-expect-error lateralJoin is gated out for SQLite
         expect(() => table.lateralJoin('alias', () => null)).toThrow(
-          'lateralJoin() requires capability sql.lateral',
+          '`lateralJoin()` is unavailable: your contract declares no dependency on `sql.lateral`',
         );
       });
     });
@@ -347,7 +347,7 @@ describe('e2e: sql-builder on SQLite', { timeout: timeouts.databaseOperation }, 
         const query = db[UNBOUND_NAMESPACE_ID].users.select('id');
         // @ts-expect-error distinctOn is gated out for SQLite
         expect(() => query.distinctOn('id')).toThrow(
-          'distinctOn() requires capability postgres.distinctOn',
+          '`distinctOn()` is unavailable: your contract declares no dependency on `postgres.distinctOn`',
         );
       });
     });

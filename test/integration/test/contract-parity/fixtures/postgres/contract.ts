@@ -17,6 +17,8 @@ import {
   gen,
   member,
   model,
+  postgres18,
+  postgresDriver,
   rel,
   sql,
   type,
@@ -196,6 +198,7 @@ const Profile = model('Profile', {
 });
 
 export const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   extensions: { 'arktype-json': arktypeJsonPack },
   namespaces: ['auth'],
   enums: { Plan, Ratio },

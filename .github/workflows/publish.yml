@@ -3,7 +3,7 @@ name: Publish to npm
 # Source-of-truth model:
 #   The version comes from the root `package.json` `version` field.
 #   Maintainers advance it via `pnpm bump-version` (see
-#   docs/oss/versioning.md). This workflow can never publish a version
+#   docs/oss/releasing.md). This workflow can never publish a version
 #   other than what is committed at HEAD.
 #
 # Trigger model:

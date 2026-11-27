@@ -117,7 +117,7 @@ describe('the check of an Update', () => {
       expect.objectContaining({
         code: 'ORM.CAPABILITY_MISSING',
         message:
-          'updateAll() on model "User" cannot read back the rows it updates: it sets key column "id" by an expression, and without capability "returning" the database does not report the value it wrote.',
+          '`updateAll()` on model "User" is unavailable: your contract declares no dependency on `sql.returning`. It cannot read back the rows it updates: it sets key column "id" by an expression, and without `sql.returning` the database does not report the value it wrote. To enable it, add `sql.returning` to your contract\'s required capabilities.',
         meta: { capability: 'returning', action: 'updateAll()' },
       }),
     );

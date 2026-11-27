@@ -275,6 +275,24 @@ describe('computeOverrides', () => {
     });
   });
 
+  it('keys a sibling named by a range by its bare name', () => {
+    const packedByName = new Map([
+      [
+        'a',
+        {
+          tarballPath: '/abs/a.tgz',
+          manifest: { name: 'a', peerDependencies: { b: '~8.1.0', c: '^8.1.0-preview.0' } },
+        },
+      ],
+      ['b', { tarballPath: '/abs/b.tgz', manifest: { name: 'b' } }],
+      ['c', { tarballPath: '/abs/c.tgz', manifest: { name: 'c' } }],
+    ]);
+    assert.deepEqual(computeOverrides({ rootName: 'a', packedByName }), {
+      b: 'file:/abs/b.tgz',
+      c: 'file:/abs/c.tgz',
+    });
+  });
+
   it('tolerates a dependency cycle between workspace siblings', () => {
     const packedByName = new Map([
       ['a', { tarballPath: '/abs/a.tgz', manifest: { name: 'a', dependencies: { b: '1.0.0' } } }],

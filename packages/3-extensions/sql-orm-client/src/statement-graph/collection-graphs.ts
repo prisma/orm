@@ -1,4 +1,5 @@
 import type { Contract } from '@internal/contract/types';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
@@ -576,7 +577,11 @@ export function requireOnlyCollidingKey(
   if (colliding === undefined) return;
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${action} on model "${modelName}" requires contract capability "insertOnConflictTarget": without it the conflict clause applies to every unique key, and the create values can also collide on (${colliding.join(', ')}), which would update a row other than the one conflictOn names.`,
+    capabilityUnavailableMessage(
+      `\`${action}\` on model "${modelName}"`,
+      ['sql.insertOnConflictTarget'],
+      `Without it the conflict clause applies to every unique key, and the create values can also collide on (${colliding.join(', ')}), which would update a row other than the one conflictOn names.`,
+    ),
     { meta: { capability: 'insertOnConflictTarget', action } },
   );
 }

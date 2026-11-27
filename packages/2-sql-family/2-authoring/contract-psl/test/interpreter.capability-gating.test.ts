@@ -40,7 +40,7 @@ describe('interpretPslDocumentToSqlContract scalar-list capability gating', () =
         expect.objectContaining({
           code: 'PSL_SCALAR_LIST_UNSUPPORTED_TARGET',
           message:
-            'Field "User.tags" is a scalar list, but target "sqlite" does not support scalar lists (the adapter does not report the "scalarList" capability). Remove the list or author it against a target that supports scalar lists.',
+            'The scalar list field "User.tags" is unavailable: your contract declares no dependency on `sql.scalarList`. To enable it, add `sql.scalarList` to your contract\'s required capabilities.',
         }),
       ]),
     );

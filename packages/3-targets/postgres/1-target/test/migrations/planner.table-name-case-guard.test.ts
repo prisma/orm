@@ -148,7 +148,7 @@ function liveSchema(
     },
     roles: [],
     existingSchemas: [schemaName],
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 

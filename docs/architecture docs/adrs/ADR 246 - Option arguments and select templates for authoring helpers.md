@@ -65,7 +65,7 @@ Four decisions make that work:
 
 ## The `option` argument kind
 
-The option concept is one shared type, declared once in [option-descriptor.ts](../../../packages/1-framework/1-core/framework-components/src/shared/option-descriptor.ts):
+The option concept is one shared type, declared once in option-descriptor.ts:
 
 ```ts
 export interface AuthoringOption {
@@ -194,9 +194,9 @@ Two factories exist because the codecs differ in whether they take parameters: `
 
 `temporal.createdAt()` and `temporal.updatedAt()` are the behavioral spellings. `createdAt` is a **storage** default (`now()` rendered into DDL) — a different mechanism from execution defaults, and deliberately not expressible through `onCreate: now`. `updatedAt` is shorthand for `temporal.timestamptz(onCreate: now, onUpdate: now)`.
 
-That shorthand relationship is **a claim about two separately authored descriptors that share no code.** `temporalAuthoringPresets` ([temporal-presets.ts](../../../packages/1-framework/1-core/framework-components/src/shared/temporal-presets.ts)) and `temporalCodecPresetWithPrecision` ([timestamp-now-generator.ts](../../../packages/2-sql-family/9-family/src/core/timestamp-now-generator.ts)) construct their outputs independently; nothing structural forces them to agree. They are held equal by tests, and by nothing else:
+That shorthand relationship is **a claim about two separately authored descriptors that share no code.** `temporalAuthoringPresets` (temporal-presets.ts) and `temporalCodecPresetWithPrecision` (timestamp-now-generator.ts) construct their outputs independently; nothing structural forces them to agree. They are held equal by tests, and by nothing else:
 
-- `it('updatedAt() is byte-identical to timestamptz(onCreate: now, onUpdate: now)')` in [interpreter.defaults.test.ts](../../../packages/2-sql-family/2-authoring/contract-psl/test/interpreter.defaults.test.ts)
+- `it('updatedAt() is byte-identical to timestamptz(onCreate: now, onUpdate: now)')` in interpreter.defaults.test.ts
 - `describe('temporal.updatedAt() three-way byte-identity')` in [ts-psl-parity.test.ts](../../../packages/2-sql-family/2-authoring/contract-psl/test/ts-psl-parity.test.ts), covering PSL-full ≡ PSL-convenience ≡ TS-full
 
 An editor changing either factory must keep those green, or the shorthand silently stops being a shorthand.
@@ -205,7 +205,7 @@ An editor changing either factory must keep those green, or the shorthand silent
 
 All four spellings — PSL and TypeScript, convenience and full — funnel through the same `instantiateAuthoringFieldPreset`. So the parity assertions prove **the spellings agree with each other**. They cannot prove the output is correct: a resolver bug moves all four together and every parity test stays green.
 
-Correctness is proved by the **absolute** assertions in `describe('temporal per-codec preset lowering')` in [interpreter.defaults.test.ts](../../../packages/2-sql-family/2-authoring/contract-psl/test/interpreter.defaults.test.ts), which pin whole column shapes and whole execution-defaults lists against literals. The two kinds of test are not substitutes.
+Correctness is proved by the **absolute** assertions in `describe('temporal per-codec preset lowering')` in interpreter.defaults.test.ts, which pin whole column shapes and whole execution-defaults lists against literals. The two kinds of test are not substitutes.
 
 ## Optional arguments on the TypeScript surface
 

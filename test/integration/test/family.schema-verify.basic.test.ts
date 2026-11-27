@@ -8,6 +8,8 @@ import {
   field,
   int4Column,
   model,
+  postgres18,
+  postgresDriver,
   rel,
   runSchemaVerify,
   textColumn,
@@ -68,6 +70,7 @@ describe('family instance schemaVerify - basic', () => {
         }));
 
         const contract = defineContract({
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           models: {
             User: User.relations({
               posts: rel.hasMany(Post, { by: 'userId' }),
@@ -105,6 +108,7 @@ describe('family instance schemaVerify - basic', () => {
       'returns ok=false with a not-found issue for the missing table',
       async () => {
         const contract = defineContract({
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           models: {
             User: model('User', {
               fields: {
@@ -148,6 +152,7 @@ describe('family instance schemaVerify - basic', () => {
       'returns ok=false with a not-found issue for the missing column',
       async () => {
         const contract = defineContract({
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           models: {
             User: model('User', {
               fields: {

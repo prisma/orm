@@ -29,7 +29,6 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql-family/9-family/test/test-sql-contract-serializer';
-import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
 import { createComposedPostgresAdapter } from './helpers/composed-adapter';
@@ -169,13 +168,7 @@ describe('renderLoweredSql cast policy', () => {
     const registry = buildPostgresCodecDescriptorRegistry([descriptorFor('app/test-foo@1', 'foo')]);
     const ast = selectWithParam('tag', 'app/test-foo@1', 'tagged');
 
-    const lowered = renderLoweredSql(
-      ast,
-      baseContract,
-      registry,
-      dataTypes,
-      postgresAdapterCapabilities,
-    );
+    const lowered = renderLoweredSql(ast, baseContract, registry, dataTypes);
 
     expect(lowered.sql).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."tag" = $1::foo');
   });
@@ -183,13 +176,7 @@ describe('renderLoweredSql cast policy', () => {
   it('emits plain $N for an inferrable scalar target descriptor', () => {
     const ast = selectWithParam('score', 'pg/int4@1', 1);
 
-    const lowered = renderLoweredSql(
-      ast,
-      baseContract,
-      postgresCodecDescriptorRegistry,
-      dataTypes,
-      postgresAdapterCapabilities,
-    );
+    const lowered = renderLoweredSql(ast, baseContract, postgresCodecDescriptorRegistry, dataTypes);
 
     expect(lowered.sql).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."score" = $1');
   });
@@ -202,13 +189,7 @@ describe('renderLoweredSql cast policy', () => {
       'a longer text than ten characters',
     );
 
-    const lowered = renderLoweredSql(
-      ast,
-      baseContract,
-      postgresCodecDescriptorRegistry,
-      dataTypes,
-      postgresAdapterCapabilities,
-    );
+    const lowered = renderLoweredSql(ast, baseContract, postgresCodecDescriptorRegistry, dataTypes);
 
     expect(lowered.sql).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."name" = $1');
   });
@@ -239,13 +220,7 @@ describe('renderLoweredSql cast policy', () => {
       ),
     ]);
     const render = (ast: SelectAst) =>
-      renderLoweredSql(
-        ast,
-        baseContract,
-        postgresCodecDescriptorRegistry,
-        dataTypes,
-        postgresAdapterCapabilities,
-      ).sql;
+      renderLoweredSql(ast, baseContract, postgresCodecDescriptorRegistry, dataTypes).sql;
 
     expect([render(list), render(projected)]).toEqual([
       'SELECT "user"."id" AS "id" FROM "user" WHERE "user"."name" = $1',
@@ -260,10 +235,9 @@ describe('renderLoweredSql cast policy', () => {
       { name: 'character varying(3)' },
       'x',
     );
-    expect(
-      renderLoweredSql(ast, baseContract, verbatimRegistry, dataTypes, postgresAdapterCapabilities)
-        .sql,
-    ).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."tag" = $1');
+    expect(renderLoweredSql(ast, baseContract, verbatimRegistry, dataTypes).sql).toBe(
+      'SELECT "user"."id" AS "id" FROM "user" WHERE "user"."tag" = $1',
+    );
   });
 
   it('emits exact native-enum casts from validated descriptor type parameters', () => {
@@ -281,22 +255,10 @@ describe('renderLoweredSql cast policy', () => {
     );
 
     expect(
-      renderLoweredSql(
-        publicAst,
-        baseContract,
-        postgresCodecDescriptorRegistry,
-        dataTypes,
-        postgresAdapterCapabilities,
-      ).sql,
+      renderLoweredSql(publicAst, baseContract, postgresCodecDescriptorRegistry, dataTypes).sql,
     ).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."status" = $1::"aal_level"');
     expect(
-      renderLoweredSql(
-        qualifiedAst,
-        baseContract,
-        postgresCodecDescriptorRegistry,
-        dataTypes,
-        postgresAdapterCapabilities,
-      ).sql,
+      renderLoweredSql(qualifiedAst, baseContract, postgresCodecDescriptorRegistry, dataTypes).sql,
     ).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."status" = $1::"auth"."aal_level"');
   });
 
@@ -310,13 +272,7 @@ describe('renderLoweredSql cast policy', () => {
         BinaryExpr.eq(ColumnRef.of('user', 'score'), ParamRef.of(1, { name: 'score', codec: ref })),
       );
 
-    const lowered = renderLoweredSql(
-      ast,
-      baseContract,
-      postgresCodecDescriptorRegistry,
-      dataTypes,
-      postgresAdapterCapabilities,
-    );
+    const lowered = renderLoweredSql(ast, baseContract, postgresCodecDescriptorRegistry, dataTypes);
 
     expect(lowered.sql).toBe('SELECT "user"."id" AS "id" FROM "user" WHERE "user"."score" = $1');
   });
@@ -334,13 +290,7 @@ describe('renderLoweredSql cast policy', () => {
         ),
       );
 
-    const lowered = renderLoweredSql(
-      ast,
-      baseContract,
-      postgresCodecDescriptorRegistry,
-      dataTypes,
-      postgresAdapterCapabilities,
-    );
+    const lowered = renderLoweredSql(ast, baseContract, postgresCodecDescriptorRegistry, dataTypes);
 
     expect(lowered.sql).toBe(
       'SELECT "user"."id" AS "id" FROM "user" WHERE "user"."score" = $1::int4[]',
@@ -353,13 +303,7 @@ describe('renderLoweredSql cast policy', () => {
       ProjectionItem.of('value', ref),
     ]);
 
-    const lowered = renderLoweredSql(
-      ast,
-      baseContract,
-      postgresCodecDescriptorRegistry,
-      dataTypes,
-      postgresAdapterCapabilities,
-    );
+    const lowered = renderLoweredSql(ast, baseContract, postgresCodecDescriptorRegistry, dataTypes);
 
     expect(lowered.sql).toBe('SELECT $1::int4 AS "value" FROM "user"');
   });
@@ -377,13 +321,7 @@ describe('renderLoweredSql cast policy', () => {
         ),
       );
 
-    const lowered = renderLoweredSql(
-      ast,
-      baseContract,
-      postgresCodecDescriptorRegistry,
-      dataTypes,
-      postgresAdapterCapabilities,
-    );
+    const lowered = renderLoweredSql(ast, baseContract, postgresCodecDescriptorRegistry, dataTypes);
 
     expect(lowered.sql).toBe(
       'SELECT "user"."id" AS "id" FROM "user" WHERE "user"."name" = $1::character varying[]',
@@ -396,13 +334,7 @@ describe('renderLoweredSql cast policy', () => {
     ]);
     const ast = selectWithParam('profile', 'arktype/json@1', { name: 'Ada' });
 
-    const lowered = renderLoweredSql(
-      ast,
-      baseContract,
-      registry,
-      dataTypes,
-      postgresAdapterCapabilities,
-    );
+    const lowered = renderLoweredSql(ast, baseContract, registry, dataTypes);
 
     expect(lowered.sql).toBe(
       'SELECT "user"."id" AS "id" FROM "user" WHERE "user"."profile" = $1::jsonb',
@@ -411,13 +343,7 @@ describe('renderLoweredSql cast policy', () => {
 
   describe('money parameters are read as numeric, so lc_monetary separators never apply', () => {
     const render = (ast: SelectAst | InsertAst) =>
-      renderLoweredSql(
-        ast,
-        baseContract,
-        postgresCodecDescriptorRegistry,
-        dataTypes,
-        postgresAdapterCapabilities,
-      ).sql;
+      renderLoweredSql(ast, baseContract, postgresCodecDescriptorRegistry, dataTypes).sql;
 
     it('casts an inserted money value through numeric', () => {
       const ast = InsertAst.into(TableSource.named('user')).withRows([
@@ -451,9 +377,9 @@ describe('renderLoweredSql cast policy', () => {
   it('throws clearly when the validated target registry has no descriptor for the codec id', () => {
     const ast = selectWithParam('tag', 'app/test-foo@1', 'tagged');
 
-    expect(() =>
-      renderLoweredSql(ast, baseContract, emptyRegistry, dataTypes, postgresAdapterCapabilities),
-    ).toThrow(/codecId "app\/test-foo@1"/);
+    expect(() => renderLoweredSql(ast, baseContract, emptyRegistry, dataTypes)).toThrow(
+      /codecId "app\/test-foo@1"/,
+    );
   });
 
   it('throws even when no contract column references the unknown codec id', () => {
@@ -466,17 +392,17 @@ describe('renderLoweredSql cast policy', () => {
         ),
       );
 
-    expect(() =>
-      renderLoweredSql(ast, baseContract, emptyRegistry, dataTypes, postgresAdapterCapabilities),
-    ).toThrow(/codecId "app\/never-used@1"/);
+    expect(() => renderLoweredSql(ast, baseContract, emptyRegistry, dataTypes)).toThrow(
+      /codecId "app\/never-used@1"/,
+    );
   });
 
   it('throws RUNTIME.PARAM_REF_MISSING_CODEC when the param ref carries no codec', () => {
     const ast = selectWithParam('id', undefined, 1);
 
-    expect(() =>
-      renderLoweredSql(ast, baseContract, emptyRegistry, dataTypes, postgresAdapterCapabilities),
-    ).toThrow(/PARAM_REF_MISSING_CODEC|reached lowering without/);
+    expect(() => renderLoweredSql(ast, baseContract, emptyRegistry, dataTypes)).toThrow(
+      /PARAM_REF_MISSING_CODEC|reached lowering without/,
+    );
   });
 });
 

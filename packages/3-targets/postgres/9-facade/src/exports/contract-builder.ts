@@ -39,6 +39,15 @@ export type {
   VarBit,
   Varchar,
 } from '@internal/target-postgres/codec-types';
+export {
+  type PostgresContractCapabilities,
+  postgres15,
+  postgres16,
+  postgres17,
+  postgres18,
+  postgresDriver,
+  type RequiredCapabilities,
+} from '../contract/contract-capabilities';
 export { defineContract } from '../contract/define-contract';
 export { enumType } from '../contract/enum-type';
 export { type ExtensionHandle, extension } from '../contract/extension';

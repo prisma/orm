@@ -100,7 +100,7 @@ const liveSchema = new PostgresDatabaseSchemaNode({
   },
   roles: [],
   existingSchemas: [],
-  pgVersion: '',
+  serverVersionNumber: undefined,
 });
 
 async function setDefaultStatement(value: number[]): Promise<string | undefined> {

@@ -203,9 +203,9 @@ export function createContractFile(testDir: string): string {
   writeFileSync(
     contractPath,
     `import { int4Column, textColumn } from '@repo/test-utils/column-descriptors';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import { defineContract, field, model, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 
-const contractObj = defineContract({
+const contractObj = defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     User: model('User', {
       fields: {

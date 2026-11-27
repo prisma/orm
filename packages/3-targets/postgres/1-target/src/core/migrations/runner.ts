@@ -34,6 +34,7 @@ import type {
 import {
   APP_SPACE_ID,
   type DatabasePolicies,
+  databaseCapabilitiesNotProvidedText,
   failedPostcheckWhy,
   failedPrecheckWhy,
   schemaCheckWhy,
@@ -48,7 +49,10 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Result } from '@internal/utils/result';
 import { notOk, ok, okVoid } from '@internal/utils/result';
+import { postgresDatabaseCapabilitiesNotProvided } from '../database-capabilities-not-provided';
 import { postgresError } from '../errors';
+import { type CapabilitiesByVersion, postgresCapabilitiesByVersion } from '../server-version';
+import { readPostgresServerVersionNumber } from '../server-version-number';
 import { CONTROL_PLANE_LC_MONETARY, quoteIdentifier } from '../sql-utils';
 import {
   DEPENDENT_OBJECTS_STILL_EXIST,
@@ -147,19 +151,26 @@ function failedTypeChangeOf(
 /** Sets `lc_monetary` for the rest of the current transaction only; {@link CONTROL_PLANE_LC_MONETARY} says why the runner sets it. */
 const SET_LOCAL_LC_MONETARY_SQL = "SELECT set_config('lc_monetary', $1, true)";
 
+/**
+ * @param capabilitiesByVersion The table the runner checks the database against; tests pass one whose rows differ.
+ */
 export function createPostgresMigrationRunner(
   family: SqlControlFamilyInstance,
+  capabilitiesByVersion: CapabilitiesByVersion = postgresCapabilitiesByVersion,
 ): SqlMigrationRunner<PostgresPlanTargetDetails> {
-  return new PostgresMigrationRunner(family);
+  return new PostgresMigrationRunner(family, capabilitiesByVersion);
 }
 
 class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDetails> {
-  constructor(private readonly family: SqlControlFamilyInstance) {}
+  constructor(
+    private readonly family: SqlControlFamilyInstance,
+    private readonly capabilitiesByVersion: CapabilitiesByVersion,
+  ) {}
 
   /**
    * Body of the migration runner without transaction management. The
    * caller ({@link PostgresMigrationRunner.execute}) owns the
-   * `BEGIN`/`COMMIT`/`ROLLBACK` lifecycle.
+   * `BEGIN`/`COMMIT`/`ROLLBACK` lifecycle, and checks the database's capabilities for every space before it calls this; a direct caller must do the same.
    */
   async executeOnConnection(
     options: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>,
@@ -314,6 +325,11 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     perSpaceOptions: ReadonlyArray<SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>>,
     expectedDatabasePolicies: DatabasePolicies | undefined,
   ): Promise<MigrationRunnerResult> {
+    const capabilitiesCheck = await this.ensureDatabaseProvidesCapabilities(
+      driver,
+      perSpaceOptions,
+    );
+    if (!capabilitiesCheck.ok) return capabilitiesCheck;
     if (expectedDatabasePolicies !== undefined) {
       await this.acquireLock(driver);
       const policiesCheck = await checkDatabasePoliciesHeld(
@@ -762,6 +778,33 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
           },
         );
       }
+    }
+    return okVoid();
+  }
+
+  /**
+   * Refuses a database that does not provide a capability some space's destination contract requires of it. It reads the server's version once and checks every space before any space runs, so a refused run sends nothing that changes the database.
+   */
+  private async ensureDatabaseProvidesCapabilities(
+    driver: SqlControlDriverInstance<string>,
+    perSpaceOptions: ReadonlyArray<SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>>,
+  ): Promise<Result<void, SqlMigrationRunnerFailure>> {
+    const serverVersionNumber = await readPostgresServerVersionNumber(driver);
+    for (const spaceOptions of perSpaceOptions) {
+      const notProvided = postgresDatabaseCapabilitiesNotProvided({
+        capabilities: spaceOptions.destinationContract.capabilities,
+        table: this.capabilitiesByVersion,
+        serverVersionNumber,
+      });
+      if (notProvided === undefined) continue;
+      const failure = runnerFailure(
+        'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED',
+        databaseCapabilitiesNotProvidedText(notProvided),
+        { meta: { databaseCapabilitiesNotProvided: notProvided } },
+      );
+      return notOk(
+        withFailingSpace(failure.failure, spaceOptions.space ?? spaceOptions.plan.spaceId),
+      );
     }
     return okVoid();
   }

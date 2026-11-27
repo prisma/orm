@@ -21,7 +21,7 @@ Node.js is the primary supported runtime. Bun and Deno are supported on a best-e
 | PostgreSQL | 15 |
 | MongoDB | 8.0 |
 
-The minimum version for each database is a constant the target package exports from its `server-version` entry point (`POSTGRES_MIN_SERVER_VERSION`, `MONGO_MIN_SERVER_VERSION`) ([ADR 222](architecture%20docs/adrs/ADR%20222%20-%20Version%20support%20policy.md)). The `prisma orm init` scaffold takes it from the target package and generates a `.env.example` with a `# Requires <db> >= <version>` comment so fresh users see the requirement before they connect.
+The minimum version for each database is a constant the target package exports (`POSTGRES_MIN_SERVER_VERSION` from PostgreSQL's `server-version-range` entry point, `MONGO_MIN_SERVER_VERSION` from MongoDB's `server-version` entry point) ([ADR 222](architecture%20docs/adrs/ADR%20222%20-%20Version%20support%20policy.md)). The `prisma orm init` scaffold takes it from the target package and generates a `.env.example` with a `# Requires <db> >= <version>` comment so fresh users see the requirement before they connect.
 
 ## TypeScript
 

@@ -13,6 +13,7 @@ import { Insert } from '../../src/statement-graph/insert';
 import { State, StateEdge } from '../../src/statement-graph/state';
 import { UnionAll } from '../../src/statement-graph/union-all';
 import { createCollectionFor } from '../collection-fixtures';
+import { statedCapabilities, withCapabilities } from '../helpers';
 import { cascadeContract } from './cascade-contract';
 import { printGraph } from './print-graph';
 import {
@@ -103,7 +104,7 @@ describe('table state in the graph', () => {
   });
 
   it('adds a State for every table a delete changes through its foreign keys', () => {
-    const graph = new Graph(cascadeContract);
+    const graph = new Graph(withCapabilities(cascadeContract, statedCapabilities.withoutReturning));
     const find = addWithState(graph, findIn('Org'));
     const orgId = ProjectionItem.of('id', ColumnRef.of('Org', 'id'));
     const del = addFiltered(graph, new Delete(DeleteAst.from(cascadeTable('Org'))), [

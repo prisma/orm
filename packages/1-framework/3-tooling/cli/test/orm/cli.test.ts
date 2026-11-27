@@ -123,6 +123,14 @@ describe('the orm command family', () => {
 });
 
 describe('createOrmCli', () => {
+  it("mounts the family's own command instances, so the engine gives every family command's errors a docs link", () => {
+    const notTheFamilys = Object.entries(ormCommandFamily.commands)
+      .filter(([path, command]) => BIN_COMMANDS[path] !== command)
+      .map(([path]) => path);
+
+    expect(notTheFamilys).toEqual([]);
+  });
+
   it('constructs without a collision, unknown group or reserved-flag violation', () => {
     expect(() => createOrmCli()).not.toThrow();
   });

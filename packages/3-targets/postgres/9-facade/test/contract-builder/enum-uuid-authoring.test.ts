@@ -2,7 +2,13 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { enumType as untypedEnumType } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, it } from 'vitest';
-import { defineContract, enumType, member } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  member,
+  postgres18,
+  postgresDriver,
+} from '../../src/exports/contract-builder';
 
 const pgUuid = { codecId: 'pg/uuid@1' as const };
 
@@ -14,16 +20,19 @@ describe('uuid-backed enum authoring against the real Postgres pack', () => {
       member('A', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'),
       member('B', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'),
     );
-    const built = defineContract({ enums: { Key } }, ({ field, model, gen, type }) => ({
-      models: {
-        Item: model('Item', {
-          fields: {
-            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-            key: field.namedType(Key),
-          },
-        }),
-      },
-    }));
+    const built = defineContract(
+      { requiredCapabilities: [...postgres18, ...postgresDriver], enums: { Key } },
+      ({ field, model, gen, type }) => ({
+        models: {
+          Item: model('Item', {
+            fields: {
+              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+              key: field.namedType(Key),
+            },
+          }),
+        },
+      }),
+    );
     const contract: Contract<SqlStorage> = built;
 
     expect({
@@ -56,16 +65,19 @@ describe('uuid-backed enum authoring against the real Postgres pack', () => {
   ])('refuses a member written in %s, saying the text Postgres stores', (_spelling, written) => {
     const Key = enumType('Key', pgUuid, member('A', written));
     expect(() =>
-      defineContract({ enums: { Key } }, ({ field, model, gen, type }) => ({
-        models: {
-          Item: model('Item', {
-            fields: {
-              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-              key: field.namedType(Key),
-            },
-          }),
-        },
-      })),
+      defineContract(
+        { requiredCapabilities: [...postgres18, ...postgresDriver], enums: { Key } },
+        ({ field, model, gen, type }) => ({
+          models: {
+            Item: model('Item', {
+              fields: {
+                id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+                key: field.namedType(Key),
+              },
+            }),
+          },
+        }),
+      ),
     ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.ENUM_INVALID',
@@ -77,16 +89,19 @@ describe('uuid-backed enum authoring against the real Postgres pack', () => {
   it('refuses a number member on pg/numeric from the untyped builder as an enum error', () => {
     const Ratio = untypedEnumType('Ratio', { codecId: 'pg/numeric@1' }, member('Half', 1.5));
     expect(() =>
-      defineContract({ enums: { Ratio } }, ({ field, model, gen, type }) => ({
-        models: {
-          Item: model('Item', {
-            fields: {
-              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-              ratio: field.namedType(Ratio),
-            },
-          }),
-        },
-      })),
+      defineContract(
+        { requiredCapabilities: [...postgres18, ...postgresDriver], enums: { Ratio } },
+        ({ field, model, gen, type }) => ({
+          models: {
+            Item: model('Item', {
+              fields: {
+                id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+                ratio: field.namedType(Ratio),
+              },
+            }),
+          },
+        }),
+      ),
     ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.ENUM_INVALID',

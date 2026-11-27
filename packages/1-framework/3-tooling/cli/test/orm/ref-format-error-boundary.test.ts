@@ -8,10 +8,18 @@ import type {
   executeRefListCommand,
   executeRefSetCommand,
 } from '../../src/control-api/operations/ref';
+import type {
+  executeRefPolicyDelete,
+  executeRefPolicySet,
+  executeRefPolicyShow,
+} from '../../src/control-api/operations/ref-policies';
 import { BIN_GROUPS } from '../../src/orm/cli';
 import { createFormatCommand } from '../../src/orm/format';
 import { createRefDeleteCommand } from '../../src/orm/ref/delete';
 import { createRefListCommand } from '../../src/orm/ref/list';
+import { createRefPolicyDeleteCommand } from '../../src/orm/ref/policy/delete';
+import { createRefPolicySetCommand } from '../../src/orm/ref/policy/set';
+import { createRefPolicyShowCommand } from '../../src/orm/ref/policy/show';
 import { createRefSetCommand } from '../../src/orm/ref/set';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 
@@ -19,6 +27,9 @@ const operations = {
   executeFormat: vi.fn<typeof executeFormat>(),
   executeRefDeleteCommand: vi.fn<typeof executeRefDeleteCommand>(),
   executeRefListCommand: vi.fn<typeof executeRefListCommand>(),
+  executeRefPolicyDelete: vi.fn<typeof executeRefPolicyDelete>(),
+  executeRefPolicySet: vi.fn<typeof executeRefPolicySet>(),
+  executeRefPolicyShow: vi.fn<typeof executeRefPolicyShow>(),
   executeRefSetCommand: vi.fn<typeof executeRefSetCommand>(),
 };
 
@@ -26,6 +37,9 @@ const commands: MountedTree = {
   'contract format': createFormatCommand(operations.executeFormat),
   'migration ref delete': createRefDeleteCommand(operations.executeRefDeleteCommand),
   'migration ref list': createRefListCommand(operations.executeRefListCommand),
+  'migration ref policy delete': createRefPolicyDeleteCommand(operations.executeRefPolicyDelete),
+  'migration ref policy set': createRefPolicySetCommand(operations.executeRefPolicySet),
+  'migration ref policy show': createRefPolicyShowCommand(operations.executeRefPolicyShow),
   'migration ref set': createRefSetCommand(operations.executeRefSetCommand),
 };
 
@@ -104,6 +118,21 @@ const CASES: readonly BoundaryCase[] = [
     command: 'ref list',
     argv: ['migration', 'ref', 'list'],
     operation: operations.executeRefListCommand,
+  },
+  {
+    command: 'ref policy delete',
+    argv: ['migration', 'ref', 'policy', 'delete', 'staging', 'change'],
+    operation: operations.executeRefPolicyDelete,
+  },
+  {
+    command: 'ref policy set',
+    argv: ['migration', 'ref', 'policy', 'set', 'staging', '--change', 'migrate'],
+    operation: operations.executeRefPolicySet,
+  },
+  {
+    command: 'ref policy show',
+    argv: ['migration', 'ref', 'policy', 'show', 'staging'],
+    operation: operations.executeRefPolicyShow,
   },
   {
     command: 'ref set',

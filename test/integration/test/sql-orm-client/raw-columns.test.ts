@@ -1,10 +1,19 @@
 import { int4Column, rawColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, model, rel, sql } from '@internal/postgres/contract-builder';
+import postgresAdapter from '@internal/adapter-postgres/runtime';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+  sql,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 
 const ShelfBase = model('Shelf', {
@@ -33,13 +42,16 @@ const Shelf = ShelfBase.relations({
   books: rel.hasMany(() => Book, { by: 'shelfId' }),
 }).sql({ table: 'raw_shelves' });
 
-const contract = defineContract({ models: { Shelf, Book } });
+const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Shelf, Book },
+});
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
-    contract,
+    contract: withIncludeStrategy(contract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
     }),
   });
 }

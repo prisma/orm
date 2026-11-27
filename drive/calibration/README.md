@@ -35,7 +35,7 @@ Each category README has a "Calibration" section near the top listing the files 
 
 ## Maintenance discipline
 
-All files in this directory are updated **trigger-based, not periodically** — per [`docs/drive/principles/retro.md`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/retro.md). The retro names which calibration file to update; the update lands in the same commit as the retro entry (the retro is not done until the update is in a surface the next dispatch will read).
+All files in this directory are updated **trigger-based, not periodically** — per the [`drive-run-retro`](https://github.com/prisma/ignite/blob/main/skills/.pilot/drive-run-retro/SKILL.md) skill. The retro names which calibration file to update; the update lands in the same commit as the retro entry (the retro is not done until the update is in a surface the next dispatch will read).
 
 | Calibration file | Update trigger |
 | --- | --- |
@@ -53,6 +53,6 @@ Never delete calibration content. Mark obsolete entries historical and explain w
 
 Three kinds of content look like calibration but live elsewhere:
 
-- **Canonical methodology** — invariants every team should honour, ritual shapes (what DoR *is*, what a brief *contains*) — lives in [`docs/drive/principles/`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/). Calibration is the *content* of overlays; principles are the *shape* the overlays plug into.
+- **Canonical methodology** — invariants every team should honour, ritual shapes (what DoR *is*, what a brief *contains*) — lives in the [Drive skills in prisma/ignite](https://github.com/prisma/ignite/tree/main/skills/.pilot). Calibration is the *content* of overlays; principles are the *shape* the overlays plug into.
 - **Operational team conventions** — how this team integrates Drive with its tracker, branch naming, PR title prefixes, where artefacts get filed — lives in the matching `drive/<category>/README.md`. Calibration grows by retro accretion; operational conventions document how the team operates.
-- **Per-project artefacts** — a specific project's spec, plan, design-decisions log, manual-QA reports — live under `projects/<x>/` and delete at close-out per [`drive-close-project`](../../skills-contrib/drive-close-project/SKILL.md). Surfaces of value get *lifted* into `drive/calibration/` during close-out (the operation `drive-close-project` calls "lift-example-to-context").
+- **Per-project artefacts** — a specific project's spec, plan, design-decisions log, manual-QA reports — live under `projects/<x>/` and delete at close-out per [`drive-close-project`](https://github.com/prisma/ignite/blob/main/skills/.pilot/drive-close-project/SKILL.md). Surfaces of value get *lifted* into `drive/calibration/` during close-out (the operation `drive-close-project` calls "lift-example-to-context").

@@ -44,6 +44,10 @@ import { appRefsDirFor, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
+  databaseRefusedInRun,
+  databaseRefusedWhy,
+  driftIssues,
+  includesDatabaseCapabilitiesNotProvided,
   issueNodes,
   readEmittedContract,
   requireVerifyConnection,
@@ -162,13 +166,13 @@ function spaceNode(outcome: DbSignSpaceOutcome): TreeNode {
       };
     case 'failed':
       return {
-        label: `${outcome.space}: not signed, the schema does not satisfy its contract`,
+        label: `${outcome.space}: not signed, ${verificationFailure(outcome.schema)}`,
         status: 'error',
-        children: issueNodes(outcome.schema.schema.issues, 'error'),
+        children: issueNodes(driftIssues(outcome.schema.schema.issues), 'error'),
       };
     case 'missing-invariants':
       return {
-        label: `${outcome.space}: not signed, its marker does not record invariants its head ref requires${outcome.schema === undefined ? '' : ', and the schema does not satisfy its contract'}`,
+        label: `${outcome.space}: not signed, its marker does not record invariants its head ref requires${outcome.schema === undefined ? '' : `, and ${verificationFailure(outcome.schema)}`}`,
         status: 'error',
         children: [
           ...outcome.missingInvariants.map(
@@ -176,7 +180,7 @@ function spaceNode(outcome: DbSignSpaceOutcome): TreeNode {
           ),
           ...(outcome.schema === undefined
             ? []
-            : issueNodes(outcome.schema.schema.issues, 'error')),
+            : issueNodes(driftIssues(outcome.schema.schema.issues), 'error')),
         ],
       };
     case 'conflict':
@@ -207,18 +211,39 @@ function quotedList(spaces: readonly DbSignSpaceOutcome[]): string {
   return spaces.map((outcome) => `"${outcome.space}"`).join(', ');
 }
 
-function failsVerification(outcome: DbSignSpaceOutcome): boolean {
-  return (
-    outcome.status === 'failed' ||
-    (outcome.status === 'missing-invariants' && outcome.schema !== undefined)
-  );
+/** Why a space's verification failed, as a clause: the database lacks capabilities, or its schema does not match. The refusal's own text is in the space's diagnostic. */
+function verificationFailure(schema: VerifyDatabaseSchemaResult): string {
+  return includesDatabaseCapabilitiesNotProvided(schema.schema.issues)
+    ? 'the database does not provide what its contract requires'
+    : 'the schema does not satisfy its contract';
+}
+
+function failedSchemaOf(outcome: DbSignSpaceOutcome): VerifyDatabaseSchemaResult | undefined {
+  if (outcome.status === 'failed') return outcome.schema;
+  if (outcome.status === 'missing-invariants') return outcome.schema;
+  return undefined;
+}
+
+function refusedForDatabaseCapabilities(outcome: DbSignSpaceOutcome): boolean {
+  const schema = failedSchemaOf(outcome);
+  return schema !== undefined && includesDatabaseCapabilitiesNotProvided(schema.schema.issues);
+}
+
+function failsSchema(outcome: DbSignSpaceOutcome): boolean {
+  return failedSchemaOf(outcome) !== undefined && !refusedForDatabaseCapabilities(outcome);
 }
 
 function signSummary(spaces: readonly DbSignSpaceOutcome[]): string {
-  const failed = spaces.filter(failsVerification);
+  const failed = spaces.filter(failsSchema);
+  const lacking = spaces.filter(refusedForDatabaseCapabilities);
   const conflicts = spaces.filter((outcome) => outcome.status === 'conflict');
   const refused = spaces.filter((outcome) => outcome.status === 'missing-invariants');
-  if (failed.length === 0 && conflicts.length === 0 && refused.length === 0) {
+  if (
+    failed.length === 0 &&
+    lacking.length === 0 &&
+    conflicts.length === 0 &&
+    refused.length === 0
+  ) {
     return 'Database signed';
   }
   const signed = spaces.filter(isSigned);
@@ -227,6 +252,11 @@ function signSummary(spaces: readonly DbSignSpaceOutcome[]): string {
       ? []
       : [
           `${refused.length === 1 ? 'space' : 'spaces'} ${quotedList(refused)} ${refused.length === 1 ? 'requires invariants its marker does' : 'require invariants their markers do'} not record`,
+        ]),
+    ...(lacking.length === 0
+      ? []
+      : [
+          `the database does not provide what the contract requires for ${lacking.length === 1 ? 'space' : 'spaces'} ${quotedList(lacking)}`,
         ]),
     ...(failed.length === 0
       ? []
@@ -293,25 +323,31 @@ function markerConflictDiagnostic(
 
 function missingInvariantsDiagnostic(
   outcome: Extract<DbSignSpaceOutcome, { readonly status: 'missing-invariants' }>,
-  migrate: string,
+  inputs: { readonly migrate: string; readonly databaseRefused: boolean },
 ): Diagnostic {
   const missing = outcome.missingInvariants.map((id) => `"${id}"`).join(', ');
   const required =
     outcome.missingInvariants.length === 1
       ? `the invariant ${missing}, which the database marker does not record`
       : `the invariants ${missing}, which the database marker does not record`;
+  const refusal = inputs.databaseRefused
+    ? databaseRefusedWhy(refusedForDatabaseCapabilities(outcome) ? 'its contract' : 'another space')
+    : undefined;
   return {
     code: 'MIGRATION.SIGN_INVARIANTS_MISSING',
     severity: 'error',
     summary: `Space "${outcome.space}" requires invariants its marker does not record`,
-    why: `The head ref of space "${outcome.space}" requires ${required}. An invariant records that a migration ran, and db sign never runs migrations, so it did not sign this space.`,
-    nextActions: [
-      {
-        kind: 'run-command',
-        label: 'Run the migrations that provide the invariants, then sign again',
-        command: migrate,
-      },
-    ],
+    why: `The head ref of space "${outcome.space}" requires ${required}. An invariant records that a migration ran, and \`db sign\` never runs migrations, so it did not sign this space.${refusal === undefined ? '' : ` ${refusal}`}`,
+    nextActions:
+      refusal === undefined
+        ? [
+            {
+              kind: 'run-command',
+              label: 'Run the migrations that provide the invariants, then sign again',
+              command: inputs.migrate,
+            },
+          ]
+        : [],
     meta: { space: outcome.space, missingInvariants: outcome.missingInvariants },
   };
 }
@@ -645,14 +681,19 @@ export function createDbSignCommand(
           }
         }
         const migrate = cliCommand(cliInvocation(ctx, args.flags.db), 'db migrate');
+        const databaseRefused = databaseRefusedInRun(
+          spaces.map((outcome) => failedSchemaOf(outcome)?.schema.issues ?? []),
+        );
         const verdictDiagnostic = (space: string, schema: VerifyDatabaseSchemaResult) =>
           schemaVerdictDiagnostic({
             result: schema,
             space,
+            databaseRefused,
             nextActions: schemaDriftNextActions({
               verb: 'sign',
               contractRef,
               issues: schema.schema.issues,
+              databaseRefused,
             }),
           });
         const diagnostics: Diagnostic[] = spaces.flatMap((outcome) => {
@@ -663,7 +704,7 @@ export function createDbSignCommand(
               return [markerConflictDiagnostic(outcome, rerun)];
             case 'missing-invariants':
               return [
-                missingInvariantsDiagnostic(outcome, migrate),
+                missingInvariantsDiagnostic(outcome, { migrate, databaseRefused }),
                 ...(outcome.schema === undefined
                   ? []
                   : [verdictDiagnostic(outcome.space, outcome.schema)]),
@@ -678,7 +719,10 @@ export function createDbSignCommand(
               errorSignRefsNotWritten({
                 signedSpaces: spaces.filter(isSigned).map((outcome) => outcome.space),
                 failedSpaces: spaces
-                  .filter((outcome) => outcome.status === 'failed')
+                  .filter((outcome) => outcome.status === 'failed' && failsSchema(outcome))
+                  .map((outcome) => outcome.space),
+                lackingSpaces: spaces
+                  .filter(refusedForDatabaseCapabilities)
                   .map((outcome) => outcome.space),
                 conflictSpaces: spaces
                   .filter((outcome) => outcome.status === 'conflict')
@@ -696,7 +740,7 @@ export function createDbSignCommand(
                 })),
                 advancedRefs: advanced.map(({ space, name, hash }) => ({ space, name, hash })),
                 rerunCommand: rerun,
-                migrateCommand: migrate,
+                migrateCommand: databaseRefused ? undefined : migrate,
                 diagnostics,
                 cause: unwritten[0]?.cause,
               }),
@@ -735,5 +779,3 @@ export function createDbSignCommand(
     },
   });
 }
-
-export const dbSignCommand = createDbSignCommand();

@@ -139,7 +139,7 @@ function actualSchema(policies: readonly PostgresRlsPolicy[]): PostgresDatabaseS
     },
     roles: [],
     existingSchemas: ['public'],
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 

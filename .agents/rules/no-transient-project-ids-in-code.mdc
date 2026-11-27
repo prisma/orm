@@ -13,7 +13,7 @@ Source code, comments, test names, identifier strings, and hash fixtures must **
 - `projects/<x>/...` paths anywhere in source (incl. JSDoc `@link`s and string literals)
 - Hash fixtures named after IDs (`'tc12-ext-contract'`)
 
-**Allowed (durable):** Linear ticket IDs (`TML-2408`), ADR numbers (`ADR 211`), PR numbers (`PR #494`), permanent doc paths (`docs/...`), durable source paths (`packages/...`, `test/...`, `examples/...`).
+**Allowed (durable; in an ADR see `adr-writing.mdc`):** Linear ticket IDs (`TML-2408`), ADR numbers, PR numbers (`PR #494`), permanent doc paths (`docs/...`), durable source paths (`packages/...`, `test/...`, `examples/...`).
 
 ## How to comply
 

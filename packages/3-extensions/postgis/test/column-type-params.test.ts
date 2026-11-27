@@ -1,21 +1,24 @@
 import type { ColumnTypeDescriptor } from '@internal/framework-components/codec';
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { pgGeometryColumn } from '../src/core/codecs';
 import { geometry } from '../src/exports/column-types';
 import postgis from '../src/exports/pack';
 
 function buildWithLocation(descriptor: ColumnTypeDescriptor) {
-  return defineContract({ extensions: { postgis } }, ({ field, model, gen, type }) => ({
-    models: {
-      Place: model('Place', {
-        fields: {
-          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-          location: field.column(descriptor),
-        },
-      }),
-    },
-  }));
+  return defineContract(
+    { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { postgis } },
+    ({ field, model, gen, type }) => ({
+      models: {
+        Place: model('Place', {
+          fields: {
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+            location: field.column(descriptor),
+          },
+        }),
+      },
+    }),
+  );
 }
 
 describe('geometry column type parameters', () => {

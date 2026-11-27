@@ -116,7 +116,7 @@ function buildLiveSchema(): PostgresDatabaseSchemaNode {
     },
     roles: [],
     existingSchemas: ['public'],
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 
@@ -227,7 +227,7 @@ function buildLiveSchemaWithCrossNamespaceOrphan(): PostgresDatabaseSchemaNode {
     },
     roles: [],
     existingSchemas: ['public', 'tenant_b'],
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 
@@ -359,7 +359,7 @@ describe('Postgres planner ownership consultation', () => {
       },
       roles: [],
       existingSchemas: ['public'],
-      pgVersion: 'unknown',
+      serverVersionNumber: undefined,
     });
 
     const planner = createPostgresMigrationPlanner(stubLowerer);

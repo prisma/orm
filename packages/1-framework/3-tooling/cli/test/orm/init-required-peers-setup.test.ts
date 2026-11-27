@@ -79,9 +79,19 @@ describe('the list the printed Prisma 6 setup names', () => {
       list: {
         facade: `@prisma/orm-mongo@${VERSION}`,
         packages: [
-          { name: '@prisma/orm-family-mongo', version: VERSION, outcome: 'to-install' },
-          { name: '@prisma/orm-framework', version: VERSION, outcome: 'to-install' },
-          { name: 'mongodb', version: '^7', outcome: 'to-install' },
+          {
+            name: '@prisma/orm-family-mongo',
+            line: VERSION,
+            requirement: VERSION,
+            outcome: 'to-install',
+          },
+          {
+            name: '@prisma/orm-framework',
+            line: VERSION,
+            requirement: VERSION,
+            outcome: 'to-install',
+          },
+          { name: 'mongodb', line: '^7', requirement: '^7', outcome: 'to-install' },
         ],
         unread: [],
         warnings: [],
@@ -111,8 +121,18 @@ describe('the list the printed Prisma 6 setup names', () => {
     )('@prisma/orm-mongo');
 
     expect(list.packages).toEqual([
-      { name: '@prisma/orm-framework', version: VERSION, outcome: 'to-install' },
-      { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'to-install' },
+      {
+        name: '@prisma/orm-framework',
+        line: VERSION,
+        requirement: VERSION,
+        outcome: 'to-install',
+      },
+      {
+        name: 'temporal-polyfill',
+        line: '^1.0.8',
+        requirement: '^1.0.8',
+        outcome: 'to-install',
+      },
     ]);
   });
 
@@ -223,7 +243,7 @@ describe('whether a package the project lists is at the version asked for', () =
   function outcomeFor(line: string, installed: string | undefined) {
     return resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsFacadeLine: false,
+      facadeLine: 'report',
       installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', line]]),
       installedVersion: () => installed,
@@ -262,14 +282,14 @@ describe('whether a package the project lists is at the version asked for', () =
     ['a dist-tag with the version installed', 'latest', VERSION, 'already-listed'],
   ])('decides %s', async (_case, line, installed, outcome) => {
     expect(await outcomeFor(line, installed)).toMatchObject({
-      packages: [{ name: '@prisma/orm-framework', version: VERSION, outcome }],
+      packages: [{ name: '@prisma/orm-framework', line: VERSION, outcome }],
     });
   });
 
   it('counts a caret line init wrote for one release candidate once the next is installed and asked for', async () => {
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsFacadeLine: false,
+      facadeLine: 'report',
       installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', '^8.0.0-rc.26']]),
       installedVersion: () => '8.0.0-rc.27',
@@ -282,7 +302,12 @@ describe('whether a package the project lists is at the version asked for', () =
 
     expect(resolved).toMatchObject({
       packages: [
-        { name: '@prisma/orm-framework', version: '8.0.0-rc.27', outcome: 'already-listed' },
+        {
+          name: '@prisma/orm-framework',
+          line: '8.0.0-rc.27',
+          requirement: '8.0.0-rc.27',
+          outcome: 'already-listed',
+        },
       ],
       warnings: [],
     });
@@ -321,7 +346,7 @@ describe('a package installed at a version other than the one asked for', () => 
     let frameworkVersion = '8.0.0';
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsFacadeLine: false,
+      facadeLine: 'report',
       installedElsewhere: new Set(),
       declared: () => new Map(),
       installedVersion: () => undefined,
@@ -347,8 +372,18 @@ describe('a package installed at a version other than the one asked for', () => 
       resolved: {
         facade: `@prisma/orm-postgres@${VERSION}`,
         packages: [
-          { name: '@prisma/orm-framework', version: VERSION, outcome: 'installed' },
-          { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
+          {
+            name: '@prisma/orm-framework',
+            line: VERSION,
+            requirement: VERSION,
+            outcome: 'installed',
+          },
+          {
+            name: 'temporal-polyfill',
+            line: '^1.0.8',
+            requirement: '^1.0.8',
+            outcome: 'installed',
+          },
         ],
         unread: [],
         warnings: [],
@@ -364,7 +399,7 @@ describe('the packages init installs in a round', () => {
     let frameworkPeers = new Map<string, string>();
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsFacadeLine: false,
+      facadeLine: 'report',
       installedElsewhere: new Set(),
       declared: () => new Map(),
       installedVersion: () => undefined,
@@ -384,10 +419,204 @@ describe('the packages init installs in a round', () => {
       installs,
     }).toEqual({
       packages: [
-        { name: '@prisma/orm-framework', version: '~8.1.0', outcome: 'installed' },
-        { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
+        {
+          name: '@prisma/orm-framework',
+          line: '^8.1.0',
+          requirement: '~8.1.0',
+          outcome: 'installed',
+        },
+        {
+          name: 'temporal-polyfill',
+          line: '^1.0.8',
+          requirement: '^1.0.8',
+          outcome: 'installed',
+        },
       ],
-      installs: [['@prisma/orm-framework@~8.1.0'], ['temporal-polyfill@^1.0.8']],
+      installs: [['@prisma/orm-framework@^8.1.0'], ['temporal-polyfill@^1.0.8']],
+    });
+  });
+});
+
+describe('the lines init writes for each line of releases', () => {
+  async function resolveFor(
+    targetVersion: string,
+    peers: Record<string, string>,
+    declared: Record<string, string> = {},
+    facadeLine: 'write' | 'keep' = 'write',
+  ) {
+    const installs: (readonly string[])[] = [];
+    const resolved = await resolveRequiredPeers({
+      packageName: '@prisma/orm-mysql',
+      facadeLine,
+      installedElsewhere: new Set(),
+      declared: () => new Map(Object.entries(declared)),
+      installedVersion: () => undefined,
+      install: async (specifiers) => {
+        installs.push(specifiers);
+        return undefined;
+      },
+      read: async (name) =>
+        name === '@prisma/orm-mysql'
+          ? { version: targetVersion, peers: new Map(Object.entries(peers)) }
+          : { version: undefined, peers: new Map() },
+    });
+    return { resolved, installs };
+  }
+
+  it('writes the exact versions on the release candidates', async () => {
+    expect(
+      await resolveFor('8.0.0-rc.27', {
+        '@prisma/orm-framework': '8.0.0-rc.27',
+        'temporal-polyfill': '^1.0.8',
+      }),
+    ).toEqual({
+      resolved: {
+        facade: '@prisma/orm-mysql@8.0.0-rc.27',
+        packages: [
+          {
+            name: '@prisma/orm-framework',
+            line: '8.0.0-rc.27',
+            requirement: '8.0.0-rc.27',
+            outcome: 'installed',
+          },
+          {
+            name: 'temporal-polyfill',
+            line: '^1.0.8',
+            requirement: '^1.0.8',
+            outcome: 'installed',
+          },
+        ],
+        unread: [],
+        warnings: [],
+      },
+      installs: [
+        [
+          '@prisma/orm-mysql@8.0.0-rc.27',
+          '@prisma/orm-framework@8.0.0-rc.27',
+          'temporal-polyfill@^1.0.8',
+        ],
+      ],
+    });
+  });
+
+  it('writes the exact versions for a development build', async () => {
+    const { installs } = await resolveFor('8.1.0-dev.4', {
+      '@prisma/orm-framework': '8.1.0-dev.4',
+    });
+
+    expect(installs).toEqual([
+      ['@prisma/orm-mysql@8.1.0-dev.4', '@prisma/orm-framework@8.1.0-dev.4'],
+    ]);
+  });
+
+  it('writes a caret on every line when it adds a GA facade', async () => {
+    const { resolved, installs } = await resolveFor('8.1.2', {
+      '@prisma/orm-framework': '~8.1.0',
+      'temporal-polyfill': '^1.0.8',
+    });
+
+    expect({ resolved, installs }).toMatchObject({
+      resolved: {
+        facade: '@prisma/orm-mysql@^8.1.0',
+        packages: [
+          {
+            name: '@prisma/orm-framework',
+            line: '^8.1.0',
+            requirement: '~8.1.0',
+            outcome: 'installed',
+          },
+          {
+            name: 'temporal-polyfill',
+            line: '^1.0.8',
+            requirement: '^1.0.8',
+            outcome: 'installed',
+          },
+        ],
+      },
+      installs: [
+        ['@prisma/orm-mysql@^8.1.0', '@prisma/orm-framework@^8.1.0', 'temporal-polyfill@^1.0.8'],
+      ],
+    });
+  });
+
+  it('leaves the facade line the project lists and writes each peer at the range the facade declares', async () => {
+    const { resolved, installs } = await resolveFor(
+      '8.1.2',
+      { '@prisma/orm-framework': '~8.1.0' },
+      { '@prisma/orm-mysql': '8.1.2' },
+      'keep',
+    );
+
+    expect({ resolved, installs }).toMatchObject({
+      resolved: {
+        facade: '@prisma/orm-mysql@8.1.2',
+        packages: [
+          {
+            name: '@prisma/orm-framework',
+            line: '~8.1.0',
+            requirement: '~8.1.0',
+            outcome: 'installed',
+          },
+        ],
+      },
+      installs: [['@prisma/orm-framework@~8.1.0']],
+    });
+  });
+
+  it('writes a tilde on every line for a facade at a pre-release', async () => {
+    const { resolved, installs } = await resolveFor('8.1.0-ea.1', {
+      '@prisma/orm-framework': '~8.1.0',
+      '@prisma/orm-target-mysql': '~8.1.0-ea.0',
+    });
+
+    expect({ resolved, installs }).toMatchObject({
+      resolved: {
+        facade: '@prisma/orm-mysql@~8.1.0-ea.1',
+        packages: [
+          {
+            name: '@prisma/orm-framework',
+            line: '~8.1.0',
+            requirement: '~8.1.0',
+            outcome: 'installed',
+          },
+          {
+            name: '@prisma/orm-target-mysql',
+            line: '~8.1.0-ea.0',
+            requirement: '~8.1.0-ea.0',
+            outcome: 'installed',
+          },
+        ],
+      },
+      installs: [
+        [
+          '@prisma/orm-mysql@~8.1.0-ea.1',
+          '@prisma/orm-framework@~8.1.0',
+          '@prisma/orm-target-mysql@~8.1.0-ea.0',
+        ],
+      ],
+    });
+  });
+
+  it('counts the line init would write as listed, and leaves the facade line that already reads it', async () => {
+    const { resolved, installs } = await resolveFor(
+      '8.1.2',
+      { '@prisma/orm-framework': '~8.1.0' },
+      { '@prisma/orm-mysql': '^8.1.0', '@prisma/orm-framework': '^8.1.0' },
+    );
+
+    expect({ resolved, installs }).toMatchObject({
+      resolved: {
+        packages: [
+          {
+            name: '@prisma/orm-framework',
+            line: '^8.1.0',
+            requirement: '~8.1.0',
+            outcome: 'already-listed',
+          },
+        ],
+        warnings: [],
+      },
+      installs: [],
     });
   });
 });
@@ -396,7 +625,7 @@ describe('a required version written with a v prefix', () => {
   it('stands for the same version listed and installed without it', async () => {
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsFacadeLine: false,
+      facadeLine: 'report',
       installedElsewhere: new Set(),
       declared: () => new Map([['@prisma/orm-framework', VERSION]]),
       installedVersion: () => VERSION,
@@ -418,7 +647,7 @@ describe('a required peer that is not a Prisma ORM package, listed at another ex
   it('is left at that version with a warning that says to change the line', async () => {
     const resolved = await resolveRequiredPeers({
       packageName: '@prisma/orm-postgres',
-      ownsFacadeLine: false,
+      facadeLine: 'report',
       installedElsewhere: new Set(),
       declared: () => new Map([['left-pad', '1.2.0']]),
       installedVersion: () => '1.2.0',
@@ -434,7 +663,12 @@ describe('a required peer that is not a Prisma ORM package, listed at another ex
 
     expect(resolved).toMatchObject({
       packages: expect.arrayContaining([
-        { name: 'left-pad', version: '1.3.0', outcome: 'left-at-another-version' },
+        {
+          name: 'left-pad',
+          line: '1.3.0',
+          requirement: '1.3.0',
+          outcome: 'left-at-another-version',
+        },
       ]),
       warnings: [
         'package.json lists left-pad at 1.2.0, installed at 1.2.0, but @prisma/orm-postgres needs 1.3.0; init left it as it is. Change the line to 1.3.0 and install.',

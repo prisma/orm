@@ -32,7 +32,6 @@ sequenceDiagram
 **Date:** 2026-02-15  
 **Authors:** Prisma Next Team  
 **Domain:** SQL family, contract types, lanes, runtime DX  
-**Spec:** [agent-os/specs/2026-02-15-runtime-dx-ir-shaped-contract-mappings-on-executioncontext/spec.md](../../../agent-os/specs/2026-02-15-runtime-dx-ir-shaped-contract-mappings-on-executioncontext/spec.md)
 
 ## Context
 

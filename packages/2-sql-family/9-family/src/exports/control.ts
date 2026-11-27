@@ -22,6 +22,10 @@ export type {
 } from '../core/control-target-descriptor';
 export type { SqlDefaultFunctionName } from '../core/default-functions';
 export { sqlDefaultFunctions } from '../core/default-functions';
+export {
+  type SqlDatabaseCapabilitiesNotProvidedFn,
+  VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+} from '../core/diff/database-capabilities-not-provided';
 export { acceptedByDataType } from '../core/migrations/accepted-by-data-type';
 export type {
   ContractToSchemaIROptions,

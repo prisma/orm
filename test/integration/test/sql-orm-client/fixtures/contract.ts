@@ -13,6 +13,8 @@ import {
   gen,
   model,
   now,
+  postgres18,
+  postgresDriver,
   rel,
   type,
 } from '@internal/postgres/contract-builder';
@@ -169,6 +171,7 @@ const User = UserBase.relations({
 }));
 
 export const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   extensions: { pgvector },
   models: {
     User,

@@ -6,13 +6,18 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import { createControlClient, enrichContract } from '@internal/cli/control-api';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import citext from '@internal/extension-citext/control';
 import citextRuntime from '@internal/extension-citext/runtime';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import { materialiseMigrationPackage } from '@internal/migration-tools/io';
 import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
 import postgresFacade from '@internal/postgres/runtime';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -59,7 +64,7 @@ function createClient() {
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
-    driver: postgresDriver,
+    driver: postgresDriverDescriptor,
     extensions: [citext],
   });
 }
@@ -84,6 +89,7 @@ describe('a citext column applied with db init', () => {
     writeFileSync(schemaPath, `// use prisma-8\n\n${schemaText}`, 'utf-8');
     process.chdir(testDir);
     const contractConfig = prismaContract('./schema.prisma', {
+      capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
       target: postgresPackRef,
       createNamespace: postgresCreateNamespace,
     });

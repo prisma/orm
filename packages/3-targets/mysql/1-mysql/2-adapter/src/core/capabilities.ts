@@ -9,5 +9,6 @@ export const mysqlAdapterCapabilities = Object.freeze({
     jsonAgg: true,
     outerReferencesInDerivedTables: true,
     jsonAggWithoutTruncation: true,
+    interactiveTransactions: true,
   },
 } as const);

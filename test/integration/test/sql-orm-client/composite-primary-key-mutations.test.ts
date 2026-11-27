@@ -1,13 +1,21 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { Contract } from '@internal/contract/types';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import { authorSqlContractFromPsl } from '../scalar-lists/psl-list-authoring';
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
@@ -40,13 +48,16 @@ const Account = AccountBase.relations({
   notes: rel.hasMany(() => Note, { by: ['tenantId', 'accountId'] }),
 }).sql({ table: 'cpk_accounts' });
 
-const accountsContract = defineContract({ models: { Account, Note } });
+const accountsContract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Account, Note },
+});
 function accountsContext(strategy: IncludeStrategy) {
   return createExecutionContext({
-    contract: accountsContract,
+    contract: withIncludeStrategy(accountsContract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
     }),
   });
 }
@@ -111,9 +122,9 @@ async function withVehicles(
   ) => Promise<void>,
 ): Promise<void> {
   const contract = await authorVehiclesContract();
-  const context = createExecutionContext({
-    contract,
-    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapterFor('join') }),
+  const context = createExecutionContext<Contract<SqlStorage>>({
+    contract: withIncludeStrategy(contract, 'join'),
+    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
   });
   await withPushedContractRuntime(contract, async (runtime) => {
     await fn(new Collection({ runtime, context }, 'Vehicle', { namespaceId: 'public' }), runtime);

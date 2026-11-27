@@ -2,7 +2,7 @@
 
 The locked visual vocabulary for the Tier-3 `migration graph` / `list` / `status`
 renderer: the glyph alphabet, lane/column layout, and the worked picture for each
-fixture topology. Companion to the [architecture](./12.%20Migration%20Graph%20Rendering.md);
+fixture topology. Companion to the [architecture](./migration-graph-rendering.md);
 this file is the glyph/layout contract, that file is the model behind it. The
 pictures use real fixture hashes/names.
 

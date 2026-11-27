@@ -26,15 +26,20 @@ Pick the entry point that matches your deployment lifecycle. A database connecti
 ```typescript
 // prisma.config.ts
 import { definePrismaConfig } from 'prisma/config';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './prisma/contract.prisma',
+    contract: {
+      path: './prisma/contract.prisma',
+      requiredCapabilities: [...postgres18, ...postgresDriver],
+    },
     db: { connection: process.env['DATABASE_URL']! },
   }),
 });
 ```
+
+`requiredCapabilities` is the list of every capability the contract requires, each as its key, such as `sql.returning`. It must not be empty, and is all the emitted contract requires: nothing is added to it. A Prisma schema contract written before the list existed, as a bare path (`contract: './prisma/contract.prisma'`) or an entry without it, requires the newest version's list and the driver's, which `prisma orm init` writes, and the commands that load the contract source, `prisma contract emit` and `prisma contract print` among them, warn with `CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED`, showing the entry to write and its import. That default is a stopgap: Prisma 8.0 removes it and requires the list. `postgres15`, `postgres16`, `postgres17` and `postgres18` list what each supported PostgreSQL version provides, built from the target's table, and `postgresDriver` what the connection of this package's driver provides (`sql.interactiveTransactions`); `@prisma/orm-postgres/config` and `@prisma/orm-postgres/contract-builder` export them. Spread the oldest version the database runs and the driver's, and filter out or leave out what the application does not use. A TypeScript contract (`contract: './prisma/contract.ts'`) lists them in `defineContract` instead, and the config refuses them in its entry. The facade gives the list to the contract source; the target, adapter and driver in the config add nothing at emit. A contract source the config builds itself, such as `prismaContract(...)`, takes `postgresContractCapabilities([...postgres18, ...postgresDriver])` from `@prisma/orm-postgres/config` as its `capabilities`. Passed to this `defineConfig` without them, until Prisma 8.0, it is read with the same default, so a scalar list or `@@check` works, and it gets the same warning. In a config built with the core `defineConfig`, which names the target, adapter and driver itself, it gets no default: after the next emit its contract lists no capabilities, so the features that need a capability, such as `transaction()`, are refused, includes still work with one query per relation, and a schema with a scalar list or `@@check` does not emit. Add `capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])` to such a source before emitting. `postgresContractCapabilities` has no default.
 
 The default export must be the value `definePrismaConfig` returns, with the ORM settings nested under `orm`; the CLI rejects a bare `defineConfig` result with `CONFIG.VERSION_MARKER_MISSING`. (Inside this repository the same two imports are `@prisma/cli-engine` and `@internal/postgres/config`; see the contributor note under `prisma7Schema` below.)
 
@@ -89,7 +94,12 @@ Simplified `defineConfig` that pre-wires all Postgres internals (family, target,
 // prisma.config.ts
 import { definePrismaConfig } from 'prisma/config';
 import { prismaContract } from '@prisma/orm-family-sql/contract-psl/provider';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import {
+  defineConfig as ormConfig,
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@prisma/orm-postgres/config';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@prisma/orm-postgres/target/codec-ids';
 import postgresPack from '@prisma/orm-postgres/target/pack';
 import { postgresCreateNamespace } from '@prisma/orm-postgres/target/types';
@@ -100,6 +110,7 @@ export default definePrismaConfig({
       target: postgresPack,
       createNamespace: postgresCreateNamespace,
       enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
+      capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
       defaultControlPolicy: 'external',
     }),
     db: { connection: process.env['DATABASE_URL']! },
@@ -109,20 +120,27 @@ export default definePrismaConfig({
 
 `contract emit` then writes `prisma/contract.json` and `prisma/contract.d.ts`.
 
-#### `prisma7Schema(path)`: adopt a Prisma 7 schema during the transition
+#### `prisma7Schema(path, { requiredCapabilities })`: adopt a Prisma 7 schema during the transition
 
-`prisma7Schema` reads a Prisma 7 `schema.prisma` as the contract source, so a project that still runs Prisma 7 can adopt Prisma 8 without a second schema file. It accepts one file or a directory of `.prisma` files (every file under it, nested directories included, as Prisma 7 reads a schema directory) and produces the same `ContractConfig` as a `.prisma` path does. `contract emit` writes `contract.json` and `contract.d.ts` into the directory that holds the schema file or the schema directory, whatever the file is named: `prisma7Schema('prisma/schema.prisma')` and `prisma7Schema('prisma/schema')` both write `prisma/contract.json` and `prisma/contract.d.ts`, never inside the schema directory. This differs from a Prisma 8 PSL source, which defaults to `<schema name>.json` beside the schema (`prisma/schema.prisma` writes `prisma/schema.json`). The `output` directory on `defineConfig` sets either explicitly, as for every other source: with `output: 'generated/prisma8'`, `contract emit` writes `generated/prisma8/contract.json` and `generated/prisma8/contract.d.ts`.
+`prisma7Schema` reads a Prisma 7 `schema.prisma` as the contract source, so a project that still runs Prisma 7 can adopt Prisma 8 without a second schema file. It accepts one file or a directory of `.prisma` files (every file under it, nested directories included, as Prisma 7 reads a schema directory) and produces the same `ContractConfig` as a `.prisma` path does. `contract emit` writes `contract.json` and `contract.d.ts` into the directory that holds the schema file or the schema directory, whatever the file is named: `prisma7Schema('prisma/schema.prisma')` and `prisma7Schema('prisma/schema')` both write `prisma/contract.json` and `prisma/contract.d.ts`, never inside the schema directory. The second argument lists the capabilities the contract requires, `requiredCapabilities`, as the contract entry `{ path, requiredCapabilities }` does for a Prisma 8 schema; a call without it gets the same default and the same warning from `prisma contract emit`, until Prisma 8.0. This differs from a Prisma 8 PSL source, which defaults to `<schema name>.json` beside the schema (`prisma/schema.prisma` writes `prisma/schema.json`). The `output` directory on `defineConfig` sets either explicitly, as for every other source: with `output: 'generated/prisma8'`, `contract emit` writes `generated/prisma8/contract.json` and `generated/prisma8/contract.d.ts`.
 
 `prisma contract format` treats this source as PSL: when `prisma7Schema` names one file, the command rewrites that file in place with the Prisma 8 formatter. To keep Prisma 7's own formatting, do not run `prisma contract format`; format the schema with Prisma 7's `prisma format` instead.
 
 ```typescript
 // prisma.config.ts
 import { definePrismaConfig } from 'prisma/config';
-import { defineConfig as ormConfig, prisma7Schema } from '@prisma/orm-postgres/config';
+import {
+  defineConfig as ormConfig,
+  postgres18,
+  postgresDriver,
+  prisma7Schema,
+} from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: prisma7Schema('prisma/schema.prisma'),
+    contract: prisma7Schema('prisma/schema.prisma', {
+      requiredCapabilities: [...postgres18, ...postgresDriver],
+    }),
     db: { connection: process.env['DATABASE_URL']! },
   }),
 });
@@ -139,7 +157,7 @@ What the project needs around that file:
 
 During the transition Prisma 7 keeps owning the database and its migrations. Prisma 8 reads the schema and verifies it against what Prisma 7 built; it does not migrate. After every Prisma 7 migration, run `prisma contract emit` and then `prisma db sign` so the recorded contract matches the database again; `prisma db verify` reports nothing when they match. When `db verify` or `db sign` finds the database behind the contract, apply the change with a Prisma 7 migration rather than the `prisma db update` the CLI suggests, then sign again. A database last migrated on Prisma 5 or earlier must migrate on Prisma 7 first: since Prisma 6.0.0 the implicit many-to-many junction tables carry a primary key on `(A, B)` instead of a unique index, and the source describes that shape.
 
-When the project is ready to stop reading the Prisma 7 file, `prisma contract print --output <path>` writes the Prisma 8 PSL that produces the same contract, with a header naming the schema it came from; without `--output` it prints the PSL instead. Point `contract` at the written file, run `prisma contract emit`, then take migration ownership: `prisma migration plan --name baseline`, `prisma db sign`, and `prisma migration ref set db <timestamp>_baseline`. Without an explicit `output`, `defineConfig` names the emitted files after the contract path it is given, so a written file with another name than the emitted files (for example `contract: './prisma/app.prisma'` where `contract emit` wrote `prisma/contract.json`) moves them to `prisma/app.json` and `prisma/app.d.ts` and leaves the old files on disk; `contract print` names both pairs in its next step when that happens. The command needs no database connection, and refuses rather than approximating, so the contract before and after the switch is the same one. Not every Prisma 7 schema prints yet: a schema that declares one model name in two `@@schema` namespaces exits `2` with `CONTRACT.PRINT_UNSUPPORTED` and prints and writes nothing.
+When the project is ready to stop reading the Prisma 7 file, `prisma contract print --output <path>` writes the Prisma 8 PSL that produces the same contract, with a header naming the schema it came from; without `--output` it prints the PSL instead. Point `contract` at the written file, listing its required capabilities as for any Prisma schema contract (`contract: { path: './prisma/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] }`), run `prisma contract emit`, then take migration ownership: `prisma migration plan --name baseline`, `prisma db sign`, and `prisma migration ref set db <timestamp>_baseline`. Without an explicit `output`, `defineConfig` names the emitted files after the contract path it is given, so a written file with another name than the emitted files (for example `contract: { path: './prisma/app.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] }` where `contract emit` wrote `prisma/contract.json`) moves them to `prisma/app.json` and `prisma/app.d.ts` and leaves the old files on disk; `contract print` names both pairs in its next step when that happens. The command needs no database connection, and refuses rather than approximating, so the contract before and after the switch is the same one. Not every Prisma 7 schema prints yet: a schema that declares one model name in two `@@schema` namespaces exits `2` with `CONTRACT.PRINT_UNSUPPORTED` and prints and writes nothing.
 
 A construct is either described exactly or refused. There is no approximate lowering and no silent change. The source reads scalars and `@db.*` native types, `@map` and `@@map`, `@@schema`, enums as native enum types (with member `@map`), `@ignore` and `@@ignore`, `Unsupported("...")` fields, defaults and ORM-side generators, `@updatedAt`, `@id`, `@@id`, `@unique`, `@@unique`, `@@index`, explicit and implicit relations, and the datasource `extensions` list. Everything else is a hard error naming the file, the line, and what to change: views, `@db.Citext` without the citext pack, `relationMode = "prisma"`, and the handful of shapes in the table below that Prisma 8 cannot yet express. Prisma 7 still owns the database, so every edit below is a Prisma 7 schema change that Prisma 7's next migration applies; the table says what that migration does where it does anything.
 
@@ -216,7 +234,7 @@ Reads are buffered by default. Pass `cursor` (typed `PostgresCursorOptions`, `{ 
 
 `supabase()` from `@internal/extension-supabase/runtime` takes the same options, `cursor` and `poolOptions` included, and the `url`, `pg` and `binding` inputs except a `pg.Client`.
 
-Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-postgres/family-runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING` and `CONTRACT.MARKER_MISMATCH` from the client's first use of the database (its first query, connection or transaction), the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'` (see *Running plans and rendering SQL*). Without `log`, the runtime drops these events. `postgresServerless()` accepts the same option.
+Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-postgres/family-runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING`, `CONTRACT.MARKER_MISMATCH`, `CONTRACT.MARKER_READ_FAILED` and `CONTRACT.MARKER_ROW_CORRUPT` from the client's first use of the database (its first query, connection or transaction), the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'` (see *Running plans and rendering SQL*). Without `log`, the runtime drops these events. `postgresServerless()` accepts the same option.
 
 ### Running plans and rendering SQL
 
@@ -273,13 +291,13 @@ Pass a compatible runtime, connection or transaction explicitly to `query(target
 
 ### `@internal/postgres/contract-builder`
 
-Re-exports the TypeScript contract authoring DSL (`defineContract`, `field`, `model`, `rel`, ...) so a generated `prisma/contract.ts` can author its contract using only this facade package. The `defineContract` export is a Postgres-specific wrapper that pre-binds `family` and `target` — callers do not pass those fields:
+Re-exports the TypeScript contract authoring DSL (`defineContract`, `field`, `model`, `rel`, ...) so a generated `prisma/contract.ts` can author its contract using only this facade package. The `defineContract` export is a Postgres-specific wrapper that pre-binds `family` and `target` — callers do not pass those fields. It takes `requiredCapabilities`, the list of every capability the contract requires, as the config's contract entry does for a Prisma schema. A contract that leaves it out requires the newest version's list and the driver's, and `prisma contract emit` warns; building the contract anywhere else prints nothing. That default is a stopgap, removed by Prisma 8.0. A list spread from `postgres18` and `postgresDriver`, filtered by comparison, or written out keeps each key in the contract's type:
 
 ```typescript
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract(
-  { extensions: {} },
+  { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: {} },
   ({ field: f, model: m, gen, type }) => ({
     models: {
       User: m('User', { fields: { id: f.column(type.Uuid()).id().onCreate(gen.uuid()) } }),
@@ -331,7 +349,7 @@ Each `connect()` call creates a fresh `pg.Client`, connects it to the database, 
 
 ### `@internal/postgres/init`
 
-The init contribution `prisma orm init` loads after installing the package: its default export is an `InitContribution` (from `@internal/cli/init-contribution`) holding the PSL and TypeScript starter contracts, `db.ts`, the `.env.example` body, the quick reference and README (the `init-*.md` files in `src/init/`, copied into `dist/`), the quick reference for a project that keeps its Prisma 7 schema (init writes that project's config itself, around `@internal/postgres/config`, whose `prisma7Schema` export is what tells init the package takes a Prisma 7 schema), the minimum server version from `@internal/target-postgres/server-version`, and the `--probe-db` probe, which reads `SELECT version()` through `pg` and answers `version-unreadable` when the row holds no PostgreSQL version. Every module it names, such as `prisma.config.ts`'s `defineConfig` import, is this package's own published name. It imports no framework code that runs. Published as `@prisma/orm-postgres/init`.
+The init contribution `prisma orm init` loads after installing the package: its default export is an `InitContribution` (from `@internal/cli/init-contribution`) holding the PSL and TypeScript starter contracts, `db.ts`, the `.env.example` body, the quick reference and README (the `init-*.md` files in `src/init/`, copied into `dist/`), the quick reference for a project that keeps its Prisma 7 schema (init writes that project's config itself, around `@internal/postgres/config`, whose `prisma7Schema` export is what tells init the package takes a Prisma 7 schema), the minimum server version from `@internal/target-postgres/server-version-range` (which, unlike `./server-version`, imports nothing), the config's `contract:` entry as a `TsExpression` node (`src/init/contract-entry.ts`: `{ path, requiredCapabilities: [...postgres18, ...postgresDriver] }` for a Prisma schema contract, and `prisma7Schema(path, { requiredCapabilities: [...postgres18, ...postgresDriver] })` for a Prisma 7 schema, both for the newest version the target's table knows, with the imports they need; its `contractValue(configModule)` builds the value the text computes from the exports of `@internal/postgres/config` that `init` has loaded, by the names the text imports, which `init` runs to check a Prisma 7 schema, and throws an `InternalError` naming any export the module lacks; the list `[...postgres18, ...postgresDriver]` is one node, `RequiredCapabilitiesList` (`src/contract/required-capabilities-list.ts`), that the entries, the TypeScript starter contract and the emit warning for a contract that lists none share; both quick references render the same node; a TypeScript contract's entry is its path, because the starter contract lists its required capabilities in `defineContract`), and the `--probe-db` probe, which reads `SELECT version()` through `pg` and answers `version-unreadable` when the row holds no PostgreSQL version. Every module it names, such as `prisma.config.ts`'s `defineConfig` import, is this package's own published name. The only framework code it loads when it is imported is `@internal/ts-render`, for the node, the `@internal/utils/internal-error`, `@internal/utils/structured-error` and `@internal/contract/hashing-utils` modules it imports, and `InternalError`; `test/integration/test/cli.init-facade-imports.e2e.test.ts` checks that list. The CLI recognises the node by its methods and an error by its shape, never by class. Published as `@prisma/orm-postgres/init`.
 
 ### `@internal/postgres/static`
 

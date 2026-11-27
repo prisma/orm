@@ -1,6 +1,6 @@
 import type { ColumnDefault } from '@internal/contract/types';
 import type { CodecRef, DataType, DataTypeParams } from '@internal/framework-components/codec';
-import type { DiffableNode, MismatchExplanation } from '@internal/framework-components/control';
+import type { DiffableNode, NodeMismatchExplanation } from '@internal/framework-components/control';
 import { freezeNode } from '@internal/framework-components/ir';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { blindCast } from '@internal/utils/casts';
@@ -231,7 +231,7 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
   }
 
   /** Why `actual` is not this column: the two types as written and reported, or the nullability of each. The two sides always hold different values. */
-  explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined {
+  explainMismatch(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined {
     if (actual === undefined) return undefined;
     const node = blindCast<
       SqlSchemaIRNode,
@@ -309,7 +309,7 @@ function shownTypeOf(column: SqlColumnIR): string {
   return text.includes('"') ? text : `"${text}"`;
 }
 
-function differs(text: string): MismatchExplanation {
+function differs(text: string): NodeMismatchExplanation {
   return { text, cause: 'differs' };
 }
 

@@ -247,11 +247,10 @@ All three are domain facts, stated on the model itself, self-describing.
 
 ### Open questions
 
-- ~~**Nested ownership.**~~ **Resolved.** An owned model can itself own other models (e.g., User → Order → LineItem, where Order is `owner: "User"` and LineItem is `owner: "Order"`). Each owned model in the chain uses `storage.relations` to map where its children go within its subdocument. Self-referential ownership (Comment owns Comment) is correctly rejected as circular — the anchor must be a non-self owner. See [design-questions.md § Q19](../../planning/mongo-target/1-design-docs/design-questions.md#19-self-referential-models).
+- ~~**Nested ownership.**~~ **Resolved.** An owned model can itself own other models (e.g., User → Order → LineItem, where Order is `owner: "User"` and LineItem is `owner: "Order"`). Each owned model in the chain uses `storage.relations` to map where its children go within its subdocument. Self-referential ownership (Comment owns Comment) is correctly rejected as circular — the anchor must be a non-self owner.
 - ~~**Value objects vs owned entities.**~~ **Resolved.** An owned Address with an `_id` is an entity (in `models` with `owner`). An Address without identity is a value object (in `valueObjects`). See [ADR 178 — Value objects in the contract](ADR%20178%20-%20Value%20objects%20in%20the%20contract.md).
 
 ## Related
 
 - [ADR 172 — Contract domain-storage separation](ADR%20172%20-%20Contract%20domain-storage%20separation.md) — domain/storage principle this ADR builds on
 - [ADR 174 — Aggregate roots and relation strategies](ADR%20174%20-%20Aggregate%20roots%20and%20relation%20strategies.md) — superseded relation strategy design
-- [design-questions.md § Q18](../../planning/mongo-target/1-design-docs/design-questions.md) — the discussion that led to this decision

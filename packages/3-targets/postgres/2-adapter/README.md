@@ -201,23 +201,13 @@ export default defineConfig({
 
 ## Capabilities
 
-The adapter declares the following PostgreSQL capabilities:
+The adapter declares no capabilities: `postgresAdapterCapabilities` is `{}`, exported from `@internal/adapter-postgres/capabilities`. Every PostgreSQL flag today is a fact about the database, so the target declares it, by version, in `postgresCapabilitiesByVersion`. The driver declares `sql.interactiveTransactions`.
 
-- **`orderBy: true`** - Supports ORDER BY clauses
-- **`limit: true`** - Supports LIMIT clauses
-- **`lateral: true`** - Supports LATERAL joins
-- **`jsonAgg: true`** - Supports JSON aggregation functions (`json_agg`)
-- **`returning: true`** - Supports RETURNING clauses for DML operations (INSERT, UPDATE, DELETE)
-- **`sql.enums: true`** - Supports contract-defined enum storage types
+A contract's capabilities are only what its author lists in `requiredCapabilities`; the adapter adds none. The control adapter declares no capabilities either, since it is the adapter that migrates the database, not the one the application runs with.
 
-**Important**: Capabilities must be declared in **both** places:
+The renderer reads the contract's capabilities. A locking clause whose capability the contract does not require fails with `RUNTIME.AST_UNSUPPORTED`.
 
-1. **Adapter descriptor** (`src/exports/control.ts` and `src/exports/runtime.ts`): Capabilities are read during emission and included in the contract
-2. **Runtime adapter code** (`src/core/adapter.ts`): The `defaultCapabilities` constant is used at runtime via `adapter.profile.capabilities`
-
-The capabilities on the descriptor must match the capabilities in code. If they don't match, emitted contracts and runtime capability checks will diverge.
-
-See `docs/reference/capabilities.md` and `docs/architecture docs/subsystems/5. Adapters & Targets.md` for details.
+See [`docs/reference/capabilities.md`](../../../../docs/reference/capabilities.md).
 
 ## JSON Aggregation
 

@@ -59,6 +59,7 @@
     "src"
   ],
   "exports": {
+    "./capabilities": "./dist/capabilities.mjs",
     "./control": "./dist/control.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
