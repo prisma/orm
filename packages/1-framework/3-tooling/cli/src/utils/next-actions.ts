@@ -134,7 +134,11 @@ export function snapshotRewriteAt(head: SnapshotHead, snapshotDirectory: string)
 }
 
 /** The ref that records which contract the configured database is at; moving it by hand makes the next plan start from a contract the database is not at. */
-const DATABASE_REF = 'db';
+export const DATABASE_REF = 'db';
+
+/** What moving a ref other than `db` changes, said wherever advice names `migration ref set` for one. */
+export const REF_MOVE_EFFECT =
+  'The ref then names a different contract, so whatever uses the ref, such as a deploy that migrates a database to it, changes with it';
 
 /**
  * How a contract snapshot this release cannot read is put right: restoring a file edited by hand, the application's upgrade instructions when an earlier release wrote it, writing it again when a command does, and moving each ref that names it other than the `db` ref. An extension's snapshot comes from the extension, so the application's upgrade instructions are not offered for it.
@@ -168,7 +172,7 @@ export function snapshotRepairActions(
       .filter((name) => name !== DATABASE_REF)
       .map((name) =>
         runCommandAction(
-          `Or point the ref "${name}" at a migration whose snapshot this release reads`,
+          `Or point the ref "${name}" at a migration whose snapshot this release reads. ${REF_MOVE_EFFECT}`,
           `{bin} migration ref set ${name} <hash>`,
         ),
       ),

@@ -78,7 +78,8 @@ describe('snapshotRepairActions', () => {
       expect.objectContaining({ kind: 'open-url' }),
       {
         kind: 'run-command',
-        label: 'Or point the ref "production" at a migration whose snapshot this release reads',
+        label:
+          'Or point the ref "production" at a migration whose snapshot this release reads. The ref then names a different contract, so whatever uses the ref, such as a deploy that migrates a database to it, changes with it',
         command: '{bin} migration ref set production <hash>',
       },
     ]);
