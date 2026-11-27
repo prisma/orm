@@ -957,6 +957,7 @@
 ./components/control: function hasPslContractInfer<TFamilyId extends string, TSchemaIR>(instance: ControlFamilyInstance<TFamilyId, TSchemaIR>): instance is ControlFamilyInstance<TFamilyId, TSchemaIR> & PslContractInferCapable<TSchemaIR>
 ./components/control: function hasSchemaSubjectClassifier<TFamilyId extends string, TSchemaIR>(instance: ControlFamilyInstance<TFamilyId, TSchemaIR>): instance is ControlFamilyInstance<TFamilyId, TSchemaIR> & SchemaSubjectClassifierCapable
 ./components/control: function hasSchemaView<TFamilyId extends string, TSchemaIR>(instance: ControlFamilyInstance<TFamilyId, TSchemaIR>): instance is ControlFamilyInstance<TFamilyId, TSchemaIR> & SchemaViewCapable<TSchemaIR>
+./components/control: function isPrismaSpace(spaceId: string): spaceId is typeof PRISMA_SPACE_ID
 ./components/control: function isRenameStatement(statement: ResolvedMigrationStatement): statement is ResolvedRenameStatement
 ./components/control: function isStorageHashHex(storageHash: string): boolean
 ./components/control: function issueLabel(issue: SchemaDiffIssue): string
@@ -2199,6 +2200,7 @@
 ./components: function isNonFiniteText(text: string): boolean
 ./components: function isNumeralText(text: string): boolean
 ./components: function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>>
+./components: function isPrismaSpace(spaceId: string): spaceId is typeof PRISMA_SPACE_ID
 ./components: function isRenameStatement(statement: ResolvedMigrationStatement): statement is ResolvedRenameStatement
 ./components: function isRuntimeError(error: unknown): error is RuntimeErrorEnvelope
 ./components: function isStorageHashHex(storageHash: string): boolean
@@ -4358,6 +4360,7 @@
 ./errors/control: class CliStructuredError, readonly required property severity: 'error' | 'info' | 'warn'
 ./errors/control: class CliStructuredError, required method toEnvelope(): CliErrorEnvelope
 ./errors/control: class CliStructuredError, static required method is(error: unknown): error is CliStructuredError
+./errors/control: const APP_UPGRADE_GUIDES_URL = "https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading/app"
 ./errors/control: function errorConfigEvaluationFailed(configPath: string | undefined, options: { readonly why: string; readonly cause?: unknown; }): CliStructuredError
 ./errors/control: function errorConfigFileNotFound(configPath?: string, options?: { readonly why?: string; }): CliStructuredError
 ./errors/control: function errorConfigValidation(field: string, options?: { readonly why?: string; readonly section?: string; }): CliStructuredError
@@ -4377,6 +4380,7 @@
 ./errors/control: function errorMigrationCliUnknownFlag(options: { readonly flag: string; readonly knownFlags: readonly string[]; }): CliStructuredError
 ./errors/control: function errorMigrationPlanningFailed(options: { readonly conflicts: readonly CliErrorConflict[]; readonly why?: string; }): CliStructuredError & { readonly why: string; }
 ./errors/control: function errorOutputFormatMutex(): CliStructuredError
+./errors/control: function errorPrismaSpaceBehind(options: { readonly why: string; readonly meta: Record<string, unknown>; }): CliStructuredError
 ./errors/control: function errorQueryRunnerFactoryRequired(options?: { readonly why?: string; }): CliStructuredError
 ./errors/control: function errorTargetMigrationNotSupported(options?: { readonly why?: string; }): CliStructuredError
 ./errors/control: function errorUnexpected(message: string, options?: { readonly why?: string; readonly fix?: string; readonly meta?: Record<string, unknown>; readonly cause?: unknown; }): CliStructuredError
@@ -4436,6 +4440,7 @@
 ./errors: class CliStructuredError, readonly required property severity: 'error' | 'info' | 'warn'
 ./errors: class CliStructuredError, required method toEnvelope(): CliErrorEnvelope
 ./errors: class CliStructuredError, static required method is(error: unknown): error is CliStructuredError
+./errors: const APP_UPGRADE_GUIDES_URL = "https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading/app"
 ./errors: function errorConfigEvaluationFailed(configPath: string | undefined, options: { readonly why: string; readonly cause?: unknown; }): CliStructuredError
 ./errors: function errorConfigFileNotFound(configPath?: string, options?: { readonly why?: string; }): CliStructuredError
 ./errors: function errorConfigValidation(field: string, options?: { readonly why?: string; readonly section?: string; }): CliStructuredError
@@ -4467,6 +4472,7 @@
 ./errors: function errorMigrationPlanningFailed(options: { readonly conflicts: readonly CliErrorConflict[]; readonly why?: string; }): CliStructuredError & { readonly why: string; }
 ./errors: function errorMigrationTargetMismatch(options: { readonly migrationTargetId: string; readonly configTargetId: string; }): CliStructuredError
 ./errors: function errorOutputFormatMutex(): CliStructuredError
+./errors: function errorPrismaSpaceBehind(options: { readonly why: string; readonly meta: Record<string, unknown>; }): CliStructuredError
 ./errors: function errorQueryRunnerFactoryRequired(options?: { readonly why?: string; }): CliStructuredError
 ./errors: function errorRuntime(code: `${string}.${string}`, summary: string, options?: { readonly why?: string; readonly fix?: string; readonly diagnostics?: readonly Diagnostic[]; readonly meta?: Record<string, unknown>; readonly cause?: unknown; }): CliStructuredError
 ./errors: function errorTargetMigrationNotSupported(options?: { readonly why?: string; }): CliStructuredError
