@@ -106,7 +106,7 @@ On every database:
 - `update()` and `delete()` are accepted only on a collection filtered by a unique key (`whereUnique(...)`). On any other collection they are a compile error. Each is one statement: `UPDATE … WHERE key = ?` or `DELETE … WHERE key = ?`.
 - `updateAll()`, `deleteAll()`, `updateAndCount()` and `deleteAndCount()` accept `orderBy(...)` and `limit(n)`. Today they throw `ORM.ARGUMENT_INVALID` on a collection with a limit. On MySQL this is the native `UPDATE … ORDER BY … LIMIT n`. On Postgres and SQLite it is one statement whose `WHERE` picks keys with a subquery, so it needs a primary key or a unique key whose columns are all `NOT NULL`.
 
-This breaks applications written against the release candidates that call `update()` or `delete()` after a plain `where()`. They get a compile error and choose `whereUnique(...)` or `limit(1).updateAll(...)`. It needs an entry in the upgrade guide, and the repository's own examples, tests and docs need the same change.
+This breaks applications written against any version published so far that call `update()` or `delete()` after a plain `where()`. They get a compile error and choose `whereUnique(...)` or `limit(1).updateAll(...)`. It needs an entry in the upgrade guide, and the repository's own examples, tests and docs need the same change.
 
 A limited bulk write does not stop two workers choosing the same rows. That is the application's to handle, as it is in SQL. Claiming a job safely stays an explicit read with `forUpdate({ skipLocked: true })` inside a transaction.
 
@@ -118,7 +118,7 @@ Where a method or a combination is refused, the compiler error should state the 
 
 ## Work to settle first
 
-Each of these needs a short investigation before the slice that depends on it. A recommendation is given where there is one.
+Each of these needs a short investigation before the part of the work that depends on it. A recommendation is given where there is one.
 
 1. **Can the types express a return type that depends on a capability,** together with the existing type states (`HasWhere`, `HasUniqueFilter`) and user subclasses of `Collection`? Spike it with real compiler output before building section 2. If it cannot be done cleanly, come back with what the compiler allows.
 2. **What `create()` returns on MySQL when the key is neither supplied by the caller nor an `AUTO_INCREMENT` column,** for example a column default that the database computes. MySQL reports no value for it. Recommendation: return the key when it is known from the payload or the insert id, and find out what key defaults the MySQL target supports before deciding the remaining case.
