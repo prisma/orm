@@ -17,14 +17,14 @@ The decision record is [ADR 335](../architecture%20docs/adrs/ADR%20335%20-%20A%2
 
 ## Who declares a capability
 
-Each capability is declared by the component that knows the fact:
+On PostgreSQL, each capability is declared by the component that knows the fact:
 
 | Component | Declares | Example |
 | --- | --- | --- |
 | Target | What the database provides, by version | `sql.lateral` on PostgreSQL 15 to 18 |
 | Driver | What the connection provides | `sql.interactiveTransactions` |
 
-No PostgreSQL capability is declared by the adapter, and extension packs declare none. On MySQL, MariaDB and SQLite, a contract takes a fixed list from its adapter at emit, and no client check runs yet; MongoDB's adapter declares no list (see [MySQL, MariaDB, SQLite and MongoDB](#mysql-mariadb-sqlite-and-mongodb)).
+No PostgreSQL capability is declared by the adapter, and extension packs declare none. On MySQL, MariaDB and SQLite, the adapter declares a fixed list that emit writes into every contract, the target and the driver declare none, and no client check runs yet. MongoDB's components declare none (see [MySQL, MariaDB, SQLite and MongoDB](#mysql-mariadb-sqlite-and-mongodb)).
 
 Keys in the `sql` namespace are shared by every SQL target. They are not a separate set for the SQL family.
 
