@@ -99,8 +99,10 @@ describe('the required capabilities of a TypeScript contract', () => {
 });
 
 describe('a contract that lists no required capabilities', () => {
-  const refusal =
-    'State the capabilities your contract requires in requiredCapabilities in defineContract. The list is missing or empty.';
+  const refusal = expect.objectContaining({
+    message:
+      'State the capabilities your contract requires in requiredCapabilities in defineContract. The list is missing or empty.',
+  });
 
   it('is refused when the list is missing, with no example', () => {
     expect(() => defineContract({} as { requiredCapabilities: [] })).toThrow(refusal);
@@ -112,7 +114,10 @@ describe('a contract that lists no required capabilities', () => {
 
   it('is refused by postgresContractCapabilities too', () => {
     expect(() => postgresContractCapabilities([])).toThrow(
-      'State the capabilities your contract requires in requiredCapabilities given to postgresContractCapabilities. The list is missing or empty.',
+      expect.objectContaining({
+        message:
+          'State the capabilities your contract requires in requiredCapabilities given to postgresContractCapabilities. The list is missing or empty.',
+      }),
     );
   });
 });
@@ -120,12 +125,16 @@ describe('a contract that lists no required capabilities', () => {
 describe('an entry that is not a capability key', () => {
   it.each([
     ['a key without a namespace', 'returning'],
+    ['a key with an empty namespace', '.returning'],
+    ['a key with an empty flag', 'sql.'],
     ['a capability set, as the removed capabilities option took', { sql: { returning: true } }],
   ])('is refused: %s', (_case, entry) => {
     expect(() =>
       defineContract({ requiredCapabilities: [entry] as unknown as ['sql.returning'] }),
     ).toThrow(
-      `requiredCapabilities in defineContract lists ${JSON.stringify(entry)}, which is not a capability key. A key is a namespace and a flag joined by a dot, as error messages print it.`,
+      expect.objectContaining({
+        message: `requiredCapabilities in defineContract lists ${JSON.stringify(entry)}, which is not a capability key. A key is a namespace and a flag joined by a dot, as error messages print it.`,
+      }),
     );
   });
 });

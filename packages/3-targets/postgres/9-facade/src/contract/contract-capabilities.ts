@@ -35,7 +35,9 @@ function isListed<Required extends RequiredCapabilities>(
 }
 
 function isCapabilityKey(key: unknown): key is CapabilityKey {
-  return typeof key === 'string' && key.indexOf('.') > 0;
+  if (typeof key !== 'string') return false;
+  const dot = key.indexOf('.');
+  return dot > 0 && dot < key.length - 1;
 }
 
 /**

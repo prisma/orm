@@ -17,18 +17,19 @@ afterEach(async () => {
 });
 
 describe('prisma7Schema', () => {
+  const missingList =
+    "State the capabilities your contract requires in requiredCapabilities in the options of prisma7Schema('./prisma/schema.prisma'). The list is missing or empty.";
+
   it('refuses a call that lists no required capabilities, with no example', () => {
     expect(() =>
       prisma7Schema('./prisma/schema.prisma', {} as { requiredCapabilities: [] }),
-    ).toThrow(
-      "State the capabilities your contract requires in requiredCapabilities in the options of prisma7Schema('./prisma/schema.prisma'). The list is missing or empty.",
-    );
+    ).toThrow(expect.objectContaining({ message: missingList }));
   });
 
   it('refuses a call with no options', () => {
     expect(() =>
       prisma7Schema('./prisma/schema.prisma', undefined as unknown as { requiredCapabilities: [] }),
-    ).toThrow('The list is missing or empty.');
+    ).toThrow(expect.objectContaining({ message: missingList }));
   });
 
   it("emits the list it states, which the config's target does not carry", async () => {

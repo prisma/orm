@@ -53,16 +53,19 @@ const withTheDriver = {
 };
 
 describe('the contract entry of the config', () => {
+  const missingList =
+    "State the capabilities your contract requires in requiredCapabilities beside the contract path './prisma/contract.prisma' in the config. The list is missing or empty.";
+
   it('refuses a Prisma schema path that lists no required capabilities, with no example', () => {
     expect(() => defineConfig({ contract: './prisma/contract.prisma' as `${string}.ts` })).toThrow(
-      "State the capabilities your contract requires in requiredCapabilities beside the contract path './prisma/contract.prisma' in the config. The list is missing or empty.",
+      expect.objectContaining({ message: missingList }),
     );
   });
 
   it('refuses an empty list', () => {
     expect(() =>
       defineConfig({ contract: { path: './prisma/contract.prisma', requiredCapabilities: [] } }),
-    ).toThrow('The list is missing or empty.');
+    ).toThrow(expect.objectContaining({ message: missingList }));
   });
 
   it('refuses a list for a TypeScript contract, which lists its own in defineContract', () => {
@@ -71,7 +74,10 @@ describe('the contract entry of the config', () => {
         contract: { path: './prisma/contract.ts', requiredCapabilities: postgres18 } as never,
       }),
     ).toThrow(
-      'The TypeScript contract "./prisma/contract.ts" lists the capabilities it requires in defineContract. Remove requiredCapabilities from its contract entry in the config.',
+      expect.objectContaining({
+        message:
+          'The TypeScript contract "./prisma/contract.ts" lists the capabilities it requires in defineContract. Remove requiredCapabilities from its contract entry in the config.',
+      }),
     );
   });
 
