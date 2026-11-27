@@ -30,9 +30,23 @@ describe('readContractDocument, which db init and db update read the contract wi
     expect(read).toMatchObject({ ok: true, value: { formatVersion: 1, target: 'postgres' } });
   });
 
+  it('reads a contract a release candidate wrote, in the newest format version', async () => {
+    await writeContract({ schemaVersion: '1' });
+    const read = await readContractDocument(contractPath);
+    expect(read.ok ? read.value : read.failure).toEqual({
+      formatVersion: 1,
+      target: 'postgres',
+      storage: { storageHash: 'h' },
+    });
+  });
+
   it.each([
     ['with no version field', {}, 'CONTRACT.FORMAT_VERSION_MISSING'],
-    ['a pre-release wrote', { schemaVersion: '1' }, 'CONTRACT.FORMAT_VERSION_MISSING'],
+    [
+      'with a schemaVersion no release wrote',
+      { schemaVersion: '2' },
+      'CONTRACT.FORMAT_VERSION_MISSING',
+    ],
     ['a newer release wrote', { formatVersion: 2 }, 'CONTRACT.FORMAT_VERSION_NEWER'],
   ])('refuses a contract %s, naming the file', async (_, version, code) => {
     await writeContract(version);

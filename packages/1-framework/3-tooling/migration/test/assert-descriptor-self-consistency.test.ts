@@ -175,12 +175,27 @@ describe('assertDescriptorSelfConsistency', () => {
     );
   });
 
-  it('refuses a bundled contract with no format version', () => {
+  it('accepts a bundled contract a release candidate wrote, whose hash covers no version field', () => {
     expect(() =>
       assertDescriptorSelfConsistency({
         extensionId: 'test-extension',
         contractJson: {
           schemaVersion: '1',
+          target: TARGET,
+          targetFamily: FAMILY,
+          storage: STORAGE,
+        },
+        headRefHash: REAL_HASH,
+        ...SQL_HOOKS,
+      }),
+    ).not.toThrow();
+  });
+
+  it('refuses a bundled contract with no version field at all', () => {
+    expect(() =>
+      assertDescriptorSelfConsistency({
+        extensionId: 'test-extension',
+        contractJson: {
           target: TARGET,
           targetFamily: FAMILY,
           storage: STORAGE,

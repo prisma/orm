@@ -77,6 +77,7 @@ import {
 import { sqlFamilyError } from './errors';
 import { SqlContractSerializer } from './ir/sql-contract-serializer';
 import { storageNameOfOperation } from './migrations/operation-storage-name';
+import type { SqlOperationsReader } from './migrations/operations-reader';
 import type { SqlSchemaDiffFn } from './migrations/schema-differ';
 import type {
   SqlControlAdapterDescriptor,
@@ -599,6 +600,12 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     { readonly diffSchema?: SqlSchemaDiffFn },
     'reading the target-descriptor diffSchema hook'
   >(target).diffSchema;
+  // The target's check of the database's capabilities. Optional: a target that declares none of its
+  // database's capabilities omits it.
+  const targetDatabaseCapabilitiesNotProvided = blindCast<
+    SqlControlTargetDescriptor<TTargetId, unknown>,
+    'reading the optional target-descriptor databaseCapabilitiesNotProvided hook'
+  >(target).databaseCapabilitiesNotProvided;
   // The target's nodeKind → granularity classifier, resolved on demand by the
   // verdict and by the instance's `classifySubjectGranularity` method below —
   // never stamped onto an issue. Read lazily for the same
@@ -623,6 +630,19 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     },
     'the stack target is this SQL target descriptor, whose accessChangesOf a construction-only stub may omit'
   >(target).accessChangesOf;
+  // Read lazily, like `accessChangesOf`: construction-only stub descriptors omit it.
+  const targetReadOperations = blindCast<
+    { readonly readOperations?: SqlOperationsReader<unknown> },
+    'the stack target is this SQL target descriptor, whose readOperations a construction-only stub may omit'
+  >(target).readOperations;
+  const readOperations = (
+    operations: readonly MigrationPlanOperation[],
+  ): readonly MigrationPlanOperation[] => {
+    if (targetReadOperations === undefined) {
+      throw missingDescriptorOperationError(target.targetId, 'readOperations');
+    }
+    return targetReadOperations(operations);
+  };
   // `contract infer` needs each extension pack's already-assembled contract,
   // carried as-is (no merging — that is the contract-spaces machinery's
   // concern), paired with the `spaceId` its descriptor was registered under
@@ -932,6 +952,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
         frameworkComponents: options.frameworkComponents,
         diffSchema,
         granularityOf: targetGranularityOf,
+        databaseCapabilitiesNotProvided: targetDatabaseCapabilitiesNotProvided,
       });
     },
 
@@ -1074,11 +1095,12 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     },
 
     toOperationPreview(operations: readonly MigrationPlanOperation[]): OperationPreview {
-      return sqlOperationsToPreview(operations);
+      return sqlOperationsToPreview(readOperations(operations));
     },
 
     storageNameOf(operation: MigrationPlanOperation): string {
-      return storageNameOfOperation(operation);
+      const [read = operation] = readOperations([operation]);
+      return storageNameOfOperation(read);
     },
 
     accessChangesOf(
@@ -1087,7 +1109,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       if (targetAccessChangesOf === undefined) {
         throw missingDescriptorOperationError(target.targetId, 'accessChangesOf');
       }
-      return targetAccessChangesOf(operations);
+      return targetAccessChangesOf(readOperations(operations));
     },
 
     toSchemaView(schema: SqlSchemaIRNode): CoreSchemaView {

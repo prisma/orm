@@ -183,7 +183,7 @@ function contractToSchemaIR(
     },
     roles: [],
     existingSchemas: [],
-    pgVersion: '',
+    serverVersionNumber: undefined,
   });
 }
 

@@ -16,10 +16,10 @@ describe('a MySQL contract and its format version', () => {
     expect(() => mysqlStatic({ contract: newer as unknown as Contract })).toThrow(refusal);
   });
 
-  it('refuses a contract a pre-release wrote', () => {
+  it('reads a contract a release candidate wrote', () => {
     const { formatVersion: _, ...rest } = fixtureContractJson;
-    expect(() => contractFromJson({ schemaVersion: '1', ...rest })).toThrow(
-      expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' }),
+    expect(contractFromJson<Contract>({ schemaVersion: '1', ...rest })).toEqual(
+      contractFromJson<Contract>(structuredClone(fixtureContractJson)),
     );
   });
 

@@ -1,3 +1,4 @@
+import type { StoredDocument } from '@internal/contract/internal/format-version';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { type } from 'arktype';
 import type { MigrationMetadata } from '../../metadata';
@@ -34,4 +35,9 @@ export function printMigrationMetadataV1(metadata: MigrationMetadata): Migration
     createdAt: metadata.createdAt,
     migrationHash: metadata.migrationHash,
   };
+}
+
+/** A version 0 `migration.json`, which a release candidate wrote without a format version, as the version 1 document. */
+export function migrationMetadataV1FromV0(document: StoredDocument): StoredDocument {
+  return { formatVersion: 1, ...document };
 }

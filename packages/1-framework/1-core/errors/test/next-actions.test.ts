@@ -43,6 +43,15 @@ describe('converted factories carry typed nextActions', () => {
     ]);
   });
 
+  it('errorContractValidationFailed on a contract snapshot advises upgrading or restoring it, not emitting it', () => {
+    const error = errorContractValidationFailed('zzz must be removed', { artifact: 'snapshot' });
+
+    expect(error.nextActions?.map(({ label }) => label)).toEqual([
+      'If an earlier release wrote the snapshot, follow the app upgrade instructions',
+      'Restore the snapshot from version control; no command rewrites it',
+    ]);
+  });
+
   it('errorMarkerMissing', () => {
     const error = errorMarkerMissing();
 

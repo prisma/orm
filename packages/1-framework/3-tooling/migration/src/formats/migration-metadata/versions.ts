@@ -1,18 +1,30 @@
-import { readFormatVersion } from '@internal/contract/format-version';
+import {
+  type NewestFormatVersion,
+  readStoredDocument,
+  type StoredFormat,
+} from '@internal/contract/internal/format-version';
 import type { Result } from '@internal/utils/result';
 import type { MigrationMetadata } from '../../metadata';
 import {
   type MigrationMetadataDocumentV1,
+  migrationMetadataV1FromV0,
   parseMigrationMetadataV1,
   printMigrationMetadataV1,
 } from './v1';
 
-const MIGRATION_METADATA_FORMAT_VERSIONS = [1] as const;
+const MIGRATION_METADATA_FORMAT_VERSIONS = [0, 1] as const;
 
-type MigrationMetadataFormatVersion = (typeof MIGRATION_METADATA_FORMAT_VERSIONS)[number];
+const MIGRATION_METADATA_FORMAT: StoredFormat<typeof MIGRATION_METADATA_FORMAT_VERSIONS> = {
+  kind: 'migration',
+  versions: MIGRATION_METADATA_FORMAT_VERSIONS,
+  conversions: { 1: migrationMetadataV1FromV0 },
+};
 
 const PARSERS: Readonly<
-  Record<MigrationMetadataFormatVersion, (document: unknown) => Result<MigrationMetadata, string>>
+  Record<
+    NewestFormatVersion<typeof MIGRATION_METADATA_FORMAT_VERSIONS>,
+    (document: unknown) => Result<MigrationMetadata, string>
+  >
 > = { 1: parseMigrationMetadataV1 };
 
 export type MigrationMetadataDocument = MigrationMetadataDocumentV1;
@@ -25,13 +37,8 @@ export function parseMigrationMetadataDocument(
   path: string | undefined,
   bundledIn?: string,
 ): Result<MigrationMetadata, string> {
-  const formatVersion = readFormatVersion(document, {
-    kind: 'migration',
-    knownVersions: MIGRATION_METADATA_FORMAT_VERSIONS,
-    path,
-    bundledIn,
-  });
-  return PARSERS[formatVersion](document);
+  const newest = readStoredDocument(document, MIGRATION_METADATA_FORMAT, { path, bundledIn });
+  return PARSERS[newest.formatVersion](newest.document);
 }
 
 /** The `migration.json` document this release writes for `metadata`. */

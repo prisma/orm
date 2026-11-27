@@ -156,6 +156,7 @@ export interface InterpretPrisma7DocumentsInput {
   /** Each composed pack's contract, by the pack's id. */
   readonly composedExtensionContracts: ReadonlyMap<string, Contract>;
   readonly defaultNamespaceId: string;
+  /** The capabilities the contract requires, as one list. */
   readonly capabilities: CapabilityMatrix;
 }
 

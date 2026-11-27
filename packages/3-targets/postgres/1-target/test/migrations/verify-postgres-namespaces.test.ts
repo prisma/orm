@@ -52,7 +52,7 @@ function makeSchema(existingSchemas?: readonly string[]): SqlSchemaIRNode {
     namespaces: {},
     roles: [],
     existingSchemas,
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 

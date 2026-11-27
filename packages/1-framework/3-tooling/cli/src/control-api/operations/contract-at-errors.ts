@@ -29,10 +29,16 @@ export function mapContractAtError(
           typeof error.meta?.['filePath'] === 'string' ? error.meta['filePath'] : 'unknown';
         const message =
           typeof error.meta?.['message'] === 'string' ? error.meta['message'] : error.message;
+        const role = options?.artifactRole ?? 'from';
         return notOk(
           errorContractValidationFailed(
-            `Predecessor contract at ${filePath} failed to deserialize: ${message}`,
-            { where: { path: filePath }, cause: error, meta: contractValidationMeta(error) },
+            `${role === 'to' ? 'Target' : 'Predecessor'} contract at ${filePath} failed to deserialize: ${message}`,
+            {
+              where: { path: filePath },
+              cause: error,
+              meta: contractValidationMeta(error),
+              artifact: 'snapshot',
+            },
           ),
         );
       }
@@ -47,7 +53,7 @@ export function mapContractAtError(
             role === 'to'
               ? `Target contract at ${filePath} failed to deserialize: ${message}`
               : `Predecessor contract at ${filePath} failed to deserialize: ${message}`,
-            { where: { path: filePath }, cause: error },
+            { where: { path: filePath }, cause: error, artifact: 'snapshot' },
           ),
         );
       }

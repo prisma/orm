@@ -4,7 +4,7 @@
 
 import { readFile } from 'node:fs/promises';
 import type { PrismaConfig } from '@internal/config/config-types';
-import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
+import { convertContractDocument } from '@internal/contract/internal/format-version';
 import {
   contractSnapshotDir,
   readContractSnapshotJson,
@@ -183,15 +183,9 @@ export async function resolveContractRefToSnapshot(
         ),
       );
     }
-    readFormatVersion(parsed, {
-      kind: 'contract',
-      knownVersions: CONTRACT_FORMAT_VERSIONS,
-      path: options.contractPathAbsolute,
-    });
-    const defaultContract = blindCast<
-      Record<string, unknown>,
-      'narrowed to a non-null, non-array object by the shape check above'
-    >(parsed);
+    const defaultContract = {
+      ...convertContractDocument(parsed, { path: options.contractPathAbsolute }),
+    };
     const storage = defaultContract['storage'];
     const storageHash =
       storage !== null && typeof storage === 'object'

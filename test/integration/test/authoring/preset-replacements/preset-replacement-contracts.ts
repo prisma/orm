@@ -12,7 +12,11 @@ import { defineContract as defineMongoContract } from '@internal/mongo/contract-
 import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
 import { mongoContextInput } from '@internal/mongo-contract-psl/test';
-import { defineContract as definePostgresContract } from '@internal/postgres/contract-builder';
+import {
+  defineContract as definePostgresContract,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
@@ -27,6 +31,7 @@ import sqliteControl from '@internal/target-sqlite/control';
 import sqlitePack from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { emit } from '../../../utils/emit';
+import { postgresPslContext } from '../../utils/postgres-psl-context';
 import type {
   MongoHelpers,
   MongoRow,
@@ -87,7 +92,7 @@ export function mongoSchema(rows: readonly MongoRow[], form: Form): string {
 export function interpretPostgres(schema: string): Interpreted {
   const bound = bindPslSchema(schema, {
     sourceId: 'preset-replacements.postgres.prisma',
-    context: contractSourceContextFromControlStack(postgresStack),
+    context: postgresPslContext(postgresStack),
   });
   return withSeedDiagnostics(
     interpretPslDocumentToSqlContract({
@@ -141,18 +146,21 @@ export function interpretMongo(schema: string): Interpreted {
 
 /** The TypeScript contract with one model per row, each field written as its replacement. */
 export function postgresTs(rows: readonly SqlRow<PostgresHelpers>[]): Contract {
-  return definePostgresContract({}, (helpers) => ({
-    models: Object.fromEntries(
-      rows.map((row) => {
-        const value = row.ts(helpers);
-        const fields =
-          row.id === true
-            ? { id: value }
-            : { id: helpers.field.column(helpers.type.Int()).id(), value };
-        return [row.model, helpers.model(row.model, { fields }).sql({ table: row.model })];
-      }),
-    ),
-  }));
+  return definePostgresContract(
+    { requiredCapabilities: [...postgres18, ...postgresDriver] },
+    (helpers) => ({
+      models: Object.fromEntries(
+        rows.map((row) => {
+          const value = row.ts(helpers);
+          const fields =
+            row.id === true
+              ? { id: value }
+              : { id: helpers.field.column(helpers.type.Int()).id(), value };
+          return [row.model, helpers.model(row.model, { fields }).sql({ table: row.model })];
+        }),
+      ),
+    }),
+  );
 }
 
 export function sqliteTs(rows: readonly SqlRow<SqliteHelpers>[]): Contract {

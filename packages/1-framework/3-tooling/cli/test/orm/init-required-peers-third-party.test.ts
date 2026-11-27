@@ -4,6 +4,7 @@ import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
 import { dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { IF_SOMETHING_PINS_IT } from '../../src/commands/init/errors';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import {
@@ -17,6 +18,7 @@ import { noRegistryLookup, noRegistryPeersLookup } from '../utils/registry-keywo
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const VERSION = '8.1.0';
+const IF_PINNED = `${IF_SOMETHING_PINS_IT} Then run \`prisma orm init\` again.`;
 const POSTGRES = ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', '--json'];
 
 let projectDir: string;
@@ -142,10 +144,22 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
       expect(run.presented?.data).toMatchObject({
         packagesInstalled: {
           requiredPeers: [
-            { name: '@prisma/orm-framework', version: VERSION, outcome: 'installed' },
-            { name: '@prisma/orm-toolchain', version: VERSION, outcome: 'installed' },
+            {
+              name: '@prisma/orm-framework',
+              version: VERSION,
+              outcome: 'installed',
+            },
+            {
+              name: '@prisma/orm-toolchain',
+              version: VERSION,
+              outcome: 'installed',
+            },
             { name: 'pg', version: '^8.22.0', outcome: 'already-listed' },
-            { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'installed' },
+            {
+              name: 'temporal-polyfill',
+              version: '^1.0.8',
+              outcome: 'installed',
+            },
           ],
         },
       });
@@ -166,7 +180,11 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
         warnings: expect.not.arrayContaining([expect.stringContaining('temporal-polyfill')]),
         packagesInstalled: {
           requiredPeers: expect.arrayContaining([
-            { name: 'temporal-polyfill', version: '^1.0.8', outcome: 'already-listed' },
+            {
+              name: 'temporal-polyfill',
+              version: '^1.0.8',
+              outcome: 'already-listed',
+            },
           ]),
         },
       });
@@ -198,9 +216,7 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
           },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label: expect.stringContaining(
-                'pnpm add "temporal-polyfill@^1.0.8"`, then run `prisma orm init` again',
-              ),
+              label: expect.stringContaining(`pnpm add "temporal-polyfill@^1.0.8"\`. ${IF_PINNED}`),
             }),
           ]),
         },
@@ -232,8 +248,7 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
           },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label:
-                'Run `pnpm install` to install temporal-polyfill, which package.json already lists, then run `prisma orm init` again.',
+              label: `Run \`pnpm install\` to install temporal-polyfill, which package.json already lists. ${IF_PINNED}`,
             }),
           ]),
         },
@@ -267,8 +282,7 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
           },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label:
-                'Run `pnpm install` to install temporal-polyfill, which package.json already lists, and add the others with `pnpm add "left-pad@^1.3.0"`, then run `prisma orm init` again.',
+              label: `Run \`pnpm install\` to install temporal-polyfill, which package.json already lists, and add the others with \`pnpm add "left-pad@^1.3.0"\`. ${IF_PINNED}`,
             }),
           ]),
         },
@@ -352,6 +366,8 @@ describe('init adds the required peers that are not Prisma ORM packages', () => 
   );
 });
 
+const OUTSIDE_LISTED_LINE = `package.json already lists @prisma/orm-framework at a version @prisma/orm-postgres accepts, but 8.0.0 is installed: run \`pnpm install\`. ${IF_PINNED}`;
+
 describe('init --skip-install with a required peer installed at another version', () => {
   function frameworkInstalledAt(version: string): void {
     writeProjectFile(
@@ -392,7 +408,42 @@ describe('init --skip-install with a required peer installed at another version'
           },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label: `Add them with \`pnpm add @prisma/orm-framework@${VERSION}\`, then run \`prisma orm init\` again.`,
+              label: `Add them with \`pnpm add @prisma/orm-framework@${VERSION}\`. ${IF_PINNED}`,
+            }),
+          ]),
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'ends the advice to add a package the project does not list with what to do if something pins it',
+    async () => {
+      writeProjectFile(
+        'package.json',
+        JSON.stringify({
+          name: 'app',
+          private: true,
+          type: 'module',
+          dependencies: {
+            '@prisma/orm-postgres': VERSION,
+            'temporal-polyfill': '^1.0.8',
+            pg: '^8.22.0',
+          },
+          overrides: { '@prisma/orm-framework': '8.0.0' },
+        }),
+      );
+
+      const { run, wrote } = await skipInstall();
+
+      expect(wrote).toBe(false);
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: `Add them with \`pnpm add @prisma/orm-framework@${VERSION}\`. ${IF_PINNED}`,
             }),
           ]),
         },
@@ -420,9 +471,42 @@ describe('init --skip-install with a required peer installed at another version'
           meta: { restoreCommand: 'pnpm install' },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label:
-                'Run `pnpm install` to install @prisma/orm-framework at the version package.json lists, then run `prisma orm init` again.',
+              label: OUTSIDE_LISTED_LINE,
             }),
+          ]),
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'gives the same advice when a resolution pins a package the project lists at the required version',
+    async () => {
+      writeProjectFile(
+        'package.json',
+        JSON.stringify({
+          name: 'app',
+          private: true,
+          type: 'module',
+          dependencies: {
+            '@prisma/orm-postgres': VERSION,
+            '@prisma/orm-framework': VERSION,
+            'temporal-polyfill': '^1.0.8',
+            pg: '^8.22.0',
+          },
+          resolutions: { '@prisma/orm-framework': '8.0.0' },
+        }),
+      );
+
+      const { run, wrote } = await skipInstall();
+
+      expect(wrote).toBe(false);
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({ label: OUTSIDE_LISTED_LINE }),
           ]),
         },
       });
@@ -453,7 +537,7 @@ describe('init --skip-install with a required peer installed at another version'
           },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label: `Change the line for @prisma/orm-framework in package.json from 8.0.0 to ${VERSION} and run \`pnpm install\`, then run \`prisma orm init\` again.`,
+              label: `Change the line for @prisma/orm-framework in package.json from 8.0.0 to ${VERSION} and run \`pnpm install\`. ${IF_PINNED}`,
             }),
           ]),
         },
@@ -480,10 +564,185 @@ describe('init --skip-install with a required peer installed at another version'
           code: 'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label: `Make the line for @prisma/orm-framework in package.json resolve to ${VERSION} (it is \`catalog:\` now, so change the version where it points, such as the catalog entry or the workspace package) and run \`pnpm install\`, then run \`prisma orm init\` again.`,
+              label: `Make the line for @prisma/orm-framework in package.json resolve to ${VERSION} (it is \`catalog:\` now, so change the version where it points, such as the catalog entry or the workspace package) and run \`pnpm install\`. ${IF_PINNED}`,
             }),
           ]),
         },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+});
+
+describe('init --skip-install on a facade that names its peers with ranges', () => {
+  function manifestAt(name: string, version: string, peerDependencies: Record<string, string>) {
+    writeProjectFile(
+      `node_modules/${name}/package.json`,
+      JSON.stringify({ name, version, peerDependencies }),
+    );
+  }
+
+  async function skipInstallWithFrameworkAt(
+    frameworkVersion: string,
+    { listsFacade }: { readonly listsFacade: boolean } = { listsFacade: true },
+  ) {
+    manifestAt('@prisma/orm-postgres', '8.1.2', {
+      '@prisma/orm-framework': '~8.1.0',
+      '@prisma/orm-toolchain': '~8.1.0',
+      pg: '^8.22.0',
+      'temporal-polyfill': '^1.0.8',
+    });
+    manifestAt('@prisma/orm-toolchain', '8.1.2', { '@prisma/orm-framework': '~8.1.0' });
+    manifestAt('@prisma/orm-framework', frameworkVersion, {});
+    installed('pg');
+    installed('temporal-polyfill');
+    writeManifest({
+      ...(listsFacade ? { '@prisma/orm-postgres': '^8.1.0' } : {}),
+      '@prisma/orm-toolchain': '^8.1.0',
+      'temporal-polyfill': '^1.0.8',
+      pg: '^8.22.0',
+    });
+    const run = await (await harness()).run([...POSTGRES, '--skip-install'], { cwd: projectDir });
+    return { run, wrote: existsSync(join(projectDir, 'prisma.config.ts')) };
+  }
+
+  it(
+    'stops before writing any file when a required peer is of another release',
+    async () => {
+      const { run, wrote } = await skipInstallWithFrameworkAt('8.0.4');
+
+      expect(wrote).toBe(false);
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
+          meta: {
+            packages: [{ name: '@prisma/orm-framework', found: '8.0.4', required: '~8.1.0' }],
+            installCommand: 'pnpm add "@prisma/orm-framework@~8.1.0"',
+          },
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'checks the installed peer against the range the facade declares when the project does not list the facade',
+    async () => {
+      const { run, wrote } = await skipInstallWithFrameworkAt('8.2.0', {
+        listsFacade: false,
+      });
+
+      expect(wrote).toBe(false);
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
+          meta: {
+            packages: [{ name: '@prisma/orm-framework', found: '8.2.0', required: '~8.1.0' }],
+          },
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'says to run the install, or remove what pins the copy, for a range line that admits the requirement but not the installed copy',
+    async () => {
+      manifestAt('@prisma/orm-postgres', '8.1.2', {
+        '@prisma/orm-framework': '~8.1.0',
+        pg: '^8.22.0',
+      });
+      manifestAt('@prisma/orm-framework', '8.2.0', {});
+      installed('pg');
+      writeManifest({
+        '@prisma/orm-postgres': '^8.1.0',
+        '@prisma/orm-framework': '~8.1.0',
+        pg: '^8.22.0',
+      });
+
+      const run = await (await harness()).run([...POSTGRES, '--skip-install'], {
+        cwd: projectDir,
+      });
+
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: `package.json already lists @prisma/orm-framework at a version @prisma/orm-postgres accepts, but 8.2.0 is installed: run \`pnpm install\`. ${IF_PINNED}`,
+            }),
+          ]),
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it.each([
+    ['wider than the requirement', '^8.1.0', {}],
+    ['of another release', '~8.0.0', {}],
+    ['that is a comparison range', '>=8.1.0', {}],
+    ['that is a dist-tag', 'latest', {}],
+    [
+      'wider than the requirement, with an override forcing the installed copy',
+      '^8.1.0',
+      { overrides: { '@prisma/orm-framework': '8.2.0' } },
+    ],
+  ])(
+    'says to change a line %s to the requirement with the add command',
+    async (_case, line, pin) => {
+      manifestAt('@prisma/orm-postgres', '8.1.2', {
+        '@prisma/orm-framework': '~8.1.0',
+        pg: '^8.22.0',
+      });
+      manifestAt('@prisma/orm-framework', '8.2.0', {});
+      installed('pg');
+      writeProjectFile(
+        'package.json',
+        JSON.stringify({
+          name: 'app',
+          private: true,
+          type: 'module',
+          dependencies: {
+            '@prisma/orm-postgres': '^8.1.0',
+            '@prisma/orm-framework': line,
+            pg: '^8.22.0',
+          },
+          ...pin,
+        }),
+      );
+
+      const run = await (await harness()).run([...POSTGRES, '--skip-install'], {
+        cwd: projectDir,
+      });
+
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
+          meta: {
+            packages: [
+              { name: '@prisma/orm-framework', found: '8.2.0', required: '~8.1.0', listed: line },
+            ],
+          },
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: `package.json lists @prisma/orm-framework at ${line}, which does not keep it within ~8.1.0, the range @prisma/orm-postgres requires, and 8.2.0 is installed: change the line to ~8.1.0 with \`pnpm add "@prisma/orm-framework@~8.1.0"\`. ${IF_PINNED}`,
+            }),
+          ]),
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'goes on when the required peer is a later patch of the same release',
+    async () => {
+      const { run, wrote } = await skipInstallWithFrameworkAt('8.1.5');
+
+      expect({ wrote, code: Reflect.get(envelopeOf(run)?.error ?? {}, 'code') }).toEqual({
+        wrote: true,
+        code: undefined,
       });
     },
     timeouts.coldTransformImport,
@@ -568,8 +827,7 @@ describe('a required peer that is not a Prisma ORM package', () => {
           },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label:
-                'Change the line for left-pad in package.json from 1.2.0 to 1.3.0 and run `pnpm install`, then run `prisma orm init` again.',
+              label: `Change the line for left-pad in package.json from 1.2.0 to 1.3.0 and run \`pnpm install\`. ${IF_PINNED}`,
             }),
           ]),
         },

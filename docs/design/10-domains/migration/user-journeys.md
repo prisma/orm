@@ -86,7 +86,7 @@ migrate --to <ref>      # walk the graph from marker to the ref's contract,
                         # execute each migration on the path
 ```
 
-This is the dominant CD operation. The verb is dead-simple by design: the *only* question the verb answers is "what state should the DB be in?", and the answer is a ref name. The directional vocabulary (`--to`) is reserved for `migrate`; signing the marker is a static claim and uses different vocabulary ([see `db sign`](./README.md#verbs)).
+This is the dominant CD operation. The verb is dead-simple by design: the *only* question the verb answers is "what state should the DB be in?", and the answer is a ref name. The directional vocabulary (`--to`) is reserved for `migrate`; signing the marker is a static claim and uses different vocabulary ([see `db sign`](./README.md#verbs-commands-users-can-perform)).
 
 `migrate` is forward-only. It walks the directed graph from the current marker to the ref. Backward motion is not a `migrate` mode — that's `db update --to <contract>` (off-graph reconciliation, which asks before losing data).
 

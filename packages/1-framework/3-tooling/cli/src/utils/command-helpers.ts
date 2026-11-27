@@ -1,15 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import {
-  CONTRACT_FORMAT_VERSIONS,
-  type ContractFormatVersion,
-  readFormatVersion,
-} from '@internal/contract/format-version';
+  CONTRACT_FORMAT,
+  type NewestContractFormatVersion,
+  readStoredDocument,
+} from '@internal/contract/internal/format-version';
 import type { ControlTargetDescriptor } from '@internal/framework-components/control';
 import { hasMigrations } from '@internal/framework-components/control';
 import type { NoInvariantPathStructuralEdge } from '@internal/migration-tools/errors';
 import type { MigrationEdge, MigrationGraph } from '@internal/migration-tools/graph';
 import { APP_SPACE_ID, spaceMigrationDirectory } from '@internal/migration-tools/spaces';
-import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { NextAction } from '@internal/utils/structured-error';
@@ -166,7 +165,7 @@ export function getTargetMigrations(target: ControlTargetDescriptor<string, stri
  */
 export interface ContractEnvelope {
   readonly storageHash: string;
-  readonly formatVersion: ContractFormatVersion;
+  readonly formatVersion: NewestContractFormatVersion;
   readonly target: string;
   readonly targetFamily: string;
   readonly profileHash?: string;
@@ -174,10 +173,10 @@ export interface ContractEnvelope {
 }
 
 /**
- * Reads and parses contract.json, reading its format version first and then
- * validating the framework-level envelope fields (storageHash, target,
- * targetFamily). A format version this release cannot read throws a format
- * version error naming the file.
+ * Reads and parses contract.json, reading its format version first and
+ * converting it to the newest one, then validating the framework-level
+ * envelope fields (storageHash, target, targetFamily). A format version this
+ * release cannot read throws a format version error naming the file.
  *
  * Family-specific validation (storage structure, codec mappings, etc.)
  * happens downstream in the control client via the family instance.
@@ -195,12 +194,7 @@ export async function readContractEnvelope(config: {
       { where: { path: contractPath } },
     );
   }
-  const json = blindCast<Record<string, unknown>, 'narrowed to a non-null, non-array object above'>(
-    parsed,
-  );
-  const formatVersion = readFormatVersion(json, {
-    kind: 'contract',
-    knownVersions: CONTRACT_FORMAT_VERSIONS,
+  const { formatVersion, document: json } = readStoredDocument(parsed, CONTRACT_FORMAT, {
     path: contractPath,
   });
 

@@ -1,12 +1,19 @@
-import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import postgresAdapter from '@internal/adapter-postgres/runtime';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  type RequiredCapabilities,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
-import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import {
   expectPerRelationStatements,
   timeouts,
@@ -38,29 +45,29 @@ const Owner = OwnerBase.relations({
   items: rel.hasMany(() => Item, { by: 'ownerId' }),
 }).sql({ table: 'write_owners' });
 
-const contract = defineContract({ models: { Owner, Item } });
+// Each case states its list of required capabilities. The lists are typed as `RequiredCapabilities`, which names no key, so both contracts have one type and each case's collections take it; the values differ by `sql.returning`.
+const withReturning: RequiredCapabilities = [...postgres18, ...postgresDriver];
+const withoutReturning: RequiredCapabilities = withReturning.filter(
+  (capability) => capability !== 'sql.returning',
+);
+const contract = defineContract({
+  requiredCapabilities: withReturning,
+  models: { Owner, Item },
+});
+const contracts = {
+  'with returning': contract,
+  'without returning': defineContract({
+    requiredCapabilities: withoutReturning,
+    models: { Owner, Item },
+  }),
+};
 
 type Returning = 'with returning' | 'without returning';
 
-const withoutReturning = {
-  ...postgresAdapterCapabilities,
-  postgres: { ...postgresAdapterCapabilities.postgres, returning: false },
-  sql: { ...postgresAdapterCapabilities.sql, returning: false },
-};
-
-function contextOf(
-  strategy: IncludeStrategy,
-  returning: Returning,
-): ExecutionContext<typeof contract> {
+function contextOf(strategy: IncludeStrategy, returning: Returning) {
   return createExecutionContext({
-    contract,
-    stack: createSqlExecutionStack({
-      target: postgresTarget,
-      adapter:
-        returning === 'with returning'
-          ? postgresAdapterFor(strategy)
-          : postgresAdapterFor(strategy, withoutReturning),
-    }),
+    contract: withIncludeStrategy(contracts[returning], strategy),
+    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
   });
 }
 

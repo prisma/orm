@@ -73,7 +73,7 @@ const emptySchema = new PostgresDatabaseSchemaNode({
   },
   roles: [],
   existingSchemas: [],
-  pgVersion: '',
+  serverVersionNumber: undefined,
 });
 
 describe('PostgresMigrationPlanner - storage types', () => {

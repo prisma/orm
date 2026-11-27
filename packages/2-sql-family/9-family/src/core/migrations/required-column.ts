@@ -4,13 +4,15 @@ import { type } from 'arktype';
 import { fieldOfColumn } from './field-of-column';
 import type { SqlMigrationPlanOperationStep } from './types';
 
-const RequiredColumnMeta = type({
-  requiredColumn: {
-    table: 'string',
-    column: 'string',
-    reason: "'nullValues' | 'newField' | 'backfillMissedRows'",
-  },
+/** What a step's `meta.requiredColumn` holds in an `ops.json`. */
+export const RequiredColumnJson = type({
+  '+': 'reject',
+  table: 'string',
+  column: 'string',
+  reason: "'nullValues' | 'newField' | 'backfillMissedRows'",
 });
+
+const RequiredColumnMeta = type({ requiredColumn: RequiredColumnJson });
 
 /** Where a column that is to become required finds no value. */
 export interface RequiredColumn {

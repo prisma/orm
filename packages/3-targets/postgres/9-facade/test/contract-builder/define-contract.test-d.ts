@@ -1,16 +1,21 @@
 import type { NamespacedEnums } from '@internal/contract/enum-accessor';
 import { expectTypeOf, test } from 'vitest';
-import { defineContract, enumType, field, member, model } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field,
+  member,
+  model,
+  postgres18,
+  postgresDriver,
+} from '../../src/exports/contract-builder';
 
 type SoleNamespaceModels<
   T extends { domain: { namespaces: Record<string, { models: unknown }> } },
 > = T['domain']['namespaces'][keyof T['domain']['namespaces']]['models'];
 
-// @ts-expect-error — capabilities are contributed by components, not authoring input
-defineContract({ capabilities: { postgres: { lateral: true } } });
-
 test('limits Date authoring to the JsDate types', () => {
-  defineContract({}, ({ type: t }) => {
+  defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }, ({ type: t }) => {
     expectTypeOf(t).not.toBeAny();
     expectTypeOf(t).not.toHaveProperty('DateTimeDate');
     expectTypeOf(t).not.toHaveProperty('TimestamptzDate');
@@ -25,7 +30,7 @@ test('limits Date authoring to the JsDate types', () => {
   });
 });
 
-const result = defineContract({});
+const result = defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] });
 expectTypeOf(result.target).toEqualTypeOf<'postgres'>();
 expectTypeOf(result.targetFamily).toEqualTypeOf<'sql'>();
 
@@ -34,6 +39,7 @@ const textColumn = {
   typeParams: {},
 };
 const withModel = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     User: model('User', { fields: { id: field.column(textColumn).id() } }),
   },
@@ -41,11 +47,14 @@ const withModel = defineContract({
 expectTypeOf(withModel.target).toEqualTypeOf<'postgres'>();
 expectTypeOf<SoleNamespaceModels<typeof withModel>['User']>().not.toBeNever();
 
-const withFactory = defineContract({}, ({ model: m, field: f, gen, type }) => ({
-  models: {
-    Post: m('Post', { fields: { id: f.column(type.Char(36)).id().onCreate(gen.uuid()) } }),
-  },
-}));
+const withFactory = defineContract(
+  { requiredCapabilities: [...postgres18, ...postgresDriver] },
+  ({ model: m, field: f, gen, type }) => ({
+    models: {
+      Post: m('Post', { fields: { id: f.column(type.Char(36)).id().onCreate(gen.uuid()) } }),
+    },
+  }),
+);
 expectTypeOf(withFactory.target).toEqualTypeOf<'postgres'>();
 expectTypeOf<SoleNamespaceModels<typeof withFactory>['Post']>().not.toBeNever();
 
@@ -55,12 +64,15 @@ const pgText = { codecId: 'pg/text@1' as const } as const;
 const Role = enumType('Role', pgText, member('User', 'user'), member('Admin', 'admin'));
 const Priority = enumType('Priority', pgText, member('Low', 'low'), member('High', 'high'));
 
-const mixedEnums = defineContract({ enums: { Role } }, ({ model: m, field: f, gen, type }) => ({
-  enums: { Priority },
-  models: {
-    Item: m('Item', { fields: { id: f.column(type.Char(36)).id().onCreate(gen.uuid()) } }),
-  },
-}));
+const mixedEnums = defineContract(
+  { requiredCapabilities: [...postgres18, ...postgresDriver], enums: { Role } },
+  ({ model: m, field: f, gen, type }) => ({
+    enums: { Priority },
+    models: {
+      Item: m('Item', { fields: { id: f.column(type.Char(36)).id().onCreate(gen.uuid()) } }),
+    },
+  }),
+);
 type MixedAccessors = NamespacedEnums<typeof mixedEnums>['public'];
 expectTypeOf<MixedAccessors>().toHaveProperty('Role');
 expectTypeOf<MixedAccessors>().toHaveProperty('Priority');

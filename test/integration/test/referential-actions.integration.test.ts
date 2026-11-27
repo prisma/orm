@@ -1,11 +1,17 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import sql, { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import postgres from '@internal/target-postgres/control';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
@@ -69,14 +75,14 @@ describe('referential actions integration', () => {
       async () => {
         if (!connectionString) throw new Error('Connection string not set');
 
-        const driver = await postgresDriver.create(connectionString);
+        const driver = await postgresDriverDescriptor.create(connectionString);
         try {
           const familyInstance = sql.create(
             createControlStack({
               family: sql,
               target: postgres,
               adapter: postgresAdapter,
-              driver: postgresDriver,
+              driver: postgresDriverDescriptor,
               extensions: [],
             }),
           );
@@ -106,14 +112,14 @@ describe('referential actions integration', () => {
       async () => {
         if (!connectionString) throw new Error('Connection string not set');
 
-        const driver = await postgresDriver.create(connectionString);
+        const driver = await postgresDriverDescriptor.create(connectionString);
         try {
           const familyInstance = sql.create(
             createControlStack({
               family: sql,
               target: postgres,
               adapter: postgresAdapter,
-              driver: postgresDriver,
+              driver: postgresDriverDescriptor,
               extensions: [],
             }),
           );
@@ -157,14 +163,14 @@ describe('referential actions integration', () => {
           `);
         });
 
-        const driver = await postgresDriver.create(connectionString);
+        const driver = await postgresDriverDescriptor.create(connectionString);
         try {
           const familyInstance = sql.create(
             createControlStack({
               family: sql,
               target: postgres,
               adapter: postgresAdapter,
-              driver: postgresDriver,
+              driver: postgresDriverDescriptor,
               extensions: [],
             }),
           );
@@ -242,18 +248,19 @@ describe('referential actions integration', () => {
           }));
 
           const contract = defineContract({
+            requiredCapabilities: [...postgres18, ...postgresDriver],
             foreignKeyDefaults: { constraint: true, index: true },
             models: { User, Post },
           });
 
-          const driver = await postgresDriver.create(connectionString);
+          const driver = await postgresDriverDescriptor.create(connectionString);
           try {
             const familyInstance = sql.create(
               createControlStack({
                 family: sql,
                 target: postgres,
                 adapter: postgresAdapter,
-                driver: postgresDriver,
+                driver: postgresDriverDescriptor,
                 extensions: [],
               }),
             );
@@ -341,18 +348,19 @@ describe('referential actions integration', () => {
           }));
 
           const contract = defineContract({
+            requiredCapabilities: [...postgres18, ...postgresDriver],
             foreignKeyDefaults: { constraint: true, index: true },
             models: { User, Post },
           });
 
-          const driver = await postgresDriver.create(connectionString);
+          const driver = await postgresDriverDescriptor.create(connectionString);
           try {
             const familyInstance = sql.create(
               createControlStack({
                 family: sql,
                 target: postgres,
                 adapter: postgresAdapter,
-                driver: postgresDriver,
+                driver: postgresDriverDescriptor,
                 extensions: [],
               }),
             );
@@ -414,18 +422,19 @@ describe('referential actions integration', () => {
           }));
 
           const contract = defineContract({
+            requiredCapabilities: [...postgres18, ...postgresDriver],
             foreignKeyDefaults: { constraint: true, index: true },
             models: { User, Post },
           });
 
-          const driver = await postgresDriver.create(connectionString);
+          const driver = await postgresDriverDescriptor.create(connectionString);
           try {
             const familyInstance = sql.create(
               createControlStack({
                 family: sql,
                 target: postgres,
                 adapter: postgresAdapter,
-                driver: postgresDriver,
+                driver: postgresDriverDescriptor,
                 extensions: [],
               }),
             );
@@ -512,18 +521,19 @@ describe('referential actions integration', () => {
           }));
 
           const contract = defineContract({
+            requiredCapabilities: [...postgres18, ...postgresDriver],
             foreignKeyDefaults: { constraint: true, index: true },
             models: { User, Post },
           });
 
-          const driver = await postgresDriver.create(connectionString);
+          const driver = await postgresDriverDescriptor.create(connectionString);
           try {
             const familyInstance = sql.create(
               createControlStack({
                 family: sql,
                 target: postgres,
                 adapter: postgresAdapter,
-                driver: postgresDriver,
+                driver: postgresDriverDescriptor,
                 extensions: [],
               }),
             );
@@ -596,6 +606,7 @@ describe('referential actions integration', () => {
         }));
 
         const contract = defineContract({
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           foreignKeyDefaults: { constraint: true, index: true },
           models: { User, Post },
         });
@@ -608,13 +619,13 @@ describe('referential actions integration', () => {
           family: sql,
           target: postgres,
           adapter: postgresAdapter,
-          driver: postgresDriver,
+          driver: postgresDriverDescriptor,
           extensions: [],
         });
         const familyInstance = sql.create(controlStack);
 
         // Introspect the empty database to get a baseline schema IR
-        const driver = await postgresDriver.create(connectionString);
+        const driver = await postgresDriverDescriptor.create(connectionString);
         try {
           const schemaIR = await familyInstance.introspect({ driver });
 

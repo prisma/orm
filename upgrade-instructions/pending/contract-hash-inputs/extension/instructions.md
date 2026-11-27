@@ -14,7 +14,7 @@ A contract has three hashes: the storage hash (`storage.storageHash`), the profi
 
 An extension's package carries these hashes: its emitted `src/contract.json` and `contract.d.ts`, `migrations/refs/head.json`, the `from`, `to` and `migrationHash` of each `migration.json` and any storage hash in its `ops.json`, the snapshots under `migrations/snapshots/<hash>/` and the `migration.ts` that import them. When an application loads the extension, this release recomputes the hash of the bundled contract and compares it with the head ref. An extension published for an earlier release therefore fails to load with `MIGRATION.DESCRIPTOR_HEAD_HASH_MISMATCH`, which names the extension.
 
-Run the upgrade step for the stored-file format version (`stored-files-format-version`) first: this script refuses a file without `formatVersion`. Commit your work, then run the script from the extension package's root:
+The script works on files with or without `formatVersion`, and leaves their format as it is, so it does not matter whether you have run the upgrade step for the stored-file format version (`stored-files-format-version`). Commit your work, then run the script from the extension package's root:
 
 ```sh
 node <path-to-this-guide>/scripts/contract-hash-inputs/contract-hash-inputs.ts

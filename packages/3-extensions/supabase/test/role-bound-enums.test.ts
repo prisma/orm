@@ -40,6 +40,7 @@ const storage = {
 } as const;
 const enumContract = {
   ...base,
+  capabilities: { sql: { interactiveTransactions: true } },
   domain: {
     namespaces: {
       public: {
@@ -60,6 +61,7 @@ const enumContract = {
 } as const;
 
 type EnumContract = Contract<SqlStorage> & {
+  readonly capabilities: (typeof enumContract)['capabilities'];
   readonly domain: (typeof enumContract)['domain'];
   readonly storage: (typeof enumContract)['storage'];
 };

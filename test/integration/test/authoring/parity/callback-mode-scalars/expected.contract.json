@@ -324,23 +324,17 @@
     "postgres": {
       "distinctOn": true,
       "forKeyShare": true,
-      "forNoKeyUpdate": true,
-      "jsonAgg": true,
-      "lateral": true,
-      "limit": true,
-      "orderBy": true,
-      "pgvector.cosine": true,
-      "returning": true
+      "forNoKeyUpdate": true
     },
     "sql": {
       "checkConstraint": true,
       "defaultInInsert": true,
-      "enums": true,
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
+      "interactiveTransactions": true,
       "jsonAgg": true,
       "jsonAggWithoutTruncation": true,
       "lateral": true,
@@ -354,11 +348,6 @@
   },
   "extensions": {
     "pgvector": {
-      "capabilities": {
-        "postgres": {
-          "pgvector.cosine": true
-        }
-      },
       "familyId": "sql",
       "id": "pgvector",
       "kind": "extension",

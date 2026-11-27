@@ -14,10 +14,10 @@ A SHA-256 hash of the meaningful storage components (storage layout and related 
 A SHA-256 hash of execution defaults (for example, execution-time defaults or policies encoded under the `execution` section). Used to detect drift in execution semantics without altering the storage hash.
 
 ### ProfileHash
-A SHA-256 hash of the contract's `targetFamily`, `target` and `capabilities` section, which `prisma contract emit` fills from the configured target, adapter and extensions ([ADR 332](../architecture%20docs/adrs/ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md)). It does not change the logical meaning of the data contract. The migration runner verifies that the database satisfies these requirements and writes the same `profileHash` to the marker. At runtime, equality with the marker is enforced.
+A SHA-256 hash of the contract's `targetFamily`, `target` and `capabilities` section, the capabilities the contract requires ([ADR 332](../architecture%20docs/adrs/ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md)). It does not change the logical meaning of the data contract. `db sign` and the migration runner write it to the marker, and at runtime equality with the marker is enforced. Nothing is negotiated with the adapter: the contract's capabilities are fixed when it is emitted.
 
 ### Capability Key
-A canonical identifier for a database or extension feature (e.g., `sql.lateral`, `sql.returning`, `pgvector.ivfflat`). Capability keys are namespaced and follow a stability contract where core capabilities are reserved and extension capabilities are prefixed by pack namespace. Used for adapter negotiation and feature gating.
+A canonical identifier for a database or extension feature (e.g., `sql.lateral`, `sql.returning`, `postgres.distinctOn`). Capability keys are namespaced and follow a stability contract where core capabilities are reserved and extension capabilities are prefixed by pack namespace. Used for feature gating. See the [capabilities reference](./capabilities.md).
 
 ### Extension Pack
 A versioned, installable npm package that extends Prisma 8 with domain-specific features like vector search (pgvector) or geospatial operations (PostGIS). Packs declare a namespace, provide schemas for contract decorations, and implement SPIs for authoring, runtime, and migration integration.
@@ -48,16 +48,16 @@ Structured metadata attached to existing core nodes (tables, columns, indexes) v
 ### Constructs
 Extension-owned entities referenced by name within a namespace (e.g., operator classes, custom codecs). Constructs are validated by pack schemas and can be referenced by decorations or used by adapters during lowering.
 
-### Capability Negotiation
-The process by which adapters advertise supported capabilities and runtimes verify that contract requirements are satisfied. Occurs at `connect()` time and fails early with stable error codes if required capabilities are missing.
+### Capability Checks
+The contract lists the capabilities it requires, fixed at emit. On PostgreSQL the author writes the list, from the lists Prisma exports for each database version and for the driver. The client checks, when it is created, that its adapter and driver provide the capabilities that are not the database's (`CONTRACT.CAPABILITIES_NOT_PROVIDED`). `db verify`, `db sign` and the migration commands check that the database provides the database's capabilities (`CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED`, `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED`). Nothing is checked at `connect()`. See the [capabilities reference](./capabilities.md).
 
 ### Pack Manifest
 A JSON document declaring pack metadata including namespace, version, supported targets, capabilities, entry points, and security policies. Required for pack discovery, validation, and integration with the Prisma 8 toolchain.
 
 ## Runtime Integration
 
-### Profile Selection
-The process of selecting an adapter profile based on engine version and features, with profiles pinned in `profileHash`. Determines which capabilities are available and how queries are lowered to SQL.
+### Database Version
+On PostgreSQL, the target's table says which capabilities each database version provides. The facade exports a list of keys for each supported version (`postgres15` to `postgres18`) and one for the driver's connection (`postgresDriver`), and the author spreads the ones the contract requires into `requiredCapabilities`. Signing checks that the database's version provides them. Other targets' contracts take a fixed list from their adapter.
 
 ### Codec Resolution
 The deterministic process of assembling active codecs with strict precedence: app-provided → pack codecs → adapter built-ins → driver fallbacks. Resolution is cached per contract type and adapter profile.

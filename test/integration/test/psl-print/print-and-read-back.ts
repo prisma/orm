@@ -4,7 +4,7 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import type { ContractSourceContext } from '@internal/config/config-types';
 import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import type { ExtensionPackRef } from '@internal/framework-components/components';
 import {
@@ -13,6 +13,11 @@ import {
   createControlStack,
   type PslSourceSettings,
 } from '@internal/framework-components/control';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
 import { printPsl } from '@internal/psl-printer';
 import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -36,7 +41,7 @@ export function composePostgresStack(
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
-    driver: postgresDriver,
+    driver: postgresDriverDescriptor,
     extensions: [...extensions],
   });
 }
@@ -100,6 +105,7 @@ export async function readPsl(
     const path = join(directory, 'contract.prisma');
     writeFileSync(path, text);
     const result = await prismaContract(path, {
+      capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
       target: postgresPackRef,
       createNamespace: postgresCreateNamespace,
       enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },

@@ -52,11 +52,16 @@ describe('SQL contract file format version 1', () => {
     expect(refusal(withoutVersion)).toMatchObject({ code: 'CONTRACT.FORMAT_VERSION_MISSING' });
   });
 
-  it('refuses a file a pre-release wrote, with schemaVersion', () => {
+  it('reads a file a release candidate wrote, with schemaVersion, into the contract version 1 holds', () => {
     const { formatVersion: _, ...withoutVersion } = printed;
-    expect(refusal({ schemaVersion: '1', ...withoutVersion })).toMatchObject({
-      code: 'CONTRACT.FORMAT_VERSION_MISSING',
-    });
+    expect(serializer.deserializeContract({ schemaVersion: '1', ...withoutVersion })).toEqual(
+      serializer.deserializeContract(printed),
+    );
+  });
+
+  it('refuses a file with neither formatVersion nor schemaVersion', () => {
+    const { formatVersion: _, ...withoutVersion } = printed;
+    expect(refusal(withoutVersion)).toMatchObject({ code: 'CONTRACT.FORMAT_VERSION_MISSING' });
   });
 
   it('refuses a field it does not know', () => {

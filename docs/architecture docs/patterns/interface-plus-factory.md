@@ -69,8 +69,8 @@ The factory's return type is the interface; the class identity does not leak int
 
 ## Related rules
 
-- [`.cursor/rules/interface-factory-pattern.mdc`](../../../.cursor/rules/interface-factory-pattern.mdc) — the tactical rule enforcing this pattern.
-- [`.cursor/rules/typescript-patterns.mdc`](../../../.cursor/rules/typescript-patterns.mdc) — the broader TypeScript-patterns rule that covers this and related shapes.
+- [`.agents/rules/interface-factory-pattern.mdc`](../../../.agents/rules/interface-factory-pattern.mdc) — the tactical rule enforcing this pattern.
+- [`.agents/rules/typescript-patterns.mdc`](../../../.agents/rules/typescript-patterns.mdc) — the broader TypeScript-patterns rule that covers this and related shapes.
 - See also [`docs/reference/typescript-patterns.md`](../../reference/typescript-patterns.md) § "Interface-Based Design with Factory Functions" — the catalogue entry is the source of truth for the architectural pattern; the reference doc retains the TypeScript-mechanical caveat about classes with private properties in exported types ("Exception: Classes with Private Properties in Exported Types").
 
 ## Cautions / common mistakes

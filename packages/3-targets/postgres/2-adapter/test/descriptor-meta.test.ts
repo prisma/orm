@@ -10,14 +10,11 @@ describe('postgresAdapterDescriptorMeta data types', () => {
 });
 
 describe('postgresAdapterDescriptorMeta capabilities', () => {
-  it('descriptor reports sql.scalarList capability', () => {
-    expect(postgresAdapterDescriptorMeta.capabilities['sql']).toMatchObject({ scalarList: true });
-  });
-
-  it('descriptor reports sql.checkConstraint capability', () => {
-    expect(postgresAdapterDescriptorMeta.capabilities['sql']).toMatchObject({
-      checkConstraint: true,
-    });
+  it('declares none, because every PostgreSQL flag is a fact about the database, which the target declares by version', () => {
+    expect([
+      postgresAdapterDescriptor.capabilities,
+      postgresRuntimeAdapterDescriptor.capabilities,
+    ]).toEqual([{}, {}]);
   });
 });
 

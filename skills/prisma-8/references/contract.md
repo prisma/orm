@@ -43,20 +43,23 @@ Both files are **emitted artefacts**. Edit the source; never the JSON or `.d.ts`
 
 - **The `@prisma/orm-<target>` package is the only surface user-authored code imports from.** For a Postgres app: `@prisma/orm-postgres/config`, `@prisma/orm-postgres/contract-builder`, `@prisma/orm-postgres/control`, `@prisma/orm-postgres/runtime`, `@prisma/orm-postgres/static`. Mongo has the same layout (`@prisma/orm-mongo/config`, `@prisma/orm-mongo/contract-builder`, `@prisma/orm-mongo/runtime`, `@prisma/orm-mongo/static`). Each extension publishes its own entry points — `@prisma/orm-extension-pgvector/control`, `@prisma/orm-extension-postgis/control`, `@prisma/orm-extension-paradedb/control`. **Never import the platform packages (`@prisma/orm-framework`, `@prisma/orm-family-*`, `@prisma/orm-target-*`, `@prisma/orm-toolchain`) from user code.** The database package bakes the family / target / adapter / driver wiring in. See *Common Pitfalls* #4.
 - **Contract source.** A file the framework reads and lowers to the canonical Contract IR. Two flavours, both first-class:
-  - **`contract.prisma` (PSL)** — schema-flavoured DSL. Canonical for typical apps and brownfield Prisma users. Wired by `contract: './<path>/contract.prisma'` — the target config (`ormConfig`, below) detects the `.prisma` extension and routes through the PSL provider. The first line of every `.prisma` file is `// use prisma-8`; `orm init` and `contract infer` write it, and the language server only serves diagnostics, completion, and formatting on files that carry it (it still recognises the header earlier releases wrote and rewrites it on Format).
-  - **`contract.ts` (TypeScript builder)** — programmatic authoring with `defineContract({...}, ({ field, model, rel, type }) => ({...}))` from `@prisma/orm-postgres/contract-builder` (or `@prisma/orm-mongo/contract-builder`, `@prisma/orm-sqlite/contract-builder`, `@prisma/orm-mysql/contract-builder`, `@prisma/orm-mariadb/contract-builder`). Wired by `contract: './<path>/contract.ts'` — the database package detects the `.ts` extension and routes through the TS provider. Use when you need programmatic composition (per-tenant variants, generated fields) or constructs PSL doesn't yet express (e.g. registering a parameterised extension type — see pgvector's contract).
+  - **`contract.prisma` (PSL)** — schema-flavoured DSL. Canonical for typical apps and brownfield Prisma users. Wired by `contract: './<path>/contract.prisma'` — the target config (`ormConfig`, below) detects the `.prisma` extension and routes through the PSL provider. On PostgreSQL the entry is an object that also lists every capability the contract requires: `contract: { path: './<path>/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] }`, with `postgres18` (what PostgreSQL 18 provides; `postgres15` to `postgres17` for older databases) and `postgresDriver` (what the driver's connection provides, such as interactive transactions) imported from `@prisma/orm-postgres/config`. The list must not be empty and nothing is added to it; filter a key out to stop requiring it. The first line of every `.prisma` file is `// use prisma-8`; `orm init` and `contract infer` write it, and the language server only serves diagnostics, completion, and formatting on files that carry it (it still recognises the header earlier releases wrote and rewrites it on Format).
+  - **`contract.ts` (TypeScript builder)** — programmatic authoring with `defineContract({...}, ({ field, model, rel, type }) => ({...}))` from `@prisma/orm-postgres/contract-builder` (or `@prisma/orm-mongo/contract-builder`, `@prisma/orm-sqlite/contract-builder`, `@prisma/orm-mysql/contract-builder`, `@prisma/orm-mariadb/contract-builder`). Wired by `contract: './<path>/contract.ts'` — the database package detects the `.ts` extension and routes through the TS provider. On PostgreSQL, `defineContract` takes `requiredCapabilities: [...postgres18, ...postgresDriver]` the same way, imported from `@prisma/orm-postgres/contract-builder`. Use when you need programmatic composition (per-tenant variants, generated fields) or constructs PSL doesn't yet express (e.g. registering a parameterised extension type — see pgvector's contract).
   - **An existing Prisma schema, during adoption.** A project that still runs an earlier Prisma can point `contract:` at its current `schema.prisma` instead of writing a Prisma 8 contract: `contract: prisma6Schema('prisma/schema.prisma')` from `@prisma/orm-mongo/config` reads a Prisma 6 MongoDB schema, and `prisma7Schema` from `@prisma/orm-postgres/config` reads a Prisma 7 Postgres schema. The earlier Prisma keeps owning the database; after each change there, run `contract emit` and `db sign`. A construct Prisma 8 cannot express fails `contract emit` with a `PSL.PRISMA6_MONGO_*` or `PSL.PRISMA7_*` diagnostic. See the database package READMEs for the details.
 - **`prisma.config.ts`.** Wires the contract source, the database connection, the migrations directory, and any installed extensions. The file is an *envelope*: the unified CLI's `definePrismaConfig({...})` from `@prisma/cli-engine` wraps an `orm:` section built by the target's `defineConfig` — conventionally imported as `ormConfig` from `@prisma/orm-postgres/config` (or `@prisma/orm-mongo/config`). There is no flat form; a bare `defineConfig({ contract, ... })` default export fails with `CONFIG.VERSION_MARKER_MISSING`. Pass `formatter: { indent, newline }` to `ormConfig` to set how `prisma contract format` and the language server lay out PSL files: `indent` is a whole number of spaces, 1 or more (default 2), or `'tab'`. `newline` is `'LF'` or `'CRLF'`; without it, `contract format` uses the operating system's line ending and the language server uses LF.
 
   ```typescript
   // prisma.config.ts — what `prisma orm init` scaffolds
   import 'dotenv/config';
+  import { defineConfig as ormConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
   import { definePrismaConfig } from '@prisma/cli-engine';
-  import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 
   export default definePrismaConfig({
     orm: ormConfig({
-      contract: './src/prisma/contract.prisma',
+      contract: {
+        path: './src/prisma/contract.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
       db: { connection: process.env['DATABASE_URL']! },
     }),
   });
@@ -79,7 +82,7 @@ Both files are **emitted artefacts**. Edit the source; never the JSON or `.d.ts`
 
 | Code | Meaning | Next move |
 |---|---|---|
-| `CONFIG.CONTRACT_MISSING` | `contract` not set in `prisma.config.ts`. | Add `contract: './src/prisma/contract.prisma'` (app layout) or `'./src/contract.prisma'` (contract-space-package layout) — likewise for `.ts` sources — to the `ormConfig({...})` section. |
+| `CONFIG.CONTRACT_MISSING` | `contract` not set in `prisma.config.ts`. | Add `contract: './src/prisma/contract.prisma'` (app layout) or `'./src/contract.prisma'` (contract-space-package layout) — likewise for `.ts` sources — to the `ormConfig({...})` section. On PostgreSQL a `.prisma` path is an object with its required capabilities: `{ path: './src/prisma/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] }`. |
 | `CONFIG.VERSION_MARKER_MISSING` | The default export was not produced by `definePrismaConfig` / `ormConfig` (a flat `defineConfig({...})`, a plain object, or a Prisma 7 config). | Rewrite to the envelope form in *Key Concepts* above. |
 | `CONTRACT.VALIDATION_FAILED` | Source loaded but the Contract IR failed structural validation. | Read `meta.errors` for the offending model/field, fix the source, re-emit. |
 | `CONFIG.MISSING_EXTENSION_PACKS` | The contract uses a namespaced constructor (e.g. `pgvector.Vector(...)`) but `extensions` in the config does not list a matching descriptor. `meta.missingExtensionPacks` names them. | Install the package, import its control descriptor (`import pgvector from '@prisma/orm-extension-pgvector/control'`), add it to `extensions: [...]` in `ormConfig({...})`. |
@@ -174,15 +177,10 @@ Note: scalar lists (e.g. `String[]`) are gated on the target's `sql.scalarList` 
 The concept: same model, different authoring surface. The database package re-exports `defineContract`, `field`, `model`, `rel`, plus the `family`/`target` packs as default exports of `@prisma/orm-postgres/family` and `@prisma/orm-postgres/target`. Use the callback overload (`defineContract({...}, ({ field, model, rel, type, gen }) => ({...}))`) to get the type constructors, type aliases and generator calls (`field.column(type.String())`, `field.column(type.Uuid()).id().onCreate(gen.uuid(7))`, `field.column(type.temporal.CreatedAt())`, `type.sql.Varchar(35)`).
 
 ```typescript
-import sqlFamily from '@prisma/orm-postgres/family';
-import { defineContract } from '@prisma/orm-postgres/contract-builder';
-import postgresPack from '@prisma/orm-postgres/target';
+import { defineContract, postgres18, postgresDriver } from '@prisma/orm-postgres/contract-builder';
 
 export const contract = defineContract(
-  {
-    family: sqlFamily,
-    target: postgresPack,
-  },
+  { requiredCapabilities: [...postgres18, ...postgresDriver] },
   ({ field, model, gen, type }) => ({
     models: {
       User: model('User', {
@@ -215,11 +213,11 @@ The concept: an extension contributes a namespace (`pgvector.*`) plus two descri
 import 'dotenv/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
 import pgvector from '@prisma/orm-extension-pgvector/control';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './src/prisma/contract.prisma',
+    contract: { path: './src/prisma/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] },
     extensions: [pgvector],
     db: { connection: process.env['DATABASE_URL']! },
   }),
@@ -484,11 +482,11 @@ The concept: the Supabase extension provides the `supabase` contract space (the 
 ```typescript
 import { definePrismaConfig } from '@prisma/cli-engine';
 import supabasePack from '@prisma/orm-extension-supabase/pack';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './src/contract.prisma',
+    contract: { path: './src/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] },
     extensions: [supabasePack],
     migrations: { dir: 'migrations' },
   }),

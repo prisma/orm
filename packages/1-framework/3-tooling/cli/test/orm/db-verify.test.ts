@@ -642,6 +642,149 @@ describe('db verify', () => {
     });
   });
 
+  describe('the database does not provide what the contract requires', () => {
+    const OLDER =
+      'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 14.10. Upgrade the database to PostgreSQL 15 or later.';
+    const NOT_PROVIDED_ISSUE = blindCast<
+      SchemaDiffIssue,
+      'The renderer reads the path, which side is present and the explanation'
+    >({
+      path: ['capabilities'],
+      expected: { id: 'capabilities', nodeKind: 'database-capabilities' },
+      explanation: {
+        text: OLDER,
+        cause: 'database-capabilities-not-provided',
+        notProvided: {
+          database: 'PostgreSQL',
+          findings: [
+            { kind: 'older-than-supported', databaseVersion: '14.10', oldestSupported: 15 },
+          ],
+        },
+      },
+    });
+    const NOT_PROVIDED = schemaResult({
+      ok: false,
+      code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
+      summary: OLDER,
+      schema: { issues: [NOT_PROVIDED_ISSUE] },
+    });
+
+    it('carries the text as the summary, with no drift advice', async () => {
+      const dir = await projectDir();
+      mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', NOT_PROVIDED]] }));
+
+      const run = await harness(ormConfig()).run(['db', 'verify', '--json'], { cwd: dir });
+
+      expect(run.exitCode).toBe(4);
+      expect(diagnosticsOf(run)).toEqual([
+        {
+          code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
+          severity: 'error',
+          summary: OLDER,
+          nextActions: [],
+          meta: { space: 'app', schemaIssues: [NOT_PROVIDED_ISSUE] },
+        },
+      ]);
+    });
+
+    it('prints the text under its code, and no db update line', async () => {
+      const dir = await projectDir();
+      mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', NOT_PROVIDED]] }));
+
+      const run = await harness(ormConfig()).run(['db', 'verify'], {
+        cwd: dir,
+        isTty: { stdout: true, stderr: true },
+      });
+      const shown = stripAnsi(`${run.stderr}\n${run.stdout}`);
+
+      expect(shown).toContain(`✘ [CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED] ${OLDER}`);
+      expect(shown).not.toContain('db update');
+    });
+
+    it('leads with the refusal, draws the drift, and offers no command that changes the database', async () => {
+      const dir = await projectDir();
+      mocks.dbVerify.mockResolvedValue(
+        aggregateOk({
+          perSpace: [
+            [
+              'app',
+              schemaResult({
+                ...NOT_PROVIDED,
+                schema: { issues: [NOT_PROVIDED_ISSUE, MISSING_COLUMN] },
+              }),
+            ],
+          ],
+        }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'verify'], {
+        cwd: dir,
+        isTty: { stdout: true },
+      });
+
+      expect(diagnosticsOf(run)).toEqual([
+        {
+          code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
+          severity: 'error',
+          summary: OLDER,
+          why: '`db update`, `db init` and `db migrate` refuse this database until it provides what the contract requires. The live schema also differs: missing: public/users/email.',
+          nextActions: [],
+          meta: { space: 'app', schemaIssues: [NOT_PROVIDED_ISSUE, MISSING_COLUMN] },
+        },
+      ]);
+      expect(run.presented?.presentation.human[1]).toEqual({
+        kind: 'tree',
+        roots: [
+          {
+            label: 'Schema issues',
+            status: 'error',
+            children: [{ label: 'missing: public/users/email', status: 'error' }],
+          },
+        ],
+      });
+    });
+
+    it('offers no drift advice for the drift of another space either, and says why', async () => {
+      const dir = await projectDir();
+      mocks.dbVerify.mockResolvedValue(
+        aggregateOk({
+          perSpace: [
+            ['app', NOT_PROVIDED],
+            [
+              'pgvector',
+              schemaResult({
+                ok: false,
+                code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
+                summary: 'Database schema does not satisfy contract (1 failure)',
+                schema: { issues: [MISSING_COLUMN] },
+              }),
+            ],
+          ],
+        }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'verify', '--json'], { cwd: dir });
+
+      expect(diagnosticsOf(run)).toEqual([
+        {
+          code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
+          severity: 'error',
+          summary: OLDER,
+          nextActions: [],
+          meta: { space: 'app', schemaIssues: [NOT_PROVIDED_ISSUE] },
+        },
+        {
+          code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
+          severity: 'error',
+          summary: 'Database schema does not satisfy contract (1 failure)',
+          why: '`db update`, `db init` and `db migrate` refuse this database until it provides what the contract of another space requires. The live schema differs: missing: public/users/email.',
+          nextActions: [],
+          meta: { space: 'pgvector', schemaIssues: [MISSING_COLUMN] },
+        },
+      ]);
+    });
+  });
+
   describe('could not verify', () => {
     it('refuses --marker-only with --schema-only at exit 2', async () => {
       const dir = await projectDir();

@@ -1,6 +1,6 @@
 import postgresAdapter from '@internal/adapter-postgres/control';
 import { defineConfig as coreDefineConfig } from '@internal/config/config-types';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
@@ -9,12 +9,15 @@ import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
+import { postgres18, postgresDriver } from '../../src/contract/contract-capabilities';
 
 describe('defineConfig facade', () => {
   it('produces config equivalent to manual wiring for .prisma contracts', () => {
     const contractPath = './prisma/contract.prisma';
 
-    const facadeConfig = defineConfig({ contract: contractPath });
+    const facadeConfig = defineConfig({
+      contract: { path: contractPath, requiredCapabilities: [...postgres18, ...postgresDriver] },
+    });
 
     const extensions: [] = [];
 
@@ -22,7 +25,7 @@ describe('defineConfig facade', () => {
       family: sql,
       target: postgres,
       adapter: postgresAdapter,
-      driver: postgresDriver,
+      driver: postgresDriverDescriptor,
       extensions,
       contract: prismaContract(contractPath, {
         output: './prisma/contract.json',
@@ -46,7 +49,12 @@ describe('defineConfig facade', () => {
   });
 
   it('derives output path by swapping .prisma to .json', () => {
-    const config = defineConfig({ contract: './foo/bar.prisma' });
+    const config = defineConfig({
+      contract: {
+        path: './foo/bar.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
+    });
 
     expect(config.contract?.output).toBe('./foo/bar.json');
   });
@@ -59,7 +67,12 @@ describe('defineConfig facade', () => {
 
   it('selects TypeScript contract provider for .ts files (distinct from PSL provider)', () => {
     const tsConfig = defineConfig({ contract: './prisma/contract.ts' });
-    const pslConfig = defineConfig({ contract: './prisma/contract.prisma' });
+    const pslConfig = defineConfig({
+      contract: {
+        path: './prisma/contract.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
+    });
 
     expect(typeof tsConfig.contract?.source.load).toBe('function');
     expect(tsConfig.contract?.output).toBe('./prisma/contract.json');
@@ -69,7 +82,10 @@ describe('defineConfig facade', () => {
 
   it('writes into the given output directory when provided', () => {
     const config = defineConfig({
-      contract: './prisma/contract.prisma',
+      contract: {
+        path: './prisma/contract.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
       output: './custom/dir',
     });
 
@@ -78,7 +94,10 @@ describe('defineConfig facade', () => {
 
   it('always uses the canonical filename contract.json regardless of contract source name', () => {
     const config = defineConfig({
-      contract: './prisma/my-schema.prisma',
+      contract: {
+        path: './prisma/my-schema.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
       output: './out',
     });
 
@@ -97,7 +116,10 @@ describe('defineConfig facade', () => {
 
   it('accepts absolute output', () => {
     const config = defineConfig({
-      contract: './prisma/contract.prisma',
+      contract: {
+        path: './prisma/contract.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
       output: '/abs/path/to/dir',
     });
 
@@ -105,15 +127,30 @@ describe('defineConfig facade', () => {
   });
 
   it('derives output from the static prefix directory of a glob contract', () => {
-    const config = defineConfig({ contract: './prisma/**/*.prisma' });
+    const config = defineConfig({
+      contract: {
+        path: './prisma/**/*.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
+    });
 
     expect(config.contract?.output).toBe('./prisma/contract.json');
     expect(config.contract?.source.inputs).toEqual(['./prisma/**/*.prisma']);
   });
 
   it('derives the same output from a backslash-separated glob contract as its forward-slash twin', () => {
-    const forwardSlash = defineConfig({ contract: './prisma/**/*.prisma' });
-    const backslash = defineConfig({ contract: '.\\prisma\\**\\*.prisma' });
+    const forwardSlash = defineConfig({
+      contract: {
+        path: './prisma/**/*.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
+    });
+    const backslash = defineConfig({
+      contract: {
+        path: '.\\prisma\\**\\*.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
+    });
 
     expect(backslash.contract?.output).toBe(forwardSlash.contract?.output);
     expect(backslash.contract?.output).toBe('./prisma/contract.json');
@@ -121,7 +158,10 @@ describe('defineConfig facade', () => {
 
   it('passes db config through', () => {
     const config = defineConfig({
-      contract: './prisma/contract.prisma',
+      contract: {
+        path: './prisma/contract.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
       db: { connection: 'postgres://localhost:5432/db' },
     });
 
@@ -130,7 +170,10 @@ describe('defineConfig facade', () => {
 
   it('passes migrations config through', () => {
     const config = defineConfig({
-      contract: './prisma/contract.prisma',
+      contract: {
+        path: './prisma/contract.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
       migrations: { dir: 'custom-migrations' },
     });
 
@@ -139,14 +182,22 @@ describe('defineConfig facade', () => {
 
   it('omits db when it is not provided', () => {
     const config = defineConfig({
-      contract: './prisma/contract.prisma',
+      contract: {
+        path: './prisma/contract.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
     });
 
     expect(Object.hasOwn(config, 'db')).toBe(false);
   });
 
   it('names its own modules for generated files', () => {
-    const config = defineConfig({ contract: './prisma/contract.prisma' });
+    const config = defineConfig({
+      contract: {
+        path: './prisma/contract.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
+    });
 
     expect(config.contract?.typesModule).toBe('@internal/postgres/contract-types');
     expect(config.migrations).toEqual({ module: '@internal/postgres/migration' });
@@ -180,7 +231,10 @@ describe('defineConfig facade', () => {
     };
 
     const config = defineConfig({
-      contract: './prisma/contract.prisma',
+      contract: {
+        path: './prisma/contract.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
       extensions: [mockExtension],
     });
 
@@ -189,7 +243,10 @@ describe('defineConfig facade', () => {
 
   it('passes formatter config through', () => {
     const config = defineConfig({
-      contract: './prisma/contract.prisma',
+      contract: {
+        path: './prisma/contract.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
       formatter: { indent: 'tab', newline: 'CRLF' },
     });
 
@@ -197,7 +254,12 @@ describe('defineConfig facade', () => {
   });
 
   it('leaves formatter out when it is not given', () => {
-    const config = defineConfig({ contract: './prisma/contract.prisma' });
+    const config = defineConfig({
+      contract: {
+        path: './prisma/contract.prisma',
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      },
+    });
 
     expect(Object.hasOwn(config, 'formatter')).toBe(false);
   });

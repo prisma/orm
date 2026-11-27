@@ -1,12 +1,17 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import { createControlClient, enrichContract } from '@internal/cli/control-api';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import pgvector from '@internal/extension-pgvector/control';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import { materialiseMigrationPackage } from '@internal/migration-tools/io';
 import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
 import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
@@ -59,7 +64,7 @@ describe(
       family: sql,
       target: postgres,
       adapter: postgresAdapter,
-      driver: postgresDriver,
+      driver: postgresDriverDescriptor,
       extensions: [pgvector],
     });
 
@@ -92,6 +97,7 @@ model Document {
         process.chdir(testDir);
 
         const pslResult = await prismaContract('./schema.prisma', {
+          capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
           target: postgresPackRef,
           createNamespace: postgresCreateNamespace,
         }).source.load({
@@ -144,7 +150,7 @@ model Document {
             family: sql,
             target: postgres,
             adapter: postgresAdapter,
-            driver: postgresDriver,
+            driver: postgresDriverDescriptor,
             extensions: [pgvector],
           });
           try {

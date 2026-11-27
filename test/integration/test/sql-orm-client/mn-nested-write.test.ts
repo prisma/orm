@@ -1,3 +1,4 @@
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 // Integration coverage for M:N nested writes through the junction table.
 //
 // Two M:N relations on User are exercised:
@@ -22,7 +23,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getExecutionDefaultedTagsContract,
   includeStrategies,
-  postgresAdapterFor,
+  withIncludeStrategy,
 } from './helpers';
 import {
   createReturningUsersCollection,
@@ -603,10 +604,10 @@ describe.each(includeStrategies)('integration/mn-nested-write (%s)', (strategy) 
         // The defaults applier closes over the contract the context was
         // created from, so build the context from the same emitted contract.
         const context = createExecutionContext({
-          contract,
+          contract: withIncludeStrategy(contract, strategy),
           stack: createSqlExecutionStack({
             target: postgresTarget,
-            adapter: postgresAdapterFor(strategy),
+            adapter: postgresAdapter,
             extensions: [pgvectorRuntime],
           }),
         });

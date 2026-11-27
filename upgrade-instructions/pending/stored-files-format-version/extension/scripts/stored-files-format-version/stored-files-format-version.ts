@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Gives every file Prisma stores in a project its format version. A `contract.json` (emitted next to the contract source, bundled by an extension, or a copy under `migrations/snapshots/<hash>/`) had `"schemaVersion": "1"`; it now has `"formatVersion": 1`. A `migration.json` and a ref file (`refs/<name>.json`, including an extension's `refs/head.json`) had no version; they now start with `"formatVersion": 1`. This release refuses each of these files without it.
+ * Gives every file Prisma stores in a project its format version. A `contract.json` (emitted next to the contract source, bundled by an extension, or a copy under `migrations/snapshots/<hash>/`) had `"schemaVersion": "1"`; it now has `"formatVersion": 1`. A `migration.json` and a ref file (`refs/<name>.json`, including an extension's `refs/head.json`) had no version; they now start with `"formatVersion": 1`. Until `8.0.0` a release reads a file without it as the format a release candidate wrote; `8.0.0` refuses it.
  *
  * Usage: node stored-files-format-version.ts [project-root]
  *

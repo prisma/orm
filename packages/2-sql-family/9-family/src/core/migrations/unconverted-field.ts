@@ -4,9 +4,15 @@ import { type } from 'arktype';
 import { fieldOfColumn } from './field-of-column';
 import type { SqlMigrationPlanOperationStep } from './types';
 
-const ConvertedColumnMeta = type({
-  convertedColumn: { table: 'string', column: 'string', by: "'cast' | 'conversion'" },
+/** What a step's `meta.convertedColumn` holds in an `ops.json`. */
+export const ConvertedColumnJson = type({
+  '+': 'reject',
+  table: 'string',
+  column: 'string',
+  by: "'cast' | 'conversion'",
 });
+
+const ConvertedColumnMeta = type({ convertedColumn: ConvertedColumnJson });
 
 /**
  * A column whose values a step converts to the column's new type, or checks that it did: `by` says

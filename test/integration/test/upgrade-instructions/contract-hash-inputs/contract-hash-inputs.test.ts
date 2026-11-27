@@ -3,6 +3,7 @@ import { computeStorageHash } from '@internal/contract/hashing';
 import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import { dirname, join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
+import type { Tree } from './test-helpers';
 import {
   copyFixture,
   copyInto,
@@ -196,19 +197,37 @@ describe('a project the script refuses, changing no file', () => {
       tree: edited,
     });
   });
+});
 
-  it('names a stored file without a format version, and the step that adds it', () => {
-    const root = copyFixture('before', 'extension');
-    editFile(root, 'migrations/refs/head.json', (text) => text.replace('"formatVersion": 1,', ''));
-    const edited = readTree(root);
-    expect({ run: runScript(root), tree: readTree(root) }).toEqual({
-      run: {
-        status: 1,
-        stdout: '',
-        stderr:
-          'Changed no file, because:\n  migrations/refs/head.json: has no "formatVersion"; run the `stored-files-format-version` script of the earlier upgrade step first, then this script again\n',
-      },
-      tree: edited,
+function inReleaseCandidateFormat(tree: Tree): Tree {
+  return Object.fromEntries(
+    Object.entries(tree).map(([path, text]) => {
+      if (!path.endsWith('.json') || !text.includes('"formatVersion"')) return [path, text];
+      const isContract = 'targetFamily' in JSON.parse(text);
+      return [
+        path,
+        isContract
+          ? text.replace(/"formatVersion"(\s*):(\s*)1/, '"schemaVersion"$1:$2"1"')
+          : text.replace(/"formatVersion"\s*:\s*1\s*,\s*/, ''),
+      ];
+    }),
+  );
+}
+
+function writeTree(root: string, tree: Tree): void {
+  for (const [path, text] of Object.entries(tree)) writeFileSync(join(root, path), text);
+}
+
+describe('a project whose files a release candidate wrote, without formatVersion', () => {
+  const root = copyFixture('before');
+  writeTree(root, inReleaseCandidateFormat(fixtureTree('before')));
+  const run = runScript(root);
+
+  it('gives every stored hash its new value and leaves each file in the format it was in', () => {
+    expect({ status: run.status, stderr: run.stderr, tree: readTree(root) }).toEqual({
+      status: 0,
+      stderr: '',
+      tree: inReleaseCandidateFormat(fixtureTree('after')),
     });
   });
 });

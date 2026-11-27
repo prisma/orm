@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { PrismaConfig } from '@internal/config/config-types';
-import { readFormatVersion } from '@internal/contract/format-version';
+import { convertContractDocument } from '@internal/contract/format-version';
 import type { Contract } from '@internal/contract/types';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
@@ -106,6 +106,17 @@ describe('buildReadAggregate', () => {
     expect(result.value.aggregate.app.contract().storage.storageHash).toBe(CONTRACT_HASH);
   });
 
+  it('reads a contract.json a release candidate wrote', async () => {
+    await writeContractFile(contractPath, CONTRACT_HASH, { schemaVersion: '1' });
+    await writeAppMigration(migrationsDir);
+
+    const result = await buildReadAggregate(makeConfig(contractPath), { migrationsDir });
+
+    expect(result.ok ? result.value.aggregate.app.contract().storage.storageHash : result).toBe(
+      CONTRACT_HASH,
+    );
+  });
+
   it('falls back to the identity-only stand-in contract when contract.json is missing', async () => {
     await writeAppMigration(migrationsDir);
 
@@ -127,7 +138,7 @@ describe('buildReadAggregate', () => {
 
   it.each([
     ['written by a newer release', { formatVersion: 2 }, 'CONTRACT.FORMAT_VERSION_NEWER'],
-    ['a pre-release wrote', { schemaVersion: '1' }, 'CONTRACT.FORMAT_VERSION_MISSING'],
+    ['with no version field', {}, 'CONTRACT.FORMAT_VERSION_MISSING'],
   ])(
     'reports a contract.json %s instead of falling back to the stand-in',
     async (_label, version, code) => {
@@ -147,8 +158,7 @@ describe('buildReadAggregate', () => {
     await writeAppMigration(migrationsDir);
     const config = makeConfig(contractPath);
     vi.mocked(config.family.create).mockReturnValue({
-      deserializeContract: () =>
-        readFormatVersion({ formatVersion: 2 }, { kind: 'contract', knownVersions: [1] }),
+      deserializeContract: () => convertContractDocument({ formatVersion: 2 }),
     } as unknown as ReturnType<PrismaConfig['family']['create']>);
 
     const result = await buildReadAggregate(config, { migrationsDir });
@@ -191,7 +201,7 @@ describe('buildReadAggregate', () => {
       });
     });
 
-    it('loads with the refused ref left out when the caller reports every problem itself', async () => {
+    it('loads with the refused ref left out when the command reports each unreadable file', async () => {
       await writeContractFile(contractPath, CONTRACT_HASH);
       await writeAppMigration(migrationsDir);
       await writeRefFile(join(migrationsDir, 'app', 'refs', 'db.json'), {
@@ -203,12 +213,48 @@ describe('buildReadAggregate', () => {
 
       const result = await buildReadAggregate(makeConfig(contractPath), {
         migrationsDir,
-        tolerateUnreadableRefs: true,
+        unreadableFiles: 'report',
       });
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.aggregate.app.refs).toEqual({});
+    });
+  });
+
+  describe('a migration whose migration.json it cannot read', () => {
+    async function writeUnreadableMigration(): Promise<string> {
+      await writeContractFile(contractPath, CONTRACT_HASH);
+      await writeAppMigration(migrationsDir);
+      const dir = join(migrationsDir, 'app', '20260102T0000_broken');
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, 'migration.json'), '{ not json');
+      await writeFile(join(dir, 'ops.json'), '[]');
+      return dir;
+    }
+
+    it('refuses the load by default, naming the migration', async () => {
+      await writeUnreadableMigration();
+
+      const result = await buildReadAggregate(makeConfig(contractPath), { migrationsDir });
+
+      expect(result.ok ? undefined : result.failure.code).toBe(
+        'MIGRATION.CONTRACT_SPACE_VIOLATION',
+      );
+      expect(result.ok ? undefined : result.failure.why).toContain('20260102T0000_broken');
+    });
+
+    it('loads without it when the command reports each unreadable file', async () => {
+      await writeUnreadableMigration();
+
+      const result = await buildReadAggregate(makeConfig(contractPath), {
+        migrationsDir,
+        unreadableFiles: 'report',
+      });
+
+      expect(
+        result.ok ? result.value.aggregate.app.packages.map((p) => p.dirName) : undefined,
+      ).toEqual(['20260101T0000_init']);
     });
   });
 });

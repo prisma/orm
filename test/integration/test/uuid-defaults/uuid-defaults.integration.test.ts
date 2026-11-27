@@ -3,9 +3,14 @@ import { int4Column } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import { createControlClient } from '@internal/cli/control-api';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
 import {
   defineContract,
   enumType,
@@ -92,7 +97,7 @@ function createClient() {
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
-    driver: postgresDriver,
+    driver: postgresDriverDescriptor,
     extensions: [],
   });
 }
@@ -185,6 +190,7 @@ function emitPsl(testDir: string, source: string) {
   return createClient().emit({
     contractConfig: {
       source: prismaContract(schemaPath, {
+        capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
         target: postgresPackRef,
         createNamespace: postgresCreateNamespace,
       }).source,
@@ -309,6 +315,7 @@ describe(
       'in the TypeScript builder, emit as the lower-case text Postgres stores, are created by db init, and pass db verify --strict',
       async () => {
         const contract = defineContract({
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           models: {
             T: model('T', {
               fields: {
@@ -358,6 +365,7 @@ describe(
           member('B', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'),
         );
         const contract = defineContract({
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           enums: { Key },
           models: {
             T: model('T', {

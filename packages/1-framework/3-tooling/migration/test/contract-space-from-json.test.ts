@@ -45,11 +45,25 @@ describe('contractSpaceFromJson', () => {
     expect(error['fix']).toContain('extension "vectors"');
   });
 
-  it('refuses a bundled contract with no format version, and says the extension must be upgraded or republished', () => {
+  it('reads every bundled file a release candidate wrote, in the newest format version', () => {
+    const { formatVersion: _c, ...contractJson } = inputs.contractJson;
+    const { formatVersion: _r, ...headRef } = inputs.headRef;
+    const space = contractSpaceFromJson({
+      ...inputs,
+      contractJson: { schemaVersion: '1', ...contractJson },
+      migrations: [{ dirName: '20260101T0000_install', metadata, ops: [] }],
+      headRef,
+    });
+    expect(space).toEqual({
+      contractJson: inputs.contractJson,
+      migrations: [{ dirName: '20260101T0000_install', metadata, ops: [] }],
+      headRef: { hash: HASH, invariants: [] },
+    });
+  });
+
+  it('refuses a bundled contract with no version field at all, and says the extension must be upgraded or republished', () => {
     const { formatVersion: _, ...contractJson } = inputs.contractJson;
-    const error = refusal(() =>
-      contractSpaceFromJson({ ...inputs, contractJson: { schemaVersion: '1', ...contractJson } }),
-    );
+    const error = refusal(() => contractSpaceFromJson({ ...inputs, contractJson }));
     expect(error).toMatchObject({
       code: 'CONTRACT.FORMAT_VERSION_MISSING',
       message: 'The contract file "contract.json" of the extension "vectors" has no format version',
@@ -82,9 +96,11 @@ describe('contractSpaceFromJson', () => {
     expect(JSON.stringify(error)).toContain('the extension \\"vectors\\"');
   });
 
-  it('refuses a bundled head ref with no format version, naming the extension and the file', () => {
+  it('refuses a bundled head ref with the old schemaVersion field, naming the extension and the file', () => {
     const { formatVersion: _, ...headRef } = inputs.headRef;
-    const error = refusal(() => contractSpaceFromJson({ ...inputs, headRef }));
+    const error = refusal(() =>
+      contractSpaceFromJson({ ...inputs, headRef: { schemaVersion: '1', ...headRef } }),
+    );
     expect(error).toMatchObject({
       code: 'MIGRATION.FORMAT_VERSION_MISSING',
       message: 'The ref file "refs/head.json" of the extension "vectors" has no format version',

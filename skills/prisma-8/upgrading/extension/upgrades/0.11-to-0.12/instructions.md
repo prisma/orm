@@ -681,7 +681,7 @@ Run `pnpm typecheck && pnpm test` on your extension package. The import codemod 
 
 ## `default-namespace-domain-access-retire-projection-helpers`
 
-Starting at the 0.12 release (runtime qualification, [ADR 223](../../../../docs/architecture%20docs/adrs/ADR%20223%20-%20Target-owned%20default%20namespace.md)), the foundation `contract` package retires the transitional projection helpers introduced during the symmetric domain-plane migration. Extension code that still calls them will fail to compile after the bump.
+Starting at the 0.12 release (runtime qualification, [ADR 223](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20223%20-%20Target-owned%20default%20namespace.md)), the foundation `contract` package retires the transitional projection helpers introduced during the symmetric domain-plane migration. Extension code that still calls them will fail to compile after the bump.
 
 The default namespace a bare name resolves through is **inferred** from the contract (sole namespace, else insertion order) — there are no `…ForSqlTarget` / `…ForMongo` helpers to import. A target's default namespace is declared on its descriptor (`defaultNamespaceId`) and consumed only by authoring; runtime code resolves target-agnostically.
 

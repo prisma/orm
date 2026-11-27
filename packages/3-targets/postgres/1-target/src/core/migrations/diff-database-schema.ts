@@ -88,7 +88,7 @@ function pruneTableLessNamespaces(
     roles: [...expected.roles],
     extensions: [...expected.extensions],
     existingSchemas: expected.existingSchemas.filter((s) => ownEntry(namespaces, s) !== undefined),
-    pgVersion: expected.pgVersion,
+    serverVersionNumber: expected.serverVersionNumber,
   });
 }
 
@@ -207,7 +207,7 @@ function padActualNamespaces(
     roles: [...actual.roles],
     extensions: [...actual.extensions],
     existingSchemas: [...actual.existingSchemas],
-    pgVersion: actual.pgVersion,
+    serverVersionNumber: actual.serverVersionNumber,
   });
 }
 

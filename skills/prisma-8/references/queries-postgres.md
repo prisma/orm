@@ -586,7 +586,7 @@ const { affectedRows } = await db.execute(deletePlan);
 
 Each row must include every column that is not nullable and has no default; leaving one out is a type error that names the column. A value typed `T | undefined` for such a column is also an error, so narrow it first.
 
-`.returning(...)` requires the target adapter to advertise the `returning` capability. The Postgres adapter advertises it by default.
+`.returning(...)` requires the contract to require `sql.returning`. `postgres15` to `postgres18` list it.
 
 ### Computed projections and joins
 
@@ -696,7 +696,7 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 5. **Importing `and` / `or` / `not` from an internal package.** They are exported from `@prisma/orm-postgres/orm-client`; do not import them from a platform package such as `@prisma/orm-family-sql`.
 6. **Trying to `db.sql.from(tables.user)`.** That surface does not exist. The builder is table-shaped: `db.sql.<ns>.<tableName>.select(...)`. There is no `db.schema.tables` either.
 7. **Reading rows with `execute`.** Plans run through the client: `db.query(plan)` for rows, `db.execute(plan)` for a non-returning write (`{ affectedRows }`). Inside a transaction, `tx.query(plan)` / `tx.execute(plan)`. `execute` never yields rows — a `select` or `.returning(...)` plan passed to it gives you statistics, not data.
-8. **Setting `capabilities: { lateral: true }` in `prisma.config.ts`.** The ORM config (`ormConfig({...})`) does not take `capabilities`. Capabilities are declared by the active adapter and become part of the emitted contract; the Postgres adapter advertises `lateral`, `jsonAgg`, and `returning` out of the box. Enable extension capabilities through `extensions: [...]` in the config (see `references/contract.md`).
+8. **Setting `capabilities: { lateral: true }` in `prisma.config.ts`.** The ORM config (`ormConfig({...})`) does not take `capabilities`. The contract lists every capability it requires in `requiredCapabilities`, beside the path in the contract entry or in `defineContract`, usually `[...postgres18, ...postgresDriver]`, which includes `sql.lateral`, `sql.jsonAgg` and `sql.returning`. To require one more, add its key to that list (see `references/contract.md`).
 9. **Confabulating a TypedSQL or `.stream()` surface.** Neither exists. Raw SQL does: the client's raw lane, ``db.raw.sql`…` ``. Reusable statements do: `db.prepare(...)` (see *Prepared statements* in [`queries.md`](./queries.md)). Streaming: `for await` over a read terminal or `runtime.query(plan)` — with the caveats in *Streaming* in [`queries.md`](./queries.md).
 10. **Mixing the ORM mutation return with `db.query(plan)` / `db.execute(plan)`.** ORM terminals issue the query themselves and return rows. `query` and `execute` are for plans.
 11. **Adding a `cursor()` to a relation, count, operation or `nulls` order.** It throws `ORM.ARGUMENT_INVALID`. Use `.limit(n).offset(n)`, or order by plain columns.
@@ -705,7 +705,7 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 
 ## Reference Files
 
-- Example queries under [`examples/prisma-8-demo/src/orm-client/`](examples/prisma-8-demo/src/orm-client/) and [`examples/prisma-8-demo/src/queries/`](examples/prisma-8-demo/src/queries/) — canonical ORM and SQL-builder shapes.
+- Example queries under [`examples/prisma-8-demo/src/orm-client/`](https://github.com/prisma/orm/tree/main/examples/prisma-8-demo/src/orm-client) and [`examples/prisma-8-demo/src/queries/`](https://github.com/prisma/orm/tree/main/examples/prisma-8-demo/src/queries) — canonical ORM and SQL-builder shapes.
 - ORM client source under `packages/3-extensions/sql-orm-client/src/`.
 - SQL builder source under `packages/2-sql-family/4-lanes/sql-builder/src/`.
 

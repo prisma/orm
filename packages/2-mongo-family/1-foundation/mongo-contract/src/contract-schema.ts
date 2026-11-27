@@ -10,6 +10,7 @@ import type { MongoJsonObject, MongoJsonPrimitive, MongoJsonValue } from './cont
 const ControlPolicySchema = type("'managed' | 'tolerated' | 'external' | 'observed'");
 
 const DomainEnumRefSchema = type({
+  '+': 'reject',
   plane: "'domain'",
   namespaceId: 'string',
   entityKind: "'enum'",
@@ -21,6 +22,7 @@ const ContractEnumSchema = type({
   '+': 'reject',
   codecId: 'string',
   members: type({
+    '+': 'reject',
     name: 'string',
     value: 'string | number | boolean | null | unknown[] | Record<string, unknown>',
   })
@@ -33,7 +35,7 @@ const RawFieldSchema = type({
   '+': 'reject',
   type: ContractFieldTypeSchema,
   'nullable?': 'boolean',
-  'many?': type('false').or({ elementNullable: 'boolean' }),
+  'many?': type('false').or({ '+': 'reject', elementNullable: 'boolean' }),
   'dict?': 'boolean',
   'valueSet?': DomainEnumRefSchema,
 });
@@ -399,6 +401,7 @@ export function createMongoNamespaceEnvelopeSchema(
     id: 'string',
     'kind?': 'string',
     entries: type({
+      '+': 'reject',
       'collection?': type({ '[string]': collectionEntrySchema(fragments) }),
       'valueSet?': type({ '[string]': StorageValueSetSchema }),
       'valueObject?': type({ '[string]': ContractValueObjectSchema }),
@@ -438,9 +441,9 @@ export function createMongoContractSchema(
     'meta?': 'Record<string, unknown>',
     'defaultControlPolicy?': ControlPolicySchema,
     'execution?': ContractExecutionSectionSchema,
-    'sources?': 'Record<string, unknown>',
     '_generated?': 'Record<string, unknown>',
     domain: type({
+      '+': 'reject',
       namespaces: type({
         '[string]': type({
           '+': 'reject',

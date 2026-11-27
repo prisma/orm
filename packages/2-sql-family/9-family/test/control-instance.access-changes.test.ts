@@ -21,8 +21,13 @@ describe('sql family instance accessChangesOf', () => {
       widens: true,
     };
     const stack = makeStack();
+    const read: (readonly unknown[])[] = [];
     const target = {
       ...stack.target,
+      readOperations: (operations: readonly unknown[]) => {
+        read.push(operations);
+        return operations;
+      },
       accessChangesOf: (operations: readonly MigrationPlanOperation[]) => {
         received.push(operations);
         return [change];
@@ -30,14 +35,60 @@ describe('sql family instance accessChangesOf', () => {
     };
     const instance = createSqlFamilyInstance({ ...stack, target });
 
-    expect({ changes: instance.accessChangesOf([DISABLE]), received }).toEqual({
+    expect({ changes: instance.accessChangesOf([DISABLE]), read, received }).toEqual({
       changes: [change],
+      read: [[DISABLE]],
       received: [[DISABLE]],
     });
   });
 
+  it("reads a migration's operations in the target's format before the target or the family acts on them", () => {
+    const received: (readonly MigrationPlanOperation[])[] = [];
+    const stack = makeStack();
+    const target = {
+      ...stack.target,
+      readOperations: () => {
+        throw new Error('refused');
+      },
+      accessChangesOf: (operations: readonly MigrationPlanOperation[]) => {
+        received.push(operations);
+        return [];
+      },
+    };
+    const instance = createSqlFamilyInstance({ ...stack, target });
+
+    expect(() => instance.accessChangesOf([DISABLE])).toThrow('refused');
+    expect(() => instance.storageNameOf(DISABLE)).toThrow('refused');
+    expect(() => instance.toOperationPreview([DISABLE])).toThrow('refused');
+    expect(received).toEqual([]);
+  });
+
+  it('names the stored object from the operation as the reader returns it', () => {
+    const stack = makeStack();
+    const target = {
+      ...stack.target,
+      readOperations: (operations: readonly unknown[]) =>
+        operations.map(() => ({
+          ...DISABLE,
+          target: { id: 'postgres', details: { objectType: 'table', name: 'post' } },
+        })),
+    };
+    const instance = createSqlFamilyInstance({ ...stack, target });
+
+    const stored = {
+      ...DISABLE,
+      target: { id: 'postgres', details: { schema: 'main', objectType: 'table', name: 'post' } },
+    };
+    expect(instance.storageNameOf(stored)).toBe('post');
+  });
+
   it('raises CONTRACT.PACK_CONTRIBUTION_INVALID when the target descriptor has no accessChangesOf', () => {
-    const instance = createSqlFamilyInstance(makeStack());
+    const stack = makeStack();
+    const target = {
+      ...stack.target,
+      readOperations: (operations: readonly unknown[]) => operations,
+    };
+    const instance = createSqlFamilyInstance({ ...stack, target });
 
     expect(() => instance.accessChangesOf([DISABLE])).toThrow(
       expect.objectContaining({

@@ -2,6 +2,10 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import type { ContractConfig, ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { validateContractDomain } from '@internal/contract/validate-domain';
+import {
+  type CapabilityMatrix,
+  mergeCapabilityMatrices,
+} from '@internal/framework-components/components';
 import type { ParseDiagnostic, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -9,6 +13,7 @@ import {
   validateModelStorageReferences,
   validateSqlStorageConsistency,
 } from '@internal/sql-contract/validators';
+import { recordSourceGivenNoCapabilities } from '@internal/sql-contract-psl/sources-given-no-capabilities';
 import { applySqlSpecifierControlPolicy } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
@@ -23,6 +28,8 @@ export interface Prisma7ContractOptions {
   readonly binding: Prisma7TargetBinding;
   readonly output?: string;
   readonly defaultControlPolicy?: ControlPolicy;
+  /** Capabilities the contract requires beyond those of the configured components, such as the connection's. */
+  readonly capabilities?: CapabilityMatrix;
 }
 
 function defaultOutputFromSchemaPath(schemaPath: string): string {
@@ -95,7 +102,7 @@ export function prisma7Contract(
   options: Prisma7ContractOptions,
 ): ContractConfig {
   const parserOptions = { grammar: 'prisma-7' } as const;
-  return {
+  const config: ContractConfig = {
     source: {
       format: 'psl',
       inputs: [schemaPath],
@@ -182,7 +189,12 @@ export function prisma7Contract(
             composedExtensions: context.composedExtensions,
             composedExtensionContracts: context.composedExtensionContracts,
             defaultNamespaceId: context.defaultNamespaceId,
-            capabilities: context.capabilities,
+            capabilities:
+              options.capabilities === undefined
+                ? context.capabilities
+                : mergeCapabilityMatrices(context.capabilities, [
+                    { capabilities: options.capabilities },
+                  ]),
           });
           if (!interpreted.ok) return interpreted;
           contract = applySqlSpecifierControlPolicy(
@@ -211,4 +223,6 @@ export function prisma7Contract(
     },
     output: options.output ?? defaultOutputFromSchemaPath(schemaPath),
   };
+  if (options.capabilities === undefined) recordSourceGivenNoCapabilities(config.source);
+  return config;
 }

@@ -67,6 +67,7 @@ The CLI holds no template, connection string or server check for any target. Aft
 | --- | --- |
 | `label` | Shows it as the target's name in the quick reference |
 | `configModule` | Writes `prisma.config.ts` importing `defineConfig` from it |
+| `contractEntry(input)` | Optional. Writes the node it returns as the config's `contract:` entry. See [The config's contract entry](#the-configs-contract-entry) |
 | `peerPackages` | Installs these driver packages into the application |
 | `authoringModes` | Offers these ways to write the contract: PSL, TypeScript or both |
 | `starterContract(mode)` | Writes it as the starter contract |
@@ -83,7 +84,23 @@ The CLI keeps everything that is the same for every target: which files exist an
 
 Two facts are shared by the CLI and every contribution, and the `InitContribution` type states them: the connection string is read from `DATABASE_URL`, and `dotenv` is installed with the facade, so `db.ts` may import `dotenv/config`.
 
-`init` finds the entrypoint as the project itself would: Node resolves `<package>/init` from the project folder. The CLI then imports that file. Because of that, the `init` entrypoint may import types from the framework but no framework code that runs. The CLI that loads it can be a different installed copy of the framework from the one the facade depends on, and two copies in one process do not recognise each other's values.
+### The config's contract entry
+
+A facade may need more in the config's `contract:` entry than the path, such as the PostgreSQL facade's list of required capabilities. `contractEntry(input)` returns the entry as a node of the kind migration files are written with: it renders itself as TypeScript and lists the imports it needs (`renderTypeScript()` and `importRequirements()`, the two methods of `TsExpression`). `input` says which contract source the project has: a contract file and its authoring mode, or a Prisma 7 schema.
+
+For a Prisma schema, the PostgreSQL facade's node writes this entry, and its imports go in the config's one import block:
+
+```ts
+contract: { path: "./prisma/contract.prisma", requiredCapabilities: [...postgres18, ...postgresDriver] },
+```
+
+A TypeScript contract lists its required capabilities in `defineContract`, so PostgreSQL's entry for one is its path.
+
+The node has a third method, `contractValue(configModule)`, which returns the entry's real value, as a migration's operation call can also build the operation to run. Before writing anything for a project that keeps its Prisma 7 schema, `init` calls it to check that the facade can read the schema. The CLI passes the exports of the facade's config module, which it has already loaded to look for `prisma7Schema`. The node takes the functions and lists it calls from those exports, by the names its text imports, so the text and the value cannot use different ones, and the node imports nothing itself.
+
+The CLI knows nothing about what the entry means. Without the member, the entry is the path, or `prisma7Schema(<path>)` from `configModule`.
+
+`init` finds the entrypoint as the project itself would: Node resolves `<package>/init` from the project folder. The CLI then imports that file. The CLI that loads it can be a different installed copy of the framework from the one the facade depends on, and two copies in one process do not recognise each other's values. So the CLI accepts a node by its three methods and never by its class, and the `init` entrypoint loads no framework code that runs, with one exception: the package that renders TypeScript (`ts-render`), which the node is built from, and the error and hashing helpers that package itself loads (from `utils` and `contract`). None of them holds state the two copies could disagree about, and the CLI recognises their errors by shape. A test lists the framework modules each facade's `init` entrypoint may load and fails on any other.
 
 A probe reports one of four results: the server's version, a driver that is missing, a driver that is installed but fails to load, or a connection that worked whose version could not be read. It rejects only when it cannot connect. `init` gives every probe a deadline. At the deadline it aborts `signal` and reports that the probe did not finish, which it treats like a failed connection. `--probe-db` reads `DATABASE_URL` from the shell's environment, not from `.env`.
 
@@ -162,7 +179,7 @@ check the flags
 A project that already has a Prisma schema states its database there, as a `provider`. `init` reads it and finds the facade through the list. Only listed packages take part: a provider with no entry is refused, with advice to start a fresh project with `--target`.
 
 - **A provider that Prisma 7 does not support**, such as `mongodb`, marks a Prisma 6 project. `init` changes nothing and prints how to set Prisma 8 up beside it.
-- **A Prisma 7 schema can stay as the contract source**, so that Prisma 8 can be adopted on a database Prisma 7 still migrates. `init` asks about it when it finds one, and `--from-prisma7-schema` asks for it outright. A facade supports it by exporting a function named `prisma7Schema` from its `configModule`, beside `defineConfig`; the function turns the path of a Prisma 7 schema into a contract source. The CLI writes the config around that function, and the contribution must give the matching quick reference in `prisma7QuickReference`, and `init` refuses a package that exports the function without it. With a facade that has no `prisma7Schema`, `init` sets up a fresh project instead in an interactive run, and stops without writing anything when `--from-prisma7-schema` was given.
+- **A Prisma 7 schema can stay as the contract source**, so that Prisma 8 can be adopted on a database Prisma 7 still migrates. `init` asks about it when it finds one, and `--from-prisma7-schema` asks for it outright. A facade supports it by exporting a function named `prisma7Schema` from its `configModule`, beside `defineConfig`; the function turns the path of a Prisma 7 schema into a contract source. The CLI writes the config around a call of that function, or the call the contribution's `contractEntry` gives, and the contribution must give the matching quick reference in `prisma7QuickReference`, and `init` refuses a package that exports the function without it. With a facade that has no `prisma7Schema`, `init` sets up a fresh project instead in an interactive run, and stops without writing anything when `--from-prisma7-schema` was given.
 - **An unlisted package cannot keep a Prisma 7 schema.** `--from-prisma7-schema` with `--target` naming an unlisted package is refused before anything is installed. Without `--from-prisma7-schema`, `--target` naming an unlisted package sets up a fresh project and leaves the Prisma 7 schema alone.
 
 ## Consequences
@@ -198,6 +215,14 @@ This keeps package code from running before the project is set up. Rejected beca
 ### The contribution supplies the whole config for a Prisma 7 schema
 
 In place of the `prisma7Schema` function, the contribution would return the full text of `prisma.config.ts` for a project that keeps its Prisma 7 schema. Rejected because that text differs from the ordinary config in one line, so every facade would carry a copy of text the CLI already writes, and a change to it would have to be made in each of them.
+
+### A member for each option the config needs
+
+The contribution would return option values, such as a list of required capabilities, and the CLI would add them beside the path. Rejected because each new option a facade needs, or a new place to put one, would add another member to the contribution.
+
+### The contract entry as data the CLI prints and runs
+
+The contribution would return a JSON value, or a call of a module's export with JSON arguments, and the CLI would print it as TypeScript and, for the check, import the module and call the export. Built first. It was a second way of writing TypeScript beside the one migration files use, it needed its own checks that the printed text would compile, and it could not express an entry that names an import, such as `[...postgres18, ...postgresDriver]`.
 
 ### Package names only, with no list
 

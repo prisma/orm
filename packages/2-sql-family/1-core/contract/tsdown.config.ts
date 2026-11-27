@@ -18,6 +18,7 @@ export default defineConfig({
     'src/exports/factories.ts',
     'src/exports/index-types.ts',
     'src/exports/index-type-validation.ts',
+    'src/exports/capability-messages.ts',
     'src/exports/normal-form.ts',
     'src/exports/entity-handle-lowering-hook.ts',
     'src/exports/value-set-derivation-hook.ts',

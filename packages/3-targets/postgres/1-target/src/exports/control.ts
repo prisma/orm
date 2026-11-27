@@ -7,6 +7,7 @@ import type {
 import { setFallbackTemporal } from '@internal/type-implementations/temporal';
 import { blindCast } from '@internal/utils/casts';
 import { Temporal as fallbackTemporal } from 'temporal-polyfill/full/implementation';
+import { postgresDatabaseCapabilitiesNotProvidedByTable } from '../core/database-capabilities-not-provided';
 import { postgresTargetDescriptorMeta } from '../core/descriptor-meta';
 import { recordedAccessChangesOf } from '../core/migrations/access-changes';
 import { diffPostgresSchema } from '../core/migrations/diff-database-schema';
@@ -14,6 +15,7 @@ import { createPostgresMigrationPlanner } from '../core/migrations/planner';
 import type { PostgresPlanTargetDetails } from '../core/migrations/planner-target-details';
 import { postgresContractToSchema } from '../core/migrations/postgres-contract-to-schema';
 import { PostgresSchemaVerifier } from '../core/migrations/postgres-schema-verifier';
+import { readPostgresOperations } from '../core/migrations/read-operations';
 import { createPostgresMigrationRunner } from '../core/migrations/runner';
 import { PostgresContractSerializer } from '../core/postgres-contract-serializer';
 import { inferPostgresPslContract } from '../core/psl-infer/infer-psl-contract';
@@ -43,9 +45,17 @@ function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
     diffSchema(input) {
       return diffPostgresSchema(input);
     },
+    databaseCapabilitiesNotProvided({ contract, schema }) {
+      PostgresDatabaseSchemaNode.assert(schema);
+      return postgresDatabaseCapabilitiesNotProvidedByTable(
+        contract.capabilities,
+        schema.serverVersionNumber,
+      );
+    },
     classifySubjectGranularity: postgresDiffSubjectGranularity,
     classifyEntityKind: postgresDiffSubjectEntityKind,
     accessChangesOf: recordedAccessChangesOf,
+    readOperations: readPostgresOperations,
     migrations: {
       createPlanner(adapter: SqlControlAdapter<'postgres'>) {
         return createPostgresMigrationPlanner(adapter);

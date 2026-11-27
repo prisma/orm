@@ -17,6 +17,7 @@ import type {
   BindSiteParams,
   Declaration,
   ExecutionContext,
+  InteractiveTransactionsListed,
   ParamsFromDeclaration,
   Runtime,
   SqlExecutionStackWithDriver,
@@ -25,11 +26,13 @@ import type {
 } from '@internal/sql-runtime';
 import {
   activitySource,
+  assertInteractiveTransactionsListed,
   delegatingActivitySource,
   delegatingRuntime,
   withTransaction,
   withTransactionMembers,
 } from '@internal/sql-runtime';
+import postgresTarget from '@internal/target-postgres/runtime';
 import { ifDefined } from '@internal/utils/defined';
 import type { PostgresStaticContext } from '../static/postgres-static';
 import type { NamespacedNativeEnums } from './native-enums';
@@ -123,10 +126,18 @@ export interface PostgresRuntimeBoundMembers<
   readonly orm: OrmClient<TContract, TCollections>;
   runtime(): Runtime;
   transaction<R>(
-    fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+    fn: PostgresTransactionCallback<TContract, TCollections, R>,
     options?: PostgresTransactionOptions,
   ): Promise<R>;
 }
+
+/** The callback `transaction()` runs. For a contract that does not list interactive transactions, and that no release candidate emitted, no callback satisfies it, and the type error names the capability. Prisma 8.0 removes the exemption for release candidate contracts. */
+export type PostgresTransactionCallback<
+  TContract extends Contract<SqlStorage>,
+  TCollections extends CollectionClasses,
+  R,
+> = ((tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>) &
+  InteractiveTransactionsListed<TContract, (typeof postgresTarget)['retiredCapabilities']>;
 
 export interface PostgresLifecycleMembers {
   close(): Promise<void>;
@@ -221,6 +232,7 @@ export function buildPostgresRuntimeBoundMembers<
       fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
       localOptions?: PostgresTransactionOptions,
     ): Promise<R> {
+      assertInteractiveTransactionsListed(context.contract, postgresTarget.retiredCapabilities);
       const local = validateTransactionOptions(localOptions);
       const isolationLevel =
         local?.isolationLevel !== undefined

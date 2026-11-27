@@ -79,7 +79,7 @@ const emptySchema = new PostgresDatabaseSchemaNode({
   },
   roles: [],
   existingSchemas: [],
-  pgVersion: '',
+  serverVersionNumber: undefined,
 });
 
 function liveSchemaWithUsers(
@@ -107,7 +107,7 @@ function liveSchemaWithUsers(
     },
     roles: [],
     existingSchemas: [],
-    pgVersion: '',
+    serverVersionNumber: undefined,
   });
 }
 

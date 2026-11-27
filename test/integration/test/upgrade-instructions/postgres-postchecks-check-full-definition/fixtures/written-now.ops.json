@@ -2021,6 +2021,14 @@
     "id": "table.public.orders.rename",
     "label": "Rename table \"orders\" to \"purchases\"",
     "operationClass": "widening",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "purchases"
+      }
+    },
     "precheck": [],
     "execute": [
       {

@@ -38,6 +38,7 @@
     "@internal/sql-runtime": "workspace:8.0.0-rc.25",
     "@internal/target-package-config": "workspace:8.0.0-rc.25",
     "@internal/target-postgres": "workspace:8.0.0-rc.25",
+    "@internal/ts-render": "workspace:8.0.0-rc.25",
     "@internal/utils": "workspace:8.0.0-rc.25",
     "@types/node": "catalog:",
     "arktype": "catalog:",

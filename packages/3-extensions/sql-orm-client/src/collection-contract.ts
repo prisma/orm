@@ -5,6 +5,7 @@ import type {
   ContractRelationThrough,
   CrossReference,
 } from '@internal/contract/types';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { type CapabilityRequirement, missingCapability } from '@internal/sql-relational-core/ast';
 import { isExpression } from '@internal/sql-relational-core/expression';
@@ -942,9 +943,13 @@ export function assertReturningCapability(contract: Contract<SqlStorage>, action
     return;
   }
 
-  throw ormError('ORM.CAPABILITY_MISSING', `${action} requires contract capability "returning"`, {
-    meta: { capability: 'returning', action },
-  });
+  throw ormError(
+    'ORM.CAPABILITY_MISSING',
+    capabilityUnavailableMessage(`\`${action}\``, ['sql.returning']),
+    {
+      meta: { capability: 'returning', action },
+    },
+  );
 }
 
 export function assertInsertConflictSkipCapability(
@@ -969,7 +974,7 @@ function requireCapability(
 
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${action} requires contract capability "${capability}". Re-emit the contract against an adapter that reports it.`,
+    capabilityUnavailableMessage(`\`${action}\``, [`sql.${capability}`]),
     { meta: { capability, action } },
   );
 }
@@ -998,7 +1003,7 @@ export function assertDistinctOnCapability(
 
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${methodName}() requires capability postgres.distinctOn`,
+    capabilityUnavailableMessage(`\`${methodName}()\``, ['postgres.distinctOn']),
     { meta: { capability: 'postgres.distinctOn', method: methodName } },
   );
 }
@@ -1013,9 +1018,13 @@ export function assertLockCapability(
     return;
   }
 
-  throw ormError('ORM.CAPABILITY_MISSING', `${methodName}() requires capability ${capability}`, {
-    meta: { capability, method: methodName },
-  });
+  throw ormError(
+    'ORM.CAPABILITY_MISSING',
+    capabilityUnavailableMessage(`\`${methodName}()\``, [capability]),
+    {
+      meta: { capability, method: methodName },
+    },
+  );
 }
 
 export function supportsDefaultInInsert(contract: Contract<SqlStorage>): boolean {

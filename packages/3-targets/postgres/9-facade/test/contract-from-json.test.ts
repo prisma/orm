@@ -41,10 +41,14 @@ describe('contractFromJson', () => {
     );
   });
 
-  it('refuses a contract a pre-release wrote', () => {
-    expect(() => contractFromJson({ schemaVersion: '1', target: 'postgres' })).toThrow(
-      expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' }),
-    );
+  it('reads a contract a release candidate wrote, passed to contractFromJson or a client', () => {
+    const { formatVersion: _, ...rest } = fixtureContractJson;
+    const releaseCandidate = { schemaVersion: '1', ...rest };
+    const expected = contractFromJson<Contract>(freshContractJson());
+    expect(contractFromJson<Contract>(releaseCandidate)).toEqual(expected);
+    expect(() =>
+      postgresStatic({ contract: releaseCandidate as unknown as Contract }),
+    ).not.toThrow();
   });
 
   it('refuses a newer contract passed straight to a client', () => {

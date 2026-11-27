@@ -1,0 +1,101 @@
+[
+  {
+    "path": "./config",
+    "export": "PostgresConfigOptions",
+    "test": "type",
+    "kind": "allowed",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "2d7a57306c390559",
+    "reason": "The config's `contract` also accepts an entry with a path and the required capabilities; every config that compiled before still compiles (prisma/orm#31218)."
+  },
+  {
+    "path": "./config",
+    "export": "defineConfig",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "7607e23832f1c4d9",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./control",
+    "export": "createPostgresControlClient",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "178b9a980dec2088",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./internal/static-context",
+    "export": "PostgresStaticContext",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "23ad978bb2ee1eba",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "PostgresClient",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "bb1d22b22934d620",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
+  },
+  {
+    "path": "./runtime",
+    "export": "PostgresQueryMembers",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "06530e5eaac5d343",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "PostgresTransactionContext",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "96d86bdaf508a04e",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "790e0da79ee6b705",
+    "reason": "`transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
+  },
+  {
+    "path": "./serverless",
+    "export": "PostgresServerlessClient",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "2f920346c3e79fa6",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
+  },
+  {
+    "path": "./serverless",
+    "export": "PostgresServerlessConnection",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "c0db335ffd26a776",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
+  },
+  {
+    "path": "./static",
+    "export": "PostgresStaticContext",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "23ad978bb2ee1eba",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  }
+]

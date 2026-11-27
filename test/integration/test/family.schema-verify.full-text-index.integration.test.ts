@@ -7,7 +7,7 @@
  */
 
 import { createPostgresBuiltinCodecLookup } from '@internal/adapter-postgres/control';
-import { fullTextIndex } from '@internal/postgres/contract-builder';
+import { fullTextIndex, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { CreateIndexCall } from '@internal/target-postgres/op-factory-call';
 import { contractToPostgresDatabaseSchemaNode } from '@internal/target-postgres/planner';
@@ -30,6 +30,7 @@ import { postgresTypeLookups } from './postgres-type-lookups';
 
 function postContract(naming: { readonly name: string } | { readonly map: string }) {
   return defineContract({
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     models: {
       Post: model('Post', {
         fields: {

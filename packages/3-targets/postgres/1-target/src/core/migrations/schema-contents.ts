@@ -2,7 +2,10 @@ import type { SqlMigrationPlanOperationStep } from '@internal/family-sql/control
 import type { BlockingObject } from '@internal/framework-components/control';
 import { type } from 'arktype';
 
-const SchemaContentsMeta = type({ schemaContents: { schema: 'string' } });
+/** What a step's `meta.schemaContents` holds in an `ops.json`. */
+export const SchemaContentsJson = type({ '+': 'reject', schema: 'string' });
+
+const SchemaContentsMeta = type({ schemaContents: SchemaContentsJson });
 
 /** The meta of a step that fails while a schema still holds objects; the runner then names them. */
 export function schemaContentsMeta(schema: string): {

@@ -89,6 +89,7 @@ export {
 export {
   type CheckSpace,
   checkSingleTarget,
+  type EnumerateCheckSpacesInputs,
   enumerateCheckSpaces,
   loadAggregateIntegrityViolations,
   type MigrationCheckOutcome,

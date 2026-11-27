@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { convertContractDocument } from '@internal/contract/internal/format-version';
 import {
   contractSnapshotFiles,
   readContractSnapshotJson,
@@ -43,18 +44,29 @@ function readJson(side: Side, relative: string): unknown {
   return JSON.parse(readFileSync(path(side, relative), 'utf8'));
 }
 
-function migrationDirs(side: Side, spaceDir: string): string[] {
-  return migrationDirsIn(path(side, spaceDir));
+function nonEmpty(list: string[], what: string): string[] {
+  if (list.length === 0) throw new Error(`The fixture has no ${what}`);
+  return list;
 }
 
-function migrationDirsIn(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && /^\d{8}T\d{4}_/.test(entry.name))
-    .map((entry) => entry.name);
+function migrationDirs(side: Side, spaceDir: string): string[] {
+  return migrationDirsIn(path(side, spaceDir), `${side}/${spaceDir}`);
+}
+
+function migrationDirsIn(dir: string, label: string): string[] {
+  return nonEmpty(
+    readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && /^\d{8}T\d{4}_/.test(entry.name))
+      .map((entry) => entry.name),
+    `migration packages in ${label}`,
+  );
 }
 
 function snapshotHashes(side: Side, migrationsDir: string): string[] {
-  return readdirSync(path(side, join(migrationsDir, 'snapshots')));
+  return nonEmpty(
+    readdirSync(path(side, join(migrationsDir, 'snapshots'))),
+    `snapshots in ${side}/${migrationsDir}`,
+  );
 }
 
 describe.each(Object.entries(projects))('the %s project after the script', (_name, project) => {
@@ -65,9 +77,7 @@ describe.each(Object.entries(projects))('the %s project after the script', (_nam
   });
 
   it('has migration packages this release reads, each with its unchanged migrationHash verified', async () => {
-    const dirs = migrationDirs('after', project.spaceDir);
-    expect(dirs.length).toBeGreaterThan(0);
-    for (const dir of dirs) {
+    for (const dir of migrationDirs('after', project.spaceDir)) {
       const pkg = await readMigrationPackage(path('after', join(project.spaceDir, dir)), {
         migrationsDir: path('after', project.migrationsDir),
       });
@@ -125,11 +135,13 @@ describe('the extension package after the script', () => {
     return contractSpaceFromJson({
       spaceId: 'fixture-extension',
       contractJson: json(extension.contract),
-      migrations: migrationDirsIn(join(root, extension.spaceDir)).map((dirName) => ({
-        dirName,
-        metadata: json(join(extension.spaceDir, dirName, 'migration.json')),
-        ops: json(join(extension.spaceDir, dirName, 'ops.json')),
-      })),
+      migrations: migrationDirsIn(join(root, extension.spaceDir), extension.spaceDir).map(
+        (dirName) => ({
+          dirName,
+          metadata: json(join(extension.spaceDir, dirName, 'migration.json')),
+          ops: json(join(extension.spaceDir, dirName, 'ops.json')),
+        }),
+      ),
       headRef: json(join(extension.spaceDir, 'refs/head.json')),
     });
   }
@@ -152,58 +164,59 @@ describe('the extension package after the script', () => {
     ).not.toThrow();
   });
 
-  it('was refused as a bundled contract space before', () => {
-    expect(() => bundledSpace(join(fixturesDir, 'before'))).toThrow(
-      expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' }),
+  it('is read before the script as the same bundled contract space, in the newest format version', () => {
+    expect(bundledSpace(join(fixturesDir, 'before'))).toEqual(
+      bundledSpace(join(fixturesDir, 'after')),
     );
   });
 });
 
-describe('the app project before the script', () => {
-  const app = projects.app;
-
-  it('is refused by every reader for having no format version', async () => {
-    const migrationDir = migrationDirs('before', app.spaceDir)[0] ?? '';
-    const snapshot = snapshotHashes('before', app.migrationsDir)[0] ?? '';
-    expect({
-      contract: codeOf(() =>
-        new PostgresContractSerializer().deserializeContract(readJson('before', app.contract)),
-      ),
-      migration: await rejectionCodeOf(
-        readMigrationPackage(path('before', join(app.spaceDir, migrationDir)), {
-          migrationsDir: path('before', app.migrationsDir),
-        }),
-      ),
-      refs: await rejectionCodeOf(readRefs(path('before', 'app/migrations/app/refs'))),
-      snapshot: await rejectionCodeOf(
-        readContractSnapshotJson(path('before', app.migrationsDir), snapshot),
-      ),
-    }).toEqual({
-      contract: 'CONTRACT.FORMAT_VERSION_MISSING',
-      migration: 'MIGRATION.FORMAT_VERSION_MISSING',
-      refs: 'MIGRATION.FORMAT_VERSION_MISSING',
-      snapshot: 'CONTRACT.FORMAT_VERSION_MISSING',
+describe.each(Object.entries(projects))(
+  'the %s project before the script, which a release candidate wrote',
+  (_name, project) => {
+    it('has a contract each reader converts to the document the script writes', () => {
+      const before = readJson('before', project.contract);
+      const after = readJson('after', project.contract);
+      expect({
+        document: convertContractDocument(before),
+        deserialized: new PostgresContractSerializer().deserializeContract(before),
+      }).toEqual({
+        document: after,
+        deserialized: new PostgresContractSerializer().deserializeContract(after),
+      });
     });
+
+    it('has migration packages this release reads as the script writes them, each with its migrationHash verified', async () => {
+      for (const dir of migrationDirs('before', project.spaceDir)) {
+        const read = async (side: Side) => {
+          const pkg = await readMigrationPackage(path(side, join(project.spaceDir, dir)), {
+            migrationsDir: path(side, project.migrationsDir),
+          });
+          return { metadata: pkg.metadata, ops: pkg.ops, verified: verifyMigrationHash(pkg).ok };
+        };
+        expect(await read('before')).toEqual({ ...(await read('after')), verified: true });
+      }
+    });
+
+    it('has snapshots this release reads as the script writes them, and leaves each file as it is', async () => {
+      for (const hash of snapshotHashes('before', project.migrationsDir)) {
+        const file = join(project.migrationsDir, 'snapshots', hash, 'contract.json');
+        expect({
+          read: await readContractSnapshotJson(path('before', project.migrationsDir), hash),
+          onDisk: readFileSync(path('before', file), 'utf8'),
+        }).toEqual({ read: readJson('after', file), onDisk: fixtureTree('before')[file] });
+      }
+    });
+  },
+);
+
+describe('the app project before the script', () => {
+  it('has ref files this release reads as the script writes them', async () => {
+    expect(await readRefs(path('before', 'app/migrations/app/refs'))).toEqual(
+      await readRefs(path('after', 'app/migrations/app/refs')),
+    );
   });
 });
-
-function codeOf(run: () => unknown): unknown {
-  try {
-    run();
-    return undefined;
-  } catch (error) {
-    return (error as { code?: unknown }).code;
-  }
-}
-
-async function rejectionCodeOf(promise: Promise<unknown>): Promise<unknown> {
-  try {
-    await promise;
-    return undefined;
-  } catch (error) {
-    return (error as { code?: unknown }).code;
-  }
-}
 
 describe.each(Object.entries(GUIDE_PATHS))('the %s guide detection', (_audience, guide) => {
   const patterns = detectionPatterns(guide, 'stored-files-format-version');
@@ -213,6 +226,7 @@ describe.each(Object.entries(GUIDE_PATHS))('the %s guide detection', (_audience,
 
   it('finds every stored file the script rewrites', () => {
     const rewritten = Object.keys(after).filter((file) => after[file] !== before[file]);
+    expect(rewritten.length).toBeGreaterThan(0);
     expect(rewritten.filter((file) => !detects(before[file] ?? ''))).toEqual([]);
   });
 

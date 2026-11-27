@@ -1,5 +1,14 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, gen, model, rel, type } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  gen,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+  type,
+} from '@internal/postgres/contract-builder';
 
 // Two domain namespaces (`public` + `shadow`) each declare the SAME junction
 // table `user_roles` with the SAME payload column `token`, but only the
@@ -86,6 +95,7 @@ const ShadowUser = model('ShadowUser', {
   .sql({ table: 'users' });
 
 export const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   namespaces: ['shadow'],
   models: {
     User: PublicUser,

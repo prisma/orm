@@ -623,13 +623,15 @@ describe('MTI variant mutation guards', () => {
 
     await expect(features.create({ title: 'X', priority: 1 } as never)).rejects.toMatchObject({
       code: 'ORM.CAPABILITY_MISSING',
-      message: 'create() requires contract capability "returning"',
+      message:
+        "`create()` is unavailable: your contract declares no dependency on `sql.returning`. To enable it, add `sql.returning` to your contract's required capabilities.",
       meta: { capability: 'returning', action: 'create()' },
     });
     expect(() => features.createAll([{ title: 'X', priority: 1 } as never])).toThrow(
       expect.objectContaining({
         code: 'ORM.CAPABILITY_MISSING',
-        message: 'createAll() requires contract capability "returning"',
+        message:
+          "`createAll()` is unavailable: your contract declares no dependency on `sql.returning`. To enable it, add `sql.returning` to your contract's required capabilities.",
         meta: { capability: 'returning', action: 'createAll()' },
       }),
     );

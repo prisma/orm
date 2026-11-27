@@ -3,13 +3,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import {
-  compareCodeUnits,
-  flattenPackage,
-  moduleUsersImport,
-  oneLine,
-  portabilityProblems,
-} from './flatten.mjs';
+import { compareCodeUnits } from './api-lines.mjs';
+import { flattenPackage, moduleUsersImport, oneLine, portabilityProblems } from './flatten.mjs';
 import { readPackageApi } from './read-api.mjs';
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -736,6 +731,13 @@ describe('moduleUsersImport', () => {
 });
 
 describe('oneLine', () => {
+  it('writes a line comment as a block comment, so the text after it stays on the line as code', () => {
+    strictEqual(
+      oneLine('type T = {\n  // the key */ here\n  a: Opts;\n}'),
+      'type T = { /* the key * / here */ a: Opts; }',
+    );
+  });
+
   it('keeps a literal inside an interpolation whose expression holds braces', () => {
     const text = 'type Spaced = `\u0024{{ x:  string } extends { x: string } ? `a  b` : never}`';
     strictEqual(
@@ -756,19 +758,6 @@ describe('oneLine', () => {
       oneLine('type  A =\n  /* it\'s   here */  "x  y" |\n  `a  \u0024{"b  c"}  d`'),
       'type A = /* it\'s here */ "x  y" | `a  \u0024{"b  c"}  d`',
     );
-  });
-});
-
-describe('compareCodeUnits', () => {
-  it('orders by UTF-16 code unit, whatever the locale', () => {
-    deepStrictEqual(['b', 'B', '_', 'a', '(', '.'].sort(compareCodeUnits), [
-      '(',
-      '.',
-      'B',
-      '_',
-      'a',
-      'b',
-    ]);
   });
 });
 

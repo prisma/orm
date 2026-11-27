@@ -6,7 +6,7 @@ import type {
   MigrationAccessChange,
   MigrationPlanOperation,
 } from '@internal/framework-components/control';
-import { createControlStack } from '@internal/framework-components/control';
+import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
 import type {
   ContractSpaceAggregate,
   DeclaredExtensionEntry,
@@ -19,7 +19,9 @@ import type { SnapshotContentVerifier } from '@internal/migration-tools/contract
 import { errorInvalidRefFile } from '@internal/migration-tools/errors';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { isInternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { join, relative } from 'pathe';
 import { CliStructuredError } from '../../utils/cli-errors';
 import { readContractEnvelope, resolveContractPath } from '../../utils/command-helpers';
 import { toDeclaredExtensionsFromRaw } from '../../utils/extension-pack-inputs';
@@ -199,9 +201,42 @@ export function mapIntegrityViolations(
   const spaceId = 'spaceId' in structural ? structural.spaceId : '*';
   return contractSpaceViolationError(`Contract-space integrity failure for "${spaceId}"`, {
     why: describeIntegrityViolation(structural),
-    fix: `Re-emit the affected migration package(s) or restore the on-disk \`${migrationsDir}\` directory from version control.`,
+    fix:
+      structural.kind === 'hashMismatch' ||
+      structural.kind === 'providedInvariantsMismatch' ||
+      structural.kind === 'packageUnloadable'
+        ? migrationPackageRepairText(migrationsDir, structural.spaceId, structural.dirName)
+        : `Restore the on-disk \`${migrationsDir}\` directory from version control.`,
     violations: [structural],
   });
+}
+
+/** How a migration package whose files are wrong is put right, in one sentence; see `migrationPackageRepairActions`. */
+function migrationPackageRepairText(
+  migrationsDir: string,
+  spaceId: string,
+  dirName: string,
+): string {
+  const packageDir = relative(process.cwd(), join(migrationsDir, spaceId, dirName));
+  return spaceId === APP_SPACE_ID
+    ? `Restore the migration package from version control, or write its migration.json and ops.json again by running \`node "${join(packageDir, 'migration.ts')}"\`.`
+    : `Restore the migration package from version control, or delete the folder ${packageDir} and run \`{bin} contract emit\`, which writes it again from the installed extension when that version of the extension ships this migration; otherwise install a version of the extension that ships its migrations.`;
+}
+
+/** A stored file of the migrations directory the aggregate could not read: a ref, or a migration's `migration.json`. */
+export type UnreadableFile = Extract<
+  IntegrityViolation,
+  { readonly kind: 'refUnreadable' | 'packageUnloadable' }
+>;
+
+/** Every ref and migration the aggregate left out because it could not read the file. */
+export function unreadableFiles(aggregate: ContractSpaceAggregate): readonly UnreadableFile[] {
+  return aggregate
+    .checkIntegrity()
+    .filter(
+      (violation): violation is UnreadableFile =>
+        violation.kind === 'refUnreadable' || violation.kind === 'packageUnloadable',
+    );
 }
 
 /**
@@ -220,11 +255,9 @@ export interface BuildAggregateInputs<TFamilyId extends string, TTargetId extend
   /** Content check for contract snapshots resolved through the aggregate; build it with `snapshotVerifierFor(config)` so the recompute uses the family's `normalizeStorage`. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
   /**
-   * Load with a ref file that exists but is refused left out of the aggregate, instead of
-   * refusing the load. Only for a caller that reports every unreadable ref itself
-   * (`migration check`); any other command would treat the ref as absent.
+   * What the load does with a ref or migration whose file it could not read: refuse (the default), or keep the aggregate without the file, for a command that only lists and reports each one with {@link unreadableFiles}. A command that acts on the migrations refuses, so a file it could not read is never silently left out.
    */
-  readonly tolerateUnreadableRefs?: boolean;
+  readonly unreadableFiles?: 'refuse' | 'report';
 }
 
 function declaredExtensionsFromInputs(
@@ -272,12 +305,9 @@ export async function loadContractSpaceAggregateForCli<
     appContract: inputs.appContract,
     ...ifDefined('verifySnapshotContent', inputs.verifySnapshotContent),
   });
-  if (inputs.tolerateUnreadableRefs !== true) {
-    const unreadableRef = mapIntegrityViolations(
-      aggregate.checkIntegrity().filter((violation) => violation.kind === 'refUnreadable'),
-      inputs.migrationsDir,
-    );
-    if (unreadableRef !== null) return notOk(unreadableRef);
+  if (inputs.unreadableFiles !== 'report') {
+    const refusal = mapIntegrityViolations(unreadableFiles(aggregate), inputs.migrationsDir);
+    if (refusal !== null) return notOk(refusal);
   }
   return ok(aggregate);
 }
@@ -400,7 +430,7 @@ export async function buildReadAggregate(
     readonly migrationsDir: string;
     /** Command-scoped verifier to share the verified-hash memo; defaults to one built from `config`. */
     readonly verifySnapshotContent?: SnapshotContentVerifier;
-    readonly tolerateUnreadableRefs?: boolean;
+    readonly unreadableFiles?: 'refuse' | 'report';
   },
 ): Promise<
   Result<
@@ -413,6 +443,10 @@ export async function buildReadAggregate(
       ) => readonly MigrationAccessChange[];
       /** Where the family keeps its markers, which an unreadable marker's error names. */
       readonly markerLocation: string;
+      /** The family's contract reader, for a command that reads a stored contract it holds. */
+      readonly deserializeContract: (contractJson: unknown) => Contract;
+      /** Why the family refused `contract.json`, when it did; the aggregate then holds a stand-in with only its hash. */
+      readonly contractRefusal: string | undefined;
     },
     CliStructuredError
   >
@@ -438,13 +472,15 @@ export async function buildReadAggregate(
       targetId: config.target.id,
       targetFamily: config.target.familyId,
     });
+    let contractRefusal: string | undefined;
     if (contractRawForAggregate !== null) {
       try {
         appContractForLoad = deserializeContract(contractRawForAggregate);
       } catch (error) {
         const formatFailure = formatVersionFailure(error, resolveContractPath(config));
         if (formatFailure !== undefined) return notOk(formatFailure);
-        // Deserialization failed — identity-only stand-in fallback
+        if (isInternalError(error)) throw error;
+        contractRefusal = error instanceof Error ? error.message : String(error);
       }
     }
 
@@ -458,7 +494,7 @@ export async function buildReadAggregate(
         'verifySnapshotContent',
         options.verifySnapshotContent ?? snapshotVerifierFor(config),
       ),
-      ...ifDefined('tolerateUnreadableRefs', options.tolerateUnreadableRefs),
+      ...ifDefined('unreadableFiles', options.unreadableFiles),
     });
     if (!loaded.ok) {
       return loaded;
@@ -470,6 +506,8 @@ export async function buildReadAggregate(
       accessChangesOf: (operations: readonly MigrationPlanOperation[]) =>
         familyInstance.accessChangesOf(operations),
       markerLocation: familyInstance.markerLocation,
+      deserializeContract,
+      contractRefusal,
     });
   } catch (error) {
     return notOk(

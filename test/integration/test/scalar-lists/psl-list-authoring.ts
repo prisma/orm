@@ -10,6 +10,11 @@ import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type { MongoContract } from '@internal/mongo-contract';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';
@@ -77,6 +82,7 @@ export interface SqlAuthoringResult {
 export async function authorSqlContractFromPsl(schema: string): Promise<SqlAuthoringResult> {
   const schemaPath = writeSchemaToTempFile(schema);
   const provider = prismaContract(schemaPath, {
+    capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
     target: postgresPackRef,
     createNamespace: postgresCreateNamespace,
   });

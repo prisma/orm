@@ -24,7 +24,10 @@
  * install packed tarballs and run in a child process, so both roots never
  * load into one module graph. The fixtures of every upgrade script's tests,
  * `test/integration/test/upgrade-instructions/<fragment>/fixtures/`, are user
- * projects a script rewrites as text; nothing imports them. Each fragment's
+ * projects a script rewrites as text; nothing imports them. So are the
+ * projects a release candidate wrote, under
+ * `test/integration/test/release-candidate-projects/fixtures/`, which tests
+ * read as stored files. Each fragment's
  * `detection.test.ts` holds sample import lines as strings to match its
  * detection patterns against; those specifiers are sample text, not imports.
  *
@@ -39,6 +42,7 @@ const CONSUMER_ROOTS = ['examples', 'apps', 'test'];
 const EXEMPT_SUBTREES = [
   /^test\/integration\/test\/packaging\//,
   /^test\/integration\/test\/upgrade-instructions\/[^/]+\/fixtures\//,
+  /^test\/integration\/test\/release-candidate-projects\/fixtures\//,
   /^test\/integration\/test\/upgrade-instructions\/[^/]+\/detection\.test\.ts$/,
 ];
 const INTERNAL_SCOPE = '@internal/';

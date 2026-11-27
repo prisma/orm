@@ -25,6 +25,18 @@ const possiblyEquivalent: SchemaDiffIssue = {
   },
 };
 const plain: SchemaDiffIssue = { path: ['public', 'event', 'id'], expected: node };
+const databaseCapabilitiesNotProvided: SchemaDiffIssue = {
+  path: ['capabilities'],
+  expected: node,
+  explanation: {
+    text: 'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 14.10. Upgrade the database to PostgreSQL 15 or later.',
+    cause: 'database-capabilities-not-provided',
+    notProvided: {
+      database: 'PostgreSQL',
+      findings: [{ kind: 'older-than-supported', databaseVersion: '14.10', oldestSupported: 15 }],
+    },
+  },
+};
 
 const writeAsStored = (retry: string) => ({
   kind: 'user-choice',
@@ -67,6 +79,7 @@ describe('schemaDriftNextActions', () => {
         contractRef: undefined,
         issues: [],
         recovery: BY_DB_UPDATE,
+        databaseRefused: false,
       }),
     ).toEqual([dbUpdate('sign'), describeDatabase('sign again')]);
   });
@@ -78,6 +91,7 @@ describe('schemaDriftNextActions', () => {
         contractRef: undefined,
         issues: [plain],
         recovery: BY_DB_UPDATE,
+        databaseRefused: false,
       }),
     ).toEqual([dbUpdate('verify'), describeDatabase('verify again')]);
   });
@@ -89,6 +103,7 @@ describe('schemaDriftNextActions', () => {
         contractRef: 'staging',
         issues: [],
         recovery: BY_DB_UPDATE,
+        databaseRefused: false,
       }),
     ).toEqual([
       dbUpdate('sign', '{bin} db update --to "staging"'),
@@ -103,6 +118,7 @@ describe('schemaDriftNextActions', () => {
         contractRef: undefined,
         issues: [possiblyEquivalent],
         recovery: BY_DB_UPDATE,
+        databaseRefused: false,
       }),
     ).toEqual([writeAsStored('verify again'), dbUpdate('verify')]);
   });
@@ -114,6 +130,7 @@ describe('schemaDriftNextActions', () => {
         contractRef: 'staging',
         issues: [possiblyEquivalent],
         recovery: BY_DB_UPDATE,
+        databaseRefused: false,
       }),
     ).toEqual([
       writeAsStored('sign the emitted contract instead of "staging"'),
@@ -128,6 +145,7 @@ describe('schemaDriftNextActions', () => {
         contractRef: undefined,
         issues: [possiblyEquivalent, plain, possiblyEquivalent],
         recovery: BY_DB_UPDATE,
+        databaseRefused: false,
       }),
     ).toEqual([
       writeAsStored('verify again'),
@@ -143,6 +161,7 @@ describe('schemaDriftNextActions', () => {
         contractRef: undefined,
         issues: [differs],
         recovery: BY_DB_UPDATE,
+        databaseRefused: false,
       }),
     ).toEqual([dbUpdate('verify'), describeDatabase('verify again')]);
   });
@@ -154,6 +173,7 @@ describe('schemaDriftNextActions', () => {
         contractRef: undefined,
         issues: [differs, possiblyEquivalent],
         recovery: BY_DB_UPDATE,
+        databaseRefused: false,
       }),
     ).toEqual([
       writeAsStored('verify again'),
@@ -169,6 +189,7 @@ describe('schemaDriftNextActions', () => {
         contractRef: undefined,
         issues: [plain],
         recovery: BY_MIGRATIONS,
+        databaseRefused: false,
       }),
     ).toEqual([signEarlier, authorMigrations, describeDatabase('sign again')]);
   });
@@ -180,11 +201,36 @@ describe('schemaDriftNextActions', () => {
         contractRef: 'staging',
         issues: [possiblyEquivalent],
         recovery: BY_MIGRATIONS,
+        databaseRefused: false,
       }),
     ).toEqual([
       writeAsStored('sign the emitted contract instead of "staging"'),
       signEarlier,
       authorMigrations,
     ]);
+  });
+
+  it('offers nothing in a run whose database does not provide what a contract requires, which db update, db init and db migrate refuse', () => {
+    expect(
+      schemaDriftNextActions({
+        verb: 'sign',
+        contractRef: undefined,
+        issues: [databaseCapabilitiesNotProvided, possiblyEquivalent],
+        recovery: BY_DB_UPDATE,
+        databaseRefused: true,
+      }),
+    ).toEqual([]);
+  });
+
+  it("offers nothing for another space's drift in a run whose database is refused", () => {
+    expect(
+      schemaDriftNextActions({
+        verb: 'verify',
+        contractRef: undefined,
+        issues: [differs],
+        recovery: BY_DB_UPDATE,
+        databaseRefused: true,
+      }),
+    ).toEqual([]);
   });
 });

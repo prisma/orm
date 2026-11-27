@@ -1,4 +1,4 @@
-import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
+import { convertContractDocument } from '@internal/contract/internal/format-version';
 import type { Contract } from '@internal/contract/types';
 import type {
   ContractSpace,
@@ -52,9 +52,7 @@ export function contractSpaceFromJson<TContract extends Contract = Contract>(inp
   readonly headRef: unknown;
 }): ContractSpace<TContract> {
   const { spaceId } = inputs;
-  readFormatVersion(inputs.contractJson, {
-    kind: 'contract',
-    knownVersions: CONTRACT_FORMAT_VERSIONS,
+  const contractJson = convertContractDocument(inputs.contractJson, {
     path: 'contract.json',
     bundledIn: spaceId,
   });
@@ -70,7 +68,7 @@ export function contractSpaceFromJson<TContract extends Contract = Contract>(inp
     contractJson: blindCast<
       TContract,
       'family.deserializeContract validates the bundled contract at control-stack construction'
-    >(inputs.contractJson),
+    >(contractJson),
     migrations,
     headRef: bundledHeadRef(spaceId, inputs.headRef),
   };

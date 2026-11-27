@@ -11,7 +11,7 @@ The spec is [spec.md](spec.md). Four pull requests, then a close-out. The stream
 
 ## 1. Format versions
 
-**What changes for a user.** `contract.json`, each snapshot, `migration.json` and each ref file carry `formatVersion: 1`. A file with a higher version is refused with "written by a newer release of Prisma". A file with no version, or with `schemaVersion`, is refused with a message that names the upgrade instructions. A ref file with an unknown field is refused. No hash changes.
+**What changes for a user.** `contract.json`, each snapshot, `migration.json` and each ref file carry `formatVersion: 1`. A file with a higher version is refused with "written by a newer release of Prisma". A file a pre-release wrote, with no version or with `schemaVersion`, is read as version 0 until `8.0.0`. A file no release wrote is refused with advice that works for that kind of file. A ref file with an unknown field is refused. No hash changes.
 
 **How.**
 
@@ -24,6 +24,8 @@ The spec is [spec.md](spec.md). Four pull requests, then a close-out. The stream
 - Upgrade instructions for applications and for extensions, with one script: rename the field in every `contract.json` and snapshot, add the field to every `migration.json` and ref file. The script changes no hash and is safe to run twice.
 - The repository's own files: `pnpm fixtures:emit` for what it reaches, the script for the rest. Fixtures of earlier upgrade scripts stay as they are.
 - A decision record: stored files carry a format version; the reading rule and the writing rule. Docs that name `schemaVersion` follow the rename.
+- Every reader refuses a key the format does not define: the contract validators of both families and of each target's entry kinds, the MongoDB operation reader, and a reader of SQL operations in the SQL family, to which each SQL target supplies its own fields. Format 1 of `ops.json` reads every shape a pre-release wrote, converted to the current shape by the reader, because `ops.json` is covered by the migration hash. The slice is in [slices/strict-readers/spec.md](slices/strict-readers/spec.md).
+- Files a pre-release wrote are read as format version 0 and converted in memory, until `8.0.0`. The slice is in [slices/read-rc-files/spec.md](slices/read-rc-files/spec.md). The hash pull request adds what depends on the new hashes: the hash script accepts version 0 files, and the saved release-candidate project is checked against hashes computed from its contracts.
 
 **Checks.** Tests first. Locally: only the touched test files, the touched packages' typecheck and lint, `pnpm lint:deps`, `pnpm check:upgrade-coverage`. Repository-wide work (`pnpm build`, whole-repo typecheck, `pnpm fixtures:check`, any test suite) runs in CI, not on this machine, which many sessions share.
 

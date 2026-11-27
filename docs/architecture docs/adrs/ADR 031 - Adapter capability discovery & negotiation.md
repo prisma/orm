@@ -9,16 +9,16 @@ Prisma Next supports multiple SQL dialects via adapters. Lanes (DSL, ORM, TypedS
 ## Problem
 
 - Lanes must not emit SQL that the target cannot execute
-- Capability presence can be static (dialect design) or runtime-dependent (server version, extensions, config)
+- Capability presence can follow from the dialect's design or from the server's version, extensions and configuration
 - We need deterministic lowering and stable failure modes across environments
 - Plans and caches must vary when capabilities change to avoid stale or unsafe SQL
 
 ## Goals
 
-- Define a capability model covering static and runtime-discovered features
+- Define a capability model covering what the dialect has by design and what depends on the server's version
 - Provide a verification flow that checks database capabilities satisfy the contract-declared requirements
 - Let lanes declare required vs optional capabilities and degrade or fail deterministically (based on contract-declared caps)
-- Allow feature flags to pin or disable capabilities for safety or perf reasons
+- Let a contract's author turn capabilities on or off for safety or perf reasons
 - Keep the lowering responsibility in adapters, preserving lane portability
 
 ## Non-goals
@@ -45,55 +45,34 @@ Each capability is documented with a short description, references, and conforma
 
 ### Surfacing capabilities
 
-Adapters expose two layers:
+Each capability is declared by the component that knows the fact ([ADR 335](ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md)):
 
-- **Static**: baked into the adapter for the dialect or profile family
-  - Example: MySQL lacks lateral, Postgres has lateral
-- **Runtime**: discovered per connection profile by probing the server
-  - Example: server version, loaded extensions, config flags, SHOW values
+- **The target** declares what each database version provides, in a table by version
+  - Example: PostgreSQL has lateral joins in every supported version; a capability that arrives with a later version is in that version's row and the rows after it
+- **The driver** declares what the connection provides
+  - Example: interactive transactions
 
-### Discovery API
-
-```typescript
-type AdapterProfile = {
-  adapterName: 'postgres' | 'mysql' | 'sqlite' | string
-  adapterVersion: string
-  staticCaps: Set<CapabilityId>
-  runtimeCaps: Set<CapabilityId>
-  serverMeta: {
-    serverVersion?: string
-    extensions?: Record<string, string> // name -> version
-    limits?: { maxParams?: number; maxIdentifierLen?: number }
-  }
-  profileHash: string // see below
-}
-```
+On PostgreSQL the contract's author writes the list of capabilities the contract requires, from the list the target exports for each database version and the list the driver exports for its connection. The other targets' contracts take a fixed list from their adapter until each gets its own table.
 
 ### Verification (pinned profile)
 
-During verification (`prisma-next verify` or runner apply):
-1. Adapter reports `staticCaps`
-2. Adapter runs lightweight probes to compute `runtimeCaps` and `serverMeta`
-3. Tooling checks that `(static ∪ runtime)` satisfies the contract-declared capability requirements
-4. On success, the runner writes the contract's `coreHash` and `profileHash` to the marker
+On PostgreSQL, during verification (`prisma db verify`, `prisma db sign`, and before the runner applies):
+1. The adapter reads the server's version during introspection
+2. The target compares the capabilities the contract requires of the database with what that version provides
+3. On success, `db sign` and the runner write the contract's `storageHash` and `profileHash` to the marker, and `db verify` writes nothing; on failure nothing is signed or applied, and the error states the versions involved
 
-### Feature flags
+When a client is created, the capabilities the contract requires of the connection are compared with what the adapter and driver declare. The runtime does not probe the database.
+
+### Leaving a capability out
+
+The author's list is everything the contract requires, with no default. A capability is removed by leaving it out:
 
 ```typescript
-type CapabilityPolicy = {
-  forceEnable?: CapabilityId[]   // pin on, useful in tests
-  forceDisable?: CapabilityId[]  // pin off for safety or perf
-  prefer?: CapabilityId[]        // tie-break hints for adapters
-}
+defineContract({
+  requiredCapabilities: [...postgres17.filter((key) => key !== 'sql.jsonAgg'), ...postgresDriver],
+  // models…
+})
 ```
-
-The effective capability set is:
-
-```
-effective = (static ∪ runtime ∪ forceEnable) \ forceDisable
-```
-
-The adapter may use `prefer` to choose among multiple legal lowerings.
 
 ### Profile hash
 
@@ -117,21 +96,19 @@ Lanes do not implement dialect fallbacks themselves. They call adapter lowerers 
 
 Stable error codes per ADR 027:
 - `ERR_CAPABILITY_MISSING` when a required cap is absent
-- `ERR_CAPABILITY_UNCERTAIN` when discovery is inconclusive
-- `ERR_CAPABILITY_DISABLED_BY_POLICY` when `forceDisable` blocks it
+- `ERR_CAPABILITY_UNCERTAIN` when the server's version cannot be read
 - Errors carry `{ capability, lane, reason, suggestions }`
 
 ### Discovery cadence and caching
 
-- Discovery runs during verification and runner apply to confirm contract satisfaction
-- Revalidation occurs when verification is re-run; runtime does not renegotiate a new profile in pinned mode
+- The database is checked during verification and before the runner applies
+- The check is repeated when verification is re-run; the runtime does not check the database in pinned mode
 - Lanes receive a read-only view of declared capabilities from the contract
 
-### Feature flags use cases
+### Uses of the list
 
-- Pin off `jsonAgg` in environments where it regresses perf to force flattened lowerings
-- Disable `transactionalDdl` when running against engines without full support
-- Prefer `cte` over subqueries for readability in training or testing contexts
+- Leave out `jsonAgg` where it regresses performance, so the ORM client loads relations with one query per relation
+- Leave out a capability the connection does not provide, such as interactive transactions behind a pooler in transaction mode
 
 ## Deterministic lowering requirement
 
@@ -146,23 +123,22 @@ Adapters must produce the same SQL for the same Plan + effective capabilities se
 - Deterministic, testable behavior across dialects and versions
 - Clear separation of concerns: lanes are portable, adapters own dialect logic
 - Stable caches keyed by profileHash and predictable invalidation (when the contract changes)
-- Safer rollouts by feature-flagging risky capabilities
+- Safer rollouts by turning a risky capability off in the contract
 
 ### Negative
 
-- Slight startup cost for discovery probes
-- Adapter authors must maintain capability matrices and conformance tests
+- Target authors must maintain the table of capabilities by version, and it cannot change for a supported version within a major version
 - Some desirable fallbacks are not possible under the one-statement rule
 
 ## Alternatives considered
 
 - **Centralize all capability handling in lanes**: Rejected to keep lanes portable and avoid dialect leakage
-- **Omit discovery entirely**: Rejected because extensions and server versions materially affect available features; we still probe to verify satisfaction, but we do not compute a new profile hash at runtime in pinned mode
+- **Omit discovery entirely**: Rejected because extensions and server versions materially affect available features; verification still reads the server's version to check the contract is satisfied, but we do not compute a new profile hash at runtime in pinned mode
 - **Auto multi-statement fallback when caps are missing**: Rejected for the lanes due to ADR 015 one-call → one-statement rule and policy guardrails. The ORM client, above the lanes, does choose a multi-statement strategy from capabilities ([ADR 164](ADR%20164%20-%20Repository%20Layer.md))
 
 ## Implementation notes
 
-- Add `adapter.discover()` and `adapter.lower(plan, caps, hints)` to the SPI
+- A SQL target answers what a database lacks of a contract's requirements through `databaseCapabilitiesNotProvided`
 - Provide a shared `CapabilityRegistry` with docs and conformance hooks
 - Expose `profileHash` and declared capabilities in runtime diagnostics and telemetry
 
@@ -179,7 +155,7 @@ Adapters must produce the same SQL for the same Plan + effective capabilities se
 
 ## Migration
 
-- Existing Postgres adapter seeds static caps and a minimal discovery probe for `serverVersion` and common extensions
+- The PostgreSQL target holds the table of capabilities by version, and its adapter reads the server's version number during introspection
 - Lanes begin passing capability intents to lowerers
 - Gradually gate advanced features behind required caps with clear errors
 

@@ -1,13 +1,24 @@
-import { readFormatVersion } from '@internal/contract/format-version';
+import {
+  type NewestFormatVersion,
+  readStoredDocument,
+  type StoredFormat,
+} from '@internal/contract/internal/format-version';
 import type { Result } from '@internal/utils/result';
-import { parseRefV1, printRefV1, type RefDocumentV1, type RefFileContent } from './v1';
+import { parseRefV1, printRefV1, type RefDocumentV1, type RefFileContent, refV1FromV0 } from './v1';
 
-const REF_FORMAT_VERSIONS = [1] as const;
+const REF_FORMAT_VERSIONS = [0, 1] as const;
 
-type RefFormatVersion = (typeof REF_FORMAT_VERSIONS)[number];
+const REF_FORMAT: StoredFormat<typeof REF_FORMAT_VERSIONS> = {
+  kind: 'ref',
+  versions: REF_FORMAT_VERSIONS,
+  conversions: { 1: refV1FromV0 },
+};
 
 const PARSERS: Readonly<
-  Record<RefFormatVersion, (document: unknown) => Result<RefFileContent, string>>
+  Record<
+    NewestFormatVersion<typeof REF_FORMAT_VERSIONS>,
+    (document: unknown) => Result<RefFileContent, string>
+  >
 > = { 1: parseRefV1 };
 
 export type RefDocument = RefDocumentV1;
@@ -20,13 +31,8 @@ export function parseRefDocument(
   path: string | undefined,
   bundledIn?: string,
 ): Result<RefFileContent, string> {
-  const formatVersion = readFormatVersion(document, {
-    kind: 'ref',
-    knownVersions: REF_FORMAT_VERSIONS,
-    path,
-    bundledIn,
-  });
-  return PARSERS[formatVersion](document);
+  const newest = readStoredDocument(document, REF_FORMAT, { path, bundledIn });
+  return PARSERS[newest.formatVersion](newest.document);
 }
 
 /** The ref file this release writes for `content`. */

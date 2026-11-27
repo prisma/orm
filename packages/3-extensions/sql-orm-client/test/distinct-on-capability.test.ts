@@ -22,7 +22,7 @@ describe('distinctOn() capability gate', () => {
     const ordered = collection.orderBy((post) => post.title.asc());
     // @ts-expect-error distinctOn is gated out without postgres.distinctOn
     expect(() => ordered.distinctOn('title')).toThrow(
-      'distinctOn() requires capability postgres.distinctOn',
+      '`distinctOn()` is unavailable: your contract declares no dependency on `postgres.distinctOn`',
     );
   });
 
@@ -44,7 +44,9 @@ describe('distinctOn() capability gate', () => {
       },
     });
 
-    expect(() => collection.all()).toThrow('distinctOn() requires capability postgres.distinctOn');
+    expect(() => collection.all()).toThrow(
+      '`distinctOn()` is unavailable: your contract declares no dependency on `postgres.distinctOn`',
+    );
   });
 
   // The method-level assert is one entry point into `state.distinctOn` — a
@@ -65,7 +67,9 @@ describe('distinctOn() capability gate', () => {
       },
     });
 
-    expect(() => collection.all()).toThrow('distinctOn() requires capability postgres.distinctOn');
+    expect(() => collection.all()).toThrow(
+      '`distinctOn()` is unavailable: your contract declares no dependency on `postgres.distinctOn`',
+    );
   });
 
   // `dispatchCollectionRows` routes to `compileSelect` only when
@@ -90,7 +94,7 @@ describe('distinctOn() capability gate', () => {
     // `compileSelectWithIncludes` runs inside an async generator, so the
     // capability error surfaces on iteration, not on `.all()` itself.
     await expect(withPosts.all().toArray()).rejects.toThrow(
-      'distinctOn() requires capability postgres.distinctOn',
+      '`distinctOn()` is unavailable: your contract declares no dependency on `postgres.distinctOn`',
     );
   });
 
@@ -118,7 +122,7 @@ describe('distinctOn() capability gate', () => {
     const withPosts = userCollection.include('posts', () => unrelated);
 
     await expect(withPosts.all().toArray()).rejects.toThrow(
-      'distinctOn() requires capability postgres.distinctOn',
+      '`distinctOn()` is unavailable: your contract declares no dependency on `postgres.distinctOn`',
     );
   });
 
@@ -147,7 +151,7 @@ describe('distinctOn() capability gate', () => {
     const withPostCount = userCollection.include('posts', () => scalarSource.count());
 
     await expect(withPostCount.all().toArray()).rejects.toThrow(
-      'distinctOn() requires capability postgres.distinctOn',
+      '`distinctOn()` is unavailable: your contract declares no dependency on `postgres.distinctOn`',
     );
   });
 });

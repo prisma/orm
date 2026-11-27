@@ -22,6 +22,14 @@ import { buildBoundContract } from '@internal/sql-contract-ts/contract-builder';
 import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import {
+  type DefaultRequiredCapabilities,
+  defaultRequiredCapabilities,
+  type PostgresContractCapabilities,
+  type RequiredCapabilities,
+  recordDefaultRequiredCapabilities,
+  requiredCapabilitiesFor,
+} from './contract-capabilities';
 import type { ExtensionHandle } from './extension';
 import type { RlsEntityHandle } from './rls';
 
@@ -34,12 +42,13 @@ type EnumsConstraint = Record<string, EnumTypeHandle>;
 type ForeignKeyDefaultsConstraint = ContractInput['foreignKeyDefaults'];
 type NamespacesConstraint = readonly string[] | undefined;
 
-/** What the adapter this contract runs with adds to it: its capabilities and its aggregate overloads, as `prisma contract emit` adds them. */
-type PostgresAdapter = typeof postgresAdapterContractContributions;
-
-const adapter: PostgresAdapter = postgresAdapterContractContributions;
+/** What the contract build is given beside the target: the aggregate overloads of the adapter, and the capabilities the contract requires. */
+type PostgresContributions<Capabilities> = typeof postgresAdapterContractContributions & {
+  readonly capabilities: Capabilities;
+};
 
 type PostgresResult<
+  Required extends RequiredCapabilities,
   DatabaseTypes extends DatabaseTypesConstraint,
   Models extends ModelsConstraint,
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
@@ -56,7 +65,7 @@ type PostgresResult<
       readonly extensions?: Extensions;
       readonly enums?: Enums;
       readonly namespaces?: Namespaces;
-      readonly adapter: PostgresAdapter;
+      readonly adapter: PostgresContributions<PostgresContractCapabilities<Required>>;
       readonly foreignKeyDefaults?: ForeignKeyDefaults;
       readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
       readonly codecLookup: CodecLookupWithDescriptors;
@@ -66,6 +75,7 @@ type PostgresResult<
 >;
 
 type PostgresBaseScaffold<
+  Required extends RequiredCapabilities,
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
   ForeignKeyDefaults extends ForeignKeyDefaultsConstraint = undefined,
 > = Omit<
@@ -83,6 +93,12 @@ type PostgresBaseScaffold<
   | 'codecLookup'
   | 'dataTypeLookup'
 > & {
+  /**
+   * Everything the contract requires of its database and its connection, each capability as its key: `[...postgres18, ...postgresDriver]`, with what the application does not use filtered or left out. The list must not be empty.
+   *
+   * A contract that leaves it out requires the newest PostgreSQL version's list and the driver's, and `prisma contract emit` warns. That default is a stopgap for contracts written before the list existed: Prisma 8.0 removes it and requires the list.
+   */
+  readonly requiredCapabilities?: Required;
   /** Contract-wide defaults for foreign keys' `constraint` and `index`. */
   readonly foreignKeyDefaults?: ForeignKeyDefaults;
   /** Overrides the codecs of the target and the extensions. */
@@ -102,13 +118,14 @@ type PostgresBaseScaffold<
 };
 
 type PostgresDefinition<
+  Required extends RequiredCapabilities,
   DatabaseTypes extends DatabaseTypesConstraint,
   Models extends ModelsConstraint,
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
   Enums extends EnumsConstraint,
   Namespaces extends NamespacesConstraint,
   ForeignKeyDefaults extends ForeignKeyDefaultsConstraint,
-> = PostgresBaseScaffold<Extensions, ForeignKeyDefaults> & {
+> = PostgresBaseScaffold<Required, Extensions, ForeignKeyDefaults> & {
   readonly databaseTypes?: DatabaseTypes;
   readonly models?: Models;
   readonly enums?: Enums;
@@ -116,18 +133,21 @@ type PostgresDefinition<
 };
 
 type PostgresScaffold<
+  Required extends RequiredCapabilities,
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
   Enums extends EnumsConstraint,
   Namespaces extends NamespacesConstraint,
   ForeignKeyDefaults extends ForeignKeyDefaultsConstraint,
-> = PostgresBaseScaffold<Extensions, ForeignKeyDefaults> & {
+> = PostgresBaseScaffold<Required, Extensions, ForeignKeyDefaults> & {
   readonly databaseTypes?: never;
   readonly models?: never;
   readonly enums?: Enums;
   readonly namespaces?: Namespaces;
 };
 
+/** Defines a PostgreSQL contract. `requiredCapabilities` lists everything it requires of the database and the connection; a contract that leaves it out requires the newest version's list and the driver's, until Prisma 8.0 removes that default and the type parameter's default. */
 export function defineContract<
+  const Required extends RequiredCapabilities = DefaultRequiredCapabilities,
   const DatabaseTypes extends DatabaseTypesConstraint = Record<never, never>,
   const Models extends ModelsConstraint = Record<never, never>,
   const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined,
@@ -136,6 +156,7 @@ export function defineContract<
   const ForeignKeyDefaults extends ForeignKeyDefaultsConstraint = undefined,
 >(
   definition: PostgresDefinition<
+    Required,
     DatabaseTypes,
     Models,
     Extensions,
@@ -143,9 +164,18 @@ export function defineContract<
     Namespaces,
     ForeignKeyDefaults
   >,
-): PostgresResult<DatabaseTypes, Models, Extensions, Enums, Namespaces, ForeignKeyDefaults>;
+): PostgresResult<
+  Required,
+  DatabaseTypes,
+  Models,
+  Extensions,
+  Enums,
+  Namespaces,
+  ForeignKeyDefaults
+>;
 
 export function defineContract<
+  const Required extends RequiredCapabilities = DefaultRequiredCapabilities,
   const DatabaseTypes extends DatabaseTypesConstraint = Record<never, never>,
   const Models extends ModelsConstraint = Record<never, never>,
   const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined,
@@ -154,13 +184,14 @@ export function defineContract<
   const Namespaces extends NamespacesConstraint = undefined,
   const ForeignKeyDefaults extends ForeignKeyDefaultsConstraint = undefined,
 >(
-  scaffold: PostgresScaffold<Extensions, ScaffoldEnums, Namespaces, ForeignKeyDefaults>,
+  scaffold: PostgresScaffold<Required, Extensions, ScaffoldEnums, Namespaces, ForeignKeyDefaults>,
   factory: (helpers: ComposedAuthoringHelpers<SqlFamily, PostgresPack, Extensions>) => {
     readonly databaseTypes?: DatabaseTypes;
     readonly models?: Models;
     readonly enums?: FactoryEnums;
   },
 ): PostgresResult<
+  Required,
   DatabaseTypes,
   Models,
   Extensions,
@@ -169,11 +200,9 @@ export function defineContract<
   ForeignKeyDefaults
 >;
 
-// Implementation — delegates to buildBoundContract which pre-binds family/target,
-// carrying zero casts and zero entity-kind logic at this layer: the generic
-// build lowers `entities` through the pack-registered entity-handle hook.
 export function defineContract(
   definition: PostgresDefinition<
+    RequiredCapabilities,
     DatabaseTypesConstraint,
     ModelsConstraint,
     undefined,
@@ -187,6 +216,7 @@ export function defineContract(
     readonly enums?: EnumsConstraint;
   },
 ): PostgresResult<
+  RequiredCapabilities,
   DatabaseTypesConstraint,
   ModelsConstraint,
   undefined,
@@ -194,6 +224,11 @@ export function defineContract(
   NamespacesConstraint,
   ForeignKeyDefaultsConstraint
 > {
+  const { requiredCapabilities, ...rest } = definition;
+  const required = requiredCapabilitiesFor(
+    requiredCapabilities === undefined ? defaultRequiredCapabilities : requiredCapabilities,
+    'in defineContract',
+  );
   const extensions: readonly ExtensionPackRef<'sql', string>[] = Object.values(
     definition.extensions ?? {},
   );
@@ -202,16 +237,18 @@ export function defineContract(
     assembleDataTypeSupport([sqlFamilyPack, postgresPack, ...extensions], () => undefined).support
       .lookup;
   const bound = {
-    ...definition,
-    adapter,
+    ...rest,
+    adapter: { ...postgresAdapterContractContributions, capabilities: required },
     createNamespace: postgresCreateNamespace,
     codecLookup:
       definition.codecLookup ??
       assemblePostgresCodecRegistryWithBuiltins(extensions, dataTypeLookup),
     dataTypeLookup,
   };
-  if (factory !== undefined) {
-    return buildBoundContract(sqlFamilyPack, postgresPack, bound, factory);
-  }
-  return buildBoundContract(sqlFamilyPack, postgresPack, bound);
+  const contract =
+    factory === undefined
+      ? buildBoundContract(sqlFamilyPack, postgresPack, bound)
+      : buildBoundContract(sqlFamilyPack, postgresPack, bound, factory);
+  if (requiredCapabilities === undefined) recordDefaultRequiredCapabilities(contract);
+  return contract;
 }

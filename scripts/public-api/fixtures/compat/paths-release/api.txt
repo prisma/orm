@@ -1,0 +1,4 @@
+# Test fixture written by hand in the format `pnpm api:update` writes.
+./sub: const b: string
+.: const a: string
+.: type OnlyStrings<T> = T extends string ? { value: T } : never

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { computeMigrationHash } from '../src/hash';
+import { computeMigrationHash, verifyMigrationHash } from '../src/hash';
 import { readMigrationPackage, readMigrationsDir, writeMigrationPackage } from '../src/io';
 import { createTestMetadata, createTestOps } from './fixtures';
 
@@ -53,8 +53,19 @@ describe('migration.json format version', () => {
     });
   });
 
-  it('refuses a migration.json with no format version', async () => {
-    await writeManifest({ ...createTestMetadata({}, createTestOps()) });
+  it('reads a migration.json a release candidate wrote with no format version, with its hash verified, and leaves the file as it is', async () => {
+    const metadata = createTestMetadata({}, createTestOps());
+    await writeManifest({ ...metadata });
+    const pkg = await readMigrationPackage(packageDir, { migrationsDir });
+    expect({
+      metadata: pkg.metadata,
+      verified: verifyMigrationHash(pkg).ok,
+      onDisk: JSON.parse(await readFile(manifestPath(), 'utf-8')),
+    }).toEqual({ metadata, verified: true, onDisk: metadata });
+  });
+
+  it('refuses a migration.json with the old schemaVersion field', async () => {
+    await writeManifest({ schemaVersion: '1', ...createTestMetadata({}, createTestOps()) });
     await expect(readMigrationPackage(packageDir, { migrationsDir })).rejects.toMatchObject({
       code: 'MIGRATION.FORMAT_VERSION_MISSING',
     });

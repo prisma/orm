@@ -1,44 +1,25 @@
 ---
 name: adr-review
 description: >-
-  Review one or more ADRs with fresh eyes (as a team member without prior
-  context), identify narrative and structural issues, then rewrite them. Use
-  when the user asks to review, improve, rewrite, or take a fresh-eyes pass on
-  an ADR or a set of ADRs (Architecture Decision Records).
+  Review one or more existing ADRs with fresh eyes (as a team member without
+  prior context), identify narrative and structural issues, then rewrite them.
+  Use when the user asks to review, improve, rewrite, or take a fresh-eyes pass
+  on an ADR or a set of ADRs (Architecture Decision Records).
 ---
 
-# Reviewing and Rewriting ADRs
+# Reviewing and rewriting ADRs
 
-Read each ADR with fresh eyes. Pretend you're a member of the team who doesn't have all the context the author has. The goal is to find places where the document assumes context the reader doesn't have, buries the decision, or carries baggage that won't make sense to a future reader.
+This skill is for an ADR that already exists and that someone has asked you to review. If you are writing a new ADR, write it and then follow the [`doc-review`](../doc-review/SKILL.md) skill directly.
 
-This skill applies whether you're working on a single ADR or a batch. Treat each ADR independently — do the analysis and rewrite per document — even when several are in scope at once.
+`doc-review` explains why the author's own reading is not enough, and gives the two briefs to hand to fresh agents: a cold reader, and a fact checker. For a review the user asked for, do this around them:
 
-## Workflow
+1. **Give your own analysis in chat first.** List the issues you see, for each ADR, before you change a file. The user asked for a review, so they want to see it.
+2. **Rewrite what needs it.** Leave an ADR that reads well alone, and say so. A rewritten ADR follows the order in [`adr-writing.mdc`](../../.agents/rules/adr-writing.mdc):
+   - a concrete example the reader can pin their understanding to, and the decision;
+   - why: what goes wrong without it, before any mechanism;
+   - how, and the consequences, built up step by step, with each term explained where it is first used;
+   - the alternatives considered, last.
+3. **Run the `doc-review` skill** on each rewrite. Its table says which reviewers the change needs: a rewritten ADR gets a cold reader and a fact checker. Stop where that skill says to stop.
+4. **Report** your analysis, what the reviewers found, and what you changed.
 
-1. **Analyze first, in chat.** Before touching any file, list the issues you found and explain them. Do not rewrite silently. When multiple ADRs are in scope, group your analysis per ADR so the user can react to each one before rewrites land.
-2. **Then rewrite each document** to address the issues you identified.
-
-## What a good ADR looks like
-
-- **Starts with a clear grounding example.** Give the reader something concrete to pin understanding to before the abstract reasoning starts.
-- **Has a strong narrative that builds the topic up bit by bit**, explaining clearly throughout. Don't compress; let ideas breathe.
-- **Leads with the decision.** State what's being decided up front. The reader should know the conclusion before working through the reasoning.
-- **Ends with alternatives considered.** Put rejected options last so the reader isn't loaded down with information about paths the document is making irrelevant.
-
-## What an ADR must NOT contain
-
-ADRs are long-lived documentation. They should not contain:
-
-- References to Linear tickets, GitHub issues, or other ticket trackers.
-- Milestones from the project that produced the ADR.
-- States the system passed through during or preceding a refactor that will never be seen again — interim names, deprecated wrappers being removed, "current" qualifiers, "we used to" framing.
-
-If a piece of context only makes sense to someone who lived through the change, cut it or rewrite it as a fact about the system as it is.
-
-## Output shape
-
-When invoked:
-
-1. Read the ADR (or ADRs) in scope.
-2. Write your analysis in the chat — what's missing, what's buried, what's transient, what's unclear to a fresh reader. Be specific; quote or cite the parts you're flagging. For multiple ADRs, label each block clearly.
-3. Then rewrite each file end-to-end so it follows the structure above.
+An ADR has no ticket numbers, no pull request numbers, no milestones, and no account of states the system passed through. `adr-writing.mdc` says why, and which history may stay.

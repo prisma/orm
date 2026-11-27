@@ -6,7 +6,9 @@
  *
  * The project root defaults to the working directory. The script reads and writes files only; it needs no database. It walks the root, skipping `node_modules`, `dist`, `build` and directories whose name starts with a dot, and finds stored files the way the `stored-files-format-version` script does: a contract by its content (`targetFamily` and `storage`) in any `*.json` file, a `migration.json` by the `ops.json` next to it, and a ref file by where Prisma writes refs or by its content.
  *
- * First it checks every contract: each stored `storageHash`, `profileHash` and `executionHash`, and each snapshot directory's name, must be the hash the old rules or the new rules give the contract's content. Two exceptions: a snapshot's profile and execution hash may come from an earlier release's rules, and a MongoDB snapshot may keep the storage hash it had before an earlier upgrade step rewrote its content; both get the hashes their content gives. Then it checks each `migration.json` against its `migrationHash`, and that each `from`, `to` and ref `hash` names a contract of the project. If any check fails, or a stored file has no `formatVersion`, it changes no file, prints one line per problem and exits 1. A hash that does not match the content means the file was edited by hand or comes from another release; fix that first.
+ * First it checks every contract: each stored `storageHash`, `profileHash` and `executionHash`, and each snapshot directory's name, must be the hash the old rules or the new rules give the contract's content. Two exceptions: a snapshot's profile and execution hash may come from an earlier release's rules, and a MongoDB snapshot may keep the storage hash it had before an earlier upgrade step rewrote its content; both get the hashes their content gives. Then it checks each `migration.json` against its `migrationHash`, and that each `from`, `to` and ref `hash` names a contract of the project. If any check fails, it changes no file, prints one line per problem and exits 1. A hash that does not match the content means the file was edited by hand or comes from another release; fix that first.
+ *
+ * It reads a stored file whether or not it has a `formatVersion`, and leaves its format version as it is: a file a release candidate wrote keeps `"schemaVersion": "1"`, or no version field, and this release reads it as format version 0.
  *
  * A contract that is not a snapshot and whose storage hash no migration, ref or snapshot names, such as a hand-made test fixture, does not stop the upgrade when its hashes are wrong: it is reported, left unchanged, and makes the script exit 1.
  *
@@ -46,8 +48,6 @@ const UNKNOWN_HASH =
   'is a storage hash no contract or snapshot in the project has, so the script cannot tell its new value.';
 const TEMPORARY_SUFFIX = '.contract-hash-inputs-tmp';
 const REMOVED_SUFFIX = '.contract-hash-inputs-removed';
-const FORMAT_VERSION_STEP =
-  'run the `stored-files-format-version` script of the earlier upgrade step first, then this script again';
 
 function isRecord(value: unknown): value is JsonRecord {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
@@ -761,11 +761,7 @@ function classify(
       return;
     }
     files.contracts.push(stored);
-  } else {
-    return;
   }
-  if (value['formatVersion'] === undefined)
-    stops.push(`${shown}: has no "formatVersion"; ${FORMAT_VERSION_STEP}`);
 }
 
 function isWalked(name: string): boolean {

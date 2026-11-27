@@ -499,6 +499,7 @@ type ContractBase = Omit<
       readonly insertOnConflictSkip: true;
       readonly insertOnConflictTarget: true;
       readonly insertOnConflictWithoutTarget: true;
+      readonly interactiveTransactions: true;
       readonly jsonAgg: true;
       readonly jsonAggWithoutTruncation: true;
       readonly limit: true;

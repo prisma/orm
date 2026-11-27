@@ -1,4 +1,4 @@
-import type { Contract } from '@internal/contract/types';
+import type { Contract, ContractFieldType, ScalarFieldType } from '@internal/contract/types';
 import type {
   AnyCodecDescriptor,
   CodecDescriptor,
@@ -8,10 +8,7 @@ import type {
   ComponentDescriptor,
   ComponentMetadata,
 } from '@internal/framework-components/components';
-import {
-  checkContractComponentRequirements,
-  mergeCapabilityMatrices,
-} from '@internal/framework-components/components';
+import { checkContractComponentRequirements } from '@internal/framework-components/components';
 import {
   createExecutionStack,
   type RuntimeAdapterDescriptor,
@@ -80,7 +77,16 @@ export interface SqlRuntimeTargetDescriptor<
     TTargetId
   >,
 > extends RuntimeTargetDescriptor<'sql', TTargetId, TTargetInstance>,
-    SqlStaticContributions {}
+    SqlStaticContributions {
+  /**
+   * The capabilities that are facts about the target's database, whichever version it runs, each as `true`: the set of their names, not what one database provides. Signing checks the database for them, so a client does not ask its adapter or driver to provide them. A target that declares none leaves every capability to the adapter and the driver.
+   */
+  readonly databaseCapabilities?: Readonly<Record<string, Readonly<Record<string, true>>>>;
+  /**
+   * The capabilities an earlier release wrote into every contract and that nothing reads any more, each as `true`. A contract that release emitted still names them; the client's checks ignore them, and they leave the contract when it is emitted again. Prisma 8.0 removes this field.
+   */
+  readonly retiredCapabilities?: Readonly<Record<string, Readonly<Record<string, true>>>>;
+}
 
 export interface SqlRuntimeAdapterDescriptor<
   TTargetId extends string = string,
@@ -221,7 +227,9 @@ export function assertExecutionStackContractRequirements(
 function validateTypeParams(
   typeParams: Record<string, unknown>,
   descriptor: RuntimeParameterizedCodecDescriptor,
-  context: { tableName: string; columnName: string },
+  context:
+    | { readonly tableName: string; readonly columnName: string }
+    | { readonly model: string; readonly field: string },
 ): Record<string, unknown> {
   const result = descriptor.paramsSchema['~standard'].validate(typeParams);
   if (result instanceof Promise) {
@@ -235,7 +243,7 @@ function validateTypeParams(
     const messages = result.issues.map((issue) => issue.message).join('; ');
     throw runtimeError(
       'RUNTIME.TYPE_PARAMS_INVALID',
-      `Invalid typeParams for column '${context.tableName}.${context.columnName}' (codecId: ${descriptor.codecId}): ${messages}`,
+      `Invalid typeParams for ${'model' in context ? `field '${context.model}.${context.field}'` : `column '${context.tableName}.${context.columnName}'`} (codecId: ${descriptor.codecId}): ${messages}`,
       { ...context, codecId: descriptor.codecId, typeParams },
     );
   }
@@ -292,6 +300,31 @@ function collectAggregateDescriptorContributions(
   contributors: ReadonlyArray<ComponentMetadata>,
 ): ReadonlyArray<unknown> {
   return contributors.flatMap((contributor) => contributor.types?.aggregateDescriptors ?? []);
+}
+
+function scalarTypesOf(type: ContractFieldType): readonly ScalarFieldType[] {
+  if (type.kind === 'scalar') return [type];
+  if (type.kind === 'union') return type.members.flatMap((member) => scalarTypesOf(member));
+  return [];
+}
+
+/** The type parameters of each model field, which reach only the types the client exposes, are checked against the codec's parameter schema as a column's are. */
+function validateFieldTypeParams(
+  contract: Contract<SqlStorage>,
+  codecDescriptors: Map<string, RuntimeParameterizedCodecDescriptor>,
+): void {
+  for (const namespace of Object.values(contract.domain.namespaces)) {
+    for (const [model, { fields }] of Object.entries(namespace.models)) {
+      for (const [field, { type }] of Object.entries(fields)) {
+        for (const scalar of scalarTypesOf(type)) {
+          const descriptor = codecDescriptors.get(scalar.codecId);
+          if (scalar.typeParams && descriptor) {
+            validateTypeParams(scalar.typeParams, descriptor, { model, field });
+          }
+        }
+      }
+    }
+  }
 }
 
 function validateColumnTypeParams(
@@ -492,9 +525,7 @@ export function createExecutionContext<
 >(options: {
   readonly contract: TContract;
   readonly stack: SqlExecutionStack<TTargetId>;
-  /**
-   * Optional driver descriptor. When provided, its `capabilities` are folded into the contract's capability matrix alongside the target, adapter, and extension packs — matching the merge `enrichContract` performs at CLI emit time. The driver is *only* consulted as a capability source here; runtime driver lifecycle is wired separately via {@link instantiateExecutionStack} + `runtime.connect`.
-   */
+  /** Ignored. Prisma 8.0 removes this option. */
   readonly driver?: RuntimeDriverDescriptor<
     'sql',
     TTargetId,
@@ -502,24 +533,9 @@ export function createExecutionContext<
     SqlRuntimeDriverInstance<TTargetId>
   >;
 }): ExecutionContext<TContract> {
-  const { stack, driver } = options;
+  const { contract, stack } = options;
 
-  assertExecutionStackContractRequirements(options.contract, stack);
-
-  const capabilityContributors: ReadonlyArray<{ readonly capabilities?: unknown }> = [
-    stack.target,
-    stack.adapter,
-    ...(driver ? [driver] : []),
-    ...stack.extensions,
-  ];
-  const mergedCapabilities = mergeCapabilityMatrices(
-    options.contract.capabilities,
-    capabilityContributors,
-  );
-  const contract: TContract = {
-    ...options.contract,
-    capabilities: mergedCapabilities,
-  };
+  assertExecutionStackContractRequirements(contract, stack);
 
   const contributors: Array<SqlStaticContributions & ComponentDescriptor<string>> = [
     stack.target,
@@ -549,6 +565,7 @@ export function createExecutionContext<
 
   if (parameterizedCodecDescriptors.size > 0) {
     validateColumnTypeParams(contract.storage, parameterizedCodecDescriptors);
+    validateFieldTypeParams(contract, parameterizedCodecDescriptors);
   }
 
   const contractCodecs = buildContractCodecRegistry(contract, codecDescriptors);

@@ -41,7 +41,6 @@ import {
 import type { SqlControlDriverInstance, SqlStorage } from '@internal/sql-contract/types';
 import { SqlConnectionError, SqlQueryError } from '@internal/sql-errors';
 import type { SqlExecuteRequest } from '@internal/sql-relational-core/ast';
-import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Result } from '@internal/utils/result';
@@ -52,6 +51,7 @@ import { verifySqliteDatabaseSchema } from './diff-database-schema';
 import { holdingStoredValue } from './operations/stored-values';
 import { affinityStorageClasses, conversionCopyOf, rebuiltTableName } from './operations/tables';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
+import { readSqliteOperations } from './read-operations';
 import { sqliteMarkedRemoval, sqliteStoredValueCallClasses } from './stored-value-calls';
 
 const NOT_NULL_VIOLATION_SQLSTATE = '23502';
@@ -93,10 +93,10 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     const space = options.plan.spaceId;
 
     // Materialize any async ops before running checks or executing.
-    const planOps = blindCast<
-      readonly SqlMigrationPlanOperation<SqlitePlanTargetDetails>[],
-      'ops were produced by the SQLite planner and are SqlMigrationPlanOperation<SqlitePlanTargetDetails>; MigrationPlan.operations uses the wider framework type to accommodate Promise covariance'
-    >(await Promise.all(options.plan.operations));
+    const planOps = readSqliteOperations(await Promise.all(options.plan.operations), {
+      space,
+      migrations: options.migrationEdges,
+    });
 
     const destinationCheck = this.ensurePlanMatchesDestinationContract(
       options.plan.destination,

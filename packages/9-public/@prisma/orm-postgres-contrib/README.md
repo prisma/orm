@@ -2,11 +2,13 @@
 
 Prisma 8 packs for the PostgreSQL contrib modules that PostgreSQL marks trusted, the ones any database owner can install.
 
+> **Maturity level: Generally Available.** From release 8.0, no later 8.x release breaks code that uses this package. Until release 8.0 it is published as `8.0.0-rc.N`, like every Prisma 8 package, and any of those versions may contain breaking changes. See [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+
 ```bash
 pnpm add @prisma/orm-postgres-contrib
 ```
 
-Every trusted contrib module gets its pack here, as one group of entrypoints named after the module. Third-party extensions such as pgvector and PostGIS keep a package each (`@prisma/orm-extension-<name>`), because they release on their own schedule; see [ADR 312](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20312%20-%20Postgres%20extension%20packs%20are%20published%20by%20tier.md).
+Every trusted contrib module gets its pack here, as one group of entrypoints named after the module. Third-party extensions such as pgvector and PostGIS keep a package each (`@prisma/orm-extension-<name>`); see [ADR 313](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20313%20-%20Postgres%20extension%20packs%20are%20published%20by%20tier.md).
 
 ## Modules
 
@@ -21,11 +23,11 @@ Add the pack to `extensions` in `prisma.config.ts`:
 ```typescript
 import { definePrismaConfig } from 'prisma/config';
 import citext from '@prisma/orm-postgres-contrib/citext/control';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './src/prisma/contract.prisma',
+    contract: { path: './src/prisma/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] },
     extensions: [citext],
   }),
 });
