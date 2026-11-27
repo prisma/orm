@@ -73,7 +73,7 @@ Before it publishes, the workflow runs four checks:
 - **Conformance** ([`pnpm check:conformance`](../../scripts/check-conformance.mjs)).
 - **Dependencies** ([`pnpm check:publish-deps`](../../scripts/check-publish-deps.mjs)). It fails if a packed `package.json` still contains a `workspace:` or `catalog:` entry, if a range on one of our packages differs from the release plan, or if one of our packages is listed as an ordinary dependency of another.
 - **Release notes** ([`pnpm check:release-notes`](../../scripts/check-release-notes.mjs)). A release must have a committed [`docs/releases/v<version>.md`](../releases/README.md), which becomes the text of the GitHub Release. Nothing generates notes when the file is missing. The same check runs on a release pull request, so a missing file is caught at review.
-- **Upgrade instructions** ([`pnpm check:upgrade-coverage`](../../scripts/check-upgrade-coverage.mjs)). A pull request that changes what users or extension authors must do carries its own upgrade fragment. A release must have its assembled upgrade guides and no pending fragments left. Development builds may have pending fragments. See the [upgrade instruction lifecycle](../../upgrade-instructions/README.md).
+- **Upgrade instructions** ([`pnpm check:upgrade-coverage`](../../scripts/check-upgrade-coverage.mjs)). A pull request that changes what users or extension authors must do carries its own upgrade fragment. A release must have its assembled upgrade guides and no pending fragments left. A release after release 8.0 needs a guide only for an audience that had fragments for it, because an upgrade within Prisma 8 asks nothing of Generally Available code. Development builds may have pending fragments. See the [upgrade instruction lifecycle](../../upgrade-instructions/README.md).
 
 ### npm tags
 
@@ -105,6 +105,44 @@ Release 8.0 is published as `8.0.1`, never `8.0.0`. Every later release starts a
 1. Set the root version with `node scripts/set-version.ts 8.0.1`. From `8.0.0-rc.N`, `pnpm bump-version` only raises the release-candidate number, so it cannot do this step. For a later release, `pnpm bump-version` raises the minor, from `8.0.1` to `8.1.0`.
 2. Assemble the upgrade guides and commit the release notes, `docs/releases/v8.0.1.md`, as for a release candidate.
 3. Merge. The git tag and the GitHub Release are `v8.0.1`. From release 8.0 on, a GitHub Release is not marked as a pre-release, whatever the levels of the packages in it.
+
+### Release 8.0 itself: what is different on that day
+
+Release 8.0 is the first release in which the packages stop sharing one version. Each gets the version of its own maturity level: `8.0.1` for a package that is Generally Available, and `8.0.1-ea.0` for one at Early Access. Three things follow that no later release needs.
+
+**Before the release pull request**
+
+1. **Check the levels.** [`levels.ts`](../../packages/0-shared/publish-surface/src/levels.ts) lists every package with its level. Run `node scripts/print-release-plan.ts 8.0.1` and read the table: it is exactly what will be published. Change a level in `levels.ts` if it is no longer right.
+2. **Look at the `@prisma/orm-extension-paradedb` line of that table.** The package has version numbers of its own and is planned as `0.18.0`, which is lower than the `8.0.0-rc.N` versions it has on npm today. If the package has been removed from this repository by then, the line is gone and there is nothing to do.
+
+**In the release pull request**
+
+3. **Rewrite the pages that say Prisma 8 is a release candidate.** After the release each of them is wrong:
+
+   | File | What to change |
+   | --- | --- |
+   | [`README.md`](../../README.md) | Remove the "Prisma 8 is a release candidate" note. Under "Supported databases", say what each level is now, not what it will be "from release 8.0". |
+   | [`docs/oss/versioning.md`](./versioning.md) | Remove the section "Until release 8.0", and every "from release 8.0" that now reads as a promise about the future. |
+   | [`SECURITY.md`](../../SECURITY.md) | Rewrite "Supported versions": remove the release-candidate paragraphs, and state what [the user page](./versioning.md#supported-versions) states. Rewrite "Scope", which still names the packages `@internal/*`. |
+   | [`CONTRIBUTING.md`](../../CONTRIBUTING.md) | Rewrite the section "Status — please read first". |
+   | [`docs/oss/governance.md`](./governance.md) | Remove or rewrite the section "Release-candidate status". |
+   | [`.github/ISSUE_TEMPLATE/bug_report.yml`](../../.github/ISSUE_TEMPLATE/bug_report.yml) | It tells a reporter to be on "the latest release candidate", and its example version is `8.0.0-rc.1`. |
+   | This page | Remove "Procedure: cut the next release candidate" and this section, and the "until release 8.0" halves of the other sections. |
+
+   Then search the repository for `release candidate` and `8.0.0-rc` and read what is left. Old release notes and upgrade guides keep their text.
+
+4. **Say in the release notes which packages are now at Early Access,** and what line a user of one writes: `"@prisma/orm-mysql": "~8.0.1-ea.0"`, with a tilde on every Prisma line, as [the user page](./versioning.md#a-new-minor-below-ga) describes. Yarn and Bun do not print the deprecation message of step 6, so the notes are where those users learn it.
+5. **Run the dry run** from [Procedure: check a change to the release tooling](#procedure-check-a-change-to-the-release-tooling) on the release branch, and compare what it would publish with the table from step 1. Then merge.
+
+**After the publish**
+
+6. **Mark the old release candidates of the Early Access packages as deprecated.** A user who is still on `@prisma/orm-mysql@8.0.0-rc.25` then sees, at install, that the package is now at Early Access and which version to move to. Nothing depends on this step: `8.0.1-ea.0` already sorts above every `8.0.0-rc.N`. A maintainer who is logged in to npm with rights on the packages runs one command for each package that the table from step 1 shows at a level below GA:
+
+   ```bash
+   npm deprecate "@prisma/orm-mysql@>=8.0.0-rc.0 <8.0.0" "From release 8.0 this package is at Early Access. Install @prisma/orm-mysql@~8.0.1-ea.0. See https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels"
+   ```
+
+   The range matches every `8.0.0-rc.N` and nothing else. The packages that are Generally Available need no such message: their users move to `8.0.1` by updating.
 
 Anything on `main` can be released at any time. A fix therefore ships in the next release, which is cut early when the fix cannot wait. The scripts publish no fix to one package alone and no release from a branch other than `main`. If `main` ever stops being releasable at any time, that is the moment to add them.
 
