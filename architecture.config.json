@@ -739,6 +739,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/postgres/3-driver/src/liveness-check.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/postgres/3-driver/src/named-cursor.ts",
       "domain": "targets",
       "layer": "drivers",

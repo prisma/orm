@@ -1,5 +1,5 @@
 import type { SessionSettings } from '@internal/framework-components/components';
-import { SqlQueryError } from '@internal/sql-errors';
+import { SqlConnectionError, SqlQueryError } from '@internal/sql-errors';
 import type {
   PreparedStatementHandle,
   SqlConnection,
@@ -27,6 +27,12 @@ import type {
 import Cursor from 'pg-cursor';
 import { callbackToPromise } from './callback-to-promise';
 import { type DriverRuntimeError, driverError } from './driver-error';
+import {
+  livenessCheckSettings,
+  type PoolClientUse,
+  poolClientUse,
+  timedStatement,
+} from './liveness-check';
 import { NamedCursor } from './named-cursor';
 import {
   isPostgresError,
@@ -34,6 +40,7 @@ import {
   normalizePgConnectFailure,
 } from './normalize-error';
 import {
+  destroySocket,
   hasLostConnection,
   hasStartedConnecting,
   markClientAbandoned,
@@ -796,6 +803,7 @@ class PostgresPoolDriverImpl
 {
   private readonly pool: PoolType;
   readonly #sessionSettings: SessionSettingsGuard;
+  readonly #clientUse: PoolClientUse;
   readonly #ownedByDriver: boolean;
   #closed = false;
 
@@ -806,6 +814,7 @@ class PostgresPoolDriverImpl
   ) {
     super(buildConnectionOptions(options));
     this.pool = options.connect.pool;
+    this.#clientUse = poolClientUse(this.pool);
     this.#sessionSettings = new SessionSettingsGuard(options.sessionSettings ?? {}, this.pool);
     this.#ownedByDriver = options.connect.ownedByDriver;
   }
@@ -835,18 +844,46 @@ class PostgresPoolDriverImpl
     }
   }
 
+  /**
+   * Takes a client from the pool that is alive. A client that sat idle is checked first, and a dead
+   * one is evicted for another; the caller's statement is never sent on a client found dead.
+   */
   async acquireClient(): Promise<PoolClient> {
+    let lastCheckFailure: SqlConnectionError | undefined;
+    for (let pass = 1; ; pass++) {
+      const client = await this.#checkOut();
+      const verdict = this.#clientUse.verdict(client);
+      if (verdict === 'use') {
+        await this.#ensureSessionSettings(client);
+        return client;
+      }
+      if (verdict === 'check') {
+        const failure = await this.#checkLiveness(client);
+        if (failure === undefined) return client;
+        lastCheckFailure = failure;
+        evictClient(client, failedCheckEviction(failure));
+      } else {
+        evictClient(client, olderClientEviction());
+      }
+      if (pass > this.pool.options.max) throw lastCheckFailure ?? olderClientEviction();
+    }
+  }
+
+  async #checkOut(): Promise<PoolClient> {
     // pg-pool detaches its own 'error' forwarding while a client is checked
-    // out, so a connection error during a held connection, transaction, or
-    // cursor emits on the client itself; without a listener that kills the
-    // process.
+    // out, so a connection error during a liveness check, held connection,
+    // transaction, or cursor emits on the client itself; without a listener
+    // that kills the process.
     let pooled: PoolClient;
     try {
       pooled = await this.pool.connect();
     } catch (error) {
       throw normalizePgConnectFailure(error);
     }
-    const client = watchClientLoss(suppressIdleConnectionErrors(pooled));
+    return watchClientLoss(suppressIdleConnectionErrors(pooled));
+  }
+
+  async #ensureSessionSettings(client: PoolClient): Promise<void> {
     try {
       await ensureSessionSettings(this.#sessionSettings, client);
     } catch (error) {
@@ -854,7 +891,34 @@ class PostgresPoolDriverImpl
       client.release(true);
       throw normalized;
     }
-    return client;
+  }
+
+  /**
+   * Sends one statement with the liveness check's time limit: the session settings when they are
+   * due, else an empty statement. Returns why the client is dead, or undefined when the server
+   * answered, which an error other than a connection error also proves.
+   */
+  async #checkLiveness(client: PoolClient): Promise<SqlConnectionError | undefined> {
+    const startedAt = this.#clientUse.now();
+    const settingsDue = this.#sessionSettings.needs(client);
+    try {
+      await sendLivenessCheck(this.#sessionSettings, client);
+      return undefined;
+    } catch (error) {
+      const normalized = normalizePgClientError(client, error);
+      if (SqlQueryError.is(normalized)) {
+        if (!settingsDue) return undefined;
+        client.release(true);
+        throw normalized;
+      }
+      this.#clientUse.recordFailedCheck(startedAt);
+      return SqlConnectionError.is(normalized)
+        ? normalized
+        : new SqlConnectionError(
+            `A pooled Postgres connection did not answer its liveness check within ${livenessCheckSettings.timeoutMillis} ms.`,
+            { cause: normalized, transient: true },
+          );
+    }
   }
 
   async releaseClient(client: PoolClient): Promise<void> {
@@ -1087,6 +1151,36 @@ export function createBoundDriverFromBinding(
         sessionSettings,
       });
   }
+}
+
+async function sendLivenessCheck(guard: SessionSettingsGuard, client: ClientBase): Promise<void> {
+  const timeLimitMillis = livenessCheckSettings.timeoutMillis;
+  const releaseLock = await acquireClientQueryLock(client);
+  try {
+    if (guard.needs(client)) await guard.ensure(client, timeLimitMillis);
+    else await client.query(timedStatement({ text: '' }, timeLimitMillis));
+  } finally {
+    releaseLock();
+  }
+}
+
+/** Removes a client from its pool, destroying its socket first so a silent peer cannot hold it open. */
+function evictClient(client: PoolClient, reason: SqlConnectionError): void {
+  destroySocket(client);
+  client.release(reason);
+}
+
+function failedCheckEviction(failure: SqlConnectionError): SqlConnectionError {
+  return new SqlConnectionError(
+    'The Postgres driver evicted an idle pooled connection that failed its liveness check.',
+    { cause: failure },
+  );
+}
+
+function olderClientEviction(): SqlConnectionError {
+  return new SqlConnectionError(
+    'The Postgres driver evicted an idle pooled connection last used before another connection from the same pool failed its liveness check.',
+  );
 }
 
 /** Ensures the session settings on a client the driver is about to use, holding the client's query lock while it does. */
