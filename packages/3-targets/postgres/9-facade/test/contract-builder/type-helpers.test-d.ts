@@ -1,8 +1,8 @@
 import { expectTypeOf, test } from 'vitest';
-import { defineContract } from '../../src/exports/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '../../src/exports/contract-builder';
 
 test('type.* has a helper for every PSL type constructor', () => {
-  defineContract({ databaseVersion: 18 }, ({ type }) => {
+  defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }, ({ type }) => {
     expectTypeOf(type.TimestampString(3).codecId).toEqualTypeOf<'pg/timestamp-string@1'>();
     expectTypeOf(type.TimestampString(3).typeParams).toEqualTypeOf<{ readonly precision: 3 }>();
     expectTypeOf(type.String().codecId).toEqualTypeOf<'pg/text@1'>();
@@ -11,24 +11,27 @@ test('type.* has a helper for every PSL type constructor', () => {
 });
 
 test('field.namedType takes only an enum handle', () => {
-  defineContract({ databaseVersion: 18 }, ({ type, field }) => {
-    // @ts-expect-error a codec instance is written with field.column
-    field.namedType(type.sql.Varchar(5));
-    // @ts-expect-error a type alias name is written as a constant
-    field.namedType('Slug');
-    return { models: {} };
-  });
+  defineContract(
+    { requiredCapabilities: [...postgres18, ...postgresDriver] },
+    ({ type, field }) => {
+      // @ts-expect-error a codec instance is written with field.column
+      field.namedType(type.sql.Varchar(5));
+      // @ts-expect-error a type alias name is written as a constant
+      field.namedType('Slug');
+      return { models: {} };
+    },
+  );
 });
 
 test('the contract takes databaseTypes, not types', () => {
   defineContract({
-    databaseVersion: 18,
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     databaseTypes: {
       vector: { kind: 'codec-instance', codecId: 'pg/text@1', typeParams: {} },
     },
   });
   defineContract({
-    databaseVersion: 18,
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     // @ts-expect-error a type alias is a constant
     types: {},
   });
@@ -44,20 +47,23 @@ type GeneratesOnCreate<Builder> = Builder extends { readonly __state: infer Stat
   : false;
 
 test('a field typed by temporal.CreatedAt is optional on create', () => {
-  defineContract({ databaseVersion: 18 }, ({ type, field }) => {
-    const createdAt = field.column(type.temporal.CreatedAt());
-    const updatedAt = field.column(type.temporal.UpdatedAt()).optional();
-    const plain = field.column(type.TimestamptzTemporal());
-    expectTypeOf<GeneratesOnCreate<typeof createdAt>>().toEqualTypeOf<true>();
-    expectTypeOf<GeneratesOnCreate<typeof updatedAt>>().toEqualTypeOf<true>();
-    expectTypeOf<GeneratesOnCreate<typeof plain>>().toEqualTypeOf<false>();
-    expectTypeOf(type.temporal.CreatedAt().codecId).toEqualTypeOf<'pg/timestamptz-date@1'>();
-    return { models: {} };
-  });
+  defineContract(
+    { requiredCapabilities: [...postgres18, ...postgresDriver] },
+    ({ type, field }) => {
+      const createdAt = field.column(type.temporal.CreatedAt());
+      const updatedAt = field.column(type.temporal.UpdatedAt()).optional();
+      const plain = field.column(type.TimestamptzTemporal());
+      expectTypeOf<GeneratesOnCreate<typeof createdAt>>().toEqualTypeOf<true>();
+      expectTypeOf<GeneratesOnCreate<typeof updatedAt>>().toEqualTypeOf<true>();
+      expectTypeOf<GeneratesOnCreate<typeof plain>>().toEqualTypeOf<false>();
+      expectTypeOf(type.temporal.CreatedAt().codecId).toEqualTypeOf<'pg/timestamptz-date@1'>();
+      return { models: {} };
+    },
+  );
 });
 
 test('a type helper requires its required arguments and not its optional ones', () => {
-  defineContract({ databaseVersion: 18 }, ({ type }) => {
+  defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }, ({ type }) => {
     // @ts-expect-error sql.Char takes a required length
     type.sql.Char();
     // @ts-expect-error sql.Varchar takes a required length
@@ -70,7 +76,7 @@ test('a type helper requires its required arguments and not its optional ones', 
 });
 
 test('type.Ulid and type.sql.Ulid are sql/char@1 of length 26, as type.Char(26) and type.sql.Char(26) are, with no generator', () => {
-  defineContract({ databaseVersion: 18 }, ({ type }) => {
+  defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }, ({ type }) => {
     const char26 = {
       kind: 'codec-instance',
       codecId: 'sql/char@1',

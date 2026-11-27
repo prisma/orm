@@ -1,50 +1,73 @@
-import postgresAdapter from '@internal/adapter-postgres/runtime';
-import postgresDriver from '@internal/driver-postgres/runtime';
 import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { describe, expect, it } from 'vitest';
-import { defineContractFor } from '../../src/contract/define-contract';
 import { postgresContractCapabilities } from '../../src/exports/config';
-import { defineContract } from '../../src/exports/contract-builder';
 import {
-  version16Capabilities,
-  version17Capabilities,
-  versionsWithALaterFeature,
-} from '../support/version-table';
+  defineContract,
+  postgres15,
+  postgres16,
+  postgres17,
+  postgres18,
+  postgresDriver,
+} from '../../src/exports/contract-builder';
 
 const removedFlags = {
   postgres: ['orderBy', 'limit', 'lateral', 'jsonAgg', 'returning'],
   sql: ['enums'],
 };
 
-const defineContractWithALaterFeature = defineContractFor(versionsWithALaterFeature);
-
-// The default capabilities list is the client's adapter's and driver's: the driver provides interactive transactions.
-function withTheDefaultConnection<Row extends { readonly sql: object }>(row: Row) {
-  return { ...row, sql: { ...row.sql, interactiveTransactions: true } };
+function keysOf(row: Readonly<Record<string, Readonly<Record<string, boolean>>>>) {
+  return Object.entries(row).flatMap(([namespace, flags]) =>
+    Object.keys(flags).map((flag) => `${namespace}.${flag}`),
+  );
 }
 
-describe('the version a TypeScript contract states', () => {
-  it('selects its own row of the table', () => {
-    expect([
-      defineContractWithALaterFeature({ databaseVersion: 16 }).capabilities,
-      defineContractWithALaterFeature({ databaseVersion: 17 }).capabilities,
-    ]).toEqual([
-      withTheDefaultConnection(version16Capabilities),
-      withTheDefaultConnection(version17Capabilities),
-    ]);
+describe('the lists of what a version and the driver provide', () => {
+  it.each([
+    [15, postgres15],
+    [16, postgres16],
+    [17, postgres17],
+    [18, postgres18],
+  ] as const)('lists every capability of version %i in the target’s table', (version, list) => {
+    expect(list).toEqual(keysOf(postgresCapabilitiesByVersion[version]));
   });
 
-  it.each([15, 16, 17, 18] as const)(
-    'makes version %i require its row of the shipped table',
-    (version) => {
-      expect(defineContract({ databaseVersion: version }).capabilities).toEqual(
-        withTheDefaultConnection(postgresCapabilitiesByVersion[version]),
-      );
-    },
-  );
+  it('lists the driver’s interactive transactions', () => {
+    expect(postgresDriver).toEqual(['sql.interactiveTransactions']);
+  });
 
-  it('requires none of the flags nothing reads', () => {
-    const { capabilities } = defineContract({ databaseVersion: 18 });
+  it('cannot be changed by an author who spreads them', () => {
+    expect([postgres18, postgresDriver].every(Object.isFrozen)).toBe(true);
+  });
+});
+
+describe('the required capabilities of a TypeScript contract', () => {
+  it('are stored as the contract records them, each key in its namespace', () => {
+    expect(
+      defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }).capabilities,
+    ).toEqual({
+      ...postgresCapabilitiesByVersion[18],
+      sql: { ...postgresCapabilitiesByVersion[18].sql, interactiveTransactions: true },
+    });
+  });
+
+  it('are only what the list names: a key left out is not required, and an unknown one is kept', () => {
+    const { capabilities } = defineContract({
+      requiredCapabilities: [
+        ...postgres15.filter((capability) => capability !== 'sql.returning'),
+        'http.batch',
+      ],
+    });
+    const { returning: _returning, ...sql } = postgresCapabilitiesByVersion[15].sql;
+
+    expect(capabilities).toEqual({
+      ...postgresCapabilitiesByVersion[15],
+      sql,
+      http: { batch: true },
+    });
+  });
+
+  it('include none of the flags nothing reads', () => {
+    const { capabilities } = defineContract({ requiredCapabilities: postgres18 });
     for (const [namespace, flags] of Object.entries(removedFlags)) {
       for (const flag of flags) {
         expect(capabilities[namespace as 'sql']).not.toHaveProperty(flag);
@@ -52,25 +75,7 @@ describe('the version a TypeScript contract states', () => {
     }
   });
 
-  it('refuses a contract that states no version, saying how to state it', () => {
-    expect(() => defineContract({} as { databaseVersion: 15 })).toThrow(
-      'State the PostgreSQL version your database runs in defineContract, for example defineContract({ databaseVersion: 18, ... }). The supported versions are 15, 16, 17, 18.',
-    );
-  });
-
-  it('refuses a version written as a string, saying to write the number', () => {
-    expect(() => defineContract({ databaseVersion: '17' as unknown as 17 })).toThrow(
-      "Write the PostgreSQL version as the number 17, not the string '17'.",
-    );
-  });
-
-  it('refuses a version the table does not list', () => {
-    expect(() => defineContract({ databaseVersion: 14 as 15 })).toThrow(
-      'PostgreSQL 14 is not supported. The supported versions are 15, 16, 17, 18.',
-    );
-  });
-
-  it('keeps the flags of the extensions it lists', () => {
+  it('keep the flags of the extensions the contract lists', () => {
     const example = {
       kind: 'extension',
       id: 'example',
@@ -80,61 +85,47 @@ describe('the version a TypeScript contract states', () => {
       capabilities: { example: { search: true } },
     } as const;
 
-    expect(defineContract({ databaseVersion: 18, extensions: { example } }).capabilities).toEqual({
-      ...withTheDefaultConnection(postgresCapabilitiesByVersion[18]),
-      example: { search: true },
-    });
+    expect(
+      defineContract({ requiredCapabilities: postgres18, extensions: { example } }).capabilities,
+    ).toEqual({ ...postgresCapabilitiesByVersion[18], example: { search: true } });
+  });
+
+  it('are the same as postgresContractCapabilities gives, for configs built by hand', () => {
+    const required = [...postgres16, ...postgresDriver];
+    expect(defineContract({ requiredCapabilities: required }).capabilities).toEqual(
+      postgresContractCapabilities(required),
+    );
   });
 });
 
-describe('the capabilities list of a TypeScript contract', () => {
-  it('merges the sets over the row in order, a later flag replacing an earlier one and false turning one off', () => {
-    const { capabilities } = defineContract({
-      databaseVersion: 15,
-      capabilities: [
-        { sql: { returning: false, interactiveTransactions: true, pipelining: true } },
-        { sql: { pipelining: false }, http: { batch: true } },
-      ],
-    });
-    const { returning: _returning, ...sql } = postgresCapabilitiesByVersion[15].sql;
+describe('a contract that lists no required capabilities', () => {
+  const refusal =
+    'State the capabilities your contract requires in requiredCapabilities in defineContract. The list is missing or empty.';
 
-    expect(capabilities).toEqual({
-      ...postgresCapabilitiesByVersion[15],
-      sql: { ...sql, interactiveTransactions: true },
-      http: { batch: true },
-    });
+  it('is refused when the list is missing, with no example', () => {
+    expect(() => defineContract({} as { requiredCapabilities: [] })).toThrow(refusal);
   });
 
-  it('refuses a single set where the list belongs, as a JavaScript caller might pass it', () => {
+  it('is refused when the list is empty', () => {
+    expect(() => defineContract({ requiredCapabilities: [] })).toThrow(refusal);
+  });
+
+  it('is refused by postgresContractCapabilities too', () => {
+    expect(() => postgresContractCapabilities([])).toThrow(
+      'State the capabilities your contract requires in requiredCapabilities given to postgresContractCapabilities. The list is missing or empty.',
+    );
+  });
+});
+
+describe('an entry that is not a capability key', () => {
+  it.each([
+    ['a key without a namespace', 'returning'],
+    ['a capability set, as the removed capabilities option took', { sql: { returning: true } }],
+  ])('is refused: %s', (_case, entry) => {
     expect(() =>
-      defineContract({
-        databaseVersion: 18,
-        capabilities: { sql: { interactiveTransactions: true } } as unknown as [],
-      }),
+      defineContract({ requiredCapabilities: [entry] as unknown as ['sql.returning'] }),
     ).toThrow(
-      'capabilities is a list of capability sets, for example capabilities: [{ sql: { interactiveTransactions: true } }].',
-    );
-  });
-
-  it('defaults to the adapter and driver the client runs with, whose driver provides interactive transactions', () => {
-    expect(defineContract({ databaseVersion: 17 }).capabilities).toEqual(
-      defineContract({
-        databaseVersion: 17,
-        capabilities: [postgresAdapter.capabilities, postgresDriver.capabilities],
-      }).capabilities,
-    );
-    expect(defineContract({ databaseVersion: 17 }).capabilities.sql.interactiveTransactions).toBe(
-      true,
-    );
-    expect(
-      defineContract({ databaseVersion: 17, capabilities: [] }).capabilities.sql,
-    ).not.toHaveProperty('interactiveTransactions');
-  });
-
-  it('gives the same capabilities as postgresContractCapabilities, for configs built by hand', () => {
-    const capabilities = [{ sql: { interactiveTransactions: true } }] as const;
-    expect(defineContract({ databaseVersion: 16, capabilities }).capabilities).toEqual(
-      postgresContractCapabilities({ databaseVersion: 16, capabilities }),
+      `requiredCapabilities in defineContract lists ${JSON.stringify(entry)}, which is not a capability key. A key is a namespace and a flag joined by a dot, as error messages print it.`,
     );
   });
 });

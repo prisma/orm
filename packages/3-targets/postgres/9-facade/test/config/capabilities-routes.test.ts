@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
 import { prisma7Schema } from '../../src/config/prisma7-schema';
 import { scratchDir } from '../support/scratch';
-import { connectionList } from './fixtures/connection-list';
+import { requiredList } from './fixtures/required-list';
 
 const tempDirs: string[] = [];
 
@@ -27,8 +27,8 @@ async function emitted(
   return JSON.parse(await readFile(join(dir, 'contract.json'), 'utf-8')).capabilities;
 }
 
-describe('the same version and capabilities list, through every authoring route', () => {
-  it('emits the same capabilities, with false turning a flag off and absent from contract.json', async () => {
+describe('the same list of required capabilities, through every authoring route', () => {
+  it('emits the same capabilities, each key in its namespace and nothing left out added back', async () => {
     const { returning: _returning, ...sql } = postgresCapabilitiesByVersion[16].sql;
     const expected = {
       ...postgresCapabilitiesByVersion[16],
@@ -39,15 +39,13 @@ describe('the same version and capabilities list, through every authoring route'
     const routes = {
       typescript: await emitted(async () =>
         defineConfig({
-          contract: `${resolve(import.meta.dirname, 'fixtures', 'connection-list-contract')}.ts`,
+          contract: `${resolve(import.meta.dirname, 'fixtures', 'required-list-contract')}.ts`,
         }),
       ),
       prismaSchema: await emitted(async (dir) => {
         const path = join(dir, 'contract.prisma');
         await writeFile(path, '// use prisma-8\nmodel User {\n  id Int @id\n}\n', 'utf-8');
-        return defineConfig({
-          contract: { path, databaseVersion: 16, capabilities: connectionList },
-        });
+        return defineConfig({ contract: { path, requiredCapabilities: requiredList } });
       }),
       prisma7Schema: await emitted(async (dir) => {
         const path = join(dir, 'schema.prisma');
@@ -57,7 +55,7 @@ describe('the same version and capabilities list, through every authoring route'
           'utf-8',
         );
         return defineConfig({
-          contract: prisma7Schema(path, { databaseVersion: 16, capabilities: connectionList }),
+          contract: prisma7Schema(path, { requiredCapabilities: requiredList }),
         });
       }),
     };

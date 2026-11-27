@@ -25,14 +25,20 @@ import type { NamespacedEnums } from '@internal/contract/enum-accessor';
 import type { JsonValue } from '@internal/contract/types';
 import type { CreateInput, DefaultModelRow } from '@internal/sql-orm-client';
 import { expectTypeOf, test } from 'vitest';
-import { defineContract, enumType, member } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  member,
+  postgres18,
+  postgresDriver,
+} from '../../src/exports/contract-builder';
 
 const pgInt = { codecId: 'pg/int4@1' } as const;
 
 const Level = enumType('Level', pgInt, member('Low', 1), member('High', 10));
 
 const contract = defineContract(
-  { databaseVersion: 18, enums: { Level } },
+  { requiredCapabilities: [...postgres18, ...postgresDriver], enums: { Level } },
   ({ field, model, gen, type }) => ({
     models: {
       Event: model('Event', {

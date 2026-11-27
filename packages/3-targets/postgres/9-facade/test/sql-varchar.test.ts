@@ -10,7 +10,7 @@ import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { postgresContractCapabilities } from '../src/exports/config';
+import { postgres18, postgresContractCapabilities, postgresDriver } from '../src/exports/config';
 import { defineContract } from '../src/exports/contract-builder';
 
 const stack = createControlStack({ family: sql, target: postgres, adapter: postgresAdapter });
@@ -19,7 +19,7 @@ function emit(schema: string) {
   const bound = bindPslSchema(schema, {
     sourceId: 'sql-varchar.psl',
     context: contractSourceContextFromControlStack(stack, {
-      capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
+      capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
     }),
   });
   const warnings: ContractSourceDiagnostic[] = [];
@@ -77,23 +77,35 @@ describe('sql.Varchar on Postgres', () => {
   });
 
   it('gives the type and contract the deprecated sql.String gives, from the TypeScript builder', () => {
-    const throughString = defineContract({ databaseVersion: 18 }, ({ field, model, type }) => {
-      expectTypeOf(type.sql.String(50)).toEqualTypeOf(type.sql.Varchar(50));
-      return {
+    const throughString = defineContract(
+      { requiredCapabilities: [...postgres18, ...postgresDriver] },
+      ({ field, model, type }) => {
+        expectTypeOf(type.sql.String(50)).toEqualTypeOf(type.sql.Varchar(50));
+        return {
+          models: {
+            Label: model('Label', {
+              fields: {
+                id: field.column(type.Int4()).id(),
+                name: field.column(type.sql.String(50)),
+              },
+            }).sql({ table: 'Label' }),
+          },
+        };
+      },
+    );
+    const throughVarchar = defineContract(
+      { requiredCapabilities: [...postgres18, ...postgresDriver] },
+      ({ field, model, type }) => ({
         models: {
           Label: model('Label', {
-            fields: { id: field.column(type.Int4()).id(), name: field.column(type.sql.String(50)) },
+            fields: {
+              id: field.column(type.Int4()).id(),
+              name: field.column(type.sql.Varchar(50)),
+            },
           }).sql({ table: 'Label' }),
         },
-      };
-    });
-    const throughVarchar = defineContract({ databaseVersion: 18 }, ({ field, model, type }) => ({
-      models: {
-        Label: model('Label', {
-          fields: { id: field.column(type.Int4()).id(), name: field.column(type.sql.Varchar(50)) },
-        }).sql({ table: 'Label' }),
-      },
-    }));
+      }),
+    );
     expect(throughString).toEqual(throughVarchar);
   });
 });

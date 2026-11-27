@@ -1,18 +1,21 @@
 import { numericStringColumn } from '@internal/adapter-postgres/column-types';
 import { describe, expect, it } from 'vitest';
-import { defineContract } from '../../src/exports/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '../../src/exports/contract-builder';
 
 function storedDefault(value: string) {
-  const contract = defineContract({ databaseVersion: 18 }, ({ field, model, gen, type }) => ({
-    models: {
-      Price: model('Price', {
-        fields: {
-          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-          amount: field.column(numericStringColumn(10, 2)).default(value),
-        },
-      }),
-    },
-  }));
+  const contract = defineContract(
+    { requiredCapabilities: [...postgres18, ...postgresDriver] },
+    ({ field, model, gen, type }) => ({
+      models: {
+        Price: model('Price', {
+          fields: {
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+            amount: field.column(numericStringColumn(10, 2)).default(value),
+          },
+        }),
+      },
+    }),
+  );
   return contract.storage.namespaces['public']?.entries.table?.['Price']?.columns.amount?.default;
 }
 

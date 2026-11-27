@@ -1,6 +1,14 @@
 import type { NamespacedEnums } from '@internal/contract/enum-accessor';
 import { expectTypeOf, test } from 'vitest';
-import { defineContract, enumType, field, member, model } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field,
+  member,
+  model,
+  postgres18,
+  postgresDriver,
+} from '../../src/exports/contract-builder';
 
 type SoleNamespaceModels<
   T extends { domain: { namespaces: Record<string, { models: unknown }> } },
@@ -8,11 +16,14 @@ type SoleNamespaceModels<
 
 test('takes the capabilities as a list of sets, refusing a single set', () => {
   // @ts-expect-error a single set is refused; the list is an array of sets
-  defineContract({ databaseVersion: 18, capabilities: { sql: { lateral: true } } });
+  defineContract({
+    requiredCapabilities: [...postgres18, ...postgresDriver],
+    capabilities: { sql: { lateral: true } },
+  });
 });
 
 test('limits Date authoring to the JsDate types', () => {
-  defineContract({ databaseVersion: 18 }, ({ type: t }) => {
+  defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }, ({ type: t }) => {
     expectTypeOf(t).not.toBeAny();
     expectTypeOf(t).not.toHaveProperty('DateTimeDate');
     expectTypeOf(t).not.toHaveProperty('TimestamptzDate');
@@ -27,7 +38,7 @@ test('limits Date authoring to the JsDate types', () => {
   });
 });
 
-const result = defineContract({ databaseVersion: 18 });
+const result = defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] });
 expectTypeOf(result.target).toEqualTypeOf<'postgres'>();
 expectTypeOf(result.targetFamily).toEqualTypeOf<'sql'>();
 
@@ -36,7 +47,7 @@ const textColumn = {
   typeParams: {},
 };
 const withModel = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     User: model('User', { fields: { id: field.column(textColumn).id() } }),
   },
@@ -45,7 +56,7 @@ expectTypeOf(withModel.target).toEqualTypeOf<'postgres'>();
 expectTypeOf<SoleNamespaceModels<typeof withModel>['User']>().not.toBeNever();
 
 const withFactory = defineContract(
-  { databaseVersion: 18 },
+  { requiredCapabilities: [...postgres18, ...postgresDriver] },
   ({ model: m, field: f, gen, type }) => ({
     models: {
       Post: m('Post', { fields: { id: f.column(type.Char(36)).id().onCreate(gen.uuid()) } }),
@@ -62,7 +73,7 @@ const Role = enumType('Role', pgText, member('User', 'user'), member('Admin', 'a
 const Priority = enumType('Priority', pgText, member('Low', 'low'), member('High', 'high'));
 
 const mixedEnums = defineContract(
-  { databaseVersion: 18, enums: { Role } },
+  { requiredCapabilities: [...postgres18, ...postgresDriver], enums: { Role } },
   ({ model: m, field: f, gen, type }) => ({
     enums: { Priority },
     models: {

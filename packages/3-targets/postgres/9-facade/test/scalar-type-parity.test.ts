@@ -1,5 +1,5 @@
 import postgresAdapter from '@internal/adapter-postgres/control';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { createControlStack } from '@internal/framework-components/control';
@@ -11,13 +11,13 @@ import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
-import { postgresContractCapabilities } from '../src/exports/config';
+import { postgres18, postgresContractCapabilities, postgresDriver } from '../src/exports/config';
 
 const stack = createControlStack({
   family: sql,
   target: postgres,
   adapter: postgresAdapter,
-  driver: postgresDriver,
+  driver: postgresDriverDescriptor,
 });
 
 const REPRESENTATIVE_SCHEMA = `model sample {
@@ -43,7 +43,7 @@ function emit() {
   const bound = bindPslSchema(REPRESENTATIVE_SCHEMA, {
     sourceId: 'scalar-type-parity.test.psl',
     context: contractSourceContextFromControlStack(stack, {
-      capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
+      capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
     }),
   });
   return withSeedDiagnostics(

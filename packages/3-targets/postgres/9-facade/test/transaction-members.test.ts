@@ -47,7 +47,7 @@ vi.mock('pg', () => {
   return { Pool, Client };
 });
 
-import { defineContract } from '../src/exports/contract-builder';
+import { defineContract, postgres18 } from '../src/exports/contract-builder';
 import postgres, {
   type PostgresTransactionContext,
   type PostgresTransactionOptions,
@@ -370,7 +370,7 @@ describe('a transaction on a serverless connection', () => {
 });
 
 describe('transaction() for a contract that does not list interactive transactions', () => {
-  const withoutInteractiveTransactions = defineContract({ databaseVersion: 18, capabilities: [] });
+  const withoutInteractiveTransactions = defineContract({ requiredCapabilities: postgres18 });
   const refusal = {
     code: 'ORM.CAPABILITY_MISSING',
     meta: { capability: 'sql.interactiveTransactions', method: 'transaction' },

@@ -1,19 +1,22 @@
 import { numericStringColumn, varcharColumn } from '@internal/adapter-postgres/column-types';
 import type { ColumnTypeDescriptor } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
-import { defineContract } from '../../src/exports/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '../../src/exports/contract-builder';
 
 function buildWithColumn(descriptor: ColumnTypeDescriptor) {
-  return defineContract({ databaseVersion: 18 }, ({ field, model, gen, type }) => ({
-    models: {
-      Item: model('Item', {
-        fields: {
-          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-          value: field.column(descriptor),
-        },
-      }),
-    },
-  }));
+  return defineContract(
+    { requiredCapabilities: [...postgres18, ...postgresDriver] },
+    ({ field, model, gen, type }) => ({
+      models: {
+        Item: model('Item', {
+          fields: {
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+            value: field.column(descriptor),
+          },
+        }),
+      },
+    }),
+  );
 }
 
 describe('column type parameters', () => {

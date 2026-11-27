@@ -1,4 +1,3 @@
-export type { CapabilityMatrix } from '@internal/framework-components/components';
 export type {
   CheckNode,
   ComposedAuthoringHelpers,
@@ -41,13 +40,15 @@ export type {
   Varchar,
 } from '@internal/target-postgres/codec-types';
 export {
-  type CapabilitiesList,
-  type DefaultConnectionCapabilities,
-  defaultConnectionCapabilities,
-  type PostgresCapabilitiesInput,
   type PostgresContractCapabilities,
+  postgres15,
+  postgres16,
+  postgres17,
+  postgres18,
+  postgresDriver,
+  type RequiredCapabilities,
 } from '../contract/contract-capabilities';
-export { defineContract, type PostgresDefineContract } from '../contract/define-contract';
+export { defineContract } from '../contract/define-contract';
 export { enumType } from '../contract/enum-type';
 export { type ExtensionHandle, extension } from '../contract/extension';
 export { field, gen, type } from '../contract/field';

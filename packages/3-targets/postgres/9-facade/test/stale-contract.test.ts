@@ -21,7 +21,7 @@ const staleFlags = [
 describe('a contract emitted by an earlier Prisma version', () => {
   it('warns when the client is created, naming the flags and saying to remove them', () => {
     const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-    // @ts-expect-error postgres.jsonAgg is required by the contract but not provided by its database version, adapter, driver or extensions
+    // @ts-expect-error postgres.jsonAgg is required by the contract but not provided by this client's connection
     postgres({ contract: staleContract, url: 'postgres://localhost/db', log });
     expect(log.warn.mock.calls).toEqual([
       [
@@ -29,7 +29,7 @@ describe('a contract emitted by an earlier Prisma version', () => {
           code: 'CONTRACT.CAPABILITIES_NOT_PROVIDED',
           missing: [...staleFlags],
           message: expect.stringContaining(
-            'Either remove the capabilities from your contract, or install a component that provides them.',
+            "Remove them from your contract's required capabilities, or connect with a driver that provides them.",
           ),
         }),
       ],
@@ -39,6 +39,6 @@ describe('a contract emitted by an earlier Prisma version', () => {
   it('is a type error at creation that names each flag the stack does not provide', () => {
     expectTypeOf<
       keyof PostgresStackProvides<Contract>
-    >().toEqualTypeOf<`${(typeof staleFlags)[number]} is required by the contract but not provided by its database version, adapter, driver or extensions`>();
+    >().toEqualTypeOf<`${(typeof staleFlags)[number]} is required by the contract but not provided by this client's connection`>();
   });
 });

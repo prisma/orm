@@ -1,8 +1,8 @@
 import { defineContract, field, model } from '../../../src/exports/contract-builder';
+import { requiredList } from './required-list';
 
 export const contract = defineContract({
-  databaseVersion: 16,
-  capabilities: [{ sql: { interactiveTransactions: true } }],
+  requiredCapabilities: requiredList,
   models: {
     User: model('User', {
       fields: { id: field.column({ codecId: 'pg/int4@1' } as const).id() },

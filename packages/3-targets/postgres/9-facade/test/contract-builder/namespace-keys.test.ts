@@ -1,6 +1,6 @@
 import type { Char, Varchar } from '@internal/target-postgres/codec-types';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { defineContract } from '../../src/exports/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '../../src/exports/contract-builder';
 import postgres from '../../src/exports/runtime';
 
 const url = 'postgres://localhost/db';
@@ -14,7 +14,7 @@ function domainModels(namespaces: Record<string, { readonly models: object }>) {
 describe('the namespaces of a TypeScript contract', () => {
   it('holds every model in its declared namespace and no default namespace', () => {
     const contract = defineContract(
-      { databaseVersion: 18, namespaces: ['auth'] },
+      { requiredCapabilities: [...postgres18, ...postgresDriver], namespaces: ['auth'] },
       ({ field, model, gen, type }) => ({
         models: {
           Session: model('Session', {
@@ -47,7 +47,7 @@ describe('the namespaces of a TypeScript contract', () => {
 
   it('has no domain namespace for a declared namespace without models', () => {
     const contract = defineContract(
-      { databaseVersion: 18, namespaces: ['audit'] },
+      { requiredCapabilities: [...postgres18, ...postgresDriver], namespaces: ['audit'] },
       ({ field, model, gen, type }) => ({
         models: {
           User: model('User', {
@@ -71,7 +71,7 @@ describe('the namespaces of a TypeScript contract', () => {
 
   it('places each model in its own namespace', () => {
     const contract = defineContract(
-      { databaseVersion: 18, namespaces: ['auth'] },
+      { requiredCapabilities: [...postgres18, ...postgresDriver], namespaces: ['auth'] },
       ({ field, model, gen, type }) => ({
         models: {
           User: model('User', {
@@ -105,7 +105,7 @@ describe('the namespaces of a TypeScript contract', () => {
 
   it('types the rows of a model in a declared namespace with the codec output types', async () => {
     const contract = defineContract(
-      { databaseVersion: 18, namespaces: ['auth'] },
+      { requiredCapabilities: [...postgres18, ...postgresDriver], namespaces: ['auth'] },
       ({ field, model, type, gen }) => ({
         models: {
           Session: model('Session', {
@@ -133,7 +133,7 @@ describe('the namespaces of a TypeScript contract', () => {
   it('lists every model in every namespace when a model namespace is not a literal', () => {
     const sessionNamespace: string = 'auth';
     const contract = defineContract(
-      { databaseVersion: 18, namespaces: ['auth', 'billing'] },
+      { requiredCapabilities: [...postgres18, ...postgresDriver], namespaces: ['auth', 'billing'] },
       ({ field, model, gen, type }) => ({
         models: {
           User: model('User', {

@@ -19,7 +19,15 @@ import type {
 } from '@internal/sql-contract/types';
 import type { DefaultModelRow } from '@internal/sql-orm-client';
 import { expectTypeOf } from 'vitest';
-import { defineContract, field, model, nativeEnum, pg } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  nativeEnum,
+  pg,
+  postgres18,
+  postgresDriver,
+} from '../../src/exports/contract-builder';
 
 const intColumn = { codecId: 'pg/int4@1' } as const;
 
@@ -37,7 +45,7 @@ expectTypeOf(columnDescriptor.entityRef.entity.members).toEqualTypeOf<
 >();
 
 const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     Session: model('Session', {
       fields: {

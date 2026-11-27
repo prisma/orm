@@ -1,7 +1,13 @@
 import type { NamespacedEnums } from '@internal/contract/enum-accessor';
 import type { CreateInput, DefaultModelRow } from '@internal/sql-orm-client';
 import { expectTypeOf, test } from 'vitest';
-import { defineContract, enumType, member } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  member,
+  postgres18,
+  postgresDriver,
+} from '../../src/exports/contract-builder';
 
 const pgNumeric = { codecId: 'pg/numeric@1' } as const;
 const pgInt = { codecId: 'pg/int4@1' } as const;
@@ -10,7 +16,7 @@ const Ratio = enumType('Ratio', pgNumeric, member('Half', '0.5'), member('Whole'
 const Level = enumType('Level', pgInt, member('Low', 1), member('High', 10));
 
 const contract = defineContract(
-  { databaseVersion: 18, enums: { Ratio, Level } },
+  { requiredCapabilities: [...postgres18, ...postgresDriver], enums: { Ratio, Level } },
   ({ field, model, gen, type }) => ({
     models: {
       Reading: model('Reading', {

@@ -40,6 +40,8 @@ import {
   model,
   nativeEnum,
   pg,
+  postgres18,
+  postgresDriver,
 } from '../../src/exports/contract-builder';
 
 const TYPES_MODULE = '@internal/postgres/contract-types';
@@ -62,7 +64,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
     const Role = nativeEnum('Role', 'user', 'admin');
 
     const contract = defineContract({
-      databaseVersion: 18,
+      requiredCapabilities: [...postgres18, ...postgresDriver],
       models: {
         Account: model('Account', {
           fields: {
@@ -100,7 +102,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
     const AalLevel = nativeEnum('AalLevel', 'aal1', 'aal2', 'aal3').map('aal_level');
 
     const contract = defineContract({
-      databaseVersion: 18,
+      requiredCapabilities: [...postgres18, ...postgresDriver],
       models: {
         Session: model('Session', {
           fields: {
@@ -141,7 +143,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
     const AalLevel = nativeEnum('AalLevel', 'aal1', 'aal2', 'aal3').map('aal_level');
 
     const contract = defineContract({
-      databaseVersion: 18,
+      requiredCapabilities: [...postgres18, ...postgresDriver],
       namespaces: ['auth'],
       models: {
         Session: model('Session', {
@@ -211,7 +213,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
 
     expect(() =>
       defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: {
           Task: model('Task', {
             fields: {
@@ -240,7 +242,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
 
     expect(() =>
       defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         enums: { Role: RoleEnum },
         models: {
           Account: model('Account', {
@@ -261,7 +263,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
     const Status = nativeEnum('Status', 'a', 'b');
 
     const contract = defineContract({
-      databaseVersion: 18,
+      requiredCapabilities: [...postgres18, ...postgresDriver],
       models: {
         Task: model('Task', {
           fields: {
@@ -295,7 +297,7 @@ describe('nativeEnum + pg.enum (TS native-enum authoring)', () => {
     const AalLevel = nativeEnum('AalLevel', 'aal1', 'aal2', 'aal3').map('aal_level');
 
     const contract = defineContract({
-      databaseVersion: 18,
+      requiredCapabilities: [...postgres18, ...postgresDriver],
       models: {
         Session: model('Session', {
           fields: {

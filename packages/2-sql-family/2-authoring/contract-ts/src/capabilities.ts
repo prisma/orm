@@ -1,7 +1,4 @@
-import {
-  type CapabilityMatrix,
-  mergeCapabilityMatrices,
-} from '@internal/framework-components/components';
+import type { CapabilityMatrix } from '@internal/framework-components/components';
 import { blindCast } from '@internal/utils/casts';
 
 type EnabledCapabilityFlags<Flags> = {
@@ -28,37 +25,54 @@ export type OverrideCapabilities<Earlier, Later> = {
       : never;
 };
 
-// A set whose type names no namespaces, such as `CapabilityMatrix` itself, says nothing the type system can merge, so it leaves the earlier sets as they are, even when it turns a flag off at run time.
-type KnownCapabilities<Set> = string extends keyof Set ? Record<never, never> : Set;
+/** A capability as a contract's list of required capabilities names it: its namespace and its flag, such as `sql.returning`. */
+export type CapabilityKey = `${string}.${string}`;
 
-type MergeFrom<Merged, Sets> = Sets extends readonly [infer Head, ...infer Tail]
-  ? MergeFrom<OverrideCapabilities<Merged, KnownCapabilities<Head>>, Tail>
-  : Sets extends readonly [...infer Rest, infer Last]
-    ? OverrideCapabilities<MergeFrom<Merged, Rest>, KnownCapabilities<Last>>
-    : Merged;
+type NamespaceOf<Key> = Key extends `${infer Namespace}.${string}` ? Namespace : never;
+type FlagOf<Key, Namespace extends string> = Key extends `${Namespace}.${infer Flag}`
+  ? Flag
+  : never;
 
-/**
- * The capability sets of a list merged in order, a later set's flags replacing an earlier one's. Every set at a fixed position, before or after a spread of unknown length, is merged; the spread itself adds nothing, and neither does a set whose type is `CapabilityMatrix`.
- */
-export type MergeCapabilitySets<Sets> = MergeFrom<Record<never, never>, Sets>;
+/** The capabilities `Key` names, as a contract records them: each namespace with its flags, each `true`. */
+export type CapabilitiesFromKeys<Key extends CapabilityKey> = {
+  readonly [Namespace in NamespaceOf<Key>]: { readonly [Flag in FlagOf<Key, Namespace>]: true };
+};
 
-/** The sets merged in order, later flags winning, keeping only the flags that are on. */
-export type ResolvedCapabilities<Sets> = EnabledCapabilities<MergeCapabilitySets<Sets>>;
+/** The flags of `Capabilities` that are on, each as its key. */
+export type CapabilityKeysOf<Capabilities> = {
+  [Namespace in keyof Capabilities & string]: {
+    [Flag in keyof Capabilities[Namespace] & string]: Capabilities[Namespace][Flag] extends true
+      ? `${Namespace}.${Flag}`
+      : never;
+  }[keyof Capabilities[Namespace] & string];
+}[keyof Capabilities & string];
 
-/** A contract's capabilities from `sets`: merged in order, later flags winning, keeping only the flags that are on. */
-export function resolveCapabilities<const Sets extends readonly CapabilityMatrix[]>(
-  sets: Sets,
-): ResolvedCapabilities<Sets> {
-  return blindCast<
-    ResolvedCapabilities<Sets>,
-    'merges in order and keeps the flags that are on, as ResolvedCapabilities does'
-  >(
-    enabledCapabilities(
-      mergeCapabilityMatrices(
-        {},
-        sets.map((capabilities) => ({ capabilities })),
-      ),
-    ),
+/** The capabilities `keys` names, as a contract records them. A key is split at its first dot. */
+export function capabilitiesFromKeys<const Key extends CapabilityKey>(
+  keys: readonly Key[],
+): CapabilitiesFromKeys<Key> {
+  const capabilities: Record<string, Record<string, true>> = {};
+  for (const key of keys) {
+    const dot = key.indexOf('.');
+    const namespace = key.slice(0, dot);
+    capabilities[namespace] = { ...capabilities[namespace], [key.slice(dot + 1)]: true };
+  }
+  return blindCast<CapabilitiesFromKeys<Key>, 'one namespace per key prefix, each flag true'>(
+    capabilities,
+  );
+}
+
+/** The flags of `capabilities` that are on, each as its key, in a frozen list. */
+export function capabilityKeysOf<const Capabilities extends CapabilityMatrix>(
+  capabilities: Capabilities,
+): readonly CapabilityKeysOf<Capabilities>[] {
+  const keys = Object.entries(capabilities).flatMap(([namespace, flags]) =>
+    Object.entries(flags)
+      .filter(([, on]) => on === true)
+      .map(([flag]) => `${namespace}.${flag}`),
+  );
+  return Object.freeze(
+    blindCast<CapabilityKeysOf<Capabilities>[], 'the key of each flag that is on'>(keys),
   );
 }
 

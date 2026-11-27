@@ -5412,6 +5412,9 @@ importers:
       '@internal/target-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../1-target
+      '@internal/ts-render':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../1-framework/1-core/ts-render
       '@internal/utils':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../1-framework/0-foundation/utils

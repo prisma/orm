@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
 import { prisma7Schema } from '../../src/config/prisma7-schema';
+import { postgres18, postgresDriver } from '../../src/contract/contract-capabilities';
 
 describe('defineConfig with a ContractConfig', () => {
   it('keeps the source fields of a prisma7Schema config, its colocated output, and wraps only its load', () => {
-    const contract = prisma7Schema('prisma/schema.prisma', { databaseVersion: 18 });
+    const contract = prisma7Schema('prisma/schema.prisma', {
+      requiredCapabilities: [...postgres18, ...postgresDriver],
+    });
     const config = defineConfig({ contract });
     const { load: _wrapped, ...kept } = config.contract?.source ?? contract.source;
     const { load: _original, ...given } = contract.source;
@@ -18,14 +21,18 @@ describe('defineConfig with a ContractConfig', () => {
 
   it('lets the output directory option override the ContractConfig output', () => {
     const config = defineConfig({
-      contract: prisma7Schema('prisma/schema.prisma', { databaseVersion: 18 }),
+      contract: prisma7Schema('prisma/schema.prisma', {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      }),
       output: 'src/generated',
     });
     expect(config.contract?.output).toBe('src/generated/contract.json');
   });
 
   it('derives the output from the first input when the ContractConfig has none', () => {
-    const contract = prisma7Schema('prisma/schema.prisma', { databaseVersion: 18 });
+    const contract = prisma7Schema('prisma/schema.prisma', {
+      requiredCapabilities: [...postgres18, ...postgresDriver],
+    });
     const config = defineConfig({
       contract: { source: contract.source },
     });
@@ -35,7 +42,9 @@ describe('defineConfig with a ContractConfig', () => {
   it('writes the contract where the top-level output directory says, as the adoption guide sets it', () => {
     const config = defineConfig({
       output: 'generated/prisma8',
-      contract: prisma7Schema('prisma/schema.prisma', { databaseVersion: 18 }),
+      contract: prisma7Schema('prisma/schema.prisma', {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+      }),
     });
     expect(config.contract?.output).toBe('generated/prisma8/contract.json');
   });

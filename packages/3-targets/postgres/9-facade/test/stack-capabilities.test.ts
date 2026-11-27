@@ -1,17 +1,18 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it, vi } from 'vitest';
-import { defineContract } from '../src/exports/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '../src/exports/contract-builder';
 import postgres from '../src/exports/runtime';
 import postgresServerless from '../src/exports/serverless';
 
 const url = 'postgres://localhost:5432/db';
 
-const providedByTheStack = defineContract({ databaseVersion: 18 });
-// A contract whose list names a driver over HTTP, which the facade's own driver is not.
+const providedByTheStack = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+});
+// A contract whose list names what a driver over HTTP provides, which the facade's own driver is not.
 const requiringBatches = defineContract({
-  databaseVersion: 18,
-  capabilities: [{ sql: { interactiveTransactions: true } }, { http: { batch: true } }],
+  requiredCapabilities: [...postgres18, ...postgresDriver, 'http.batch'],
 });
 
 function spyLog() {
@@ -23,7 +24,7 @@ const notProvided = {
   scope: 'stack-verification',
   missing: ['http.batch'],
   message:
-    'Your contract requires capabilities that no supported version of your database provides, and neither do your adapter, driver or extensions (http.batch). Either remove the capabilities from your contract, or install a component that provides them.',
+    "Your contract requires `http.batch`, which this client's connection does not provide. Remove it from your contract's required capabilities, or connect with a driver that provides it.",
 };
 
 // Typed as any contract, so the compile-time check, tested in stack-capabilities.types.test-d.ts, leaves the run-time one to be seen.

@@ -3,7 +3,13 @@ import { domainModelsAtDefaultNamespace } from '@internal/contract/types';
 import { generateContractDts } from '@internal/emitter';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { describe, expect, it } from 'vitest';
-import { defineContract, field, model } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '../../src/exports/contract-builder';
 
 const TYPES_MODULE = '@internal/postgres/contract-types';
 
@@ -14,36 +20,42 @@ const textColumn = {
 
 describe('postgres defineContract wrap', () => {
   it('pre-binds family and target (no factory form)', () => {
-    const result = defineContract({ databaseVersion: 18 });
+    const result = defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] });
     expect(result.target).toBe('postgres');
     expect(result.targetFamily).toBe('sql');
   });
 
   it('pre-binds family and target (factory form)', () => {
-    const result = defineContract({ databaseVersion: 18 }, ({ field: f, model: m, gen, type }) => ({
-      models: {
-        Foo: m('Foo', { fields: { id: f.column(type.Char(36)).id().onCreate(gen.uuid()) } }),
-      },
-    }));
+    const result = defineContract(
+      { requiredCapabilities: [...postgres18, ...postgresDriver] },
+      ({ field: f, model: m, gen, type }) => ({
+        models: {
+          Foo: m('Foo', { fields: { id: f.column(type.Char(36)).id().onCreate(gen.uuid()) } }),
+        },
+      }),
+    );
     expect(result.target).toBe('postgres');
     expect(result.targetFamily).toBe('sql');
     expect(domainModelsAtDefaultNamespace(result.domain)['Foo']).toBeDefined();
   });
 
   it('declares Date columns through the composed type helpers', () => {
-    const result = defineContract({ databaseVersion: 18 }, ({ field: f, model: m, type, gen }) => ({
-      models: {
-        Event: m('Event', {
-          fields: {
-            id: f.column(type.Char(36)).id().onCreate(gen.uuid()),
-            at: f.column(type.TimestamptzJsDate()),
-            precise: f.column(type.TimestamptzJsDate(3)).onCreate(gen.now()).onUpdate(gen.now()),
-            created: f.column(type.temporal.CreatedAt()),
-            updated: f.column(type.temporal.UpdatedAt()),
-          },
-        }),
-      },
-    }));
+    const result = defineContract(
+      { requiredCapabilities: [...postgres18, ...postgresDriver] },
+      ({ field: f, model: m, type, gen }) => ({
+        models: {
+          Event: m('Event', {
+            fields: {
+              id: f.column(type.Char(36)).id().onCreate(gen.uuid()),
+              at: f.column(type.TimestamptzJsDate()),
+              precise: f.column(type.TimestamptzJsDate(3)).onCreate(gen.now()).onUpdate(gen.now()),
+              created: f.column(type.temporal.CreatedAt()),
+              updated: f.column(type.temporal.UpdatedAt()),
+            },
+          }),
+        },
+      }),
+    );
     expect(result.storage).toMatchObject({
       namespaces: {
         public: {
@@ -76,17 +88,20 @@ describe('postgres defineContract wrap', () => {
   });
 
   it('types Date columns through the codec map, with no type of their own', () => {
-    const contract = defineContract({ databaseVersion: 18 }, ({ field: f, model: m, type }) => ({
-      models: {
-        Event: m('Event', {
-          fields: {
-            id: f.column({ codecId: 'pg/int4@1' }).id(),
-            at: f.column(type.TimestamptzJsDate()),
-            maybe: f.column(type.TimestamptzJsDate(6)).optional(),
-          },
-        }),
-      },
-    }));
+    const contract = defineContract(
+      { requiredCapabilities: [...postgres18, ...postgresDriver] },
+      ({ field: f, model: m, type }) => ({
+        models: {
+          Event: m('Event', {
+            fields: {
+              id: f.column({ codecId: 'pg/int4@1' }).id(),
+              at: f.column(type.TimestamptzJsDate()),
+              maybe: f.column(type.TimestamptzJsDate(6)).optional(),
+            },
+          }),
+        },
+      }),
+    );
     const dts = generateContractDts(
       contract,
       sqlEmission,
@@ -104,13 +119,16 @@ describe('postgres defineContract wrap', () => {
   });
 
   it('accepts extensions: undefined', () => {
-    const result = defineContract({ databaseVersion: 18, extensions: undefined });
+    const result = defineContract({
+      requiredCapabilities: [...postgres18, ...postgresDriver],
+      extensions: undefined,
+    });
     expect(result.target).toBe('postgres');
   });
 
   it('produces a model when defined inline', () => {
     const result = defineContract({
-      databaseVersion: 18,
+      requiredCapabilities: [...postgres18, ...postgresDriver],
       models: {
         Bar: model('Bar', { fields: { id: field.column(textColumn).id() } }),
       },

@@ -52,13 +52,15 @@ vi.mock('pg', () => {
 });
 
 import { Client, Pool } from 'pg';
-import { defineContract } from '../src/exports/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '../src/exports/contract-builder';
 import { buildNativeEnumsMapForNamespace } from '../src/runtime/native-enums';
 import postgres from '../src/runtime/postgres';
 
 const contract = createContract<SqlStorage>();
 // The default capabilities list includes the driver's interactive transactions.
-const transactionalContract = defineContract({ databaseVersion: 18 });
+const transactionalContract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+});
 
 function poolEndSpy() {
   return (Pool as unknown as { _endSpy: ReturnType<typeof vi.fn> })._endSpy;

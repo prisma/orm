@@ -37,6 +37,8 @@ import {
   policyInsert,
   policySelect,
   policyUpdate,
+  postgres18,
+  postgresDriver,
   type RlsEntityHandle,
   rlsEnabled,
   role,
@@ -71,7 +73,7 @@ describe('entities lowering: every helper lands in entries with PSL-matching key
   const usingSql = sql`owner_id = current_setting('app.uid')::int`;
 
   const contract = defineContract({
-    databaseVersion: 18,
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     models: { Profile },
     entities: [
       role('app_user'),
@@ -104,7 +106,7 @@ describe('entities lowering: every helper lands in entries with PSL-matching key
     const emitWarning = vi.spyOn(process, 'emitWarning').mockImplementation(() => {});
     try {
       defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: { Profile: makeProfile() },
         entities: [
           rlsEnabled(Profile),
@@ -231,7 +233,7 @@ describe('round-trip through the contract serializer', () => {
   it('preserves policy, rls, and role entries losslessly', () => {
     const Profile = makeProfile();
     const contract = defineContract({
-      databaseVersion: 18,
+      requiredCapabilities: [...postgres18, ...postgresDriver],
       models: { Profile },
       entities: [
         role('app_user'),
@@ -269,7 +271,7 @@ describe('load-time diagnostics name the prefix', () => {
     const what = `Policy "p" ${predicate}`;
     expect(() =>
       defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: { Profile },
         entities: [
           rlsEnabled(Profile),
@@ -289,7 +291,7 @@ describe('load-time diagnostics name the prefix', () => {
     const Profile = makeProfile();
     expect(() =>
       defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: { Profile },
         entities: [
           rlsEnabled(Profile),
@@ -308,7 +310,7 @@ describe('load-time diagnostics name the prefix', () => {
 
     expect(() =>
       defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: { Profile },
         entities: [policySelect(Orphan, { name: 'p_orphan', roles: [anon], using: sql`true` })],
       }),
@@ -320,16 +322,19 @@ describe('load-time diagnostics name the prefix', () => {
       fields: { id: field.column(intColumn).id() },
     }).sql({ table: 'orphans' });
 
-    expect(() => defineContract({ databaseVersion: 18, entities: [rlsEnabled(Orphan)] })).toThrow(
-      /rlsEnabled entry targets model "Orphan", which is not in the contract's models/,
-    );
+    expect(() =>
+      defineContract({
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+        entities: [rlsEnabled(Orphan)],
+      }),
+    ).toThrow(/rlsEnabled entry targets model "Orphan", which is not in the contract's models/);
   });
 
   it('rejects a policy whose target has no rlsEnabled entry', () => {
     const Profile = makeProfile();
     expect(() =>
       defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: { Profile },
         entities: [policySelect(Profile, { name: 'p_read', roles: [anon], using: sql`true` })],
       }),
@@ -346,7 +351,7 @@ describe('load-time diagnostics name the prefix', () => {
 
     expect(() =>
       defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: { Profile },
         entities: [
           rlsEnabled(Profile),
@@ -363,16 +368,19 @@ describe('load-time diagnostics name the prefix', () => {
       'supabase',
     );
 
-    expect(() => defineContract({ databaseVersion: 18, entities: [rlsEnabled(AuthUser)] })).toThrow(
-      /rlsEnabled entry targets model "AuthUser", which lives in another contract space/,
-    );
+    expect(() =>
+      defineContract({
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+        entities: [rlsEnabled(AuthUser)],
+      }),
+    ).toThrow(/rlsEnabled entry targets model "AuthUser", which lives in another contract space/);
   });
 
   it('rejects a duplicate role-name declaration', () => {
     const Profile = makeProfile();
     expect(() =>
       defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: { Profile },
         entities: [role('app_user'), role('app_user')],
       }),
@@ -384,7 +392,7 @@ describe('load-time diagnostics name the prefix', () => {
     const longPrefix = 'p'.repeat(55);
     expect(() =>
       defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: { Profile },
         entities: [
           rlsEnabled(Profile),
@@ -398,7 +406,7 @@ describe('load-time diagnostics name the prefix', () => {
     const Profile = makeProfile();
     const maxPrefix = 'p'.repeat(54);
     const contract = defineContract({
-      databaseVersion: 18,
+      requiredCapabilities: [...postgres18, ...postgresDriver],
       models: { Profile },
       entities: [
         rlsEnabled(Profile),
@@ -415,7 +423,7 @@ describe('tableName is always the build-resolved table name', () => {
     // would produce "order" and mismatch the real table.
     const Order = model('Order', { fields: { id: field.column(intColumn).id() } });
     const contract = defineContract({
-      databaseVersion: 18,
+      requiredCapabilities: [...postgres18, ...postgresDriver],
       models: { Order },
       entities: [
         rlsEnabled(Order),
@@ -433,7 +441,7 @@ describe('tableName is always the build-resolved table name', () => {
       fields: { id: field.column(intColumn).id() },
     }).sql(() => ({ table: 'profile_rows' }));
     const contract = defineContract({
-      databaseVersion: 18,
+      requiredCapabilities: [...postgres18, ...postgresDriver],
       models: { Profile },
       entities: [
         rlsEnabled(Profile),
@@ -452,7 +460,7 @@ describe('tableName is always the build-resolved table name', () => {
       fields: { id: field.column(intColumn).id() },
     }).sql({ table: 'sessions' });
     const contract = defineContract({
-      databaseVersion: 18,
+      requiredCapabilities: [...postgres18, ...postgresDriver],
       namespaces: ['auth'],
       models: { Session },
       entities: [
@@ -476,7 +484,7 @@ describe('entities coexist with the factory authoring form', () => {
     const Profile = makeProfile();
     const contract = defineContract(
       {
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         entities: [
           rlsEnabled(Profile),
           policySelect(Profile, { name: 'p_read', roles: [anon], using: sql`true` }),

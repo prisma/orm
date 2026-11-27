@@ -9,7 +9,7 @@ import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { postgresContractCapabilities } from '../src/exports/config';
+import { postgres18, postgresContractCapabilities, postgresDriver } from '../src/exports/config';
 import { defineContract } from '../src/exports/contract-builder';
 
 const stack = createControlStack({ family: sql, target: postgres, adapter: postgresAdapter });
@@ -18,7 +18,7 @@ function interpret(schema: string) {
   const bound = bindPslSchema(schema, {
     sourceId: 'sql-char.psl',
     context: contractSourceContextFromControlStack(stack, {
-      capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
+      capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
     }),
   });
   const result = withSeedDiagnostics(
@@ -54,22 +54,30 @@ describe('sql.Char on Postgres', () => {
   });
 
   it('stores what Char stores, from the TypeScript builder', () => {
-    const throughSqlChar = defineContract({ databaseVersion: 18 }, ({ field, model, type }) => {
-      const id = type.sql.Char(36);
-      expectTypeOf(id.typeParams).toEqualTypeOf<{ readonly length: 36 }>();
-      return {
-        models: {
-          Token: model('Token', { fields: { id: field.column(id).id() } }).sql({ table: 'Token' }),
-        },
-      };
-    });
-    const throughChar = defineContract({ databaseVersion: 18 }, ({ field, model, type }) => ({
-      models: {
-        Token: model('Token', { fields: { id: field.column(type.Char(36)).id() } }).sql({
-          table: 'Token',
-        }),
+    const throughSqlChar = defineContract(
+      { requiredCapabilities: [...postgres18, ...postgresDriver] },
+      ({ field, model, type }) => {
+        const id = type.sql.Char(36);
+        expectTypeOf(id.typeParams).toEqualTypeOf<{ readonly length: 36 }>();
+        return {
+          models: {
+            Token: model('Token', { fields: { id: field.column(id).id() } }).sql({
+              table: 'Token',
+            }),
+          },
+        };
       },
-    }));
+    );
+    const throughChar = defineContract(
+      { requiredCapabilities: [...postgres18, ...postgresDriver] },
+      ({ field, model, type }) => ({
+        models: {
+          Token: model('Token', { fields: { id: field.column(type.Char(36)).id() } }).sql({
+            table: 'Token',
+          }),
+        },
+      }),
+    );
     expect(throughSqlChar).toEqual(throughChar);
   });
 });

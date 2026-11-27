@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { defineContract, field, model, nativeEnum, pg } from '../src/exports/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  nativeEnum,
+  pg,
+  postgres18,
+  postgresDriver,
+} from '../src/exports/contract-builder';
 import postgresStatic from '../src/static/postgres-static';
 
 const Status = nativeEnum('Status', 'draft', 'published').map('sample_status');
 const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     Sample: model('Sample', {
       fields: {

@@ -1,75 +1,73 @@
-import type { CapabilityMatrix } from '@internal/framework-components/components';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { resolveCapabilities } from '../src/capabilities';
+import { type CapabilityKey, capabilitiesFromKeys, capabilityKeysOf } from '../src/capabilities';
 
-const row = { sql: { returning: true, lateral: true }, postgres: { distinctOn: true } } as const;
-
-describe('resolveCapabilities', () => {
-  it('merges the sets in order, a later flag replacing an earlier one, and keeps the flags that are on', () => {
-    const resolved = resolveCapabilities([
-      row,
-      { sql: { returning: false, pipelining: true } },
-      { http: { batch: true }, sql: { pipelining: false } },
+describe('capabilitiesFromKeys', () => {
+  it('stores each key as its namespace and flag, as a contract records them', () => {
+    const capabilities = capabilitiesFromKeys([
+      'sql.returning',
+      'sql.lateral',
+      'postgres.distinctOn',
     ]);
 
-    expect(resolved).toEqual({
-      sql: { lateral: true },
+    expect(capabilities).toEqual({
+      sql: { returning: true, lateral: true },
       postgres: { distinctOn: true },
-      http: { batch: true },
     });
-    expectTypeOf(resolved).toEqualTypeOf<{
-      readonly sql: { readonly lateral: true };
+    expectTypeOf(capabilities).toEqualTypeOf<{
+      readonly sql: { readonly returning: true; readonly lateral: true };
       readonly postgres: { readonly distinctOn: true };
-      readonly http: { readonly batch: true };
     }>();
   });
 
-  it('keeps the type of the earlier sets when a set has a wide type, which says nothing the type can merge', () => {
-    const wide: CapabilityMatrix = { sql: { batch: true } };
-    const resolved = resolveCapabilities([row, wide]);
+  it('keeps each key literally in the type when the list is spread from lists typed as arrays', () => {
+    const database: readonly ('sql.returning' | 'sql.lateral')[] = ['sql.returning', 'sql.lateral'];
+    const connection: readonly 'sql.interactiveTransactions'[] = ['sql.interactiveTransactions'];
+    const capabilities = capabilitiesFromKeys([...database, ...connection]);
 
-    expect(resolved).toEqual({ ...row, sql: { ...row.sql, batch: true } });
-    expectTypeOf(resolved.sql).toEqualTypeOf<{
-      readonly returning: true;
-      readonly lateral: true;
+    expect(capabilities).toEqual({
+      sql: { returning: true, lateral: true, interactiveTransactions: true },
+    });
+    expectTypeOf(capabilities).toEqualTypeOf<{
+      readonly sql: {
+        readonly returning: true;
+        readonly lateral: true;
+        readonly interactiveTransactions: true;
+      };
     }>();
+  });
+
+  it('splits a key at its first dot, so the flag may contain dots', () => {
+    expect(capabilitiesFromKeys(['ext.search.fuzzy'])).toEqual({ ext: { 'search.fuzzy': true } });
   });
 });
 
-describe('resolveCapabilities with a list of unknown length', () => {
-  it('keeps the type of the entries the type knows at the front', () => {
-    const rest: CapabilityMatrix[] = [{ sql: { batch: true } }];
-    const resolved = resolveCapabilities([row, ...rest]);
+describe('capabilityKeysOf', () => {
+  it('lists the flags that are on as keys, and leaves out the ones that are off', () => {
+    const keys = capabilityKeysOf({
+      sql: { returning: true, lateral: false },
+      postgres: { distinctOn: true },
+    } as const);
 
-    expect(resolved.sql).toEqual({ ...row.sql, batch: true });
-    expectTypeOf(resolved.sql).toEqualTypeOf<{
-      readonly returning: true;
-      readonly lateral: true;
-    }>();
+    expect(keys).toEqual(['sql.returning', 'postgres.distinctOn']);
+    expectTypeOf(keys).toEqualTypeOf<readonly ('sql.returning' | 'postgres.distinctOn')[]>();
+    expect(Object.isFrozen(keys)).toBe(true);
   });
 
-  it('merges the literal sets after a spread of unknown length', () => {
-    const shared: CapabilityMatrix[] = [];
-    const off = resolveCapabilities([row, ...shared, { sql: { returning: false } }]);
-    const on = resolveCapabilities([row, ...shared, { sql: { interactiveTransactions: true } }]);
-
-    expect([off.sql, on.sql]).toEqual([
-      { lateral: true },
-      { returning: true, lateral: true, interactiveTransactions: true },
-    ]);
-    expectTypeOf(off.sql).toEqualTypeOf<{ readonly lateral: true }>();
-    expectTypeOf(on.sql).toEqualTypeOf<{
-      readonly returning: true;
-      readonly lateral: true;
-      readonly interactiveTransactions: true;
-    }>();
+  it('gives back the capabilities it was given, through capabilitiesFromKeys', () => {
+    const matrix = { sql: { returning: true }, postgres: { distinctOn: true } } as const;
+    expect(capabilitiesFromKeys(capabilityKeysOf(matrix))).toEqual(matrix);
   });
 
-  it('keeps a flag in the type that a set with a wide type turns off at run time, a known limit', () => {
-    const off: CapabilityMatrix = { sql: { returning: false } };
-    const resolved = resolveCapabilities([row, off]);
+  it('lists nothing for a set with no flags', () => {
+    const keys = capabilityKeysOf({} as const);
+    expect(keys).toEqual([]);
+    expectTypeOf(keys).toEqualTypeOf<readonly never[]>();
+  });
+});
 
-    expect(resolved.sql).toEqual({ lateral: true });
-    expectTypeOf(resolved.sql.returning).toEqualTypeOf<true>();
+describe('CapabilityKey', () => {
+  it('is a namespace and a flag joined by a dot', () => {
+    expectTypeOf<'sql.returning'>().toExtend<CapabilityKey>();
+    expectTypeOf<'returning'>().not.toExtend<CapabilityKey>();
   });
 });

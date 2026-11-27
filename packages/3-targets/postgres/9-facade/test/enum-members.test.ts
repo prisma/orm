@@ -1,6 +1,12 @@
 import 'temporal-polyfill/full/global';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { defineContract, enumType, member } from '../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  member,
+  postgres18,
+  postgresDriver,
+} from '../src/exports/contract-builder';
 import postgresStatic from '../src/static/postgres-static';
 
 const uuidA = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
@@ -59,7 +65,7 @@ const Float8Level = enumType(
 
 const contract = defineContract(
   {
-    databaseVersion: 18,
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     enums: {
       TextLevel,
       Int4Level,

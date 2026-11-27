@@ -1,5 +1,12 @@
 import { expectTypeOf, test } from 'vitest';
-import { defineContract, field, model, rel } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '../../src/exports/contract-builder';
 import postgres from '../../src/exports/runtime';
 
 const int4 = { codecId: 'pg/int4@1' } as const;
@@ -41,7 +48,7 @@ const Session = model('Session', {
 });
 
 const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   namespaces: ['auth'],
   models: {
     User: User.relations({

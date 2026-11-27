@@ -2,10 +2,15 @@ import type { JsonValue } from '@internal/contract/types';
 import type { CreateInput, ScalarUpdateInput } from '@internal/sql-orm-client';
 import type { Temporal } from 'temporal-spec';
 import { expectTypeOf, test } from 'vitest';
-import { defineContract, field as importedField } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  field as importedField,
+  postgres18,
+  postgresDriver,
+} from '../../src/exports/contract-builder';
 
 test('the field presets and field.generated are not on the field the callback receives', () => {
-  defineContract({ databaseVersion: 18 }, ({ field }) => {
+  defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }, ({ field }) => {
     expectTypeOf(field).not.toHaveProperty('text');
     expectTypeOf(field).not.toHaveProperty('uuidString');
     expectTypeOf(field).not.toHaveProperty('id');
@@ -22,22 +27,28 @@ test('the field presets and field.generated are not on the field contract-builde
   expectTypeOf(importedField).not.toHaveProperty('generated');
 });
 
-const contract = defineContract({ databaseVersion: 18 }, ({ field, model, type, gen }) => ({
-  models: {
-    Event: model('Event', {
-      fields: {
-        id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-        code: field.column(type.Char(12)),
-        seenAt: field.column(type.TimeTemporal(3)).onUpdate(gen.now()),
-        createdAt: field.column(type.TimestamptzTemporal()).onCreate(gen.now()),
-        updatedAt: field.column(type.TimestamptzTemporal()).onCreate(gen.now()).onUpdate(gen.now()),
-        payload: field.column(type.Jsonb()).optional(),
-        slug: field.column(type.Char(16)).onCreate(gen.nanoid(16)),
-        title: field.column(type.String()),
-      },
-    }),
-  },
-}));
+const contract = defineContract(
+  { requiredCapabilities: [...postgres18, ...postgresDriver] },
+  ({ field, model, type, gen }) => ({
+    models: {
+      Event: model('Event', {
+        fields: {
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+          code: field.column(type.Char(12)),
+          seenAt: field.column(type.TimeTemporal(3)).onUpdate(gen.now()),
+          createdAt: field.column(type.TimestamptzTemporal()).onCreate(gen.now()),
+          updatedAt: field
+            .column(type.TimestamptzTemporal())
+            .onCreate(gen.now())
+            .onUpdate(gen.now()),
+          payload: field.column(type.Jsonb()).optional(),
+          slug: field.column(type.Char(16)).onCreate(gen.nanoid(16)),
+          title: field.column(type.String()),
+        },
+      }),
+    },
+  }),
+);
 
 type Scalars = {
   id: string;

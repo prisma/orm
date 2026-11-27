@@ -5,6 +5,8 @@ import {
   field,
   fullTextIndex,
   model,
+  postgres18,
+  postgresDriver,
   sql,
 } from '../../src/exports/contract-builder';
 import postgres from '../../src/exports/runtime';
@@ -37,7 +39,10 @@ const Article = model('Article', {
   foreignKeys: [constraints.foreignKey(cols.authorId, Author.refs.id)],
 }));
 
-const contract = defineContract({ databaseVersion: 18, models: { Author, Article } });
+const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Author, Article },
+});
 const db = postgres({ contract, url: 'postgres://localhost/db' });
 
 test('a where callback offers exactly the declared index names and the foreign key backing index', () => {
@@ -109,7 +114,7 @@ const Covered = model('Covered', {
 }));
 
 const namingContract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: { Writer, LongNames, Partials, Covered },
 });
 const naming = postgres({ contract: namingContract, url: 'postgres://localhost/db' });

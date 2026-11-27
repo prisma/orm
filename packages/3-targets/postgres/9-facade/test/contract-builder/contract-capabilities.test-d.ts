@@ -1,104 +1,63 @@
-import postgresAdapter from '@internal/adapter-postgres/runtime';
-import postgresDriver from '@internal/driver-postgres/runtime';
-import type { CapabilityMatrix } from '@internal/framework-components/components';
 import { expectTypeOf, test } from 'vitest';
-import { defineContractFor } from '../../src/contract/define-contract';
-import { postgresContractCapabilities } from '../../src/exports/config';
-import { defineContract, field, model } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  type RequiredCapabilities,
+} from '../../src/exports/contract-builder';
 import postgres from '../../src/exports/runtime';
-import { versionsWithALaterFeature } from '../support/version-table';
 
 const User = model('User', {
   fields: { id: field.column({ codecId: 'pg/int4@1' } as const).id() },
 }).sql({ table: 'users' });
 
-const defineContractWithALaterFeature = defineContractFor(versionsWithALaterFeature);
-
-test('a contract for 16 does not offer a feature that needs 17', () => {
-  const contract = defineContractWithALaterFeature({ databaseVersion: 16, models: { User } });
-  const db = postgres({ contract, url: 'postgres://localhost/db' });
-  db.orm.public.User.forUpdate();
-  // @ts-expect-error FOR NO KEY UPDATE arrives with 17 in this table
-  db.orm.public.User.forNoKeyUpdate();
-});
-
-test('a contract for 17 offers it', () => {
-  const contract = defineContractWithALaterFeature({ databaseVersion: 17, models: { User } });
-  const db = postgres({ contract, url: 'postgres://localhost/db' });
-  db.orm.public.User.forNoKeyUpdate();
-});
-
-test('a version outside the table is a type error', () => {
-  // @ts-expect-error 18 is not in this table
-  defineContractWithALaterFeature({ databaseVersion: 18 });
-  // @ts-expect-error 14 is not a supported PostgreSQL version
-  defineContract({ databaseVersion: 14 });
-  // @ts-expect-error the version is required
-  defineContract({});
-});
-
-test('the capabilities list reaches the type in order, with false turning a flag off', () => {
-  const contract = defineContract({
-    databaseVersion: 18,
-    capabilities: [
-      { sql: { interactiveTransactions: true, returning: false } },
-      { http: { batch: true } },
-    ],
-  });
+test('a list spread from the version’s and the driver’s keeps each capability in the type', () => {
+  const contract = defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] });
   expectTypeOf(contract.capabilities.sql.interactiveTransactions).toEqualTypeOf<true>();
-  expectTypeOf(contract.capabilities.sql).not.toHaveProperty('returning');
-  expectTypeOf(contract.capabilities.http.batch).toEqualTypeOf<true>();
+  expectTypeOf(contract.capabilities.sql.returning).toEqualTypeOf<true>();
   expectTypeOf(contract.capabilities.postgres.forNoKeyUpdate).toEqualTypeOf<true>();
   expectTypeOf(contract.capabilities.postgres).not.toHaveProperty('orderBy');
 });
 
-test('a set with a wide type keeps the row in the type', () => {
-  const wide: CapabilityMatrix = { sql: { interactiveTransactions: true } };
-  const contract = defineContract({ databaseVersion: 18, capabilities: [wide] });
-  expectTypeOf(contract.capabilities.postgres.forNoKeyUpdate).toEqualTypeOf<true>();
-  expectTypeOf(contract.capabilities.sql.returning).toEqualTypeOf<true>();
-});
-
-test("the runtime adapter's and driver's capabilities are a list a contract accepts", () => {
-  defineContract({
-    databaseVersion: 18,
-    capabilities: [postgresAdapter.capabilities, postgresDriver.capabilities],
+test('the list is the type, so a feature it leaves out is not offered', () => {
+  expectTypeOf(
+    defineContract({ requiredCapabilities: ['http.batch'] }).capabilities.http.batch,
+  ).toEqualTypeOf<true>();
+  const contract = defineContract({
+    requiredCapabilities: postgres18.filter(
+      (capability) => capability !== 'postgres.forNoKeyUpdate',
+    ),
+    models: { User },
   });
-});
-
-test('a single set where the list belongs is refused', () => {
-  // @ts-expect-error the capabilities are a list of sets, not one set
-  defineContract({ databaseVersion: 18, capabilities: { sql: { interactiveTransactions: true } } });
-});
-
-test('a list typed as an array keeps the version row in the type', () => {
-  const list: CapabilityMatrix[] = [{ sql: { interactiveTransactions: true } }];
-  const contract = defineContract({ databaseVersion: 18, capabilities: list, models: { User } });
-  expectTypeOf(contract.capabilities.postgres.forNoKeyUpdate).toEqualTypeOf<true>();
   const db = postgres({ contract, url: 'postgres://localhost/db' });
   db.orm.public.User.forUpdate();
+  // @ts-expect-error the list leaves out postgres.forNoKeyUpdate
   db.orm.public.User.forNoKeyUpdate();
-  expectTypeOf(
-    postgresContractCapabilities({ databaseVersion: 17, capabilities: list }).sql.returning,
-  ).toEqualTypeOf<true>();
 });
 
-test('a set with a wide type that turns a flag off leaves the flag in the type, a documented limit', () => {
-  const off: CapabilityMatrix = { sql: { returning: false } };
-  const contract = defineContract({ databaseVersion: 18, capabilities: [off] });
-  expectTypeOf(contract.capabilities.sql.returning).toEqualTypeOf<true>();
+test('a list filtered by a comparison leaves what it filters out of the type too', () => {
+  const contract = defineContract({
+    requiredCapabilities: postgres18.filter((capability) => capability !== 'sql.returning'),
+  });
+  expectTypeOf(contract.capabilities.sql).not.toHaveProperty('returning');
+  expectTypeOf(contract.capabilities.sql.lateral).toEqualTypeOf<true>();
 });
 
-test('literal sets after a spread of unknown length reach the type', () => {
-  const shared: CapabilityMatrix[] = [];
-  const off = postgresContractCapabilities({
-    databaseVersion: 18,
-    capabilities: [...shared, { sql: { returning: false } }],
-  });
-  const on = postgresContractCapabilities({
-    databaseVersion: 18,
-    capabilities: [...shared, { sql: { interactiveTransactions: true } }],
-  });
-  expectTypeOf(off.sql).not.toHaveProperty('returning');
-  expectTypeOf(on.sql.interactiveTransactions).toEqualTypeOf<true>();
+test('a list typed as RequiredCapabilities names no capability in the type, and the client is still created', () => {
+  const required: RequiredCapabilities = [...postgres18];
+  const contract = defineContract({ requiredCapabilities: required, models: { User } });
+  postgres({ contract, url: 'postgres://localhost/db' });
+});
+
+test('the list is required, and its entries are capability keys', () => {
+  // @ts-expect-error the list is required
+  defineContract({});
+  // @ts-expect-error a capability is a key with a namespace
+  defineContract({ requiredCapabilities: ['returning'] });
+  // @ts-expect-error the database version is not an option
+  defineContract({ databaseVersion: 18 });
+  // @ts-expect-error the capability sets option is gone
+  defineContract({ requiredCapabilities: postgres18, capabilities: [] });
 });

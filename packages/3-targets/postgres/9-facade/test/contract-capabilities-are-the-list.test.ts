@@ -7,17 +7,16 @@ import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-r
 import postgresTarget from '@internal/target-postgres/runtime';
 import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { describe, expect, it } from 'vitest';
-import { defineContract, field, model } from '../src/exports/contract-builder';
+import { defineContract, field, model, postgres18 } from '../src/exports/contract-builder';
 import { buildPostgresStaticContext } from '../src/static/postgres-static';
 
 const User = model('User', {
   fields: { id: field.column({ codecId: 'pg/int4@1' } as const).id() },
 }).sql({ table: 'users' });
 
-const withLocking = defineContract({ databaseVersion: 18, models: { User } });
+const withLocking = defineContract({ requiredCapabilities: postgres18, models: { User } });
 const withoutLocking = defineContract({
-  databaseVersion: 18,
-  capabilities: [{ sql: { forUpdate: false } }],
+  requiredCapabilities: postgres18.filter((capability) => capability !== 'sql.forUpdate'),
   models: { User },
 });
 

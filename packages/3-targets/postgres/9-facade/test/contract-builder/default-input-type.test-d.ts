@@ -11,6 +11,8 @@ import {
   field as importedField,
   member,
   now,
+  postgres18,
+  postgresDriver,
   type ScalarFieldBuilder,
   sql,
 } from '../../src/exports/contract-builder';
@@ -27,7 +29,7 @@ const handWritten = { codecId: 'app/custom@1' } as const;
 
 test('.default() takes the input type of the field codec', () => {
   defineContract(
-    { databaseVersion: 18, enums: { Level, BigLevel } },
+    { requiredCapabilities: [...postgres18, ...postgresDriver], enums: { Level, BigLevel } },
     ({ field, model, gen, type }) => {
       const Counter = field.column({
         kind: 'codec-instance',

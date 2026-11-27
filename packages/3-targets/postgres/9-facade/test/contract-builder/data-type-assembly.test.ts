@@ -1,7 +1,7 @@
 import { dataType } from '@internal/framework-components/codec';
 import type { ExtensionPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
-import { defineContract } from '../../src/exports/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '../../src/exports/contract-builder';
 
 const duplicateText: ExtensionPackRef<'sql', 'postgres'> = {
   kind: 'extension',
@@ -14,7 +14,12 @@ const duplicateText: ExtensionPackRef<'sql', 'postgres'> = {
 
 describe('postgres defineContract data types', () => {
   it('refuses an extension that registers a data type the target already registers', () => {
-    expect(() => defineContract({ databaseVersion: 18, extensions: { duplicateText } })).toThrow(
+    expect(() =>
+      defineContract({
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+        extensions: { duplicateText },
+      }),
+    ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DATA_TYPE_DUPLICATE',
         details: expect.objectContaining({ dataType: 'pg/text', contributedBy: 'duplicate-text' }),
