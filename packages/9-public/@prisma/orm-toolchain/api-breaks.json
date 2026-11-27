@@ -131,7 +131,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3f2cb2739f09ffac",
+    "fingerprint": "6ff832e7a965926f",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   },
   {

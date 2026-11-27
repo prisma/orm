@@ -131,7 +131,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "8e6270864a3cbcfb",
+    "fingerprint": "f3a0fadadadf8583",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   },
   {
@@ -158,7 +158,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "8e6270864a3cbcfb",
+    "fingerprint": "f3a0fadadadf8583",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   },
   {
