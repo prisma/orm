@@ -38,7 +38,7 @@ import { callMethod, hasMethod, type OrmCollection, type Row } from './orm';
 export interface PrismaClientLike {
   readonly contract: SqlContract;
   readonly orm: object;
-  /** The client's stack, whose target names the capabilities it retired. */
+  /** The client's stack, whose target names the capabilities it retired. Prisma 8.0 removes this field. */
   readonly stack?: {
     readonly target: Pick<SqlRuntimeTargetDescriptor, 'retiredCapabilities'>;
   };

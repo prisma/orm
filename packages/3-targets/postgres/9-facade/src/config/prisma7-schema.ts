@@ -25,6 +25,8 @@ export interface Prisma7SchemaOptions {
 /**
  * Reads a Prisma 7 `schema.prisma` (or a directory of `.prisma` files) as the
  * contract source, so Prisma 8 can adopt a database Prisma 7 still migrates.
+ *
+ * Prisma 8.0 removes the default for missing `options`.
  */
 export function prisma7Schema(schemaPath: string, options?: Prisma7SchemaOptions): ContractConfig {
   const listed = options?.requiredCapabilities;

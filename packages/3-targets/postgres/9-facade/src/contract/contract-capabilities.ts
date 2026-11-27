@@ -23,6 +23,7 @@ export const postgres18 = capabilityKeysOf(postgresCapabilitiesByVersion[18]);
 /** The capabilities the connection of the PostgreSQL driver provides, as keys for `requiredCapabilities`. */
 export const postgresDriver = capabilityKeysOf(postgresDriverCapabilities);
 
+/** Prisma 8.0 removes it. */
 const providedCapabilityLists = {
   postgres15,
   postgres16,
@@ -37,7 +38,7 @@ const providedCapabilityLists = {
 export type DefaultRequiredCapabilities =
   (typeof providedCapabilityLists)[(typeof defaultRequiredCapabilityLists)[number]];
 
-/** The capabilities of `DefaultRequiredCapabilities`, as one list. */
+/** The capabilities of `DefaultRequiredCapabilities`, as one list. Prisma 8.0 removes it. */
 export const defaultRequiredCapabilities: readonly DefaultRequiredCapabilities[number][] =
   Object.freeze(defaultRequiredCapabilityLists.flatMap((list) => providedCapabilityLists[list]));
 
@@ -45,7 +46,7 @@ const contractsWithDefaultKey = Symbol.for(
   'prisma.orm.postgres.contractsWithDefaultRequiredCapabilities',
 );
 
-// Kept on `globalThis`, as `validateContractOnce` keeps its record, so that two copies of this package in one process, such as the workspace's and an installed one, share it.
+/** Kept on `globalThis`, as `validateContractOnce` keeps its record, so that two copies of this package in one process, such as the workspace's and an installed one, share it. Prisma 8.0 removes it. */
 function contractsWithDefault(): WeakSet<object> {
   const existing: unknown = Reflect.get(globalThis, contractsWithDefaultKey);
   if (existing instanceof WeakSet) return existing;
@@ -54,12 +55,12 @@ function contractsWithDefault(): WeakSet<object> {
   return created;
 }
 
-/** Records that `contract` was built with `defaultRequiredCapabilities`, so that emitting it warns. */
+/** Records that `contract` was built with `defaultRequiredCapabilities`, so that emitting it warns. Prisma 8.0 removes it. */
 export function recordDefaultRequiredCapabilities(contract: object): void {
   contractsWithDefault().add(contract);
 }
 
-/** Whether `contract` was built with `defaultRequiredCapabilities`, because its source listed none. */
+/** Whether `contract` was built with `defaultRequiredCapabilities`, because its source listed none. Prisma 8.0 removes it. */
 export function hasDefaultRequiredCapabilities(contract: unknown): boolean {
   return typeof contract === 'object' && contract !== null && contractsWithDefault().has(contract);
 }
@@ -79,6 +80,7 @@ function isCapabilityKey(key: unknown): key is CapabilityKey {
   return dot > 0 && dot < key.length - 1;
 }
 
+/** Prisma 8.0 removes it, with the refusal of a retired key. */
 function isRetired(key: CapabilityKey): boolean {
   const dot = key.indexOf('.');
   const flags: unknown = Reflect.get(postgresRetiredCapabilities, key.slice(0, dot));

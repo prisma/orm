@@ -1,6 +1,2 @@
-export {
-  isSourceGivenNoCapabilities,
-  type PrismaContractOptions,
-  prismaContract,
-  recordSourceGivenNoCapabilities,
-} from '../provider';
+export { type PrismaContractOptions, prismaContract } from '../provider';
+export { isSourceGivenNoCapabilities } from '../sources-given-no-capabilities';

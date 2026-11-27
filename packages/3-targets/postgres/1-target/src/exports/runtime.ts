@@ -47,6 +47,7 @@ const postgresRuntimeTargetDescriptor: RuntimeTargetDescriptor<
   readonly queryOperations: () => SqlOperationDescriptors;
   readonly collectionMethods: () => readonly CollectionMethodContribution[];
   readonly databaseCapabilities: typeof postgresDatabaseCapabilities;
+  /** Prisma 8.0 removes this field. */
   readonly retiredCapabilities: typeof postgresRetiredCapabilities;
 } = {
   ...postgresTargetDescriptorMetaRuntime,

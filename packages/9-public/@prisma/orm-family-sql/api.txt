@@ -1232,7 +1232,6 @@
 ./contract-psl/map-names: function pslModelMapName(modelName: string, tableName: string): string | undefined
 ./contract-psl/provider: function isSourceGivenNoCapabilities(source: object): boolean
 ./contract-psl/provider: function prismaContract(schemaPath: string, options: PrismaContractOptions): ContractConfig
-./contract-psl/provider: function recordSourceGivenNoCapabilities(source: object): void
 ./contract-psl/provider: interface PrismaContractOptions
 ./contract-psl/provider: interface PrismaContractOptions, readonly optional property capabilities?: CapabilityMatrix
 ./contract-psl/provider: interface PrismaContractOptions, readonly optional property composedExtensionPackRefs?: readonly ExtensionPackRef<'sql', string>[]

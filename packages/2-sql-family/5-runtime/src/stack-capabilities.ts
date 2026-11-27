@@ -19,7 +19,7 @@ function flagIn(set: CapabilitySet, namespace: string, flag: string): unknown {
   return typeof flags === 'object' && flags !== null ? Reflect.get(flags, flag) : undefined;
 }
 
-/** The capabilities `contract` requires, as `namespace.flag`, that are not the database's, not retired, and that neither the adapter nor the driver provides. */
+/** The capabilities `contract` requires, as `namespace.flag`, that are not the database's, not retired, and that neither the adapter nor the driver provides. Prisma 8.0 removes its exemption of retired capabilities. */
 export function capabilitiesNotProvided(
   contract: Contract<SqlStorage>,
   stack: SqlExecutionStackWithDriver,
@@ -93,7 +93,7 @@ type FlagNames<Set> = Set extends unknown
     }[keyof Known<Set> & string]
   : never;
 
-/** At type level, the capabilities `Capabilities` requires that are not `DatabaseCapabilities`, not `RetiredCapabilities`, and that neither the adapter's nor the driver's set provides. */
+/** At type level, the capabilities `Capabilities` requires that are not `DatabaseCapabilities`, not `RetiredCapabilities`, and that neither the adapter's nor the driver's set provides. Prisma 8.0 removes the `RetiredCapabilities` parameter. */
 export type CapabilitiesNotProvided<
   Capabilities,
   DatabaseCapabilities,
@@ -130,6 +130,7 @@ export type NoneMissing<
 interface StackDescriptors {
   readonly target: {
     readonly databaseCapabilities?: unknown;
+    /** Prisma 8.0 removes this field. */
     readonly retiredCapabilities?: unknown;
   };
   readonly adapter: { readonly capabilities?: unknown };
@@ -137,7 +138,7 @@ interface StackDescriptors {
 }
 
 /**
- * Creating a client from `Stack` for `TContract` is a type error naming each capability the contract requires that is not the database's and that its adapter and driver do not provide. A function generic over contracts is checked only when the client is created (see `NoneMissing`).
+ * Creating a client from `Stack` for `TContract` is a type error naming each capability the contract requires that is not the database's and that its adapter and driver do not provide. A function generic over contracts is checked only when the client is created (see `NoneMissing`). Prisma 8.0 removes the retired capabilities it passes as the fifth argument.
  */
 export type StackProvides<
   TContract extends Contract<SqlStorage>,
@@ -159,13 +160,14 @@ export interface InteractiveTransactionsCapability {
   readonly sql: { readonly interactiveTransactions: true };
 }
 
-// A target that declares retired capabilities declares that a contract naming one was emitted before contracts listed connection capabilities, when clients offered `transaction()` to every contract.
+/** A target that declares retired capabilities declares that a contract naming one was emitted before contracts listed connection capabilities, when clients offered `transaction()` to every contract. Prisma 8.0 removes it. */
 type EmittedByEarlierRelease<Capabilities, RetiredCapabilities> = [
   Extract<EnabledFlagNames<Capabilities>, FlagNames<RetiredCapabilities>>,
 ] extends [never]
   ? false
   : true;
 
+/** Prisma 8.0 removes the `RetiredCapabilities` parameter. */
 type InteractiveTransactionsNotListed<Capabilities, RetiredCapabilities> =
   IsAny<Capabilities> extends true
     ? never
@@ -175,7 +177,7 @@ type InteractiveTransactionsNotListed<Capabilities, RetiredCapabilities> =
         ? never
         : 'sql.interactiveTransactions';
 
-/** What a `transaction()` callback must also be: nothing for a contract that requires interactive transactions, or that an earlier release emitted (it names one of `RetiredCapabilities`); for any other, a type no callback is, whose error names the capability. */
+/** What a `transaction()` callback must also be: nothing for a contract that requires interactive transactions, or that an earlier release emitted (it names one of `RetiredCapabilities`); for any other, a type no callback is, whose error names the capability. Prisma 8.0 removes the `RetiredCapabilities` parameter. */
 export type InteractiveTransactionsListed<
   TContract extends Contract<SqlStorage>,
   RetiredCapabilities = undefined,
@@ -185,6 +187,7 @@ export type InteractiveTransactionsListed<
   '`'
 >;
 
+/** Prisma 8.0 removes it. */
 function namesRetiredCapability(
   contract: Contract<SqlStorage>,
   retiredCapabilities: CapabilitySet,
@@ -197,7 +200,7 @@ function namesRetiredCapability(
   );
 }
 
-/** Whether `transaction()` is available for `contract`: it requires interactive transactions, or an earlier release emitted it (it names one of `retiredCapabilities`). */
+/** Whether `transaction()` is available for `contract`: it requires interactive transactions, or an earlier release emitted it (it names one of `retiredCapabilities`). Prisma 8.0 removes the `retiredCapabilities` parameter. */
 export function interactiveTransactionsAvailable(
   contract: Contract<SqlStorage>,
   retiredCapabilities: CapabilitySet,
@@ -208,7 +211,7 @@ export function interactiveTransactionsAvailable(
   );
 }
 
-/** Refuses `transaction()` for a contract for which `interactiveTransactionsAvailable` is false. */
+/** Refuses `transaction()` for a contract for which `interactiveTransactionsAvailable` is false. Prisma 8.0 removes the `retiredCapabilities` parameter. */
 export function assertInteractiveTransactionsListed(
   contract: Contract<SqlStorage>,
   retiredCapabilities: CapabilitySet,

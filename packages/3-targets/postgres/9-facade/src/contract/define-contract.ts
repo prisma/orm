@@ -145,7 +145,7 @@ type PostgresScaffold<
   readonly namespaces?: Namespaces;
 };
 
-/** Defines a PostgreSQL contract. `requiredCapabilities` lists everything it requires of the database and the connection; a contract that leaves it out requires the newest version's list and the driver's, until Prisma 8.0. */
+/** Defines a PostgreSQL contract. `requiredCapabilities` lists everything it requires of the database and the connection; a contract that leaves it out requires the newest version's list and the driver's, until Prisma 8.0 removes that default and the type parameter's default. */
 export function defineContract<
   const Required extends RequiredCapabilities = DefaultRequiredCapabilities,
   const DatabaseTypes extends DatabaseTypesConstraint = Record<never, never>,

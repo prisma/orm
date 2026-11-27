@@ -4,7 +4,7 @@ import {
   defaultContractOutputPath,
 } from '@internal/config/config-types';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
-import { prismaContract } from '@internal/sql-contract-psl/provider';
+import { isSourceGivenNoCapabilities, prismaContract } from '@internal/sql-contract-psl/provider';
 import {
   refuseOtherTargetOnLoad,
   typescriptContractFromPath,
@@ -68,6 +68,7 @@ function isContractEntry(contract: object): contract is UntypedEntry {
   return Object.hasOwn(contract, 'path');
 }
 
+/** Prisma 8.0 removes its default for a missing `requiredCapabilities`, and the warning. */
 function contractConfigFromEntry(entry: UntypedEntry, output: string): ContractConfig {
   if (extname(entry.path) === '.ts') {
     if (entry.requiredCapabilities !== undefined) {
@@ -120,10 +121,11 @@ function resolveContractConfig(options: {
     explicitOutput ??
     contract.output ??
     (firstInput !== undefined ? defaultContractOutputPath(firstInput) : undefined);
+  const givenNoCapabilities = isSourceGivenNoCapabilities(contract.source);
   return {
-    ...refuseOtherTargetOnLoad(
-      defaultRequiredCapabilitiesOfReadySource(contract),
-      postgresContractTarget,
+    ...defaultRequiredCapabilitiesOfReadySource(
+      refuseOtherTargetOnLoad(contract, postgresContractTarget),
+      givenNoCapabilities,
     ),
     ...ifDefined('output', output),
   };

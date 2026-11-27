@@ -6,7 +6,6 @@ import type {
 } from '@internal/config/config-types';
 import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { hasPslInterpreter, type PslInterpretCapable } from '@internal/psl-parser/interpret';
-import { isSourceGivenNoCapabilities } from '@internal/sql-contract-psl/provider';
 import { capabilitiesFromKeys } from '@internal/sql-contract-ts/contract-builder';
 import { type ImportRequirement, renderImports, TsExpression } from '@internal/ts-render';
 import {
@@ -17,7 +16,7 @@ import { RequiredCapabilitiesList } from '../contract/required-capabilities-list
 import { contractBuilderModule } from './components';
 import { configModule } from './module-base';
 
-/** What the author writes to list the capabilities a contract left out, rendered as `init` writes it, and where. */
+/** What the author writes to list the capabilities a contract left out, rendered as `init` writes it, and where. Prisma 8.0 removes it. */
 export interface RequiredCapabilitiesPlace {
   /** The property the author writes: `requiredCapabilities`, `contract` or `capabilities`. */
   readonly key: string;
@@ -30,7 +29,7 @@ export interface RequiredCapabilitiesPlace {
   readonly alreadyImported: readonly string[];
 }
 
-/** The place in `defineContract`, for a TypeScript contract. */
+/** The place in `defineContract`, for a TypeScript contract. Prisma 8.0 removes it. */
 export function inDefineContract(path: string): RequiredCapabilitiesPlace {
   return {
     key: 'requiredCapabilities',
@@ -41,7 +40,7 @@ export function inDefineContract(path: string): RequiredCapabilitiesPlace {
   };
 }
 
-/** The place in the config, where `entry` replaces the contract entry of a config that already imports `alreadyImported`. */
+/** The place in the config, where `entry` replaces the contract entry of a config that already imports `alreadyImported`. Prisma 8.0 removes it. */
 export function asTheContractEntry(
   entry: TsExpression,
   path: string,
@@ -71,7 +70,7 @@ class ContractCapabilitiesCall extends TsExpression {
   }
 }
 
-/** The warning the commands that load the contract source report for a contract that lists no required capabilities: what to write and its import. */
+/** The warning the commands that load the contract source report for a contract that lists no required capabilities: what to write and its import. Prisma 8.0 removes it. */
 export function requiredCapabilitiesNotListed(
   place: RequiredCapabilitiesPlace,
   sourceId: string,
@@ -97,7 +96,7 @@ function reportNotListed(context: ContractSourceContext, place: RequiredCapabili
   );
 }
 
-/** `config` whose source reports `requiredCapabilitiesNotListed` each time it loads a contract that `defaulted` says was built with the default list. */
+/** `config` whose source reports `requiredCapabilitiesNotListed` each time it loads a contract that `defaulted` says was built with the default list. Prisma 8.0 removes it. */
 export function warnWhenRequiredCapabilitiesDefaulted(
   config: ContractConfig,
   place: RequiredCapabilitiesPlace,
@@ -156,12 +155,15 @@ function sourceWithDefaultCapabilities(
 /**
  * A ready `ContractConfig`, such as `prismaContract(...)` or `typescriptContract(contract)`, given the default required capabilities and the warning when its source lists none. Prisma 8.0 removes this default and requires the list.
  *
- * A Prisma schema source built with no `capabilities` option loads, and is interpreted in the editor, with the default added to the capabilities it sees; one given `capabilities`, even `{}`, is left as written. A TypeScript contract built by `defineContract` without a list already has the default.
+ * `givenNoCapabilities` is whether the Prisma schema source was built with no `capabilities` option, read before any wrapper spreads the source. Such a source loads, and is interpreted in the editor, with the default added to the capabilities it sees; one given `capabilities`, even `{}`, is left as written. A TypeScript contract built by `defineContract` without a list already has the default.
  */
-export function defaultRequiredCapabilitiesOfReadySource(config: ContractConfig): ContractConfig {
+export function defaultRequiredCapabilitiesOfReadySource(
+  config: ContractConfig,
+  givenNoCapabilities: boolean,
+): ContractConfig {
   const { source } = config;
   const path = source.inputs?.[0];
-  if (isSourceGivenNoCapabilities(source)) {
+  if (givenNoCapabilities) {
     return {
       ...config,
       source: sourceWithDefaultCapabilities(source, {

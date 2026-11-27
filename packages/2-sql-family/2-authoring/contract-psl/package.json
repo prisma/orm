@@ -79,6 +79,10 @@
       "types": "./dist/resolution.d.mts",
       "import": "./dist/resolution.mjs"
     },
+    "./sources-given-no-capabilities": {
+      "types": "./dist/sources-given-no-capabilities.d.mts",
+      "import": "./dist/sources-given-no-capabilities.mjs"
+    },
     "./test": {
       "types": "./dist/test.d.mts",
       "import": "./dist/test.mjs"

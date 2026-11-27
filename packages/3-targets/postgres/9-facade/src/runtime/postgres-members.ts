@@ -131,7 +131,7 @@ export interface PostgresRuntimeBoundMembers<
   ): Promise<R>;
 }
 
-/** The callback `transaction()` runs. For a contract that does not list interactive transactions, and that no release candidate emitted, no callback satisfies it, and the type error names the capability. */
+/** The callback `transaction()` runs. For a contract that does not list interactive transactions, and that no release candidate emitted, no callback satisfies it, and the type error names the capability. Prisma 8.0 removes the exemption for release candidate contracts. */
 export type PostgresTransactionCallback<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses,

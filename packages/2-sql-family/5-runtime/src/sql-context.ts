@@ -83,7 +83,7 @@ export interface SqlRuntimeTargetDescriptor<
    */
   readonly databaseCapabilities?: Readonly<Record<string, Readonly<Record<string, true>>>>;
   /**
-   * The capabilities an earlier release wrote into every contract and that nothing reads any more, each as `true`. A contract that release emitted still names them; the client's checks ignore them, and they leave the contract when it is emitted again.
+   * The capabilities an earlier release wrote into every contract and that nothing reads any more, each as `true`. A contract that release emitted still names them; the client's checks ignore them, and they leave the contract when it is emitted again. Prisma 8.0 removes this field.
    */
   readonly retiredCapabilities?: Readonly<Record<string, Readonly<Record<string, true>>>>;
 }

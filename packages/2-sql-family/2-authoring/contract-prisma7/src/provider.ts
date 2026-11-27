@@ -13,7 +13,7 @@ import {
   validateModelStorageReferences,
   validateSqlStorageConsistency,
 } from '@internal/sql-contract/validators';
-import { recordSourceGivenNoCapabilities } from '@internal/sql-contract-psl/provider';
+import { recordSourceGivenNoCapabilities } from '@internal/sql-contract-psl/sources-given-no-capabilities';
 import { applySqlSpecifierControlPolicy } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
