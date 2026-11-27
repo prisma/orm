@@ -93,6 +93,14 @@ Slice spec: [`slices/3-policies/spec.md`](slices/3-policies/spec.md).
 
 **Builds on:** slices 2 and 3, released. **Hands to:** close-out.
 
+## Slice 6: commands read and write a ref's policies (orm) (TML-3959)
+
+Slice spec: [`slices/6-ref-policy-commands/spec.md`](slices/6-ref-policy-commands/spec.md).
+
+**Outcome:** `prisma migration ref policy show|set|delete` read and write the `policies` field of a ref file. They change no database, and no error or advice suggests them. `MIGRATION.POLICY_MISMATCH` no longer advises loosening a ref. A second pull request in prisma/prisma-cli mounts the commands in the `prisma` binary once an ORM release carries them.
+
+**Builds on:** slice 3. **Hands to:** close-out.
+
 ## Dependencies
 
 - Slices 2 and 5 need an ORM `8.0.0-rc` release containing slices 1 and 3 respectively. Users of Composer get the improved error only when slice 2 ships in a Composer release.

@@ -1,10 +1,8 @@
 # Framework Gaps — what Prisma 8 is missing for an extension like CipherStash
 
-> Companion to [system-design-review.md](./system-design-review.md), [code-review.md](./code-review.md), and [walkthrough.md](./walkthrough.md).
+> Audience: the **Prisma 8 framework team**. The CipherStash integration is the first non-trivial real-world consumer of the post-#379 / [ADR 204](../architecture%20docs/adrs/ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md) extension surface. This document collects every place where the integration paid a measurable tax — code it had to write, types it had to vendor, behavior it had to document around — because of a missing or under-specified framework seam. Each gap names the workaround the integration ships today and what the framework should provide so the workaround can be deleted.
 >
-> Audience: the **Prisma 8 framework team**. The CipherStash integration is the first non-trivial real-world consumer of the post-#379 / [ADR 204](../../../docs/architecture%20docs/adrs/ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md) extension surface. This document collects every place where the integration paid a measurable tax — code it had to write, types it had to vendor, behavior it had to document around — because of a missing or under-specified framework seam. Each gap names the workaround the integration ships today and what the framework should provide so the workaround can be deleted.
->
-> Scope: branch `prisma-next` of `cipherstash/stack` vs `origin/main`, head commit `8e8e5a2`. Integration code under [reference/cipherstash/stack/packages/stack/src/prisma/](../../../reference/cipherstash/stack/packages/stack/src/prisma/).
+> Scope: branch `prisma-next` of `cipherstash/stack` vs `origin/main`, head commit `8e8e5a2`. Integration code under `packages/stack/src/prisma/` in that repository.
 
 ---
 
@@ -672,7 +670,7 @@ The "either-side" gaps (**G5, G11, G13, G14, G15**) are nice-to-have framework h
 - `[./spec.md](./spec.md)` — inferred review spec, including risks **R1** (cleartext leakage), **R2** (unbounded `Promise.all`), **R3** (multi-column miscoding), **R4** (typeName convention), **R5** (bundle size), **R6** (vendored type drift).
 - `[./system-design-review.md](./system-design-review.md)` — architectural risks **A1**–**A5** and "What I'd ask before merge".
 - `[./code-review.md](./code-review.md)` — code-level findings, especially **F01** (multi-column miscoding), **F02** (bundle assertion), **F03** (planTypeOperations no-op observability), **F04** (`OperationTypes` type tests), **F05** (typeName parsing), **F06** (`emitTimed` failure-envelope), **F08** (`core/bool@1` constant), **F15** (`encryptedJson` constraint), **D04** (cross-row batching), **D09** (destructive DDL).
-- [ADR 204 — Single-Path Async Codec Runtime](../../../docs/architecture%20docs/adrs/ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md) — §Risks on cleartext leakage and unbounded `Promise.all`, both of which this integration encounters in production form.
+- [ADR 204 — Single-Path Async Codec Runtime](../architecture%20docs/adrs/ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md) — §Risks on cleartext leakage and unbounded `Promise.all`, both of which this integration encounters in production form.
 - [TML-2329](https://linear.app/prisma-company/issue/TML-2329) — trait-gated redaction (covers **G9**).
 - [TML-2330](https://linear.app/prisma-company/issue/TML-2330) — column-context plumbing + codec concurrency (covers **G1**, **G4**).
 

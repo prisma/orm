@@ -75,4 +75,5 @@ Copy this into `docs/releases/v<version>.md` and fill it in, dropping any sectio
 ## See also
 
 - [`CHANGELOG.md`](../../CHANGELOG.md) — the rolling, newest-first index; each release entry mirrors its per-release file here under a `## v<version>` header.
-- [`docs/oss/versioning.md`](../oss/versioning.md) — the version contract and the release procedure these notes are part of.
+- [`docs/oss/releasing.md`](../oss/releasing.md) — the release procedure these notes are part of.
+- [`docs/oss/versioning.md`](../oss/versioning.md) — what users are promised about versions.

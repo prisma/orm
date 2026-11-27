@@ -217,7 +217,7 @@ const ACCESS_FORBIDDEN = {
   dataProtection: { accessWidening: 'access-widening-forbidden' },
 } as const;
 const KEEP_DATA =
-  "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract. To do it anyway, whoever owns the database must first change its data protection policy.";
+  "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract.";
 
 describe('executeDbUpdate, data-loss-forbidden', () => {
   it('refuses a plan that loses data, without asking, and runs nothing', async () => {

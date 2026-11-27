@@ -2,9 +2,11 @@
 
 The concrete MariaDB target of Prisma 8: the target descriptor, the control adapter and the driver, under the target id `mariadb`.
 
-A MariaDB application lists this package beside `@prisma/orm-mariadb`, at the same version, because that database package names it as a peer dependency; `prisma orm init` writes that list. Application code imports from the database package. Extension authors targeting MariaDB and decomposed installs import this package directly.
+> **Maturity level: Early Access.** This package is published so that you can try it. It may have known failures, and any new version may change it. At each new release you edit the Prisma lines in your `package.json` by hand, and [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#a-new-minor-below-ga) shows how. Until release 8.0 it is published as `8.0.0-rc.N`, like every Prisma 8 package, and any of those versions may contain breaking changes.
 
-MariaDB support is early, and is built on MySQL's. This package publishes only the MariaDB parts: the target metadata and the control target, the control adapter with its catalog reader, and the drivers. MySQL's planner, codecs, data types and SQL come from `@prisma/orm-target-mysql`, a peer dependency at the same version, so each module has one published home. The package covers the control plane: emitting contracts, planning and applying migrations, `db verify`, `db sign` and introspection, on MariaDB 10.11 and later. It also carries the runtime target and the runtime adapter, with MariaDB's SQL renderer, which `mariadb()` in `@prisma/orm-mariadb` runs on.
+A MariaDB application lists this package beside `@prisma/orm-mariadb`. The database package requires it as a peer dependency and says which versions it accepts, and `prisma orm init` writes the line for you. Application code imports from the database package. Extension authors targeting MariaDB and decomposed installs import this package directly.
+
+MariaDB support is built on MySQL's. This package publishes only the MariaDB parts: the target metadata and the control target, the control adapter with its catalog reader, and the drivers. MySQL's planner, codecs, data types and SQL come from `@prisma/orm-target-mysql`, a peer dependency of the same release, so each module has one published home. The package covers the control plane: emitting contracts, planning and applying migrations, `db verify`, `db sign` and introspection, on MariaDB 10.11 and later. It also carries the runtime target and the runtime adapter, with MariaDB's SQL renderer, which `mariadb()` in `@prisma/orm-mariadb` runs on.
 
 ## Entrypoints
 

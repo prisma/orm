@@ -1,6 +1,6 @@
 # Package Layering & Naming Conventions
 
-This document describes the package layering structure and naming conventions for Prisma 8, as defined in [ADR 140](../adrs/ADR%20140%20-%20Package%20Layering%20&%20Target-Family%20Namespacing.md).
+This document describes the package layering structure and naming conventions for Prisma 8, as defined in [ADR 140](adrs/ADR%20140%20-%20Package%20Layering%20&%20Target-Family%20Namespacing.md).
 
 ## Overview
 
@@ -129,7 +129,7 @@ The Mongo family domain (`packages/2-mongo-family/`) contains Mongo-specific pac
 
 ### Targets Domain
 
-The targets domain (`packages/3-targets/`) holds one folder per database, for every family ([ADR 278](../adrs/ADR%20278%20-%20Each%20database's%20packages%20live%20in%20one%20folder.md)). Target, adapter, driver and facade stay separate packages, so an application can replace one of them; the folder keeps them together. Inside a database folder the numbers give dependency order: the adapter imports the target, the facade imports all three, the driver imports none of them. A package imports only from lower-numbered folders. Numbers compare only between folders in the same parent.
+The targets domain (`packages/3-targets/`) holds one folder per database, for every family ([ADR 278](adrs/ADR%20278%20-%20Each%20database's%20packages%20live%20in%20one%20folder.md)). Target, adapter, driver and facade stay separate packages, so an application can replace one of them; the folder keeps them together. Inside a database folder the numbers give dependency order: the adapter imports the target, the facade imports all three, the driver imports none of them. A package imports only from lower-numbered folders. Numbers compare only between folders in the same parent.
 
 `0-shared/` beside the database folders holds packages that several databases' packages share ([ADR 314](adrs/ADR%20314%20-%20Code%20shared%20by%20several%20targets'%20type%20implementations%20lives%20in%20one%20package.md)). Today that is `@internal/type-implementations`: value logic that more than one target's codecs, data types and `now()` generators use, depending on no database and no family; and `@internal/target-package-config`: what every target package's `defineConfig` shares, such as restating its target's and adapter's type declarations with its own module. Both are registered in the `targets` domain, plane `shared`, so the target packs, the adapters and the target packages can import them. The top-level `packages/0-shared/` is a different folder: it holds repository tooling, such as the map of published packages, registered in the framework domain.
 
@@ -213,7 +213,7 @@ graph LR
   style Adapters fill:#e0f2f1,stroke:#004d40,stroke-width:2px
 ```
 
-The runtime ring is a single layer: `RuntimeCore` (the abstract base) lives on `@internal/framework-components/runtime` (core layer) and is extended directly by family runtimes (`@internal/sql-runtime`, `@internal/mongo-runtime`). See [ADR 204](../adrs/ADR%20204%20-%20Single-tier%20runtime.md).
+The runtime ring is a single layer: `RuntimeCore` (the abstract base) lives on `@internal/framework-components/runtime` (core layer) and is extended directly by family runtimes (`@internal/sql-runtime`, `@internal/mongo-runtime`). See [ADR 204](adrs/ADR%20204%20-%20Single-tier%20runtime.md).
 
 ### Dependency Rules
 
@@ -284,7 +284,7 @@ Lanes consume targets and relational-core helpers to produce AST plans. Packages
 
 ### Runtime Layer
 
-Per-family runtime implementations that extend the abstract `RuntimeCore` from `@internal/framework-components/runtime` (core layer). There is no separate target-agnostic runtime package; the kernel collapsed into `framework-components` per [ADR 204](../adrs/ADR%20204%20-%20Single-tier%20runtime.md).
+Per-family runtime implementations that extend the abstract `RuntimeCore` from `@internal/framework-components/runtime` (core layer). There is no separate target-agnostic runtime package; the kernel collapsed into `framework-components` per [ADR 204](adrs/ADR%20204%20-%20Single-tier%20runtime.md).
 
 **SQL Domain (Runtime Plane):**
 - `packages/2-sql-family/5-runtime/` → `@internal/sql-runtime` – SQL family runtime that extends `RuntimeCore` from `@internal/framework-components/runtime` with SQL adapters (future document runtimes will mirror this)
@@ -292,7 +292,7 @@ Per-family runtime implementations that extend the abstract `RuntimeCore` from `
 **Mongo Domain (Runtime Plane):**
 - `packages/2-mongo-family/7-runtime/` → `@internal/mongo-runtime` – Mongo family runtime that extends `RuntimeCore` from `@internal/framework-components/runtime` with the Mongo adapter
 
-**Dependency Rules:** Family runtimes import the runtime SPI (`RuntimeCore`, `RuntimeMiddleware`, `RuntimeExecutor`, `runWithMiddleware`) from `@internal/framework-components/runtime` (core layer) and may also import from their family's lanes, transport, and adapter packages. There is no separate target-agnostic runtime package; per [ADR 204](../adrs/ADR%20204%20-%20Single-tier%20runtime.md), the runtime kernel collapsed into `@internal/framework-components` and family runtimes extend it directly.
+**Dependency Rules:** Family runtimes import the runtime SPI (`RuntimeCore`, `RuntimeMiddleware`, `RuntimeExecutor`, `runWithMiddleware`) from `@internal/framework-components/runtime` (core layer) and may also import from their family's lanes, transport, and adapter packages. There is no separate target-agnostic runtime package; per [ADR 204](adrs/ADR%20204%20-%20Single-tier%20runtime.md), the runtime kernel collapsed into `@internal/framework-components` and family runtimes extend it directly.
 
 ### Adapters Layer (Targets Domain, Multi-Plane)
 
@@ -539,5 +539,5 @@ The numbered prefixes ensure:
 
 ## References
 
-- [ADR 140 - Package Layering & Target-Family Namespacing](../adrs/ADR%20140%20-%20Package%20Layering%20&%20Target-Family%20Namespacing.md)
-- [ADR 005 - Thin Core, Fat Targets](../adrs/ADR%20005%20-%20Thin%20Core,%20Fat%20Targets.md)
+- [ADR 140 - Package Layering & Target-Family Namespacing](adrs/ADR%20140%20-%20Package%20Layering%20&%20Target-Family%20Namespacing.md)
+- [ADR 005 - Thin Core, Fat Targets](adrs/ADR%20005%20-%20Thin%20Core%20Fat%20Targets.md)
