@@ -17,6 +17,7 @@ import type { SqlOperationDescriptors } from '@internal/sql-operations';
 import type { SqlSchemaIR, SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import type { SqlControlAdapter } from './control-adapter';
 import type { SqlControlFamilyInstance } from './control-instance';
+import type { SqlOperationsReader } from './migrations/operations-reader';
 import type { SqlSchemaDiffFn } from './migrations/schema-differ';
 import type { SqlMigrationPlanner, SqlMigrationRunner } from './migrations/types';
 
@@ -123,6 +124,8 @@ export interface SqlControlTargetDescriptor<
   readonly accessChangesOf: (
     operations: readonly MigrationPlanOperation[],
   ) => readonly MigrationAccessChange[];
+  /** Reads the operations of an `ops.json` in this target's format, refusing a key the format does not define; every reader of SQL operations goes through it. */
+  readonly readOperations: SqlOperationsReader<TTargetDetails>;
   createPlanner(adapter: SqlControlAdapter<TTargetId>): SqlMigrationPlanner<TTargetDetails>;
   createRunner(family: SqlControlFamilyInstance): SqlMigrationRunner<TTargetDetails>;
 }

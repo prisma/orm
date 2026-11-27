@@ -14,6 +14,7 @@ import { createPostgresMigrationPlanner } from '../core/migrations/planner';
 import type { PostgresPlanTargetDetails } from '../core/migrations/planner-target-details';
 import { postgresContractToSchema } from '../core/migrations/postgres-contract-to-schema';
 import { PostgresSchemaVerifier } from '../core/migrations/postgres-schema-verifier';
+import { readPostgresOperations } from '../core/migrations/read-operations';
 import { createPostgresMigrationRunner } from '../core/migrations/runner';
 import { PostgresContractSerializer } from '../core/postgres-contract-serializer';
 import { inferPostgresPslContract } from '../core/psl-infer/infer-psl-contract';
@@ -46,6 +47,7 @@ function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
     classifySubjectGranularity: postgresDiffSubjectGranularity,
     classifyEntityKind: postgresDiffSubjectEntityKind,
     accessChangesOf: recordedAccessChangesOf,
+    readOperations: readPostgresOperations,
     migrations: {
       createPlanner(adapter: SqlControlAdapter<'postgres'>) {
         return createPostgresMigrationPlanner(adapter);

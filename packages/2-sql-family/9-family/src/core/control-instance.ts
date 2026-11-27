@@ -77,6 +77,7 @@ import {
 import { sqlFamilyError } from './errors';
 import { SqlContractSerializer } from './ir/sql-contract-serializer';
 import { storageNameOfOperation } from './migrations/operation-storage-name';
+import type { SqlOperationsReader } from './migrations/operations-reader';
 import type { SqlSchemaDiffFn } from './migrations/schema-differ';
 import type {
   SqlControlAdapterDescriptor,
@@ -623,6 +624,19 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     },
     'the stack target is this SQL target descriptor, whose accessChangesOf a construction-only stub may omit'
   >(target).accessChangesOf;
+  // Read lazily, like `accessChangesOf`: construction-only stub descriptors omit it.
+  const targetReadOperations = blindCast<
+    { readonly readOperations?: SqlOperationsReader<unknown> },
+    'the stack target is this SQL target descriptor, whose readOperations a construction-only stub may omit'
+  >(target).readOperations;
+  const readOperations = (
+    operations: readonly MigrationPlanOperation[],
+  ): readonly MigrationPlanOperation[] => {
+    if (targetReadOperations === undefined) {
+      throw missingDescriptorOperationError(target.targetId, 'readOperations');
+    }
+    return targetReadOperations(operations);
+  };
   // `contract infer` needs each extension pack's already-assembled contract,
   // carried as-is (no merging — that is the contract-spaces machinery's
   // concern), paired with the `spaceId` its descriptor was registered under
@@ -1074,10 +1088,11 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     },
 
     toOperationPreview(operations: readonly MigrationPlanOperation[]): OperationPreview {
-      return sqlOperationsToPreview(operations);
+      return sqlOperationsToPreview(readOperations(operations));
     },
 
     storageNameOf(operation: MigrationPlanOperation): string {
+      readOperations([operation]);
       return storageNameOfOperation(operation);
     },
 
@@ -1087,7 +1102,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       if (targetAccessChangesOf === undefined) {
         throw missingDescriptorOperationError(target.targetId, 'accessChangesOf');
       }
-      return targetAccessChangesOf(operations);
+      return targetAccessChangesOf(readOperations(operations));
     },
 
     toSchemaView(schema: SqlSchemaIRNode): CoreSchemaView {

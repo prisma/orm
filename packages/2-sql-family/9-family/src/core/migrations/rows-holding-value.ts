@@ -11,17 +11,19 @@ import { type } from 'arktype';
 import { marksOfMigration } from './required-column';
 import type { SqlMigrationPlanOperationStep } from './types';
 
-const RowsHoldingValueMeta = type({
-  rowsHoldingValue: {
-    enumValue: { 'namespaceId?': 'string', enum: 'string', member: 'string' },
-    value: 'string | number',
-    'codecRef?': { codecId: 'string', 'typeParams?': 'unknown' },
-    table: 'string',
-    column: 'string',
-    storedValue: 'string | number',
-    'path?': 'string',
-  },
+/** What a step's `meta.rowsHoldingValue` holds in an `ops.json`; a codec's `typeParams` stay open. */
+export const RowsHoldingValueJson = type({
+  '+': 'reject',
+  enumValue: { '+': 'reject', 'namespaceId?': 'string', enum: 'string', member: 'string' },
+  value: 'string | number',
+  'codecRef?': { '+': 'reject', codecId: 'string', 'typeParams?': 'unknown' },
+  table: 'string',
+  column: 'string',
+  storedValue: 'string | number',
+  'path?': 'string',
 });
+
+const RowsHoldingValueMeta = type({ rowsHoldingValue: RowsHoldingValueJson });
 
 /**
  * The enum value a removal check guards, with its stored value as the contract stores it and the

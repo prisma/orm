@@ -77,6 +77,12 @@ export {
   subjectsOfCalls,
   unknownCallNames,
 } from '../core/migrations/operation-subjects';
+export type {
+  SqlOperationsFormat,
+  SqlOperationsReader,
+  SqlOperationsSource,
+} from '../core/migrations/operations-reader';
+export { createSqlOperationsReader } from '../core/migrations/operations-reader';
 export {
   createMigrationPlan,
   plannerFailure,
