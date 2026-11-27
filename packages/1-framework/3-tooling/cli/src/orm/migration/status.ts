@@ -32,6 +32,8 @@ import {
   buildReadAggregate,
   loadContractRawSafely,
   mapIntegrityViolations,
+  unreadableFiles,
+  unreadableRefNamed,
 } from '../../control-api/operations/contract-space-aggregate-loader';
 import { hasMigrationPath } from '../../control-api/operations/graph-queries';
 import {
@@ -214,10 +216,15 @@ export function buildNoPathSummary(args: {
   readonly origin: StatusOrigin;
   readonly targetHash: string;
   readonly target: StatusTarget;
+  /** Whether a migration of the space could not be read: the path may be in it, so no migration is advised. */
+  readonly migrationsLeftOut?: boolean;
 }): string {
   const markerPart = describeOrigin(args.origin);
   const targetShort = shortDisplayHash(args.targetHash);
   const { target } = args;
+  if (args.migrationsLeftOut === true) {
+    return `No migration path from ${markerPart} to ${shortDisplayHash(args.targetHash)} among the migrations that could be read. A migration that could not be read may hold the path, so repair it first, as its warning says.`;
+  }
   if (target.kind === 'extension') {
     return `No migration path from ${markerPart} to the head of extension space \`${target.spaceId}\` (${targetShort}).`;
   }
@@ -442,6 +449,15 @@ export const migrationStatusCommand = defineOrmCommand({
     const invocation = cliInvocation(ctx, undefined);
     const refContext = { graph: appGraph, refs, contractHash };
 
+    for (const name of [liveTarget ? undefined : to, liveOrigin ? undefined : from]) {
+      if (name === undefined) continue;
+      const unreadable = unreadableRefNamed(aggregate, aggregate.app.spaceId, name);
+      if (unreadable !== undefined) {
+        const refusal = mapIntegrityViolations([unreadable], migrationsDir);
+        if (refusal !== null) return notOk(normalizeError(refusal));
+      }
+    }
+
     let toRef: ContractRef | undefined;
     if (to !== undefined && !liveTarget) {
       const resolved = resolveContractRef(to, refContext);
@@ -516,13 +532,7 @@ export const migrationStatusCommand = defineOrmCommand({
       [];
     const emptySpaces: string[] = [];
     let divergedMarker: { readonly space: string; readonly markerHash: string } | undefined;
-    let noPath:
-      | {
-          readonly origin: StatusOrigin;
-          readonly targetHash: string;
-          readonly target: StatusTarget;
-        }
-      | undefined;
+    let noPath: Parameters<typeof buildNoPathSummary>[0] | undefined | undefined;
     let firstPlan: PrintedPlan | undefined;
     let headlineTargetHash = activeRefHash ?? contractHash;
     let totalPending = 0;
@@ -604,6 +614,9 @@ export const migrationStatusCommand = defineOrmCommand({
         noPath = {
           origin,
           targetHash,
+          migrationsLeftOut: unreadableFiles(aggregate).some(
+            (file) => file.kind === 'packageUnloadable' && file.spaceId === entry.space,
+          ),
           target: isAppSpace
             ? {
                 kind: 'app',

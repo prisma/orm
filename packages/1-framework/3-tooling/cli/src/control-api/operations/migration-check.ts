@@ -50,6 +50,7 @@ import {
 import { resolveContractPath } from '../../utils/command-helpers';
 import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { toDeclaredExtensionsFromRaw } from '../../utils/extension-pack-inputs';
+import { integrityViolationToCheckFailure } from '../../utils/integrity-violation-to-check-failure';
 import {
   findPackageByDirPath,
   looksLikePath,
@@ -249,6 +250,11 @@ export interface CheckSpace {
   readonly headHash: string | undefined;
   /** The migrations of this space whose `migration.json` could not be read, with why. */
   readonly unreadableMigrations: readonly { readonly dirName: string; readonly detail: string }[];
+  /** The refs of this space whose file could not be read, with why. */
+  readonly unreadableRefs: readonly Extract<
+    IntegrityViolation,
+    { readonly kind: 'refUnreadable' }
+  >[];
 }
 
 /** The inputs of {@link enumerateCheckSpaces}. */
@@ -276,8 +282,12 @@ export async function enumerateCheckSpaces(
   const { aggregate, projectMigrationsDir, cwd, verifySnapshotContent, deserializeContract } =
     inputs;
   const candidateDirs = await listContractSpaceDirectories(projectMigrationsDir);
-  const unloadable = unreadableFiles(aggregate).flatMap((file) =>
+  const unreadable = unreadableFiles(aggregate);
+  const unloadable = unreadable.flatMap((file) =>
     file.kind === 'packageUnloadable' ? [file] : [],
+  );
+  const unreadableRefs = unreadable.flatMap((file) =>
+    file.kind === 'refUnreadable' ? [file] : [],
   );
   const onDiskSpaceIds = new Set(candidateDirs.filter(isValidSpaceId));
   const spaces: CheckSpace[] = [];
@@ -301,6 +311,7 @@ export async function enumerateCheckSpaces(
       unreadableMigrations: unloadable
         .filter((violation) => violation.spaceId === spaceId)
         .map(({ dirName, detail }) => ({ dirName, detail })),
+      unreadableRefs: unreadableRefs.filter((violation) => violation.spaceId === spaceId),
     });
   }
   return spaces;
@@ -509,6 +520,19 @@ function unreadableMigrationNamed(
   return undefined;
 }
 
+function unreadableRefNamedIn(
+  target: string,
+  spaces: readonly CheckSpace[],
+): CheckFailure | undefined {
+  for (const space of spaces) {
+    const found = space.unreadableRefs.find((violation) => violation.refName === target);
+    if (found !== undefined) {
+      return integrityViolationToCheckFailure(found, space.projectMigrationsDir, space.cwd);
+    }
+  }
+  return undefined;
+}
+
 export interface MigrationCheckOutcome {
   readonly result?: MigrationCheckResult;
   readonly error?: CliStructuredError;
@@ -579,7 +603,8 @@ export async function checkSingleTarget(
   const scopedSpaces =
     spaceFilter !== undefined ? spaces.filter((s) => s.spaceId === spaceFilter) : spaces;
 
-  const unreadable = unreadableMigrationNamed(target, scopedSpaces);
+  const unreadable =
+    unreadableMigrationNamed(target, scopedSpaces) ?? unreadableRefNamedIn(target, scopedSpaces);
   if (unreadable !== undefined) {
     return {
       result: { ok: false, failures: [unreadable], summary: '1 integrity failure(s)' },

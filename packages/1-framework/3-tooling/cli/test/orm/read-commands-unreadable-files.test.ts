@@ -239,3 +239,67 @@ describe('a command that acts on the migrations meets a migration.json it cannot
     });
   });
 });
+
+describe('a command that resolves a ref it could not read says so, instead of calling it unknown', () => {
+  async function projectWithUnreadableProductionRef() {
+    const project = await projectWithTwoMigrations();
+    await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_HEAD });
+    await writeFile(
+      join(project.appMigrationsDir, 'refs', 'production.json'),
+      JSON.stringify({ formatVersion: 1, hash: HASH_BASE, invariants: [], zzz: 1 }),
+      'utf-8',
+    );
+    return project;
+  }
+
+  it.each([['--to'], ['--from']])(
+    'migration status %s production refuses with the file and the reason',
+    async (flag) => {
+      const project = await projectWithUnreadableProductionRef();
+
+      const run = await harness(
+        driverConfig(project, fakeDatabase({ markers: markersAt(HASH_HEAD) })),
+      ).run(['migration', 'status', flag, 'production', '--json'], { cwd: project.dir });
+
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        kind: 'result',
+        envelope: {
+          ok: false,
+          error: {
+            code: 'MIGRATION.INVALID_REF_FILE',
+            why: expect.stringMatching(/refs\/production\.json.*zzz/),
+          },
+        },
+      });
+    },
+  );
+
+  it('migration check production reports the ref it could not read', async () => {
+    const project = await projectWithUnreadableProductionRef();
+
+    const run = await harness(offlineConfig({ project })).run(
+      ['migration', 'check', 'production', '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(run.exitCode).toBe(4);
+    expect(run.presented?.diagnostics).toEqual([
+      expect.objectContaining({ code: 'MIGRATION.CHECK_REF_UNREADABLE' }),
+    ]);
+  });
+});
+
+describe('migration status with a migration it could not read', () => {
+  it('does not advise authoring a path that the unread migration may hold', async () => {
+    const project = await projectWithUnreadableHead();
+
+    const run = await harness(
+      driverConfig(project, fakeDatabase({ markers: markersAt(HASH_BASE) })),
+    ).run(['migration', 'status', '--json'], { cwd: project.dir });
+
+    const summary = String((run.presented?.data as { summary?: unknown } | undefined)?.summary);
+    expect(summary).not.toContain('to author');
+    expect(summary).toContain('could not be read');
+  });
+});

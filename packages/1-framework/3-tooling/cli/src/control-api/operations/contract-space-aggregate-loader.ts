@@ -245,6 +245,17 @@ export function unreadableFiles(aggregate: ContractSpaceAggregate): readonly Unr
     );
 }
 
+/** The unreadable ref of `spaceId` that `name` names, when there is one: a command that resolves the name refuses with it, never calling the ref unknown. */
+export function unreadableRefNamed(
+  aggregate: ContractSpaceAggregate,
+  spaceId: string,
+  name: string,
+): UnreadableFile | undefined {
+  return unreadableFiles(aggregate).find(
+    (file) => file.kind === 'refUnreadable' && file.spaceId === spaceId && file.refName === name,
+  );
+}
+
 /**
  * Inputs needed to compose the aggregate loader at the CLI surface.
  *
@@ -341,11 +352,7 @@ const PACKAGE_CORRUPTION_KINDS = new Set<IntegrityViolation['kind']>([
   'packageUnloadable',
 ]);
 
-/**
- * Reader-subset integrity refusal for `migration status`: package
- * corruptions only (`hashMismatch`, `providedInvariantsMismatch`,
- * `packageUnloadable`).
- */
+/** Refuses a migration package whose files are corrupt (`hashMismatch`, `providedInvariantsMismatch`, `packageUnloadable`), for a command such as `migration new` that reads the graph but not the contracts of extension spaces. */
 export function refusePackageCorruptionOnAggregate(
   aggregate: ContractSpaceAggregate,
   migrationsDir: string,
