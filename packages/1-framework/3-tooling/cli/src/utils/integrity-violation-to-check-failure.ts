@@ -5,14 +5,6 @@ import { chooseAction, migrationPackageRepairActions, runCommandAction } from '.
 
 export type { CheckFailure } from '../commands/json/schemas';
 
-function migrationPathRelative(dirPath: string): string {
-  return relative(process.cwd(), dirPath);
-}
-
-function migrationFileRelative(dirPath: string, fileName: string): string {
-  return join(migrationPathRelative(dirPath), fileName);
-}
-
 /**
  * Map one {@link IntegrityViolation} onto a `migration check` failure row.
  * Sole catalogue mapping from integrity violations to `MIGRATION.CHECK_*` codes.
@@ -20,7 +12,17 @@ function migrationFileRelative(dirPath: string, fileName: string): string {
 export function integrityViolationToCheckFailure(
   violation: IntegrityViolation,
   migrationsDir: string,
+  cwd: string,
 ): CheckFailure {
+  const migrationPathRelative = (dirPath: string): string => relative(cwd, dirPath);
+  const migrationFileRelative = (dirPath: string, fileName: string): string =>
+    join(migrationPathRelative(dirPath), fileName);
+  const repairActions = (spaceId: string, dirName: string) =>
+    migrationPackageRepairActions({
+      spaceId,
+      packageDir: join(migrationsDir, spaceId, dirName),
+      cwd,
+    });
   const spaceRelative = (spaceId: string): string =>
     migrationPathRelative(join(migrationsDir, spaceId));
   const packageRelative = (spaceId: string, dirName: string): string =>
@@ -38,9 +40,7 @@ export function integrityViolationToCheckFailure(
           'migration.json',
         ),
         why: `Stored hash ${violation.stored} does not match recomputed hash ${violation.computed}`,
-        nextActions: migrationPackageRepairActions(
-          join(migrationsDir, violation.spaceId, violation.dirName),
-        ),
+        nextActions: repairActions(violation.spaceId, violation.dirName),
       };
     case 'providedInvariantsMismatch':
       return {
@@ -48,9 +48,7 @@ export function integrityViolationToCheckFailure(
         code: 'MIGRATION.CHECK_PROVIDED_INVARIANTS_MISMATCH',
         where: packageRelative(violation.spaceId, violation.dirName),
         why: `Migration "${violation.dirName}" providedInvariants in migration.json disagrees with ops.json.`,
-        nextActions: migrationPackageRepairActions(
-          join(migrationsDir, violation.spaceId, violation.dirName),
-        ),
+        nextActions: repairActions(violation.spaceId, violation.dirName),
       };
     case 'packageUnloadable':
       return {
@@ -58,9 +56,7 @@ export function integrityViolationToCheckFailure(
         code: 'MIGRATION.CHECK_PACKAGE_UNLOADABLE',
         where: packageRelative(violation.spaceId, violation.dirName),
         why: `Migration "${violation.dirName}" could not be loaded: ${violation.detail}. Until it is read, the checks that follow the migration graph of space "${violation.spaceId}" are not run.`,
-        nextActions: migrationPackageRepairActions(
-          join(migrationsDir, violation.spaceId, violation.dirName),
-        ),
+        nextActions: repairActions(violation.spaceId, violation.dirName),
       };
     case 'sameSourceAndTarget':
       return {
@@ -107,7 +103,10 @@ export function integrityViolationToCheckFailure(
         where: refRelative(violation.spaceId, 'head'),
         why: `Head ref \`refs/head.json\` is missing for contract space "${violation.spaceId}".`,
         nextActions: [
-          chooseAction('Re-emit the contract-space migrations and head ref artefacts'),
+          runCommandAction(
+            "Write the extension's head ref and migrations again from the installed extension",
+            '{bin} contract emit',
+          ),
           chooseAction('Or restore `refs/head.json` from version control'),
         ],
       };
@@ -118,8 +117,11 @@ export function integrityViolationToCheckFailure(
         where: refRelative(violation.spaceId, 'head'),
         why: `Head ref ${violation.hash} for contract space "${violation.spaceId}" is not present in its migration graph.`,
         nextActions: [
-          chooseAction('Re-emit the contract-space migrations'),
-          chooseAction('Or restore the missing migration package'),
+          runCommandAction(
+            "Write the extension's head ref and migrations again from the installed extension",
+            '{bin} contract emit',
+          ),
+          chooseAction('Or restore the missing migration package from version control'),
         ],
       };
     case 'refUnreadable':

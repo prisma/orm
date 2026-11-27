@@ -255,7 +255,7 @@ describe('migration check', () => {
         {
           kind: 'run-command',
           label: 'Or write migration.json and ops.json again from its migration.ts',
-          command: `node "${relative(process.cwd(), join(dir, 'migrations', 'app', '20250102T0000_broken', 'migration.ts'))}"`,
+          command: 'node "migrations/app/20250102T0000_broken/migration.ts"',
         },
       ]);
     });
