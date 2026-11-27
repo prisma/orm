@@ -71,3 +71,9 @@ Seven slices, one pull request each, in this order. PostgreSQL comes first becau
 ## Slice 7. Decide whether PostgreSQL's contract table becomes a documented feature
 
 **Outcome.** A recommendation to the operator, with evidence: who reads the table (Studio does; nothing in this repository), what it costs in a database with many migrations, and what a framework interface and a setting that controls storage would look like. Until then the table stays an undocumented PostgreSQL feature inside the `_prisma` schema.
+
+## A step for the 8.0 rollout: squash the Prisma space's migrations
+
+When Prisma 8 goes from release candidates to 8.0, the migrations of Prisma's own tables that the release candidates shipped are squashed into the fewest migrations possible, so 8.0 users are not given obsolete steps. The stream lead holds the rollout checklist this step belongs to.
+
+The constraint: a release candidate's database records the hash of the last of these migrations it ran. After the squash, 8.0 must still recognise each such hash, and treat it as "run the first migration again", which works because every step of it skips what already holds. Otherwise 8.0 refuses that database. Design this when the step is due.
