@@ -310,47 +310,47 @@
     },
     "precheck": [
       {
-        "description": "ensure table \"_prisma\".\"marker\" has column \"space\" text NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"marker\" has column \"space\" text NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "marker", "space", "text", true]
       },
       {
-        "description": "ensure table \"_prisma\".\"marker\" has column \"core_hash\" text NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"marker\" has column \"core_hash\" text NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "marker", "core_hash", "text", true]
       },
       {
-        "description": "ensure table \"_prisma\".\"marker\" has column \"profile_hash\" text NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"marker\" has column \"profile_hash\" text NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "marker", "profile_hash", "text", true]
       },
       {
-        "description": "ensure table \"_prisma\".\"marker\" has column \"contract_json\" jsonb nullable: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"marker\" has column \"contract_json\" jsonb nullable: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "marker", "contract_json", "jsonb", false]
       },
       {
-        "description": "ensure table \"_prisma\".\"marker\" has column \"canonical_version\" integer nullable: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"marker\" has column \"canonical_version\" integer nullable: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "marker", "canonical_version", "integer", false]
       },
       {
-        "description": "ensure table \"_prisma\".\"marker\" has column \"updated_at\" timestamp with time zone NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"marker\" has column \"updated_at\" timestamp with time zone NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "marker", "updated_at", "timestamp with time zone", true]
       },
       {
-        "description": "ensure table \"_prisma\".\"marker\" has column \"app_tag\" text nullable: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"marker\" has column \"app_tag\" text nullable: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "marker", "app_tag", "text", false]
       },
       {
-        "description": "ensure table \"_prisma\".\"marker\" has column \"meta\" jsonb NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"marker\" has column \"meta\" jsonb NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "marker", "meta", "jsonb", true]
       },
       {
-        "description": "ensure table \"_prisma\".\"marker\" has column \"invariants\" text[] NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"marker\" has column \"invariants\" text[] NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "marker", "invariants", "text[]", true]
       }
@@ -372,52 +372,52 @@
     },
     "precheck": [
       {
-        "description": "ensure table \"_prisma\".\"ledger\" has column \"id\" bigint NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"ledger\" has column \"id\" bigint NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "ledger", "id", "bigint", true]
       },
       {
-        "description": "ensure table \"_prisma\".\"ledger\" has column \"created_at\" timestamp with time zone NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"ledger\" has column \"created_at\" timestamp with time zone NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "ledger", "created_at", "timestamp with time zone", true]
       },
       {
-        "description": "ensure table \"_prisma\".\"ledger\" has column \"space\" text NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"ledger\" has column \"space\" text NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "ledger", "space", "text", true]
       },
       {
-        "description": "ensure table \"_prisma\".\"ledger\" has column \"migration_name\" text NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"ledger\" has column \"migration_name\" text NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "ledger", "migration_name", "text", true]
       },
       {
-        "description": "ensure table \"_prisma\".\"ledger\" has column \"migration_hash\" text NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"ledger\" has column \"migration_hash\" text NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "ledger", "migration_hash", "text", true]
       },
       {
-        "description": "ensure table \"_prisma\".\"ledger\" has column \"origin_core_hash\" text nullable: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"ledger\" has column \"origin_core_hash\" text nullable: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "ledger", "origin_core_hash", "text", false]
       },
       {
-        "description": "ensure table \"_prisma\".\"ledger\" has column \"origin_profile_hash\" text nullable: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"ledger\" has column \"origin_profile_hash\" text nullable: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "ledger", "origin_profile_hash", "text", false]
       },
       {
-        "description": "ensure table \"_prisma\".\"ledger\" has column \"destination_core_hash\" text NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"ledger\" has column \"destination_core_hash\" text NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "ledger", "destination_core_hash", "text", true]
       },
       {
-        "description": "ensure table \"_prisma\".\"ledger\" has column \"destination_profile_hash\" text nullable: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"ledger\" has column \"destination_profile_hash\" text nullable: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "ledger", "destination_profile_hash", "text", false]
       },
       {
-        "description": "ensure table \"_prisma\".\"ledger\" has column \"operations\" jsonb NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"ledger\" has column \"operations\" jsonb NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "ledger", "operations", "jsonb", true]
       }
@@ -439,17 +439,17 @@
     },
     "precheck": [
       {
-        "description": "ensure table \"_prisma\".\"contract\" has column \"core_hash\" text NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"contract\" has column \"core_hash\" text NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "contract", "core_hash", "text", true]
       },
       {
-        "description": "ensure table \"_prisma\".\"contract\" has column \"created_at\" timestamp with time zone NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"contract\" has column \"created_at\" timestamp with time zone NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "contract", "created_at", "timestamp with time zone", true]
       },
       {
-        "description": "ensure table \"_prisma\".\"contract\" has column \"contract_json\" jsonb NOT NULL: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form",
+        "description": "ensure table \"_prisma\".\"contract\" has column \"contract_json\" jsonb NOT NULL: it has no such column, or the column has another type or nullability. This release of Prisma reads and writes this table only in the form it creates, and the table has another form",
         "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
         "params": ["_prisma", "contract", "contract_json", "jsonb", true]
       }

@@ -117,14 +117,20 @@ function nullability(column: ExpectedColumn): string {
   return column.notNull ? 'NOT NULL' : 'nullable';
 }
 
-function checkColumns(table: (typeof tables)[number], schema: string, id: string, origin: string) {
+function checkColumns(
+  table: (typeof tables)[number],
+  schema: string,
+  id: string,
+  origin: string,
+  otherForm: string,
+) {
   return rawSql({
     id,
     label: `Check the columns of table ${qualified(table.name, schema)}`,
     operationClass: 'additive',
     target: { id: 'postgres', details: { schema, objectType: 'table', name: table.name } },
     precheck: table.columns.map((column) => ({
-      description: `ensure table ${qualified(table.name, schema)}${origin} has column "${column.name}" ${column.type} ${nullability(column)}: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form`,
+      description: `ensure table ${qualified(table.name, schema)}${origin} has column "${column.name}" ${column.type} ${nullability(column)}: it has no such column, or the column has another type or nullability. ${otherForm}`,
       sql: absentOrColumnHasForm,
       params: [schema, table.name, column.name, column.type, column.notNull],
     })),
@@ -149,6 +155,7 @@ export default class M extends Migration {
           RELEASE_CANDIDATE_SCHEMA,
           `_prisma.check-release-candidate-columns.${table.name}`,
           ', which the release candidates of Prisma 8 created,',
+          'Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form',
         ),
       ),
       rawSql({
@@ -223,7 +230,13 @@ export default class M extends Migration {
         }),
       ),
       ...tables.map((table) =>
-        checkColumns(table, SCHEMA, `_prisma.check-columns.${table.name}`, ''),
+        checkColumns(
+          table,
+          SCHEMA,
+          `_prisma.check-columns.${table.name}`,
+          '',
+          'This release of Prisma reads and writes this table only in the form it creates, and the table has another form',
+        ),
       ),
     ];
   }
