@@ -1,4 +1,4 @@
-# ADR 337 — Each target has a contract space for Prisma's own tables
+# ADR 339 — Each target has a contract space for Prisma's own tables
 
 **Status:** Proposed
 **Date:** 2026-11-27
@@ -30,7 +30,7 @@ From `8.0.0` the compatibility policy promises that no upgrade within Prisma 8 f
 
 An extension such as pgvector holds a contract and migration folders in its package and carries them on its descriptor in a `contractSpace` field ([ADR 212](ADR%20212%20-%20Contract%20spaces.md)). A target package does the same for Prisma's own tables, with the same `contractSpace` field on the target's control descriptor. The contract is emitted and the migrations are written with the same commands and in the same file formats. One thing differs in the layout: the config used to emit them sits in the target's adapter package, because a config names an adapter and the adapter depends on the target.
 
-The space's name is `_prisma` on every target. The framework holds that name as a constant, with one function that answers "is this the Prisma space", and everything that treats the space differently asks that function. No extension or application can take the name: a space the user's repository declares must have a name that is a valid folder name, which begins with a letter.
+The space's name is `_prisma` on every target. The framework holds that name as a constant, with one function that answers "is this the Prisma space", and everything that treats the space differently asks that function. No extension or application can declare a space of that name: the code that builds the list of spaces refuses any name that is not a valid folder name, which begins with a letter. That check is what refuses it today; nothing about the space depends on it, since the space never comes from the user's repository. A user's contract declaring a PostgreSQL namespace named `_prisma` is not yet refused.
 
 Each target has its own contract and migrations, in its own database's terms. The framework has no say in what a target stores or what it calls it, because the target also writes the queries against it.
 
@@ -52,13 +52,13 @@ Three things differ from an extension's space:
 - **It is applied before anything is read.** Every command reads the rows of all spaces and the policies before the runner starts, and plans from what it read. A migration of these tables that ran inside the same runner call would move the rows after the plans were made.
 - **It is not part of the list of spaces built from the repository.** So no command lists it and no folder under `migrations/` is written for it. The checks for rows of undeclared spaces count it as declared. `migration log` does not show its ledger rows; a user can read them in the table.
 
-The phase is run by the control client, the programmatic interface the commands are built on, so a program that uses the client gets it too. Code that reaches the runner or the sign path without the client does not. On PostgreSQL such a caller is refused before anything runs, with `MIGRATION.PRISMA_TABLES_MISSING`, when the tables do not exist.
+The phase is run by the control client, the programmatic interface the commands are built on, so a program that uses the client gets it too. Code that reaches the runner or the sign path without the client does not, so a program that does that calls `bringPrismaSpaceUpToDate` on the client first. On PostgreSQL such a caller is refused before anything runs when the tables are not up to date: with `MIGRATION.PRISMA_TABLES_MISSING` when they do not exist, and with `CONTRACT.PRISMA_SPACE_BEHIND` when they are still in a release candidate's schema.
 
 ### The phase commits before the command's own checks
 
 The phase is its own transaction and commits before the command reads the policies, loads the user's migrations, or asks the user anything. It has to: on a release-candidate database the policies are in the tables the phase renames.
 
-So a command that is then refused or cancelled has still brought Prisma's own tables up to date. `db update` on a database whose change policy forbids it renames the schema and then refuses. This is the one thing a refused command changes, and [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) says so. The policies govern how the user's schema may change; the phase touches only Prisma's own tables, only adds within a major, and leaves the database in the form the installed release needs whatever the command then does.
+So a command that is then refused, cancelled, or fails for any other reason (a migration folder it cannot read, for example) has still brought Prisma's own tables up to date. `db update` on a database whose change policy forbids it renames the schema and then refuses. This is the one thing a refused command changes, and [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) says so. The policies govern how the user's schema may change; the phase touches only Prisma's own tables, only adds within a major, and leaves the database in the form the installed release needs whatever the command then does.
 
 If the user's migration fails after the phase, Prisma's own tables stay up to date.
 
@@ -88,7 +88,7 @@ Every database from `8.0.0` on says which form its tables are in. A database set
 On PostgreSQL the first migration:
 
 1. Checks the release candidate's tables, where they exist, for the expected columns. A database from before the release candidates can have these tables in an older form; the command then stops and names the table. Those forms are not migrated.
-2. Renames the schema `prisma_contract` to `_prisma` ([ADR 336](ADR%20336%20-%20Names%20Prisma%20puts%20in%20a%20database%20or%20a%20query%20begin%20with%20_prisma.md)). `ALTER SCHEMA … RENAME` changes only the catalogue, so it is instant at any size.
+2. Renames the schema `prisma_contract` to `_prisma` ([ADR 338](ADR%20338%20-%20Names%20Prisma%20puts%20in%20a%20database%20or%20a%20query%20begin%20with%20_prisma.md)). `ALTER SCHEMA … RENAME` changes only the catalogue, so it is instant at any size.
 3. Creates the schema and each table that is missing, and checks the result.
 
 Two more cases stop it without changing anything. PostgreSQL lets only a role with the privileges of a schema's owner, and `CREATE` on the database, rename a schema, so a migrating role that has only grants on `prisma_contract` is told how to find the owner and give the migrating role ownership. And a database that has both schemas is not guessed at.
@@ -114,7 +114,8 @@ PostgreSQL follows this record. SQLite, MySQL, MariaDB and MongoDB still create 
 - A target author ships a contract and migrations for these tables, as an extension author does for theirs.
 - On PostgreSQL the tables are described in four places: the contract, the statements that create them, the columns the first migration checks, and the table definitions the adapter reads and writes through. Tests keep them in agreement. With an emitted contract a target can query its own tables through a client typed from it, which would remove the last of these; that is not done yet.
 - This is a stated exception to [ADR 212](ADR%20212%20-%20Contract%20spaces.md), which says everything needed to apply and verify a database is in the user's repository. For this one space it is in the installed target package.
-- A refused or cancelled command is no longer guaranteed to change nothing: it may have brought Prisma's own tables up to date.
+- A refused, cancelled or failed command is no longer guaranteed to change nothing: it may have brought Prisma's own tables up to date.
+- `CONTRACT.PRISMA_SPACE_BEHIND` is raised by every command that only reads, and is also a finding of `db verify`, where findings exit with code 4 as the other drift findings do. Its payload says which of the three situations it is: a release candidate's schema, a missing row for the space, or a row at an older contract of the space.
 
 ## Alternatives considered
 

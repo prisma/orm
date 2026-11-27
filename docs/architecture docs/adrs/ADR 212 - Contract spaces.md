@@ -10,7 +10,7 @@ This ADR's worked example is CipherStash as it was on version 2 of its Encrypt Q
 
 ## At a glance
 
-A Prisma Next application's database is the integration point for many parties: the application itself, plus every schema-contributing extension installed in `prisma.config.ts`. This ADR makes each of those parties a **contract space** — a disjoint `(contract.json, migration-graph, head-ref)` tuple — and runs the same per-space planner, runner, and verifier across all of them. The user's repo holds a pinned mirror of every space the application and its extensions own, so apply-time and verify-time flows never need to read an extension package from `node_modules`. One space is the exception: the Prisma space, `_prisma`, holds the tables Prisma keeps for itself, is carried by the target package, and is read from the installed package and applied before anything else is read ([ADR 337](ADR%20337%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)).
+A Prisma Next application's database is the integration point for many parties: the application itself, plus every schema-contributing extension installed in `prisma.config.ts`. This ADR makes each of those parties a **contract space** — a disjoint `(contract.json, migration-graph, head-ref)` tuple — and runs the same per-space planner, runner, and verifier across all of them. The user's repo holds a pinned mirror of every space the application and its extensions own, so apply-time and verify-time flows never need to read an extension package from `node_modules`. One space is the exception: the Prisma space, `_prisma`, holds the tables Prisma keeps for itself, is carried by the target package, and is read from the installed package and applied before anything else is read ([ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)).
 
 ```mermaid
 flowchart TB
@@ -193,7 +193,7 @@ App-space's current `contract.json` continues to live at the project root (today
 
 The framework owns the pinned files: every `migrate` invocation overwrites them from each loaded extension's descriptor `contractSpace` values, alongside materialising any new migration directories. The user reviews the resulting diff in their PR.
 
-Space identifiers are constrained to `[a-z][a-z0-9_-]{0,63}` (filesystem-safe and round-trippable through path manipulation). The Prisma space's name, `_prisma`, is outside that pattern and never names a folder: it is not in the user's repository ([ADR 337](ADR%20337%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)).
+Space identifiers are constrained to `[a-z][a-z0-9_-]{0,63}` (filesystem-safe and round-trippable through path manipulation). The Prisma space's name, `_prisma`, is outside that pattern and never names a folder: it is not in the user's repository ([ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)).
 
 ### Marker schema gains a `space` column
 
@@ -232,7 +232,7 @@ The runner's `execute({ driver, perSpaceOptions })` takes every space's plan in 
 
 Either way the failure's payload names the space that failed (`failingSpace`) and says whether the database changed (`databaseUnchanged`). The CLI's `why` names the space when it is not the application's own.
 
-**Cross-space ordering**: extension spaces alphabetical-by-spaceId first, app-space last. The Prisma space is not in this order: it is brought up to date in a phase of its own before the command reads any row ([ADR 337](ADR%20337%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)). The convention is sufficient for v1 (a formal cross-space dependency graph is deferred), and matches the implicit dependency direction — application schema may reference extension-provided types (`Encrypted<String>` → `eql_v2_encrypted`), so extension types must exist before the app's `CREATE TABLE` runs.
+**Cross-space ordering**: extension spaces alphabetical-by-spaceId first, app-space last. The Prisma space is not in this order: it is brought up to date in a phase of its own before the command reads any row ([ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)). The convention is sufficient for v1 (a formal cross-space dependency graph is deferred), and matches the implicit dependency direction — application schema may reference extension-provided types (`Encrypted<String>` → `eql_v2_encrypted`), so extension types must exist before the app's `CREATE TABLE` runs.
 
 ### Disjoint per-space ownership: schema-prune
 

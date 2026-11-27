@@ -10,7 +10,7 @@ Part of [the plan](../../plan.md). Read [design.md](../../design.md) sections 1 
 4. **A database from before the release candidates stops with a clear error.** When an existing table lacks expected columns, the command stops, names the table, and points at the upgrade instructions. Nothing is changed.
 5. **Running a command again changes nothing.** When the `_prisma` row is at the newest contract in the installed package, the phase reads one row and stops.
 6. **Commands that only read say what to run.** `db verify`, `migration status`, `migration log`, a dry run and the client's check on first use, pointed at a database that still has `prisma_contract` and no `_prisma`, say that Prisma's own tables were written by an earlier release and name `prisma db migrate`. They do not report an unsigned database.
-7. **The user does not see the space unless they ask.** No command lists it among the spaces. `db init`, `db update` and `db verify` do not treat its row as the row of an undeclared space. `migration log` leaves its rows out by default.
+7. **The user does not see the space.** No command lists it among the spaces. `db init`, `db update` and `db verify` do not treat its row as the row of an undeclared space. `migration log` leaves its rows out. A user can read the tables.
 8. **The `CREATE … IF NOT EXISTS` route is gone on PostgreSQL.** The runner's `ensureControlTables` and `db sign`'s separate creation of the marker table no longer run for PostgreSQL. SQLite, MySQL, MariaDB and MongoDB behave exactly as before; they keep their route until their own slice.
 
 ## The first migration

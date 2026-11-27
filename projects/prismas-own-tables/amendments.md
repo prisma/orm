@@ -74,3 +74,14 @@ The design says the space's row records the hash of its contract and that within
 - A user's contract may declare a namespace named `_prisma`; nothing refuses it yet.
 - A test that pins the space's hashes, once the one-time hash change has merged and the files have been emitted for the last time.
 - A client typed from the space's contract for the adapter's own reads and writes, which would remove the hand-written table definitions.
+
+## 9. Found by the second review
+
+- **Decision records renumbered** to 338 (names begin `_prisma`) and 339 (the Prisma space), because `main` took 336 and an open pull request takes 337.
+- **A row at a known contract carrying a later major's invariant** must stop too, not only a row at an unknown contract. Being fixed.
+- **Commands that fail for reasons other than a policy** (a migration folder that cannot be read) have also already run the phase. The decision record says so.
+- **`db verify --schema-only` on a release candidate's database** reports that the records are behind, as every reading command does. Intended: the command cannot read the rows it would verify against.
+- **No `--json` field says the phase applied something.** The command-line output formats are being designed in their own project; a field can be added there, since adding a field does not break a reader.
+- **The general shape of `applyInstalledContractSpace`** stays: it takes the space id and descriptor and contains nothing PostgreSQL- or `_prisma`-specific, so a second target uses it unchanged.
+- **Two commands starting together** are tested with a fake runner only. A test against a real database would need two processes racing for a lock and could not fail reliably; the retry is a pure function of the runner's typed failure, which the unit test covers.
+- **Further framework changes beyond section 1,** all agreed in this round: `errorPrismaSpaceBehind` and the export of the upgrade instructions' address in the core errors package; the exports for classifying the row and `errorInstalledSpaceUnreachable` with its `reason`; the listener the four client methods take for the one line of output; and those methods returning the phase's failure in their existing result shape.

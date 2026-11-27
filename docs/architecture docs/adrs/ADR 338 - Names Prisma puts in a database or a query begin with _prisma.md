@@ -1,4 +1,4 @@
-# ADR 336 — Names Prisma puts in a database or a query begin with `_prisma`
+# ADR 338 — Names Prisma puts in a database or a query begin with `_prisma`
 
 **Status:** Proposed
 **Date:** 2026-11-26
@@ -24,7 +24,7 @@ Anything a target stores in a user's database for Prisma, and any name Prisma in
 
 The underscore means "do not edit". It does not mean "do not look": the record of which contract a database was signed with is worth a user's reading.
 
-A target chooses its own names under this rule, because the target also writes the queries against them. The framework fixes one name only, the contract space for Prisma's own tables, which is `_prisma` on every target ([ADR 337](ADR%20337%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)).
+A target chooses its own names under this rule, because the target also writes the queries against them. The framework fixes one name only, the contract space for Prisma's own tables, which is `_prisma` on every target ([ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)).
 
 Lock names are outside the rule. `prisma_8.contract.marker` on PostgreSQL and `prisma_marker_<hash>` on MySQL are not objects in a namespace the user shares, and an earlier release that is still running during a deploy must take the same lock.
 
@@ -40,7 +40,7 @@ Before this decision each name was chosen where it was written. A search of the 
 
 | Where | Names before | Prefix before | After |
 | --- | --- | --- | --- |
-| PostgreSQL schema | `prisma_contract` | none | `_prisma`, renamed automatically ([ADR 337](ADR%20337%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)) |
+| PostgreSQL schema | `prisma_contract` | none | `_prisma`, renamed automatically ([ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)) |
 | SQLite and MySQL tables | `_prisma_marker`, `_prisma_ledger` | one underscore | already follow the rule |
 | MongoDB collection | `_prisma_migrations` | one underscore | already follows the rule |
 | Temporary names while a migration swaps enum values or storage names | `prisma_swap`, `prisma_swap_<name>` | none | `_prisma_swap…`; nothing is stored, so nothing is migrated |
