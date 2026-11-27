@@ -1,6 +1,6 @@
 # ADR 010 — Canonicalization Rules for contract.json
 
-**Revised:** 2026-07-23 — hashes are represented as bare lowercase hex; the former `sha256:` algorithm prefix was dropped before the RC format freeze (TML-2756). The prefix carried no information — the algorithm never varies per hash — and a change to the hashing rules is signalled by re-emit, not by an in-band marker, the same no-in-band-version reasoning [ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md) records. Examples below use the bare form.
+**Revised:** 2026-07-23 — hashes are represented as bare lowercase hex; the former `sha256:` algorithm prefix was dropped before the RC format freeze (TML-2756). The prefix carried no information — the algorithm never varies per hash — and nothing in the hash names the rules that produced it, the same no-in-band-version reasoning [ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md) records. Examples below use the bare form.
 
 Hashes cover only `targetFamily`, `target` and their own section, and the rules that compute them do not change within a major version: see [ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md).
 
@@ -26,21 +26,15 @@ This project adopts a pragmatic subset inspired by RFC 8785 with additional doma
 
 ### Encoding
 
+The hash input and the written file have the same form: the key-sorted JSON, printed by `JSON.stringify` with a two-space indent.
+
 - UTF-8 without BOM
 - Newlines are `\n`
 - No trailing newline at EOF
-- Objects serialized with deterministic key order
-- Numbers encoded with minimal decimal form, no `+`, no leading zeros, no trailing `.0` unless required, and no scientific notation unless necessary to preserve value
-- Booleans as `true` or `false` and `null` as `null`
-- Strings escaped per JSON spec with `\uXXXX` for control chars
+- Two-space indentation, one space after each `:`, as `JSON.stringify(value, null, 2)` prints it
+- Numbers, booleans, `null` and string escapes as `JSON.stringify` prints them
 
-### Whitespace
-
-- No insignificant whitespace other than that required by JSON separators
-- Exactly one `:` after keys and no space
-- Keys separated by `,` with no spaces
-
-**Example:** `{"a":1,"b":[true,"x"]}`
+The indentation is part of the rule: the same JSON printed without it has a different hash.
 
 ### Object key ordering
 
@@ -56,16 +50,16 @@ This project adopts a pragmatic subset inspired by RFC 8785 with additional doma
 ### Arrays
 
 - Arrays are preserved in the order that is semantically meaningful
-- Where order is not semantically meaningful, arrays are canonically sorted
+- Every array keeps the order it is given in, except the lists named below
 - Column lists in composite keys retain declared order
-- Lists whose order means nothing to the database are ordered by the family, in its normal form: the SQL family orders a table's checks, foreign keys, indexes and unique constraints by name, and an entry without a name by its content; the MongoDB family orders a collection's indexes by name. Reordering them in the contract source changes no hash
+- Lists whose order means nothing to the database are ordered by the family, in its normal form: the SQL family orders a table's checks, foreign keys, indexes and unique constraints by name, and an entry without a name by its content; the MongoDB family orders a collection's indexes by name, and indexes with the same name by their content. Reordering them in the contract source changes no hash
 - Model and table registries are represented as objects, not arrays, to avoid order-dependence
 
 ### Optional and default fields
 
 The framework's canonicalizer leaves out nothing. It sorts keys and encodes what it is given; it does not know what any field means, so it never decides that a `false`, an empty array or an empty object is a default.
 
-Each family owns the normal form of its own content, and gives it to the framework through one function (`normalizeStorage`) that the framework applies both when it writes `storage` and when it hashes it. A value is therefore in the hash input exactly when it is in the written section.
+Each family owns the normal form of its own content, and gives it to the framework through one function (`normalizeStorage`) that the framework applies both when it writes `storage` and when it hashes it. A value is therefore in the hash input exactly when it is in the written section, except a namespace's `kind`, which is written and which the storage hash leaves out (ADR 332).
 
 - A family leaves out a field only where the family itself defines the absent field and the value to mean the same, and it names each such field. For example, the SQL family leaves out a column's `many: false` and a foreign key's `onDelete: "noAction"`; the MongoDB family leaves out an index's `unique: false`.
 - Nothing is left out because of the shape of its value. Data a family does not own is kept exactly as given: a type's parameters, an index's options, a MongoDB partial filter expression, a generator's parameters, the members of a value set, and every field of an entry an extension pack defines.
@@ -85,7 +79,7 @@ An earlier rule had the framework drop every `false`, `[]` and `{}` unless a pat
 
 ### Target extensions
 
-- Capability requirement keys live under `capabilities.<key>` and storage extensions under `storage.extensions.<target>`
+- Capability requirement keys live under `capabilities.<key>`
 - Use shared `capabilities.sql.*` keys for family-wide SQL features, and use target brand keys only for target-specific capabilities
 - Keys within extensions follow the same lexicographic ordering
 - Fields that do not alter logical meaning are included in profileHash only per ADR 004
@@ -99,44 +93,47 @@ An earlier rule had the framework drop every `false`, `[]` and `{}` unless a pat
 
 ### Hashing
 
-- `storageHash` is computed over canonical JSON for storage meaning (profile-only fields stripped)
+- `storageHash` is computed over `targetFamily`, `target` and `storage` in the family's normal form, with keys sorted
 - `executionHash` is emitted only when execution-plane defaults are present in the emitted contract artifact
-- `profileHash` is computed over canonical JSON including profile fields
+- `profileHash` is computed over `targetFamily`, `target` and `capabilities`, with keys sorted
 - Hash algorithm: SHA-256, represented as bare lowercase `<hex>` (no algorithm prefix)
 
 ## Emitter responsibilities
 
-- Normalize then canonicalize, then compute hashes, then write artifacts
-- Provide `--verify` mode that re-parses and re-emits to assert byte-identical output
-- Provide a `prisma-next verify contract.json` command to check adherence outside of emit
+- The storage hash is computed when the contract is built, by the family's authoring code. The emitter writes it, and refuses to write a `storage` section that does not hash to it
 - Ensure TS-first and PSL-first projects produce identical canonical JSON and `storageHash` for the same logical schema
 
 ## Consumer responsibilities
 
 - Treat `contract.json` as immutable content-addressed data
-- Never reorder or pretty-print when storing or transmitting
+- Never reorder or reformat when storing or transmitting
 - Use `storageHash` for applicability checks and `profileHash` for drift checks
 
-## Examples
+## Example
 
-### Minimal canonical object
-
-```json
-{"formatVersion":1,"targetFamily":"sql","target":"postgres","profileHash":"...","models":{},"storage":{"storageHash":"...","tables":{}}}
-```
-
-### With capabilities
-
-`capabilities` records contract requirements. Adapters still negotiate and verify support at connect time; this example only shows required keys captured in the contract.
+The input of a storage hash, as it is hashed:
 
 ```json
-{"formatVersion":1,"targetFamily":"sql","target":"postgres","profileHash":"...","models":{"User":{"fields":{"email":{"codecId":"text","nullable":false},"id":{"codecId":"int4","nullable":false}},"storage":{"table":"user"}}},"storage":{"storageHash":"...","tables":{"user":{"columns":{"email":{"type":"text"},"id":{"type":"int4"}},"primaryKey":{"columns":["id"],"name":"user_pkey"}}}},"capabilities":{"sql":{"jsonAgg":true,"lateral":true}},"codecs":{"int4":{"ts":"number"},"text":{"ts":"string"}}}
+{
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {}
+        },
+        "id": "public"
+      }
+    }
+  },
+  "target": "postgres",
+  "targetFamily": "sql"
+}
 ```
 
 ## Alternatives considered
 
 - **RFC 8785 strict conformance without domain rules**: Insufficient for our defaults and naming requirements
-- **Pretty-printed JSON for readability**: Increases diff noise and weakens byte-level determinism
+- **Compact JSON with no whitespace**: what an earlier draft of this record described. The file is written indented so that it can be read and diffed, and the hash input uses the same form so that there is one
 - **Protobuf or CBOR canonical formats**: Tighter encoding but worse DX and harder ecosystem interoperability
 
 ## Consequences
@@ -150,7 +147,6 @@ An earlier rule had the framework drop every `false`, `[]` and `{}` unless a pat
 
 ### Trade-offs
 
-- Harder to eyeball without a pretty-printer
 - Slight complexity in emitter and tests
 - Consumers must not reformat artifacts
 
