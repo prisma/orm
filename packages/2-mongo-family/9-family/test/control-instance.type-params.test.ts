@@ -22,22 +22,40 @@ const vectorType = mongoDataType('test/vector', {
   params: type({ '+': 'reject', length: 'number' }),
 });
 
+const PLAIN_CODEC_ID = 'test/plain@1';
+
+const plainType = mongoDataType('test/plain', {
+  read: (json) => json,
+  bsonTypes: ['string'],
+});
+
 const codecLookup: CodecLookupWithDescriptors = {
   get: () => undefined,
   renderOutputTypeFor: () => undefined,
   descriptorFor: (codecId) =>
-    codecId === VECTOR_CODEC_ID
+    codecId === PLAIN_CODEC_ID
       ? {
           codecId,
-          dataType: vectorType.id,
+          dataType: plainType.id,
           traits: [],
           paramsSchema: undefined,
-          isParameterized: true,
+          isParameterized: false,
           factory: () => () => {
             throw new Error('not used');
           },
         }
-      : undefined,
+      : codecId === VECTOR_CODEC_ID
+        ? {
+            codecId,
+            dataType: vectorType.id,
+            traits: [],
+            paramsSchema: undefined,
+            isParameterized: true,
+            factory: () => () => {
+              throw new Error('not used');
+            },
+          }
+        : undefined,
 };
 
 function familyInstance() {
@@ -48,7 +66,7 @@ function familyInstance() {
   const withVector: ControlStack<'mongo', 'mongo'> = {
     ...stack,
     codecLookup: { ...stack.codecLookup, ...codecLookup },
-    dataTypes: { ...stack.dataTypes, lookup: createDataTypeLookup([vectorType]) },
+    dataTypes: { ...stack.dataTypes, lookup: createDataTypeLookup([vectorType, plainType]) },
   };
   return createMongoFamilyInstance(withVector);
 }
@@ -109,5 +127,41 @@ describe('deserializeContract checks type parameters against their data type', (
         ),
       }),
     );
+  });
+
+  function withPlainField(typeParams: Record<string, unknown>) {
+    return mongoContractJson({
+      models: {
+        Item: {
+          fields: {
+            _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+            name: {
+              type: { kind: 'scalar', codecId: PLAIN_CODEC_ID, typeParams },
+              nullable: false,
+              many: false,
+            },
+          },
+          storage: {
+            fields: { _id: { field: '_id' }, name: { field: 'name' } },
+            collection: 'items',
+          },
+        } as unknown as ContractModelBase,
+      },
+    });
+  }
+
+  it('refuses a parameter on a data type and codec that take none', () => {
+    expect(() => familyInstance().deserializeContract(withPlainField({ zzz: 1 }))).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.VALIDATION_FAILED',
+        message: expect.stringContaining(
+          `models.Item.fields.name.type.typeParams: Invalid typeParams for codec '${PLAIN_CODEC_ID}'`,
+        ),
+      }),
+    );
+  });
+
+  it('accepts empty parameters on a data type that takes none', () => {
+    expect(() => familyInstance().deserializeContract(withPlainField({}))).not.toThrow();
   });
 });
