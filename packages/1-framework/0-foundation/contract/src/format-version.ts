@@ -467,8 +467,8 @@ function missingWhy(
         : 'It has the field "schemaVersion", which a pre-release of Prisma 8 wrote in place of "formatVersion".';
     case 'bothFields':
       return kind === 'contract'
-        ? 'It has "formatVersion", which Prisma writes, and also "schemaVersion", which a pre-release of Prisma 8 wrote in its place. No release of Prisma wrote both into one file.'
-        : 'It has "formatVersion", which Prisma writes, and also "schemaVersion", which no release of Prisma wrote into this kind of file.';
+        ? 'It has "formatVersion", which Prisma writes, and also "schemaVersion", which a pre-release of Prisma 8 wrote in its place. No release of Prisma wrote both into one file, so it cannot be told which format version the file is in.'
+        : 'It has "formatVersion", which Prisma writes, and also "schemaVersion", which no release of Prisma wrote into this kind of file, so it cannot be told which format version the file is in.';
     case 'invalid':
       return `Its "formatVersion" is ${JSON.stringify(problem.formatVersion)}, which is not a positive integer.`;
   }

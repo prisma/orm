@@ -187,7 +187,7 @@ describe('readFormatVersion', () => {
         ],
       };
       const bothFields = {
-        why: 'It has "formatVersion", which Prisma writes, and also "schemaVersion", which a pre-release of Prisma 8 wrote in its place. No release of Prisma wrote both into one file.',
+        why: 'It has "formatVersion", which Prisma writes, and also "schemaVersion", which a pre-release of Prisma 8 wrote in its place. No release of Prisma wrote both into one file, so it cannot be told which format version the file is in.',
         ...bothFieldsAdvice,
       };
 
@@ -216,7 +216,7 @@ describe('readFormatVersion', () => {
           ).toMatchObject({
             code: 'MIGRATION.FORMAT_VERSION_MISSING',
             message: expect.stringMatching(/has both "formatVersion" and "schemaVersion"$/),
-            why: 'It has "formatVersion", which Prisma writes, and also "schemaVersion", which no release of Prisma wrote into this kind of file.',
+            why: 'It has "formatVersion", which Prisma writes, and also "schemaVersion", which no release of Prisma wrote into this kind of file, so it cannot be told which format version the file is in.',
             ...bothFieldsAdvice,
           });
         },
