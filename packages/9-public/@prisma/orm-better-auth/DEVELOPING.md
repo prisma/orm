@@ -10,12 +10,13 @@ Notes for people who change this package. For how to use it, see the [README](RE
 
 ## What the adapter knows about each database
 
+The adapter supports Postgres. It also ships a SQLite support, at the same proof-of-concept level as Prisma 8's SQLite package: its tests and Better Auth's suites run on it, and the README promises nothing beyond that.
+
 Everything the adapter must know about one database is in that database's target support, in `src/targets/`: `postgres.ts` and `sqlite.ts`. The interface, `TargetSupport`, and the lookup are in `src/target-support.ts`; the interface is internal until the MySQL and MariaDB supports have shaped it. The adapter refuses a client that is not for a SQL database, then looks up the support whose `target` is the client's `contract.target`, and refuses the client when none is. A support states:
 
 - `valueKind`: the kind of JavaScript value each codec reads and writes, which the contract check compares with what Better Auth needs. Nothing Prisma publishes gives that at run time. A codec the support does not know is accepted.
 - `compareText`: the condition for every comparison of a text column Better Auth asks for (`eq`, `ne`, `in`, `not_in`, `contains`, `starts_with`, `ends_with`, each respecting or ignoring case). A field holds text when the ORM offers `like` on it, which it does only for a codec with the `textual` trait; a text filter on any other field is refused. The adapter answers an empty pattern (any value that is not null) and an empty list itself, so a support never sees them.
-- `sameStorageName`: whether two table names, or two column names, are the same name on the database. `auth generate` uses it to find a model stored under another name.
-- `defaultNamespace`: the namespace of a model whose contract names none. The target's descriptor records it, but the runtime client does not carry the descriptor, so the support states it again and a test checks that the two agree.
+- `defaultNamespace`: the namespace a model declared outside any `namespace` block belongs to. The adapter needs it only for models the contract does not have yet: to print them in the contract check's message and in `auth generate`, and, in `auth generate`, to place the models the source file declares outside a `namespace` block. Models the contract has carry their own namespace. The target's descriptor records the default (`defaultNamespaceId`), and a test checks that each support agrees with it.
 - `pslType`: the PSL type the contract check and `auth generate` print for a Better Auth field.
 
 The supports contain codec ids, SQL text and functions only, and import no database package: `test/source-imports.test.ts` fails if any module in `src/` imports a `@prisma/` package that is not a peer dependency, type-only imports included. `test/source-literals.test.ts` fails if a literal or a name outside `src/targets/` and `src/exports/` contains a target name in any case (`pg/`, `PostgreSQL`, `isMysqlClient`) or is a codec id, and if a module outside those two folders imports any module of `src/targets/` other than `shipped.ts`. `src/exports/` is exempt because it will re-export the supports by name; the same test keeps it to re-exports only. `test/targets/shipped-supports.test.ts` reads every codec the published Postgres and SQLite target packages register and fails on one whose value kind the support does not state; when a target package adds a codec, add it to that support.
@@ -25,8 +26,10 @@ The types a support sees are the ORM's published ones: a text column is an `Expr
 Gaps in what Prisma publishes, which the supports work around:
 
 - No published value says which kind of JavaScript value a codec reads, so each support keeps that table.
-- The runtime client does not carry the target's descriptor, so each support repeats its default namespace.
+- Nothing the adapter can read at run time names the default namespace. The runtime client carries the contract but not the target's descriptor; the runtime part of the descriptor leaves out `defaultNamespaceId`; and the emitted contract lists the default namespace among its storage namespaces without marking it, so a contract with models in `public` and in `auth` does not say which is the default. `auth generate` could read the descriptor from `prisma.config.ts`, but it reads that file only when Better Auth passes no `--output`, and the contract check, which runs in the application, needs the same answer. So each support states it once, and both read it there.
 - Postgres's `citext` extension codec is `textual`, so text filters accept it, but its `=` ignores case, so even a case-sensitive `eq` on a `citext` column matches another case.
+
+Table and column names are compared exactly, letter case included. `auth generate` compares them to find a model or field your contract already stores in the table or column Better Auth needs, under another name. On Postgres an exact comparison is right. SQLite ignores the case of the letters A to Z in names, so a model whose table name differs only in case is not found there; SQLite then refuses to create the second table when the migration runs, which reports the clash; the same holds for two columns in one table. Matching SQLite's rule in the adapter would repeat what Prisma's SQLite package already knows for its migration planner, for a database Prisma 8 offers only as a proof of concept.
 
 ## How `auth generate` edits the contract
 
@@ -47,7 +50,7 @@ Gaps in what Prisma publishes, which the supports work around:
 
 ## Tests
 
-- `test/conformance/` runs Better Auth's own adapter suites on Postgres and SQLite. No test in them is disabled, and none may be.
+- `test/conformance/` runs Better Auth's own adapter suites on Postgres and, as a proof of concept, SQLite. No test in them is disabled, and none may be.
 - `test/targets/` checks the lookup and the shipped supports: each states a value kind for every codec its target package registers, and has its target descriptor's default namespace. These tests import the database packages; `src/` may not.
 - `test/generate/` checks the edit: the whole edited text for each layout, that every edited contract emits and then has nothing missing, and each case where nothing is written.
 - `test/integration/test/packaging/orm-better-auth-tarball.test.ts`, in the Prisma repository, installs the packed package with the lowest Better Auth release the peer range admits, outside the workspace. It checks that creating the auth instance logs nothing and that the first request fails with the message, and runs the real `auth generate` and `auth check`: one-file and two-file contracts, `--output` with and without `--cwd` and naming a directory, Better Auth's refusal to ask without a terminal, and the main cases where nothing is written. It compares everything the command prints on standard error. It runs in the merge queue, not on pull requests, so run that file locally when you change the contract check, `auth generate` or the manifest.

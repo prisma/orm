@@ -1,6 +1,6 @@
 # @prisma/orm-better-auth
 
-Use [Better Auth](https://www.better-auth.com) with Prisma 8. The adapter stores Better Auth's users, sessions, accounts and verification tokens through your application's Prisma 8 client, on Postgres or SQLite.
+Use [Better Auth](https://www.better-auth.com) with Prisma 8. The adapter stores Better Auth's users, sessions, accounts and verification tokens through your application's Prisma 8 client, on Postgres.
 
 > **This package is a release candidate, as Prisma 8 itself is.** Its versions are `8.0.0-rc.N`, in step with the Prisma 8 packages. Until `8.0.0` is released, any release may contain breaking changes, and only the latest release candidate is maintained. See [Prisma 8's release candidates](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#release-candidates).
 
@@ -21,7 +21,7 @@ export const auth = betterAuth({
 Install the adapter at the same version as your Prisma 8 database package, together with Better Auth 1.7.22 or a later 1.7 release:
 
 ```sh
-pnpm add @prisma/orm-better-auth@<version of @prisma/orm-postgres or @prisma/orm-sqlite> better-auth@~1.7.22
+pnpm add @prisma/orm-better-auth@<version of @prisma/orm-postgres> better-auth@~1.7.22
 ```
 
 The adapter uses the Prisma packages your database package already installs. If the versions differ, your package manager warns you, or refuses to install when it checks peer dependencies strictly. Keep them the same, or the adapter loads a second copy of Prisma's code.
@@ -30,16 +30,18 @@ Better Auth must load one copy of `@better-auth/core`, the one `better-auth` its
 
 ## Supported databases and versions
 
-- Postgres and SQLite, through `@prisma/orm-postgres` and `@prisma/orm-sqlite`. The adapter refuses a client for another database.
+- Postgres, through `@prisma/orm-postgres`.
+- SQLite, through `@prisma/orm-sqlite`, as a proof of concept only. Prisma 8's SQLite package is itself a proof of concept, and the adapter promises nothing beyond what that package does. Better Auth's adapter suites run on it, and the limits below apply.
+- The adapter refuses a client for any other database.
 - Better Auth 1.7.22 or a later 1.7 release (`>=1.7.22 <1.8.0`). It is tested against 1.7.22 and 1.7.27. Releases from 1.7.6 to 1.7.21 run the contract check when the auth instance is created, and log a contract that is missing something as "Could not validate the database schema. Check your database connection.", which is wrong. From 1.7.22 the check runs before the first request instead, and the request fails with the adapter's message.
 
 ## Set up
 
-These steps assume an application that already uses Prisma 8 on Postgres or SQLite. To start one, see the [Prisma docs](https://www.prisma.io/docs/orm).
+These steps assume an application that already uses Prisma 8 on Postgres. To start one, see the [Prisma docs](https://www.prisma.io/docs/orm).
 
 ### 1. Add Better Auth's models to your contract
 
-Better Auth's models live in your contract, next to your own models. For the default configuration, add these four models to your PSL contract, for example `prisma/contract.prisma`. The same PSL works on Postgres and SQLite:
+Better Auth's models live in your contract, next to your own models. For the default configuration, add these four models to your PSL contract, for example `prisma/contract.prisma`. The same PSL also works on SQLite:
 
 ```prisma
 // use prisma-8
@@ -132,7 +134,7 @@ export const db = postgres({
 });
 ```
 
-On SQLite, give the client a file path:
+On SQLite, as a proof of concept, give the client a file path:
 
 ```ts
 // src/lib/db.ts
@@ -221,7 +223,7 @@ The message can also list fields whose type is wrong; optional Better Auth field
 - a model has no field named `id` (see [Limits](#limits)).
 - a model it would add fields to is written on one line, with its `}` on the line of its last field.
 - the contract file already declares a model or field it would add, under the name Better Auth looks it up by. This happens when you edit the contract and do not run `prisma contract emit`: run it, then `auth generate` again.
-- the contract file stores a model in the table, or a field in the column, that Better Auth's model or field needs, under another name. Emitting does not help, because the adapter finds models and fields by name, not by table or column. The message names the model or field Better Auth looks for: rename yours to that name, then run `prisma contract emit`. Better Auth's own naming options are the other way to make the names agree (see the model and field names under [Options](#options)). On SQLite, table and column names that differ only in case count as the same.
+- the contract file stores a model in the table, or a field in the column, that Better Auth's model or field needs, under another name. Emitting does not help, because the adapter finds models and fields by name, not by table or column. The message names the model or field Better Auth looks for: rename yours to that name, then run `prisma contract emit`. Better Auth's own naming options are the other way to make the names agree (see the model and field names under [Options](#options)). Table and column names are compared exactly, letter case included.
 - the contract file declares something else, such as an enum, a composite type or a mixin, with the name of a model it would add. Rename that declaration and run `auth generate` again.
 - Prisma would not accept the edited file although it accepted the original, for example because of a duplicate declaration the other checks did not foresee. The line names Prisma's first new error.
 
