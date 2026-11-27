@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EMPTY_CONTRACT_HASH } from '../src/constants';
 import type { MigrationEdge } from '../src/graph';
 import { computeMigrationHash } from '../src/hash';
@@ -403,5 +403,67 @@ describe('findPathWithInvariants — pathological shapes', () => {
     const path = findPathWithInvariants(graph, 'A', 'C', new Set(['X']));
     expect(path).not.toBeNull();
     expect(dirNames(path)).toEqual(['m_AB', 'm_BD', 'm_DB', 'm_BC']);
+  });
+});
+
+describe('tie-break on a machine whose locale reorders hex strings', () => {
+  const danish = new Intl.Collator('da');
+  const createdAt = '2026-02-25T14:00:00.000Z';
+
+  function pkgWithHash(
+    from: string,
+    to: string,
+    dirName: string,
+    migrationHash: string,
+    invariants: readonly string[] = [],
+  ): OnDiskMigrationPackage {
+    const ops = createTestOps();
+    return {
+      dirName,
+      dirPath: `/migrations/${dirName}`,
+      metadata: createTestMetadata({
+        from,
+        to,
+        createdAt,
+        migrationHash,
+        providedInvariants: invariants,
+      }),
+      ops,
+    };
+  }
+
+  beforeEach(() => {
+    vi.spyOn(String.prototype, 'localeCompare').mockImplementation(function (
+      this: string,
+      that: string,
+    ) {
+      return danish.compare(this, that);
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('picks the route character-code order picks among equally short routes', () => {
+    const graph = reconstructGraph([
+      pkgWithHash(E, 'H1', 'm0', 'sha256:00'),
+      pkgWithHash('H1', 'H2', 'm_b', 'sha256:b0'),
+      pkgWithHash('H1', 'H2', 'm_aa', 'sha256:aa'),
+    ]);
+    expect(dirNames(findPath(graph, E, 'H2'))).toEqual(['m0', 'm_aa']);
+  });
+
+  it('runs data-only migrations on one contract in character-code order', () => {
+    const graph = reconstructGraph([
+      pkgWithHash(E, 'H1', 'm0', 'sha256:00'),
+      pkgWithHash('H1', 'H1', 'data_b', 'sha256:b0', ['Y']),
+      pkgWithHash('H1', 'H1', 'data_aa', 'sha256:aa', ['X']),
+    ]);
+    expect(dirNames(findPathWithInvariants(graph, E, 'H1', new Set(['X', 'Y'])))).toEqual([
+      'm0',
+      'data_aa',
+      'data_b',
+    ]);
   });
 });
