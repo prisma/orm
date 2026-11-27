@@ -8,7 +8,7 @@ The framework-level overhead the contract-space machinery adds per `dbInit` disc
 
 ## Methodology
 
-A one-shot benchmark, not a CI gate. The script lives at `wip/perf/contract-spaces.bench.ts` (intentionally outside the committed source tree — see "Limitations" below for why we did not invest in a permanent bench harness).
+A one-shot benchmark, not a CI gate. The script was kept outside the committed source tree and is not in the repository (see "Limitations" below for why we did not invest in a permanent bench harness).
 
 **What we measure.** The benchmark exercises the three pure / IO-bound helpers the per-space mechanism added:
 

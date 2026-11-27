@@ -1,10 +1,8 @@
 # Framework Gaps — what Prisma 8 is missing for an extension like CipherStash
 
-> Companion to system-design-review.md, code-review.md, and walkthrough.md.
->
 > Audience: the **Prisma 8 framework team**. The CipherStash integration is the first non-trivial real-world consumer of the post-#379 / [ADR 204](../architecture%20docs/adrs/ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md) extension surface. This document collects every place where the integration paid a measurable tax — code it had to write, types it had to vendor, behavior it had to document around — because of a missing or under-specified framework seam. Each gap names the workaround the integration ships today and what the framework should provide so the workaround can be deleted.
 >
-> Scope: branch `prisma-next` of `cipherstash/stack` vs `origin/main`, head commit `8e8e5a2`. Integration code under reference/cipherstash/stack/packages/stack/src/prisma/.
+> Scope: branch `prisma-next` of `cipherstash/stack` vs `origin/main`, head commit `8e8e5a2`. Integration code under `packages/stack/src/prisma/` in that repository.
 
 ---
 
