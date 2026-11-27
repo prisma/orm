@@ -15,7 +15,10 @@
 - **A contract check swallows a migration it cannot load when the space has no `contract.json`** (`loadAggregateIntegrityViolations`).
 - **The runner records a version 0 snapshot in the database as it is stored,** without converting it to version 1. Nothing reads those records back today. A reader added later has to read them through the format version.
 - **SQLite creates an empty database file when `db migrate` refuses a migration,** because the refusal comes after the database is opened to read its marker.
-- **`node <migration>/migration.ts` is advised for a `migration.json` it cannot always repair.** It cannot rewrite one that is not JSON, and when the file is missing it writes a new `createdAt`, which changes the migration hash. For a migration a database has applied, only restoring the file keeps its hash.
+- **A ledger row can name a migration hash no file has.** When no database has applied a migration whose `migration.json` is lost, the advice runs its `migration.ts`, which gives it a new hash. If a database had applied it after all, its ledger keeps the old hash. Nothing compares the two today; a check added later would report it.
+- **The advice for an unreadable extension head ref does not name `contract emit`,** which now writes that file again. `migration check` says "Repair or remove the corrupt ref file", and the other commands say to make the file valid.
+- **A migration whose `to` is not a well-formed hash is applied without recording its contract, and without a warning.**
+- **A project that uses `db update` without migrations fails `migration check`:** its `db` ref names a contract no migration reaches. The advice there is not false, but the finding is. Not yet checked whether this predates this work.
 - **The MongoDB client does not check type parameters.** It has no registry to check them against and does not use them; the commands check them when they read a contract.
 - **A SQL planning refusal's operation is named through an untyped `meta.migration` on the wrapper error.** It works, but nothing ties the field's shape to the code that reads it.
 - **`migration.json`'s `from` and `to` accept a value that is not a contract hash.** A malformed one is caught later, as a snapshot that cannot be found. Making the schema strict breaks many tests that use made-up hashes.

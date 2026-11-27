@@ -143,7 +143,7 @@ A release that makes a reader act on something inside an open place, for example
 
 A type's parameters in a contract are not an open place. They belong to the type, and the type's own schema refuses a parameter it does not define: its codec's schema, or, for a MongoDB type whose data type has a schema, that one. A command applies it when it reads a contract, for every type the project's configuration registers. A command skips a type the configuration does not register. A SQL client refuses such a type at startup; a MongoDB client does not use type parameters.
 
-An extension's own section under `extensions` is open to Prisma, which carries it; the extension's own schema is what refuses a key there.
+Nothing in Prisma checks inside an extension's own section under `extensions`: Prisma writes it at emit and carries it unread.
 
 One thing Prisma interprets is not checked when a contract is read: an index's `type`. It is checked, with the index's options, only when a contract is built. So in a stored contract an index's options are open, and when a contract is built they are checked against the index type. Consequences lists the gap.
 
@@ -174,7 +174,7 @@ Two things are not checked in these runs:
 | Only lists (`migration list`, `graph`, `status`) | Warns, and answers from the rest. `migration status --to` or `--from` refuses when the ref it names cannot be read |
 | `migration check` | Reports the file as a finding, and checks the rest. A `contract.json` that is not JSON it refuses |
 | `db update`, for the snapshot of the contract the database was last at | Warns and plans without it, as it does for a database with no such snapshot |
-| `db migrate`, `db update`, `db init`, for each migration whose snapshot is not JSON, is `null`, or does not match its hash | Warn, and record no contract for that migration when they apply it |
+| `db migrate`, `db update`, `db init`, for a migration the run is about to apply whose snapshot is not JSON, is `null`, or does not match its hash | Warn, and record no contract for that migration. Nothing is printed on a dry run or for a migration the database has already applied |
 
 A format version the reader does not read is never handled this way: rule 2 applies, and every command stops.
 
@@ -183,22 +183,18 @@ A format version the reader does not read is never handled this way: rule 2 appl
 | File | Written again by |
 | --- | --- |
 | `contract.json` | `prisma contract emit` |
-| The snapshot at the application's head, when a migration ends at the head | Once its folder is deleted: `prisma db migrate --advance-ref db`, which also applies any pending migrations |
+| The snapshot at the application's head, when a migration ends at the head | Once its folder is deleted: `prisma db migrate --advance-ref db`, which also applies any pending migrations. The advice keeps a `--db` the user passed, so it acts on the same database |
 | The snapshot at the application's head, when no migration ends there | Once its folder is deleted: `prisma db sign`, which also signs the database |
 | The snapshot at an extension's head, or a migration in an extension's space of the project | Once its folder is deleted: `prisma contract emit`, from the installed extension. It also emits `contract.json` |
 | Any other snapshot | Nothing. It can only be restored |
 | `migration.json` that still parses and has its `createdAt` | `node <migration folder>/migration.ts`, which writes the same migration hash |
-| Any other `migration.json` | Nothing that keeps its hash. See the steps below |
+| Any other `migration.json` (missing, not JSON, or without `createdAt`) | Only when no database has applied the migration: delete `migration.json` and run `node <migration folder>/migration.ts`. It writes the migration with a new creation time, so the migration gets a new hash. The later migrations and the refs do not change, because they name contracts, not migrations |
 | A ref file that cannot be read | The advice is to make the file valid |
-| A ref file no release wrote | Deleted and set again with `prisma migration ref set <name> <contract>` |
-| A ref other than `db` that names a snapshot which cannot be read | `prisma migration ref set <name> <hash>`, with the hash of a contract the ref should name |
+| A ref file no release wrote | Deleted and written again. The `db` ref by `prisma db migrate --advance-ref db`, or by `prisma db sign` when no migration ends at `contract.json`; an extension's head ref by `prisma contract emit`; any other ref by `prisma migration ref set <name> <contract>`. A user never names a contract for the `db` ref by hand |
+| A ref other than `db` that names a snapshot which cannot be read | `prisma migration ref set <name> <hash>`, with the hash of a contract the ref should name. The advice says that the ref then names a different contract, so whatever uses it, such as a deploy that migrates to it, changes with it |
 | A file inside an extension's installed package | Upgrading the extension |
 
-A `migration.json` that cannot be rewritten with its hash can only be planned again, and only when no database has applied the migration and no ref names where it or a later migration ends. The user knows which databases a migration has reached; `prisma migration status` against a database shows it. The steps:
-
-1. Delete the migration's folder and the folders of the migrations after it.
-2. Plan again from the contract it started from: `prisma migration plan --from <hash>`, where the hash is that of the start snapshot its `migration.ts` imports, or `@empty` when it imports none.
-3. Plan the later migrations again the same way.
+A database that applied a migration records its hash in its ledger. Nothing compares that record with the files, so a new hash would not stop any command, but the ledger would name a migration no file has. That is why the advice that gives a new hash applies only where no database has applied the migration. The user knows which databases a migration has reached; `prisma migration status` against a database shows it.
 
 No advice leads to a new hash for a migration a database has applied.
 
@@ -237,7 +233,7 @@ Until `8.0.0` the content of format 1 is not final. A pre-release may still chan
 
 `ops.json` is covered by the migration hash, and from `8.0.0` no release may change the hash of a migration. So whatever shapes of operation are in users' repositories at `8.0.0` have to be read for the whole major. Pre-releases wrote three shapes that differ from the current one. They are read rather than rewritten before `8.0.0` (Why gives the reason), so they are part of what format 1 of `ops.json` accepts, and rule 3 does not refuse them. The reader turns each into the current shape before it checks the operation, so nothing after the reader sees the earlier shape. The migration hash is computed from the file as stored.
 
-Two of them as they are stored and as they are read. A SQLite operation written by a pre-release up to `8.0.0-rc.20` names a schema, which the current shape does not have:
+Two of them follow, each as it is stored and as it is read. A SQLite operation written by a pre-release up to `8.0.0-rc.20` names a schema, which the current shape does not have:
 
 ```json
 "target": { "id": "sqlite", "details": { "schema": "main", "objectType": "table", "name": "user" } }
@@ -253,7 +249,7 @@ A step that checks whether rows still hold an enum value being removed carries a
 
 ```json
 "target": { "id": "sqlite", "details": { "objectType": "column", "name": "state", "table": "task" } },
-"postcheck": [{ "sql": "…", "params": ["archived"], "meta": { "rowsHoldingValue": { "enumValue": { "enum": "Status", "member": "ARCHIVED" }, "value": "archived" } } }]
+"precheck": [{ "description": "…", "sql": "…", "params": ["archived"], "meta": { "rowsHoldingValue": { "enumValue": { "enum": "Status", "member": "ARCHIVED" }, "value": "archived" } } }]
 ```
 
 is read with the entry completed from the operation's target details and the step's first parameter:
@@ -284,7 +280,7 @@ The code for one version of one kind of file is a unit. It can hold three things
 
 Version 0 has no unit: version 1's converter reads it, and nothing writes it.
 
-- **Reading.** One shared function, `readStoredDocument`, reads the version number and reports the refusals of rule 2. It then converts the document one version at a time to the newest, and the caller parses it with the newest version's parser. Every read takes this one path.
+- **Reading.** One shared path reads the version number and reports the refusals of rule 2. It has two entries: `readStoredDocument`, and for a contract `convertContractDocument`. It then converts the document one version at a time to the newest, and the caller parses it with the newest version's parser. Every read takes this one path.
 - **Who owns the units.** The contents of a contract differ between families, so each family owns its contract parser and printer. The units for `migration.json` and ref files live with the migration tooling.
 - **Where a contract is converted today.** Three places hold a stored contract before any family sees it: the CLI's contract reader, the snapshot store, and the loader of an extension's bundled files. The shared function converts for them, so they pass on only the newest version. This works because the one contract converter that exists, from version 0, changes only the version field, which every family's contract has.
 - **What the first family-specific contract change needs.** A contract version that changes content one family owns needs a converter from that family, and those three places have to ask the family for it.
