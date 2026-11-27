@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import pg from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { type Clock, livenessCheckSettings, poolClientUse } from '../src/liveness-check';
+import { type Clock, livenessCheckLimits, poolLastUse } from '../src/liveness-check';
 import { createBoundDriverFromBinding } from '../src/postgres-driver';
 
 function fakeClock(): Clock & { advance(millis: number): void; shiftWall(millis: number): void } {
@@ -19,21 +19,21 @@ function fakeClock(): Clock & { advance(millis: number): void; shiftWall(millis:
   };
 }
 
-const original = { ...livenessCheckSettings };
+const original = { ...livenessCheckLimits };
 
 beforeEach(() => {
-  Object.assign(livenessCheckSettings, { checkAfterIdleMillis: 1000, timeoutMillis: 5000 });
+  Object.assign(livenessCheckLimits, { checkAfterIdleMillis: 1000, timeoutMillis: 5000 });
 });
 
 afterEach(() => {
-  Object.assign(livenessCheckSettings, original);
+  Object.assign(livenessCheckLimits, original);
 });
 
 describe('the record of when each pooled client was last used', () => {
   function setUp() {
     const pool = new EventEmitter();
     const clock = fakeClock();
-    return { pool, clock, use: poolClientUse(pool, clock) };
+    return { pool, clock, use: poolLastUse(pool, clock) };
   }
 
   it('uses a client unchecked within the threshold of the pool opening it', () => {
@@ -70,7 +70,7 @@ describe('the record of when each pooled client was last used', () => {
     const client = {};
     pool.emit('release', undefined, client);
     clock.advance(20);
-    livenessCheckSettings.checkAfterIdleMillis = 10;
+    livenessCheckLimits.checkAfterIdleMillis = 10;
 
     expect(use.verdict(client)).toBe('check');
   });
@@ -128,11 +128,11 @@ describe('the record of when each pooled client was last used', () => {
     expect(use.verdict(client)).toBe('use');
   });
 
-  it('evicts a client it has no record of once a check failed', () => {
+  it('checks a client it has no record of, even once a check failed', () => {
     const { use } = setUp();
     use.recordFailedCheck(use.now());
 
-    expect(use.verdict({})).toBe('evict');
+    expect(use.verdict({})).toBe('check');
   });
 
   it('keeps the later start when two checks fail', () => {
@@ -153,7 +153,7 @@ describe('the record of when each pooled client was last used', () => {
   it('is one record per pool, however often it is asked for', () => {
     const pool = new EventEmitter();
 
-    expect(poolClientUse(pool)).toBe(poolClientUse(pool));
+    expect(poolLastUse(pool)).toBe(poolLastUse(pool));
     expect([pool.listenerCount('connect'), pool.listenerCount('release')]).toEqual([1, 1]);
   });
 });

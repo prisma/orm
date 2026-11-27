@@ -1,7 +1,7 @@
 import type { SessionSettings } from '@internal/framework-components/components';
 import { Client, type ClientBase, type ClientConfig, Pool, type PoolConfig } from 'pg';
 import { parse } from 'pg-connection-string';
-import { timedStatement } from './liveness-check';
+import { timedStatement } from './timed-statement';
 
 /** The settings pg's `ConnectionParameters` reads from a parsed connection string, except `binary`, which a pg client also applies to every query when it is in the client's own settings. Any other query parameter is not a connection setting, and pg ignores it in a connection string. */
 const CONNECTION_SETTINGS = [

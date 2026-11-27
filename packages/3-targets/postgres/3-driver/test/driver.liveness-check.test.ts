@@ -124,6 +124,59 @@ describe('the liveness check of a pooled client', () => {
     expect(pool.connect).toHaveBeenCalledTimes(11);
   });
 
+  it('keeps serving requests on a pool that emits no connect event after one check failed', async () => {
+    const dead = idleClient(async () => {
+      throw pgError('ECONNRESET', 'read ECONNRESET');
+    });
+    const clients = [
+      dead,
+      idleClient(async () => ({ rows: [] })),
+      idleClient(async () => ({ rows: [] })),
+    ];
+    const driver = driverOver(poolOf(() => clients.shift()));
+
+    expect(await queryRows(driver, 'select 1')).toEqual([]);
+    expect(await queryRows(driver, 'select 2')).toEqual([]);
+    expect(dead.release.mock.calls).toEqual([[expect.any(SqlConnectionError)]]);
+  });
+
+  it('says no statement was sent when every client it took was older than another failed check', async () => {
+    const olderClients = [
+      idleClient(async () => ({ rows: [] })),
+      idleClient(async () => ({ rows: [] })),
+    ];
+    const live = idleClient(async () => ({ rows: [] }));
+    const clients = [
+      idleClient(async () => {
+        throw pgError('ECONNRESET', 'read ECONNRESET');
+      }),
+      live,
+      ...olderClients,
+    ];
+    const pool = poolOf(() => undefined, 1);
+    pool.connect.mockImplementation(async () => {
+      const next = clients.shift();
+      if (next === live) pool.emit('connect', live);
+      return next;
+    });
+    const driver = driverOver(pool);
+    for (const older of olderClients) pool.emit('release', undefined, older);
+    await queryRows(driver, 'select 1');
+
+    const error = await queryRows(driver, 'select 2').then(
+      () => undefined,
+      (reason: unknown) => reason,
+    );
+
+    expect(error).toBeInstanceOf(SqlConnectionError);
+    expect(error).toMatchObject({
+      transient: true,
+      message:
+        'The Postgres driver took 2 connections from the pool and evicted each one, because each was last used before a liveness check on another connection from the same pool failed. No statement was sent.',
+    });
+    expect(olderClients.map((older) => older.query.mock.calls.length)).toEqual([0, 0]);
+  });
+
   it.each([
     ['no connection', {}],
     ['a connection with no socket', { connection: {} }],

@@ -27,12 +27,7 @@ import type {
 import Cursor from 'pg-cursor';
 import { callbackToPromise } from './callback-to-promise';
 import { type DriverRuntimeError, driverError } from './driver-error';
-import {
-  livenessCheckSettings,
-  type PoolClientUse,
-  poolClientUse,
-  timedStatement,
-} from './liveness-check';
+import { livenessCheckLimits, type PoolLastUse, poolLastUse } from './liveness-check';
 import { NamedCursor } from './named-cursor';
 import {
   isPostgresError,
@@ -48,6 +43,7 @@ import {
 } from './pg-client-state';
 import { serverTextTypes } from './server-text-types';
 import { createPgPool, SessionSettingsGuard } from './session-settings';
+import { timedStatement } from './timed-statement';
 
 export type QueryResult<T extends QueryResultRow = QueryResultRow> = PgQueryResult<T>;
 
@@ -803,7 +799,7 @@ class PostgresPoolDriverImpl
 {
   private readonly pool: PoolType;
   readonly #sessionSettings: SessionSettingsGuard;
-  readonly #clientUse: PoolClientUse;
+  readonly #lastUse: PoolLastUse;
   readonly #ownedByDriver: boolean;
   #closed = false;
 
@@ -814,7 +810,7 @@ class PostgresPoolDriverImpl
   ) {
     super(buildConnectionOptions(options));
     this.pool = options.connect.pool;
-    this.#clientUse = poolClientUse(this.pool);
+    this.#lastUse = poolLastUse(this.pool);
     this.#sessionSettings = new SessionSettingsGuard(options.sessionSettings ?? {}, this.pool);
     this.#ownedByDriver = options.connect.ownedByDriver;
   }
@@ -852,7 +848,7 @@ class PostgresPoolDriverImpl
     let lastCheckFailure: SqlConnectionError | undefined;
     for (let pass = 1; ; pass++) {
       const client = await this.#checkOut();
-      const verdict = this.#clientUse.verdict(client);
+      const verdict = this.#lastUse.verdict(client);
       if (verdict === 'use') {
         await this.#ensureSessionSettings(client);
         return client;
@@ -865,7 +861,7 @@ class PostgresPoolDriverImpl
       } else {
         evictClient(client, olderClientEviction());
       }
-      if (pass > poolMax(this.pool)) throw lastCheckFailure ?? olderClientEviction();
+      if (pass > poolMax(this.pool)) throw lastCheckFailure ?? noLiveClientFound(pass);
     }
   }
 
@@ -899,7 +895,7 @@ class PostgresPoolDriverImpl
    * answered, which an error other than a connection error also proves.
    */
   async #checkLiveness(client: PoolClient): Promise<SqlConnectionError | undefined> {
-    const startedAt = this.#clientUse.now();
+    const startedAt = this.#lastUse.now();
     const settingsDue = this.#sessionSettings.needs(client);
     try {
       await sendLivenessCheck(this.#sessionSettings, client, settingsDue);
@@ -911,11 +907,11 @@ class PostgresPoolDriverImpl
         client.release(true);
         throw normalized;
       }
-      this.#clientUse.recordFailedCheck(startedAt);
+      this.#lastUse.recordFailedCheck(startedAt);
       return SqlConnectionError.is(normalized)
         ? normalized
         : new SqlConnectionError(
-            `A pooled Postgres connection gave no answer from the server to its liveness check (time limit ${livenessCheckSettings.timeoutMillis} ms): ${normalized.message}`,
+            `A pooled Postgres connection gave no answer from the server to its liveness check (time limit ${livenessCheckLimits.timeoutMillis} ms): ${normalized.message}`,
             { cause: normalized, transient: true },
           );
     }
@@ -1158,7 +1154,7 @@ async function sendLivenessCheck(
   client: ClientBase,
   settingsDue: boolean,
 ): Promise<void> {
-  const timeLimitMillis = livenessCheckSettings.timeoutMillis;
+  const timeLimitMillis = livenessCheckLimits.timeoutMillis;
   const releaseLock = await acquireClientQueryLock(client);
   try {
     if (settingsDue) await guard.ensure(client, timeLimitMillis);
@@ -1188,6 +1184,13 @@ function failedCheckEviction(failure: SqlConnectionError): SqlConnectionError {
   return new SqlConnectionError(
     'The Postgres driver evicted an idle pooled connection that failed its liveness check.',
     { cause: failure },
+  );
+}
+
+function noLiveClientFound(taken: number): SqlConnectionError {
+  return new SqlConnectionError(
+    `The Postgres driver took ${taken} connections from the pool and evicted each one, because each was last used before a liveness check on another connection from the same pool failed. No statement was sent.`,
+    { transient: true },
   );
 }
 
