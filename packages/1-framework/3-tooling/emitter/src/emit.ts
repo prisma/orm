@@ -107,7 +107,7 @@ function requireWrittenStorageToHashTo(
   });
   if (writtenHash !== storageHash) {
     throw new InternalError(
-      `The written storage section hashes to ${writtenHash}, but the contract's storage hash is ${storageHash}. The storage hash was computed with a different normal form of storage from the one the contract is written with.`,
+      `The written storage section hashes to ${writtenHash}, but the storage hash of the contract for family "${contract.targetFamily}" and target "${contract.target}" is ${storageHash}. The storage hash was computed with a different normal form of storage, or over storage that changed afterwards, or is a placeholder. Compute \`storage.storageHash\` with \`computeStorageHash\` and the same \`normalizeStorage\` that is passed to \`emit\`, over the storage as it is passed.`,
     );
   }
 }

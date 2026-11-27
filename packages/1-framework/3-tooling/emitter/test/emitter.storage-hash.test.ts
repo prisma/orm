@@ -36,8 +36,13 @@ describe('emit storage hash', () => {
   it('refuses a contract whose storage hash was computed with another normal form of storage', async () => {
     const contract = createTestContract({ storage: storageWithUnorderedIndexes });
 
-    await expect(emit(contract, { codecTypeImports: [] }, createMockSpi())).rejects.toThrow(
-      `but the contract's storage hash is ${contract.storage.storageHash}`,
+    const refusal = emit(contract, { codecTypeImports: [] }, createMockSpi());
+
+    await expect(refusal).rejects.toThrow(
+      `but the storage hash of the contract for family "${contract.targetFamily}" and target "${contract.target}" is ${contract.storage.storageHash}`,
+    );
+    await expect(refusal).rejects.toThrow(
+      'Compute `storage.storageHash` with `computeStorageHash` and the same `normalizeStorage` that is passed to `emit`, over the storage as it is passed.',
     );
   });
 });
