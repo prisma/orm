@@ -53,10 +53,10 @@ describe('the liveness check of a pooled client', () => {
     const driver = driverOver(poolOf(() => client));
 
     expect(await queryRows(driver, 'select 1 as one')).toEqual([{ one: '1' }]);
-    expect(client.query.mock.calls.map(([config]) => config)).toEqual([
-      expect.objectContaining({ text: '', query_timeout: 5000 }),
-      expect.objectContaining({ text: 'select 1 as one' }),
-    ]);
+    const [check, callers] = client.query.mock.calls.map(([config]) => config);
+    expect(check).toEqual(expect.objectContaining({ text: '', query_timeout: 5000 }));
+    expect(callers).toEqual(expect.objectContaining({ text: 'select 1 as one' }));
+    expect(callers).not.toHaveProperty('query_timeout');
     expect(client.release.mock.calls).toEqual([[]]);
   });
 
@@ -70,7 +70,12 @@ describe('the liveness check of a pooled client', () => {
     );
 
     await expect(queryRows(driver, 'select 1')).rejects.toBeInstanceOf(SqlQueryError);
-    expect(client.query).toHaveBeenCalledTimes(1);
+    expect(client.query.mock.calls.map(([config]) => config)).toEqual([
+      expect.objectContaining({
+        text: expect.stringMatching(/^SELECT set_config\(/),
+        query_timeout: 5000,
+      }),
+    ]);
     expect(client.release.mock.calls).toEqual([[true]]);
   });
 
@@ -93,6 +98,30 @@ describe('the liveness check of a pooled client', () => {
     expect(error).toBeInstanceOf(SqlConnectionError);
     expect(error).toHaveProperty('cause', reset);
     expect(pool.connect).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops after the default pg-pool max plus one clients on a pool-like object with no max, and says what failed', async () => {
+    const pool = Object.assign(new EventEmitter(), {
+      connect: vi.fn(async () =>
+        idleClient(async () => {
+          throw new Error('Unexpected end of input');
+        }),
+      ),
+      end: vi.fn(async () => {}),
+    });
+    const driver = driverOver(pool as unknown as Pool);
+
+    const error = await queryRows(driver, 'select 1').then(
+      () => undefined,
+      (reason: unknown) => reason,
+    );
+
+    expect(error).toBeInstanceOf(SqlConnectionError);
+    expect(error).toHaveProperty(
+      'message',
+      'A pooled Postgres connection gave no answer from the server to its liveness check (time limit 5000 ms): Unexpected end of input',
+    );
+    expect(pool.connect).toHaveBeenCalledTimes(11);
   });
 
   it.each([

@@ -1,9 +1,7 @@
-import { setTimeout as sleep } from 'node:timers/promises';
 import { timeouts } from '@repo/test-utils';
 import { inCi } from '@repo/test-utils/ci';
 import pg from 'pg';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { livenessCheckSettings } from '../src/liveness-check';
 import { createBoundDriverFromBinding } from '../src/postgres-driver';
 import {
   type Death,
@@ -12,11 +10,8 @@ import {
   targetOf,
   throughProxy,
 } from './dying-connections-proxy';
+import { idleBeyondThreshold, useLoweredLivenessCheck } from './lowered-liveness-check';
 import { queryRows } from './sql-queryable-test-utils';
-
-const IDLE_THRESHOLD_MILLIS = 30;
-const CHECK_LIMIT_MILLIS = 300;
-const original = { ...livenessCheckSettings };
 
 const serverUrl =
   process.env['DATABASE_URL'] ?? 'postgres://postgres:postgres@localhost:5432/postgres';
@@ -49,10 +44,6 @@ it.runIf(inCi)(
   },
 );
 
-function idleBeyondThreshold(): Promise<void> {
-  return sleep(IDLE_THRESHOLD_MILLIS * 2);
-}
-
 /**
  * The dev database accepts one connection at a time, so these cases, which hold several pooled
  * connections at once, run against a real server.
@@ -60,17 +51,13 @@ function idleBeyondThreshold(): Promise<void> {
 describe.runIf(realPostgresAvailable)('pooled connections that died while idle', () => {
   let proxy: DyingConnectionsProxy;
   const cleanups: (() => Promise<void>)[] = [];
+  useLoweredLivenessCheck();
 
   beforeEach(async () => {
-    Object.assign(livenessCheckSettings, {
-      checkAfterIdleMillis: IDLE_THRESHOLD_MILLIS,
-      timeoutMillis: CHECK_LIMIT_MILLIS,
-    });
     proxy = await startDyingConnectionsProxy(targetOf(serverUrl));
   }, timeouts.spinUpPpgDev);
 
   afterEach(async () => {
-    Object.assign(livenessCheckSettings, original);
     for (const cleanup of cleanups.splice(0).reverse()) await cleanup().catch(() => undefined);
     await proxy.close();
   }, timeouts.spinUpPpgDev);
@@ -114,7 +101,9 @@ describe.runIf(realPostgresAvailable)('pooled connections that died while idle',
       expect(await queryRows(driver, 'select 1 as one')).toEqual([{ one: '1' }]);
       expect(proxy.connections.filter((connection) => connection.wroteAfterDeath)).toHaveLength(1);
       expect(proxy.connections).toHaveLength(4);
-      await vi.waitFor(() => expect(removed).toHaveLength(3));
+      await vi.waitFor(() => expect(removed).toHaveLength(3), {
+        timeout: timeouts.databaseOperation,
+      });
     },
     timeouts.spinUpPpgDev,
   );
@@ -126,7 +115,7 @@ describe.runIf(realPostgresAvailable)('pooled connections that died while idle',
 
       expect(await queryRows(driver, 'select 1 as one')).toEqual([{ one: '1' }]);
       await vi.waitFor(() => expect(removed).toHaveLength(3), {
-        timeout: CHECK_LIMIT_MILLIS * 3,
+        timeout: timeouts.databaseOperation,
       });
       expect(proxy.connections.filter((connection) => connection.wroteAfterDeath)).toHaveLength(1);
     },
@@ -155,7 +144,9 @@ describe.runIf(realPostgresAvailable)('pooled connections that died while idle',
       await idleBeyondThreshold();
 
       const waiting = queryRows(driver, "select 'first'");
-      await vi.waitFor(() => expect(silent.wroteAfterDeath).toBe(true));
+      await vi.waitFor(() => expect(silent.wroteAfterDeath).toBe(true), {
+        timeout: timeouts.databaseOperation,
+      });
       await queryRows(driver, "select 'second'");
       await waiting;
 

@@ -865,7 +865,7 @@ class PostgresPoolDriverImpl
       } else {
         evictClient(client, olderClientEviction());
       }
-      if (pass > this.pool.options.max) throw lastCheckFailure ?? olderClientEviction();
+      if (pass > poolMax(this.pool)) throw lastCheckFailure ?? olderClientEviction();
     }
   }
 
@@ -902,7 +902,7 @@ class PostgresPoolDriverImpl
     const startedAt = this.#clientUse.now();
     const settingsDue = this.#sessionSettings.needs(client);
     try {
-      await sendLivenessCheck(this.#sessionSettings, client);
+      await sendLivenessCheck(this.#sessionSettings, client, settingsDue);
       return undefined;
     } catch (error) {
       const normalized = normalizePgClientError(client, error);
@@ -915,7 +915,7 @@ class PostgresPoolDriverImpl
       return SqlConnectionError.is(normalized)
         ? normalized
         : new SqlConnectionError(
-            `A pooled Postgres connection did not answer its liveness check within ${livenessCheckSettings.timeoutMillis} ms.`,
+            `A pooled Postgres connection gave no answer from the server to its liveness check (time limit ${livenessCheckSettings.timeoutMillis} ms): ${normalized.message}`,
             { cause: normalized, transient: true },
           );
     }
@@ -1153,15 +1153,29 @@ export function createBoundDriverFromBinding(
   }
 }
 
-async function sendLivenessCheck(guard: SessionSettingsGuard, client: ClientBase): Promise<void> {
+async function sendLivenessCheck(
+  guard: SessionSettingsGuard,
+  client: ClientBase,
+  settingsDue: boolean,
+): Promise<void> {
   const timeLimitMillis = livenessCheckSettings.timeoutMillis;
   const releaseLock = await acquireClientQueryLock(client);
   try {
-    if (guard.needs(client)) await guard.ensure(client, timeLimitMillis);
+    if (settingsDue) await guard.ensure(client, timeLimitMillis);
     else await client.query(timedStatement({ text: '' }, timeLimitMillis));
   } finally {
     releaseLock();
   }
+}
+
+const PG_POOL_DEFAULT_MAX = 10;
+
+/** The pool's `max`, or pg-pool's default for a pool-like object that has none. */
+function poolMax(pool: object): number {
+  const options = 'options' in pool ? pool.options : undefined;
+  const max =
+    typeof options === 'object' && options !== null && 'max' in options ? options.max : undefined;
+  return typeof max === 'number' && max > 0 ? max : PG_POOL_DEFAULT_MAX;
 }
 
 /** Removes a client from its pool, destroying its socket first so a silent peer cannot hold it open. */

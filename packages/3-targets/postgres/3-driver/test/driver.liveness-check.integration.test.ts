@@ -1,9 +1,7 @@
-import { setTimeout as sleep } from 'node:timers/promises';
 import { SqlConnectionError } from '@internal/sql-errors';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import pg from 'pg';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { livenessCheckSettings } from '../src/liveness-check';
 import { createBoundDriverFromBinding } from '../src/postgres-driver';
 import {
   type Death,
@@ -12,11 +10,14 @@ import {
   targetOf,
   throughProxy,
 } from './dying-connections-proxy';
+import {
+  idleBeyondThreshold,
+  useLoweredLivenessCheck,
+  useShippedIdleThreshold,
+} from './lowered-liveness-check';
 import { executeSql, queryRows } from './sql-queryable-test-utils';
 
-const IDLE_THRESHOLD_MILLIS = 30;
-const CHECK_LIMIT_MILLIS = 300;
-const original = { ...livenessCheckSettings };
+useLoweredLivenessCheck();
 
 let proxy: DyingConnectionsProxy;
 let closeDatabase: () => Promise<void>;
@@ -24,10 +25,6 @@ let connectionString: string;
 const cleanups: (() => Promise<void>)[] = [];
 
 beforeEach(async () => {
-  Object.assign(livenessCheckSettings, {
-    checkAfterIdleMillis: IDLE_THRESHOLD_MILLIS,
-    timeoutMillis: CHECK_LIMIT_MILLIS,
-  });
   const database = await createDevDatabase();
   closeDatabase = () => database.close();
   proxy = await startDyingConnectionsProxy(targetOf(database.connectionString));
@@ -35,15 +32,10 @@ beforeEach(async () => {
 }, timeouts.spinUpPpgDev);
 
 afterEach(async () => {
-  Object.assign(livenessCheckSettings, original);
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup().catch(() => undefined);
   await proxy.close();
   await closeDatabase();
 }, timeouts.spinUpPpgDev);
-
-function idleBeyondThreshold(): Promise<void> {
-  return sleep(IDLE_THRESHOLD_MILLIS * 2);
-}
 
 function poolOfOne(sessionSettings?: Record<string, string>) {
   const driver = createBoundDriverFromBinding(
@@ -107,13 +99,13 @@ describe('a pooled connection that died while idle', () => {
     timeouts.spinUpPpgDev,
   );
 
-  it(
-    'is replaced when the session settings are due, which serve as its liveness check',
-    async () => {
+  it.each<Death>(['reset', 'silence'])(
+    'is replaced after %s when the session settings are due, which serve as its liveness check',
+    async (death) => {
       const driver = poolOfOne({ DateStyle: 'ISO, YMD' });
       await queryRows(driver, "select 'warm'");
       await (await driver.acquireConnection()).release();
-      proxy.connectionThatRan("select 'warm'").die('reset');
+      proxy.connectionThatRan("select 'warm'").die(death);
       await idleBeyondThreshold();
 
       expect(await queryRows(driver, 'select 1 as one')).toEqual([{ one: '1' }]);
@@ -164,7 +156,9 @@ describe('a pooled connection that died while idle', () => {
         () => 'resolved',
         (error: unknown) => error,
       );
-      await vi.waitFor(() => expect(dying.wroteAfterDeath).toBe(true));
+      await vi.waitFor(() => expect(dying.wroteAfterDeath).toBe(true), {
+        timeout: timeouts.databaseOperation,
+      });
       await driver.close();
 
       expect(await outcome).toBeInstanceOf(SqlConnectionError);
@@ -177,7 +171,7 @@ describe('a pooled connection used within the threshold', () => {
   it(
     'is used unchecked, so the server receives the caller statement and nothing before it',
     async () => {
-      Object.assign(livenessCheckSettings, { checkAfterIdleMillis: original.checkAfterIdleMillis });
+      useShippedIdleThreshold();
       const driver = poolOfOne();
       await queryRows(driver, "select 'warm'");
       await queryRows(driver, 'select 2 as two');
