@@ -20,15 +20,11 @@ describe('errorDataProtectionForbids', () => {
     subject: 'post',
     label: 'Disable row-level security on "post"',
   };
-  const markerCloses =
-    'To do it anyway, whoever owns the database must first change its data protection policy.';
-  const refCloses =
-    'To do it anyway, whoever owns that database must first change the data protection policy production declares.';
   const lossForbidden =
     "This database's data protection policy forbids losing data, so these operations cannot run on it.";
-  const keepData = `${lossForbidden} If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied, delete the migration and any later ones no database has applied, and plan again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting back in the contract what the migration removes. ${markerCloses}`;
-  const keepAccess = `production declares a data protection policy that forbids changing who can read or write data, so these operations cannot run on the database it describes. Keep the contract's access rules as they are. ${refCloses}`;
-  const keepDataPlanned = `${lossForbidden} If a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract. ${markerCloses}`;
+  const keepData = `${lossForbidden} If another database has already applied a migration listed here, keep it as it is: this database cannot run it, so report that to whoever owns the database. For a migration no database has applied, delete the migration and any later ones no database has applied, and plan again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting back in the contract what the migration removes.`;
+  const keepAccess = `production declares a data protection policy that forbids changing who can read or write data, so these operations cannot run on the database it describes. Keep the contract's access rules as they are.`;
+  const keepDataPlanned = `${lossForbidden} If a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract.`;
 
   it('refuses a migration that loses data under data-loss-forbidden the marker records', () => {
     expect(
@@ -88,6 +84,66 @@ describe('errorDataProtectionForbids', () => {
     });
   });
 
+  describe("a refusal by a ref's policy gives the command's own recovery, and never says to change what the ref declares", () => {
+    const refusesLoss =
+      'production declares a data protection policy that forbids losing data, so these operations cannot run on the database it describes.';
+    const refusesAccess =
+      'production declares a data protection policy that forbids changing who can read or write data, so these operations cannot run on the database it describes.';
+    const keepApplied =
+      'If another database has already applied a migration listed here, keep it as it is: this database cannot run it, so report that to whoever owns the database.';
+
+    it.each([
+      [
+        'db migrate',
+        'dataLoss',
+        `${refusesLoss} ${keepApplied} For a migration no database has applied, delete the migration and any later ones no database has applied, and plan again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting back in the contract what the migration removes.`,
+      ],
+      [
+        'db migrate',
+        'accessWidening',
+        `${refusesAccess} ${keepApplied} For a migration no database has applied, delete the migration and any later ones no database has applied, put the contract's access rules back as they were, and plan again.`,
+      ],
+      [
+        'db update',
+        'dataLoss',
+        `${refusesLoss} If a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract.`,
+      ],
+      [
+        'db update',
+        'accessWidening',
+        `${refusesAccess} Keep the contract's access rules as they are.`,
+      ],
+      [
+        'migration plan',
+        'dataLoss',
+        `${refusesLoss} If a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract.`,
+      ],
+      [
+        'migration plan',
+        'accessWidening',
+        `${refusesAccess} Keep the contract's access rules as they are.`,
+      ],
+    ] as const)('%s refused by its %s', (command, setting, recovery) => {
+      const { fix, nextActions } = errorDataProtectionForbids({
+        spaceId: 'app',
+        command,
+        refusals: [
+          {
+            setting,
+            source: { kind: 'ref', refName: 'production' },
+            operations: [setting === 'dataLoss' ? dropColumn : disableRls],
+          },
+        ],
+        invocation,
+      }).toEnvelope();
+
+      expect({ fix, nextActions }).toEqual({
+        fix: recovery,
+        nextActions: [{ kind: 'user-choice', label: recovery }],
+      });
+    });
+  });
+
   it('tells a db migrate user to keep a migration another database applied, under access-widening-forbidden', () => {
     expect(
       errorDataProtectionForbids({
@@ -99,7 +155,7 @@ describe('errorDataProtectionForbids', () => {
         invocation,
       }).toEnvelope().fix,
     ).toBe(
-      `This database's data protection policy forbids changing who can read or write data, so these operations cannot run on it. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied, delete the migration and any later ones no database has applied, put the contract's access rules back as they were, and plan again. ${markerCloses}`,
+      `This database's data protection policy forbids changing who can read or write data, so these operations cannot run on it. If another database has already applied a migration listed here, keep it as it is: this database cannot run it, so report that to whoever owns the database. For a migration no database has applied, delete the migration and any later ones no database has applied, put the contract's access rules back as they were, and plan again.`,
     );
   });
 
@@ -107,12 +163,12 @@ describe('errorDataProtectionForbids', () => {
     [
       'dataLoss',
       dropColumn,
-      `production declares a data protection policy that forbids losing data, so these operations cannot run on the database it describes. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied, delete the migration and any later ones no database has applied, and plan again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting back in the contract what the migration removes. ${refCloses}`,
+      'production declares a data protection policy that forbids losing data, so these operations cannot run on the database it describes. If another database has already applied a migration listed here, keep it as it is: this database cannot run it, so report that to whoever owns the database. For a migration no database has applied, delete the migration and any later ones no database has applied, and plan again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting back in the contract what the migration removes.',
     ],
     [
       'accessWidening',
       disableRls,
-      `production declares a data protection policy that forbids changing who can read or write data, so these operations cannot run on the database it describes. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied, delete the migration and any later ones no database has applied, put the contract's access rules back as they were, and plan again. ${refCloses}`,
+      `production declares a data protection policy that forbids changing who can read or write data, so these operations cannot run on the database it describes. If another database has already applied a migration listed here, keep it as it is: this database cannot run it, so report that to whoever owns the database. For a migration no database has applied, delete the migration and any later ones no database has applied, put the contract's access rules back as they were, and plan again.`,
     ],
   ] as const)(
     'tells a db migrate user what to do when a ref forbids %s',
@@ -136,7 +192,7 @@ describe('errorDataProtectionForbids', () => {
     const accessForbidden =
       "This database's data protection policy forbids changing who can read or write data, so these operations cannot run on it.";
     const keptApplied =
-      'If another database has already applied a migration listed here, keep it as it is.';
+      'If another database has already applied a migration listed here, keep it as it is: this database cannot run it, so report that to whoever owns the database.';
     const dropAuditColumn = {
       ...dropColumn,
       spaceId: 'audit',
@@ -162,30 +218,10 @@ describe('errorDataProtectionForbids', () => {
         .fix;
 
     it.each([
-      [
-        'db migrate',
-        'dataLoss',
-        dropAuditColumn,
-        `${lossForbidden} ${extensionOwns} ${markerCloses}`,
-      ],
-      [
-        'db migrate',
-        'accessWidening',
-        disableAuditRls,
-        `${accessForbidden} ${extensionOwns} ${markerCloses}`,
-      ],
-      [
-        'db update',
-        'dataLoss',
-        dropAuditColumn,
-        `${lossForbidden} ${extensionOwns} ${markerCloses}`,
-      ],
-      [
-        'db update',
-        'accessWidening',
-        disableAuditRls,
-        `${accessForbidden} ${extensionOwns} ${markerCloses}`,
-      ],
+      ['db migrate', 'dataLoss', dropAuditColumn, `${lossForbidden} ${extensionOwns}`],
+      ['db migrate', 'accessWidening', disableAuditRls, `${accessForbidden} ${extensionOwns}`],
+      ['db update', 'dataLoss', dropAuditColumn, `${lossForbidden} ${extensionOwns}`],
+      ['db update', 'accessWidening', disableAuditRls, `${accessForbidden} ${extensionOwns}`],
     ] as const)(
       'tells a %s user not to change it, and gives no advice for the application, under %s',
       (command, setting, operation, fix) => {
@@ -201,28 +237,28 @@ describe('errorDataProtectionForbids', () => {
         'dataLoss',
         dropColumn,
         dropAuditColumn,
-        `${lossForbidden} ${keptApplied} For an application migration no database has applied, delete the migration and any later ones no database has applied, and plan again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting back in the contract what the migration removes. ${extensionOwns} ${markerCloses}`,
+        `${lossForbidden} ${keptApplied} For an application migration no database has applied, delete the migration and any later ones no database has applied, and plan again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting back in the contract what the migration removes. ${extensionOwns}`,
       ],
       [
         'db migrate',
         'accessWidening',
         disableRls,
         disableAuditRls,
-        `${accessForbidden} ${keptApplied} For an application migration no database has applied, delete the migration and any later ones no database has applied, put the contract's access rules back as they were, and plan again. ${extensionOwns} ${markerCloses}`,
+        `${accessForbidden} ${keptApplied} For an application migration no database has applied, delete the migration and any later ones no database has applied, put the contract's access rules back as they were, and plan again. ${extensionOwns}`,
       ],
       [
         'db update',
         'dataLoss',
         dropColumn,
         dropAuditColumn,
-        `${lossForbidden} For the application's operations: if a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract. ${extensionOwns} ${markerCloses}`,
+        `${lossForbidden} For the application's operations: if a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract. ${extensionOwns}`,
       ],
       [
         'db update',
         'accessWidening',
         disableRls,
         disableAuditRls,
-        `${accessForbidden} For the application's operations, keep the contract's access rules as they are. ${extensionOwns} ${markerCloses}`,
+        `${accessForbidden} For the application's operations, keep the contract's access rules as they are. ${extensionOwns}`,
       ],
     ] as const)(
       'gives a %s user advice for the application and for the extension when one setting refuses both, under %s',
@@ -245,7 +281,7 @@ describe('errorDataProtectionForbids', () => {
           },
         ]),
       ).toBe(
-        `${lossForbidden} Contract spaces "audit" and "geo" belong to extensions, so do not edit or delete their migrations; ask the extensions' authors for versions without the operations. ${markerCloses}`,
+        `${lossForbidden} Contract spaces "audit" and "geo" belong to extensions, so do not edit or delete their migrations; ask the extensions' authors for versions without the operations.`,
       );
     });
 
@@ -255,7 +291,7 @@ describe('errorDataProtectionForbids', () => {
           { setting: 'dataLoss', source: { kind: 'marker' }, operations: [dropColumn] },
           { setting: 'accessWidening', source: { kind: 'marker' }, operations: [disableAuditRls] },
         ]),
-      ).toBe(`${keepData} ${accessForbidden} ${extensionOwns} ${markerCloses}`);
+      ).toBe(`${keepData} ${accessForbidden} ${extensionOwns}`);
     });
   });
 
@@ -330,7 +366,7 @@ describe('errorDataProtectionForbids advice', () => {
       {
         kind: 'user-choice',
         label:
-          "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, state the rename with --rename <old>:<new>. For a type change, write the conversion with `{bin} migration plan --from db --convert <field> --config app.config.ts`, run `node <migration directory>/migration.ts --config app.config.ts` for the directory it writes, and apply it with `{bin} db migrate --config app.config.ts --db <url>`. Otherwise keep it in the contract. To do it anyway, whoever owns the database must first change its data protection policy.",
+          "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, state the rename with --rename <old>:<new>. For a type change, write the conversion with `{bin} migration plan --from db --convert <field> --config app.config.ts`, run `node <migration directory>/migration.ts --config app.config.ts` for the directory it writes, and apply it with `{bin} db migrate --config app.config.ts --db <url>`. Otherwise keep it in the contract.",
       },
     ]);
   });

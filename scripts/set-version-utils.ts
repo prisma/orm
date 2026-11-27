@@ -52,6 +52,17 @@ export function rewriteWorkspaceDeps(packageJson: MutablePackageJson, version: s
 }
 
 /**
+ * The manifest in `text` when it pins a package with `workspace:`, else `undefined`. A tracked
+ * manifest without such a pin is not parsed, so a fixture that is not valid JSON on purpose does
+ * not stop a version bump.
+ */
+export function lockstepManifest(text: string): MutablePackageJson | undefined {
+  if (!text.includes('workspace:')) return undefined;
+  const packageJson: MutablePackageJson = JSON.parse(text);
+  return participatesInLockstep(packageJson) ? packageJson : undefined;
+}
+
+/**
  * Whether a manifest that is NOT a workspace member still versions in
  * lockstep with the workspace. A `workspace:` dep spec is the tell:
  * project-boundary manifests (e.g. `examples/bundle-size/src/postgres`,

@@ -1,0 +1,63 @@
+import { ormConfigSection } from '@internal/config-loader';
+import { positional } from '@prisma/cli-engine';
+import { notOk, ok } from '@prisma/cli-engine/protocol';
+import {
+  executeRefPolicyDelete,
+  type RefPolicyChange,
+} from '../../../control-api/operations/ref-policies';
+import { defineOrmCommand } from '../../define-command';
+import { normalizeError } from '../../normalize-error';
+import { editPresentations } from './presentation';
+import { andList, NOT_A_REASON_TO_CHANGE, planCheckSentence, refPositional } from './text';
+
+function closing(ref: string, changes: readonly RefPolicyChange[]): string {
+  const removed = andList(changes.map(({ setting }) => setting));
+  return `No database was changed. Deploys to ${ref} no longer compare ${removed} with the database.${planCheckSentence(ref, changes)}`;
+}
+
+export function createRefPolicyDeleteCommand(
+  execute: typeof executeRefPolicyDelete = executeRefPolicyDelete,
+) {
+  return defineOrmCommand({
+    help: {
+      summary: 'Remove settings from the policies a ref declares',
+      description:
+        'Removes the named settings from the policies field of\n' +
+        'migrations/app/refs/<ref>.json, so the ref declares nothing about them. A\n' +
+        'setting is named change, dataProtection.dataLoss or\n' +
+        'dataProtection.accessWidening, or by its flag name: data-loss or\n' +
+        'access-widening. It never connects to a database.\n\n' +
+        NOT_A_REASON_TO_CHANGE,
+      examples: [
+        'migration ref policy delete staging change',
+        'migration ref policy delete staging data-loss access-widening --json',
+      ],
+    },
+    args: {
+      positionals: {
+        ref: positional.string(refPositional),
+        settings: positional.variadic({ brief: 'Settings to remove', placeholder: 'setting' }),
+      },
+    },
+    needs: { config: ormConfigSection },
+    handler: async (args, ctx) => {
+      const ref = args.positionals.ref;
+      const result = await execute(ref, args.positionals.settings, {
+        config: ctx.config,
+        cwd: ctx.cwd,
+      });
+      if (!result.ok) return notOk(normalizeError(result.failure));
+      return ok(
+        ctx.present(
+          { data: result.value.result },
+          editPresentations(result.value, ctx.cwd, {
+            nothingChanged: 'declares none of these settings',
+            closing: (changes) => closing(ref, changes),
+          }),
+        ),
+      );
+    },
+  });
+}
+
+export const refPolicyDeleteCommand = createRefPolicyDeleteCommand();
