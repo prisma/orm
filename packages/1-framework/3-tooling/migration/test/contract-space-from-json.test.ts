@@ -115,6 +115,15 @@ describe('contractSpaceFromJson', () => {
     );
   });
 
+  it('refuses a bundled head ref whose hash is not a contract hash, naming the extension', () => {
+    const error = refusal(() =>
+      contractSpaceFromJson({ ...inputs, headRef: { ...inputs.headRef, hash: `sha256:${HASH}` } }),
+    );
+    expect(error).toMatchObject({ code: 'MIGRATION.INVALID_REF_FILE' });
+    expect(error['why']).toContain('hash must be a contract hash of 64 lowercase hex characters');
+    expect(error['why']).toContain('the extension "vectors"');
+  });
+
   it('refuses a bundled head ref with a field the format does not know', () => {
     const error = refusal(() =>
       contractSpaceFromJson({ ...inputs, headRef: { ...inputs.headRef, note: 'x' } }),

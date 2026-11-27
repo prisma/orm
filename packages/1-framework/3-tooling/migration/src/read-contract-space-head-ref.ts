@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import type { ContractSpaceHeadRef } from '@internal/framework-components/control';
 import { join } from 'pathe';
 import { errorInvalidJson, errorInvalidRefFile } from './errors';
+import { notContractHashText } from './formats/contract-hash';
 import { parseRefDocument } from './formats/ref/versions';
 import { assertValidSpaceId, spaceMigrationDirectory, spaceRefsDirectory } from './space-layout';
 
@@ -64,5 +65,7 @@ export async function readContractSpaceHeadRef(
   if (content.value.policies !== undefined) {
     throw errorInvalidRefFile(filePath, 'the head ref declares no policies');
   }
+  const hashProblem = notContractHashText('hash', content.value.hash);
+  if (hashProblem !== undefined) throw errorInvalidRefFile(filePath, hashProblem);
   return { hash: content.value.hash, invariants: content.value.invariants };
 }
