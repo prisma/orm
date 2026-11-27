@@ -6,7 +6,7 @@ Evidence is from reading `main` at `f0241ad4c5` on 2026-11-26. Paths under `cli/
 
 ## 1. The space is applied in a first phase, not as one more entry in the list
 
-**Status: proposed to the operator on 2026-11-26, because it changes which framework code changes. Not yet agreed.**
+**Status: agreed with the operator on 2026-11-27.** It keeps the design's intent (the tables are a contract space the target package carries, read from the installed package and applied before anything else) and changes where "applied first" happens.
 
 **What the design says.** Section 2: the code that builds the list of spaces adds the target's space, and everything after the list needs no change. Section 3: the space runs first, in the same transaction as the others.
 

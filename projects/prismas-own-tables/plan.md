@@ -10,7 +10,7 @@ Six slices, one pull request each, in this order. PostgreSQL comes first because
 
 | Slice | State |
 | --- | --- |
-| 1. PostgreSQL: the `_prisma` contract space, applied first, and the schema rename | The space, the function that applies it, and what users read are built and reviewed once. The command wiring waits on one decision ([amendments.md](amendments.md) section 1) |
+| 1. PostgreSQL: the `_prisma` contract space, applied first, and the schema rename | The space, the function that applies it, and what users read are built and reviewed once. The command wiring is being built |
 | 2. PostgreSQL: split the marker into signatures and configuration | Not started |
 | 3. Rename the concept from "marker" to "signature" | Not started |
 | 4. SQLite, MySQL, MariaDB and MongoDB | Not started |
