@@ -9,8 +9,8 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { compareCodeUnits } from './api-lines.mjs';
 import { listDifferences } from './differences.mjs';
-import { compareCodeUnits } from './flatten.mjs';
 import { entryPointsOf, MODEL_FOLDER } from './read-api.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
