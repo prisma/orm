@@ -9,7 +9,7 @@ changes:
         - '(?<![\w$])swapsValues(?![\w$])'
   - id: mongo-runner-checked-policies-renamed
     summary: |
-      The MongoDB runner's execute option `checkedPolicies` is renamed `policiesInForce`, and every contract space's runner now receives it. Code that passes `checkedPolicies` must pass `policiesInForce` instead; the runner ignores the old name.
+      The MongoDB runner's execute option `checkedPolicies` is renamed `policiesInForce`, and every contract space's runner now receives it. Code that passes `checkedPolicies` to the runner's `execute` must pass `policiesInForce` instead; the runner ignores the old name. Only that option is renamed: the `checkedPolicies` parameter of `updateMarker` (on `MarkerOperations` and `MongoControlAdapter`) and of `markerSwapFailure` keeps its name, so leave those as they are.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -28,4 +28,4 @@ Now the question carries the target's `keepDataAdvice`, and the ways to keep the
 
 ## `mongo-runner-checked-policies-renamed`
 
-8.0.0-rc.25 gave `MongoMigrationRunnerExecuteOptions` an optional `checkedPolicies`, the database's change policies, which guarded the application space's marker write. It is now `policiesInForce`, passed to every contract space's runner: the runner guards the application space's marker with it, and every space's advice offers only routes the policy permits. Rename the option where you pass it. Passing `checkedPolicies` through a variable still compiles, but the runner no longer reads it, so the marker write is not guarded.
+8.0.0-rc.25 gave `MongoMigrationRunnerExecuteOptions` an optional `checkedPolicies`, the database's change policies, which guarded the application space's marker write. It is now `policiesInForce`, passed to every contract space's runner: the runner guards the application space's marker with it, and every space's advice offers only routes the policy permits. Rename the option where you pass it to `execute`. Only that option is renamed: the `checkedPolicies` parameter of `updateMarker` (on `MarkerOperations` and `MongoControlAdapter`) and of `markerSwapFailure` keeps its name, so a target that implements those keeps it. Passing `checkedPolicies` through a variable still compiles, but the runner no longer reads it, so the marker write is not guarded.
