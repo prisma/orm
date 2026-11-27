@@ -12,8 +12,8 @@ import {
   assertDescriptorSelfConsistency,
   contractSpaceFromJson,
 } from '@internal/migration-tools/spaces';
-import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -56,8 +56,8 @@ const projects: readonly Project[] = [
 ];
 
 const HOOKS = {
-  sql: sqlContractCanonicalizationHooks,
-  mongo: mongoContractCanonicalizationHooks,
+  sql: { normalizeStorage: normalizeSqlStorage },
+  mongo: { normalizeStorage: normalizeMongoStorage },
 } as const;
 
 function path(relative: string): string {
@@ -112,7 +112,7 @@ describe.each(projects)('the $name project after the script', (project) => {
   });
 
   it('has snapshots the snapshot store reads with their content verified', async () => {
-    const verifier = createSnapshotContentVerifier(HOOKS[project.family]);
+    const verifier = createSnapshotContentVerifier(HOOKS[project.family].normalizeStorage);
     for (const hash of snapshotHashes(project))
       await expect(
         readContractSnapshotJson(path(project.migrationsDir), hash, verifier),
@@ -139,6 +139,17 @@ describe.each(projects)('the $name project after the script', (project) => {
     const snapshots = new Set(snapshotHashes(project));
     const refs = Object.values(await readRefs(path(project.refsDir)));
     for (const ref of refs) expect(snapshots.has(ref.hash)).toBe(true);
+  });
+});
+
+describe('a hand-edited contract that writes out every default its family leaves out, after the script', () => {
+  it.each([
+    ['postgres-app/every-default/contract.json', 'sql'],
+    ['mongo-app/every-default/contract.json', 'mongo'],
+  ] as const)('%s stores the hashes this release computes', (file, family) => {
+    expect(() =>
+      assertContractHashes({ contracts: [storedHashes(file, file)], ...HOOKS[family] }),
+    ).not.toThrow();
   });
 });
 
@@ -174,7 +185,7 @@ describe('the extension package after the script', () => {
         extensionId: 'pgvector',
         contractJson: space.contractJson,
         headRefHash: space.headRef.hash,
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       }),
     ).not.toThrow();
   });
@@ -186,7 +197,7 @@ describe('the extension package after the script', () => {
         extensionId: 'pgvector',
         contractJson: JSON.parse(before['src/contract.json'] ?? ''),
         headRefHash: JSON.parse(before['migrations/refs/head.json'] ?? '').hash,
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       }),
     ).toThrow(expect.objectContaining({ code: 'MIGRATION.DESCRIPTOR_HEAD_HASH_MISMATCH' }));
   });

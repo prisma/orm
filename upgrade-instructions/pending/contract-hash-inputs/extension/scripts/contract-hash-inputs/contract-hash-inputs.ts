@@ -317,7 +317,7 @@ function oldHash(contract: ContractSections, section: JsonRecord, hooks: Hooks):
 }
 
 // ---------------------------------------------------------------------------
-// The families' normal form of storage under the new rule. The canonicalizer leaves out no value; each family leaves out only the fields it names.
+// The families' normal form of storage under the new rule. The canonicalizer leaves out no value; each family leaves out only the fields it names, and orders the lists whose order has no meaning.
 
 type Normalize = (value: JsonRecord) => JsonRecord;
 
@@ -353,15 +353,48 @@ function mapListItems(value: Json | undefined, map: Normalize): Json | undefined
 
 const isEmptyRecord = (value: Json): boolean => isRecord(value) && Object.keys(value).length === 0;
 const isEmptyList = (value: Json): boolean => Array.isArray(value) && value.length === 0;
-const withoutSingleValueMany: Normalize = (field) =>
+const withoutManyFalse: Normalize = (field) =>
   without(field, (key, value) => key === 'many' && value === false);
+const withoutEmptyTypeParams: Normalize = (record) =>
+  without(record, (key, value) => key === 'typeParams' && isEmptyRecord(value));
+
+function normalFieldType(fieldType: JsonRecord): JsonRecord {
+  const kept = withoutEmptyTypeParams(fieldType);
+  return withEntry(kept, 'members', mapListItems(kept['members'], withoutEmptyTypeParams));
+}
+
+function normalValueObjectField(field: JsonRecord): JsonRecord {
+  const kept = withoutManyFalse(field);
+  return isRecord(kept['type']) ? withEntry(kept, 'type', normalFieldType(kept['type'])) : kept;
+}
 
 function normalValueObject(valueObject: JsonRecord): JsonRecord {
   return withEntry(
     valueObject,
     'fields',
-    mapRecordValues(valueObject['fields'], withoutSingleValueMany),
+    mapRecordValues(valueObject['fields'], normalValueObjectField),
   );
+}
+
+function contentOf(entry: Json): string {
+  return JSON.stringify(sortKeys(entry));
+}
+
+function compareByNameThenContent(a: Json, b: Json): number {
+  return compareByName(a, b) || compareCodeUnits(contentOf(a), contentOf(b));
+}
+
+function sortListsOf(
+  record: JsonRecord,
+  keys: readonly string[],
+  compare: (a: Json, b: Json) => number,
+): JsonRecord {
+  let next = record;
+  for (const key of keys) {
+    const list = next[key];
+    if (Array.isArray(list)) next = withEntry(next, key, [...list].sort(compare));
+  }
+  return next;
 }
 
 function normalStorageWith(entriesOf: Normalize): (storage: JsonRecord) => JsonRecord {
@@ -389,16 +422,25 @@ function sqlForeignKey(foreignKey: JsonRecord): JsonRecord {
   return without(
     foreignKey,
     (key, value) =>
-      (key === 'index' && value === false) ||
+      (key === 'index' && typeof value === 'boolean') ||
       ((key === 'onDelete' || key === 'onUpdate') && value === 'noAction'),
   );
 }
 
 function sqlTable(table: JsonRecord): JsonRecord {
   let next = without(table, (key, value) => key === 'checks' && isEmptyList(value));
-  next = withEntry(next, 'columns', mapRecordValues(next['columns'], withoutSingleValueMany));
+  next = withEntry(
+    next,
+    'columns',
+    mapRecordValues(next['columns'], (column) => withoutEmptyTypeParams(withoutManyFalse(column))),
+  );
   next = withEntry(next, 'indexes', mapListItems(next['indexes'], sqlIndex));
-  return withEntry(next, 'foreignKeys', mapListItems(next['foreignKeys'], sqlForeignKey));
+  next = withEntry(next, 'foreignKeys', mapListItems(next['foreignKeys'], sqlForeignKey));
+  return sortListsOf(
+    next,
+    ['checks', 'foreignKeys', 'indexes', 'uniques'],
+    compareByNameThenContent,
+  );
 }
 
 function sqlEntries(entries: JsonRecord): JsonRecord {
@@ -413,26 +455,23 @@ function sqlEntries(entries: JsonRecord): JsonRecord {
 
 function sqlNormalStorage(storage: JsonRecord): JsonRecord {
   const withNamespaces = normalStorageWith(sqlEntries)(storage);
-  const withTypes = withEntry(
+  return withEntry(
     withNamespaces,
     'types',
-    mapRecordValues(withNamespaces['types'], (storageType) =>
-      without(storageType, (key, value) => key === 'typeParams' && isEmptyRecord(value)),
-    ),
+    mapRecordValues(withNamespaces['types'], withoutEmptyTypeParams),
   );
-  const sorted = sortSqlStorage(withTypes);
-  return isRecord(sorted) ? sorted : withTypes;
 }
 
-const MONGO_COLLATION_FLAGS = new Set([
-  'caseLevel',
-  'numericOrdering',
-  'backwards',
-  'normalization',
-]);
+const MONGO_COLLATION_FLAGS = new Set(['caseLevel', 'numericOrdering']);
 const MONGO_INDEX_FLAGS = new Set(['unique', 'sparse']);
-const MONGO_SUBSCHEMA_KEYWORDS = new Set(['items', 'not', 'additionalProperties']);
+const MONGO_SUBSCHEMA_KEYWORDS = new Set([
+  'items',
+  'not',
+  'additionalProperties',
+  'additionalItems',
+]);
 const MONGO_SUBSCHEMA_LIST_KEYWORDS = new Set(['oneOf', 'anyOf', 'allOf', 'items']);
+const MONGO_SUBSCHEMA_MAP_KEYWORDS = new Set(['properties', 'patternProperties', 'dependencies']);
 
 const mongoCollation: Normalize = (collation) =>
   without(collation, (key, value) => MONGO_COLLATION_FLAGS.has(key) && value === false);
@@ -453,7 +492,7 @@ function mongoJsonSchema(schema: JsonRecord): JsonRecord {
   const next: JsonRecord = {};
   for (const [key, value] of Object.entries(kept)) {
     let mapped: Json | undefined = value;
-    if (key === 'properties') mapped = mapRecordValues(value, mongoJsonSchema);
+    if (MONGO_SUBSCHEMA_MAP_KEYWORDS.has(key)) mapped = mapRecordValues(value, mongoJsonSchema);
     else if (MONGO_SUBSCHEMA_LIST_KEYWORDS.has(key) && Array.isArray(value))
       mapped = mapListItems(value, mongoJsonSchema);
     else if (MONGO_SUBSCHEMA_KEYWORDS.has(key) && isRecord(value)) mapped = mongoJsonSchema(value);
@@ -465,6 +504,7 @@ function mongoJsonSchema(schema: JsonRecord): JsonRecord {
 function mongoCollection(collection: JsonRecord): JsonRecord {
   let next = without(collection, (key, value) => key === 'indexes' && isEmptyList(value));
   next = withEntry(next, 'indexes', mapListItems(next['indexes'], mongoIndex));
+  next = sortListsOf(next, ['indexes'], compareByName);
   const validator = next['validator'];
   if (isRecord(validator) && isRecord(validator['jsonSchema'])) {
     next = withEntry(

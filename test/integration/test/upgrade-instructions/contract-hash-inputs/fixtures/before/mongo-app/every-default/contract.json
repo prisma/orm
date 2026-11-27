@@ -1,0 +1,161 @@
+{
+  "formatVersion": 1,
+  "target": "mongo",
+  "targetFamily": "mongo",
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "storage": {
+    "storageHash": "aa367e8797097bb36d35ac39e0558ce28c83d680d4c98e80e5b2dcff7e574368",
+    "namespaces": {
+      "app": {
+        "id": "app",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "users": {
+              "kind": "mongo-collection",
+              "indexes": [
+                {
+                  "kind": "mongo-index",
+                  "name": "users_email_idx",
+                  "keys": [
+                    {
+                      "field": "email",
+                      "direction": 1
+                    }
+                  ],
+                  "unique": true,
+                  "collation": {
+                    "locale": "fr_CA",
+                    "backwards": false,
+                    "normalization": false,
+                    "caseLevel": false,
+                    "numericOrdering": false
+                  },
+                  "sparse": false
+                },
+                {
+                  "kind": "mongo-index",
+                  "name": "users_name_idx",
+                  "keys": [
+                    {
+                      "field": "name",
+                      "direction": 1
+                    }
+                  ],
+                  "partialFilterExpression": {
+                    "isAdmin": false
+                  },
+                  "unique": false
+                },
+                {
+                  "kind": "mongo-index",
+                  "name": "users_age_idx",
+                  "keys": [
+                    {
+                      "field": "age",
+                      "direction": 1
+                    }
+                  ],
+                  "sparse": true
+                }
+              ],
+              "validator": {
+                "kind": "mongo-validator",
+                "jsonSchema": {
+                  "bsonType": "object",
+                  "properties": {
+                    "email": {
+                      "bsonType": "string"
+                    },
+                    "address": {
+                      "bsonType": "object",
+                      "required": [],
+                      "properties": {
+                        "city": {
+                          "bsonType": "string"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "bsonType": "object",
+                      "properties": {}
+                    },
+                    "raw": {},
+                    "pair": {
+                      "bsonType": "array",
+                      "items": [
+                        {
+                          "bsonType": "int"
+                        }
+                      ],
+                      "additionalItems": false
+                    },
+                    "extra": {
+                      "bsonType": "object",
+                      "patternProperties": {
+                        "^x_": {
+                          "bsonType": "object",
+                          "required": []
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "email"
+                  ],
+                  "additionalProperties": false
+                },
+                "validationLevel": "strict",
+                "validationAction": "error"
+              },
+              "options": {
+                "kind": "mongo-collection-options",
+                "collation": {
+                  "locale": "vi",
+                  "normalization": false,
+                  "numericOrdering": false
+                },
+                "changeStreamPreAndPostImages": {
+                  "enabled": false
+                },
+                "clusteredIndex": {}
+              }
+            },
+            "posts": {
+              "kind": "mongo-collection",
+              "indexes": []
+            }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "city": {
+                  "nullable": false,
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1",
+                    "typeParams": {}
+                  },
+                  "many": false
+                }
+              }
+            }
+          },
+          "valueSet": {
+            "Role": {
+              "kind": "valueSet",
+              "values": [
+                "admin",
+                {
+                  "a": false
+                }
+              ]
+            }
+          },
+          "custom": {}
+        }
+      }
+    }
+  },
+  "capabilities": {}
+}

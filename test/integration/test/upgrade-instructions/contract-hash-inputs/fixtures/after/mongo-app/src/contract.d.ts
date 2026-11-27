@@ -18,7 +18,7 @@ import type {
 } from '@prisma/orm-mongo/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'928c3f2ba5154177dfa601d7ede1557dfc66ef1c93472d6feab47d4dd06345a7'>;
+  StorageHashBase<'ff958ad30f036a7d4c5c3efd677924abd8169aa1516278419a5621204af31c35'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69'>;

@@ -1,6 +1,6 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { computeStorageHash } from '@internal/contract/hashing';
-import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
 import { dirname, join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
@@ -26,7 +26,7 @@ const POSTGRES_HEAD_SNAPSHOT =
 const REMOVED_HASH = '6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1';
 const REMOVED_HASH_NEW_VALUE = 'ff745362b097d2c6a45dac30c7679674557f0d02bf9e8de489f29fa83c773deb';
 const BACKFILL_HASH = '5b423686089e2ada5ece2b224849ac73ce6b998fb062e88217d2f30a1a567748';
-const BACKFILL_HASH_NEW_VALUE = 'f6146e922053633f815e208705396f57f232a93ac6a95e78b39ee7fb695d0d70';
+const BACKFILL_HASH_NEW_VALUE = '248955e3f438997c7f6b35efe2fa7e91462dc40845aa0f75451616f0af4b702b';
 const MONGO_CONTRACT = 'mongo-app/src/contract.json';
 const MONGO_STORAGE_HASH = '1c73a5a88943362a9b01f6476e85fddc574031accb9ada12be61e9da24fe0fd8';
 const MONGO_EARLIER_SNAPSHOT_HASH =
@@ -69,6 +69,7 @@ describe('an application and an extension with hashes under the old rules', () =
         '  3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2 -> 21234604124379cdee70a9b006a21486652efd31ec8b2c663587040a15560146\n' +
         '  3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2 -> 3f81ceb53f2b89ed6df558a576771fb51a26b9946d33791105aa145152db5fcd\n' +
         '  3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2 -> 833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174\n' +
+        '  3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2 -> ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632\n' +
         '  3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2 -> b2e32ae1b00ceab2d871e7322fe8ec98c7e62edca4aef951a827b094cc78dad2\n',
     );
   });
@@ -503,6 +504,6 @@ function mongoStorageHashOf(path: string, which: 'content' | 'stored' = 'content
     target: contract.target,
     targetFamily: contract.targetFamily,
     storage,
-    ...mongoContractCanonicalizationHooks,
+    normalizeStorage: normalizeMongoStorage,
   });
 }
