@@ -3,12 +3,12 @@ import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach } from 'vitest';
 import { livenessCheckSettings } from '../src/liveness-check';
 
-export const IDLE_THRESHOLD_MILLIS = 30;
+const IDLE_THRESHOLD_MILLIS = 30;
 
 const shipped = { ...livenessCheckSettings };
 
 /** The lowered limit on a liveness check. It scales with `TEST_TIMEOUT_MULTIPLIER`, so a healthy check on a slow runner is not evicted. */
-export function checkLimitMillis(): number {
+function checkLimitMillis(): number {
   return timeouts.default * 3;
 }
 
