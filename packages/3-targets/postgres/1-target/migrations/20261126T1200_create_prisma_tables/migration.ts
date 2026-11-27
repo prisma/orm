@@ -197,12 +197,12 @@ export default class M extends Migration {
             params: [SCHEMA],
           },
           {
-            description: `The role that runs this command must have the privileges of the role that owns schema "${RELEASE_CANDIDATE_SCHEMA}", because renaming a schema needs them. Find the owners of the schema and its tables with SELECT nspowner::regrole FROM pg_namespace WHERE nspname = '${RELEASE_CANDIDATE_SCHEMA}' and SELECT relname, relowner::regrole FROM pg_class WHERE relnamespace = to_regnamespace('${RELEASE_CANDIDATE_SCHEMA}'). ${giveToMigratingRole}`,
+            description: `The role that runs this command must have the privileges of the role that owns schema "${RELEASE_CANDIDATE_SCHEMA}", because renaming a schema needs them. Find the owners of the schema and its tables with SELECT nspowner::regrole FROM pg_namespace WHERE nspname = '${RELEASE_CANDIDATE_SCHEMA}' and SELECT relname, relowner::regrole FROM pg_class WHERE relnamespace = to_regnamespace('${RELEASE_CANDIDATE_SCHEMA}') AND relkind = 'r'. ${giveToMigratingRole}`,
             sql: absentOrHasSchemaOwnerPrivileges,
             params: [RELEASE_CANDIDATE_SCHEMA],
           },
           ...tables.map((table) => ({
-            description: `The role that runs this command must have the privileges of the role that owns table ${qualified(table.name, RELEASE_CANDIDATE_SCHEMA)}, because later migrations of Prisma's own tables alter them, and altering a table needs those privileges. ${giveToMigratingRole}`,
+            description: `The role that runs this command must have the privileges of the role that owns table ${qualified(table.name, RELEASE_CANDIDATE_SCHEMA)}, because a later migration of Prisma's own tables may add a column to it, and that needs those privileges. ${giveToMigratingRole}`,
             sql: absentOrHasTableOwnerPrivileges,
             params: [RELEASE_CANDIDATE_SCHEMA, table.name],
           })),

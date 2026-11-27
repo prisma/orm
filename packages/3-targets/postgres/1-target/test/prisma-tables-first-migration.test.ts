@@ -99,6 +99,23 @@ describe("the first migration of the Postgres target's _prisma space", () => {
     }).toEqual({ checks: 4, missing: [] });
   });
 
+  it('says why it needs the owner of each table without promising a later change, and finds only the owners of tables', () => {
+    const rename = ops.find((op) => op.id === '_prisma.rename-release-candidate-schema');
+    const descriptions = (rename?.precheck ?? []).map((check) => check.description);
+    expect({
+      tableChecks: descriptions.filter((description) =>
+        description.includes(
+          "because a later migration of Prisma's own tables may add a column to it, and that needs those privileges.",
+        ),
+      ).length,
+      ownerQuery: descriptions.some((description) =>
+        description.includes(
+          "SELECT relname, relowner::regrole FROM pg_class WHERE relnamespace = to_regnamespace('prisma_contract') AND relkind = 'r'",
+        ),
+      ),
+    }).toEqual({ tableChecks: 3, ownerQuery: true });
+  });
+
   it('ends at the contract its snapshot holds', () => {
     expect(endContract.storage.storageHash).toBe(metadata.to);
   });
