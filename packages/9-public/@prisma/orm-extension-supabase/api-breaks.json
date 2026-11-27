@@ -5,8 +5,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "34261bf6461da021",
-    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+    "fingerprint": "4fb4ddf7775003e4",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
   },
   {
     "path": "./runtime",
@@ -14,8 +14,35 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "61772b2813420f86",
-    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+    "fingerprint": "3c9d16b4eda4510c",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
+  },
+  {
+    "path": "./runtime",
+    "export": "SupabaseDb",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "d355ac44c3abb036",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
+  },
+  {
+    "path": "./runtime",
+    "export": "SupabaseExtensionContract",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "aa1d211f375e6a3c",
+    "reason": "The Supabase contract's capabilities are the ones it requires; the `postgres` flags this release retired, such as `jsonAgg`, are gone (prisma/orm#31218)."
+  },
+  {
+    "path": "./runtime",
+    "export": "SupabaseInternalDb",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "927d50a8cf68b4ae",
+    "reason": "The Supabase contract's capabilities are the ones it requires; the `postgres` flags this release retired, such as `jsonAgg`, are gone (prisma/orm#31218)."
   },
   {
     "path": "./runtime",
