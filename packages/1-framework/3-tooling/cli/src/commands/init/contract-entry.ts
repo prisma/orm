@@ -1,10 +1,6 @@
 import { errorInitContributionUnavailable } from './errors';
 import type { ContractEntryInput, ContractEntryNode, InitContribution } from './init-contribution';
-import {
-  configFile,
-  defaultContractEntry,
-  type RenderedContractEntry,
-} from './templates/code-templates';
+import { configFile, defaultContractEntry } from './templates/code-templates';
 
 /** The package an init contribution came from, for the refusal of a malformed entry. */
 export interface ContributionOwner {
@@ -49,7 +45,7 @@ export function contractEntryFor(
   contribution: InitContribution,
   input: ContractEntryInput,
   owner: ContributionOwner,
-): RenderedContractEntry {
+): ContractEntryNode {
   return contribution.contractEntry === undefined
     ? defaultContractEntry(contribution.configModule, input)
     : contributedContractEntry(contribution.contractEntry, input, owner);

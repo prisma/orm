@@ -8,7 +8,12 @@ import {
   renderImports,
   TsExpression,
 } from '@internal/ts-render';
-import type { ContractEntryInput } from '../init-contribution';
+import { InternalError } from '@internal/utils/internal-error';
+import type {
+  ConfigModuleExports,
+  ContractEntryInput,
+  ContractEntryNode,
+} from '../init-contribution';
 
 export function defaultSchemaPath(authoring: ContractSourceFormat): string {
   if (authoring === 'typescript') {
@@ -28,10 +33,7 @@ function escapedForSingleQuotes(requirement: ImportRequirement): ImportRequireme
   };
 }
 
-/** What `prisma.config.ts` writes as its `contract:` entry, with the imports it needs. */
-export type RenderedContractEntry = Pick<TsExpression, 'renderTypeScript' | 'importRequirements'>;
-
-class ContractPathEntry extends TsExpression {
+class ContractPathEntry extends TsExpression implements ContractEntryNode {
   constructor(private readonly path: string) {
     super();
   }
@@ -43,9 +45,13 @@ class ContractPathEntry extends TsExpression {
   importRequirements(): readonly ImportRequirement[] {
     return [];
   }
+
+  contractValue(): unknown {
+    return this.path;
+  }
 }
 
-class Prisma7SchemaEntry extends TsExpression {
+class Prisma7SchemaEntry extends TsExpression implements ContractEntryNode {
   constructor(
     private readonly configModule: string,
     private readonly path: string,
@@ -60,13 +66,23 @@ class Prisma7SchemaEntry extends TsExpression {
   importRequirements(): readonly ImportRequirement[] {
     return [{ moduleSpecifier: this.configModule, symbol: 'prisma7Schema' }];
   }
+
+  contractValue(exports: ConfigModuleExports): unknown {
+    const prisma7Schema = exports['prisma7Schema'];
+    if (typeof prisma7Schema !== 'function') {
+      throw new InternalError(
+        `${this.configModule} exports no prisma7Schema function, which the config's contract entry imports.`,
+      );
+    }
+    return prisma7Schema(this.path);
+  }
 }
 
 /** The config's `contract:` entry for a contribution that gives none: the path, or `prisma7Schema(<path>)` from `configModule`. */
 export function defaultContractEntry(
   configModule: string,
   input: ContractEntryInput,
-): RenderedContractEntry {
+): ContractEntryNode {
   return input.kind === 'prisma7-schema'
     ? new Prisma7SchemaEntry(configModule, input.path)
     : new ContractPathEntry(input.path);
@@ -85,7 +101,7 @@ function configFileImports(configModule: string): readonly ImportRequirement[] {
  */
 export function configFile(options: {
   readonly configModule: string;
-  readonly contract: RenderedContractEntry;
+  readonly contract: ContractEntryNode;
   readonly output: string | undefined;
 }): string {
   const imports = renderImports(
@@ -100,7 +116,7 @@ ${imports}
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: ${options.contract.renderTypeScript()},${output}
+    contract: ${options.contract.renderTypeScript().replaceAll('\n', '\n    ')},${output}
     db: {
       connection: process.env['DATABASE_URL']!,
     },

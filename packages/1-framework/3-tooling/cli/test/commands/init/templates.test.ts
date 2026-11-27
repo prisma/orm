@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import type { ContractEntryNode } from '../../../src/commands/init/init-contribution';
 import {
   configFile,
   defaultContractEntry,
-  type RenderedContractEntry,
 } from '../../../src/commands/init/templates/code-templates';
 import { requirementsBlock } from '../../../src/commands/init/templates/quick-reference';
 
@@ -58,13 +58,15 @@ describe('templates', () => {
     });
 
     it("writes the entry node's source and merges its imports with its own", () => {
-      const sameModule: RenderedContractEntry = {
+      const sameModule: ContractEntryNode = {
         renderTypeScript: () => 'acmeContract("./prisma/contract.acme", { level: 3 })',
         importRequirements: () => [{ moduleSpecifier: 'acme-db/config', symbol: 'acmeContract' }],
+        contractValue: () => undefined,
       };
-      const otherModule: RenderedContractEntry = {
+      const otherModule: ContractEntryNode = {
         renderTypeScript: () => 'levelled()',
         importRequirements: () => [{ moduleSpecifier: 'acme-db/levels', symbol: 'levelled' }],
+        contractValue: () => undefined,
       };
 
       expect(
@@ -96,6 +98,65 @@ describe('templates', () => {
         "import { defineConfig as ormConfig } from 'acme-db/config';\nimport { levelled } from 'acme-db/levels';\n",
       );
       expect(other).toContain('    contract: levelled(),\n');
+    });
+
+    it('indents the lines of an entry that spans several to the depth of the entry', () => {
+      const multiLine: ContractEntryNode = {
+        renderTypeScript: () => '{\n  path: "./prisma/contract.acme",\n  level: 3,\n}',
+        importRequirements: () => [],
+        contractValue: () => undefined,
+      };
+
+      expect(
+        configFile({ configModule: 'acme-db/config', contract: multiLine, output: undefined }),
+      ).toContain(
+        [
+          '    contract: {',
+          '      path: "./prisma/contract.acme",',
+          '      level: 3,',
+          '    },',
+          '    db: {',
+        ].join('\n'),
+      );
+    });
+  });
+
+  describe('defaultContractEntry', () => {
+    it('is the path of a starter contract, as text and as value', () => {
+      const entry = defaultContractEntry('acme-db/config', {
+        kind: 'starter',
+        mode: 'psl',
+        path: './prisma/contract.prisma',
+      });
+
+      expect(entry.renderTypeScript()).toBe('"./prisma/contract.prisma"');
+      expect(entry.contractValue({})).toBe('./prisma/contract.prisma');
+    });
+
+    it("calls the config module's prisma7Schema with the path for a Prisma 7 schema", () => {
+      const entry = defaultContractEntry('acme-db/config', {
+        kind: 'prisma7-schema',
+        path: 'prisma/schema.prisma',
+      });
+
+      expect(entry.renderTypeScript()).toBe('prisma7Schema("prisma/schema.prisma")');
+      expect(entry.contractValue({ prisma7Schema: (path: string) => ({ path }) })).toEqual({
+        path: 'prisma/schema.prisma',
+      });
+    });
+
+    it('refuses to build the Prisma 7 entry from a config module without prisma7Schema', () => {
+      const entry = defaultContractEntry('acme-db/config', {
+        kind: 'prisma7-schema',
+        path: 'prisma/schema.prisma',
+      });
+
+      expect(() => entry.contractValue({})).toThrow(
+        expect.objectContaining({
+          message:
+            "acme-db/config exports no prisma7Schema function, which the config's contract entry imports.",
+        }),
+      );
     });
   });
 

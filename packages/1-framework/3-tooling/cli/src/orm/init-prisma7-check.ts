@@ -1,6 +1,6 @@
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
 import { buildLoadedConfig, requireConfigSections } from '@internal/config-loader';
-import { contributedContractEntry } from '../commands/init/contract-entry';
+import { contractEntryFor } from '../commands/init/contract-entry';
 import {
   errorInitContributionUnavailable,
   errorInitPrisma7SchemaRefused,
@@ -24,7 +24,7 @@ export type CheckPrisma7Source = (request: {
 }) => Promise<Prisma7SourceCheck>;
 
 /**
- * Finds out whether the installed facade can read the Prisma 7 schema before init changes the project: loads the package's config module as the project resolves it and computes the contract entry init then writes, without writing: the contribution's node builds its value from the config module's exports, and the CLI's own entry calls the config module's `prisma7Schema`. The CLI carries no target code, so the installed package is the only one that can answer. A `prisma7Schema` export from the config module is still the only sign that a package takes a Prisma 7 schema, and such a package must give `prisma7QuickReference`.
+ * Finds out whether the installed facade can read the Prisma 7 schema before init changes the project: loads the package's config module as the project resolves it and computes the contract entry init then writes, without writing: the entry's node builds its value from the config module's exports. The CLI carries no target code, so the installed package is the only one that can answer. A `prisma7Schema` export from the config module is still the only sign that a package takes a Prisma 7 schema, and such a package must give `prisma7QuickReference`.
  */
 export function createPrisma7SourceCheck(ctx: {
   readonly cwd: string;
@@ -78,14 +78,11 @@ export function createPrisma7SourceCheck(ctx: {
       throw missing;
     }
 
-    const contract =
-      contribution.contractEntry === undefined
-        ? prisma7Schema(schemaPath)
-        : await contributedContractEntry(
-            contribution.contractEntry,
-            { kind: 'prisma7-schema', path: schemaPath },
-            { packageName, unlisted: false },
-          ).contractValue(imported.module);
+    const contract = await contractEntryFor(
+      contribution,
+      { kind: 'prisma7-schema', path: schemaPath },
+      { packageName, unlisted: false },
+    ).contractValue(imported.module);
     const section: unknown = defineConfig({ contract, output: DEFAULT_CONTRACT_SOURCE_DIR });
     const loaded = buildLoadedConfig(isRecord(section) ? section : {}, ctx.cwd);
     const required = requireConfigSections(loaded, ['family', 'target', 'adapter', 'contract']);

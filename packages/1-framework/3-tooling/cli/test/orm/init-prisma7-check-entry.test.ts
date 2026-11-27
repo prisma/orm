@@ -97,6 +97,17 @@ describe('the Prisma 7 check runs the contract entry node', {
     expect(readdirSync(projectDir, { recursive: true })).toEqual(before);
   });
 
+  it("runs the CLI's own entry node for a contribution that gives none, calling the config module's prisma7Schema with the path alone", async () => {
+    const real = await fixtureContribution(PACKAGE);
+    const contribution = Object.assign({}, real, { contractEntry: undefined });
+
+    await expect(check(contribution)).rejects.toMatchObject({
+      code: 'CONTRACT.ARGUMENT_INVALID',
+      message: `State the capabilities your contract requires in requiredCapabilities in the options of prisma7Schema('${SCHEMA_PATH}'). The list is missing or empty.`,
+    });
+    expect(imports).toEqual([[projectDir, TARGET_CONFIG]]);
+  });
+
   it('refuses an entry that is not a node', async () => {
     const contribution = await withEntry((path) => ({ value: path }));
 
