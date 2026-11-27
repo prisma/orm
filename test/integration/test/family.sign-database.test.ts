@@ -6,7 +6,7 @@ import sql from '@internal/family-sql/control';
 import {
   APP_SPACE_ID,
   createControlStack,
-  PRISMA_TABLES_SPACE_ID,
+  PRISMA_SPACE_ID,
 } from '@internal/framework-components/control';
 import { defineContract, field, model } from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -331,7 +331,7 @@ describe('family instance signSpaces', () => {
           const markers = await familyInstance.readAllMarkers({ driver });
           expect(
             [...markers]
-              .filter(([space]) => space !== PRISMA_TABLES_SPACE_ID)
+              .filter(([space]) => space !== PRISMA_SPACE_ID)
               .map(([space, marker]) => [space, marker.storageHash]),
           ).toEqual([[APP_SPACE_ID, 'old-hash']]);
         } finally {

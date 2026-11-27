@@ -1,5 +1,5 @@
 import type { Contract } from '@internal/contract/types';
-import { PRISMA_TABLES_SPACE_ID } from '@internal/framework-components/control';
+import { PRISMA_SPACE_ID } from '@internal/framework-components/control';
 import { applyInstalledContractSpace } from '@internal/migration-tools/spaces';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -44,7 +44,7 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
 
   function apply() {
     return applyInstalledContractSpace({
-      spaceId: PRISMA_TABLES_SPACE_ID,
+      spaceId: PRISMA_SPACE_ID,
       contractSpace,
       driver,
       familyInstance,

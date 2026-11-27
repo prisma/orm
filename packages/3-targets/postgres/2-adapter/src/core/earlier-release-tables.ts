@@ -1,5 +1,5 @@
 import { CliStructuredError } from '@internal/errors/control';
-import { PRISMA_TABLES_SPACE_ID } from '@internal/framework-components/control';
+import { isPrismaSpace } from '@internal/framework-components/control';
 import {
   EARLIER_RELEASE_PRISMA_TABLES_SCHEMA,
   execute,
@@ -19,7 +19,7 @@ export async function prismaTablesFromEarlierRelease(
   driver: PostgresMarkerDriver,
   space: string | undefined,
 ): Promise<boolean> {
-  if (space === PRISMA_TABLES_SPACE_ID) return false;
+  if (space !== undefined && isPrismaSpace(space)) return false;
   const probe = infoSchemaTables
     .select(infoSchemaTables.table_schema)
     .where(

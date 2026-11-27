@@ -1,5 +1,5 @@
 import type { Contract } from '@internal/contract/types';
-import { PRISMA_TABLES_SPACE_ID } from '@internal/framework-components/control';
+import { PRISMA_SPACE_ID } from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { verifyMigrationHash } from '@internal/migration-tools/hash';
 import { findPathWithDecision, reconstructGraph } from '@internal/migration-tools/migration-graph';
@@ -18,7 +18,7 @@ function prismaTablesSpace() {
 describe("the Postgres target's contract space for Prisma's own tables", () => {
   it('describes the tables marker, ledger and contract in schema _prisma', () => {
     const { storage } = prismaTablesSpace().contractJson as Contract<SqlStorage>;
-    const prismaNamespace = storage.namespaces[PRISMA_TABLES_SPACE_ID] as {
+    const prismaNamespace = storage.namespaces[PRISMA_SPACE_ID] as {
       readonly entries: { readonly table: Record<string, unknown> };
     };
     expect(Object.keys(prismaNamespace.entries.table).sort()).toEqual([
@@ -41,7 +41,7 @@ describe("the Postgres target's contract space for Prisma's own tables", () => {
     const contract = space.contractJson as Contract<SqlStorage>;
     expect(() =>
       assertDescriptorSelfConsistency({
-        extensionId: PRISMA_TABLES_SPACE_ID,
+        extensionId: PRISMA_SPACE_ID,
         target: contract.target,
         targetFamily: contract.targetFamily,
         storage: contract.storage,

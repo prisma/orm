@@ -6,9 +6,7 @@ import { chooseAction } from './next-actions';
 /**
  * A failure of the migrations of the target's `_prisma` contract space, which every command that changes a database applies first. Those migrations are Prisma's, so none of the advice for a user's own migration fits; their checks are written for the user, so the runner's why, which quotes the failed check, is the explanation.
  */
-export function prismaTablesRunnerFailureError(
-  failure: MigrationRunnerFailure,
-): CliStructuredError {
+export function prismaSpaceRunnerFailureError(failure: MigrationRunnerFailure): CliStructuredError {
   const state =
     failure.meta.databaseUnchanged === false
       ? 'The operations that ran before the failure stay applied.'

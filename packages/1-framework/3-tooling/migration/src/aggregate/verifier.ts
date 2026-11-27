@@ -1,5 +1,5 @@
 import {
-  PRISMA_TABLES_SPACE_ID,
+  isPrismaSpace,
   type SchemaEntityCoordinate,
   type VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
@@ -157,7 +157,7 @@ function runVerifyMigration(input: VerifierInput): VerifierOutput {
     classifyEntityKind,
   } = input;
   const allSpaces: ReadonlyArray<AggregateContractSpace> = [aggregate.app, ...aggregate.extensions];
-  const declaredSpaceIds = new Set([PRISMA_TABLES_SPACE_ID, ...allSpaces.map((m) => m.spaceId)]);
+  const aggregateSpaceIds = new Set(allSpaces.map((m) => m.spaceId));
 
   // Marker check per contract space.
   const markerPerSpace = new Map<string, MarkerCheckResult>();
@@ -189,11 +189,10 @@ function runVerifyMigration(input: VerifierInput): VerifierOutput {
   }
 
   // Orphan markers: entries in markersBySpaceId whose spaceId is not a
-  // contract space of the aggregate, nor the space of Prisma's own tables,
-  // which the installed target package carries.
+  // contract space of the aggregate, nor the Prisma space.
   const orphanMarkers: { spaceId: string; row: ContractMarkerRecordLike }[] = [];
   for (const [spaceId, row] of markersBySpaceId) {
-    if (row !== null && !declaredSpaceIds.has(spaceId)) {
+    if (row !== null && !aggregateSpaceIds.has(spaceId) && !isPrismaSpace(spaceId)) {
       orphanMarkers.push({ spaceId, row });
     }
   }

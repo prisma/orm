@@ -28,14 +28,14 @@ export type ResolveRecordedPathOutcome =
   | { readonly kind: 'unsatisfiable'; readonly missing: readonly string[] };
 
 /** What a path is resolved over: a space's migration packages, held in memory or read from disk, with its head ref, graph and contract. */
-export interface RecordedPathSpace
+export interface ContractSpaceWithGraph
   extends Pick<AggregateContractSpace, 'spaceId' | 'headRef' | 'graph' | 'contract'> {
   readonly packages: readonly MigrationPackage[];
 }
 
 export interface ResolveRecordedPathInputs {
   readonly aggregateTargetId: string;
-  readonly space: RecordedPathSpace;
+  readonly space: ContractSpaceWithGraph;
   readonly currentMarker: ContractMarkerRecordLike | null;
   /**
    * Optional ref name to decorate the resulting `PathDecision`. Used by

@@ -984,7 +984,7 @@ export interface ControlClient {
    *
    * @throws A structured CLI error when the space's migrations fail, and `MIGRATION.INSTALLED_SPACE_UNREACHABLE` when the database records the space at a contract this release cannot reach
    */
-  bringPrismaTablesUpToDate(): Promise<InstalledContractSpaceApplied | undefined>;
+  bringPrismaSpaceUpToDate(): Promise<InstalledContractSpaceApplied | undefined>;
 
   /**
    * Reads the contract marker from the database.

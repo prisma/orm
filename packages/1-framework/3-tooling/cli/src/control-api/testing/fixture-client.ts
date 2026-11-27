@@ -58,7 +58,7 @@ export interface ControlClientFixtures {
   readonly dbUpdate: DbUpdateResult;
   readonly dbVerify: ExecuteDbVerifyResult;
   readonly dbSign: ExecuteDbSignResult;
-  readonly bringPrismaTablesUpToDate: InstalledContractSpaceApplied | undefined;
+  readonly bringPrismaSpaceUpToDate: InstalledContractSpaceApplied | undefined;
   readonly readMarker: ContractMarkerRecord | null;
   readonly readAllMarkers: ReadonlyMap<string, ContractMarkerRecord>;
   readonly readLedger: readonly LedgerEntryRecord[];
@@ -173,7 +173,7 @@ export function defaultControlClientFixtures(): ControlClientFixtures {
         },
       ],
     }),
-    bringPrismaTablesUpToDate: undefined,
+    bringPrismaSpaceUpToDate: undefined,
     readMarker: fixtureMarker(),
     readAllMarkers: new Map([[APP_SPACE_ID, fixtureMarker()]]),
     readLedger: [
@@ -312,11 +312,11 @@ class FixtureControlClientImpl implements FixtureControlClient {
     return this.recordConnected('dbSign', options, this.fixtures.dbSign);
   }
 
-  async bringPrismaTablesUpToDate(): Promise<InstalledContractSpaceApplied | undefined> {
+  async bringPrismaSpaceUpToDate(): Promise<InstalledContractSpaceApplied | undefined> {
     return this.recordConnected(
-      'bringPrismaTablesUpToDate',
+      'bringPrismaSpaceUpToDate',
       undefined,
-      this.fixtures.bringPrismaTablesUpToDate,
+      this.fixtures.bringPrismaSpaceUpToDate,
     );
   }
 

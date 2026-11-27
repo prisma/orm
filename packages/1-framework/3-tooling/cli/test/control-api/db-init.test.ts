@@ -4,7 +4,7 @@ import {
   type ControlDriverInstance,
   type ControlFamilyInstance,
   migrationRunnerFailure,
-  PRISMA_TABLES_SPACE_ID,
+  PRISMA_SPACE_ID,
   type SchemaDiffIssue,
   schemaCheckWhy,
   type TargetMigrationsCapability,
@@ -83,7 +83,7 @@ describe('executeDbInit', () => {
     }
 
     it("counts the row of the space for Prisma's own tables as declared", async () => {
-      expect((await applyWithRowOf(PRISMA_TABLES_SPACE_ID)).ok).toBe(true);
+      expect((await applyWithRowOf(PRISMA_SPACE_ID)).ok).toBe(true);
     });
 
     it('refuses a row of a space nothing declares', async () => {

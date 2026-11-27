@@ -23,7 +23,7 @@ import {
   hasOperationPreview,
   hasPslContractInfer,
   hasSchemaView,
-  PRISMA_TABLES_SPACE_ID,
+  PRISMA_SPACE_ID,
 } from '@internal/framework-components/control';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
@@ -39,7 +39,7 @@ import { structuredError } from '@internal/utils/structured-error';
 import { errorContractTypesModuleMissing } from '../utils/cli-errors';
 import { contractValidationMeta } from '../utils/contract-validation-meta';
 import { assertFrameworkComponentsCompatible } from '../utils/framework-components';
-import { prismaTablesRunnerFailureError } from '../utils/prisma-tables-failure';
+import { prismaSpaceRunnerFailureError } from '../utils/prisma-space-failure';
 import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { enrichContract } from './contract-enrichment';
 import { executeDbInit } from './operations/db-init';
@@ -389,7 +389,7 @@ class ControlClientImpl implements ControlClient {
       });
     }
 
-    if (options.mode === 'apply') await this.bringPrismaTablesUpToDate();
+    if (options.mode === 'apply') await this.bringPrismaSpaceUpToDate();
     return executeDbInit({
       driver,
       invocation: options.invocation,
@@ -433,7 +433,7 @@ class ControlClientImpl implements ControlClient {
       });
     }
 
-    if (options.mode === 'apply') await this.bringPrismaTablesUpToDate();
+    if (options.mode === 'apply') await this.bringPrismaSpaceUpToDate();
     return executeDbUpdate({
       driver,
       invocation: options.invocation,
@@ -486,7 +486,7 @@ class ControlClientImpl implements ControlClient {
     await this.connectWithProgress(options.connection, 'dbSign', onProgress);
     const { driver, familyInstance, frameworkComponents } = await this.ensureConnected();
 
-    await this.bringPrismaTablesUpToDate();
+    await this.bringPrismaSpaceUpToDate();
     return executeDbSign({
       driver,
       familyInstance,
@@ -501,19 +501,19 @@ class ControlClientImpl implements ControlClient {
     });
   }
 
-  async bringPrismaTablesUpToDate(): Promise<InstalledContractSpaceApplied | undefined> {
+  async bringPrismaSpaceUpToDate(): Promise<InstalledContractSpaceApplied | undefined> {
     const { driver, familyInstance, frameworkComponents } = await this.ensureConnected();
     const { target } = this.options;
     if (target.contractSpace === undefined || !hasMigrations(target)) return undefined;
     const applied = await applyInstalledContractSpace({
-      spaceId: PRISMA_TABLES_SPACE_ID,
+      spaceId: PRISMA_SPACE_ID,
       contractSpace: target.contractSpace,
       driver,
       familyInstance,
       migrations: target.migrations,
       frameworkComponents,
     });
-    if (!applied.ok) throw prismaTablesRunnerFailureError(applied.failure);
+    if (!applied.ok) throw prismaSpaceRunnerFailureError(applied.failure);
     return applied.value;
   }
 
@@ -560,7 +560,7 @@ class ControlClientImpl implements ControlClient {
       });
     }
 
-    await this.bringPrismaTablesUpToDate();
+    await this.bringPrismaSpaceUpToDate();
     return executeMigrate({
       driver,
       invocation: options.invocation,

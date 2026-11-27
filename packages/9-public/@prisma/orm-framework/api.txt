@@ -915,7 +915,7 @@
 ./components/control: const DATA_LOSS_LEVELS: readonly ["data-loss-forbidden", "data-loss-with-consent", "data-loss-permitted"]
 ./components/control: const DATA_PROTECTION_KEYS: readonly ["dataLoss", "accessWidening"]
 ./components/control: const DEFAULT_DATABASE_POLICIES: DatabasePolicies
-./components/control: const PRISMA_TABLES_SPACE_ID: "_prisma"
+./components/control: const PRISMA_SPACE_ID: "_prisma"
 ./components/control: const TAGGED_LITERAL_MAX_BYTES = 65536
 ./components/control: const VERIFY_CODE_HASH_MISMATCH = "CONTRACT.MARKER_MISMATCH"
 ./components/control: const VERIFY_CODE_MARKER_MISSING = "CONTRACT.MARKER_MISSING"
@@ -2044,7 +2044,7 @@
 ./components: const EMPTY_GENERATOR_FUNCTIONS: GeneratorFunctionRegistry
 ./components: const INT32_RANGE: IntegerRange
 ./components: const INT64_RANGE: BigIntRange
-./components: const PRISMA_TABLES_SPACE_ID: "_prisma"
+./components: const PRISMA_SPACE_ID: "_prisma"
 ./components: const RUNTIME_ABORTED: "RUNTIME.ABORTED"
 ./components: const RelationKeys: unique symbol
 ./components: const SAFE_INTEGER_BIGINT_RANGE: BigIntRange

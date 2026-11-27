@@ -23,9 +23,9 @@ import type {
 import {
   CONTRACT_SNAPSHOTS_DIRNAME,
   hasOperationPreview,
+  isPrismaSpace,
   isStorageHashHex,
   migrationSubjectKey,
-  PRISMA_TABLES_SPACE_ID,
 } from '@internal/framework-components/control';
 import {
   type PlannerSuccess as AggregatePlan,
@@ -847,14 +847,18 @@ function detectOrphanMarkers(
   markerRows: ReadonlyMap<string, unknown>,
   markerLocation: string,
 ): CliStructuredError | null {
-  const declaredSpaceIds = new Set<string>([
-    PRISMA_TABLES_SPACE_ID,
+  const aggregateSpaceIds = new Set<string>([
     aggregate.app.spaceId,
     ...aggregate.extensions.map((m) => m.spaceId),
   ]);
   const orphans: string[] = [];
   for (const [spaceId, row] of markerRows) {
-    if (row !== null && row !== undefined && !declaredSpaceIds.has(spaceId)) {
+    if (
+      row !== null &&
+      row !== undefined &&
+      !aggregateSpaceIds.has(spaceId) &&
+      !isPrismaSpace(spaceId)
+    ) {
       orphans.push(spaceId);
     }
   }

@@ -588,7 +588,7 @@ export function createMigrateCommand(
       const diagnostics: Diagnostic[] = [];
       try {
         await client.connect(dbConnection);
-        await client.bringPrismaTablesUpToDate();
+        await client.bringPrismaSpaceUpToDate();
         const appGraph = aggregate.app.graph();
         const markers = await client.readAllMarkers();
         const appMarker = markers.get(aggregate.app.spaceId) ?? null;

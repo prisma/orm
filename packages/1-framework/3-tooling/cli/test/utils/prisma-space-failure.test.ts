@@ -3,7 +3,7 @@ import {
   migrationRunnerFailure,
 } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
-import { prismaTablesRunnerFailureError } from '../../src/utils/prisma-tables-failure';
+import { prismaSpaceRunnerFailureError } from '../../src/utils/prisma-space-failure';
 
 const ownershipCheck =
   'ensure the current role may rename schema "prisma_contract": run the command as the role that owns it';
@@ -27,9 +27,9 @@ function failedPrecheck(databaseUnchanged: boolean): MigrationRunnerFailure {
   );
 }
 
-describe('prismaTablesRunnerFailureError', () => {
+describe('prismaSpaceRunnerFailureError', () => {
   it("reports a failed check of the _prisma space's migration by the check's own text, without the advice for a user's migration", () => {
-    const error = prismaTablesRunnerFailureError(failedPrecheck(true));
+    const error = prismaSpaceRunnerFailureError(failedPrecheck(true));
 
     expect({
       code: error.code,
@@ -55,7 +55,7 @@ describe('prismaTablesRunnerFailureError', () => {
   });
 
   it('says what stays applied when the target could not roll the failure back', () => {
-    expect(prismaTablesRunnerFailureError(failedPrecheck(false)).fix).toBe(
+    expect(prismaSpaceRunnerFailureError(failedPrecheck(false)).fix).toBe(
       'The operations that ran before the failure stay applied. Prisma brings its own tables up to date before anything else, and stopped at the check above, whose text says what to do; then run the command again.',
     );
   });
@@ -67,7 +67,7 @@ describe('prismaTablesRunnerFailureError', () => {
       { meta: { failingSpace: '_prisma', databaseUnchanged: true } },
     );
 
-    expect(prismaTablesRunnerFailureError(failure)).toMatchObject({
+    expect(prismaSpaceRunnerFailureError(failure)).toMatchObject({
       code: 'MIGRATION.EXECUTION_FAILED',
       message: "Prisma's own tables in this database could not be brought up to date",
       why: 'permission denied for database',

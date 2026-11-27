@@ -9,7 +9,7 @@ import {
   createControlStack,
   type MigrationPlan,
   type MigrationRunnerFailure,
-  PRISMA_TABLES_SPACE_ID,
+  PRISMA_SPACE_ID,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -110,7 +110,7 @@ export async function createPrismaTables(driver: PostgresControlDriver): Promise
     throw new Error('the Postgres target descriptor carries no contract space');
   }
   const result = await applyInstalledContractSpace({
-    spaceId: PRISMA_TABLES_SPACE_ID,
+    spaceId: PRISMA_SPACE_ID,
     contractSpace,
     driver,
     familyInstance,

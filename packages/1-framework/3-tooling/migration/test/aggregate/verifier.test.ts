@@ -1,6 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { VerifyDatabaseSchemaResult } from '@internal/framework-components/control';
-import { issueOutcome, PRISMA_TABLES_SPACE_ID } from '@internal/framework-components/control';
+import { issueOutcome, PRISMA_SPACE_ID } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { createSqlContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -223,7 +223,7 @@ describe('verifyMigration', () => {
       });
       const markers = new Map<string, ContractMarkerRecordLike>([
         ['app', { storageHash: 'h', invariants: [] }],
-        [PRISMA_TABLES_SPACE_ID, { storageHash: 'prisma-tables', invariants: [] }],
+        [PRISMA_SPACE_ID, { storageHash: 'prisma-tables', invariants: [] }],
       ]);
       const result = verifyMigration({
         aggregate,

@@ -1,4 +1,4 @@
-import { APP_SPACE_ID, PRISMA_TABLES_SPACE_ID } from '@internal/framework-components/control';
+import { APP_SPACE_ID, PRISMA_SPACE_ID } from '@internal/framework-components/control';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestPostgresControlAdapter } from '../helpers/test-control-adapter';
 import {
@@ -69,9 +69,9 @@ describe('reading Prisma tables an earlier release wrote', { concurrent: false }
       timeout: testTimeout,
     }, async () => {
       expect({
-        marker: await familyInstance.readMarker({ driver, space: PRISMA_TABLES_SPACE_ID }),
-        ledger: await familyInstance.readLedger({ driver, space: PRISMA_TABLES_SPACE_ID }),
-        read: await adapter.readMarkerDiscriminated(driver, PRISMA_TABLES_SPACE_ID),
+        marker: await familyInstance.readMarker({ driver, space: PRISMA_SPACE_ID }),
+        ledger: await familyInstance.readLedger({ driver, space: PRISMA_SPACE_ID }),
+        read: await adapter.readMarkerDiscriminated(driver, PRISMA_SPACE_ID),
       }).toEqual({ marker: null, ledger: [], read: { kind: 'no-table' } });
     });
 

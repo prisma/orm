@@ -11,7 +11,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { PRISMA_TABLES_SPACE_ID } from '@prisma/orm-framework/components/control';
+import { PRISMA_SPACE_ID } from '@prisma/orm-framework/components/control';
 import postgresTargetDescriptor from '@prisma/orm-postgres/target/control';
 import { describe, expect, it } from 'vitest';
 import { releaseCandidatePrismaTables } from '../../../../packages/3-targets/postgres/2-adapter/test/migrations/fixtures/release-candidate-prisma-tables';
@@ -183,7 +183,7 @@ withTempDir(({ createTempDir }) => {
             destination_core_hash: first.to,
           },
           {
-            space: PRISMA_TABLES_SPACE_ID,
+            space: PRISMA_SPACE_ID,
             migration_name: FIRST_PRISMA_TABLES_MIGRATION,
             origin_core_hash: EMPTY_CONTRACT_HASH,
             destination_core_hash: PRISMA_TABLES_HEAD,
@@ -198,7 +198,7 @@ withTempDir(({ createTempDir }) => {
         const expectedState = {
           schemas: ['_prisma'],
           markers: [
-            { space: PRISMA_TABLES_SPACE_ID, core_hash: PRISMA_TABLES_HEAD },
+            { space: PRISMA_SPACE_ID, core_hash: PRISMA_TABLES_HEAD },
             { space: 'app', core_hash: second.to },
           ],
           ledger: expectedLedger,
@@ -293,7 +293,7 @@ withTempDir(({ createTempDir }) => {
           userColumns: await userColumns(db.connectionString),
         }).toEqual({
           schemas: ['_prisma'],
-          spaces: [PRISMA_TABLES_SPACE_ID, 'app'],
+          spaces: [PRISMA_SPACE_ID, 'app'],
           firstLedgerRow: {
             space: 'app',
             migration_name: first.dirName,
@@ -324,7 +324,7 @@ withTempDir(({ createTempDir }) => {
         }).toEqual({
           schemas: ['_prisma'],
           markers: [
-            { space: PRISMA_TABLES_SPACE_ID, core_hash: PRISMA_TABLES_HEAD },
+            { space: PRISMA_SPACE_ID, core_hash: PRISMA_TABLES_HEAD },
             { space: 'app', core_hash: first.to },
           ],
         });
@@ -348,14 +348,14 @@ withTempDir(({ createTempDir }) => {
           schemas: await schemas(db.connectionString),
           spaces: (await markers(db.connectionString)).map((row) => row['space']),
           prismaLedger: (await ledger(db.connectionString)).filter(
-            (row) => row['space'] === PRISMA_TABLES_SPACE_ID,
+            (row) => row['space'] === PRISMA_SPACE_ID,
           ),
         }).toEqual({
           schemas: ['_prisma'],
-          spaces: [PRISMA_TABLES_SPACE_ID, 'app'],
+          spaces: [PRISMA_SPACE_ID, 'app'],
           prismaLedger: [
             {
-              space: PRISMA_TABLES_SPACE_ID,
+              space: PRISMA_SPACE_ID,
               migration_name: FIRST_PRISMA_TABLES_MIGRATION,
               origin_core_hash: EMPTY_CONTRACT_HASH,
               destination_core_hash: PRISMA_TABLES_HEAD,

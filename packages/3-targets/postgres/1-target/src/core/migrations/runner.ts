@@ -36,7 +36,8 @@ import {
   type DatabasePolicies,
   failedPostcheckWhy,
   failedPrecheckWhy,
-  PRISMA_TABLES_SPACE_ID,
+  isPrismaSpace,
+  PRISMA_SPACE_ID,
   schemaCheckWhy,
   withDatabaseUnchanged,
   withFailingSpace,
@@ -193,7 +194,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
 
     await this.readMoneyLiteralsInCents(driver);
     await this.acquireLock(driver);
-    if (space !== PRISMA_TABLES_SPACE_ID) {
+    if (!isPrismaSpace(space)) {
       const tablesCheck = await this.ensurePrismaTablesExist(driver);
       if (!tablesCheck.ok) return tablesCheck;
     }
@@ -432,7 +433,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
       'MIGRATION.PRISMA_TABLES_MISSING',
       `Prisma's own tables are missing from this database: ${markerLocation} does not exist.`,
       {
-        why: `The tables are created, or moved from the schema prisma_contract that the release candidates of Prisma 8 used, by applying the target's ${PRISMA_TABLES_SPACE_ID} contract space, and nothing has applied it to this database. \`prisma db init\`, \`prisma db update\`, \`prisma db migrate\` and \`prisma db sign\` apply it before anything else; code that runs the migration runner directly must apply it first with applyInstalledContractSpace.`,
+        why: `The tables are created, or moved from the schema prisma_contract that the release candidates of Prisma 8 used, by applying the target's ${PRISMA_SPACE_ID} contract space, and nothing has applied it to this database. \`prisma db init\`, \`prisma db update\`, \`prisma db migrate\` and \`prisma db sign\` apply it before anything else; code that runs the migration runner directly must apply it first with applyInstalledContractSpace.`,
         meta: { markerLocation },
       },
     );

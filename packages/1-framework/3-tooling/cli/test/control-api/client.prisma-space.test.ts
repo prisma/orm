@@ -5,7 +5,7 @@ import type {
   ControlFamilyInstance,
   ControlTargetDescriptor,
 } from '@internal/framework-components/control';
-import { PRISMA_TABLES_SPACE_ID } from '@internal/framework-components/control';
+import { PRISMA_SPACE_ID } from '@internal/framework-components/control';
 import { createContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createControlClient } from '../../src/control-api/client';
@@ -40,7 +40,7 @@ function clientWith(contractSpace: ContractSpace | undefined) {
     ...mockFamilyInstance,
     readMarker: async ({ space }: { readonly space: string }) => {
       reads.push(`readMarker ${space}`);
-      return space === PRISMA_TABLES_SPACE_ID ? markerAt(PRISMA_TABLES_HEAD) : null;
+      return space === PRISMA_SPACE_ID ? markerAt(PRISMA_TABLES_HEAD) : null;
     },
     readAllMarkers: async () => {
       reads.push('readAllMarkers');
@@ -80,18 +80,18 @@ describe("bringing Prisma's own tables up to date", () => {
     const { client, reads } = clientWith(installedSpace);
     await client.connect('postgres://test');
 
-    expect(await client.bringPrismaTablesUpToDate()).toEqual({
+    expect(await client.bringPrismaSpaceUpToDate()).toEqual({
       outcome: 'atHead',
       operationsExecuted: 0,
     });
-    expect(reads).toEqual([`readMarker ${PRISMA_TABLES_SPACE_ID}`]);
+    expect(reads).toEqual([`readMarker ${PRISMA_SPACE_ID}`]);
   });
 
   it('does nothing on a target that carries no space for its tables', async () => {
     const { client, reads } = clientWith(undefined);
     await client.connect('postgres://test');
 
-    expect(await client.bringPrismaTablesUpToDate()).toBeUndefined();
+    expect(await client.bringPrismaSpaceUpToDate()).toBeUndefined();
     expect(reads).toEqual([]);
   });
 
@@ -100,7 +100,7 @@ describe("bringing Prisma's own tables up to date", () => {
 
     await client.dbSign({ ...dbSignOptions, connection: 'postgres://test' });
 
-    expect(reads.slice(0, 2)).toEqual([`readMarker ${PRISMA_TABLES_SPACE_ID}`, 'readAllMarkers']);
+    expect(reads.slice(0, 2)).toEqual([`readMarker ${PRISMA_SPACE_ID}`, 'readAllMarkers']);
   });
 
   it('db sign on a target that carries no space reads only the rows it always read', async () => {
@@ -108,7 +108,7 @@ describe("bringing Prisma's own tables up to date", () => {
 
     await client.dbSign({ ...dbSignOptions, connection: 'postgres://test' });
 
-    expect(reads).not.toContain(`readMarker ${PRISMA_TABLES_SPACE_ID}`);
+    expect(reads).not.toContain(`readMarker ${PRISMA_SPACE_ID}`);
   });
 
   it('a dry run of db init leaves the tables as they are', async () => {
@@ -124,6 +124,6 @@ describe("bringing Prisma's own tables up to date", () => {
       })
       .catch(() => undefined);
 
-    expect(reads).not.toContain(`readMarker ${PRISMA_TABLES_SPACE_ID}`);
+    expect(reads).not.toContain(`readMarker ${PRISMA_SPACE_ID}`);
   });
 });

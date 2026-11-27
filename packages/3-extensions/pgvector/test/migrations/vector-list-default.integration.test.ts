@@ -17,7 +17,7 @@ import {
   APP_SPACE_ID,
   createControlStack,
   type MigrationOperationPolicy,
-  PRISMA_TABLES_SPACE_ID,
+  PRISMA_SPACE_ID,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
@@ -132,7 +132,7 @@ describe('a vector(3)[] literal default', { concurrent: false }, () => {
     await driver.query('create schema public');
     await driver.query('CREATE EXTENSION IF NOT EXISTS vector');
     const prismaTables = await applyInstalledContractSpace({
-      spaceId: PRISMA_TABLES_SPACE_ID,
+      spaceId: PRISMA_SPACE_ID,
       contractSpace: postgresTargetDescriptor.contractSpace!,
       driver,
       familyInstance,

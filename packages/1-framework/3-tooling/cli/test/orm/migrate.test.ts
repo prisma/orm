@@ -54,7 +54,7 @@ const SNAPSHOT_CONTRACT_DTS = '/* rendered */ export type Contract = { rendered:
 /** The command tree mounted over a control-client double instead of the real client. */
 const clientDouble = {
   connect: mocks.connect,
-  bringPrismaTablesUpToDate: async () => undefined,
+  bringPrismaSpaceUpToDate: async () => undefined,
   readAllMarkers: mocks.readAllMarkers,
   migrate: mocks.migrate,
   renderContractDts: mocks.renderContractDts,

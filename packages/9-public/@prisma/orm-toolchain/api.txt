@@ -270,7 +270,7 @@
 ./cli/control-api/testing: function createFixtureControlClient(overrides?: Partial<ControlClientFixtures>): FixtureControlClient
 ./cli/control-api/testing: function defaultControlClientFixtures(): ControlClientFixtures
 ./cli/control-api/testing: interface ControlClientFixtures
-./cli/control-api/testing: interface ControlClientFixtures, readonly required property bringPrismaTablesUpToDate: InstalledContractSpaceApplied | undefined
+./cli/control-api/testing: interface ControlClientFixtures, readonly required property bringPrismaSpaceUpToDate: InstalledContractSpaceApplied | undefined
 ./cli/control-api/testing: interface ControlClientFixtures, readonly required property dbInit: DbInitResult
 ./cli/control-api/testing: interface ControlClientFixtures, readonly required property dbSign: ExecuteDbSignResult
 ./cli/control-api/testing: interface ControlClientFixtures, readonly required property dbUpdate: DbUpdateResult
@@ -420,7 +420,7 @@
 ./cli/control-api: interface ContractSpaceSeedPhaseResult
 ./cli/control-api: interface ContractSpaceSeedPhaseResult, readonly required property seeded: readonly ContractSpaceSeedPhaseRecord[]
 ./cli/control-api: interface ControlClient
-./cli/control-api: interface ControlClient, required method bringPrismaTablesUpToDate(): Promise<InstalledContractSpaceApplied | undefined>
+./cli/control-api: interface ControlClient, required method bringPrismaSpaceUpToDate(): Promise<InstalledContractSpaceApplied | undefined>
 ./cli/control-api: interface ControlClient, required method close(): Promise<void>
 ./cli/control-api: interface ControlClient, required method connect(connection?: unknown, options?: ControlDriverConnectOptions): Promise<void>
 ./cli/control-api: interface ControlClient, required method dbInit(options: DbInitOptions): Promise<DbInitResult>
@@ -965,14 +965,14 @@
 ./migration-tools/aggregate: interface PlannerSuccess
 ./migration-tools/aggregate: interface PlannerSuccess, readonly required property applyOrder: readonly string[]
 ./migration-tools/aggregate: interface PlannerSuccess, readonly required property perSpace: ReadonlyMap<string, PerSpacePlan>
-./migration-tools/aggregate: interface RecordedPathSpace extends Pick<AggregateContractSpace, 'contract' | 'graph' | 'headRef' | 'spaceId'>
-./migration-tools/aggregate: interface RecordedPathSpace, readonly required property packages: readonly MigrationPackage[]
+./migration-tools/aggregate: interface ContractSpaceWithGraph extends Pick<AggregateContractSpace, 'contract' | 'graph' | 'headRef' | 'spaceId'>
+./migration-tools/aggregate: interface ContractSpaceWithGraph, readonly required property packages: readonly MigrationPackage[]
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly optional property refName?: string
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property aggregateTargetId: string
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property currentMarker: ContractMarkerRecordLike | null
-./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property space: RecordedPathSpace
+./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property space: ContractSpaceWithGraph
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property storageNameOf: (operation: MigrationPlanOperation) => string
 ./migration-tools/aggregate: interface SchemaCheckSection
 ./migration-tools/aggregate: interface SchemaCheckSection, readonly required property perSpace: ReadonlyMap<string, VerifyDatabaseSchemaResult>
@@ -1572,8 +1572,8 @@
 ./migration-tools: interface ReadMigrationsDirResult
 ./migration-tools: interface ReadMigrationsDirResult, readonly required property packages: readonly OnDiskMigrationPackage[]
 ./migration-tools: interface ReadMigrationsDirResult, readonly required property problems: readonly PackageLoadProblem[]
-./migration-tools: interface RecordedPathSpace extends Pick<AggregateContractSpace, 'contract' | 'graph' | 'headRef' | 'spaceId'>
-./migration-tools: interface RecordedPathSpace, readonly required property packages: readonly MigrationPackage[]
+./migration-tools: interface ContractSpaceWithGraph extends Pick<AggregateContractSpace, 'contract' | 'graph' | 'headRef' | 'spaceId'>
+./migration-tools: interface ContractSpaceWithGraph, readonly required property packages: readonly MigrationPackage[]
 ./migration-tools: interface RefEntry
 ./migration-tools: interface RefEntry, readonly optional property policies?: DeclaredDatabasePolicies
 ./migration-tools: interface RefEntry, readonly required property hash: string
@@ -1606,7 +1606,7 @@
 ./migration-tools: interface ResolveRecordedPathInputs, readonly required property accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]
 ./migration-tools: interface ResolveRecordedPathInputs, readonly required property aggregateTargetId: string
 ./migration-tools: interface ResolveRecordedPathInputs, readonly required property currentMarker: ContractMarkerRecordLike | null
-./migration-tools: interface ResolveRecordedPathInputs, readonly required property space: RecordedPathSpace
+./migration-tools: interface ResolveRecordedPathInputs, readonly required property space: ContractSpaceWithGraph
 ./migration-tools: interface ResolveRecordedPathInputs, readonly required property storageNameOf: (operation: MigrationPlanOperation) => string
 ./migration-tools: interface SchemaCheckSection
 ./migration-tools: interface SchemaCheckSection, readonly required property perSpace: ReadonlyMap<string, VerifyDatabaseSchemaResult>

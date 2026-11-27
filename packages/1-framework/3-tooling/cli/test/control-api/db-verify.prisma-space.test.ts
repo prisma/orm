@@ -5,7 +5,7 @@ import type {
   ControlFamilyInstance,
   MigrationPackage,
 } from '@internal/framework-components/control';
-import { PRISMA_TABLES_SPACE_ID } from '@internal/framework-components/control';
+import { PRISMA_SPACE_ID } from '@internal/framework-components/control';
 import { createContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { executeDbVerify } from '../../src/control-api/operations/db-verify';
@@ -30,7 +30,7 @@ function verifyWithPrismaRowAt(
 ) {
   const familyInstance = {
     readAllMarkers: async () =>
-      new Map([[PRISMA_TABLES_SPACE_ID, { storageHash, profileHash: 'p', invariants: [] }]]),
+      new Map([[PRISMA_SPACE_ID, { storageHash, profileHash: 'p', invariants: [] }]]),
     deserializeContract: (json: unknown) => json as Contract,
   } as unknown as ControlFamilyInstance<string, unknown>;
   return executeDbVerify({
@@ -62,10 +62,10 @@ describe("db verify and the space for Prisma's own tables", () => {
       fix: drift?.fix,
       meta: drift?.meta,
     }).toEqual({
-      code: 'CONTRACT.PRISMA_TABLES_BEHIND',
+      code: 'CONTRACT.PRISMA_SPACE_BEHIND',
       message: "Prisma's own tables in this database are in the form an earlier release left them",
       fix: "Run `{bin} db migrate`, which brings Prisma's own tables up to date before it does anything else; `{bin} db init`, `{bin} db update` and `{bin} db sign` do the same.",
-      meta: { spaceId: PRISMA_TABLES_SPACE_ID, markerHash: 'first', headRefHash: 'second' },
+      meta: { spaceId: PRISMA_SPACE_ID, markerHash: 'first', headRefHash: 'second' },
     });
   });
 

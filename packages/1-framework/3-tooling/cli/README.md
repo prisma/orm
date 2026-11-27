@@ -1652,7 +1652,7 @@ try {
 |--------|-------------|
 | `connect(url)` | Establishes database connection |
 | `close()` | Closes connection (idempotent) |
-| `bringPrismaTablesUpToDate()` | Applies the contract space for Prisma's own tables that the target's control descriptor carries, as every command that changes a database does first; `dbInit` and `dbUpdate` in apply mode, `dbSign` and `migrate` call it themselves. Does nothing on a target that carries no such space |
+| `bringPrismaSpaceUpToDate()` | Applies the contract space for Prisma's own tables that the target's control descriptor carries, as every command that changes a database does first; `dbInit` and `dbUpdate` in apply mode, `dbSign` and `migrate` call it themselves. Does nothing on a target that carries no such space |
 | `readMarker()` | Reads contract marker from database (null if none) |
 | `verify(options)` | Verifies database marker matches contract |
 | `schemaVerify(options)` | Verifies database schema satisfies contract |

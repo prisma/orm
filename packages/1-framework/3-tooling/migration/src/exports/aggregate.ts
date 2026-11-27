@@ -28,7 +28,7 @@ export {
   planMigration,
 } from '../aggregate/planner';
 export {
-  type RecordedPathSpace,
+  type ContractSpaceWithGraph,
   type ResolveRecordedPathInputs,
   type ResolveRecordedPathOutcome,
   resolveRecordedPath,

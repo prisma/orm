@@ -22,8 +22,14 @@ import type { MigrationMetadata, MigrationPlanOperation } from './control-migrat
  */
 export const APP_SPACE_ID = 'app' as const;
 
-/** The contract space of the tables a target keeps for Prisma itself in a user's database, which its control descriptor carries. Reserved, as {@link APP_SPACE_ID} is. */
-export const PRISMA_TABLES_SPACE_ID = '_prisma' as const;
+/**
+ * The Prisma space: the contract space of what Prisma itself stores in a user's database, which a target's control descriptor carries. It is never one of the spaces of the user's repository: it is not listed, not an undeclared space, and is brought up to date before anything else. Every check for it goes through {@link isPrismaSpace}.
+ */
+export const PRISMA_SPACE_ID = '_prisma' as const;
+
+export function isPrismaSpace(spaceId: string): spaceId is typeof PRISMA_SPACE_ID {
+  return spaceId === PRISMA_SPACE_ID;
+}
 
 /**
  * Head ref for a contract space — the `(hash, invariants)` tuple

@@ -686,7 +686,7 @@ An extension pack targets a different database target than the contract does (e.
 
 An RLS policy declaration is invalid: it targets a model in another contract space, its prefix exceeds the length limit or is declared twice in one namespace, or it targets a table that is not RLS-enabled or not present in the namespace. Raised by the Postgres `defineContract` builder and while deriving the Postgres schema tree from the contract. Payload: `prefix`/`policyName`, `tableName`, `namespaceId`, `reason`.
 
-### CONTRACT.PRISMA_TABLES_BEHIND
+### CONTRACT.PRISMA_SPACE_BEHIND
 
 `db verify` found the row of the `_prisma` contract space, which records the form of Prisma's own tables, at a contract that the installed release's migrations of that space lead on from: Prisma was upgraded and no command that changes the database has run since. Reported as a finding on a completed run that exits `4`. Run `prisma db migrate`, or `db init`, `db update` or `db sign`; each brings the tables up to date before it does anything else. A row at a contract the installed release does not know was written by a later release and is not reported. Payload: `spaceId`, `markerHash`, `headRefHash`.
 

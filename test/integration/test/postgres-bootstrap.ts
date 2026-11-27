@@ -3,7 +3,7 @@ import postgresDriverDescriptor, {
   type PostgresControlDriver,
 } from '@internal/driver-postgres/control';
 import sqlFamilyDescriptor from '@internal/family-sql/control';
-import { createControlStack, PRISMA_TABLES_SPACE_ID } from '@internal/framework-components/control';
+import { createControlStack, PRISMA_SPACE_ID } from '@internal/framework-components/control';
 import { applyInstalledContractSpace } from '@internal/migration-tools/spaces';
 import type { SqlExecuteRequest } from '@internal/sql-relational-core/ast';
 import postgresTargetDescriptor from '@internal/target-postgres/control';
@@ -47,7 +47,7 @@ export async function createPrismaTables(driver: PostgresControlDriver): Promise
     throw new Error('the Postgres target descriptor carries no contract space');
   }
   const result = await applyInstalledContractSpace({
-    spaceId: PRISMA_TABLES_SPACE_ID,
+    spaceId: PRISMA_SPACE_ID,
     contractSpace,
     driver,
     familyInstance,

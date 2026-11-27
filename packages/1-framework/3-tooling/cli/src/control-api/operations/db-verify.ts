@@ -10,7 +10,7 @@ import type {
 } from '@internal/framework-components/control';
 import {
   hasSchemaSubjectClassifier,
-  PRISMA_TABLES_SPACE_ID,
+  PRISMA_SPACE_ID,
 } from '@internal/framework-components/control';
 import {
   type AggregateContractSpace,
@@ -167,7 +167,7 @@ export async function executeDbVerify<TFamilyId extends string, TTargetId extend
     prismaTablesBehind:
       options.prismaTables === undefined
         ? undefined
-        : prismaTablesBehind(options.prismaTables, markersBySpaceId.get(PRISMA_TABLES_SPACE_ID)),
+        : prismaTablesBehind(options.prismaTables, markersBySpaceId.get(PRISMA_SPACE_ID)),
   });
 }
 
@@ -191,15 +191,15 @@ interface PrismaTablesBehind {
 function errorPrismaTablesBehind(behind: PrismaTablesBehind): CliStructuredError {
   const migrate = '{bin} db migrate';
   return new CliStructuredError(
-    'CONTRACT.PRISMA_TABLES_BEHIND',
+    'CONTRACT.PRISMA_SPACE_BEHIND',
     "Prisma's own tables in this database are in the form an earlier release left them",
     {
-      why: `The installed release of Prisma keeps them in a later form. The row of the \`${PRISMA_TABLES_SPACE_ID}\` space records contract ${behind.markerHash}, and the newest the installed release knows is ${behind.headRefHash}.`,
+      why: `The installed release of Prisma keeps them in a later form. The row of the \`${PRISMA_SPACE_ID}\` space records contract ${behind.markerHash}, and the newest the installed release knows is ${behind.headRefHash}.`,
       fix: `Run \`${migrate}\`, which brings Prisma's own tables up to date before it does anything else; \`{bin} db init\`, \`{bin} db update\` and \`{bin} db sign\` do the same.`,
       nextActions: [
         { kind: 'run-command', label: "Bring Prisma's own tables up to date", command: migrate },
       ],
-      meta: { spaceId: PRISMA_TABLES_SPACE_ID, ...behind },
+      meta: { spaceId: PRISMA_SPACE_ID, ...behind },
     },
   );
 }
