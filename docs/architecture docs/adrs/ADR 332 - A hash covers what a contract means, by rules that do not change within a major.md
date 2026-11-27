@@ -32,7 +32,7 @@ That holds because each hash is computed from a small, fixed input, by rules tha
 
 ## Decision
 
-**Each hash covers three inputs.**
+**Each hash covers the family, the target and one section of the contract.** The family and the target are in every hash so that the same section on two databases gives two hashes.
 
 | Hash | Covers | Tells Prisma |
 | --- | --- | --- |
@@ -42,9 +42,9 @@ That holds because each hash is computed from a small, fixed input, by rules tha
 
 Nothing else in the file enters a hash, not even the file's `formatVersion` ([ADR 331](ADR%20331%20-%20Stored%20files%20carry%20a%20format%20version%2C%20and%20a%20reader%20refuses%20one%20it%20does%20not%20know.md)).
 
-**The rules that compute them do not change within a major version.** For the same contract source and configuration, every release of the major writes the same `storage`, `capabilities` and `execution`, and computes the same three hashes from them. This binds Prisma's families and targets, and any family or target built outside this repository, for the whole of Prisma's major version.
+**The rules that compute them do not change within a major version.** For the same contract source and configuration, every release of the major writes the same `storage` and `execution`, and computes the same three hashes from what it writes. This binds Prisma's families and targets, and any family or target built outside this repository, for the whole of Prisma's major version.
 
-**What a contract's `capabilities` section lists, and the rule that the capability lists it is built from do not change within a major version, belong to [ADR 335](ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md).** This record says only that the profile hash covers that section.
+**Capabilities belong to [ADR 335](ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md).** It decides what the `capabilities` section lists and when the lists it is built from may change. This record says only that the profile hash covers that section.
 
 ## Why
 
@@ -55,9 +55,9 @@ Each hash covers only what it identifies, so that nothing else can move it. A ha
 ## How it is held
 
 - **The hashing rules.** Each family keeps saved contracts and their expected hashes, written as literals, in `hash-rules.fixed-answers.test.ts` beside its normal form. Every release must compute those hashes.
-- **What a family writes.** The repository emits its fixtures and examples again in CI and compares them with the committed files (`pnpm fixtures:check`). A change to what a family writes therefore shows in the pull request's diff, where review catches it.
-- **Format versions.** Prisma checks a stored contract by reading it, converting an earlier format version to the newest layout, and hashing it again; it compares the result with the hash the contract is stored under (a snapshot's directory name, or an extension's head ref). So a later format version within the major may change how the file is laid out, but not what `storage`, `capabilities` and `execution` hold once converted.
-- **A family or target built outside this repository** runs the first check with the function Prisma publishes. It saves a few `contract.json` files it emitted, covering every field its normal form leaves out or orders, writes down their hashes, and calls:
+- **What a family writes.** The repository emits its fixtures and examples again in CI and compares them with the committed files (`pnpm fixtures:check`). A change to what a family writes therefore shows in the pull request's diff, where review catches it: a committed contract whose source did not change, but whose emitted content or hash did, is a change that waits for the next major. A new fixture for new syntax is not.
+- **Format versions.** Prisma checks a stored contract by reading it, converting an earlier format version to the newest layout, and hashing it again; it compares the result with the hash the contract is stored under (a snapshot's directory name, or, for the contract an extension package ships with its own migrations, the hash the extension names for it). So a later format version within the major may change how the file is laid out, but not what `storage`, `capabilities` and `execution` hold once converted.
+- **A family or target built outside this repository** runs the same fixed-hash test in its own test suite, with the function Prisma publishes. It emits a few contracts from sources that use every default its normal form leaves out and every list it orders, saves the `contract.json` files, writes down their hashes, and calls:
 
   ```ts
   import { normalizeSqlStorage } from '@prisma/orm-family-sql/contract/normal-form';
@@ -82,15 +82,16 @@ Each hash covers only what it identifies, so that nothing else can move it. A ha
 ## Consequences
 
 - **An upgrade within a major changes no hash,** so it needs no change to a user's files or databases.
-- **A contract's hashes change when its author changes the contract.** A new column gives a new storage hash and arrives with a migration, which writes the new hashes into the marker when it is applied. A change to the capabilities the contract lists gives a new profile hash and no migration, so the author signs each database again.
+- **A contract's hashes change when its author changes the contract.** A new column gives a new storage hash and arrives with a migration, which writes the new hashes into the marker when it is applied. A change to the capabilities the contract lists gives a new profile hash and no migration; ADR 335 says how a database is brought to it.
 - **Some fixes wait for the next major,** because each would change hashes already recorded:
   - a mistake in the hashing rules, including one that gives two different contracts the same hash;
-  - a family naming a new default to leave out, or writing different `storage` for an existing contract source.
-- **The execution hash is recorded only in files:** `contract.json`, `contract.d.ts`, and their snapshot copies, which `contract emit` does not rewrite. It is frozen with the others so that an upgrade leaves no file holding a value a new emit would not write.
+  - a family starting to leave out a field that existing contracts already write, or writing different `storage` for an existing contract source. A field added for a new feature, which no existing contract holds, may have its default left out from the start;
+  - changing an expected hash in a family's `hash-rules.fixed-answers.test.ts`, which is the test failing for one of the reasons above.
+- **Nothing compares the execution hash today** apart from the fixed-hash test. It is recorded only in files: `contract.json` and `contract.d.ts`, which `contract emit` rewrites, and their snapshot copies, which it does not. It is frozen with the others so that an upgrade leaves no file holding a value a new emit would not write.
 - **A project whose hashes were computed by other rules,** such as one created by a Prisma 8 pre-release, cannot be brought to these rules by the migration system, which never changes a recorded hash. The upgrade instructions for moving from a pre-release do it: a script rewrites the hashes in the project's files, and each database is signed again with `prisma db sign`.
 - **`prisma db sign --force` exists for that step.** A database whose change policy allows only migrations refuses `db sign` ([ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md)), and `--force` overrides that one refusal. It changes no schema, still checks that the database matches the contract before it writes the marker, and leaves the database's policies as they were. No error or advice offers the flag; the upgrade instructions do.
 - **After that step, the ledger still names the old migration hashes.** The script changed the storage hashes inside each migration's files, and so each migration's hash; it cannot change the ledger, which lives in each database.
-  - `prisma migration status` counts a migration as applied only when its hash is in the ledger, so it permanently shows the earlier migrations as not applied.
+  - `prisma migration status` counts a migration as applied only when its hash is in the ledger, so it permanently shows the earlier migrations as not applied. That is accepted for the one move from a pre-release, which no release within the major repeats.
   - `prisma db migrate` decides what to apply from the marker, not the ledger, so it applies none of them again.
   - `prisma migration log` still lists the ledger, and `db migrate` reads it to explain a marker that is outside the known migrations.
 
