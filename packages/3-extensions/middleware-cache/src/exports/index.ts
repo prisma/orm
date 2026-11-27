@@ -14,4 +14,4 @@ export type {
   CacheStore,
   InMemoryCacheStoreOptions,
 } from '../cache-store';
-export { createInMemoryCacheStore } from '../cache-store';
+export { createInMemoryCacheStore, invalidOption } from '../cache-store';

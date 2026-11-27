@@ -4,6 +4,7 @@
 .: function createCacheMiddleware<TMeta = unknown>(options?: CacheMiddlewareOptions<TMeta>): CacheMiddleware<TMeta>
 .: function createInMemoryCacheStore<TMeta = unknown>(options?: InMemoryCacheStoreOptions): CacheStore<TMeta, CachedValue>
 .: function deriveKeyFromContentHash(exec: ExecutionPlan, ctx: ActivityContext): Promise<string>
+.: function invalidOption(argument: 'maxEntries' | 'ttlMs', received: number, expected: string): StructuredError
 .: interface CacheAnnotationOptions, readonly optional property bypass?: boolean | undefined
 .: interface CacheAnnotationOptions, readonly optional property key?: string | undefined
 .: interface CacheAnnotationOptions, readonly optional property meta?: TMeta | undefined
@@ -23,7 +24,7 @@
 .: interface InMemoryCacheStoreOptions
 .: interface InMemoryCacheStoreOptions, readonly optional property clock?: () => number
 .: interface InMemoryCacheStoreOptions, readonly optional property maxEntries?: number
-.: interface InMemoryCacheStoreOptions, readonly optional property ttlMs?: number
+.: interface InMemoryCacheStoreOptions, readonly required property ttlMs: number
 .: interface InvalidationTarget, readonly optional property keys?: readonly string[] | undefined
 .: interface InvalidationTarget, readonly optional property meta?: TMeta | undefined
 .: interface InvalidationTarget<TMeta = unknown>

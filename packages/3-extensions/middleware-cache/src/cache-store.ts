@@ -88,7 +88,7 @@ export interface CacheStore<TMeta = unknown, TValue = CachedValue> {
  */
 export interface InMemoryCacheStoreOptions {
   readonly maxEntries?: number;
-  readonly ttlMs?: number;
+  readonly ttlMs: number;
   readonly clock?: () => number;
 }
 
@@ -192,7 +192,7 @@ function metaUnsupported() {
   );
 }
 
-function invalidOption(argument: 'maxEntries' | 'ttlMs', received: number, expected: string) {
+export function invalidOption(argument: 'maxEntries' | 'ttlMs', received: number, expected: string) {
   return structuredError(
     'RUNTIME.ARGUMENT_INVALID',
     `createInMemoryCacheStore: ${argument} must be ${expected}`,
