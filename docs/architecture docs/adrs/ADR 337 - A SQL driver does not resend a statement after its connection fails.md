@@ -1,6 +1,6 @@
 # ADR 337 — A SQL driver does not resend a statement after its connection fails
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-11-27
 **Domain:** Adapters / Targets
 **Related:** [ADR 159 — Driver Terminology and Lifecycle](ADR%20159%20-%20Driver%20Terminology%20and%20Lifecycle.md) (how a driver ensures a connection is its own choice), [ADR 210 — Prepared Statements](ADR%20210%20-%20Prepared%20Statements%20-%20Author%20Surface%20and%20Driver%20SPI.md) (the one statement a driver sends again: a re-prepare after the server lost a prepared statement), [ADR 003 — One Query One Statement](ADR%20003%20-%20One%20Query%20One%20Statement.md), [Project intent](../../design/00-purpose/project-intent.md) ("No hidden extra round-trips, fallbacks or guesses"), [Adapters & Targets](../subsystems/5.%20Adapters%20&%20Targets.md)
@@ -60,7 +60,11 @@ What the check does not cover still fails with `SqlConnectionError`: a connectio
 
 ## How this fits the project intent
 
-The [project intent](../../design/00-purpose/project-intent.md) promises "no hidden extra round-trips, fallbacks or guesses", and [ADR 003](ADR%20003%20-%20One%20Query%20One%20Statement.md) promises one statement per query. The check is a trade-off against the first promise, and this record accepts it on these terms:
+The [project intent](../../design/00-purpose/project-intent.md) promises "no hidden extra round-trips, fallbacks or guesses", and [ADR 003](ADR%20003%20-%20One%20Query%20One%20Statement.md) promises one statement per query.
+
+The check does not break that promise. It is driver behaviour that manages connection state in direct response to what the user asked for. The user wants to send a query, and the extra round trip makes sure that a connection whose state cannot be trusted still works before the query goes out on it. What the project intent forbids is the framework adding round trips for purposes other than the user's own.
+
+This record accepts the check on these terms:
 
 - **It is one extra round trip, documented, on a connection idle for a second or more.** A connection used within the last second is used without one, so a busy application pays nothing. The Postgres driver's README describes it and lists every statement the driver sends that the user did not write.
 - **It sends no user statement twice.** The caller's statement is compiled to one statement, as ADR 003 says, and is sent once, whatever the check finds.
