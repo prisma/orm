@@ -18,9 +18,9 @@ Today none of this is guaranteed. Only `contract.json` carries a format version,
 - Every reader looks at `formatVersion` before anything else in the file.
   - A version it knows: it reads the file.
   - A higher version: it stops and says the file was written by a newer release of Prisma. It interprets nothing else and changes nothing.
-  - No version, or the old field name: it stops and names the upgrade instructions. It does not guess.
-- No reader skips a field it does not know. Ref file readers, which skip unknown fields today, become strict.
-- The code has one unit per version of each kind of file: a parser, the in-memory document and a printer. The framework reads only the version number and picks the unit. The contents of a contract differ between families, so each family owns its contract units. A second version can be added later without rework. Writing "the oldest version that can hold the data" and converting between versions are not built now, because there is one version.
+  - No version: until `8.0.0`, a file only a pre-release wrote is read as format version 0 and converted in memory; any other file with no version is refused with advice that works for that kind of file. From `8.0.0` a file with no version is refused. The reader does not guess.
+- No reader skips a field it does not know, in a contract, a `migration.json`, a ref or an operation in `ops.json`, outside the places whose content Prisma carries for someone else. Format 1 of `ops.json` reads every shape a pre-release wrote. Converting a version 0 ref drops the keys a ref does not have, as the pre-releases that wrote it did.
+- The code has one unit per version of each kind of file. The newest version has a parser and a printer; an older version has a converter to the next. A shared reader in the framework reads the version number and converts one version at a time, and the caller parses the newest version. The contents of a contract differ between families, so each family owns its contract units. Converting is built and runs for version 0 until `8.0.0`. Writing "the oldest version that can hold the data" is not built, because a release writes one version.
 
 ### 2. Hashes
 
@@ -44,7 +44,7 @@ Today none of this is guaranteed. Only `contract.json` carries a format version,
 ### 5. For release-candidate users
 
 - Upgrade instructions for every breaking change, with a script that rewrites the user's files where a deterministic rewrite is possible. After the hash change, each database is signed again with `db sign`.
-- No shim reads an old release-candidate file. No migration-system mechanism is built for the move.
+- Until `8.0.0`, files a release candidate wrote are read as format version 0. The hash change still needs its script and a `db sign`. No migration-system mechanism is built for the move.
 
 ## Details the design left open, and what was decided
 

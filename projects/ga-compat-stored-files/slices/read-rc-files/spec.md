@@ -1,6 +1,6 @@
 # Slice: Prisma reads the files a release candidate wrote, by converting them
 
-One pull request, built on the hash slice. Part of the project in [../../spec.md](../../spec.md).
+Part of the format-versions pull request. The items below that depend on the new hashes are added by the hash pull request, and are marked. Part of the project in [../../spec.md](../../spec.md).
 
 ## Why
 
@@ -20,7 +20,7 @@ Decided with Will on 2026-11-26. The hashes are not included: an old hash still 
 - **Every read path converts:** each family's contract reader, the CLI commands, the snapshot store, the loader behind the read commands, an extension's bundled files, and a contract passed to a client.
 - **Reading changes nothing on disk.** Every writer writes version 1. A project may hold both versions at once, and that must work.
 - **No hash changes.** Contract hashes do not read the version field, and the migration hash leaves `formatVersion` out, so a version 0 file keeps its hashes.
-- **The hash script accepts version 0 files** and leaves their format as it is.
+- **The hash script accepts version 0 files** and leaves their format as it is. (In the hash pull request.)
 - **Upgrade instructions:** the format step is no longer required now. Its script stays, and the instructions say to run it before upgrading to `8.0.0`, which reads version 1 only.
 - **A test that fails once the release is not a pre-release while a version 0 unit exists,** so `8.0.0` cannot ship with them.
 - **The format version decision record** says what version 0 is and that it is removed at `8.0.0`.
@@ -30,10 +30,10 @@ Decided with Will on 2026-11-26. The hashes are not included: an old hash still 
 - Each converter: a version 0 document converts to the version 1 document the script would write.
 - Each read path above accepts a version 0 file.
 - A project in which every file is version 0, and one with both versions.
-- A real project written by `8.0.0-rc.25`, after the hash script has run on it: every file reads, and the hashes it records are the hashes computed from its contracts.
+- A real project written by `8.0.0-rc.25`: every file reads. (The hash pull request runs the hash script on it and checks that the hashes it records are the hashes computed from its contracts.)
 
 ## Done when
 
 - The tests above pass, and each fails when its converter is broken.
-- Manual QA: on the real `8.0.0-rc.25` project after the hash script, `contract emit`, `migration status`, `db sign`, `db migrate`, `db verify` and a query work with no format script run, on PostgreSQL and MongoDB.
+- Manual QA: on the real `8.0.0-rc.25` project (in the hash pull request, after the hash script), `contract emit`, `migration status`, `db sign`, `db migrate`, `db verify` and a query work with no format script run, on PostgreSQL and MongoDB.
 - `/drive-code-review` on the final commit has no open finding.

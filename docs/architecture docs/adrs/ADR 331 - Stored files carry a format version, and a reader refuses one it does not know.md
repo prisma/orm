@@ -55,7 +55,7 @@ A reader looks at `formatVersion` before anything else in the file.
 
 - **A version it knows:** it reads the file. A release reads every format version an earlier release in the same major wrote.
 - **A version higher than any it knows:** it stops and says the file was written by a newer release of Prisma. It interprets nothing else in the file.
-- **No version, or a value that is neither a version it knows nor a higher integer:** it stops and says how to get a file it can read. The reader does not guess. For a file an extension package ships, it says to upgrade the extension. For a file in the repository, it says to restore the file from version control. A file can be made again only after it is deleted, or for a migration its folder, because every command that reads it refuses it while it is there: the emitted contract is emitted again, a ref is set again, and a migration is planned again only if no database has applied it. A contract snapshot can only be restored, because no command rewrites one.
+- **No version, or a value that is neither a version it knows nor a higher integer:** it stops, unless the file is one a pre-release wrote (below). The reader does not guess. For a file an extension package ships, it says to upgrade the extension. For a file in the repository that no release wrote, it says to restore the file from version control. A file can be made again only after it is deleted, or for a migration its folder, because every command that reads it refuses it while it is there: the emitted contract is emitted again, a ref is set again, and a migration is planned again only if no database has applied it. A contract snapshot can only be restored, because no command rewrites one.
 
 This holds for every read: a command that changes nothing, the runtime loading `contract.json`, and a contract, migration or ref that an extension package ships inside itself. A command or client entry point that accepts either a contract Prisma built in memory (from the TypeScript builder or by reading a file) or a file's content tells them apart this way: a value with no format version field, whose `storage` is an object Prisma constructed and not parsed JSON, is a built contract. It prints that contract in the current format and reads the result back. Anything else is read as a file. A function that reads a file always expects the file: a serializer's `deserializeContract`, the snapshot writer and an extension's `contractJson` refuse a built contract.
 
@@ -63,9 +63,13 @@ This holds for every read: a command that changes nothing, the runtime loading `
 
 A pre-release of Prisma 8 wrote these files without `formatVersion`: a contract or snapshot has `"schemaVersion": "1"` in its place, and a `migration.json` or ref file has neither field. Only a pre-release wrote these, so they are recognised without guessing. A contract with neither field is refused, because no release wrote it.
 
-A release before `8.0.0` reads such a file as format version 0 and converts it to version 1 in memory. Nothing is written back; the file becomes version 1 the next time a command writes it. Version 0 has a converter and no printer, so no release writes it. `8.0.0` and later do not read version 0: a file without `formatVersion` gets the refusal above, and the upgrade instructions rewrite the files before that upgrade. A test fails if a release that is not a pre-release still reads version 0.
+A release before `8.0.0` reads such a file as format version 0 and converts it to version 1 in memory. Nothing is written back; the file becomes version 1 the next time a command writes it. Version 0 has a converter and no printer, so no release writes it. `8.0.0` and later do not read version 0: a file without `formatVersion` is refused, with advice to follow the upgrade instructions of each release since the one that wrote it, which rewrite the files. A test fails if a release that is not a pre-release still reads version 0.
 
-Version 0 means the file as the newest pre-release wrote it. A file from an earlier pre-release first needs the upgrade steps of each release since the one that wrote it; the contract reader names the step for content it no longer accepts.
+Version 0 of a contract, a `migration.json` or a ref means the file as the newest pre-release wrote it. A file from an earlier pre-release first needs the upgrade steps of each release since the one that wrote it; the contract reader names the step for content it no longer accepts. The operations in `ops.json` are the exception, described below: every shape a pre-release wrote is read.
+
+Converting a version 0 ref drops any key a ref does not have, because the pre-releases that wrote it ignored such a key. This is the one place a reader accepts a key no release wrote. The upgrade script drops the same keys and lists each one.
+
+Until `8.0.0` the content of format 1 is not final. A pre-release may still change it, and the upgrade instructions of that release say what a user does. From `8.0.0`, a change to a format is a new format version.
 
 ### A reader refuses a field it does not know
 
@@ -73,22 +77,23 @@ A reader refuses a field the format does not define. Because every reader is str
 
 The rule covers everything Prisma interprets. It stops at content Prisma carries for someone else, where any key is accepted:
 
-- **In a contract:** `meta`; each extension's own section under `extensions`; `capabilities`, a map in which each reader looks up the names it knows; `_generated`; the parameters of a generator; the value of a literal default; an index's `options`, which belong to the index type; and the MongoDB documents a contract hands to the database as they are, such as a collection's validator and an index's partial filter. A type's parameters belong to its codec, whose own schema refuses a key it does not define.
-- **In a SQL operation:** a step's `params`, which are values handed to the database driver; the operation's `meta`; and the entries of a step's `meta` that no reader acts on. The entries a reader acts on are strict.
-- **In a MongoDB operation:** the documents handed to the database as they are, such as a filter, an update and a pipeline; a query plan's `resultShape`; and the entries of a plan's `meta` that no reader acts on.
+- **In a contract:** `meta`; each extension's own section under `extensions`; `capabilities`, a list a later release may add a name to (ADR 335), so a reader meets names it does not know and treats each as its own rules say; `_generated`; the parameters of a generator; the value of a literal default; an index's `options`, which belong to the index type; and the MongoDB documents a contract hands to the database as they are, such as a collection's validator and an index's partial filter. A type's parameters belong to its codec, whose own schema refuses a key it does not define.
+- **In a SQL operation:** a step's `params`, which are values handed to the database driver; the operation's `meta`; the entries of a step's `meta` that no reader acts on; and a codec's `typeParams` inside a mark, which belong to the codec. The entries of a step's `meta` that a reader acts on are strict.
+- **In a MongoDB operation:** the documents handed to the database as they are, such as a filter, an update and a pipeline; a query plan's `resultShape` and `annotations`; and the entries of a plan's `meta` that no reader acts on.
 
 So a release that makes a reader act on something inside one of these, for example a new entry in a step's `meta`, must raise the format version, because an earlier reader would not notice the entry.
 
-Operations are read strictly by everything that acts on their statements or commands: the runners, the statement preview, and the checks a recorded path gets before it is applied. The commands that only list or compare migrations (`migration status`, `list`, `graph` and `check`) read the fields every target shares and do not read a target's own fields.
+Operations are read strictly by everything that acts on their statements or commands: the runners, the statement preview, and the checks a recorded path gets before it is applied. `migration status`, `list`, `graph` and `check` read the fields every target shares and do not read a target's own fields. For `status`, `list` and `graph` that is all they use. `migration check` is meant to say whether a migration is sound, so it can pass one that `db migrate` then refuses for a target's own field.
 
 ### Format 1 of `ops.json` reads every shape a pre-release wrote
 
-`ops.json` is covered by the migration hash, so it cannot be rewritten: a migration a database has applied must keep its hash. Format 1 of `ops.json` therefore includes every shape of an operation that a pre-release of Prisma 8 wrote. The reader turns each such shape into the current one before it checks the operation, so nothing after the reader sees an earlier shape. The migration hash is computed from the file as stored.
+From `8.0.0` no release may change a migration's hash, and `ops.json` is covered by that hash. So from `8.0.0` an earlier shape of an operation in a migration can only be read, never rewritten, and format 1 must read it for the whole major. Before `8.0.0` the shapes pre-releases wrote could still have been rewritten by an upgrade script, because the hash rules change once before `8.0.0` ([ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md)). They are read instead, because that is small and needs no step from a user.
+
+The reader turns each such shape into the current one before it checks the operation, so nothing after the reader sees an earlier shape. The migration hash is computed from the file as stored.
 
 - SQLite: a `schema` of `"main"` in an operation's target details is dropped. Any other `schema` is refused.
 - PostgreSQL and SQLite: a `rowsHoldingValue` mark that has only `enumValue`, `value` and `codecRef` gets its table and column from the operation's target details and its stored value from the check's first parameter. A mark that cannot be completed this way is dropped.
-
-A contract shape an earlier pre-release wrote is not accepted this way. The published upgrade instructions rewrite it, in `contract.json` and in every snapshot.
+- MongoDB: the `sort` and `returnDocument` of a raw find-and-update command and the `sort` of a raw find-and-delete command are read and passed to the command. Readers before this rule dropped them, so a migration that carries one now changes the document its author chose.
 
 ### What a writer does
 
@@ -104,7 +109,7 @@ For each version of each kind of file there is one unit of code. The newest vers
 
 - **Reading.** One shared function reads the version number and reports the refusals above. It then converts the document to the newest version, and the caller parses it with the newest version's unit. Every read takes this one path. The contents of a contract differ between families, so each family owns its contract units; the units for `migration.json` and ref files live with the migration tooling.
 - **Converting.** Each version after the oldest has a function that turns a document of the version before it into one of its own, and a document is converted one version at a time. Because the shared reader runs the conversions, a read path that holds a file before any family sees it (the CLI's contract reader, the snapshot store, an extension's bundled files) passes on only the newest version. The conversion of a contract from version 0 changes only the version field, which every family's contract has in common, so it lives with the shared reader. A contract version that changes content one family owns needs each family to declare its own contract format, made of the shared steps and its own, and those read paths to take the format from the family.
-- **Writing.** The writer tries the oldest version first. From the second version on, a printer either produces a complete document or reports that its version cannot hold the data; it never leaves something out. A printer that wrongly reports this only makes the writer choose a higher version, which an older release refuses outright, so no release is handed a file it misreads.
+- **Writing.** While a release writes one version of a file, the writer prints that version. From the second version on, the writer tries the oldest first, and a printer either produces a complete document or reports that its version cannot hold the data; it never leaves something out. A printer that wrongly reports this only makes the writer choose a higher version, which an older release refuses outright, so no release is handed a file it misreads.
 - **Operations.** Each family owns the reader of its operations. The SQL family's reader takes from each target a schema for the target's own fields, the step marks only that target reads, and a conversion for the target's earlier shapes. The readers run where operations are acted on. They are not given the file's format version, so the first change to an operation format has to pass it to them.
 - **Testing.** For the newest version: print, parse the result, and get the same data back. A saved file of every earlier version still reads.
 
@@ -127,6 +132,7 @@ Git treats a repository's format version this way, and Cargo refuses a lock file
 - A project whose members are on different releases of the same major keeps working until someone uses a feature that needs a newer format. From then, everyone who reads that file upgrades.
 - Adding an optional field to any of these files is a format change. It needs a new version unit, and a saved file of every earlier version must still read.
 - A hand-edited file with a stray key is refused, in a contract, a migration or a ref.
+- An index's `type` and `options` are checked when a contract is built, not when it is read, so an option an index type does not define is accepted from a stored contract.
 - The open places depend on the author of a change knowing that a reader now acts on something inside one. No test finds that.
 - `migration check` can pass a migration whose operations `db migrate` then refuses for a target's own field, and that refusal names the operation but not the migration file, because the framework loads `ops.json` and reads only the fields every target shares.
 
@@ -136,7 +142,7 @@ Git treats a repository's format version this way, and Cargo refuses a lock file
 - **Keep the name `schemaVersion` for the field.** Rejected: "schema" means the database's schema everywhere else in the project.
 - **Each addition says whether an older reader may ignore it.** Rejected as too complex: someone would have to judge that correctly for every field ever added. The writing rule serves the same case, an older release meeting a file from newer tooling, with no judgement for each field.
 - **Refuse a pre-release file and leave it to the upgrade instructions.** Rejected while pre-releases continue: every pre-release user would rewrite every stored file for a change that adds one field, and the conversion path would first run on real files only after `8.0.0`.
-- **Rewrite an earlier shape of an operation with an upgrade script.** Rejected: `ops.json` is covered by the migration hash, and a migration a database has applied must keep its hash.
+- **Rewrite an earlier shape of an operation with an upgrade script.** Possible before `8.0.0` and not chosen: reading the shapes is small and needs no step from a user. From `8.0.0` it is not possible, because a migration's hash may not change.
 - **Read operations strictly when the framework loads `ops.json`.** Not chosen here: the framework would have to ask the family to read each operation, which adds to the framework. It would let `migration check` refuse what `db migrate` refuses and let every refusal name the migration file.
 - **A version inside `ops.json`.** Rejected: the file is a bare array, and it is never read apart from its `migration.json`.
 - **A format version on the marker and the ledger.** Rejected: they are records Prisma keeps in the database, and their form is identified another way.
