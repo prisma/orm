@@ -14,7 +14,7 @@
 | 3b | The remaining SQL renames and deletes | 3a | Merged, prisma/orm#30823, #30849, #30869 and #30929 |
 | 4b | `--convert`, `--backfill` and value object renames on MongoDB | 3b, 4a | Merged, prisma/orm#30970 and #31061 |
 | Stored-name renames, PR 1 | A model, field or enum member that keeps its name while its stored name or value changes is renamed with no question, on PostgreSQL and SQLite; the refusals of swaps, chains and takeovers; ADR 324 | — | Merged, prisma/orm#31088. Spec: [`slices/stored-name-renames/`](./slices/stored-name-renames/spec.md) |
-| Stored-name renames, PR 2 | The same on MongoDB | PR 1 | In review, branch `gandhi-65/tml-3840-mongo-stored-name-renames` |
+| Stored-name renames, PR 2 | The same on MongoDB | PR 1 | Merged, prisma/orm#31192 |
 | Consent error first line | The first line of the consent error in plain words, written by the CLI engine | — | Merged, prisma/prisma-cli#397, #398 and #399 (engine 0.10.4) and prisma/orm#31179 |
 | Close-out | See below | All | Not started |
 
@@ -23,7 +23,7 @@
        └─ 4a ───────┴─ 4b → close-out
 ```
 
-- Every slice is merged except MongoDB stored-name renames and the close-out.
+- Every slice is merged except the close-out.
 - Each slice is one pull request against `main`.
 - Slices 3 and 4 were split on 2026-10-08. Each was too large to review as one pull request.
 
