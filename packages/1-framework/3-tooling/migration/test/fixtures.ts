@@ -123,3 +123,24 @@ export async function writeTestPackage(
   await writeMigrationPackage(dir, metadata, ops);
   return { metadata, ops };
 }
+
+export function pkgWithHash(
+  from: string,
+  to: string,
+  dirName: string,
+  migrationHash: string,
+  invariants: readonly string[] = [],
+): OnDiskMigrationPackage {
+  return {
+    dirName,
+    dirPath: `/migrations/${dirName}`,
+    metadata: createTestMetadata({
+      from,
+      to,
+      createdAt: '2026-02-25T14:00:00.000Z',
+      migrationHash,
+      providedInvariants: invariants,
+    }),
+    ops: createTestOps(),
+  };
+}

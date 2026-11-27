@@ -4,8 +4,8 @@ import type { MigrationEdge } from '../src/graph';
 import { computeMigrationHash } from '../src/hash';
 import { findPath, findPathWithInvariants, reconstructGraph } from '../src/migration-graph';
 import type { OnDiskMigrationPackage } from '../src/package';
-import { collateAsDanishInEachTest, pkgWithHash } from './danish-collation';
-import { createTestMetadata, createTestOps } from './fixtures';
+import { collateAsDanishInEachTest } from './danish-collation';
+import { createTestMetadata, createTestOps, pkgWithHash } from './fixtures';
 
 let migrationCounter = 0;
 

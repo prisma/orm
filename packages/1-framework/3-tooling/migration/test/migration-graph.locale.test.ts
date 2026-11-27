@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { EMPTY_CONTRACT_HASH } from '../src/constants';
 import { findPath, reconstructGraph } from '../src/migration-graph';
-import { collateAsDanishInEachTest, pkgWithHash } from './danish-collation';
+import { collateAsDanishInEachTest } from './danish-collation';
+import { pkgWithHash } from './fixtures';
 
 const E = EMPTY_CONTRACT_HASH;
 
