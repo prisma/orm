@@ -1,4 +1,7 @@
-import type { MigrationRunnerFailure } from '@internal/framework-components/control';
+import {
+  type MigrationRunnerFailure,
+  migrationRunnerFailure,
+} from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { prismaTablesRunnerFailureError } from '../../src/utils/prisma-tables-failure';
 
@@ -6,20 +9,22 @@ const ownershipCheck =
   'ensure the current role may rename schema "prisma_contract": run the command as the role that owns it';
 
 function failedPrecheck(databaseUnchanged: boolean): MigrationRunnerFailure {
-  return {
-    code: 'MIGRATION.PRECHECK_FAILED',
-    message: `Operation _prisma.rename-release-candidate-schema failed during precheck: ${ownershipCheck}`,
-    why: `Before operation _prisma.rename-release-candidate-schema runs, it checks: ${ownershipCheck}. That check failed on this database.`,
-    meta: {
-      failingSpace: '_prisma',
-      databaseUnchanged,
-      failedCheck: {
-        operationId: '_prisma.rename-release-candidate-schema',
-        phase: 'precheck',
-        description: ownershipCheck,
+  return migrationRunnerFailure(
+    'MIGRATION.PRECHECK_FAILED',
+    `Operation _prisma.rename-release-candidate-schema failed during precheck: ${ownershipCheck}`,
+    {
+      why: `Before operation _prisma.rename-release-candidate-schema runs, it checks: ${ownershipCheck}. That check failed on this database.`,
+      meta: {
+        failingSpace: '_prisma',
+        databaseUnchanged,
+        failedCheck: {
+          operationId: '_prisma.rename-release-candidate-schema',
+          phase: 'precheck',
+          description: ownershipCheck,
+        },
       },
     },
-  };
+  );
 }
 
 describe('prismaTablesRunnerFailureError', () => {
@@ -56,11 +61,11 @@ describe('prismaTablesRunnerFailureError', () => {
   });
 
   it('names no check when none failed', () => {
-    const failure: MigrationRunnerFailure = {
-      code: 'MIGRATION.EXECUTION_FAILED',
-      message: 'permission denied for database',
-      meta: { failingSpace: '_prisma', databaseUnchanged: true },
-    };
+    const failure = migrationRunnerFailure(
+      'MIGRATION.EXECUTION_FAILED',
+      'permission denied for database',
+      { meta: { failingSpace: '_prisma', databaseUnchanged: true } },
+    );
 
     expect(prismaTablesRunnerFailureError(failure)).toMatchObject({
       code: 'MIGRATION.EXECUTION_FAILED',

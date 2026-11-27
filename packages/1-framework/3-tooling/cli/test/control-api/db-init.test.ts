@@ -4,6 +4,7 @@ import {
   type ControlDriverInstance,
   type ControlFamilyInstance,
   migrationRunnerFailure,
+  PRISMA_TABLES_SPACE_ID,
   type SchemaDiffIssue,
   schemaCheckWhy,
   type TargetMigrationsCapability,
@@ -37,6 +38,62 @@ const dummyContract = {
 } as unknown as Contract;
 
 describe('executeDbInit', () => {
+  describe('the check for rows of spaces the project does not declare', () => {
+    const marker = { storageHash: 'other', profileHash: 'other', invariants: [], meta: {} };
+    const migrations = {
+      createPlanner: () => ({
+        plan: vi.fn().mockReturnValue({
+          kind: 'success',
+          appliedStatements: [],
+          plan: { targetId: 'postgres', destination: { storageHash: 'dest' }, operations: [] },
+        }),
+      }),
+      createRunner: () => ({
+        execute: vi.fn().mockResolvedValue(
+          ok({
+            perSpaceResults: [
+              { space: 'app', value: { operationsPlanned: 0, operationsExecuted: 0 } },
+            ],
+          }),
+        ),
+      }),
+    } as unknown as TargetMigrationsCapability<
+      'sql',
+      'postgres',
+      ControlFamilyInstance<'sql', unknown>
+    >;
+
+    function applyWithRowOf(space: string) {
+      return executeDbInit({
+        invocation: TEST_INVOCATION,
+        driver: createMockDriver(),
+        adapter: {} as unknown as ControlAdapterInstance<'sql', 'postgres'>,
+        familyInstance: {
+          ...createMockFamilyInstance(),
+          readAllMarkers: async () => new Map([[space, marker]]),
+          markerLocation: '_prisma.marker',
+        } as unknown as ControlFamilyInstance<'sql', unknown>,
+        contract: dummyContract,
+        mode: 'apply',
+        migrations,
+        frameworkComponents: [],
+        migrationsDir: '/tmp/__test-db-init-migrations',
+        targetId: 'postgres',
+      });
+    }
+
+    it("counts the row of the space for Prisma's own tables as declared", async () => {
+      expect((await applyWithRowOf(PRISMA_TABLES_SPACE_ID)).ok).toBe(true);
+    });
+
+    it('refuses a row of a space nothing declares', async () => {
+      await expect(applyWithRowOf('cipher')).rejects.toMatchObject({
+        code: 'MIGRATION.CONTRACT_SPACE_VIOLATION',
+        meta: { violations: [{ kind: 'orphanMarker', spaceId: 'cipher' }] },
+      });
+    });
+  });
+
   it('plans from no contract, asserts no origin, gives no statements, and reports none', async () => {
     const planFn = vi.fn().mockReturnValue({
       kind: 'success',

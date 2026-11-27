@@ -1,13 +1,17 @@
-import type { Contract } from '@internal/contract/types';
+import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
+  ContractSpace,
   ControlDriverInstance,
   ControlExtensionDescriptor,
   ControlFamilyInstance,
   SchemaDiffIssue,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
-import { hasSchemaSubjectClassifier } from '@internal/framework-components/control';
+import {
+  hasSchemaSubjectClassifier,
+  PRISMA_TABLES_SPACE_ID,
+} from '@internal/framework-components/control';
 import {
   type AggregateContractSpace,
   collectAggregateNamespaces,
@@ -16,6 +20,7 @@ import {
   verifyMigration,
 } from '@internal/migration-tools/aggregate';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import { reconstructGraph } from '@internal/migration-tools/migration-graph';
 import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -58,6 +63,8 @@ export interface ExecuteDbVerifyOptions<TFamilyId extends string, TTargetId exte
   readonly skipMarker: boolean;
   /** Content check for contract snapshots the aggregate loader resolves. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
+  /** The space for Prisma's own tables the target's control descriptor carries, whose row is checked against it. */
+  readonly prismaTables?: ContractSpace;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -157,7 +164,44 @@ export async function executeDbVerify<TFamilyId extends string, TTargetId extend
     skipMarker,
     onProgress,
     migrationsDir: options.migrationsDir,
+    prismaTablesBehind:
+      options.prismaTables === undefined
+        ? undefined
+        : prismaTablesBehind(options.prismaTables, markersBySpaceId.get(PRISMA_TABLES_SPACE_ID)),
   });
+}
+
+/**
+ * The row of the space for Prisma's own tables, when it records a contract the installed release's migrations of the space lead on from. A row at a contract they never reach was written by a later release, which within a major version only added to the tables, so it is not reported.
+ */
+function prismaTablesBehind(
+  space: ContractSpace,
+  row: ContractMarkerRecord | undefined,
+): PrismaTablesBehind | undefined {
+  if (row === undefined || row.storageHash === space.headRef.hash) return undefined;
+  if (!reconstructGraph(space.migrations).nodes.has(row.storageHash)) return undefined;
+  return { markerHash: row.storageHash, headRefHash: space.headRef.hash };
+}
+
+interface PrismaTablesBehind {
+  readonly markerHash: string;
+  readonly headRefHash: string;
+}
+
+function errorPrismaTablesBehind(behind: PrismaTablesBehind): CliStructuredError {
+  const migrate = '{bin} db migrate';
+  return new CliStructuredError(
+    'CONTRACT.PRISMA_TABLES_BEHIND',
+    "Prisma's own tables in this database are in the form an earlier release left them",
+    {
+      why: `The installed release of Prisma keeps them in a later form. The row of the \`${PRISMA_TABLES_SPACE_ID}\` space records contract ${behind.markerHash}, and the newest the installed release knows is ${behind.headRefHash}.`,
+      fix: `Run \`${migrate}\`, which brings Prisma's own tables up to date before it does anything else; \`{bin} db init\`, \`{bin} db update\` and \`{bin} db sign\` do the same.`,
+      nextActions: [
+        { kind: 'run-command', label: "Bring Prisma's own tables up to date", command: migrate },
+      ],
+      meta: { spaceId: PRISMA_TABLES_SPACE_ID, ...behind },
+    },
+  );
 }
 
 function buildLoadInputs<TFamilyId extends string, TTargetId extends string>(
@@ -270,6 +314,7 @@ function finaliseVerifyResult(args: {
   skipMarker: boolean;
   onProgress: OnControlProgress | undefined;
   migrationsDir: string;
+  prismaTablesBehind: PrismaTablesBehind | undefined;
 }): ExecuteDbVerifyResult {
   const { verifyResult, aggregate, skipMarker, onProgress, migrationsDir } = args;
   if (!verifyResult.ok) {
@@ -288,7 +333,14 @@ function finaliseVerifyResult(args: {
   }
   const markerDrift = skipMarker
     ? null
-    : mapMarkerCheckFailures(aggregate.app.spaceId, verifyResult.value.markerCheck, migrationsDir);
+    : (mapMarkerCheckFailures(
+        aggregate.app.spaceId,
+        verifyResult.value.markerCheck,
+        migrationsDir,
+      ) ??
+      (args.prismaTablesBehind === undefined
+        ? null
+        : errorPrismaTablesBehind(args.prismaTablesBehind)));
   emitVerifySpan(onProgress, markerDrift === null ? 'spanEndOk' : 'spanEndError');
   return ok({
     schemaResults: verifyResult.value.schemaCheck.perSpace,

@@ -686,6 +686,14 @@ An extension pack targets a different database target than the contract does (e.
 
 An RLS policy declaration is invalid: it targets a model in another contract space, its prefix exceeds the length limit or is declared twice in one namespace, or it targets a table that is not RLS-enabled or not present in the namespace. Raised by the Postgres `defineContract` builder and while deriving the Postgres schema tree from the contract. Payload: `prefix`/`policyName`, `tableName`, `namespaceId`, `reason`.
 
+### CONTRACT.PRISMA_TABLES_BEHIND
+
+`db verify` found the row of the `_prisma` contract space, which records the form of Prisma's own tables, at a contract that the installed release's migrations of that space lead on from: Prisma was upgraded and no command that changes the database has run since. Reported as a finding on a completed run that exits `4`. Run `prisma db migrate`, or `db init`, `db update` or `db sign`; each brings the tables up to date before it does anything else. A row at a contract the installed release does not know was written by a later release and is not reported. Payload: `spaceId`, `markerHash`, `headRefHash`.
+
+### CONTRACT.PRISMA_TABLES_FROM_EARLIER_RELEASE
+
+On PostgreSQL, a command that only reads the database (`db verify`, `migration status`, `migration log`, `db migrate --show`, or a dry run of `db init` or `db update`) found Prisma's own tables in the schema `prisma_contract`, where the release candidates of Prisma 8 kept them, and no `_prisma.marker`. It cannot read which contract the database matches, so it stops instead of reporting an unsigned database. Run `prisma db migrate`, or `db init`, `db update` or `db sign`, which rename the schema to `_prisma` before they read anything. The runtime's marker check reports the same code as a warning and runs. Payload: `schema`.
+
 ### CONTRACT.RELATION_INVALID
 
 A relation's shape is wrong: `.sql(...)` on a non-belongsTo relation, mismatched field counts between the two sides, an N:M relation without `through` metadata, a relation target referencing a field of another model, or a join column that no field of its model maps (`reason: 'join-column-not-a-field'`; the target side of an N:M relation names junction columns and is exempt). The Mongo builder also refuses an embed relation to a model with variants (`reason: 'embedded-model-has-variants'`), because the ORM reads and writes only the base fields of an embedded model. Raised while authoring/building a contract (SQL and Mongo). Payload: `modelName`, `relationName`, `reason`, and `column` for an unmapped join column.
