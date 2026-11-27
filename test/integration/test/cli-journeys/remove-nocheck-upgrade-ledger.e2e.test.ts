@@ -99,22 +99,21 @@ withTempDir(({ createTempDir }) => {
           'contract.prisma': BEFORE_SOURCE,
         });
         await withClient(db.connectionString, async (client) => {
-          await client.query(`DELETE FROM "prisma_contract"."ledger"`);
-          await client.query(`DELETE FROM "prisma_contract"."contract"`);
+          await client.query(`DELETE FROM "_prisma"."ledger" WHERE space = 'app'`);
+          await client.query(`DELETE FROM "_prisma"."contract"`);
           for (const migration of migrations) {
             await client.query(
-              `INSERT INTO "prisma_contract"."ledger" (space, migration_name, migration_hash, origin_core_hash, destination_core_hash, operations) VALUES ('app', $1, $2, $3, $4, '[]'::jsonb)`,
+              `INSERT INTO "_prisma"."ledger" (space, migration_name, migration_hash, origin_core_hash, destination_core_hash, operations) VALUES ('app', $1, $2, $3, $4, '[]'::jsonb)`,
               [migration.name, migration.migrationHash, migration.from ?? 'empty', migration.to],
             );
             await client.query(
-              `INSERT INTO "prisma_contract"."contract" (core_hash, contract_json) VALUES ($1, $2::jsonb)`,
+              `INSERT INTO "_prisma"."contract" (core_hash, contract_json) VALUES ($1, $2::jsonb)`,
               [migration.to, before[`migrations/snapshots/${migration.to}/contract.json`]],
             );
           }
-          await client.query(
-            `UPDATE "prisma_contract"."marker" SET core_hash = $1 WHERE space = 'app'`,
-            [head.to],
-          );
+          await client.query(`UPDATE "_prisma"."marker" SET core_hash = $1 WHERE space = 'app'`, [
+            head.to,
+          ]);
         });
 
         const script = spawnSync(process.execPath, [appScript], {

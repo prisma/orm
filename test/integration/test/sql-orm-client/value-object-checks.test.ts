@@ -19,6 +19,7 @@ import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { dirname, join } from 'pathe';
 import { Client } from 'pg';
 import { describe, expect, it } from 'vitest';
+import { createPrismaTables } from '../postgres-bootstrap';
 import { authorSqlContractFromPsl } from '../scalar-lists/psl-list-authoring';
 
 const schema = readFileSync(
@@ -68,6 +69,7 @@ async function pushAndVerify(contract: Contract<SqlStorage>, connectionString: s
       });
     if (planResult.kind !== 'success') throw new Error(JSON.stringify(planResult));
     const { plan } = planResult;
+    await createPrismaTables(driver);
     const applied = await postgresTargetControl.createRunner(family).execute({
       driver,
       perSpaceOptions: [

@@ -118,7 +118,7 @@ withTempDir(({ createTempDir }) => {
         // Marker stays at the first migration's target hash
         const marker = await sql(
           db.connectionString,
-          'SELECT core_hash FROM prisma_contract.marker WHERE space = $1',
+          'SELECT core_hash FROM _prisma.marker WHERE space = $1',
           ['app'],
         );
         expect(marker.rows[0]?.['core_hash'], 'marker unchanged after failure').toBe(
@@ -212,7 +212,7 @@ withTempDir(({ createTempDir }) => {
         // Verify marker updated
         const marker = await sql(
           db.connectionString,
-          'SELECT core_hash FROM prisma_contract.marker WHERE space = $1',
+          'SELECT core_hash FROM _prisma.marker WHERE space = $1',
           ['app'],
         );
         expect(marker.rows[0]?.['core_hash'], 'marker matches result').toBe(result.markerHash);

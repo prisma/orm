@@ -514,12 +514,12 @@ withTempDir(({ createTempDir }) => {
         // moves the storage hash backward.
         await sql(
           db.connectionString,
-          `UPDATE "prisma_contract"."marker" SET core_hash = $1 WHERE space = 'app'`,
+          `UPDATE "_prisma"."marker" SET core_hash = $1 WHERE space = 'app'`,
           [c1Hash],
         );
         const markerAfterReset = await sql(
           db.connectionString,
-          `SELECT core_hash, invariants FROM "prisma_contract"."marker" WHERE space = 'app'`,
+          `SELECT core_hash, invariants FROM "_prisma"."marker" WHERE space = 'app'`,
         );
         expect(markerAfterReset.rows[0]?.['core_hash'], 'R.03: storage hash rolled back').toBe(
           c1Hash,
@@ -550,7 +550,7 @@ withTempDir(({ createTempDir }) => {
 
         const markerAfterReapply = await sql(
           db.connectionString,
-          `SELECT core_hash, invariants FROM "prisma_contract"."marker" WHERE space = 'app'`,
+          `SELECT core_hash, invariants FROM "_prisma"."marker" WHERE space = 'app'`,
         );
         expect(markerAfterReapply.rows[0]?.['core_hash'], 'R.05: marker at C2').toBe(c2Hash);
         expect(
@@ -688,7 +688,7 @@ MigrationCLI.run(import.meta.url, M);
 
         const markerRow = await sql(
           db.connectionString,
-          `SELECT invariants FROM "prisma_contract"."marker" WHERE space = 'app'`,
+          `SELECT invariants FROM "_prisma"."marker" WHERE space = 'app'`,
         );
         expect(
           markerRow.rows[0]?.['invariants'],
@@ -782,7 +782,7 @@ MigrationCLI.run(import.meta.url, M);
         );
         const markerAfterApply = await sql(
           db.connectionString,
-          `SELECT invariants FROM "prisma_contract"."marker" WHERE space = 'app'`,
+          `SELECT invariants FROM "_prisma"."marker" WHERE space = 'app'`,
         );
         expect(
           markerAfterApply.rows[0]?.['invariants'],
@@ -794,11 +794,11 @@ MigrationCLI.run(import.meta.url, M);
         // is non-empty — this is the case the bug fix surfaces.
         await sql(
           db.connectionString,
-          `UPDATE "prisma_contract"."marker" SET invariants = '{}' WHERE space = 'app'`,
+          `UPDATE "_prisma"."marker" SET invariants = '{}' WHERE space = 'app'`,
         );
         const markerAfterReset = await sql(
           db.connectionString,
-          `SELECT core_hash, invariants FROM "prisma_contract"."marker" WHERE space = 'app'`,
+          `SELECT core_hash, invariants FROM "_prisma"."marker" WHERE space = 'app'`,
         );
         expect(markerAfterReset.rows[0]?.['core_hash'], 'T.04: marker still at c1').toBe(c1Hash);
         expect(markerAfterReset.rows[0]?.['invariants'], 'T.04: marker.invariants cleared').toEqual(

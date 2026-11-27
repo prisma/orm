@@ -2,6 +2,7 @@ import { rmSync } from 'node:fs';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { bootstrapPostgresSignMarkerTables } from './postgres-bootstrap';
 import { runOnEngine, setupTestDirectoryFromFixtures, withTempDir } from './utils/cli-test-helpers';
 import { runDbUpdateAllowFailure, setupDbUpdateFixture } from './utils/db-update-test-helpers';
 
@@ -26,22 +27,9 @@ withTempDir(({ createTempDir }) => {
       async () => {
         await withDevDatabase(async ({ connectionString }) => {
           await withClient(connectionString, async (client) => {
-            await client.query('CREATE SCHEMA IF NOT EXISTS prisma_contract');
+            await bootstrapPostgresSignMarkerTables(client);
             await client.query(`
-              CREATE TABLE IF NOT EXISTS prisma_contract.marker (
-                space TEXT NOT NULL PRIMARY KEY DEFAULT 'app',
-                core_hash TEXT NOT NULL,
-                profile_hash TEXT NOT NULL,
-                contract_json JSONB,
-                canonical_version INTEGER,
-                updated_at TIMESTAMPTZ DEFAULT NOW(),
-                app_tag TEXT,
-                meta JSONB DEFAULT '{}',
-                invariants TEXT[] NOT NULL DEFAULT '{}'
-              )
-            `);
-            await client.query(`
-              INSERT INTO prisma_contract.marker (space, core_hash, profile_hash, contract_json)
+              INSERT INTO _prisma.marker (space, core_hash, profile_hash, contract_json)
               VALUES ('retired-extension', 'retired', 'retired-profile', '{}')
               ON CONFLICT (space) DO NOTHING
             `);

@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import sqliteAdapter from '@internal/adapter-sqlite/control';
 import type { Contract } from '@internal/contract/types';
-import postgresControlDriver from '@internal/driver-postgres/control';
+import postgresControlDriver, {
+  type PostgresControlDriver,
+} from '@internal/driver-postgres/control';
 import sqliteDriver from '@internal/driver-sqlite/control';
 import sql, {
   INIT_ADDITIVE_POLICY,
@@ -28,6 +30,7 @@ import {
   sqliteFrameworkComponents,
   sqliteStack,
 } from '../date-time-defaults/sqlite-authoring';
+import { createPrismaTables } from '../postgres-bootstrap';
 import {
   authorSqlContractFromPsl,
   postgresFrameworkComponents,
@@ -39,6 +42,7 @@ interface Stack {
   readonly family: ReturnType<typeof sql.create>;
   readonly planner: SqlMigrationPlanner<SqlPlanTargetDetails>;
   readonly runner: SqlMigrationRunner<SqlPlanTargetDetails>;
+  readonly createPrismaTables: (driver: Driver) => Promise<void>;
   readonly frameworkComponents:
     | typeof postgresFrameworkComponents
     | typeof sqliteFrameworkComponents;
@@ -59,6 +63,7 @@ const postgresStack = (() => {
     family,
     planner: postgres.createPlanner(postgresAdapter.create(controlStack)),
     runner: postgres.createRunner(family),
+    createPrismaTables: (driver: Driver) => createPrismaTables(driver as PostgresControlDriver),
     frameworkComponents: postgresFrameworkComponents,
   };
 })();
@@ -69,6 +74,7 @@ const sqliteControl = (() => {
     family,
     planner: sqlite.createPlanner(sqliteAdapter.create(sqliteStack)),
     runner: sqlite.createRunner(family),
+    createPrismaTables: async () => {},
     frameworkComponents: sqliteFrameworkComponents,
   };
 })();
@@ -93,6 +99,7 @@ async function move(
   });
   if (planned.kind !== 'success') throw new Error(`planner failed: ${JSON.stringify(planned)}`);
   const operations = await Promise.all(planned.plan.operations);
+  await stack.createPrismaTables(driver);
   const applied = await stack.runner.execute({
     driver,
     perSpaceOptions: [

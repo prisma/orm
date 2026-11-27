@@ -40,8 +40,8 @@ function clientDriver(client: Client): PostgresControlDriver {
   } as unknown as PostgresControlDriver;
 }
 
-/** Creates Prisma's own tables as the commands do: by applying the Postgres target's `_prisma` contract space. */
-export async function bootstrapPostgresSignMarkerTables(client: Client): Promise<void> {
+/** Creates Prisma's own tables as the commands do: by applying the Postgres target's `_prisma` contract space. A test that runs the migration runner directly calls it first, since the runner refuses to apply a space before the tables exist. */
+export async function createPrismaTables(driver: PostgresControlDriver): Promise<void> {
   const contractSpace = postgresTargetDescriptor.contractSpace;
   if (contractSpace === undefined) {
     throw new Error('the Postgres target descriptor carries no contract space');
@@ -49,7 +49,7 @@ export async function bootstrapPostgresSignMarkerTables(client: Client): Promise
   const result = await applyInstalledContractSpace({
     spaceId: PRISMA_TABLES_SPACE_ID,
     contractSpace,
-    driver: clientDriver(client),
+    driver,
     familyInstance,
     migrations: postgresTargetDescriptor.migrations,
     frameworkComponents: [postgresTargetDescriptor, postgresAdapterDescriptor],
@@ -57,4 +57,9 @@ export async function bootstrapPostgresSignMarkerTables(client: Client): Promise
   if (!result.ok) {
     throw new Error(`${result.failure.code}: ${result.failure.message}`);
   }
+}
+
+/** {@link createPrismaTables} over a `pg` client. */
+export async function bootstrapPostgresSignMarkerTables(client: Client): Promise<void> {
+  await createPrismaTables(clientDriver(client));
 }

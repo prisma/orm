@@ -8,6 +8,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import postgres from '@internal/target-postgres/control';
 import { createDevDatabase, type DevDatabase, timeouts, withClient } from '@repo/test-utils';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createPrismaTables } from '../postgres-bootstrap';
 import {
   authorSqlContractFromPsl,
   postgresFrameworkComponents,
@@ -54,6 +55,7 @@ async function apply(connectionString: string, contract: Contract<SqlStorage>) {
     if (planResult.kind !== 'success') {
       throw new Error(`planner failed: ${JSON.stringify(planResult)}`);
     }
+    await createPrismaTables(driver);
     return await postgres.createRunner(familyInstance).execute({
       driver,
       perSpaceOptions: [
@@ -114,7 +116,7 @@ describe('a raw SQL default the database stores in its own form', { concurrent: 
     await withClient(connectionString(), async (client) => {
       await client.query('DROP SCHEMA IF EXISTS public CASCADE');
       await client.query('CREATE SCHEMA public');
-      await client.query('DROP SCHEMA IF EXISTS prisma_contract CASCADE');
+      await client.query('DROP SCHEMA IF EXISTS _prisma CASCADE');
     });
   }, timeouts.spinUpPpgDev);
 

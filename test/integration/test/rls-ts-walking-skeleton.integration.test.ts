@@ -47,6 +47,7 @@ import postgresTargetDescriptor from '@internal/target-postgres/control';
 import { isPostgresSchema, PostgresDatabaseSchemaNode } from '@internal/target-postgres/types';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createPrismaTables } from './postgres-bootstrap';
 
 const testTimeout = timeouts.spinUpPpgDev;
 
@@ -163,6 +164,7 @@ async function applyPlan(
   contract: Contract<SqlStorage>,
   policy: MigrationOperationPolicy,
 ): Promise<void> {
+  await createPrismaTables(driver);
   const runner = postgresTargetDescriptor.createRunner(familyInstance);
   const executeResult = await runner.execute({
     driver,

@@ -188,6 +188,7 @@ export async function setupTestDatabase<TClient extends TestSqlClient>(
   bootstrapMarkerTables: (client: TClient) => Promise<void>,
 ): Promise<void> {
   await client.query('drop schema if exists prisma_contract cascade');
+  await client.query('drop schema if exists _prisma cascade');
   await client.query('create schema if not exists public');
 
   await setupFn(client);
@@ -214,7 +215,7 @@ export interface SeedMarkerInput {
  */
 export async function seedTestMarker(client: TestSqlClient, input: SeedMarkerInput): Promise<void> {
   await client.query(
-    `insert into prisma_contract.marker
+    `insert into _prisma.marker
        (space, core_hash, profile_hash, contract_json, canonical_version, invariants, updated_at)
      values ($1, $2, $3, $4::jsonb, $5, $6::text[], now())`,
     [

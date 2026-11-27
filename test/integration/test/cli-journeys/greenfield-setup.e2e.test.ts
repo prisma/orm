@@ -65,7 +65,7 @@ withTempDir(({ createTempDir }) => {
         // Verify marker created
         const marker = await sql(
           db.connectionString,
-          "SELECT core_hash, profile_hash FROM prisma_contract.marker WHERE space = 'app'",
+          "SELECT core_hash, profile_hash FROM _prisma.marker WHERE space = 'app'",
         );
         expect(marker.rows.length, 'A.03: marker created').toBe(1);
         expect(marker.rows[0]?.['core_hash'], 'A.03: marker has core_hash').toBeDefined();

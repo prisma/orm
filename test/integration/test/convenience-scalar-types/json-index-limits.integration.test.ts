@@ -8,6 +8,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import postgres from '@internal/target-postgres/control';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { createPrismaTables } from '../postgres-bootstrap';
 import {
   authorSqlContractFromPsl,
   postgresFrameworkComponents,
@@ -47,6 +48,7 @@ async function apply(connectionString: string, contract: Contract<SqlStorage>) {
       throw new Error(`planner failed: ${JSON.stringify(planResult)}`);
     }
     const { plan } = planResult;
+    await createPrismaTables(driver);
     return await postgres.createRunner(familyInstance).execute({
       driver,
       perSpaceOptions: [

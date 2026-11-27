@@ -8,7 +8,7 @@ import { runOnEngine, setupTestDirectoryFromFixtures, withTempDir } from './util
 import {
   dbRefPath,
   JOURNEY_TIMEOUT,
-  postgresMarkerTableExists,
+  postgresMarkers,
   prepareProject,
   signedSpaces,
 } from './utils/db-sign-spaces-helpers';
@@ -44,7 +44,7 @@ withTempDir(({ createTempDir }) => {
               previous: undefined,
             },
           ]);
-          expect(await postgresMarkerTableExists(connectionString)).toBe(false);
+          expect(await postgresMarkers(connectionString)).toEqual({});
           expect([
             existsSync(dbRefPath(project, 'app')),
             existsSync(dbRefPath(project, TEST_SPACE_ID)),

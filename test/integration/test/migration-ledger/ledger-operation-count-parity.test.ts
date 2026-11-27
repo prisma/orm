@@ -45,6 +45,7 @@ import {
   frameworkComponents as sqliteFrameworkComponents,
   sqliteTargetDescriptor,
 } from '../../../../packages/3-targets/sqlite/2-adapter/test/migrations/fixtures/runner-fixtures';
+import { createPrismaTables } from '../postgres-bootstrap';
 
 const controlAdapter = new MongoControlAdapterImpl();
 
@@ -209,6 +210,7 @@ describe('LedgerEntryRecord.operationCount parity across targets', {
     timeout: timeouts.databaseOperation,
   }, async () => {
     const pg = multiEdgePlanPg();
+    await createPrismaTables(pgDriver!);
     const pgRunner = postgresTargetDescriptor.createRunner(pgFamily);
     const pgResult = await pgRunner.execute({
       driver: pgDriver!,
@@ -337,6 +339,7 @@ describe('LedgerEntryRecord.operationCount parity across targets', {
       ],
       migrationEdges: edges,
     });
+    await createPrismaTables(pgDriver!);
     const pgRunner = postgresTargetDescriptor.createRunner(pgFamily);
     const pgResult = await pgRunner.execute({
       driver: pgDriver!,
@@ -492,6 +495,7 @@ describe('LedgerEntryRecord.operationCount parity across targets', {
       ],
       migrationEdges: pgSynthEdges,
     });
+    await createPrismaTables(pgDriver!);
     const pgRunner = postgresTargetDescriptor.createRunner(pgFamily);
     const pgResult = await pgRunner.execute({
       driver: pgDriver!,
