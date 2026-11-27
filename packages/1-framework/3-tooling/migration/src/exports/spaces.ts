@@ -8,6 +8,12 @@ export {
   type DescriptorSelfConsistencyInputs,
 } from '../assert-descriptor-self-consistency';
 export {
+  type ClassifyInstalledSpaceRowInputs,
+  classificationNeedsLedger,
+  classifyInstalledSpaceRow,
+  type InstalledSpacePosition,
+} from '../classify-installed-space-row';
+export {
   type ComputeExtensionSpaceApplyPathInputs,
   computeExtensionSpaceApplyPath,
   type ExtensionSpaceApplyPathOutcome,

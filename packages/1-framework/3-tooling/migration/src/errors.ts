@@ -216,16 +216,22 @@ export function errorInstalledSpaceUnreachable(args: {
   readonly spaceId: string;
   readonly markerHash: string;
   readonly headRefHash: string;
+  readonly reason: 'laterMajor' | 'unknownContract';
 }): MigrationToolsError {
-  const { spaceId, markerHash, headRefHash } = args;
+  const { spaceId, markerHash, headRefHash, reason } = args;
+  const recorded = `The database records contract space "${spaceId}" at ${markerHash}, which the installed Prisma packages never reach: their newest is ${headRefHash}.`;
+  const why =
+    reason === 'laterMajor'
+      ? `${recorded} The row also records an invariant that no migration of the installed packages provides, which only a release of a later major version of Prisma writes. That release changed these tables in a way this release cannot read.`
+      : `${recorded} The space's ledger never recorded ${headRefHash}, so no release of this major version brought the database there from this release's form; a release of another major version, or a change by hand, did.`;
+  const fix =
+    reason === 'laterMajor'
+      ? 'Use the release of the later major version that changed this database, or a newer one, for every command against it.'
+      : 'Use the Prisma release that last changed this database, or a newer one, and run the command again.';
   return new MigrationToolsError(
     'MIGRATION.INSTALLED_SPACE_UNREACHABLE',
     `The database's contract space "${spaceId}" is at a contract the installed Prisma does not know`,
-    {
-      why: `The database records contract space "${spaceId}" at ${markerHash}. The migrations in the installed Prisma packages lead from the empty database to ${headRefHash} without passing through it, and the space's ledger never recorded ${headRefHash}, so no release of this major version brought the database there from this release's tables. A release of another major version, or a change by hand, did.`,
-      fix: 'Install the Prisma release that last changed this database, or a later one of the same major version, and run the command again.',
-      meta: { spaceId, markerHash, headRefHash },
-    },
+    { why, fix, meta: { spaceId, markerHash, headRefHash, reason } },
   );
 }
 

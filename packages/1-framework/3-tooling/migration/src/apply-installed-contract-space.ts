@@ -11,6 +11,10 @@ import { InternalError } from '@internal/utils/internal-error';
 import type { Result } from '@internal/utils/result';
 import { notOk, ok } from '@internal/utils/result';
 import { resolveRecordedPath } from './aggregate/strategies/resolve-recorded-path';
+import {
+  classificationNeedsLedger,
+  classifyInstalledSpaceRow,
+} from './classify-installed-space-row';
 import { errorInstalledSpaceUnreachable } from './errors';
 import { verifyMigrationHash } from './hash';
 import { reconstructGraph } from './migration-graph';
@@ -41,16 +45,18 @@ export interface ApplyInstalledContractSpaceInputs<
 
 export interface InstalledContractSpaceApplied {
   /**
-   * `applied`: the runner ran the path to the head. `atHead`: the space's row already recorded the head. `ahead`: the row records a contract these migrations never reach, and the space's ledger shows the database passed through the head, so a later release brought it further; within a major version that release only added, so nothing is applied.
+   * `applied`: the runner ran the path to the head. `atHead`: the space's row already recorded the head. `ahead`: a later release of the same major version brought the database further; as `classifyInstalledSpaceRow` describes.
    */
   readonly outcome: 'applied' | 'atHead' | 'ahead';
   readonly operationsExecuted: number;
 }
 
 /**
- * Brings a contract space that an installed package carries up to date: reads the space's own marker row, and when it does not record the space's head, applies the path from it to the head with the target's runner, in one call for this space alone. Reads nothing from the user's repository. A database without the marker table reads as having no row, so the path then starts from the empty contract.
+ * Brings a contract space that an installed package carries up to date: reads the space's own marker row, classifies it with {@link classifyInstalledSpaceRow}, and when it is behind, applies the path from it to the head with the target's runner, in one call for this space alone. Reads nothing from the user's repository. A database without the marker table reads as having no row, so the path then starts from the empty contract.
  *
- * Throws when a migration in the space does not match its hash or no path covers the head's invariants, which are faults of the package, and `MIGRATION.INSTALLED_SPACE_UNREACHABLE` when the row records a contract the space's migrations never pass through and the space's ledger never recorded the head. When the ledger did record the head, the database is ahead of this release and nothing is applied. Returns the runner's failure unchanged.
+ * When the runner fails because another command moved the row after it was read (`MIGRATION.MARKER_ORIGIN_MISMATCH`), it reads the row again and classifies it again, once: at or ahead of the head it returns that, still behind it plans and runs again, and a second such failure is returned.
+ *
+ * Throws when a migration in the space does not match its hash or no path covers the head's invariants, which are faults of the package, and `MIGRATION.INSTALLED_SPACE_UNREACHABLE` when the row is one this release cannot use. Returns the runner's other failures unchanged.
  */
 export async function applyInstalledContractSpace<
   TFamilyId extends string,
@@ -58,19 +64,8 @@ export async function applyInstalledContractSpace<
 >(
   inputs: ApplyInstalledContractSpaceInputs<TFamilyId, TTargetId>,
 ): Promise<Result<InstalledContractSpaceApplied, MigrationRunnerFailure>> {
-  const { spaceId, contractSpace, driver, familyInstance } = inputs;
-  const { headRef, migrations: packages } = contractSpace;
-
-  const marker = await familyInstance.readMarker({ driver, space: spaceId });
-  if (
-    marker !== null &&
-    marker.storageHash === headRef.hash &&
-    headRef.invariants.every((invariant) => marker.invariants.includes(invariant))
-  ) {
-    return ok({ outcome: 'atHead', operationsExecuted: 0 });
-  }
-
-  for (const pkg of packages) {
+  const { spaceId, contractSpace } = inputs;
+  for (const pkg of contractSpace.migrations) {
     if (!verifyMigrationHash(pkg).ok) {
       throw new InternalError(
         `Migration "${pkg.dirName}" of the installed contract space "${spaceId}" does not match its migrationHash.`,
@@ -78,18 +73,35 @@ export async function applyInstalledContractSpace<
     }
   }
 
-  const graph = reconstructGraph(packages);
-  if (marker !== null && !graph.nodes.has(marker.storageHash)) {
-    const ledger = await familyInstance.readLedger({ driver, space: spaceId });
-    if (ledger.some((entry) => entry.to === headRef.hash)) {
-      return ok({ outcome: 'ahead', operationsExecuted: 0 });
-    }
+  const first = await applyFromCurrentRow(inputs);
+  if (first.ok || first.failure.code !== 'MIGRATION.MARKER_ORIGIN_MISMATCH') return first;
+  return applyFromCurrentRow(inputs);
+}
+
+async function applyFromCurrentRow<TFamilyId extends string, TTargetId extends string>(
+  inputs: ApplyInstalledContractSpaceInputs<TFamilyId, TTargetId>,
+): Promise<Result<InstalledContractSpaceApplied, MigrationRunnerFailure>> {
+  const { spaceId, contractSpace, driver, familyInstance } = inputs;
+  const { headRef, migrations: packages } = contractSpace;
+
+  const marker = await familyInstance.readMarker({ driver, space: spaceId });
+  const ledger = classificationNeedsLedger(contractSpace, marker)
+    ? await familyInstance.readLedger({ driver, space: spaceId })
+    : [];
+  const position = classifyInstalledSpaceRow({ contractSpace, row: marker, ledger });
+  if (position.kind === 'atHead' || position.kind === 'ahead') {
+    return ok({ outcome: position.kind, operationsExecuted: 0 });
+  }
+  if (position.kind === 'unreachable') {
     throw errorInstalledSpaceUnreachable({
       spaceId,
-      markerHash: marker.storageHash,
+      markerHash: position.markerHash,
       headRefHash: headRef.hash,
+      reason: position.reason,
     });
   }
+
+  const graph = reconstructGraph(packages);
   const outcome = resolveRecordedPath({
     aggregateTargetId: driver.targetId,
     space: {
@@ -104,16 +116,9 @@ export async function applyInstalledContractSpace<
     accessChangesOf: (operations) => familyInstance.accessChangesOf(operations),
   });
   if (outcome.kind === 'unreachable') {
-    if (marker === null) {
-      throw new InternalError(
-        `The installed contract space "${spaceId}" does not lead from the empty contract to its head ${headRef.hash}.`,
-      );
-    }
-    throw errorInstalledSpaceUnreachable({
-      spaceId,
-      markerHash: marker.storageHash,
-      headRefHash: headRef.hash,
-    });
+    throw new InternalError(
+      `The installed contract space "${spaceId}" does not lead from ${marker?.storageHash ?? 'the empty contract'} to its head ${headRef.hash}.`,
+    );
   }
   if (outcome.kind === 'unsatisfiable') {
     throw new InternalError(

@@ -72,8 +72,12 @@ function ledgerEntry(to: string): LedgerEntryRecord {
 
 function setup(options: {
   readonly marker: ContractMarkerRecord | null;
+  /** The rows later reads return, in order, after the first. */
+  readonly laterMarkers?: readonly (ContractMarkerRecord | null)[];
   readonly ledger?: readonly LedgerEntryRecord[];
   readonly failure?: MigrationRunnerFailure;
+  /** The results of the runner's calls, in order; a call past the end succeeds. */
+  readonly failures?: readonly (MigrationRunnerFailure | undefined)[];
 }) {
   const ledgerReads: (string | undefined)[] = [];
   const executions: MigrationRunnerPerSpaceOptions<'sql', 'postgres'>[][] = [];
@@ -81,7 +85,9 @@ function setup(options: {
   const familyInstance = {
     readMarker: async ({ space: read }: { readonly space: string }) => {
       markerReads.push(read);
-      return options.marker;
+      return markerReads.length === 1
+        ? options.marker
+        : (options.laterMarkers?.[markerReads.length - 2] ?? options.marker);
     },
     readLedger: async ({ space: read }: { readonly space?: string }) => {
       ledgerReads.push(read);
@@ -94,7 +100,8 @@ function setup(options: {
   const runner: MigrationRunner<'sql', 'postgres'> = {
     execute: async ({ perSpaceOptions }) => {
       executions.push([...perSpaceOptions]);
-      if (options.failure !== undefined) return notOk(options.failure);
+      const failure = options.failure ?? options.failures?.[executions.length - 1];
+      if (failure !== undefined) return notOk(failure);
       return ok({
         perSpaceResults: perSpaceOptions.map((spaceOptions) => ({
           space: spaceOptions.space,
@@ -298,5 +305,125 @@ describe('applyInstalledContractSpace', () => {
       }),
     ).rejects.toMatchObject({ code: 'MIGRATION.INSTALLED_SPACE_UNREACHABLE' });
     expect(executions).toEqual([]);
+  });
+
+  it('refuses a row that carries an invariant the installed migrations never provide, though the ledger reached the head', async () => {
+    const { executions, familyInstance, migrations } = setup({
+      marker: marker('hash-next-major', ['_prisma:major-9']),
+      ledger: [ledgerEntry('hash-1'), ledgerEntry('hash-2'), ledgerEntry('hash-next-major')],
+    });
+
+    await expect(
+      applyInstalledContractSpace({
+        spaceId: SPACE,
+        contractSpace: space('hash-2', [first, second]),
+        driver,
+        familyInstance,
+        migrations,
+        frameworkComponents: [],
+      }),
+    ).rejects.toMatchObject({
+      code: 'MIGRATION.INSTALLED_SPACE_UNREACHABLE',
+      meta: { reason: 'laterMajor' },
+    });
+    expect(executions).toEqual([]);
+  });
+
+  describe('when another command moved the row after it was read', () => {
+    const originMismatch = {
+      code: 'MIGRATION.MARKER_ORIGIN_MISMATCH',
+      summary: 'origin mismatch',
+      why: 'another command moved the row',
+      meta: { failingSpace: SPACE },
+    } as unknown as MigrationRunnerFailure;
+
+    it('returns at the head when the other command brought it there', async () => {
+      const { executions, markerReads, familyInstance, migrations } = setup({
+        marker: marker('hash-1'),
+        laterMarkers: [marker('hash-2')],
+        failures: [originMismatch],
+      });
+
+      const result = await applyInstalledContractSpace({
+        spaceId: SPACE,
+        contractSpace: space('hash-2', [first, second]),
+        driver,
+        familyInstance,
+        migrations,
+        frameworkComponents: [],
+      });
+
+      expect(result).toEqual(ok({ outcome: 'atHead', operationsExecuted: 0 }));
+      expect({ markerReads, executions: executions.length }).toEqual({
+        markerReads: [SPACE, SPACE],
+        executions: 1,
+      });
+    });
+
+    it('plans again from the row it reads again when that is still behind', async () => {
+      const { executions, familyInstance, migrations } = setup({
+        marker: null,
+        laterMarkers: [marker('hash-1')],
+        failures: [originMismatch],
+      });
+
+      const result = await applyInstalledContractSpace({
+        spaceId: SPACE,
+        contractSpace: space('hash-2', [first, second]),
+        driver,
+        familyInstance,
+        migrations,
+        frameworkComponents: [],
+      });
+
+      expect(result).toEqual(ok({ outcome: 'applied', operationsExecuted: 1 }));
+      expect(executions.map((execution) => execution[0]?.plan.origin)).toEqual([
+        null,
+        { storageHash: 'hash-1' },
+      ]);
+    });
+
+    it('returns a second origin mismatch as the failure', async () => {
+      const { executions, familyInstance, migrations } = setup({
+        marker: null,
+        laterMarkers: [marker('hash-1')],
+        failures: [originMismatch, originMismatch],
+      });
+
+      const result = await applyInstalledContractSpace({
+        spaceId: SPACE,
+        contractSpace: space('hash-2', [first, second]),
+        driver,
+        familyInstance,
+        migrations,
+        frameworkComponents: [],
+      });
+
+      expect({ result, executions: executions.length }).toEqual({
+        result: notOk(originMismatch),
+        executions: 2,
+      });
+    });
+
+    it('does not read again after any other failure', async () => {
+      const failure = {
+        code: 'MIGRATION.PRECHECK_FAILED',
+        summary: 'check failed',
+        why: 'because',
+        meta: { failingSpace: SPACE },
+      } as unknown as MigrationRunnerFailure;
+      const { markerReads, familyInstance, migrations } = setup({ marker: null, failure });
+
+      await applyInstalledContractSpace({
+        spaceId: SPACE,
+        contractSpace: space('hash-1', [first]),
+        driver,
+        familyInstance,
+        migrations,
+        frameworkComponents: [],
+      });
+
+      expect(markerReads).toEqual([SPACE]);
+    });
   });
 });
