@@ -43,7 +43,7 @@ As of 2026-11-27. The GA plan (`planning/plan.md` on branch `planning/prisma-8-g
 | --- | --- | --- | --- |
 | 2. Stored files and records | Built; in review | prisma/orm#31198 and #31200 ready; #31203 a draft with review fixes in progress; reading release-candidate files is on a local branch | Review. Which other hash-changing work lands with #31203 |
 | 3. Reduce exports | Design settled; session paused | None. Audit, spec and plan on a local branch | prisma/orm#31218 merging, since both change the PostgreSQL facade |
-| 4. API check in CI | Merged | prisma/orm#31201 and #31217 merged | TML-3977 before release 8.0: compare each package with its own last release |
+| 4. API check in CI | Done | prisma/orm#31201 and #31217 merged | Nothing for GA. TML-3977 (compare each package with its own last release) can follow GA |
 | 5. Additions that break | Not started | | A free session |
 | 6. Versions, levels, dependencies | Mostly merged | prisma/prisma-cli#405, prisma/orm#31204, #31212 and #31222 merged | Three items remain: the command and written procedure for cutting release 8.0 as `8.0.1`, create-prisma listing the platform packages (TML-3956), and the `prisma` command's check of the toolchain it carries |
 | 7. Prisma's own tables | Building | prisma/studio#1606 merged; nothing pushed in prisma/orm | A decision on applying Prisma's own tables in a first phase; merges after #31203 |
@@ -118,6 +118,8 @@ Outside this stream, and blocking projects 2 and 3: capabilities by database ver
 - The check treats a new required member on an interface that users implement as a break. Project 5 records which interfaces those are.
 
 **Decided when it started.** The checks compare each package's types and the example apps with the last published release, and fail on any break not recorded in the package's `api-breaks.json`. They fail now, during the release candidates. A name starting `ea_`, `preview_` or `rc_` may break, unless a promotion left it as another name for a GA API.
+
+**Decided on 2026-11-28.** TML-3977, which makes the check compare each package with its own last release, is not needed for GA. We release all packages in sync today. If that policy changes, it changes after GA, and the check changes with it.
 
 ### 5. Prevent new error codes, built-in names and builder methods from breaking user code
 
