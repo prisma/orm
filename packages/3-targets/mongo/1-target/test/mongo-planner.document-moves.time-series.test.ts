@@ -7,7 +7,7 @@ const LIMITS =
 const MOVE_LIMITS =
   'Stop writes to each collection the documents move out of until the apply ends: the delete also removes a document of those models written there after the copy, and that document was not copied.';
 const OUT_LIMITS =
-  'Stop writes to collection "measurements" too, for the whole apply, retries included: an $out stage replaces the collection with what it read, so a document written there while the copy runs is lost. An $out stage cannot write into a sharded collection.';
+  'Stop writes to collection "measurements" too, for the whole apply, re-runs included: an $out stage replaces the collection with what it read, so a document written there while the copy runs is lost. An $out stage cannot write into a sharded collection.';
 
 function rerun(from: string): string {
   return `The copy has no check, so it runs again on every run of the migration, and a run after the delete has finished writes back what collection "measurements" already holds. If the apply stops after the copy and before the delete has finished, finish that delete yourself, on collection "${from}" with the same filter, before you run db migrate again: otherwise the copy adds the documents still in collection "${from}" to collection "measurements" a second time. Do not delete documents from collection "measurements" instead: a time-series collection does not enforce a unique _id, so a delete by _id there can also remove a document it already held.`;

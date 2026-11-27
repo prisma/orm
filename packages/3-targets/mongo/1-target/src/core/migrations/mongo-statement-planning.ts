@@ -65,6 +65,7 @@ import {
   joinedList,
   modelNamesText,
   modelsText,
+  outWriteLossText,
   timeSeriesCopyLimits,
   timeSeriesRenameCopyText,
 } from './mongo-plan-text';
@@ -644,7 +645,7 @@ function collectionRenameRefusal(
       `${label}: collection "${from}" is a time-series collection`,
       statement === undefined
         ? `${changed}MongoDB cannot rename a time-series collection. Keep the collection's name: store the models in "${from}" (with @@map(${JSON.stringify(from)}) in PSL), then run this command again. To start the collection under its new name without its documents, remove the model in one change and add it back in a second.`
-        : `MongoDB cannot rename a time-series collection. Leave out this statement. With db update, first create collection "${to}" yourself with the time-series options of collection "${from}", which db.getCollectionInfos({ name: ${JSON.stringify(from)} }) shows in mongosh, stop writes to collections "${from}" and "${to}", copy the documents into it, and run db update again with --delete naming the model, which drops "${from}". Allow writes again only once it has run, re-runs included: a document written to "${from}" after the copy is dropped with it, and a copy with an $out stage replaces collection "${to}" with what it read, so a document written there while the copy runs is lost. With migration plan, plan with --delete naming the model; the migration.ts it writes creates collection "${to}", and there add a dataTransform right after that creation and before the drop of collection "${from}". ${timeSeriesRenameCopyText(from, to)}\n\nThen run that migration.ts to emit its ops.json, stop writes to collections "${from}" and "${to}", and apply it with db migrate. Allow writes again only once it has applied, re-runs included: a document written to "${from}" after the copy is dropped with it, and the $out stage replaces collection "${to}" with what it read, so a document written there while the copy runs is lost.`,
+        : `MongoDB cannot rename a time-series collection. Leave out this statement. With db update, first create collection "${to}" yourself with the time-series options of collection "${from}", which db.getCollectionInfos({ name: ${JSON.stringify(from)} }) shows in mongosh, stop writes to collections "${from}" and "${to}", copy the documents into it, and run db update again with --delete naming the model, which drops "${from}". Allow writes again only once it has run, re-runs included: a document written to "${from}" after the copy is dropped with it, and ${outWriteLossText(`collection "${to}"`)}. With migration plan, plan with --delete naming the model; the migration.ts it writes creates collection "${to}", and there add a dataTransform right after that creation and before the drop of collection "${from}". ${timeSeriesRenameCopyText(from, to)}\n\nThen run that migration.ts to emit its ops.json, stop writes to collections "${from}" and "${to}", and apply it with db migrate. Allow writes again only once it has applied, re-runs included: a document written to "${from}" after the copy is dropped with it, and ${outWriteLossText(`collection "${to}"`)}.`,
     );
   }
   const invalid = invalidCollectionNameReason(to);

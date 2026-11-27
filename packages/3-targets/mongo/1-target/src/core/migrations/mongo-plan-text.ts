@@ -266,12 +266,17 @@ const MOVE_LIMITS =
   'Stop writes to each collection the documents move out of until the apply ends: the delete also removes a document of those models written there after the copy, and that document was not copied.';
 
 const MERGE_LIMITS =
-  ' $merge matches documents by _id, so a moved document whose _id a document of the collection it moves into already holds is merged into that document. Check first that no _id is in both collections, and stop writes to each collection the documents move into from before that check until the apply finishes, retries included: a document written there after the check could hold the _id of a document that moves.';
+  ' $merge matches documents by _id, so a moved document whose _id a document of the collection it moves into already holds is merged into that document. Check first that no _id is in both collections, and stop writes to each collection the documents move into from before that check until the apply finishes, re-runs included: a document written there after the check could hold the _id of a document that moves.';
+
+/** Why writes to `collection`, which a copy writes into with an `$out` stage, stop for the whole apply, re-runs included. */
+export function outWriteLossText(collection: string): string {
+  return `an $out stage replaces ${collection} with what it read, so a document written there while the copy runs is lost`;
+}
 
 function outLimits(collections: readonly string[]): string {
   return collections.length === 0
     ? ''
-    : ` Stop writes to ${namedList('collection', collections)} too, for the whole apply, retries included: an $out stage replaces the collection with what it read, so a document written there while the copy runs is lost. An $out stage cannot write into a sharded collection.`;
+    : ` Stop writes to ${namedList('collection', collections)} too, for the whole apply, re-runs included: ${outWriteLossText('the collection')}. An $out stage cannot write into a sharded collection.`;
 }
 
 /** For each collection the documents of several collections move into, that their `_id` values must be checked against each other as well as against it. */
