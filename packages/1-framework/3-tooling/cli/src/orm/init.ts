@@ -327,7 +327,11 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             status: packagesInstalled,
             deps: installed ? deps : [...inputs.preinstalled],
             devDeps: installed ? devDeps : [],
-            requiredPeers: [...inputs.requiredPeers.packages],
+            requiredPeers: inputs.requiredPeers.packages.map(({ name, line, outcome }) => ({
+              name,
+              version: line,
+              outcome,
+            })),
           },
           contractEmitted,
           prisma7: adoptsPrisma7
@@ -400,9 +404,9 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             warn(warning);
           }
         }
-        const engineSpec = engineDevDependencySpec(ctx.cwd);
+        const secondDevDeps = [engineDevDependencySpec(ctx.cwd)];
         const engineInstall = await ctx.packages.install({
-          packages: [engineSpec],
+          packages: secondDevDeps,
           dev: true,
           cwd: ctx.cwd,
         });
@@ -411,7 +415,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           findings.push(installFailedFinding(engineInstall.failure, scaffold.filesWritten));
           return settle(4);
         }
-        devDeps.push(engineSpec);
+        devDeps.push(...secondDevDeps);
         packagesInstalled = 'installed';
 
         const emitStep = 'Emit the contract';

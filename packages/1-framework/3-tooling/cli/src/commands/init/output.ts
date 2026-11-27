@@ -44,9 +44,10 @@ export const InitOutputSchema = type({
    * `@prisma/orm-*` packages it names as peers, directly or through another,
    * and the other required peers those name, such as `temporal-polyfill`),
    * what init did:
-   * installed it at `version`, found it already listed at that version, left
-   * it at another version (and warned), or, under `--skip-install`, left it
-   * for the application to install.
+   * installed it at `version`, the line it writes in `package.json` (a version
+   * or a range), found it already listed at that line, left it at another
+   * version (and warned), or, under `--skip-install`, left it for the
+   * application to install.
    */
   packagesInstalled: {
     status: "'installed'|'skipped'|'failed'",

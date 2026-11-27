@@ -114,7 +114,7 @@ See `architecture.config.json` for the complete mapping and `pnpm lint:deps` to 
 
 - Day-to-day playbook (add SQL operation, split monolith, fix import violation, etc.): [Common Tasks Playbook](docs/onboarding/Common-Tasks-Playbook.md)
 - Shape and deliver a project (spec → plan → implement): run `drive-start-workflow`; methodology in [prisma/ignite](https://github.com/prisma/ignite/blob/main/docs/engineering/drive-process.md); project artifacts live under `projects/` (see [`projects/README.md`](projects/README.md))
-- Cut the next npm minor release: `.agents/skills/publish-npm-version/SKILL.md` (policy in [`docs/oss/versioning.md`](docs/oss/versioning.md))
+- Cut the next npm minor release: `.agents/skills/publish-npm-version/SKILL.md` ([`docs/oss/releasing.md`](docs/oss/releasing.md))
 
 ## Check requests and proposals against the vision
 
@@ -133,4 +133,4 @@ See [`docs/architecture docs/subsystems/`](docs/architecture%20docs/subsystems/)
 
 ---
 
-**Remember**: This is a prototype. Focus on clear docs that reflect implemented behavior.
+**Remember**: Focus on clear docs that reflect implemented behavior.
