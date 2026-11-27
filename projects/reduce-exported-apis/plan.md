@@ -24,7 +24,7 @@ Each slice is one pull request.
 ### 1. The Supabase extension builds on names any user can import
 
 - Contract: [slices/1-supabase-supported-names.md](slices/1-supabase-supported-names.md).
-- Status: being built.
+- Status: merged in prisma/orm#31241.
 
 ### 2. The facades pass on only what an application uses
 
