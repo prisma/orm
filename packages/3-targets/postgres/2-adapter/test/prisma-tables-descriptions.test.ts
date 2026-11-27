@@ -1,3 +1,4 @@
+import type { ColumnProxy } from '@internal/sql-relational-core/contract-free';
 import {
   PRISMA_TABLE_NAMES,
   PRISMA_TABLES_SCHEMA,
@@ -10,6 +11,7 @@ import { ledger, ledgerContract, ledgerReadShape, marker } from '../src/core/mar
 interface ContractColumn {
   readonly codecId: string;
   readonly nullable: boolean;
+  readonly many?: unknown;
 }
 
 const contractSpace = postgres.contractSpace;
@@ -30,6 +32,7 @@ interface ColumnForm {
   readonly name: string;
   readonly codecId: string;
   readonly nullable: boolean;
+  readonly many: boolean;
 }
 
 function byName(a: ColumnForm, b: ColumnForm): number {
@@ -43,6 +46,7 @@ function contractColumns(table: string): readonly ColumnForm[] {
       name,
       codecId: column.codecId,
       nullable: column.nullable,
+      many: column.many !== undefined,
     }))
     .sort(byName);
 }
@@ -51,13 +55,14 @@ function handleColumns(handle: object): readonly ColumnForm[] {
   return Object.values(handle)
     .flatMap((value: unknown) =>
       typeof value === 'object' && value !== null && 'columnName' in value
-        ? [value as { columnName: string; codecId: string; nullable: boolean }]
+        ? [value as ColumnProxy]
         : [],
     )
     .map((column) => ({
       name: column.columnName,
       codecId: column.codecId,
       nullable: column.nullable,
+      many: column.toProjectionItem().codec?.many === true,
     }))
     .sort(byName);
 }
@@ -69,7 +74,7 @@ describe("the descriptions of Prisma's own tables", () => {
     expect(Object.keys(contractTables ?? {}).sort()).toEqual([...tableNames].sort());
   });
 
-  it("declare in the adapter's handles only columns the contract describes, with its codecs and nullability", () => {
+  it("declare in the adapter's handles only columns the contract describes, with its codecs, nullability and whether each holds a list", () => {
     const outside = (handle: object, table: string) =>
       handleColumns(handle).filter(
         (column) =>
@@ -77,7 +82,8 @@ describe("the descriptions of Prisma's own tables", () => {
             (described) =>
               described.name === column.name &&
               described.codecId === column.codecId &&
-              described.nullable === column.nullable,
+              described.nullable === column.nullable &&
+              described.many === column.many,
           ),
       );
     expect({
