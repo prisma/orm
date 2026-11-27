@@ -46,7 +46,7 @@ Nothing else in the file is interpreted, and nothing is changed in the repositor
 - `migration.json`. Its version also covers the `ops.json` beside it: the two files are one migration, and `ops.json` is a bare array with nowhere to put a field.
 - Ref files, including an extension space's `head.json`.
 
-The field is `formatVersion`, a positive integer. The contract's earlier `schemaVersion` field is this field under an old name. The name changed because "schema" means the database's schema everywhere else in the project.
+The field is `formatVersion`, a positive integer.
 
 The marker and the ledger are database records, not files, and get no format version. How Prisma's own tables change between releases is decided separately.
 
@@ -56,15 +56,15 @@ A reader looks at `formatVersion` before anything else in the file.
 
 - **A version it knows:** it reads the file. A release reads every format version an earlier release in the same major wrote.
 - **A version higher than any it knows:** it stops and says the file was written by a newer release of Prisma. It interprets nothing else in the file.
-- **No version:** it stops and names the upgrade instructions. Only a pre-release of Prisma 8 wrote such a file. The reader does not guess.
+- **No version:** it stops and names the upgrade instructions. Only a pre-release of Prisma 8 wrote such a file, including a contract that has a `schemaVersion` field in the place of `formatVersion`. The reader does not guess.
 
 This holds for every read: a command that changes nothing, the runtime loading `contract.json`, and a contract, migration or ref that an extension package ships inside itself. A command or client entry point that accepts either a contract Prisma built in memory (from the TypeScript builder or by reading a file) or a file's content does not check the built contract; it tells the two apart by storage, which in a built contract is an object Prisma constructed rather than parsed JSON. A function that reads a file always expects the file: a serializer's `deserializeContract`, the snapshot writer and an extension's `contractJson` refuse a built contract.
 
-A reader never skips a field it does not know. A migration is an instruction to change a database, and acting on one that is only partly understood is the failure this rule prevents. Because every reader is strict, a release cannot add a field to a format without raising its version.
+A reader never skips a field it does not know. Because every reader is strict, a release cannot add a field to a format without raising its version.
 
 ### What a writer does
 
-A release writes the oldest format version that can hold the data. A file that uses nothing a newer version added is written in the older version, so an earlier release can still read it. An extension author who upgrades their tooling therefore does not force every application that uses the extension to upgrade, unless the extension uses something new.
+A release writes the oldest format version that can hold the data. A file that uses nothing a newer version added is written in the older version, so an earlier release can still read it.
 
 ### The format version is not part of the migration hash
 
@@ -79,11 +79,19 @@ For each version of each kind of file there is one unit of code: a parser, which
 - **Converting.** A unit offers functions that turn a document of an earlier version into its own. Where one exists for the version on disk it is used directly; otherwise the document is converted one version at a time.
 - **Testing.** For each version: print, parse the result, and get the same data back.
 
-`8.0.0` has one version of each file, so trying versions in order and converting are not built yet. They arrive with the first change to a format and constrain only later releases. The version field and the refusal of a higher version cannot be added later, because an `8.0.0` reader stays in use for the life of the major.
+While a file has one version, there is nothing to try in order and nothing to convert; both come into use with the first change to a format, and constrain only the releases after it.
+
+## Why
+
+- **The version field and the refusal of a higher version have to be in `8.0.0`.** An `8.0.0` reader stays in use for the life of the major, so it must already know how to recognise a file it cannot read. Neither can be added later.
+- **A reader is strict because a migration is an instruction to change a database.** Acting on one that is only partly understood is the failure the rule prevents. A reader that skipped unknown fields would apply a migration while ignoring part of it.
+- **A writer chooses the oldest version that holds the data so that newer tooling does not force an upgrade on everyone who reads its files.** An extension author who upgrades their tooling does not make every application that uses the extension upgrade, unless the extension uses something new.
+
+Git treats a repository's format version this way, and Cargo refuses a lock file in a format it does not know and keeps an existing lock file in its old format when nothing needs the new one.
 
 ## Consequences
 
-- An earlier release fails clearly on a file it cannot read, where before it reported a validation error or read the file wrongly.
+- An earlier release fails clearly on a file it cannot read, instead of reporting a validation error or reading the file wrongly.
 - A project whose members are on different releases of the same major keeps working until someone uses a feature that needs a newer format. From then, everyone who reads that file upgrades.
 - Adding an optional field to any of these files is a format change. It needs a new version unit, and the saved samples of earlier versions must still read.
 - Ref files are strict, so a hand-edited ref with a stray field is refused.
@@ -91,8 +99,7 @@ For each version of each kind of file there is one unit of code: a parser, which
 ## Alternatives considered
 
 - **A reader ignores the fields it does not know**, as Protocol Buffers readers do. Rejected: it would apply a migration while ignoring part of it.
+- **Keep the name `schemaVersion` for the field.** Rejected: "schema" means the database's schema everywhere else in the project.
 - **Each addition says whether an older reader may ignore it.** Rejected as too complex: someone would have to judge that correctly for every field ever added. The writing rule serves the same case, an older release meeting a file from newer tooling, with no judgement for each field.
 - **A version inside `ops.json`.** Rejected: the file is a bare array, and it is never read apart from its `migration.json`.
 - **A format version on the marker and the ledger.** Rejected: they are records Prisma keeps in the database, and their form is identified another way.
-
-Git treats a repository's format version this way, and Cargo refuses a lock file in a format it does not know and keeps an existing lock file in its old format when nothing needs the new one.
