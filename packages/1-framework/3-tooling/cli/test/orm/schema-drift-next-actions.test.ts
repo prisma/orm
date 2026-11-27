@@ -144,13 +144,13 @@ describe('schemaDriftNextActions', () => {
     ).toEqual([]);
   });
 
-  it('offers the drift actions for the other issues beside a database that does not provide what the contract requires', () => {
+  it('offers nothing beside a database that does not provide what the contract requires, which every command that changes the database refuses', () => {
     expect(
       schemaDriftNextActions({
         verb: 'verify',
         contractRef: undefined,
         issues: [databaseCapabilitiesNotProvided, possiblyEquivalent],
       }),
-    ).toEqual([writeAsStored('verify again'), dbUpdate('verify')]);
+    ).toEqual([]);
   });
 });

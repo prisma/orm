@@ -184,6 +184,17 @@ describe('db sign refusing a space whose database also does not provide what its
     mocks.dbSign.mockResolvedValue(ok({ spaces: [signed, refusedAndLacking] }));
   });
 
+  it('offers no command that changes the database, db migrate included', async () => {
+    const dir = await projectDir();
+
+    const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+    expect(diagnosticsOf(run).map(({ code, nextActions }) => ({ code, nextActions }))).toEqual([
+      { code: 'MIGRATION.SIGN_INVARIANTS_MISSING', nextActions: [] },
+      { code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED', nextActions: [] },
+    ]);
+  });
+
   it('says the database does not provide what the contract requires, in the summary and the label, with no schema issue under it', async () => {
     const dir = await projectDir();
 

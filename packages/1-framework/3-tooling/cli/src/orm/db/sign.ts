@@ -45,8 +45,8 @@ import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
   driftIssues,
+  includesDatabaseCapabilitiesNotProvided,
   issueNodes,
-  onlyDatabaseCapabilitiesNotProvided,
   readEmittedContract,
   requireVerifyConnection,
   schemaDriftNextActions,
@@ -211,7 +211,7 @@ function quotedList(spaces: readonly DbSignSpaceOutcome[]): string {
 
 /** Why a space's verification failed, as a clause: the database lacks capabilities, or its schema does not match. The refusal's own text is in the space's diagnostic. */
 function verificationFailure(schema: VerifyDatabaseSchemaResult): string {
-  return onlyDatabaseCapabilitiesNotProvided(schema.schema.issues)
+  return includesDatabaseCapabilitiesNotProvided(schema.schema.issues)
     ? 'the database does not provide what its contract requires'
     : 'the schema does not satisfy its contract';
 }
@@ -224,7 +224,7 @@ function failedSchemaOf(outcome: DbSignSpaceOutcome): VerifyDatabaseSchemaResult
 
 function refusedForDatabaseCapabilities(outcome: DbSignSpaceOutcome): boolean {
   const schema = failedSchemaOf(outcome);
-  return schema !== undefined && onlyDatabaseCapabilitiesNotProvided(schema.schema.issues);
+  return schema !== undefined && includesDatabaseCapabilitiesNotProvided(schema.schema.issues);
 }
 
 function failsSchema(outcome: DbSignSpaceOutcome): boolean {
@@ -321,7 +321,7 @@ function markerConflictDiagnostic(
 
 function missingInvariantsDiagnostic(
   outcome: Extract<DbSignSpaceOutcome, { readonly status: 'missing-invariants' }>,
-  migrate: string,
+  migrate: string | undefined,
 ): Diagnostic {
   const missing = outcome.missingInvariants.map((id) => `"${id}"`).join(', ');
   const required =
@@ -333,13 +333,16 @@ function missingInvariantsDiagnostic(
     severity: 'error',
     summary: `Space "${outcome.space}" requires invariants its marker does not record`,
     why: `The head ref of space "${outcome.space}" requires ${required}. An invariant records that a migration ran, and db sign never runs migrations, so it did not sign this space.`,
-    nextActions: [
-      {
-        kind: 'run-command',
-        label: 'Run the migrations that provide the invariants, then sign again',
-        command: migrate,
-      },
-    ],
+    nextActions:
+      migrate === undefined
+        ? []
+        : [
+            {
+              kind: 'run-command',
+              label: 'Run the migrations that provide the invariants, then sign again',
+              command: migrate,
+            },
+          ],
     meta: { space: outcome.space, missingInvariants: outcome.missingInvariants },
   };
 }
@@ -673,15 +676,18 @@ export function createDbSignCommand(
           }
         }
         const migrate = cliCommand(cliInvocation(ctx, args.flags.db), 'db migrate');
+        const databaseRefused = spaces.some(refusedForDatabaseCapabilities);
         const verdictDiagnostic = (space: string, schema: VerifyDatabaseSchemaResult) =>
           schemaVerdictDiagnostic({
             result: schema,
             space,
-            nextActions: schemaDriftNextActions({
-              verb: 'sign',
-              contractRef,
-              issues: schema.schema.issues,
-            }),
+            nextActions: databaseRefused
+              ? []
+              : schemaDriftNextActions({
+                  verb: 'sign',
+                  contractRef,
+                  issues: schema.schema.issues,
+                }),
           });
         const diagnostics: Diagnostic[] = spaces.flatMap((outcome) => {
           switch (outcome.status) {
@@ -691,7 +697,7 @@ export function createDbSignCommand(
               return [markerConflictDiagnostic(outcome, rerun)];
             case 'missing-invariants':
               return [
-                missingInvariantsDiagnostic(outcome, migrate),
+                missingInvariantsDiagnostic(outcome, databaseRefused ? undefined : migrate),
                 ...(outcome.schema === undefined
                   ? []
                   : [verdictDiagnostic(outcome.space, outcome.schema)]),

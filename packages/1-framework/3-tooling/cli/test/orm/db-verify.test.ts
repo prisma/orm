@@ -701,7 +701,7 @@ describe('db verify', () => {
       expect(shown).not.toContain('db update');
     });
 
-    it('keeps the drift advice and the drift tree for the other issues', async () => {
+    it('leads with the refusal, draws the drift, and offers no command that changes the database', async () => {
       const dir = await projectDir();
       mocks.dbVerify.mockResolvedValue(
         aggregateOk({
@@ -722,22 +722,16 @@ describe('db verify', () => {
         isTty: { stdout: true },
       });
 
-      expect(diagnosticsOf(run)[0]).toMatchObject({
-        summary: OLDER,
-        why: 'The live schema differs: missing: public/users/email.',
-        nextActions: [
-          {
-            kind: 'run-command',
-            label: 'Change the database to match the contract, then verify again',
-            command: 'prisma-test db update',
-          },
-          {
-            kind: 'user-choice',
-            label:
-              'Or change the contract source to describe the database as it is, re-run contract emit, then verify again',
-          },
-        ],
-      });
+      expect(diagnosticsOf(run)).toEqual([
+        {
+          code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
+          severity: 'error',
+          summary: OLDER,
+          why: 'No command changes this database until it provides what the contract requires. The live schema also differs: missing: public/users/email.',
+          nextActions: [],
+          meta: { space: 'app', schemaIssues: [NOT_PROVIDED_ISSUE, MISSING_COLUMN] },
+        },
+      ]);
       expect(run.presented?.presentation.human[1]).toEqual({
         kind: 'tree',
         roots: [
@@ -748,6 +742,33 @@ describe('db verify', () => {
           },
         ],
       });
+    });
+
+    it('offers no drift advice for the drift of another space either', async () => {
+      const dir = await projectDir();
+      mocks.dbVerify.mockResolvedValue(
+        aggregateOk({
+          perSpace: [
+            ['app', NOT_PROVIDED],
+            [
+              'pgvector',
+              schemaResult({
+                ok: false,
+                code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
+                summary: 'Database schema does not satisfy contract (1 failure)',
+                schema: { issues: [MISSING_COLUMN] },
+              }),
+            ],
+          ],
+        }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'verify', '--json'], { cwd: dir });
+
+      expect(diagnosticsOf(run).map(({ code, nextActions }) => ({ code, nextActions }))).toEqual([
+        { code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED', nextActions: [] },
+        { code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED', nextActions: [] },
+      ]);
     });
   });
 

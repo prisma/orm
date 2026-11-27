@@ -394,7 +394,63 @@ describe('db sign', () => {
       });
     });
 
-    it('keeps the drift advice for the drift of another space', async () => {
+    describe('when the schema also differs', () => {
+      const lackingAndDrifted = failedSpace('app', HASH_A, {
+        ...NOT_PROVIDED,
+        schema: { issues: [DATABASE_NOT_PROVIDED, MISSING_COLUMN] },
+      });
+
+      it('leads with the refusal, lists the drift, and offers no command that changes the database', async () => {
+        const dir = await projectDir();
+        mocks.dbSign.mockResolvedValue(ok({ spaces: [lackingAndDrifted] }));
+
+        const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+        expect(run.exitCode).toBe(4);
+        expect(diagnosticsOf(run)).toEqual([
+          {
+            code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
+            severity: 'error',
+            summary: OLDER_THAN_SUPPORTED,
+            why: 'No command changes this database until it provides what the contract requires. The live schema also differs: missing: public/users/email.',
+            nextActions: [],
+            meta: { space: 'app', schemaIssues: [DATABASE_NOT_PROVIDED, MISSING_COLUMN] },
+          },
+        ]);
+      });
+
+      it('names the refusal on the space and in the summary, draws the drift under it, and prints no db update line', async () => {
+        const dir = await projectDir();
+        mocks.dbSign.mockResolvedValue(ok({ spaces: [lackingAndDrifted] }));
+
+        const run = await harness(ormConfig()).run(['db', 'sign', '--no-advance-ref'], {
+          cwd: dir,
+          isTty: { stdout: true, stderr: true },
+        });
+        const shown = stripAnsi(`${run.stderr}\n${run.stdout}`);
+
+        expect(run.presented?.presentation.human.slice(1, 3)).toEqual([
+          {
+            kind: 'tree',
+            roots: [
+              {
+                label: 'app: not signed, the database does not provide what its contract requires',
+                status: 'error',
+                children: [{ label: 'missing: public/users/email', status: 'error' }],
+              },
+            ],
+          },
+          {
+            kind: 'summary',
+            status: 'error',
+            text: 'The database does not provide what the contract requires for space "app"; signed nothing',
+          },
+        ]);
+        expect(shown).not.toContain('db update');
+      });
+    });
+
+    it('offers no drift advice for the drift of another space either, since every command that changes the database refuses it', async () => {
       const dir = await projectDir();
       mocks.dbSign.mockResolvedValue(
         ok({
@@ -407,20 +463,9 @@ describe('db sign', () => {
 
       const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
-      expect(diagnosticsOf(run).map((entry) => entry.nextActions)).toEqual([
-        [],
-        [
-          {
-            kind: 'run-command',
-            label: 'Change the database to match the contract, then sign again',
-            command: 'prisma-test db update',
-          },
-          {
-            kind: 'user-choice',
-            label:
-              'Or change the contract source to describe the database as it is, re-run contract emit, then sign again',
-          },
-        ],
+      expect(diagnosticsOf(run).map(({ code, nextActions }) => ({ code, nextActions }))).toEqual([
+        { code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED', nextActions: [] },
+        { code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED', nextActions: [] },
       ]);
     });
   });

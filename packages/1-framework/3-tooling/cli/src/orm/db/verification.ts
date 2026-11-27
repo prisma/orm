@@ -9,6 +9,7 @@ import {
   type VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { castAs } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { isStructuredErrorCode } from '@internal/utils/structured-error';
 import type { Block, TreeNode } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction, Result } from '@prisma/cli-engine/protocol';
@@ -156,9 +157,11 @@ export function driftIssues(issues: readonly SchemaDiffIssue[]): readonly Schema
   return issues.filter((issue) => !isDatabaseCapabilitiesNotProvided(issue));
 }
 
-/** Whether every issue says the database does not provide what the contract requires: the verdict is that refusal alone. */
-export function onlyDatabaseCapabilitiesNotProvided(issues: readonly SchemaDiffIssue[]): boolean {
-  return issues.length > 0 && issues.every(isDatabaseCapabilitiesNotProvided);
+/** Whether some issue says the database does not provide what the contract requires. Every command that changes the database refuses it then, so the refusal leads and no drift advice is given for any space. */
+export function includesDatabaseCapabilitiesNotProvided(
+  issues: readonly SchemaDiffIssue[],
+): boolean {
+  return issues.some(isDatabaseCapabilitiesNotProvided);
 }
 
 export function issueNodes(
@@ -217,12 +220,11 @@ export function schemaVerdictDiagnostic(inputs: {
   const code = inputs.result.code;
   const dotted = code !== undefined && isStructuredErrorCode(code);
   const { issues } = inputs.result.schema;
-  const drift = driftIssues(issues);
   return {
     code: dotted ? code : 'CONTRACT.VERIFY_FAILED',
     severity: 'error',
     summary: inputs.result.summary,
-    ...(drift.length === 0 ? {} : { why: schemaIssuesWhy('The live schema differs', drift) }),
+    ...ifDefined('why', schemaVerdictWhy(issues)),
     nextActions: inputs.nextActions,
     meta: {
       ...(inputs.space === undefined ? {} : { space: inputs.space }),
@@ -232,13 +234,23 @@ export function schemaVerdictDiagnostic(inputs: {
   };
 }
 
+function schemaVerdictWhy(issues: readonly SchemaDiffIssue[]): string | undefined {
+  const drift = driftIssues(issues);
+  if (drift.length === 0) return undefined;
+  if (!includesDatabaseCapabilitiesNotProvided(issues)) {
+    return schemaIssuesWhy('The live schema differs', drift);
+  }
+  return `No command changes this database until it provides what the contract requires. ${schemaIssuesWhy('The live schema also differs', drift)}`;
+}
+
 /**
  * What to do about schema drift, by the causes the issues name. A value the database may hold in a
  * form of its own is fixed in the contract when the two mean the same, and by `db update` when they
  * do not. `db update` is always offered; changing the contract to describe the database is offered
  * when some issue is not one the database may only have stored in its own form, or there is none.
- * A database that does not provide what the contract requires is no drift, and its text says what
- * to do, so issues of that kind alone get no action.
+ * A database that does not provide what the contract requires gets no action, even beside drift:
+ * every command that changes the database refuses it until then, and a caller offers none for
+ * another space's drift in the same run either.
  */
 export function schemaDriftNextActions(inputs: {
   readonly verb: 'sign' | 'verify';
@@ -246,7 +258,7 @@ export function schemaDriftNextActions(inputs: {
   readonly issues: readonly SchemaDiffIssue[];
 }): readonly NextAction[] {
   const { verb, contractRef } = inputs;
-  if (onlyDatabaseCapabilitiesNotProvided(inputs.issues)) return [];
+  if (includesDatabaseCapabilitiesNotProvided(inputs.issues)) return [];
   const issues = driftIssues(inputs.issues);
   const retryAfterEmit =
     contractRef === undefined
