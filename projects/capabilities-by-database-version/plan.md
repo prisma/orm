@@ -66,7 +66,7 @@ The pull request that fixes the hash rules (prisma/orm#31203) makes the SQL prof
 
 ## Before 8.0: remove the release candidate stopgap
 
-Built in [slice-rc-users-keep-working.md](slice-rc-users-keep-working.md) so that no project on a release candidate breaks. At `8.0` these go, in one change: the default for a missing `requiredCapabilities` and its emit warning, the retired capability flags and the check's exemption for them, and `transaction()` for a contract that lists a retired flag. The test that uses the release candidate's files goes with them, or is replaced by one for the last release before `8.0`.
+Built in [slice-rc-users-keep-working.md](slice-rc-users-keep-working.md) so that no project on a release candidate breaks. At `8.0` these go, in one change: the default for a missing `requiredCapabilities` and its emit warning, the retired capability flags and the check's exemption for them, and `transaction()` for a contract that lists a retired flag. The test that uses the release candidate's files goes with them, or is replaced by one for the last release before `8.0`. No test fails if one of these is left behind, so the change removes each by name: `requiredCapabilities` becomes a required field again in `defineContract`, the config's contract entry and `prisma7Schema` (whose options argument becomes required), with the type parameter's default; the config's `contract` entry stops accepting a bare `.prisma` path string; `retiredCapabilities` leaves the SQL runtime target descriptor; and `InteractiveTransactionsListed` and `assertInteractiveTransactionsListed` in `@prisma/orm-family-sql` lose their retired-set parameter.
 
 ## Must not be lost
 

@@ -108,7 +108,7 @@ A method or a schema feature that needs a capability the contract does not requi
 
 A project as the last release candidate left it, with its config, its contract source and its emitted `contract.json` unchanged, keeps type-checking, emitting and running after it upgrades. It gets warnings that say what to change, and no error. Three things make that so, and all three are removed at `8.0`:
 
-- **A missing list gets a default.** The facade uses the list `init` writes, the newest version's and the driver's, and `prisma contract emit` warns once (`CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED`) with the exact line and import to add. Only emit warns; loading a contract file elsewhere prints nothing.
+- **A missing list gets a default.** The facade uses the list `init` writes, the newest version's and the driver's, and the CLI commands that load the contract's source, `prisma contract emit` among them, warn once (`CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED`) with the exact line and import to add. Loading a contract file outside the CLI, as an application does, prints nothing.
 - **Retired capabilities are ignored.** A release candidate's `contract.json` lists flags that nothing read and that this design removed, such as `postgres.jsonAgg`. The PostgreSQL target names them (`retiredCapabilities`), and the client's check skips them, at compile time and when the client is created. A retired flag gates nothing and disappears when the contract is emitted again.
 - **A release candidate's contract may call `transaction()`.** No release candidate's contract lists `sql.interactiveTransactions`, because the flag did not exist. A contract that lists a retired flag was emitted by a release candidate, whose clients all offered `transaction()`, so it is allowed.
 
