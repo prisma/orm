@@ -43,7 +43,7 @@ export function errorPrismaTablesFromEarlierRelease(): CliStructuredError {
 export function errorPrismaTablesMissing(markerLocation: string): CliStructuredError {
   return new CliStructuredError('MIGRATION.PRISMA_TABLES_MISSING', prismaTablesMissingSummary(), {
     why: PRISMA_TABLES_MISSING_WHY,
-    fix: "Run `{bin} db sign`, `{bin} db migrate`, `{bin} db init` or `{bin} db update`, which bring Prisma's own tables up to date first, or apply the `_prisma` contract space with applyInstalledContractSpace before signing.",
+    fix: "Run `{bin} db sign`, `{bin} db migrate`, `{bin} db init` or `{bin} db update`, which bring Prisma's own tables up to date first, or call bringPrismaSpaceUpToDate on the control client before signing.",
     meta: { markerLocation },
   });
 }

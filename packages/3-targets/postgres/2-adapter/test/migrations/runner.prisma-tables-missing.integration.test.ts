@@ -94,11 +94,15 @@ describe("PostgresMigrationRunner on a database without Prisma's own tables", {
     expect({
       code: failure.code,
       message: failure.message,
+      why: failure.why,
       failingSpace: failure.meta.failingSpace,
       ran: await ranTableExists(),
     }).toEqual({
       code: 'MIGRATION.PRISMA_TABLES_MISSING',
       message: expect.stringContaining('_prisma.marker'),
+      why: expect.stringContaining(
+        'call bringPrismaSpaceUpToDate on the control client, or, without the control client, applyInstalledContractSpace from @prisma/orm-toolchain/migration-tools/spaces',
+      ),
       failingSpace: APP_SPACE_ID,
       ran: false,
     });
