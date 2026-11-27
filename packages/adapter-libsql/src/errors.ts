@@ -17,7 +17,7 @@ export function convertDriverError(error: unknown): DriverAdapterErrorObject {
 }
 
 export function mapDriverError(error: LibsqlError): MappedError {
-  const rawCode: number = error.rawCode ?? error.cause?.['rawCode'] ?? 1
+  const rawCode: number = error.rawCode ?? error.cause?.['rawCode'] ?? constraintCodeFromMessage(error) ?? 1
   switch (rawCode) {
     case 2067:
     case 1555: {
@@ -85,4 +85,27 @@ function isDriverError(error: any): error is LibsqlError {
     typeof error.message === 'string' &&
     (typeof error.rawCode === 'number' || error.rawCode === undefined)
   )
+}
+
+const CONSTRAINT_CODES_BY_MESSAGE: [header: string, extendedCode: number][] = [
+  ['UNIQUE constraint failed', 2067],
+  ['PRIMARY KEY constraint failed', 1555],
+  ['NOT NULL constraint failed', 1299],
+  ['FOREIGN KEY constraint failed', 787],
+]
+
+const REMOTE_ERROR_PREFIX = /^(?:[A-Z_]+: )*(?:SQLite error: )?/
+
+/**
+ * Errors from a remote libSQL server carry only the primary `SQLITE_CONSTRAINT`
+ * code and no numeric `rawCode`, so the extended code is recovered from
+ * SQLite's message. Only the start of the message is matched, since the table
+ * and column names that follow it can contain any text.
+ */
+function constraintCodeFromMessage(error: LibsqlError): number | undefined {
+  if (!error.code.startsWith('SQLITE_CONSTRAINT')) {
+    return undefined
+  }
+  const message = error.message.replace(REMOTE_ERROR_PREFIX, '')
+  return CONSTRAINT_CODES_BY_MESSAGE.find(([header]) => message.startsWith(header))?.[1]
 }
