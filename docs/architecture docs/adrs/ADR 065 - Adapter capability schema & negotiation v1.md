@@ -3,7 +3,7 @@
 ## Decision
 
 Define a versioned capability schema and a discovery flow where:
-- The target declares the capabilities each database version provides and the driver those its connection provides, in one schema; on PostgreSQL a contract lists the capabilities its author writes, from the lists exported for each database version and for the driver's connection, and the other targets' contracts take a fixed list from their adapter ([ADR 335](ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md))
+- The target declares the capabilities each database version provides and the driver those its connection provides, in one schema; on PostgreSQL a contract lists the capabilities its author writes, from the lists exported for each database version and for the driver's connection, MySQL, MariaDB and SQLite contracts take a fixed list from their adapter, and MongoDB's components declare none ([ADR 335](ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md))
 - Compile profiles (target-specific lowerers, e.g. `sql/pg`) consume capabilities to choose deterministic lowering strategies
 - Lanes and plugins branch on capabilities, never on target strings
 - The runtime goes by the contract's capabilities; they change only when the contract is emitted again
@@ -85,7 +85,7 @@ Capabilities are a JSON-serializable object with stable key ordering:
 2. **Signing** (PostgreSQL)
    - Verification reads the server's version and refuses a database that does not provide what the contract requires of it
 
-3. **Client creation**
+3. **Client creation** (PostgreSQL)
    - The capabilities the contract requires of the connection are compared with what the adapter and driver declare, at compile time and when the client is created
 
 4. **Execute**
@@ -146,7 +146,6 @@ Capabilities are a JSON-serializable object with stable key ordering:
 
 ## Adapter responsibilities
 
-- Declare accurately what the adapter can write as a query
 - Read the server's version during introspection, as a number, for the target's check
 - Map database errors to stable runtime error codes per ADR 027
 - Do not embed lowering logic or transform ASTs

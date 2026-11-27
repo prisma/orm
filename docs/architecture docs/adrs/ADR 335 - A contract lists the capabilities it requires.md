@@ -69,7 +69,7 @@ The list belongs in the contract's own source. `defineContract` takes it for a T
 
 `prisma orm init` writes the whole list into a new project, from the newest version's list and the driver's.
 
-The control descriptors of the target, adapter and driver declare no capabilities. The framework still merges the capabilities of the config's components into a contract at emit, and with nothing declared that merge adds nothing. The config's adapter and driver are the stack that migrates, not the stack the application runs on, so they have no say in what the application requires.
+On PostgreSQL the control descriptors of the target, adapter and driver declare no capabilities. The framework still merges the capabilities of the config's components into a contract at emit, and with nothing declared that merge adds nothing. The config's adapter and driver are the stack that migrates, not the stack the application runs on, so they have no say in what the application requires.
 
 ### Signing checks the database
 
@@ -83,7 +83,7 @@ No message needs a version the author stated: each speaks of the first version t
 
 The runtime keeps the contract's capabilities as the contract lists them. It does not merge the capabilities of its target, adapter, driver or extensions over them.
 
-The contract's capabilities that are not the database's must be provided by the connection: the check reads the sets the client's driver and adapter declare, and PostgreSQL's adapter declares none. The PostgreSQL clients run this check. The clients of the other targets do not run it yet.
+The target tells the check which capabilities are the database's (`databaseCapabilities` on the SQL runtime target descriptor); signing answers for those. The others must be provided by the connection: the check reads the sets the client's driver and adapter declare, and PostgreSQL's adapter declares none. The PostgreSQL clients run this check. The clients of the other targets do not run it yet.
 
 - **At compile time,** creating a client from a contract whose type is known and whose connection lacks a required capability is a type error that names the capability. A helper that passes on a contract type it does not know yet compiles, and is checked at run time.
 - **When the client is created,** the same comparison runs on the values in `contract.json` and logs one warning, `CONTRACT.CAPABILITIES_NOT_PROVIDED`. It is reported as a signature that does not match is reported, and `verifyMarker: false` turns both off.
@@ -109,7 +109,7 @@ A method or a schema feature that needs a capability the contract does not requi
 - **The minimum server version is the oldest supported version, and the table's first row.** `POSTGRES_MIN_SERVER_VERSION` is the oldest entry in the target's list of supported versions (`server-version-range`, which imports nothing, so the `init` entrypoint can read it). The table has one row for each of those versions, and a test checks that its first row is the minimum ([ADR 222](ADR%20222%20-%20Version%20support%20policy.md)).
 - **A signature covers only the capabilities the installed table knows.** A key that no row names may be a connection's, so signing does not check it, and the client reports it when it is created. Before `8.0` each key is prefixed by its expected provider, `db.` or `conn.`, and the stored field is renamed `requiredCapabilities`. Signing then refuses a `db.` key its table does not know, and the client checks only `conn.` keys.
 - **The kinds of refusal are fixed in the framework.** The data a target returns names its findings: capabilities a version lacks, a server older than supported, a version that could not be read. A target that refuses for another reason, such as MySQL's `sql_mode` or a MongoDB server that is not part of a replica set, needs a new kind and its wording added to the framework.
-- **Other targets.** MySQL, MariaDB, SQLite and MongoDB still take their capabilities from their adapters' lists. They follow this design when each is built. A target whose features arrive in patch releases exports a function that returns a version's list in place of a name per version.
+- **Other targets.** MySQL, MariaDB and SQLite still take their capabilities from the fixed list their adapter declares, which emit writes into the contract. MongoDB's components declare none, so its contracts store none. They follow this design when each is built. A target whose features arrive in patch releases exports a function that returns a version's list in place of a name per version.
 
 ## Alternatives considered
 
