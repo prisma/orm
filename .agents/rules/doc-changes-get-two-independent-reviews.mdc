@@ -1,16 +1,11 @@
 ---
-description: A doc change that teaches or claims something needs a cold reader and a fact checker, both separate agents, before it is done
+description: A doc change that teaches or claims something is reviewed by fresh agents, for clarity and for facts, before it is done
 alwaysApply: false
 globs:
-  - "docs/**/*.md"
-  - "**/README.md"
-  - "skills/**/*.md"
-  - "skills-contrib/**/*.md"
+  - "**/*.md"
   - ".agents/rules/*.mdc"
 ---
 
-**What happened.** An agent wrote two decision records and changed fifty other docs, and judged them clear. The maintainer could not follow them. Readers who were given only the files then found the mechanism explained before the problem, terms used before they were defined, rules stated but never shown with an example, and wrong facts. The text said an error appears on the first query; it appears only when a default value is read.
+An author cannot judge their own doc. They already know what every term means, so the text reads as clear to them, and nothing in the act of writing compares it with the code. Docs written this way have reached the maintainer unreadable and with wrong facts in them.
 
-**Why it happens.** An author cannot read their own text cold, because they already know what every term means. And nothing in the act of writing compares the text with the code: a name remembered from a spec is often a name that was changed while building.
-
-**So** when your change adds or alters something a reader has to understand or rely on (an explanation, a rule, a statement of behaviour, a code sample, a command, a number), however short, run the [`doc-review`](../../skills-contrib/doc-review/SKILL.md) skill before you call it done. It has one fresh agent read the doc cold and another check its facts against the repository, and covers when to stop and the special cases. A change that teaches and claims nothing, such as a typo, a moved file or a fixed link, needs only `pnpm lint:doc-links`, which checks that every relative link and heading anchor resolves.
+So when your change adds or alters something a reader has to understand or rely on (an explanation, a rule, a statement of behaviour, a code sample, a command, a number), however short, run the [`doc-review`](../../skills-contrib/doc-review/SKILL.md) skill before you call it done. It has fresh agents read the doc cold and check its facts against the repository, and says how much review each kind of change needs. A change that teaches and claims nothing, such as a typo or a moved file, needs only `pnpm lint:doc-links`. Working files under `projects/` are exempt.

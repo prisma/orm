@@ -42,7 +42,7 @@ The process:
 2. Fill in every section — every claim must cite a reference implementation, an ADR, or a rule. **Lead with a grounding example**; the template's own guidance has the writing rules.
 3. Add a row to the table above and link the slug.
 4. Cross-link from any related ADRs, rules, or reference docs.
-5. Open a PR. The **architect persona** ([`.agents/skills/drive-agent-personas/personas/architect.md`](https://github.com/prisma/ignite/blob/main/skills/.pilot/drive-agent-personas/personas/architect.md)) owns the bar; tech-lead arbitrates if there is disagreement on whether the entry is ready.
+5. Open a PR. The **architect persona** ([`drive-agent-personas/personas/architect.md` in prisma/ignite](https://github.com/prisma/ignite/blob/main/skills/.pilot/drive-agent-personas/personas/architect.md)) owns the bar; tech-lead arbitrates if there is disagreement on whether the entry is ready.
 
 ## Related indexes
 

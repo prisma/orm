@@ -21,7 +21,7 @@ reviews:
         - a package, file, function, flag, script or error code that the text presents as this repository's
           and that does not exist;
         - a rule or fact that the change removes or alters with nothing in the pull request explaining why;
-        - the same rule stated differently in two files, including a file the pull request did not change;
+        - a rule the changed text states that another file, changed or not, states differently;
         - a relative link or heading anchor that does not resolve.
 
         In text that explains or teaches (a decision record, a guide, a policy page, the prose of a README),
@@ -35,9 +35,9 @@ reviews:
         no reason: such guidance says what went wrong and why before it says what to do.
 
         In a decision record under docs/architecture docs/adrs/, also flag a ticket number, a pull request
-        number, a project milestone, and any account of a state the system passed through, such as "before
-        this refactor" or "we used to". History that explains something permanent, such as versions that
-        remain published, is fine.
+        number, a project milestone, and narration of how the work went, such as "before this refactor" or
+        "we used to". History that explains something permanent, such as versions that remain published, is
+        fine.
     - path: "**/*.{ts,tsx,mts,cts,js,mjs,cjs}"
       instructions: >-
         Decimal, bigint and 64-bit integer types exist to hold values a JavaScript number would round, so flag

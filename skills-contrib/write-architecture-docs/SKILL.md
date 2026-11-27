@@ -64,9 +64,9 @@ Bad: "See [ADR 177](...) for how embedding works."
 
 ## Quality check
 
-Before finishing, re-read the doc as a developer who has never seen it before. For each paragraph, ask:
+Do not rely on re-reading the doc yourself: you know what every term means, so it will read as clear to you. Run the [`doc-review`](../doc-review/SKILL.md) skill, which has a fresh agent read the doc cold and another check its facts against the code. Its cold reader asks the questions that matter here:
 
 - Can I understand this without context from outside this doc?
 - Does it explain why before what?
 - Would a concrete example help here?
-- Am I stating a fact about the system, or narrating a project?
+- Is this a fact about the system, or the story of a project?

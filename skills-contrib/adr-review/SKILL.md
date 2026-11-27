@@ -14,13 +14,12 @@ This skill is for an ADR that already exists and that someone has asked you to r
 `doc-review` explains why the author's own reading is not enough, and gives the two briefs to hand to fresh agents: a cold reader, and a fact checker. For a review the user asked for, do this around them:
 
 1. **Give your own analysis in chat first.** List the issues you see, for each ADR, before you change a file. The user asked for a review, so they want to see it.
-2. **Rewrite what needs it.** Leave an ADR that reads well alone, and say so. A rewritten ADR follows the order `doc-review` gives for a decision record:
-   - a concrete example the reader can pin their understanding to;
-   - the problem it solves;
-   - the decision;
-   - the reasoning, built up step by step, with each term explained where it is first used;
+2. **Rewrite what needs it.** Leave an ADR that reads well alone, and say so. A rewritten ADR follows the order in [`adr-writing.mdc`](../../.agents/rules/adr-writing.mdc):
+   - a concrete example the reader can pin their understanding to, and the decision;
+   - why: what goes wrong without it, before any mechanism;
+   - how, and the consequences, built up step by step, with each term explained where it is first used;
    - the alternatives considered, last.
 3. **Run the two reviews** from `doc-review` on each rewrite, and stop where that skill says to stop.
 4. **Report** your analysis, what the reviewers found, and what you changed.
 
-An ADR has no ticket numbers, no pull request numbers, no milestones, and no account of states the system passed through. `doc-review` says why, and which history may stay.
+An ADR has no ticket numbers, no pull request numbers, no milestones, and no account of states the system passed through. `adr-writing.mdc` says why, and which history may stay.

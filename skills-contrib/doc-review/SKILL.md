@@ -30,12 +30,16 @@ The question is whether the change adds or alters something a reader has to unde
 
 | The change | What it needs |
 | --- | --- |
-| New or rewritten explanation, rule, example or claim, however short | Both reviews. One changed sentence can state a wrong fact. |
-| A typo, formatting, a moved or renamed file, a fixed link | `pnpm lint:doc-links` only. |
-| The same mechanical edit across many files, such as a renamed term | `pnpm lint:doc-links`. If the term is a name in the code, search the code to confirm the new name exists. Then one cold reader on the two or three files where the term matters most, to check that the edit reads right in context. If the edit changes what the term means, it is not mechanical: use the first row. |
+| A new or rewritten explanation: an ADR, a policy page, a guide, a section of one | Both reviews: a cold reader and a fact checker. |
+| A small change that states something: up to about a paragraph, a changed example, command or number | A fact checker only, who also quotes any sentence it could not follow. One changed sentence can state a wrong fact, but it rarely needs a second reader. |
+| A typo, formatting, a moved or renamed file, a link repointed to where the same content now lives | `pnpm lint:doc-links` only. |
+| A link whose target no longer exists | The sentence around it is now a claim about something that is gone. Rewrite the sentence, and treat it as a small change that states something. |
+| The same mechanical edit across many files, such as a renamed term | `pnpm lint:doc-links`. If the term is a name in the code, search the code to confirm the new name exists. Then one cold reader on the two or three files where the term matters most. If the edit changes what the term means, it is not mechanical: use the first row. |
 | A generated doc | Change the generator or its template, never the output. Then give the cold reader a freshly generated sample, and have the fact checker check the template's own statements. |
-| One section, or one sentence, of a long doc | Name the changed part in both briefs. The cold reader reads the whole file but reports on your part and how it fits. The fact checker checks only your part. You are done when your part is clean. A fault they notice elsewhere you fix if it is small; otherwise mention it in your report and leave it. |
+| One section of a long doc | Name the changed part in both briefs. The cold reader reads the whole file but reports on your part and how it fits. The fact checker checks only your part. You are done when your part is clean. A fault they notice elsewhere you fix if it is small; otherwise mention it in your report and leave it. |
 | A working file under `projects/` (spec, plan, notes) | Nothing. It has to be correct, but it is not documentation. |
+
+The reviewers only read files and search the code, so they do not load the machine. They do cost time and tokens, which is why a small change gets one of them and not both. When the pull request will also get a code review, that reviewer can take the fact checker brief for the docs in the diff.
 
 ## The procedure
 
@@ -58,7 +62,7 @@ The question is whether the change adds or alters something a reader has to unde
 
 Fill in the four lines at the end. For "Kind", say what the doc is for, because the right shape depends on it:
 
-- **A decision record** starts with a concrete example, then says what problem it solves, then states the decision, then gives the reasoning step by step, and ends with the alternatives considered. The problem comes before the mechanism; the decision comes before its reasons.
+- **A decision record** follows the order in [`adr-writing.mdc`](../../.agents/rules/adr-writing.mdc): a concrete example and the decision first, then why, how and the consequences, and the alternatives last. Within the "why", what goes wrong comes before how the fix works.
 - **An explanation or a guide** starts with a concrete example and builds up step by step.
 - **A reference page, an index or a checklist** is complete and easy to scan.
 - **Guidance for agents,** such as a rule or a skill, says what went wrong and why before it says what to do.
@@ -111,7 +115,7 @@ Fill in the lines at the end. "Checkout" is the folder that holds the code the d
 
 ## What a decision record must not contain
 
-A decision record is read for years. It has no ticket numbers, no pull request numbers, no project milestones, and no account of states the system passed through on the way ("before this refactor", "we used to"). A design that was replaced is an alternative considered, stated as a fact. History stays only where it explains something permanent, such as versions that remain published and constrain the numbering.
+A decision record is read for years, so [`adr-writing.mdc`](../../.agents/rules/adr-writing.mdc) forbids ticket numbers, pull request numbers, milestones, and any account of states the system passed through on the way ("before this refactor", "we used to"). It says which history may stay. Neither reviewer's brief covers this, which is why step 6 gives the check to you.
 
 ## When you are reviewing someone else's pull request
 
@@ -121,4 +125,4 @@ A doc change is not reviewed until someone without the author's context has read
 - **Check the facts** as the fact checker brief says, or hand that to an agent.
 - **Use the table above** to decide which changed docs need it. A contributor's typo fix does not.
 - **Put your findings in review comments** on the pull request, as you would for code. When the author has answered them, check that each one is settled; you do not need a new reader for that.
-- **A review bot's comments add to this and do not replace it.** The bot sees the diff, not the whole repository, and it is not a reader.
+- **A review bot's comments add to this and do not replace it.** The bot does not trace a claim through the code the way the fact checker brief asks.
