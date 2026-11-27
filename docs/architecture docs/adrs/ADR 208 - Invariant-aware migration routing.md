@@ -142,7 +142,7 @@ Framework decisions about applicability and routing must never depend on the aud
 
 This section describes how the planner behaves today. It is not a decision of this ADR.
 
-Several routes can be equally short and cover the same invariants. The planner picks one with the neighbour order that [ADR 039](./ADR%20039%20-%20Migration%20graph%20path%20resolution%20&%20integrity.md) § Deterministic tie-breaking describes, as implemented by `compareTieBreak`: migrations that cover a still-needed invariant first, then by `createdAt`, then `to`, then `migrationHash`. The same graph, start, target and required set give the same route on machines with the same locale. The comparison uses `localeCompare` today, so machines with locales that sort letters differently can choose different routes among equal ones; comparing by character code is a separate fix, because it can change routes for users on those locales.
+Several routes can be equally short and cover the same invariants. The planner picks one with the neighbour order that [ADR 039](./ADR%20039%20-%20Migration%20graph%20path%20resolution%20&%20integrity.md) § Deterministic tie-breaking describes, as implemented by `compareTieBreak`: migrations that cover a still-needed invariant first, then by `createdAt`, then `to`, then `migrationHash`. Each key is compared by character code, not by the machine's locale, so the same graph, start, target and required set give the same route on every machine.
 
 ### Open question: the run order of data-only migrations on one contract
 
