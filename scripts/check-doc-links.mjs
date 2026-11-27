@@ -111,6 +111,7 @@ function* proseLines(content) {
       const closing = FENCE.exec(unquoted);
       if (
         closing &&
+        quoteDepth(raw) === fenceDepth &&
         closing[1][0] === fence[0] &&
         closing[1].length >= fence.length &&
         unquoted.trim() === closing[1]

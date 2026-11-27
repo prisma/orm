@@ -368,8 +368,9 @@ describe('collectAnchors', () => {
         '> > ```\n> > example\n> [broken](missing.md)',
         '>> ```\n>> [h](h.md)\n>> ```\n>> after [b](b.md)',
         '> ```\n> > [deeper](deeper.md)\n> ```\n[c](c.md)',
+        '> ```\n> > ```\n> [h](h.md)\n> ```\n> [y](y.md)',
       ].map(targets),
-      [['missing.md'], ['b.md'], ['c.md']],
+      [['missing.md'], ['b.md'], ['c.md'], ['y.md']],
     );
   });
 
