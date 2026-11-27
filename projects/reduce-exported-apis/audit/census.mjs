@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { publicShells } from '../../../packages/0-shared/publish-surface/dist/shells.mjs';
+import { publicShells } from '../../../packages/0-shared/publish-surface/src/shells.ts';
 
 const root = process.cwd();
 const publicDir = 'packages/9-public/@prisma';

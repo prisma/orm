@@ -14,10 +14,11 @@ After this project:
 - No published import path and no exported name contains "internal".
 - Application code imports from its facade (the package an application installs for its database, such as `@prisma/orm-postgres`), from its extensions and from `@prisma/cli-engine`.
 - Our own products (the Supabase extension, Composer, the `prisma` tool, the control plane) import only what any user can.
+- Nothing tells an extension author to use something that is not published. The unpublished package `@internal/extension-author-tools` is deleted.
 
 ## At a glance
 
-Today `@prisma/orm-postgres` has 163 import paths. Fifteen are its own code. The other 148 pass a platform package on under the facade's name, whether or not an application has a use for it:
+Today `@prisma/orm-postgres` has 167 import paths. Fifteen are its own code. The other 152 pass a platform package on under the facade's name, whether or not an application has a use for it:
 
 ```ts
 import { arrayEqual } from '@prisma/orm-postgres/utils/array-equal'
@@ -43,7 +44,7 @@ The audit applies these tests to each import path. The first that holds decides.
 4. **Another package of ours imports it across a package boundary.** Each module is published from exactly one package, so such a path cannot be removed. It stays, and the audit marks it as kept for that reason.
 5. **Otherwise it is removed.** A path whose only importers are the owning package's own tests is not published.
 
-A name below GA inside a GA package carries its level at the start (`ea_foo`), as `maturity-levels.md` defines.
+A name below GA inside a GA package carries its level at the start: `ea_foo` for a function or constant, `Ea_Foo` for a type or class, as `docs/oss/versioning.md` defines.
 
 ## Scope
 
@@ -65,7 +66,7 @@ Settled with the operator on 2026-11-26. This project does not reopen them witho
 - **Changing behaviour.** This project removes, renames and moves exports. No function changes what it does.
 - **The release of `@prisma/cli-engine`.** It is another repository's work. This project files the ticket.
 - **Reference documentation for what remains.** That is project 8 of the stream.
-- **The check that fails on a removed export.** That is project 4 (prisma/orm#31201, prisma/orm#31217). This project follows its contributor guide: every changed `api.txt` is explained in the pull request.
+- **The check that fails on a removed export.** That is project 4 (prisma/orm#31201, prisma/orm#31217). This project follows its guide, `docs/Public API Compatibility.md`: every removal is recorded as a break with a reason, and every changed `api.txt` is named in the pull request.
 
 ## Definition of done
 

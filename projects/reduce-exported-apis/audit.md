@@ -21,10 +21,10 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 
 | Package | Level at release 8.0 | Paths today | Keep | Rename | Remove |
 | --- | --- | --- | --- | --- | --- |
-| `@prisma/orm-postgres` | GA | 163 | 32 | 0 | 131 |
+| `@prisma/orm-postgres` | GA | 167 | 32 | 0 | 135 |
 | `@prisma/orm-framework` | GA | 71 | 68 | 1 | 2 |
-| `@prisma/orm-family-sql` | GA | 68 | 57 | 1 | 10 |
-| `@prisma/orm-target-postgres` | GA | 49 | 27 | 0 | 22 |
+| `@prisma/orm-family-sql` | GA | 69 | 58 | 1 | 10 |
+| `@prisma/orm-target-postgres` | GA | 52 | 29 | 0 | 23 |
 | `@prisma/orm-toolchain` | GA | 32 | 21 | 0 | 11 |
 | `@prisma/orm-extension-pgvector` | GA | 6 | 6 | 0 | 0 |
 | `@prisma/orm-extension-postgis` | GA | 7 | 7 | 0 | 0 |
@@ -35,10 +35,10 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | `@prisma/orm-extension-paradedb` | below GA | 5 | not reduced path by path | | |
 | `@prisma/orm-extension-supabase` | below GA | 3 | not reduced path by path | | |
 | `@prisma/orm-family-mongo` | below GA | 32 | not reduced path by path | | |
-| `@prisma/orm-mariadb` | below GA | 121 | 22 | 0 | 99 |
+| `@prisma/orm-mariadb` | below GA | 122 | 22 | 0 | 100 |
 | `@prisma/orm-mongo` | below GA | 95 | 28 | 0 | 67 |
-| `@prisma/orm-mysql` | below GA | 138 | 26 | 0 | 112 |
-| `@prisma/orm-sqlite` | below GA | 141 | 30 | 0 | 111 |
+| `@prisma/orm-mysql` | below GA | 139 | 26 | 0 | 113 |
+| `@prisma/orm-sqlite` | below GA | 142 | 30 | 0 | 112 |
 | `@prisma/orm-target-mariadb` | below GA | 14 | not reduced path by path | | |
 | `@prisma/orm-target-mongo` | below GA | 17 | not reduced path by path | | |
 | `@prisma/orm-target-mysql` | below GA | 29 | not reduced path by path | | |
@@ -52,6 +52,7 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | --- | --- | --- | --- |
 | `adapter` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `adapter/adapter` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
+| `adapter/capabilities` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `adapter/column-types` | example applications (2); docs | keep | a TypeScript contract imports its column types; documented |
 | `adapter/control` | docs; the control plane | remove | parts of a control stack built by hand; `control` gives the assembled client |
 | `adapter/runtime` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
@@ -71,7 +72,7 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | `components/psl-ast` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `components/runtime` | example applications (2); docs | keep | the types an application names when it writes middleware; documented |
 | `components/utils` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
-| `config` | example applications (20); docs; Composer, the control plane | keep | the facade’s own code: what an application imports to configure, define a contract, connect and query |
+| `config` | example applications (20); docs; our extensions (extension-paradedb, extension-supabase); Composer, the control plane | keep | the facade’s own code: what an application imports to configure, define a contract, connect and query |
 | `contract` | docs | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `contract/apply-specifier-default-control-policy` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `contract/contract-validation-error` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
@@ -89,6 +90,7 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | `contract-types` | generated files; stored generated files; docs | keep | the facade’s own code: the one module a generated `contract.d.ts` imports |
 | `control` | example applications (6); docs; Composer, the control plane | keep | the facade’s own code: what an application imports to configure, define a contract, connect and query |
 | `driver` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
+| `driver/capabilities` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `driver/control` | docs; the control plane | remove | parts of a control stack built by hand; `control` gives the assembled client |
 | `driver/runtime` | the control plane | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family` | docs | keep | the facade’s own code: the pack a TypeScript contract names |
@@ -105,6 +107,7 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | `family-contract` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/authored-check-naming` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/canonicalization-hooks` | Composer | remove | no application, generator or document uses it; an extension author imports the platform package |
+| `family-contract/capability-messages` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/check-expressions` | docs | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/codec-json-type` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/contract-view` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
@@ -190,7 +193,8 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | `target/rls-canonicalize` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `target/runtime` | example applications (4) | keep | an application that loads its contract in the browser or a worker uses the contract serializer |
 | `target/schema-ir-annotations` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
-| `target/server-version` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
+| `target/server-version` | docs | remove | no application, generator or document uses it; an extension author imports the platform package |
+| `target/server-version-range` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `target/sql-utils` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `target/types` | docs | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `utils` | nobody | remove | general helpers; no application needs Prisma for them |
@@ -237,7 +241,7 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | `contract/default-namespace` | our extensions (better-auth); our families (family-mongo) | keep | extension and target authors: our own extensions or targets build on it |
 | `contract/enum-accessor` | docs; our extensions (extension-supabase); our families (family-mongo); our facades (mongo, mysql, postgres, sqlite) | keep | extension and target authors: our own extensions or targets build on it |
 | `contract/hashing` | docs; our targets (target-postgres); our families (family-mongo, family-sql); the toolchain | keep | extension and target authors: our own extensions or targets build on it |
-| `contract/hashing-utils` | our targets (target-postgres); our families (family-mongo, family-sql); the toolchain | keep | extension and target authors: our own extensions or targets build on it |
+| `contract/hashing-utils` | docs; our targets (target-postgres); our families (family-mongo, family-sql); the toolchain | keep | extension and target authors: our own extensions or targets build on it |
 | `contract/is-plain-record` | our targets (target-postgres); our families (family-mongo, family-sql) | keep | extension and target authors: our own extensions or targets build on it |
 | `contract/resolve-domain-model` | nobody | remove | nothing outside its own package imports it |
 | `contract/types` | stored generated files; docs; our extensions (extension-arktype-json, postgres-contrib, extension-paradedb, extension-pgvector, extension-postgis, extension-supabase, better-auth); our targets (target-mongo, target-mysql, target-mariadb, target-postgres, target-sqlite); our families (family-mongo, family-sql); our facades (mongo, mysql, mariadb, postgres, sqlite); the toolchain | keep | applications reach it through their facade |
@@ -254,13 +258,13 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | `operations` | docs; our targets (target-mongo); our families (family-sql) | keep | extension and target authors: our own extensions or targets build on it |
 | `psl-parser` | docs; our extensions (better-auth); our targets (target-postgres); our families (family-mongo, family-sql); the toolchain; the control plane | keep | extension and target authors: our own extensions or targets build on it |
 | `psl-parser/format` | docs; the toolchain | keep | wiring: another package of ours imports it across the package boundary, so it cannot be unpublished |
-| `psl-parser/interpret` | docs; our families (family-mongo, family-sql); the toolchain | keep | wiring: another package of ours imports it across the package boundary, so it cannot be unpublished |
+| `psl-parser/interpret` | docs; our families (family-mongo, family-sql); our facades (postgres); the toolchain | keep | wiring: another package of ours imports it across the package boundary, so it cannot be unpublished |
 | `psl-parser/syntax` | docs; our extensions (better-auth); our families (family-mongo, family-sql); the toolchain | keep | extension and target authors: our own extensions or targets build on it |
 | `psl-parser/tokenizer` | docs | remove | only documents name it; they change to a kept path |
 | `psl-printer` | docs; our extensions (extension-supabase); the toolchain | keep | extension and target authors: our own extensions or targets build on it |
 | `target-package-config` | docs | keep | the name for the whole module, which the docs use |
 | `target-package-config/type-declarations` | docs; our facades (mongo, mysql, mariadb, postgres, sqlite) | keep | wiring: another package of ours imports it across the package boundary, so it cannot be unpublished |
-| `ts-render` | docs; our targets (target-mongo, target-mysql, target-postgres, target-sqlite); our families (family-sql); the toolchain | keep | extension and target authors: our own extensions or targets build on it |
+| `ts-render` | docs; our targets (target-mongo, target-mysql, target-postgres, target-sqlite); our families (family-sql); our facades (postgres); the toolchain | keep | extension and target authors: our own extensions or targets build on it |
 | `type-implementations` | docs | keep | the name for the whole module, which the docs use |
 | `type-implementations/boolean` | our targets (target-mysql, target-sqlite) | keep | extension and target authors: our own extensions or targets build on it |
 | `type-implementations/date` | our targets (target-mongo, target-mysql, target-postgres, target-sqlite) | keep | extension and target authors: our own extensions or targets build on it |
@@ -300,6 +304,7 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | `contract` | docs; the control plane | keep | the control plane imports it |
 | `contract/authored-check-naming` | nobody | remove | nothing outside its own package imports it |
 | `contract/canonicalization-hooks` | our targets (target-postgres) | keep | extension and target authors: our own extensions or targets build on it |
+| `contract/capability-messages` | our extensions (better-auth); our targets (target-postgres) | keep | extension and target authors: our own extensions or targets build on it |
 | `contract/check-expressions` | our targets (target-postgres) | keep | extension and target authors: our own extensions or targets build on it |
 | `contract/codec-json-type` | our targets (target-postgres) | keep | extension and target authors: our own extensions or targets build on it |
 | `contract/contract-view` | our targets (target-postgres, target-sqlite) | keep | extension and target authors: our own extensions or targets build on it |
@@ -357,7 +362,7 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | `relational-core/plan` | docs; our extensions (extension-supabase); our targets (target-postgres); our facades (mysql, postgres, sqlite) | keep | extension and target authors: our own extensions or targets build on it |
 | `relational-core/query-lane-context` | docs; our extensions (extension-arktype-json, postgres-contrib, extension-pgvector, extension-postgis); our targets (target-mysql, target-postgres, target-sqlite) | keep | extension and target authors: our own extensions or targets build on it |
 | `relational-core/types` | docs; our extensions (extension-supabase); our facades (mysql, postgres, sqlite) | keep | extension and target authors: our own extensions or targets build on it |
-| `runtime` | docs; our extensions (extension-arktype-json, postgres-contrib, extension-paradedb, extension-pgvector, extension-postgis, extension-supabase); our targets (target-mysql, target-postgres, target-sqlite); our facades (mysql, postgres, sqlite); the control plane | keep | applications reach it through their facade |
+| `runtime` | docs; our extensions (extension-arktype-json, postgres-contrib, extension-paradedb, extension-pgvector, extension-postgis, extension-supabase, better-auth); our targets (target-mysql, target-postgres, target-sqlite); our facades (mysql, postgres, sqlite); the control plane | keep | applications reach it through their facade |
 | `runtime/internal/prepared-query` | docs; our extensions (extension-supabase) | rename | named "internal"; the Supabase extension needs it, so its exports move to `runtime` with the Early Access prefix |
 | `schema-ir` | docs | keep | the name for the whole module, which the docs use |
 | `schema-ir/naming` | docs; our targets (target-postgres, target-sqlite) | keep | extension and target authors: our own extensions or targets build on it |
@@ -369,12 +374,14 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | --- | --- | --- | --- |
 | `adapter` | docs; named in package source | keep | the name for the whole module, which the docs use |
 | `adapter/adapter` | docs; our facades (postgres) | keep | wiring: another package of ours imports it across the package boundary, so it cannot be unpublished |
+| `adapter/capabilities` | docs | remove | only documents name it; they change to a kept path |
 | `adapter/column-types` | docs | keep | applications reach it through their facade |
 | `adapter/control` | docs; our extensions (postgres-contrib, extension-paradedb, extension-pgvector, extension-postgis, extension-supabase); our facades (postgres); the framework | keep | extension and target authors: our own extensions or targets build on it |
 | `adapter/runtime` | docs; our extensions (extension-supabase); our facades (postgres) | keep | extension and target authors: our own extensions or targets build on it |
 | `adapter/sql-renderer` | docs | remove | only documents name it; they change to a kept path |
 | `adapter/types` | nobody | remove | nothing outside its own package imports it |
 | `driver` | docs; the control plane | keep | the control plane imports it |
+| `driver/capabilities` | our facades (postgres) | keep | wiring: another package of ours imports it across the package boundary, so it cannot be unpublished |
 | `driver/control` | docs; our extensions (extension-supabase); our facades (postgres); the framework | keep | extension and target authors: our own extensions or targets build on it |
 | `driver/runtime` | docs; our extensions (extension-supabase); our facades (postgres) | keep | extension and target authors: our own extensions or targets build on it |
 | `target` | docs | keep | the name for the whole module, which the docs use |
@@ -413,7 +420,8 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | `target/rls-canonicalize` | docs; our facades (postgres) | keep | wiring: another package of ours imports it across the package boundary, so it cannot be unpublished |
 | `target/runtime` | docs; our extensions (extension-supabase); our facades (postgres) | keep | applications reach it through their facade |
 | `target/schema-ir-annotations` | nobody | remove | nothing outside its own package imports it |
-| `target/server-version` | docs; our facades (postgres) | keep | wiring: another package of ours imports it across the package boundary, so it cannot be unpublished |
+| `target/server-version` | our facades (postgres) | keep | wiring: another package of ours imports it across the package boundary, so it cannot be unpublished |
+| `target/server-version-range` | docs; our facades (postgres) | keep | wiring: another package of ours imports it across the package boundary, so it cannot be unpublished |
 | `target/sql-utils` | docs; our facades (postgres) | keep | wiring: another package of ours imports it across the package boundary, so it cannot be unpublished |
 | `target/types` | docs; our extensions (extension-paradedb, extension-supabase); our facades (postgres) | keep | extension and target authors: our own extensions or targets build on it |
 
@@ -508,7 +516,7 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 
 | Path | Who imports it today | Decision | Why |
 | --- | --- | --- | --- |
-| `.` | example applications (1); docs | keep | an example application imports it |
+| `.` | example applications (1); docs; named in package source | keep | an example application imports it |
 
 ### `@prisma/orm-mariadb` (below GA; it follows the PostgreSQL facade’s list)
 
@@ -566,6 +574,7 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | `family-contract` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/authored-check-naming` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/canonicalization-hooks` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
+| `family-contract/capability-messages` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/check-expressions` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/codec-json-type` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/contract-view` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
@@ -794,6 +803,7 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | `family-contract` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/authored-check-naming` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/canonicalization-hooks` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
+| `family-contract/capability-messages` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/check-expressions` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/codec-json-type` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/contract-view` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
@@ -938,6 +948,7 @@ This is the working record behind [spec.md](spec.md). It lists each import path 
 | `family-contract` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/authored-check-naming` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/canonicalization-hooks` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
+| `family-contract/capability-messages` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/check-expressions` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/codec-json-type` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
 | `family-contract/contract-view` | nobody | remove | no application, generator or document uses it; an extension author imports the platform package |
