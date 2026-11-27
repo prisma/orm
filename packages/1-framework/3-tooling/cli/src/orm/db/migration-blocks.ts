@@ -6,7 +6,6 @@ import { labelsText } from '../../control-api/statements/plan-questions';
 import { statementFlag } from '../../control-api/statements/statement-flag';
 import type { PerSpaceExecutionEntry } from '../../control-api/types';
 import { skippedOperationsText } from '../../utils/applied-summary';
-import type { DataProtectionSetting } from '../../utils/data-protection-settings';
 import {
   type MigrationCommandResult,
   previewBlockHeader,
@@ -15,6 +14,7 @@ import {
 import { runCommandAction } from '../../utils/next-actions';
 import { plannerWarningText } from '../../utils/planner-warning-text';
 import { declaredSettingsText } from '../../utils/policy-errors';
+import type { DataProtectionKey } from '../../utils/policy-settings';
 import {
   type CliInvocation,
   cliCommand,
@@ -243,7 +243,7 @@ function answerGroups<TEntry extends { readonly text: string; readonly operation
  * answered by `--delete` or `--rename`, and each that would change access, answered by `--allow`.
  */
 function questionBlocks(result: MigrationCommandResult): readonly Block[] {
-  const asks = (setting: DataProtectionSetting) => result.permitted?.includes(setting) !== true;
+  const asks = (setting: DataProtectionKey) => result.permitted?.includes(setting) !== true;
   const entries = [
     ...(asks('dataLoss') ? (result.dataLoss ?? []) : []).map((entry) => ({
       entry,
@@ -352,7 +352,7 @@ const PERMITTED_STATEMENTS = {
     verb: 'allow',
     text: 'permits changing who can read or write data, so these access changes',
   },
-} as const satisfies Record<DataProtectionSetting, { verb: string; text: string }>;
+} as const satisfies Record<DataProtectionKey, { verb: string; text: string }>;
 
 /** Says which applied statements the database's data protection policy answered, without asking. */
 function permittedStatementBlocks(result: MigrationCommandResult): readonly Block[] {

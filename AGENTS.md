@@ -34,10 +34,10 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 
 - **Skills — canonical home:** `skills-contrib/<skill-name>/SKILL.md`. These are the tracked, deliverable source-of-truth files.
 - **Skills — presentation symlinks:** `.claude/skills/<skill-name>` and `.agents/skills/<skill-name>` are symlink directories pointing into `skills-contrib/`. They exist so the various agent harnesses (Cursor, Claude Code, …) can find the skills at the paths they expect. Both symlink trees are gitignored.
-- **Skills — wired post-install:** the symlink trees (and any tooling-specific copies) are materialized by the `prepare` script in [`package.json`](./package.json), which runs `skills add ./skills-contrib --skill '*' --agent universal claude-code -y`. After `pnpm install`, `.claude/skills/` and `.agents/skills/` are populated automatically — no manual setup. If you add a new skill under `skills-contrib/`, re-run `pnpm install` (or just the prepare hook) to wire it into the tooling locations. `pnpm lint:skills` validates skill frontmatter in CI.
-- **Drive upstream in ignite:** `drive-*` skills and [`docs/drive/`](https://github.com/prisma/ignite/tree/main/docs/drive) live in [prisma/ignite](https://github.com/prisma/ignite) (`skills/.pilot/`); install with `npx skills add prisma/ignite/skills/.pilot --skill '*'`. This repo keeps only `drive/` project-context overlays.
-- **Rules — canonical home:** `.agents/rules/<rule-name>.mdc` — the only tracked copy (rule files must use the `.mdc` extension; a `.md` rule is never loaded by the harnesses). The `.cursor/rules/` and `.claude/rules/` trees are gitignored presentation mirrors containing only relative symlinks back into `.agents/rules/`.
-- **Rules — wired post-install:** like skills, the symlink trees are materialized by `prepare` (which runs `node scripts/sync-agent-rules.mjs` after `skills add`). After `pnpm install` the trees are regenerated automatically — no manual setup. A rule added only to `.cursor/rules` is gitignored and silently lost, so **always add it under `.agents/rules/`** and run `pnpm rules:sync`. `pnpm lint:rules:symlinks` enforces tree/canonical consistency in CI.
+- **Skills — wired post-install:** the symlink trees (and any tooling-specific copies) are materialized by the `prepare` script in [`package.json`](./package.json), which runs `skills add ./skills-contrib --skill '*' --agent universal claude-code -y`. After `pnpm install`, `.claude/skills/` and `.agents/skills/` are populated. If you add a new skill under `skills-contrib/`, re-run `pnpm install` (or just the prepare hook) to wire it into the tooling locations. `pnpm lint:skills` validates skill frontmatter in CI.
+- **Drive upstream in ignite:** `drive-*` skills and the [Drive process](https://github.com/prisma/ignite/blob/main/docs/engineering/drive-process.md) live in prisma/ignite (`skills/.pilot/`); install with `npx skills add prisma/ignite/skills/.pilot --skill '*'`. This repo keeps only `drive/` project-context overlays.
+- **Rules — canonical home:** `.agents/rules/<rule-name>.mdc` — the only tracked copy (rule files must end in `.mdc`). The `.cursor/rules/` and `.claude/rules/` trees are gitignored presentation mirrors containing only relative symlinks back into `.agents/rules/`.
+- **Rules — wired post-install:** like skills, the symlink trees are materialized by `prepare` (which runs `node scripts/sync-agent-rules.mjs` after `skills add`). After `pnpm install` the trees are regenerated. A rule added only to `.cursor/rules` is gitignored and silently lost, so **always add it under `.agents/rules/`** and run `pnpm rules:sync`. `pnpm lint:rules:symlinks` enforces tree/canonical consistency in CI.
 - **Practical implication for editors and sub-agents:** when amending or authoring a skill or rule, **edit at the canonical path** (`skills-contrib/` for skills, `.agents/rules/` for rules) — not at the symlinked path. `git status` reports the canonical path, so edit there.
 
 ## Golden Rules
@@ -56,7 +56,7 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 - Don't branch on target; use adapters: `.agents/rules/no-target-branches.mdc`.
 - Keep tests concise; omit "should": `.agents/rules/omit-should-in-tests.mdc`.
 - In sql-orm-client tests, assert the whole result shape (`toEqual`/snapshot) with explicit `select`: `.agents/rules/sql-orm-client-whole-shape-assertions.mdc`.
-- Keep docs current (READMEs, rules, links): `.agents/rules/doc-maintenance.mdc`.
+- Keep docs current (READMEs, rules, links): `.agents/rules/doc-maintenance.mdc`. Before a doc change that teaches or claims something is done, run the `doc-review` skill.
 - `Decimal`/`bigint`/int8 exist to hold values a JS number would round, so never convert one to a number for convenience without proving it exact, nor override `valueOf`/`Symbol.toPrimitive` to make operators work; use `Decimal`'s own methods (`a.lt(b)`).
 
 ## Typesafety rules
@@ -113,7 +113,7 @@ See `architecture.config.json` for the complete mapping and `pnpm lint:deps` to 
 ## Frequent Tasks
 
 - Day-to-day playbook (add SQL operation, split monolith, fix import violation, etc.): [Common Tasks Playbook](docs/onboarding/Common-Tasks-Playbook.md)
-- Shape and deliver a project (spec → plan → implement): run `drive-start-workflow`; methodology in [`prisma/ignite docs/drive/`](https://github.com/prisma/ignite/tree/main/docs/drive); project artifacts live under `projects/` (see [`projects/README.md`](projects/README.md))
+- Shape and deliver a project (spec → plan → implement): run `drive-start-workflow`; methodology in [prisma/ignite](https://github.com/prisma/ignite/blob/main/docs/engineering/drive-process.md); project artifacts live under `projects/` (see [`projects/README.md`](projects/README.md))
 - Cut the next npm minor release: `.agents/skills/publish-npm-version/SKILL.md` (policy in [`docs/oss/versioning.md`](docs/oss/versioning.md))
 
 ## Check requests and proposals against the vision

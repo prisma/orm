@@ -348,7 +348,7 @@ After re-emitting, run `pnpm typecheck && pnpm test`. The regenerated `contract.
 
 ## `runtime-qualified-sql-default-namespace`
 
-Starting at the 0.12 release, runtime SQL on Postgres qualifies table identifiers with the storage namespace the flat DSL/ORM surface resolved ([ADR 223](../../../../docs/architecture%20docs/adrs/ADR%20223%20-%20Target-owned%20default%20namespace.md)). Un-namespaced Postgres models continue to resolve through the `public` default; explicit `namespace unbound { … }` in PSL still maps to `__unbound__`.
+Starting at the 0.12 release, runtime SQL on Postgres qualifies table identifiers with the storage namespace the flat DSL/ORM surface resolved ([ADR 223](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20223%20-%20Target-owned%20default%20namespace.md)). Un-namespaced Postgres models continue to resolve through the `public` default; explicit `namespace unbound { … }` in PSL still maps to `__unbound__`.
 
 ### Application code
 

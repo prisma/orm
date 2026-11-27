@@ -48,7 +48,7 @@ Writing guidance — read this before drafting:
 
 ## Related rules
 
-<!-- Optional. Cursor rules under [`.cursor/rules/`](../../../.cursor/rules/) that enforce or otherwise relate to this pattern. Delete this section if there are none. -->
+<!-- Optional. Cursor rules under [`.agents/rules/`](../../../.agents/rules/) that enforce or otherwise relate to this pattern. Delete this section if there are none. -->
 
 - `<rule path>` — `<one-line note>`
 
