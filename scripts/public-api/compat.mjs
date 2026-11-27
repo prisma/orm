@@ -30,8 +30,7 @@ const EXCESSIVE_STACK_DEPTH = 2321;
 const SUSPECT_BATCH = 32;
 const OUT_OF_TIME =
   'not decided: compared after a comparison too deep to finish, which may have let it pass, and the time for comparing it again ran out';
-const UNCONFIRMED =
-  ' (not confirmed against the copy of the last release: the time ran out; raise the budget)';
+const UNCONFIRMED = ' (not confirmed against the copy of the last release: the time ran out)';
 const OUT_OF_STACK = 'not decided: TypeScript ran out of stack comparing it';
 const OUTDATED =
   "a record for an earlier state of this export exists; the export, or a declaration it uses as a type in api.txt, has changed since, so it is judged again. If the break is still intended, replace the record with this one. TypeScript's message may name only the first difference; check the export's changed lines in api.txt.";

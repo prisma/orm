@@ -1,6 +1,6 @@
 # Public API compatibility checks
 
-Once Prisma 8 is generally available (GA), an application must be able to upgrade to any later `8.x` release without changing its code. CI checks every pull request against that promise. This guide says what each check does, and what to do when one fails. The reasons behind the design are in [ADR 336](architecture%20docs/adrs/ADR%20336%20-%20CI%20finds%20breaking%20and%20accidental%20API%20changes%20against%20the%20last%20release.md).
+Once Prisma 8 is generally available (GA), an application that uses only what is GA must be able to upgrade to any later `8.x` release without changing its code. CI checks every pull request against that promise. This guide says what each check does, and what to do when one fails. The reasons behind the design are in [ADR 336](architecture%20docs/adrs/ADR%20336%20-%20CI%20finds%20breaking%20and%20accidental%20API%20changes%20against%20the%20last%20release.md).
 
 ## The checks
 
@@ -11,7 +11,7 @@ Once Prisma 8 is generally available (GA), an application must be able to upgrad
 | [A break against the last release](#a-break-against-the-last-release) | `API compatibility` (`pnpm api:compat`) | Code written against the last release still compiles against the build | Once the last release is GA |
 | [The last release's example apps fail](#the-last-releases-example-apps-fail) | `API compatibility` (`pnpm api:compat:examples`) | The example apps, as they were at the last release, compile against the build | Once the last release is GA |
 
-The last release is GA when its version has no pre-release part, such as `8.1.0`. Against a pre-release, such as `8.0.0-rc.25`, the last two checks list what they find in the job summary and pass, because breaking a pre-release is allowed. A check that could not compare at all, for example because the registry was unreachable, fails at any version.
+The last release is the newest release tag at or below the version in the root `package.json` of the branch your pull request merges into. It is not whatever the registry tags as `latest`. Every package has that one version. The last release is GA when its version has no pre-release part, such as `8.1.0`. Against a pre-release, such as `8.0.0-rc.25`, the last two checks list what they find in the job summary and pass, because breaking a pre-release is allowed. A check that could not compare at all, for example because the registry was unreachable, fails at any version.
 
 ## `api.txt` is out of date
 
@@ -26,7 +26,7 @@ Each package under `packages/9-public/@prisma/` has a generated `api.txt` beside
 
 To fix the failure, run `pnpm build`, then `pnpm api:update`, and commit the changed lists. Never edit an `api.txt` by hand. After a merge conflict in one, rebuild and run `pnpm api:update` again; do not merge the file by hand.
 
-If `pnpm api:update` changes nothing on your machine and CI still fails, the scripts have a bug. Download the `api-lists` artifact from the failed run and compare it with your files.
+If `pnpm api:update` changes nothing on your machine and CI still fails, the usual cause is a stale local build. If a clean build gives the same lists, the scripts have a bug: download the `api-lists` artifact from the failed run and compare it with your files.
 
 Some lines change although the API did not:
 
@@ -36,7 +36,7 @@ Some lines change although the API did not:
 
 ## The description does not name a change
 
-When your pull request changes an `api.txt`, a comment appears on it with the added and removed lines:
+When your pull request changes an `api.txt`, a comment appears on it with the added and removed lines. On a pull request from a fork there is no comment, and the same text is in the job's summary.
 
 ````markdown
 ## Public API changes
@@ -68,12 +68,26 @@ Reviewers read this section to decide whether each addition is one we want to ke
 The `API compatibility` job installs the last release of each package beside your build. For each export of the last release, it asks TypeScript whether your version can be used wherever the old one could. When it cannot, the job reports a break:
 
 ```text
-@prisma/orm-extension-middleware-cache: 16 exports on 1 paths; 16 comparisons, …; breaks 1, undecided 0, not compared 0, recorded 0 — FAILS
+@prisma/orm-extension-middleware-cache: 16 exports on 1 paths; 16 comparisons, and 0 forwarded names checked only for existence (they are compared in the package that declares them); breaks 1, undecided 0, not compared 0, recorded 0; 0.9 s, 588 MB — FAILS
   break  @prisma/orm-extension-middleware-cache: createCacheMiddleware (value): Type 'undefined' is not assignable to type 'CacheMiddlewareOptions<TMeta>'.
     to record it: {"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"…"}
 ```
 
-The line names the package and import path, the export, which comparison failed (here `value`, the function itself), and TypeScript's message. While the last release is a pre-release, the line reads `break (reported only)` and the job passes.
+The break line names the package and import path, the export, the test that failed in brackets, and TypeScript's message. While the last release is a pre-release, the line reads `break (reported only)` and the job passes.
+
+Each export gets one or more of these tests:
+
+| Test | What it compares |
+| --- | --- |
+| `type` | The type itself |
+| `value` | The function, constant or class as a value. It also fails when a value becomes a type-only export |
+| `constructor` | The parameters of a class's constructor |
+| `abstract` | What a subclass of an abstract class must implement |
+| `augments` | A member the package adds to another package's interface with `declare module` |
+| `exists` | A name re-exported from another of our packages is still exported |
+| `path` | An import path is still there |
+
+TypeScript's message can contain names the check itself writes. `MembersNew<…>` and `MembersOld<…>` wrap your type and the last release's. A key such as `"private @prisma/orm-family-sql:Pool"`, `"protected name"` or `"unique symbol @prisma/orm-family-sql:brand"` stands for a private member, a protected member or a unique symbol.
 
 What is a break:
 
@@ -91,29 +105,36 @@ Run `pnpm build`, then check the one package you changed:
 pnpm api:compat --only @prisma/orm-extension-middleware-cache
 ```
 
-Add `--ga` to treat the last release as GA and see what would fail. Leave the run over all packages to CI: it compares three packages at a time, and the largest need about 6 GB of memory each.
+Add `--ga` to treat the last release as GA and see what would fail. Do not run it over all packages on your machine: by default it compares three packages at a time, and the largest need about 6 GB of memory each. CI does that run.
 
 ### The other entries in the report
 
-Besides breaks, the report lists entries that need no action but tell you what was not checked.
+Besides breaks, the report lists these entries. Only `problem` fails the job.
+
+**`problem`** means the check could not do its work, or a record no longer matches a break and must be removed. It fails the job at any version.
 
 **`undecided`** means TypeScript could not settle the comparison, so it neither passed nor failed. The word in brackets says where it stopped:
 
 | | Why it is undecided |
 | --- | --- |
 | `undecided (native)` | The type is too deep for TypeScript to compare, or it came after such a type and there was no time to compile it again |
-| `undecided (structural)` or `undecided (member)` | TypeScript cannot relate two copies of this generic type, and comparing it member by member did not settle it either: a member was too deep, the type also has call, construct or index signatures or symbol keys, which that comparison leaves out, or the package's ten minutes ran out |
+| `undecided (structural)` | TypeScript cannot relate two copies of this type, and the check's fallback, called the structural comparison, could not settle it either. The type cannot be compared member by member (it is a function, a union or a generic type alias), or one of its members cannot be related |
+| `undecided (member)` | Its members passed one by one, but it also has call, construct or index signatures or symbol keys, which that comparison leaves out. Or a member was too deep, or the package's ten minutes ran out |
 | `undecided (shared marker)` | The export uses one of two classes or unique symbols that have the same name in one package, which the check cannot tell apart. Renaming one of the two restores the comparison |
 
-If your change touches an undecided export, check it yourself: the job has not.
+The job has not checked an undecided export. If your change touches one, check it yourself: add a type test that asserts the type you expect to the example app that uses it, or compile a small file that uses the export as a user would.
 
-**`not compared`** means there was nothing to compare. Most often the last release's type is `never` or `any`, which every type satisfies.
+**`not compared`** means the test would pass whatever the export is. Most often it is a generic type that evaluates to `never` when its type parameters are filled with `never`, which is how the check fills a parameter with no default.
 
-**`decided member by member`** is a pass that took the longer route.
+**`decided member by member`** is a pass. TypeScript could not compare the whole type across the two copies, so each member was compared, and all passed.
 
-**`problem`** always fails the job. It means the check could not do its work, or a record no longer matches a break and must be removed.
+**`recorded break`** and **`recorded allowed change`** are breaks that a record covers.
 
-In the package's first line, "forwarded names" are names the package re-exports from another of our packages, such as `Collection` in `@prisma/orm-postgres`. They are only checked to still exist; their types are compared in the package that declares them.
+**`removable record`** is a record made against an earlier release. It no longer applies and does not fail; delete it.
+
+A closing line, `Not checked, no release <version>: …`, names packages that have never been released, so there is nothing to compare them with.
+
+In a package's first line, "forwarded names" are names the package re-exports from another of our packages, such as `Collection` in `@prisma/orm-postgres`. They only get the `exists` test; their types are compared in the package that declares them.
 
 ## An API below GA
 
@@ -136,7 +157,7 @@ export type Ea_Options<T> = Options<T>;                // an alias that passes i
 
 Keep the `typeof` annotation on a constant. Without it, TypeScript writes out the value's type for an object or a primitive, and the check can no longer see that the two names are one thing. An `interface Ea_Options extends Options {}` is not recognised either.
 
-A level on a member, such as a method named `preview_run` on a GA class, is not read: the member is checked as GA. Record its break as `allowed`.
+A level on a member, such as a method named `preview_run` on a GA class, is not read: the member is checked as GA. Its break is permitted, so record it as `allowed`.
 
 ## Recording a break you mean
 
@@ -144,14 +165,17 @@ A break in a GA export is an exception to the promise. It needs a reason a user 
 
 1. Run `pnpm build` and `pnpm api:update`, so that the fingerprint in the printed record is taken from the lists you will commit.
 2. Copy the record the job prints under the break (`to record it: …`) into the package's `api-breaks.json`, which is a JSON array beside its `api.txt`.
-3. Replace the `…` in `reason` with one line that says why. If the change is safe for users, change `kind` to `allowed`.
+3. Replace the `…` in `reason` with one line that says why. If the promise permits the change, change `kind` to `allowed`.
 4. Name the package in your description's `## API changes` section. The `API changes named` job treats a changed record as an API change.
 
 ```json
 [{"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"A cache always needs a store; see the release notes."}]
 ```
 
-`kind` is `break` for a real break. It is `allowed` when the change is safe for users and the check reports it anyway. That happens because the check cannot know whether users implement a type or only receive it, so it tests both. For example, a wider return type on a method of an interface that users only implement is safe for them, and is still reported.
+`kind` is `break` for a break of a GA API. It is `allowed` for a change the promise permits and the check reports anyway. There are two such cases:
+
+- The change is safe for users. The check cannot know whether users implement a type or only receive it, so it tests both. A wider return type on a method of an interface that users only implement is safe for them, and is still reported.
+- The change breaks only an API below GA that the check cannot recognise as one, such as a member named with a level.
 
 A record covers the export only as it is now. `fingerprint` is taken from the export's lines in `api.txt` and from the types of the same package those lines use. When any of them changes, the record stops applying, and the break is reported again for you to judge afresh. Some changes that are not API changes also change a fingerprint: a renumbered `(not exported)` type, or an upgrade of TypeScript or API Extractor. After one of those, paste the printed record again.
 
@@ -162,14 +186,17 @@ Two other things are recorded the same way, each with the record the job prints:
 `pnpm api:compat:examples` takes each app under `examples/` as it was at the last release's git tag, puts it in a folder of its own (`.api-examples/`), and compiles it against your build. Your own app folders are not touched. An error there is one a user would see after upgrading:
 
 ```text
-prisma-8-demo: 1 error in 1 file (recorded: 0 allowed, 0 breaks) — FAILS
-  test/codec-id-ergonomics.types.test-d.ts(14,55): TS2344 Type '"pg/timestamptz-temporal@1"' does not satisfy the constraint …
-    to record it: {"app":"prisma-8-demo","file":"test/codec-id-ergonomics.types.test-d.ts","line":14,"code":"TS2344","message":"…","kind":"break","lastRelease":"8.1.0","reason":"…"}
+prisma-8-demo: 1 error in 1 file (recorded: 0 allowed, 0 breaks); 3.3 s — FAILS
+  test/codec-id-ergonomics.types.test-d.ts: 1
+    test/codec-id-ergonomics.types.test-d.ts(14,55): TS2344 Type '"pg/timestamptz-temporal@1"' does not satisfy the constraint '"Expected: literal string: pg/timestamptz-temporal@1, Actual: string"'.
+      to record it: {"app":"prisma-8-demo","file":"test/codec-id-ergonomics.types.test-d.ts","line":14,"code":"TS2344","message":"…","kind":"break","lastRelease":"8.1.0","reason":"…"}
 ```
+
+(The `message` field holds the whole error message; it is shortened here.)
 
 To check one app yourself, run `pnpm api:compat:examples --only prisma-8-demo`.
 
-The apps' type tests assert exact types, so they also fail on a change that is safe for users, such as a new optional property on a result row. To accept an error, copy the printed record into `examples/last-release-errors.json`, write the reason, and set `kind` to `allowed` for a safe change or `break` for a real one. Name it in the description as `examples/<app>`.
+The apps' type tests assert exact types, so they also fail on a change that is safe for users, such as a new optional property on a result row. To accept an error, copy the printed record into `examples/last-release-errors.json`, write the reason, and set `kind` to `allowed` for a change that is safe for users or `break` for a real break. Name it in the description as `examples/<app>`.
 
 A record matches one error by app, file, line, code and message. Unlike a break record it has no fingerprint, so it keeps matching while the error's place and text stay the same. If the message changes, the record matches nothing, which fails the job, and the job prints a new record to replace it.
 
