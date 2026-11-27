@@ -19,11 +19,11 @@ node <installed skill>/scripts/fetch-upgrade-guides.mjs <database package>
 - `<installed skill>` is the `prisma-8` folder that holds this file's `references/` folder. If it has no `scripts/` folder, use the copy inside the installed database package, `node_modules/<database package>/skills/prisma-8`.
 - `<database package>` is the application's own: `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` or `@prisma/orm-mariadb`.
 
-The script downloads the newest published Prisma 8 version of that package without installing it. It does not change `package.json`, the lockfile or any installed package. It creates a folder `.prisma-upgrade-guides/` in the current folder, with a `.gitignore` of its own so that git ignores it, and extracts that version's copy of this skill into it. It prints the path of the extracted `prisma-8` folder, which contains the version in its name, such as `.prisma-upgrade-guides/prisma-orm-postgres-8.3.0/prisma-8`.
+The script downloads the newest published Prisma 8 version of that package without installing it. It does not change `package.json`, the lockfile or any installed package. It creates a folder `.prisma-upgrade-guides/` in the current folder, with a `.gitignore` of its own so that git ignores it, and extracts that version's copy of this skill into it. It prints the full path of the extracted `prisma-8` folder, which contains the version in its name, such as `<project>/.prisma-upgrade-guides/prisma-orm-postgres-8.3.0/prisma-8`.
 
 Now open `references/upgrade-app.md` in the printed folder and follow that file from its start. It, not this file, is the one to follow for the rest of the upgrade.
 
-**If the script fails,** stop. Tell the user what it reported, and do not continue with the installed copy: its guides may be uncorrected. A registry that needs a login is the usual cause. The script downloads with `npm` when that is installed, so a login that `npm` can use from this folder is enough.
+**If the script fails,** stop. Tell the user what it reported, and do not continue with the installed copy: its guides may be uncorrected. A registry that needs a login is the usual cause. The script downloads with `npm` when `npm` is on the PATH, so a login that `npm` can use from this folder is enough. Without `npm` it downloads by itself and sends no login.
 
 ## How to use the fetched copy
 
@@ -82,7 +82,7 @@ If the repository also holds an extension, in a `package.json` of its own, run *
   - **On the `8.0.0` release candidates,** compare the full version strings, including the part after the hyphen. `8.0.0-rc.10` and `8.0.0-rc.11` are different versions, and different steps in the chain below.
   - **From release 8.0,** each package has its own patch number or level suffix, and a step is named by the release, which is the major and minor: `8.0-to-8.1`. So the from-version is the release that the database package's version belongs to. `8.0.1-ea.0`, `8.0.1` and `8.0.2` all belong to release `8.0`.
   - If the lockfile shows the application's Prisma packages on different releases, which is already a broken state, the **lowest** is the from-version. Leave `@prisma/orm-extension-paradedb` out of that comparison: it has version numbers of its own (`0.18.0`), which name no step.
-- **To-version.** Either the version the user specified, or the newest published version of the application's own database package. That is the version in the name of the folder Step 0 fetched. Do not assume that is a stable version: while Prisma 8 is a release candidate, `latest` tracks the newest release, `8.0.0-rc.N` included. If the user wants a stable version specifically, they must name it.
+- **To-version.** Either the version the user specified, or the newest published version of the application's own database package. That is the version in the name of the folder Step 0 fetched. Do not assume that is a stable version: it is the newest version that is not deprecated, which while Prisma 8 is a release candidate is an `8.0.0-rc.N`, and for a database package below GA has a level suffix such as `-ea.0`. If the user wants a stable version specifically, they must name it.
 
 Report both back to the user before continuing.
 
@@ -159,16 +159,16 @@ Then move on to the next step.
 
 Some projects depend on a package that is not an extension and that requires one exact Prisma release. A deployment tool that lists `@prisma/orm-postgres` as a peer dependency at an exact version is an example. Such a project can only install the Prisma releases that some version of that package requires, so it cannot take every step of the chain.
 
-**How to notice it.** Before the first step, look through the project's dependencies for a package, other than the extensions the pre-flight covers, whose `peerDependencies` name an `@prisma/orm-*` package at an exact version. `pnpm view <name> peerDependencies --json` shows them. If there is none, use the per-step flow.
+**How to notice it.** Before the first step, look through the project's dependencies for a package, other than the extensions the pre-flight covers, whose `peerDependencies` name an `@prisma/orm-*` package at an exact version. Read them from the installed copy, `node_modules/<name>/package.json`; `pnpm view <name>@<version> peerDependencies --json` shows them for any other version. If there is none, use the per-step flow.
 
 If there is one, list the Prisma release each of its published versions requires.
 
-- If it has a version for every release in the chain, use the per-step flow, and at each step set that package to its version for the step.
+- If it has a version for every release in the chain, use the per-step flow, and at each step set that package to its version for the step. Write the Prisma packages it names at the exact versions it requires, with no caret and no tilde: a range could install a later fix, which its exact requirement does not accept.
 - If the last release of the chain is not among them, tell the user which releases are possible and stop.
 - Otherwise replace the per-step flow with the steps below. This is the one exception to the rule that no step is skipped.
 
 1. Read the guide of every step in the chain.
-2. Bump once. Write every Prisma entry as the bump step gives it for the last step of the chain. Set each extension published by someone else to the release the pre-flight noted for the last step. Set the package that requires an exact release to its version for that release. Also make every change to `package.json` that any of the guides asks for before its install.
+2. Bump once. Write every Prisma entry as the bump step gives it for the last step of the chain. Set each extension published by someone else to the release the pre-flight noted for the last step. Set the package that requires an exact release to its version for that release, and write the Prisma packages it names at the exact versions it requires, with no caret and no tilde. Also make every change to `package.json` that any of the guides asks for before its install.
 3. Install once, and commit the bump with the lockfile.
 4. Apply each step's guide in order, with one commit for each. Install again only where a guide tells you to add or change a package.
 5. After a guide that is not the last, do not run the typecheck or the tests: they are expected to fail, because the installed types are those of the last release. Go on to the next guide. A script or a Prisma command that a guide tells you to run must succeed. If one fails, halt and tell the user which guide and which command.
