@@ -7,13 +7,14 @@
  * Re-emit `ops.json` and `migration.json` after editing, from `packages/3-targets/postgres/2-adapter`: `pnpm exec tsx ../1-target/migrations/20261126T1200_create_prisma_tables/migration.ts --config prisma-tables.config.ts`.
  */
 import { APP_SPACE_ID } from '@internal/framework-components/control';
+import {
+  PRISMA_TABLE_NAMES,
+  type PrismaTableName,
+  qualifiedPrismaTable as qualified,
+  RELEASE_CANDIDATE_PRISMA_TABLES_SCHEMA as RELEASE_CANDIDATE_SCHEMA,
+  PRISMA_TABLES_SCHEMA as SCHEMA,
+} from '../../src/core/prisma-tables';
 import { Migration, MigrationCLI, rawSql } from '../../src/exports/migration';
-
-const SCHEMA = '_prisma';
-const RELEASE_CANDIDATE_SCHEMA = 'prisma_contract';
-/** Written out, not imported: a check's text is part of the migration's hash, which must not change once released. */
-const UPGRADE_INSTRUCTIONS_URL =
-  'https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading/app';
 
 interface ExpectedColumn {
   readonly name: string;
@@ -22,13 +23,13 @@ interface ExpectedColumn {
 }
 
 const tables: ReadonlyArray<{
-  readonly name: string;
+  readonly name: PrismaTableName;
   readonly create: string;
   readonly columns: readonly ExpectedColumn[];
 }> = [
   {
-    name: 'marker',
-    create: `CREATE TABLE IF NOT EXISTS "_prisma"."marker" (
+    name: PRISMA_TABLE_NAMES.marker,
+    create: `CREATE TABLE IF NOT EXISTS ${qualified(PRISMA_TABLE_NAMES.marker)} (
   "space" text DEFAULT '${APP_SPACE_ID}' NOT NULL PRIMARY KEY,
   "core_hash" text NOT NULL,
   "profile_hash" text NOT NULL,
@@ -52,8 +53,8 @@ const tables: ReadonlyArray<{
     ],
   },
   {
-    name: 'ledger',
-    create: `CREATE TABLE IF NOT EXISTS "_prisma"."ledger" (
+    name: PRISMA_TABLE_NAMES.ledger,
+    create: `CREATE TABLE IF NOT EXISTS ${qualified(PRISMA_TABLE_NAMES.ledger)} (
   "id" bigserial PRIMARY KEY,
   "created_at" timestamptz DEFAULT (now()) NOT NULL,
   "space" text NOT NULL,
@@ -79,8 +80,8 @@ const tables: ReadonlyArray<{
     ],
   },
   {
-    name: 'contract',
-    create: `CREATE TABLE IF NOT EXISTS "_prisma"."contract" (
+    name: PRISMA_TABLE_NAMES.contract,
+    create: `CREATE TABLE IF NOT EXISTS ${qualified(PRISMA_TABLE_NAMES.contract)} (
   "core_hash" text NOT NULL PRIMARY KEY,
   "created_at" timestamptz DEFAULT (now()) NOT NULL,
   "contract_json" jsonb NOT NULL
@@ -112,10 +113,6 @@ const mayRenameSchema = `SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = c
     AND has_database_privilege(current_database(), 'CREATE')) AS "result"
 FROM pg_namespace WHERE nspname = $1`;
 
-function qualified(table: string, schema: string = SCHEMA): string {
-  return `"${schema}"."${table}"`;
-}
-
 function nullability(column: ExpectedColumn): string {
   return column.notNull ? 'NOT NULL' : 'nullable';
 }
@@ -127,7 +124,7 @@ function checkColumns(table: (typeof tables)[number], schema: string, id: string
     operationClass: 'additive',
     target: { id: 'postgres', details: { schema, objectType: 'table', name: table.name } },
     precheck: table.columns.map((column) => ({
-      description: `ensure table ${qualified(table.name, schema)}${origin} has column "${column.name}" ${column.type} ${nullability(column)}: it has no such column, or the column has another type or nullability. Prisma cannot bring a table of another form up to date: the upgrade instructions at ${UPGRADE_INSTRUCTIONS_URL} say what to do`,
+      description: `ensure table ${qualified(table.name, schema)}${origin} has column "${column.name}" ${column.type} ${nullability(column)}: it has no such column, or the column has another type or nullability. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and this table has another form`,
       sql: absentOrColumnHasForm,
       params: [schema, table.name, column.name, column.type, column.notNull],
     })),
@@ -161,7 +158,7 @@ export default class M extends Migration {
         target: { id: 'postgres' },
         precheck: [
           {
-            description: `ensure schemas "${RELEASE_CANDIDATE_SCHEMA}" and "${SCHEMA}" do not both exist: Prisma keeps its tables in one of them, and cannot tell which holds the tables to keep`,
+            description: `ensure schemas "${RELEASE_CANDIDATE_SCHEMA}" and "${SCHEMA}" do not both exist: this release keeps Prisma's own tables in "${SCHEMA}", and "${RELEASE_CANDIDATE_SCHEMA}" was created by a release candidate of Prisma 8, so Prisma cannot tell which holds the tables to keep. Follow the upgrade instructions before dropping either schema`,
             sql: schemaAbsent,
             params: [SCHEMA],
           },

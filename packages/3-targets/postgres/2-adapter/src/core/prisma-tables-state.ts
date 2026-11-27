@@ -1,12 +1,16 @@
-import { CliStructuredError } from '@internal/errors/control';
-import { isPrismaSpace } from '@internal/framework-components/control';
+import { CliStructuredError, errorPrismaSpaceBehind } from '@internal/errors/control';
+import { isPrismaSpace, PRISMA_SPACE_ID } from '@internal/framework-components/control';
 import {
-  EARLIER_RELEASE_PRISMA_TABLES_SCHEMA,
-  execute,
-  infoSchemaTables,
+  PRISMA_TABLE_NAMES,
+  PRISMA_TABLES_MISSING_WHY,
+  PRISMA_TABLES_SCHEMA,
+  prismaTablesMissingSummary,
+  RELEASE_CANDIDATE_PRISMA_TABLES_SCHEMA,
+} from '@internal/target-postgres/contract-free';
+import {
   type PostgresMarkerDriver,
   type PostgresMarkerLower,
-  PRISMA_TABLES_SCHEMA,
+  prismaTableExists,
 } from './marker-ledger';
 
 /**
@@ -20,33 +24,26 @@ export async function prismaTablesFromEarlierRelease(
   space: string | undefined,
 ): Promise<boolean> {
   if (space !== undefined && isPrismaSpace(space)) return false;
-  const probe = infoSchemaTables
-    .select(infoSchemaTables.table_schema)
-    .where(
-      infoSchemaTables.table_schema
-        .eq(EARLIER_RELEASE_PRISMA_TABLES_SCHEMA)
-        .and(infoSchemaTables.table_name.eq('marker')),
-    )
-    .build();
-  return (await execute(lower, driver, probe)).length > 0;
+  return prismaTableExists(
+    lower,
+    driver,
+    PRISMA_TABLE_NAMES.marker,
+    RELEASE_CANDIDATE_PRISMA_TABLES_SCHEMA,
+  );
 }
 
 export function errorPrismaTablesFromEarlierRelease(): CliStructuredError {
-  const migrate = '{bin} db migrate';
-  return new CliStructuredError(
-    'CONTRACT.PRISMA_TABLES_FROM_EARLIER_RELEASE',
-    "Prisma's own tables in this database were written by an earlier release of Prisma",
-    {
-      why: `They are in the schema \`${EARLIER_RELEASE_PRISMA_TABLES_SCHEMA}\`, where the release candidates of Prisma 8 kept them. This release keeps them in the schema \`${PRISMA_TABLES_SCHEMA}\`, so it cannot read which contract the database matches until they are brought up to date.`,
-      fix: `Run \`${migrate}\`, which brings Prisma's own tables up to date before it does anything else; \`{bin} db init\`, \`{bin} db update\` and \`{bin} db sign\` do the same.`,
-      nextActions: [
-        {
-          kind: 'run-command',
-          label: "Bring Prisma's own tables up to date",
-          command: migrate,
-        },
-      ],
-      meta: { schema: EARLIER_RELEASE_PRISMA_TABLES_SCHEMA },
-    },
-  );
+  return errorPrismaSpaceBehind({
+    why: `They are in the schema \`${RELEASE_CANDIDATE_PRISMA_TABLES_SCHEMA}\`, where the release candidates of Prisma 8 kept them. This release keeps them in the schema \`${PRISMA_TABLES_SCHEMA}\`, so it cannot read which contract the database matches until they are brought up to date.`,
+    meta: { spaceId: PRISMA_SPACE_ID, schema: RELEASE_CANDIDATE_PRISMA_TABLES_SCHEMA },
+  });
+}
+
+/** Writing a marker row before Prisma's own tables exist, as the migration runner refuses to do with the same code. */
+export function errorPrismaTablesMissing(markerLocation: string): CliStructuredError {
+  return new CliStructuredError('MIGRATION.PRISMA_TABLES_MISSING', prismaTablesMissingSummary(), {
+    why: PRISMA_TABLES_MISSING_WHY,
+    fix: "Run `{bin} db sign`, `{bin} db migrate`, `{bin} db init` or `{bin} db update`, which bring Prisma's own tables up to date first, or apply the `_prisma` contract space with applyInstalledContractSpace before signing.",
+    meta: { markerLocation },
+  });
 }

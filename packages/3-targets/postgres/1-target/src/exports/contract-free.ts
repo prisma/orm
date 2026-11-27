@@ -46,3 +46,12 @@ export {
   dropDefaultAction,
 } from '../contract-free/ddl';
 export { PostgresTableSource } from '../core/ast/table-source';
+export {
+  PRISMA_TABLE_NAMES,
+  PRISMA_TABLES_MISSING_WHY,
+  PRISMA_TABLES_SCHEMA,
+  type PrismaTableName,
+  prismaTablesMissingSummary,
+  qualifiedPrismaTable,
+  RELEASE_CANDIDATE_PRISMA_TABLES_SCHEMA,
+} from '../core/prisma-tables';

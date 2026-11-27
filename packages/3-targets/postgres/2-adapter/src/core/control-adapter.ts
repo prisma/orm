@@ -77,6 +77,7 @@ import {
   type PostgresCodecRegistry,
   parsePostgresListText,
 } from '@internal/target-postgres/codecs';
+import { PRISMA_TABLE_NAMES, PRISMA_TABLES_SCHEMA } from '@internal/target-postgres/contract-free';
 import type {
   AddColumnAction,
   AddConstraintAction,
@@ -129,12 +130,7 @@ import { adapterError } from './adapter-errors';
 import { postgresAdapterCapabilities } from './capabilities';
 import { encodeControlQueryParams } from './control-codecs';
 import {
-  errorPrismaTablesFromEarlierRelease,
-  prismaTablesFromEarlierRelease,
-} from './earlier-release-tables';
-import {
   execute,
-  infoSchemaTables,
   ledger,
   ledgerContract,
   ledgerReadShape,
@@ -142,14 +138,19 @@ import {
   mergeInvariants,
   metaRecordingPolicies,
   NOW,
-  PRISMA_TABLES_SCHEMA,
+  prismaTableExists,
 } from './marker-ledger';
+import {
+  errorPrismaTablesFromEarlierRelease,
+  errorPrismaTablesMissing,
+  prismaTablesFromEarlierRelease,
+} from './prisma-tables-state';
 import { reportedSqlType } from './reported-sql-type';
 import { renderLoweredSql } from './sql-renderer';
 import type { PostgresContract } from './types';
 
-const POSTGRES_MARKER_TABLE = `${PRISMA_TABLES_SCHEMA}.marker`;
-const POSTGRES_LEDGER_TABLE = `${PRISMA_TABLES_SCHEMA}.ledger`;
+const POSTGRES_MARKER_TABLE = `${PRISMA_TABLES_SCHEMA}.${PRISMA_TABLE_NAMES.marker}`;
+const POSTGRES_LEDGER_TABLE = `${PRISMA_TABLES_SCHEMA}.${PRISMA_TABLE_NAMES.ledger}`;
 
 /**
  * Tables another migration tool, not Prisma 8, keeps in an application schema: Prisma 7's ledger. `introspect` leaves them out unless the contract declares a table of that name in the same namespace.
@@ -354,16 +355,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     driver: SqlControlDriverInstance<'postgres'>,
   ): Promise<ReadonlyMap<string, ContractMarkerRecord>> {
     const lower = (query: AnyQueryAst) => this.lower(query, { contract: undefined });
-    const probe = infoSchemaTables
-      .select(infoSchemaTables.table_schema)
-      .where(
-        infoSchemaTables.table_schema
-          .eq(PRISMA_TABLES_SCHEMA)
-          .and(infoSchemaTables.table_name.eq('marker')),
-      )
-      .build();
-    const exists = await execute(lower, driver, probe);
-    if (exists.length === 0) {
+    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.marker))) {
       if (await prismaTablesFromEarlierRelease(lower, driver, undefined)) {
         throw errorPrismaTablesFromEarlierRelease();
       }
@@ -423,16 +415,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     space: string | undefined,
   ): Promise<readonly LedgerEntryRecord[]> {
     const lower = (query: AnyQueryAst) => this.lower(query, { contract: undefined });
-    const probe = infoSchemaTables
-      .select(infoSchemaTables.table_schema)
-      .where(
-        infoSchemaTables.table_schema
-          .eq(PRISMA_TABLES_SCHEMA)
-          .and(infoSchemaTables.table_name.eq('ledger')),
-      )
-      .build();
-    const exists = await execute(lower, driver, probe);
-    if (exists.length === 0) {
+    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.ledger))) {
       if (await prismaTablesFromEarlierRelease(lower, driver, space)) {
         throw errorPrismaTablesFromEarlierRelease();
       }
@@ -478,8 +461,12 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     space: string,
     destination: MarkerInsert,
   ): Promise<void> {
+    const lower = (query: AnyQueryAst) => this.lower(query, { contract: undefined });
+    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.marker))) {
+      throw errorPrismaTablesMissing(this.markerLocation);
+    }
     await execute(
-      (query) => this.lower(query, { contract: undefined }),
+      lower,
       driver,
       marker
         .insert({
@@ -648,16 +635,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
 
   private async readMarkerResult(driver: SqlControlDriverInstance<'postgres'>, space: string) {
     const lower = (query: AnyQueryAst) => this.lower(query, { contract: undefined });
-    const probe = infoSchemaTables
-      .select(infoSchemaTables.table_schema)
-      .where(
-        infoSchemaTables.table_schema
-          .eq(PRISMA_TABLES_SCHEMA)
-          .and(infoSchemaTables.table_name.eq('marker')),
-      )
-      .build();
-    const exists = await execute(lower, driver, probe);
-    if (exists.length === 0) {
+    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.marker))) {
       return (await prismaTablesFromEarlierRelease(lower, driver, space))
         ? { kind: 'earlier-release' as const }
         : { kind: 'no-table' as const };

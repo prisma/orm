@@ -19,6 +19,9 @@ import {
   int4,
   int8,
   jsonb,
+  PRISMA_TABLE_NAMES,
+  PRISMA_TABLES_SCHEMA,
+  type PrismaTableName,
   pgTable,
   text,
   textArray,
@@ -26,14 +29,8 @@ import {
 } from '@internal/target-postgres/contract-free';
 import { encodeControlQueryParams } from './control-codecs';
 
-/** The schema the Postgres target keeps Prisma's own tables in, which the first migration of its `_prisma` contract space creates. */
-export const PRISMA_TABLES_SCHEMA = '_prisma';
-
-/** The schema the release candidates of Prisma 8 kept Prisma's own tables in, which the first migration of the `_prisma` contract space renames to {@link PRISMA_TABLES_SCHEMA}. */
-export const EARLIER_RELEASE_PRISMA_TABLES_SCHEMA = 'prisma_contract';
-
 export const marker = pgTable(
-  { name: 'marker', schema: PRISMA_TABLES_SCHEMA },
+  { name: PRISMA_TABLE_NAMES.marker, schema: PRISMA_TABLES_SCHEMA },
   {
     space: text(),
     core_hash: text(),
@@ -53,7 +50,7 @@ export const marker = pgTable(
  * insert path doesn't have to pass them.
  */
 export const ledger = pgTable(
-  { name: 'ledger', schema: PRISMA_TABLES_SCHEMA },
+  { name: PRISMA_TABLE_NAMES.ledger, schema: PRISMA_TABLES_SCHEMA },
   {
     space: text(),
     migration_name: text(),
@@ -72,7 +69,7 @@ export const ledger = pgTable(
  * a rollback cycle is stored exactly once (upsert DO NOTHING).
  */
 export const ledgerContract = pgTable(
-  { name: 'contract', schema: PRISMA_TABLES_SCHEMA },
+  { name: PRISMA_TABLE_NAMES.contract, schema: PRISMA_TABLES_SCHEMA },
   {
     core_hash: text(),
     contract_json: jsonb(),
@@ -84,7 +81,7 @@ export const ledgerContract = pgTable(
  * including the DB-generated `id` (for ORDER BY) and `created_at`.
  */
 export const ledgerReadShape = pgTable(
-  { name: 'ledger', schema: PRISMA_TABLES_SCHEMA },
+  { name: PRISMA_TABLE_NAMES.ledger, schema: PRISMA_TABLES_SCHEMA },
   {
     id: int8(),
     space: text(),
@@ -154,3 +151,17 @@ export async function execute(
 export type PostgresMarkerDriver = MarkerDriver;
 export type PostgresMarkerLower = Lower;
 export type PostgresMarkerWriteDriver = SqlControlDriverInstance<'postgres'>;
+
+/** Whether one of Prisma's own tables exists in `schema`. Reads `information_schema.tables`, so a database without the schema answers no instead of raising "relation does not exist". */
+export async function prismaTableExists(
+  lower: Lower,
+  driver: MarkerDriver,
+  table: PrismaTableName,
+  schema: string = PRISMA_TABLES_SCHEMA,
+): Promise<boolean> {
+  const probe = infoSchemaTables
+    .select(infoSchemaTables.table_schema)
+    .where(infoSchemaTables.table_schema.eq(schema).and(infoSchemaTables.table_name.eq(table)))
+    .build();
+  return (await execute(lower, driver, probe)).length > 0;
+}

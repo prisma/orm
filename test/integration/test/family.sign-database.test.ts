@@ -133,6 +133,55 @@ describe('family instance signSpaces', () => {
     );
   });
 
+  describe("without Prisma's own tables", () => {
+    beforeEach(async () => {
+      if (!connectionString) {
+        throw new Error('Connection string not set');
+      }
+      await withClient(connectionString, async (client) => {
+        await client.query('drop schema if exists _prisma cascade');
+      });
+    }, timeouts.spinUpPpgDev);
+
+    it(
+      'refuses to sign, saying the tables are missing, as the migration runner does',
+      async () => {
+        if (!connectionString) {
+          throw new Error('Connection string not set');
+        }
+        const validatedContract = new PostgresContractSerializer().deserializeContract(
+          createTestContract(),
+        ) as Contract<SqlStorage>;
+        const driver = await postgresDriver.create(connectionString);
+        try {
+          const familyInstance = sql.create(
+            createControlStack({
+              family: sql,
+              target: postgres,
+              adapter: postgresAdapter,
+              driver: postgresDriver,
+              extensions: [],
+            }),
+          );
+
+          await expect(
+            familyInstance.signSpaces({
+              driver,
+              spaces: [{ space: APP_SPACE_ID, contract: validatedContract, expected: null }],
+            }),
+          ).rejects.toMatchObject({
+            code: 'MIGRATION.PRISMA_TABLES_MISSING',
+            message:
+              "Prisma's own tables are missing from this database: _prisma.marker does not exist.",
+          });
+        } finally {
+          await driver.close();
+        }
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
   describe('marker update', () => {
     beforeEach(async () => {
       if (!connectionString) {

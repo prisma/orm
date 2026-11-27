@@ -37,7 +37,6 @@ import {
   failedPostcheckWhy,
   failedPrecheckWhy,
   isPrismaSpace,
-  PRISMA_SPACE_ID,
   schemaCheckWhy,
   withDatabaseUnchanged,
   withFailingSpace,
@@ -50,6 +49,12 @@ import { InternalError } from '@internal/utils/internal-error';
 import type { Result } from '@internal/utils/result';
 import { notOk, ok, okVoid } from '@internal/utils/result';
 import { postgresError } from '../errors';
+import {
+  PRISMA_TABLE_NAMES,
+  PRISMA_TABLES_MISSING_WHY,
+  prismaTablesMissingSummary,
+  qualifiedPrismaTable,
+} from '../prisma-tables';
 import { CONTROL_PLANE_LC_MONETARY, quoteIdentifier } from '../sql-utils';
 import {
   DEPENDENT_OBJECTS_STILL_EXIST,
@@ -423,20 +428,15 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
   private async ensurePrismaTablesExist(
     driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
   ): Promise<Result<void, SqlMigrationRunnerFailure>> {
-    const markerLocation = this.family.markerLocation;
     const found = await driver.query<{ readonly exists: boolean }>(
       'SELECT to_regclass($1) IS NOT NULL AS "exists"',
-      [markerLocation],
+      [qualifiedPrismaTable(PRISMA_TABLE_NAMES.marker)],
     );
     if (found.rows[0]?.exists === true) return okVoid();
-    return runnerFailure(
-      'MIGRATION.PRISMA_TABLES_MISSING',
-      `Prisma's own tables are missing from this database: ${markerLocation} does not exist.`,
-      {
-        why: `The tables are created, or moved from the schema prisma_contract that the release candidates of Prisma 8 used, by applying the target's ${PRISMA_SPACE_ID} contract space, and nothing has applied it to this database. \`prisma db init\`, \`prisma db update\`, \`prisma db migrate\` and \`prisma db sign\` apply it before anything else; code that runs the migration runner directly must apply it first with applyInstalledContractSpace.`,
-        meta: { markerLocation },
-      },
-    );
+    return runnerFailure('MIGRATION.PRISMA_TABLES_MISSING', prismaTablesMissingSummary(), {
+      why: PRISMA_TABLES_MISSING_WHY,
+      meta: { markerLocation: this.family.markerLocation },
+    });
   }
 
   private async runExpectationSteps(
