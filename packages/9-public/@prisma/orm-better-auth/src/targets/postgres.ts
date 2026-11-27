@@ -56,7 +56,6 @@ export const postgresSupport: TargetSupport = {
   target: 'postgres',
   valueKind,
   compareText: compareTextBySubstring,
-  sameStorageName: (a, b) => a === b,
   defaultNamespace: 'public',
   pslType,
 };

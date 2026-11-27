@@ -263,7 +263,6 @@ function fieldConflicts(
   block: PrintedBlock,
   model: DeclaredModel,
   mixins: readonly DeclaredMixin[],
-  comparison: ContractComparison,
   into: Conflicts,
 ): void {
   const additions = new Set(block.fieldNames);
@@ -273,9 +272,7 @@ function fieldConflicts(
       into.aheadOfEmit.push({ name: declared, namespaceId: undefined, path });
       continue;
     }
-    const needed = block.columns.find((candidate) =>
-      comparison.support.sameStorageName(candidate, column, 'column'),
-    );
+    const needed = block.columns.find((candidate) => candidate === column);
     if (needed === undefined) continue;
     into.storedUnderAnotherName.push({
       path,
@@ -309,7 +306,7 @@ function modelConflicts(
     }
     if (namespaceId !== newNamespace) continue;
     const stored = mappedName(declaration.attributes()) ?? name;
-    if (!comparison.support.sameStorageName(stored, table, 'table')) continue;
+    if (stored !== table) continue;
     into.storedUnderAnotherName.push({
       path: file.path,
       declared: name,
@@ -473,7 +470,7 @@ export function editContractSource<F extends ContractSourceFile>(
   const allDeclared = [...declared.values()].flat();
   const conflicts: Conflicts = { aheadOfEmit: [], storedUnderAnotherName: [] };
   for (const { block, ...model } of targets) {
-    fieldConflicts(block, model, mixins, comparison, conflicts);
+    fieldConflicts(block, model, mixins, conflicts);
   }
   for (const block of added) modelConflicts(block, allDeclared, comparison, conflicts);
   const { aheadOfEmit, storedUnderAnotherName } = conflicts;

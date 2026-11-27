@@ -64,8 +64,6 @@ export interface TargetSupport {
   valueKind(codecId: string): ValueKind | undefined;
   /** The ORM condition for a comparison of a text column. A case-sensitive `eq` must be able to use the column's index. */
   compareText(comparison: TextComparison): Condition;
-  /** Whether two table names, or two column names, are the same name on this database. */
-  sameStorageName(a: string, b: string, kind: 'table' | 'column'): boolean;
   /** The namespace a model is in when the contract names none. */
   readonly defaultNamespace: string;
   /** The PSL type of a Better Auth field, without `?`. */

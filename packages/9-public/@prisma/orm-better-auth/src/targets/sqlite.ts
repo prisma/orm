@@ -24,16 +24,10 @@ const valueKind = valueKindOf(sqlFamilyCodecKinds, {
   ],
 });
 
-/** The name with only the ASCII letters A to Z lower-cased, the case SQLite ignores in table and column names. */
-function foldAsciiCase(name: string): string {
-  return name.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
-}
-
 export const sqliteSupport: TargetSupport = {
   target: 'sqlite',
   valueKind,
   compareText: compareTextBySubstring,
-  sameStorageName: (a, b) => foldAsciiCase(a) === foldAsciiCase(b),
   defaultNamespace: UNBOUND_DOMAIN_NAMESPACE_ID,
   pslType: standardPslType,
 };
