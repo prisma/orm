@@ -51,4 +51,14 @@ describe('LibSQL error handling', () => {
       originalMessage: message,
     })
   })
+
+  test('check constraint violation from a remote connection without a numeric code', () => {
+    const message = 'SQLITE_CONSTRAINT: SQLite error: CHECK constraint failed: t_sum_check'
+    expect(convertDriverError({ code: 'SQLITE_CONSTRAINT', message, cause: { code: 'SQLITE_CONSTRAINT' } })).toEqual({
+      kind: 'CheckConstraintViolation',
+      constraint: { index: 't_sum_check' },
+      originalCode: undefined,
+      originalMessage: message,
+    })
+  })
 })

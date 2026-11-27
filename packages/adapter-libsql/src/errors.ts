@@ -3,6 +3,7 @@ import { Error as DriverAdapterErrorObject, MappedError } from '@prisma/driver-a
 
 const SQLITE_BUSY = 5
 const PRIMARY_ERROR_CODE_MASK = 0xff
+const CHECK_CONSTRAINT_FAILED = 'CHECK constraint failed: '
 
 export function convertDriverError(error: unknown): DriverAdapterErrorObject {
   if (isDriverError(error)) {
@@ -43,13 +44,8 @@ export function mapDriverError(error: LibsqlError): MappedError {
         constraint: fields !== undefined ? { fields } : undefined,
       }
     }
-    case 275: {
-      const index = error.message.split('CHECK constraint failed: ').at(1)
-      return {
-        kind: 'CheckConstraintViolation',
-        constraint: index !== undefined ? { index } : undefined,
-      }
-    }
+    case 275:
+      return mapCheckConstraintViolation(error.message)
     case 787:
     case 1811:
       return {
@@ -61,6 +57,8 @@ export function mapDriverError(error: LibsqlError): MappedError {
         return {
           kind: 'SocketTimeout',
         }
+      } else if (error.message.includes(CHECK_CONSTRAINT_FAILED)) {
+        return mapCheckConstraintViolation(error.message)
       } else if (error.message.startsWith('no such table')) {
         return {
           kind: 'TableDoesNotExist',
@@ -83,6 +81,14 @@ export function mapDriverError(error: LibsqlError): MappedError {
         extendedCode: rawCode,
         message: error.message,
       }
+  }
+}
+
+function mapCheckConstraintViolation(message: string): MappedError {
+  const index = message.split(CHECK_CONSTRAINT_FAILED).at(1)
+  return {
+    kind: 'CheckConstraintViolation',
+    constraint: index !== undefined ? { index } : undefined,
   }
 }
 
