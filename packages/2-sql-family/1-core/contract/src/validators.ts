@@ -61,6 +61,7 @@ import type {
 
 const ControlPolicySchema = type("'managed' | 'tolerated' | 'external' | 'observed'");
 const DomainEnumRefSchema = type({
+  '+': 'reject',
   plane: "'domain'",
   namespaceId: 'string',
   entityKind: "'enum'",
@@ -81,7 +82,8 @@ const StorageTypeInstanceSchema = type
     codecId: 'string',
     dataType: DATA_TYPE_ID_PATTERN,
     'typeParams?': 'Record<string, unknown>',
-  });
+  })
+  .onUndeclaredKey('reject');
 
 /** Document-scoped `storage.types`: codec triples only. */
 const DocumentScopedStorageTypeSchema = StorageTypeInstanceSchema;
@@ -94,6 +96,7 @@ export const ContractEnumSchema = type({
   '+': 'reject',
   codecId: 'string',
   members: type({
+    '+': 'reject',
     name: 'string',
     value: 'string | number | boolean | null | unknown[] | Record<string, unknown>',
   })
@@ -150,10 +153,16 @@ export function createNamespaceEntrySchema(
         Type<unknown>,
         'knownKinds.has(key) guarantees schemas.get(key) is defined'
       >(schemas.get(key));
-      for (const [, value] of Object.entries(innerMap)) {
+      for (const [name, value] of Object.entries(innerMap)) {
         const parsed = entrySchema(value);
         if (parsed instanceof type.errors) {
-          return ctx.reject({ expected: parsed.summary });
+          for (const problem of parsed) {
+            ctx.reject({
+              relativePath: ['entries', key, name, ...problem.path],
+              problem: problem.problem,
+            });
+          }
+          return false;
         }
       }
     }
@@ -466,12 +475,14 @@ const ModelFieldSchema = type({
 });
 
 const ModelStorageFieldSchema = type({
+  '+': 'reject',
   column: 'string',
   'codecId?': 'string',
   'nullable?': 'boolean',
 });
 
 const ModelStorageSchema = type({
+  '+': 'reject',
   table: 'string',
   namespaceId: 'string',
   fields: type({ '[string]': ModelStorageFieldSchema }),
@@ -528,10 +539,11 @@ const ContractEmbedRelationSchema = type({
 const ContractRelationSchema = ContractReferenceRelationSchema.or(ContractEmbedRelationSchema);
 
 const ModelSchema = type({
+  '+': 'reject',
   storage: ModelStorageSchema,
   'fields?': type({ '[string]': ModelFieldSchema }),
   'relations?': type({ '[string]': ContractRelationSchema }),
-  'discriminator?': type({ field: 'string' }),
+  'discriminator?': type({ '+': 'reject', field: 'string' }),
   'variants?': type({ '[string]': CrossReferenceSchema }),
   'base?': CrossReferenceSchema,
   'owner?': 'string',
@@ -562,8 +574,10 @@ export function createSqlContractSchema(
     'defaultControlPolicy?': ControlPolicySchema,
     'roots?': type({ '[string]': CrossReferenceSchema }),
     domain: type({
+      '+': 'reject',
       namespaces: type({
         '[string]': type({
+          '+': 'reject',
           models: type({ '[string]': ModelSchema }),
           'enum?': type({ '[string]': ContractEnumSchema }),
         }),

@@ -53,9 +53,10 @@ import { type } from 'arktype';
 import { mongoTargetError } from '../mongo-target-errors';
 
 const IndexKeyDirection = type('1 | -1 | "text" | "2dsphere" | "2d" | "hashed"');
-const IndexKeyJson = type({ field: 'string', direction: IndexKeyDirection });
+const IndexKeyJson = type({ '+': 'reject', field: 'string', direction: IndexKeyDirection });
 
 const CollationJson = type({
+  '+': 'reject',
   locale: 'string',
   'caseLevel?': 'boolean',
   'caseFirst?': 'string',
@@ -68,6 +69,7 @@ const CollationJson = type({
 });
 
 const CreateIndexJson = type({
+  '+': 'reject',
   kind: '"createIndex"',
   collection: 'string',
   keys: IndexKeyJson.array().atLeastLength(1),
@@ -84,12 +86,14 @@ const CreateIndexJson = type({
 });
 
 const DropIndexJson = type({
+  '+': 'reject',
   kind: '"dropIndex"',
   collection: 'string',
   name: 'string',
 });
 
 const CreateCollectionJson = type({
+  '+': 'reject',
   kind: '"createCollection"',
   collection: 'string',
   'validator?': 'Record<string, unknown>',
@@ -99,13 +103,15 @@ const CreateCollectionJson = type({
   'size?': 'number',
   'max?': 'number',
   'timeseries?': {
+    '+': 'reject',
     timeField: 'string',
     'metaField?': 'string',
     'granularity?': '"seconds" | "minutes" | "hours"',
   },
   'collation?': CollationJson,
-  'changeStreamPreAndPostImages?': { enabled: 'boolean' },
+  'changeStreamPreAndPostImages?': { '+': 'reject', enabled: 'boolean' },
   'clusteredIndex?': {
+    '+': 'reject',
     key: 'Record<string, number>',
     unique: 'boolean',
     'name?': 'string',
@@ -113,35 +119,41 @@ const CreateCollectionJson = type({
 });
 
 const DropCollectionJson = type({
+  '+': 'reject',
   kind: '"dropCollection"',
   collection: 'string',
 });
 
 const RenameCollectionJson = type({
+  '+': 'reject',
   kind: '"renameCollection"',
   collection: 'string',
   to: 'string',
 });
 
 const CollModJson = type({
+  '+': 'reject',
   kind: '"collMod"',
   collection: 'string',
   'validator?': 'Record<string, unknown>',
   'validationLevel?': '"strict" | "moderate"',
   'validationAction?': '"error" | "warn"',
-  'changeStreamPreAndPostImages?': { enabled: 'boolean' },
+  'changeStreamPreAndPostImages?': { '+': 'reject', enabled: 'boolean' },
 });
 
 const ListIndexesJson = type({
+  '+': 'reject',
   kind: '"listIndexes"',
   collection: 'string',
 });
 
 const ListCollectionsJson = type({
+  '+': 'reject',
   kind: '"listCollections"',
 });
 
 const FieldFilterJson = type({
+  '+': 'reject',
   kind: '"field"',
   field: 'string',
   op: 'string',
@@ -149,21 +161,25 @@ const FieldFilterJson = type({
 });
 
 const AndFilterJson = type({
+  '+': 'reject',
   kind: '"and"',
   exprs: 'Record<string, unknown>[]',
 });
 
 const OrFilterJson = type({
+  '+': 'reject',
   kind: '"or"',
   exprs: 'Record<string, unknown>[]',
 });
 
 const NotFilterJson = type({
+  '+': 'reject',
   kind: '"not"',
   expr: 'Record<string, unknown>',
 });
 
 const ExistsFilterJson = type({
+  '+': 'reject',
   kind: '"exists"',
   field: 'string',
   exists: 'boolean',
@@ -174,18 +190,21 @@ const ExistsFilterJson = type({
 // ============================================================================
 
 const RawInsertOneJson = type({
+  '+': 'reject',
   kind: '"rawInsertOne"',
   collection: 'string',
   document: 'Record<string, unknown>',
 });
 
 const RawInsertManyJson = type({
+  '+': 'reject',
   kind: '"rawInsertMany"',
   collection: 'string',
   documents: 'Record<string, unknown>[]',
 });
 
 const RawUpdateOneJson = type({
+  '+': 'reject',
   kind: '"rawUpdateOne"',
   collection: 'string',
   filter: 'Record<string, unknown>',
@@ -193,6 +212,7 @@ const RawUpdateOneJson = type({
 });
 
 const RawUpdateManyJson = type({
+  '+': 'reject',
   kind: '"rawUpdateMany"',
   collection: 'string',
   filter: 'Record<string, unknown>',
@@ -201,24 +221,28 @@ const RawUpdateManyJson = type({
 });
 
 const RawDeleteOneJson = type({
+  '+': 'reject',
   kind: '"rawDeleteOne"',
   collection: 'string',
   filter: 'Record<string, unknown>',
 });
 
 const RawDeleteManyJson = type({
+  '+': 'reject',
   kind: '"rawDeleteMany"',
   collection: 'string',
   filter: 'Record<string, unknown>',
 });
 
 const RawAggregateJson = type({
+  '+': 'reject',
   kind: '"rawAggregate"',
   collection: 'string',
   pipeline: 'Record<string, unknown>[]',
 });
 
 const RawFindOneAndUpdateJson = type({
+  '+': 'reject',
   kind: '"rawFindOneAndUpdate"',
   collection: 'string',
   filter: 'Record<string, unknown>',
@@ -227,18 +251,21 @@ const RawFindOneAndUpdateJson = type({
 });
 
 const RawFindOneAndDeleteJson = type({
+  '+': 'reject',
   kind: '"rawFindOneAndDelete"',
   collection: 'string',
   filter: 'Record<string, unknown>',
 });
 
 const TypedAggregateJson = type({
+  '+': 'reject',
   kind: '"aggregate"',
   collection: 'string',
   pipeline: 'Record<string, unknown>[]',
 });
 
 const PlanMetaJson = type({
+  '+': 'reject',
   target: 'string',
   storageHash: 'string',
   lane: 'string',
@@ -248,37 +275,44 @@ const PlanMetaJson = type({
 });
 
 const QueryPlanJson = type({
+  '+': 'reject',
   collection: 'string',
   command: 'Record<string, unknown>',
   meta: PlanMetaJson,
 });
 
 const MatchStageJson = type({
+  '+': 'reject',
   kind: '"match"',
   filter: 'Record<string, unknown>',
 });
 
 const LimitStageJson = type({
+  '+': 'reject',
   kind: '"limit"',
   limit: 'number',
 });
 
 const SortStageJson = type({
+  '+': 'reject',
   kind: '"sort"',
   sort: 'Record<string, 1 | -1>',
 });
 
 const ProjectStageJson = type({
+  '+': 'reject',
   kind: '"project"',
   projection: 'Record<string, 0 | 1>',
 });
 
 const AddFieldsStageJson = type({
+  '+': 'reject',
   kind: '"addFields"',
   fields: 'Record<string, unknown>',
 });
 
 const LookupStageJson = type({
+  '+': 'reject',
   kind: '"lookup"',
   from: 'string',
   as: 'string',
@@ -293,6 +327,7 @@ const LookupStageJson = type({
 // ============================================================================
 
 const CheckJson = type({
+  '+': 'reject',
   description: 'string',
   source: 'Record<string, unknown>',
   filter: 'Record<string, unknown>',
@@ -301,19 +336,23 @@ const CheckJson = type({
 });
 
 const StepJson = type({
+  '+': 'reject',
   description: 'string',
   command: 'Record<string, unknown>',
 });
 
 const OperationMetaJson = type({
+  '+': 'reject',
   'rewrite?': type({
+    '+': 'reject',
     kind: '"cast"',
     collection: 'string',
     field: 'string',
     to: 'string',
   })
-    .or({ kind: '"fill"', collection: 'string', field: 'string' })
+    .or({ '+': 'reject', kind: '"fill"', collection: 'string', field: 'string' })
     .or({
+      '+': 'reject',
       kind: '"renameStoredKey"',
       collection: 'string',
       field: 'string',
@@ -321,18 +360,21 @@ const OperationMetaJson = type({
       to: 'string',
     })
     .or({
+      '+': 'reject',
       kind: '"removeStoredKey" | "fillStoredKey"',
       collection: 'string',
       field: 'string',
       path: 'string',
     })
     .or({
+      '+': 'reject',
       kind: '"replaceStoredValue"',
       collection: 'string',
       field: 'string',
       'path?': 'string',
     })
     .or({
+      '+': 'reject',
       kind: '"removeStoredValue"',
       collection: 'string',
       field: 'string',
@@ -340,11 +382,12 @@ const OperationMetaJson = type({
       value: 'string | number | boolean',
       'required?': 'boolean',
       'filter?': 'Record<string, unknown>',
-      'enumValue?': { 'namespaceId?': 'string', enum: 'string', member: 'string' },
+      'enumValue?': { '+': 'reject', 'namespaceId?': 'string', enum: 'string', member: 'string' },
     }),
 });
 
 const DdlOperationJson = type({
+  '+': 'reject',
   id: 'string',
   label: 'string',
   operationClass: '"additive" | "widening" | "destructive"',
@@ -355,6 +398,7 @@ const DdlOperationJson = type({
 });
 
 const DmlCheckJson = type({
+  '+': 'reject',
   description: 'string',
   source: 'Record<string, unknown>',
   filter: 'Record<string, unknown>',
@@ -362,10 +406,12 @@ const DmlCheckJson = type({
 });
 
 const DmlOperationJson = type({
+  '+': 'reject',
   id: 'string',
   label: 'string',
   operationClass: '"additive" | "widening" | "destructive" | "data"',
   name: 'string',
+  'invariantId?': 'string',
   'meta?': OperationMetaJson,
   precheck: 'Record<string, unknown>[]',
   run: 'Record<string, unknown>[]',
@@ -834,6 +880,7 @@ function deserializeDmlOp(json: unknown): MongoDmlOperation {
     label: data.label,
     operationClass: data.operationClass,
     name: data.name,
+    ...ifDefined('invariantId', data.invariantId),
     ...ifDefined('meta', data.meta),
     precheck: data.precheck.map(deserializeDmlCheck),
     run: data.run.map(deserializeMongoQueryPlan),
