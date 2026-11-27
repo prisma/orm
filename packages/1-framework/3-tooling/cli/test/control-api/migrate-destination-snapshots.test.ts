@@ -1,6 +1,6 @@
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
-import type { Contract } from '@internal/contract/types';
+import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
 import type {
   ControlDriverInstance,
   ControlFamilyInstance,
@@ -40,39 +40,65 @@ afterEach(async () => {
   await Promise.all(projectDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-/** A migrations directory with one app migration ∅ → APP_HEAD and the snapshot it ends at. */
-async function migrationsDirWithSnapshot(): Promise<string> {
-  const projectDir = createTestProjectDir('migrate-destination-snapshots');
-  projectDirs.push(projectDir);
-  const migrationsDir = join(projectDir, 'migrations');
+const MIDDLE = 'ab'.repeat(32);
+
+async function writeMigration(
+  migrationsDir: string,
+  dirName: string,
+  from: string,
+  to: string,
+): Promise<void> {
   const ops = [CREATE_TABLE];
   const base: Omit<MigrationMetadata, 'migrationHash'> = {
-    from: EMPTY_CONTRACT_HASH,
-    to: APP_HEAD,
+    from,
+    to,
     providedInvariants: [],
     createdAt: '2026-01-01T00:00:00.000Z',
   };
   await writeMigrationPackage(
-    join(migrationsDir, 'app', '20260101T0000_initial'),
+    join(migrationsDir, 'app', dirName),
     { ...base, migrationHash: computeMigrationHash(base, ops) },
     ops,
   );
+}
+
+/**
+ * Two app migrations, ∅ → MIDDLE → APP_HEAD, each with the snapshot it ends at. The snapshot at
+ * MIDDLE holds a key the family refuses, as a snapshot an earlier release wrote can.
+ */
+async function migrationsDirWithUnreadableMiddleSnapshot(): Promise<{
+  readonly migrationsDir: string;
+  readonly middleSnapshot: unknown;
+}> {
+  const projectDir = createTestProjectDir('migrate-destination-snapshots');
+  projectDirs.push(projectDir);
+  const migrationsDir = join(projectDir, 'migrations');
+  await writeMigration(migrationsDir, '20260101T0000_initial', EMPTY_CONTRACT_HASH, MIDDLE);
+  await writeMigration(migrationsDir, '20260102T0000_second', MIDDLE, APP_HEAD);
+  const middleSnapshot = {
+    formatVersion: 1,
+    ...APP_CONTRACT,
+    storage: { ...APP_CONTRACT.storage, storageHash: MIDDLE },
+    zzz: 1,
+  };
+  await writeContractSnapshot(migrationsDir, MIDDLE, {
+    contractJson: middleSnapshot,
+    contractDts: 'export type Contract = never;\n',
+  });
   await writeContractSnapshot(migrationsDir, APP_HEAD, {
     contractJson: { formatVersion: 1, ...APP_CONTRACT },
     contractDts: 'export type Contract = never;\n',
   });
-  return migrationsDir;
-}
-
-async function addUnknownKeyToSnapshot(migrationsDir: string): Promise<string> {
-  const path = join(contractSnapshotDir(migrationsDir, APP_HEAD), 'contract.json');
-  const json = JSON.parse(await readFile(path, 'utf-8'));
-  await writeFile(path, JSON.stringify({ ...json, zzz: 1 }));
-  return path;
+  const stored = JSON.parse(
+    await readFile(join(contractSnapshotDir(migrationsDir, MIDDLE), 'contract.json'), 'utf-8'),
+  );
+  return { migrationsDir, middleSnapshot: stored };
 }
 
 /** A family that refuses a contract holding the key `zzz`, as the strict contract reader does. */
-function strictFamily(): ControlFamilyInstance<'sql', unknown> {
+function strictFamily(
+  markers: ReadonlyMap<string, ContractMarkerRecord> = new Map(),
+): ControlFamilyInstance<'sql', unknown> {
   const used: Pick<
     ControlFamilyInstance<'sql', unknown>,
     'familyId' | 'deserializeContract' | 'readAllMarkers' | 'accessChangesOf'
@@ -86,7 +112,7 @@ function strictFamily(): ControlFamilyInstance<'sql', unknown> {
         json,
       );
     },
-    readAllMarkers: async () => new Map(),
+    readAllMarkers: async () => markers,
     accessChangesOf: () => [],
   };
   return blindCast<
@@ -125,6 +151,7 @@ function recordingMigrations() {
 function migrateOptions(
   migrationsDir: string,
   migrations: TargetMigrationsCapability<'sql', 'postgres', ControlFamilyInstance<'sql', unknown>>,
+  markers?: ReadonlyMap<string, ContractMarkerRecord>,
 ) {
   return {
     driver: blindCast<ControlDriverInstance<'sql', 'postgres'>, 'the fakes never touch it'>({
@@ -133,7 +160,7 @@ function migrateOptions(
       close: async () => {},
     }),
     invocation: { cwd: '/work/app', configPath: undefined, dbGiven: false },
-    familyInstance: strictFamily(),
+    familyInstance: strictFamily(markers),
     contract: APP_CONTRACT,
     migrations,
     frameworkComponents: [],
@@ -143,45 +170,45 @@ function migrateOptions(
   };
 }
 
-describe('executeMigrate reads the snapshot each migration ends at through the family', () => {
-  it('hands the runner a snapshot the family reads', async () => {
-    const migrationsDir = await migrationsDirWithSnapshot();
+describe('executeMigrate records the snapshots of the migrations it applies as they are stored', () => {
+  it('applies every migration to an empty database when a snapshot along the path is one the family refuses', async () => {
+    const { migrationsDir, middleSnapshot } = await migrationsDirWithUnreadableMiddleSnapshot();
     const { handed, migrations } = recordingMigrations();
 
     const result = await executeMigrate(migrateOptions(migrationsDir, migrations));
 
-    expect({ ok: result.ok, handed: handed.map((edges) => edges.length) }).toEqual({
-      ok: true,
-      handed: [1],
-    });
+    expect({ ok: result.ok, middle: handed[0]?.[0] }).toEqual({ ok: true, middle: middleSnapshot });
   });
 
-  it('refuses a snapshot the family refuses, naming the file, before the runner runs', async () => {
-    const migrationsDir = await migrationsDirWithSnapshot();
-    const snapshotPath = await addUnknownKeyToSnapshot(migrationsDir);
+  it('applies the pending migration to a database already past that snapshot', async () => {
+    const { migrationsDir } = await migrationsDirWithUnreadableMiddleSnapshot();
     const { handed, migrations } = recordingMigrations();
 
-    const result = await executeMigrate(migrateOptions(migrationsDir, migrations));
+    const result = await executeMigrate(
+      migrateOptions(
+        migrationsDir,
+        migrations,
+        new Map([
+          [
+            'app',
+            {
+              storageHash: MIDDLE,
+              profileHash: '',
+              contractJson: null,
+              canonicalVersion: null,
+              updatedAt: new Date(0),
+              appTag: null,
+              meta: {},
+              invariants: [],
+            },
+          ],
+        ]),
+      ),
+    );
 
-    expect({
-      failure: result.ok
-        ? undefined
-        : {
-            code: result.failure.code,
-            why: result.failure.why,
-            advice: result.failure.nextActions?.map(({ label }) => label),
-          },
-      handed,
-    }).toEqual({
-      failure: {
-        code: 'CONTRACT.VALIDATION_FAILED',
-        why: `Target contract at ${snapshotPath} failed to deserialize: zzz must be removed`,
-        advice: [
-          'If an earlier release wrote the snapshot, follow the app upgrade instructions',
-          'Restore the snapshot from version control; no command rewrites it',
-        ],
-      },
-      handed: [],
+    expect({ ok: result.ok, edges: handed.map((edges) => edges.length) }).toEqual({
+      ok: true,
+      edges: [1],
     });
   });
 });
