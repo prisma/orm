@@ -8,7 +8,8 @@ import postgresTarget from '@internal/target-postgres/runtime';
  * and `Runtime` (the common interface) is the everyday parameter type.
  *
  * `PostgresRuntimeImpl` is the implementing class. It is exported as the Early Access
- * `Ea_PostgresRuntimeImpl` so that other extensions (e.g. Supabase) can subclass it; app code never references it directly.
+ * `Ea_PostgresRuntimeImpl` so that other extensions (e.g. Supabase) can subclass it; app code
+ * never references it directly.
  */
 export interface PostgresRuntime extends Runtime {}
 
