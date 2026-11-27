@@ -135,7 +135,7 @@ Prisma does not know what the data a family carries without owning means, such a
 To compute a storage hash:
 
 1. Take the `storage` section, and remove its `storageHash`: a hash cannot cover itself.
-2. Remove each namespace's `kind`, such as `postgres-schema`. The serializer writes it into the file from the target and the namespace's `id`, which are both in the hash input already. The storage the family's authoring code builds, where a hash is first computed, does not include it.
+2. Remove each namespace's `kind`, such as `postgres-schema`. The serializer writes it into the file from the target and the namespace's `id`, which are both in the hash input already. The storage the family's authoring code builds, where a hash is first computed, holds it only as a non-enumerable field, which is not serialized.
 3. Apply the family's `normalizeStorage`. When the contract is written, the function receives each namespace's `kind`; when a hash is computed, it does not. So the function must not depend on `kind`, or writing and hashing would disagree. Neither of Prisma's families reads it.
 4. Put the result beside the contract's top-level `target` and `targetFamily`: `{ storage, target, targetFamily }`.
 5. Sort every key, as below.
@@ -229,7 +229,7 @@ For example, suppose an extension defines a `searchIndex` entry with a `language
 
 ### The written files
 
-Prisma writes a contract in two forms. The bytes of neither file are hashed; a hash is always computed from the parsed sections.
+Prisma writes a contract in two forms. The bytes of neither file are hashed; a hash is always computed from the sections, never from a file's bytes.
 
 - **The emitted `contract.json`:**
   - is printed with a two-space indent and no trailing newline;
@@ -255,7 +255,7 @@ Every function that computes or checks a storage hash takes the family's `normal
 - A contract written in TypeScript and the same contract written in the Prisma schema language give the same file and the same hashes.
 - A family that forgets to name a default writes the default into every contract. That is visible in the file and in review, and it is harmless to the hash as long as the family always writes it. The opposite mistake, leaving out a value that is not a default, is the one that makes two contracts share a hash, and it is possible only through a rule a family writes on purpose.
 - An author of a type, an extension pack or a target can rely on Prisma to keep a `false`, `[]` or `{}` that appears inside the data they own.
-- The rules, and each family's output for a given contract, do not change within a major version (ADR 332). A family may reorganise its normal form's code, but it must give the same output. So a family cannot name a new default to leave out within a major version: a contract that wrote that field out would get a new hash.
+- The rules, and each family's output for a given contract, do not change within a major version (ADR 332). A family may reorganise its normal form's code, but it must give the same output. So a family cannot start leaving out a field that existing contracts already write: those contracts would get a new hash. A field added for a new feature may have its default left out from the start.
 - Each family's test, `hash-rules.fixed-answers.test.ts`, holds saved contracts to literal hashes. Among them are two contracts that differ only in that one has every named default written out and every list the family sorts in an unsorted order, and the other has the defaults left out and the lists sorted. Both must give the same storage hash.
 
 ## Alternatives considered
