@@ -106,7 +106,7 @@ Release 8.0 is published as `8.0.1`, never `8.0.0`. Every later release starts a
 2. Assemble the upgrade guides and commit the release notes, `docs/releases/v8.0.1.md`, as for a release candidate.
 3. Merge. The git tag and the GitHub Release are `v8.0.1`. From release 8.0 on, a GitHub Release is not marked as a pre-release, whatever the levels of the packages in it.
 
-The scripts do not yet publish a fix to one package alone. Until they do, a fix ships in the next release.
+Anything on `main` can be released at any time. A fix therefore ships in the next release, which is cut early when the fix cannot wait. The scripts publish no fix to one package alone and no release from a branch other than `main`. If `main` ever stops being releasable at any time, that is the moment to add them.
 
 ## Publishing again, or under `beta`
 

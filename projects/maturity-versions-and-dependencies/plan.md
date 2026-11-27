@@ -20,7 +20,7 @@ Slices 1 to 4 are in the order of what cannot be changed after release `8.0`; sl
 | 5 | Every release's notes have a "How to upgrade" section | prisma/orm | nothing | the next release candidate after slice 1 |
 | 6, [TML-3956](https://linear.app/prisma-company/issue/TML-3956) | Apps that create-prisma generates list the platform packages | prisma/create-prisma | the first release of prisma/orm that contains slice 1 | create-prisma's move to that release |
 
-Status: slice 1 merged in prisma/orm#31204, and slice 2 in prisma/orm#31212. Slice 3 is built as three pull requests, in the order its section gives; the first is in review. Slice 4's draft can be written while slice 3 is built. Slice 5 is independent of the others and starts after slice 1's pull request.
+Status: slice 1 merged in prisma/orm#31204, and slice 2 in prisma/orm#31212. Slice 3 is built as two pull requests, in the order its section gives; the first is in review. Slice 4's draft can be written while slice 3 is built. Slice 5 is independent of the others and starts after slice 1's pull request.
 
 ### 6. Apps that create-prisma generates list the platform packages
 
@@ -98,11 +98,11 @@ Agreed with the operator on 2026-11-25, through the stream. From the next releas
 
 **After this slice:** a maintainer can cut release `8.0`, published as `8.0.1`, release a fix to one package, and release a fix to an older major, each with one command and a dry run that shows what will be published.
 
-**Three pull requests, in this order.** The second and third change the same release scripts, so they are built one after the other.
+**Two pull requests, in this order.**
 
 1. **A corrected upgrade guide reaches the user** (the bullet below with that name, and the reading order in the upgrade skills). In review. It does not need a fix release: before release `8.0` a correction ships in the next release candidate.
 2. **Cutting `8.0.1`:** the command that leaves the release candidates, the list of old release candidates to deprecate, the written procedure, and how long a major receives fixes.
-3. **A fix to one package, and a release of an older major,** with the change to `check-upgrade-coverage.mjs` and the sentence in the skills that a step after `8.0.1` may have no guide. Two points need the operator before it is built: where a fix is published from (proposed: a branch per minor, cut from the release commit at the first fix), and what a fix release is called (proposed: a git tag and GitHub release per package, because two packages can both reach `8.3.1`).
+**Not built: a fix to one package, and a release of an older major.** Decided by the operator on 2026-11-27: the team works on the expectation that anything on `main` can be released at any time, so a fix ships in the next release, cut early when it cannot wait. A fix to one package would need a branch per minor, because a fix published from `main` carries whatever else has merged; that machinery is revisited only if the expectation about `main` changes. The bullets below that describe a fix to one package, a release of an older major, their dry runs, and a correction shipped as a fix release are therefore not built. Two small parts of them move to the second pull request: `check-upgrade-coverage.mjs` stops requiring a guide for every release after `8.0.1`, and the skills say that such a step may have no guide.
 
 What the first pull request found, which changes the bullets below:
 
