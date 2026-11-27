@@ -13,7 +13,7 @@
 (not exported) type JwtSecretOption = { readonly jwtSecret: string; readonly jwksUrl?: never; }
 (not exported) type OrmClient<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = ReturnType<typeof orm<TContract, TCollections>>
 (not exported) type ParameterizedOutputTypeFunctions = ParameterizedOutputTypesForTypeParams
-(not exported) type ProfileHash = ProfileHashBase<'833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174'>
+(not exported) type ProfileHash = ProfileHashBase<'18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619'>
 (not exported) type QueryOperationTypes_2 = QueryOperationTypes<CodecTypes_2>
 (not exported) type StorageColumnInputTypes = ColumnTypesFromStorage<ContractBase['storage'], CodecTypes_2, ParameterizedOutputTypeFunctions, ColumnTypeOverrides, 'input'>
 (not exported) type StorageColumnTypes = ColumnTypesFromStorage<ContractBase['storage'], CodecTypes_2, ParameterizedOutputTypeFunctions, ColumnTypeOverrides, 'output'>

@@ -124,6 +124,7 @@
 ./driver/runtime: export default from @prisma/orm-target-sqlite/driver/runtime
 ./driver: everything from @prisma/orm-target-sqlite/driver
 ./family-contract/authored-check-naming: everything from @prisma/orm-family-sql/contract/authored-check-naming
+./family-contract/capability-messages: everything from @prisma/orm-family-sql/contract/capability-messages
 ./family-contract/check-expressions: everything from @prisma/orm-family-sql/contract/check-expressions
 ./family-contract/codec-json-type: everything from @prisma/orm-family-sql/contract/codec-json-type
 ./family-contract/contract-view: everything from @prisma/orm-family-sql/contract/contract-view

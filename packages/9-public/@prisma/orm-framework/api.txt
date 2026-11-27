@@ -928,6 +928,8 @@
 ./components/control: function contractSnapshotJsonSpecifier(snapshotsImportPath: string, storageHash: string): string
 ./components/control: function contractSnapshotTypesSpecifier(snapshotsImportPath: string, storageHash: string): string
 ./components/control: function createControlStack<TFamilyId extends string, TTargetId extends string>(input: CreateControlStackInput<TFamilyId, TTargetId>): ControlStack<TFamilyId, TTargetId>
+./components/control: function databaseCapabilitiesNotProvidedIssue(input: { readonly path: readonly string[]; readonly expected: DiffableNode; readonly notProvided: DatabaseCapabilitiesNotProvided; }): SchemaDiffIssue
+./components/control: function databaseCapabilitiesNotProvidedText(notProvided: DatabaseCapabilitiesNotProvided): string
 ./components/control: function databasePoliciesMovedFailure(checked: DatabasePolicies, found: DatabasePolicies): MigrationRunnerFailure & { readonly code: 'MIGRATION.MARKER_CAS_FAILURE'; }
 ./components/control: function databasePoliciesOf(marker: ContractMarkerRecord | null | undefined): Result<DatabasePolicies, DatabasePoliciesUnreadable>
 ./components/control: function databasePolicyDifferences(declared: DeclaredDatabasePolicies, inForce: DatabasePolicies): readonly DatabasePolicyDifference[]
@@ -998,6 +1000,9 @@
 ./components/control: interface BlockingObject
 ./components/control: interface BlockingObject, readonly required property kind: string
 ./components/control: interface BlockingObject, readonly required property name: string
+./components/control: interface CapabilityFirstAvailable
+./components/control: interface CapabilityFirstAvailable, readonly required property capability: string
+./components/control: interface CapabilityFirstAvailable, readonly required property firstVersion: DatabaseVersion
 ./components/control: interface CheckExpectation
 ./components/control: interface CheckExpectation, readonly required property expects: 'absent' | 'present'
 ./components/control: interface CheckExpectation, readonly required property object: string
@@ -1086,6 +1091,13 @@
 ./components/control: interface CreateControlStackInput, readonly required property family: ControlFamilyDescriptor<TFamilyId>
 ./components/control: interface CreateControlStackInput, readonly required property target: ControlTargetDescriptor<TFamilyId, TTargetId>
 ./components/control: interface CreateControlStackInput<TFamilyId extends string = string, TTargetId extends string = string>
+./components/control: interface DatabaseCapabilitiesNotProvided
+./components/control: interface DatabaseCapabilitiesNotProvided, readonly required property database: string
+./components/control: interface DatabaseCapabilitiesNotProvided, readonly required property findings: readonly [DatabaseCapabilitiesNotProvidedFinding, ...DatabaseCapabilitiesNotProvidedFinding[]]
+./components/control: interface DatabaseCapabilitiesNotProvidedExplanation
+./components/control: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property cause: 'database-capabilities-not-provided'
+./components/control: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property notProvided: DatabaseCapabilitiesNotProvided
+./components/control: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property text: string
 ./components/control: interface DatabasePolicies
 ./components/control: interface DatabasePolicies, readonly required property change: readonly ChangeStrategy[]
 ./components/control: interface DatabasePolicies, readonly required property dataProtection: { readonly dataLoss: DataLossLevel; readonly accessWidening: AccessWideningLevel; }
@@ -1101,7 +1113,7 @@
 ./components/control: interface DefaultFunctionLoweringContext, readonly required property modelName: string
 ./components/control: interface DefaultFunctionLoweringContext, readonly required property sourceId: string
 ./components/control: interface DiffableNode
-./components/control: interface DiffableNode, optional method explainMismatch?(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./components/control: interface DiffableNode, optional method explainMismatch?(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./components/control: interface DiffableNode, readonly optional property dependsOn?: readonly SchemaNodeRef[]
 ./components/control: interface DiffableNode, readonly required property id: string
 ./components/control: interface DiffableNode, readonly required property nodeKind: string
@@ -1243,6 +1255,7 @@
 ./components/control: interface MigrationRunnerFailureMeta
 ./components/control: interface MigrationRunnerFailureMeta, readonly index signature [key: string]: unknown
 ./components/control: interface MigrationRunnerFailureMeta, readonly optional property blockingObjects?: readonly BlockingObject[]
+./components/control: interface MigrationRunnerFailureMeta, readonly optional property databaseCapabilitiesNotProvided?: DatabaseCapabilitiesNotProvided
 ./components/control: interface MigrationRunnerFailureMeta, readonly optional property databaseUnchanged?: boolean
 ./components/control: interface MigrationRunnerFailureMeta, readonly optional property failedCheck?: FailedCheck
 ./components/control: interface MigrationRunnerFailureMeta, readonly optional property failedTypeChange?: FailedTypeChange
@@ -1276,9 +1289,6 @@
 ./components/control: interface MigrationScaffoldContext, readonly required property toHash: string
 ./components/control: interface MigrationTemporaryValue extends MigrationOperationSubject
 ./components/control: interface MigrationTemporaryValue, readonly required property value: string
-./components/control: interface MismatchExplanation
-./components/control: interface MismatchExplanation, readonly required property cause: MismatchCause
-./components/control: interface MismatchExplanation, readonly required property text: string
 ./components/control: interface ModelCoordinate
 ./components/control: interface ModelCoordinate, readonly required property model: string
 ./components/control: interface ModelCoordinate, readonly required property namespaceId: NamespaceId
@@ -1287,6 +1297,9 @@
 ./components/control: interface ModelCoordinateJson, readonly required property model: string
 ./components/control: interface MutationDefaultGeneratorDescriptor
 ./components/control: interface MutationDefaultGeneratorDescriptor, readonly required property id: string
+./components/control: interface NodeMismatchExplanation
+./components/control: interface NodeMismatchExplanation, readonly required property cause: 'differs' | 'possibly-equivalent'
+./components/control: interface NodeMismatchExplanation, readonly required property text: string
 ./components/control: interface OpFactoryCall
 ./components/control: interface OpFactoryCall, readonly required property factoryName: string
 ./components/control: interface OpFactoryCall, readonly required property label: string
@@ -1476,7 +1489,9 @@
 ./components/control: type ChangeStrategy = (typeof CHANGE_STRATEGIES)[number]
 ./components/control: type ControlMutationDefaultRegistry = ReadonlyMap<string, ControlMutationDefaultEntry>
 ./components/control: type DataLossLevel = (typeof DATA_LOSS_LEVELS)[number]
+./components/control: type DatabaseCapabilitiesNotProvidedFinding = { readonly kind: 'missing-capabilities'; readonly databaseVersion: DatabaseVersion; readonly capabilities: readonly CapabilityFirstAvailable[]; } | { readonly kind: 'older-than-supported'; readonly databaseVersion: DatabaseVersion; readonly oldestSupported: DatabaseVersion; } | { readonly kind: 'version-not-read'; readonly versionQuery: string; }
 ./components/control: type DatabasePolicyDifference = { readonly setting: 'change'; readonly declared: readonly ChangeStrategy[]; readonly inForce: readonly ChangeStrategy[]; } | { readonly setting: 'dataProtection.accessWidening'; readonly declared: AccessWideningLevel; readonly inForce: AccessWideningLevel; } | { readonly setting: 'dataProtection.dataLoss'; readonly declared: DataLossLevel; readonly inForce: DataLossLevel; }
+./components/control: type DatabaseVersion = number | string
 ./components/control: type DiffSubjectGranularity = 'auxiliary' | 'entity' | 'field' | 'namespace' | 'structural'
 ./components/control: type ExpectationFailureReason = 'not-equal' | 'not-expected' | 'not-found'
 ./components/control: type FailedTypeChange = FailedCast | FailedConversion
@@ -1491,7 +1506,8 @@
 ./components/control: type MigrationStatementJson = { readonly kind: 'backfill' | 'convert'; readonly entity: 'field'; readonly field: FieldCoordinateJson; } | { readonly kind: 'backfill'; readonly entity: 'valueObjectField'; readonly field: ValueObjectFieldCoordinateJson; } | { readonly kind: 'convert'; readonly entity: 'model'; readonly model: ModelCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'enumValue'; readonly from: EnumValueCoordinateJson; readonly to: EnumValueCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'field'; readonly from: FieldCoordinateJson; readonly to: FieldCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'model'; readonly from: ModelCoordinateJson; readonly to: ModelCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'namespace'; readonly from: { readonly namespaceId: NamespaceId; }; readonly to: { readonly namespaceId: NamespaceId; }; } | { readonly kind: 'rename'; readonly entity: 'valueObjectField'; readonly from: ValueObjectFieldCoordinateJson; readonly to: ValueObjectFieldCoordinateJson; }
 ./components/control: type MigrationSubject = ({ readonly kind: 'enumValue'; } & EnumValueCoordinate) | ({ readonly kind: 'field'; } & FieldCoordinate) | ({ readonly kind: 'model'; } & ModelCoordinate) | ({ readonly kind: 'valueObjectField'; } & ValueObjectFieldCoordinate) | { readonly kind: 'storage'; readonly name: string; }
 ./components/control: type MigrationSubjectJson = ({ readonly kind: 'enumValue'; } & EnumValueCoordinateJson) | ({ readonly kind: 'field'; } & FieldCoordinateJson) | ({ readonly kind: 'model'; } & ModelCoordinateJson) | ({ readonly kind: 'valueObjectField'; } & ValueObjectFieldCoordinateJson) | { readonly kind: 'storage'; readonly name: string; }
-./components/control: type MismatchCause = 'differs' | 'possibly-equivalent'
+./components/control: type MismatchCause = MismatchExplanation['cause']
+./components/control: type MismatchExplanation = DatabaseCapabilitiesNotProvidedExplanation | NodeMismatchExplanation
 ./components/control: type ResolvedMigrationStatement = ResolvedFieldBackfillStatement | ResolvedFieldConvertStatement | ResolvedRenameStatement | ResolvedValueObjectFieldBackfillStatement | ResolvedVariantConvertStatement
 ./components/control: type ResolvedRenameStatement = ResolvedEnumValueRenameStatement | ResolvedFieldRenameStatement | ResolvedModelRenameStatement | ResolvedNamespaceRenameStatement | ResolvedValueObjectFieldRenameStatement
 ./components/control: type SchemaLabelPartRole = 'detail' | 'keyword' | 'name' | 'title'
@@ -2112,6 +2128,8 @@
 ./components: function dataTypeParams(type: DataType, typeParams: unknown): DataTypeParams
 ./components: function dataTypeParamsProblem(type: DataType, params: Readonly<Record<string, unknown>>): DataTypeParamsProblem | undefined
 ./components: function dataTypeValuesEqual(a: DataTypeValue, b: DataTypeValue): boolean
+./components: function databaseCapabilitiesNotProvidedIssue(input: { readonly path: readonly string[]; readonly expected: DiffableNode; readonly notProvided: DatabaseCapabilitiesNotProvided; }): SchemaDiffIssue
+./components: function databaseCapabilitiesNotProvidedText(notProvided: DatabaseCapabilitiesNotProvided): string
 ./components: function databasePoliciesMovedFailure(checked: DatabasePolicies, found: DatabasePolicies): MigrationRunnerFailure & { readonly code: 'MIGRATION.MARKER_CAS_FAILURE'; }
 ./components: function databasePoliciesOf(marker: ContractMarkerRecord | null | undefined): Result<DatabasePolicies, DatabasePoliciesUnreadable>
 ./components: function databasePolicyDifferences(declared: DeclaredDatabasePolicies, inForce: DatabasePolicies): readonly DatabasePolicyDifference[]
@@ -2497,6 +2515,9 @@
 ./components: interface BlockingObject
 ./components: interface BlockingObject, readonly required property kind: string
 ./components: interface BlockingObject, readonly required property name: string
+./components: interface CapabilityFirstAvailable
+./components: interface CapabilityFirstAvailable, readonly required property capability: string
+./components: interface CapabilityFirstAvailable, readonly required property firstVersion: DatabaseVersion
 ./components: interface CheckExpectation
 ./components: interface CheckExpectation, readonly required property expects: 'absent' | 'present'
 ./components: interface CheckExpectation, readonly required property object: string
@@ -2710,6 +2731,13 @@
 ./components: interface DataTypeSupport, readonly required property dataTypeOfCodec: (codecId: string) => DataTypeId | undefined
 ./components: interface DataTypeSupport, readonly required property entries: Readonly<Record<string, DataTypeAuthoringEntry>>
 ./components: interface DataTypeSupport, readonly required property lookup: DataTypeLookup
+./components: interface DatabaseCapabilitiesNotProvided
+./components: interface DatabaseCapabilitiesNotProvided, readonly required property database: string
+./components: interface DatabaseCapabilitiesNotProvided, readonly required property findings: readonly [DatabaseCapabilitiesNotProvidedFinding, ...DatabaseCapabilitiesNotProvidedFinding[]]
+./components: interface DatabaseCapabilitiesNotProvidedExplanation
+./components: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property cause: 'database-capabilities-not-provided'
+./components: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property notProvided: DatabaseCapabilitiesNotProvided
+./components: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property text: string
 ./components: interface DatabasePolicies
 ./components: interface DatabasePolicies, readonly required property change: readonly ChangeStrategy[]
 ./components: interface DatabasePolicies, readonly required property dataProtection: { readonly dataLoss: DataLossLevel; readonly accessWidening: AccessWideningLevel; }
@@ -2737,7 +2765,7 @@
 ./components: interface DefineAnnotationOptions, readonly required property namespace: string
 ./components: interface DefineAnnotationOptions<Kinds extends OperationKind>
 ./components: interface DiffableNode
-./components: interface DiffableNode, optional method explainMismatch?(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./components: interface DiffableNode, optional method explainMismatch?(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./components: interface DiffableNode, readonly optional property dependsOn?: readonly SchemaNodeRef[]
 ./components: interface DiffableNode, readonly required property id: string
 ./components: interface DiffableNode, readonly required property nodeKind: string
@@ -3003,6 +3031,7 @@
 ./components: interface MigrationRunnerFailureMeta
 ./components: interface MigrationRunnerFailureMeta, readonly index signature [key: string]: unknown
 ./components: interface MigrationRunnerFailureMeta, readonly optional property blockingObjects?: readonly BlockingObject[]
+./components: interface MigrationRunnerFailureMeta, readonly optional property databaseCapabilitiesNotProvided?: DatabaseCapabilitiesNotProvided
 ./components: interface MigrationRunnerFailureMeta, readonly optional property databaseUnchanged?: boolean
 ./components: interface MigrationRunnerFailureMeta, readonly optional property failedCheck?: FailedCheck
 ./components: interface MigrationRunnerFailureMeta, readonly optional property failedTypeChange?: FailedTypeChange
@@ -3036,9 +3065,6 @@
 ./components: interface MigrationScaffoldContext, readonly required property toHash: string
 ./components: interface MigrationTemporaryValue extends MigrationOperationSubject
 ./components: interface MigrationTemporaryValue, readonly required property value: string
-./components: interface MismatchExplanation
-./components: interface MismatchExplanation, readonly required property cause: MismatchCause
-./components: interface MismatchExplanation, readonly required property text: string
 ./components: interface ModelCoordinate
 ./components: interface ModelCoordinate, readonly required property model: string
 ./components: interface ModelCoordinate, readonly required property namespaceId: NamespaceId
@@ -3066,6 +3092,9 @@
 ./components: interface Namespace, readonly optional property isUnbound?: boolean
 ./components: interface Namespace, readonly required property entries: Readonly<Record<string, Readonly<Record<string, unknown>>>>
 ./components: interface Namespace, readonly required property kind: string
+./components: interface NodeMismatchExplanation
+./components: interface NodeMismatchExplanation, readonly required property cause: 'differs' | 'possibly-equivalent'
+./components: interface NodeMismatchExplanation, readonly required property text: string
 ./components: interface NumberClassification
 ./components: interface NumberClassification, readonly required property form: 'number' | 'text'
 ./components: interface NumberClassification, readonly required property type: DataTypeId
@@ -3590,7 +3619,9 @@
 ./components: type DataTypeSpelling = (json: JsonValue, params: DataTypeParams) => JsonValue
 ./components: type DataTypeValue<J extends JsonValue = JsonValue> = DataTypeValueRecord<J>
 ./components: type DataTypeWrittenForm = { readonly kind: 'plain'; readonly syntax: 'boolean' | 'string'; readonly parse: (text: string) => JsonValue; } | { readonly kind: 'plain'; readonly syntax: 'number'; readonly types: readonly DataTypeId[]; readonly classify: (text: string) => undefined | { readonly type: DataTypeId; readonly value: JsonValue; }; } | { readonly kind: 'tag'; readonly tag: string; readonly parse: (text: string) => JsonValue; }
+./components: type DatabaseCapabilitiesNotProvidedFinding = { readonly kind: 'missing-capabilities'; readonly databaseVersion: DatabaseVersion; readonly capabilities: readonly CapabilityFirstAvailable[]; } | { readonly kind: 'older-than-supported'; readonly databaseVersion: DatabaseVersion; readonly oldestSupported: DatabaseVersion; } | { readonly kind: 'version-not-read'; readonly versionQuery: string; }
 ./components: type DatabasePolicyDifference = { readonly setting: 'change'; readonly declared: readonly ChangeStrategy[]; readonly inForce: readonly ChangeStrategy[]; } | { readonly setting: 'dataProtection.accessWidening'; readonly declared: AccessWideningLevel; readonly inForce: AccessWideningLevel; } | { readonly setting: 'dataProtection.dataLoss'; readonly declared: DataLossLevel; readonly inForce: DataLossLevel; }
+./components: type DatabaseVersion = number | string
 ./components: type DateTimeShape = 'date' | 'dateTime' | 'instant' | 'time' | 'timeWithOffset'
 ./components: type DefaultNamespaceEntries<TStorage extends { readonly namespaces: object; }> = TStorage['namespaces'] extends Record<typeof UNBOUND_NAMESPACE_ID, { readonly entries: infer E; }> ? E : never
 ./components: type DiffSubjectGranularity = 'auxiliary' | 'entity' | 'field' | 'namespace' | 'structural'
@@ -3620,7 +3651,8 @@
 ./components: type MigrationStatementJson = { readonly kind: 'backfill' | 'convert'; readonly entity: 'field'; readonly field: FieldCoordinateJson; } | { readonly kind: 'backfill'; readonly entity: 'valueObjectField'; readonly field: ValueObjectFieldCoordinateJson; } | { readonly kind: 'convert'; readonly entity: 'model'; readonly model: ModelCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'enumValue'; readonly from: EnumValueCoordinateJson; readonly to: EnumValueCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'field'; readonly from: FieldCoordinateJson; readonly to: FieldCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'model'; readonly from: ModelCoordinateJson; readonly to: ModelCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'namespace'; readonly from: { readonly namespaceId: NamespaceId; }; readonly to: { readonly namespaceId: NamespaceId; }; } | { readonly kind: 'rename'; readonly entity: 'valueObjectField'; readonly from: ValueObjectFieldCoordinateJson; readonly to: ValueObjectFieldCoordinateJson; }
 ./components: type MigrationSubject = ({ readonly kind: 'enumValue'; } & EnumValueCoordinate) | ({ readonly kind: 'field'; } & FieldCoordinate) | ({ readonly kind: 'model'; } & ModelCoordinate) | ({ readonly kind: 'valueObjectField'; } & ValueObjectFieldCoordinate) | { readonly kind: 'storage'; readonly name: string; }
 ./components: type MigrationSubjectJson = ({ readonly kind: 'enumValue'; } & EnumValueCoordinateJson) | ({ readonly kind: 'field'; } & FieldCoordinateJson) | ({ readonly kind: 'model'; } & ModelCoordinateJson) | ({ readonly kind: 'valueObjectField'; } & ValueObjectFieldCoordinateJson) | { readonly kind: 'storage'; readonly name: string; }
-./components: type MismatchCause = 'differs' | 'possibly-equivalent'
+./components: type MismatchCause = MismatchExplanation['cause']
+./components: type MismatchExplanation = DatabaseCapabilitiesNotProvidedExplanation | NodeMismatchExplanation
 ./components: type MutationDefaultsOp = 'create' | 'update'
 ./components: type NamespacedEntities<TStorage extends { readonly namespaces: object; }, TBuiltinKinds extends string> = { readonly [Ns in keyof TStorage['namespaces']]: SingleNamespaceView<EntriesOf<TStorage['namespaces'][Ns]>, TBuiltinKinds>; }
 ./components: type NoInputAggregateDescriptor = AggregateDescriptorBase & { readonly input: { readonly kind: 'none'; }; readonly output: NamedAggregateOutput; }
@@ -3888,16 +3920,16 @@
 ./contract/enum-accessor: type EnumValues<A> = A extends { readonly values: ReadonlyArray<infer V>; } ? V : never
 ./contract/enum-accessor: type NamespaceEnumAccessors<TContract extends Contract, NsId extends keyof TContract['domain']['namespaces']> = EnumEntriesToAccessors<NamespaceEnumEntries<TContract['domain']['namespaces'][NsId]>>
 ./contract/enum-accessor: type NamespacedEnums<TContract extends Contract> = { readonly [Ns in keyof TContract['domain']['namespaces']]: NamespaceEnumAccessors<TContract, Ns>; }
-./contract/format-version: const CONTRACT_FORMAT_VERSIONS: readonly [1]
+./contract/format-version: const NEWEST_CONTRACT_FORMAT_VERSION: NewestContractFormatVersion
+./contract/format-version: function convertContractDocument(document: unknown, location?: ContractFileLocation): StoredDocument
 ./contract/format-version: function isFormatVersionError(error: unknown): error is StructuredError
-./contract/format-version: function readFormatVersion<TVersion extends number>(document: unknown, options: ReadFormatVersionOptions<TVersion>): TVersion
-./contract/format-version: interface ReadFormatVersionOptions, readonly optional property bundledIn?: string | undefined
-./contract/format-version: interface ReadFormatVersionOptions, readonly optional property path?: string | undefined
-./contract/format-version: interface ReadFormatVersionOptions, readonly required property kind: StoredFileKind
-./contract/format-version: interface ReadFormatVersionOptions, readonly required property knownVersions: readonly TVersion[]
-./contract/format-version: interface ReadFormatVersionOptions<TVersion extends number>
-./contract/format-version: type ContractFormatVersion = (typeof CONTRACT_FORMAT_VERSIONS)[number]
-./contract/format-version: type StoredFileKind = 'contract' | 'migration' | 'ref'
+./contract/format-version: interface ContractFileLocation extends StoredFileLocation
+./contract/format-version: interface ContractFileLocation, readonly optional property snapshot?: boolean | undefined
+./contract/format-version: interface StoredFileLocation
+./contract/format-version: interface StoredFileLocation, readonly optional property bundledIn?: string | undefined
+./contract/format-version: interface StoredFileLocation, readonly optional property path?: string | undefined
+./contract/format-version: type NewestContractFormatVersion = NewestFormatVersion<typeof CONTRACT_FORMAT_VERSIONS_READ>
+./contract/format-version: type StoredDocument = Readonly<Record<string, unknown>>
 ./contract/hashing-utils: function compareByNameProperty(a: unknown, b: unknown): number
 ./contract/hashing-utils: function compareCodeUnits(a: string, b: string): number
 ./contract/hashing-utils: function createStorageSort(targets: readonly NamedArraySortTarget[], compare?: (a: unknown, b: unknown) => number): NormalizeStorage
@@ -3932,9 +3964,32 @@
 ./contract/hashing: interface HashedContractSections, readonly required property targetFamily: string
 ./contract/hashing: type NormalizeStorage = (storage: unknown) => unknown
 ./contract/hashing: type SerializeContract = (contract: Contract) => JsonObject
+./contract/internal/format-version: const CONTRACT_FORMAT: StoredFormat<typeof CONTRACT_FORMAT_VERSIONS_READ>
+./contract/internal/format-version: const CONTRACT_FORMAT_VERSIONS_READ: readonly [0, 1]
+./contract/internal/format-version: const NEWEST_CONTRACT_FORMAT_VERSION: NewestContractFormatVersion
 ./contract/internal/format-version: function carriesFormatVersion(value: unknown): boolean
+./contract/internal/format-version: function convertContractDocument(document: unknown, location?: ContractFileLocation): StoredDocument
 ./contract/internal/format-version: function formatVersionErrorAt(error: StructuredError, path: string): StructuredError
 ./contract/internal/format-version: function isContractBuiltInMemory(value: unknown): boolean
+./contract/internal/format-version: function readStoredDocument<TVersions extends FormatVersionList>(document: unknown, format: StoredFormat<TVersions>, location?: StoredFileLocation): StoredDocumentInNewestVersion<TVersions>
+./contract/internal/format-version: interface ContractFileLocation extends StoredFileLocation
+./contract/internal/format-version: interface ContractFileLocation, readonly optional property snapshot?: boolean | undefined
+./contract/internal/format-version: interface StoredDocumentInNewestVersion, readonly required property document: StoredDocument
+./contract/internal/format-version: interface StoredDocumentInNewestVersion, readonly required property formatVersion: NewestFormatVersion<TVersions>
+./contract/internal/format-version: interface StoredDocumentInNewestVersion<TVersions extends FormatVersionList>
+./contract/internal/format-version: interface StoredFileLocation
+./contract/internal/format-version: interface StoredFileLocation, readonly optional property bundledIn?: string | undefined
+./contract/internal/format-version: interface StoredFileLocation, readonly optional property path?: string | undefined
+./contract/internal/format-version: interface StoredFormat, readonly required property conversions: Readonly<Record<Exclude<TVersions[number], TVersions[0]>, StoredConversion>> & Readonly<Partial<Record<TVersions[0], never>>>
+./contract/internal/format-version: interface StoredFormat, readonly required property kind: StoredFileKind
+./contract/internal/format-version: interface StoredFormat, readonly required property versions: TVersions
+./contract/internal/format-version: interface StoredFormat<TVersions extends FormatVersionList>
+./contract/internal/format-version: type FormatVersionList = readonly [number, ...number[]]
+./contract/internal/format-version: type NewestContractFormatVersion = NewestFormatVersion<typeof CONTRACT_FORMAT_VERSIONS_READ>
+./contract/internal/format-version: type NewestFormatVersion<TVersions extends FormatVersionList> = TVersions extends readonly [...unknown[], infer TNewest extends number] ? TNewest : never
+./contract/internal/format-version: type StoredConversion = (document: StoredDocument) => StoredDocument
+./contract/internal/format-version: type StoredDocument = Readonly<Record<string, unknown>>
+./contract/internal/format-version: type StoredFileKind = 'contract' | 'migration' | 'ref'
 ./contract/is-plain-record: function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>>
 ./contract/resolve-domain-model: function resolveDomainModel(domain: ApplicationDomain, modelName: string): ResolvedDomainModel | undefined
 ./contract/resolve-domain-model: interface ResolvedDomainModel
@@ -4127,12 +4182,12 @@
 ./contract: class ContractValidationError, readonly required property code = "CONTRACT.VALIDATION_FAILED"
 ./contract: class ContractValidationError, readonly required property meta: Readonly<Record<string, unknown>> | undefined
 ./contract: class ContractValidationError, readonly required property phase: ContractValidationPhase
-./contract: const CONTRACT_FORMAT_VERSIONS: readonly [1]
 ./contract: const ContractExecutionSectionSchema: ObjectType<ContractExecutionSection, {}>
 ./contract: const ContractFieldTypeSchema: ObjectType<{ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "union"; members: ({ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; })[]; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; }, {}>
 ./contract: const ContractValueObjectFieldSchema: ObjectType<{ nullable: boolean; type: { kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "union"; members: ({ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; })[]; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; }; many?: false | { elementNullable: boolean; }; dict?: true; valueSet?: { plane: "storage"; namespaceId: string; entityKind: "valueSet"; entityName: string; spaceId?: string; }; }, {}>
 ./contract: const ContractValueObjectSchema: ObjectType<{ fields: { [x: string]: { nullable: boolean; type: { kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "union"; members: ({ kind: "scalar"; codecId: string; typeParams?: Record<string, unknown>; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; })[]; } | { kind: "valueObject"; plane: "storage"; namespaceId: string; entityKind: "valueObject"; entityName: string; }; many?: false | { elementNullable: boolean; }; dict?: true; valueSet?: { plane: "storage"; namespaceId: string; entityKind: "valueSet"; entityName: string; spaceId?: string; }; }; }; }, {}>
 ./contract: const CrossReferenceSchema: ObjectType<CrossReference, {}>
+./contract: const NEWEST_CONTRACT_FORMAT_VERSION: NewestContractFormatVersion
 ./contract: const UNBOUND_DOMAIN_NAMESPACE_ID: "__unbound__"
 ./contract: export type const $: unique symbol
 ./contract: function applySpecifierDefaultControlPolicy(contract: Contract, specifierDefault: ControlPolicy | undefined): Contract
@@ -4148,6 +4203,7 @@
 ./contract: function computeExecutionHash(args: { target: string; targetFamily: string; execution: Record<string, unknown>; }): ExecutionHashBase<string>
 ./contract: function computeProfileHash(args: { target: string; targetFamily: string; capabilities: Record<string, Record<string, boolean>>; }): ProfileHashBase<string>
 ./contract: function computeStorageHash(args: ComputeStorageHashArgs): StorageHashBase<string>
+./contract: function convertContractDocument(document: unknown, location?: ContractFileLocation): StoredDocument
 ./contract: function coreHash<const T extends string>(value: T): StorageHashBase<T>
 ./contract: function createEnumAccessor(contractEnum: ContractEnum, codec?: EnumMemberCodec): EnumAccessor
 ./contract: function createStorageSort(targets: readonly NamedArraySortTarget[], compare?: (a: unknown, b: unknown) => number): NormalizeStorage
@@ -4162,7 +4218,6 @@
 ./contract: function isFormatVersionError(error: unknown): error is StructuredError
 ./contract: function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>>
 ./contract: function profileHash<const T extends string>(value: T): ProfileHashBase<T>
-./contract: function readFormatVersion<TVersion extends number>(document: unknown, options: ReadFormatVersionOptions<TVersion>): TVersion
 ./contract: function removedDomainKeyProblems(contract: unknown): readonly string[]
 ./contract: function resolveDomainModel(domain: ApplicationDomain, modelName: string): ResolvedDomainModel | undefined
 ./contract: function soleDomainNamespaceId(domain: { readonly namespaces: Readonly<Record<string, unknown>>; }): string
@@ -4194,6 +4249,8 @@
 ./contract: interface Contract, readonly required property target: string
 ./contract: interface Contract, readonly required property targetFamily: string
 ./contract: interface Contract<TStorage extends StorageBase = StorageBase>
+./contract: interface ContractFileLocation extends StoredFileLocation
+./contract: interface ContractFileLocation, readonly optional property snapshot?: boolean | undefined
 ./contract: interface ContractMarkerRecord
 ./contract: interface ContractMarkerRecord, readonly required property appTag: null | string
 ./contract: interface ContractMarkerRecord, readonly required property canonicalVersion: null | number
@@ -4294,11 +4351,6 @@
 ./contract: interface PlanMeta, readonly required property lane: string
 ./contract: interface PlanMeta, readonly required property storageHash: string
 ./contract: interface PlanMeta, readonly required property target: string
-./contract: interface ReadFormatVersionOptions, readonly optional property bundledIn?: string | undefined
-./contract: interface ReadFormatVersionOptions, readonly optional property path?: string | undefined
-./contract: interface ReadFormatVersionOptions, readonly required property kind: StoredFileKind
-./contract: interface ReadFormatVersionOptions, readonly required property knownVersions: readonly TVersion[]
-./contract: interface ReadFormatVersionOptions<TVersion extends number>
 ./contract: interface ResolvedDomainModel
 ./contract: interface ResolvedDomainModel, readonly required property model: ContractModelBase
 ./contract: interface ResolvedDomainModel, readonly required property namespaceId: string
@@ -4313,6 +4365,9 @@
 ./contract: interface StorageNamespace
 ./contract: interface StorageNamespace, readonly required property entries: Readonly<Record<string, StorageEntitySlot>>
 ./contract: interface StorageNamespace, readonly required property id: string
+./contract: interface StoredFileLocation
+./contract: interface StoredFileLocation, readonly optional property bundledIn?: string | undefined
+./contract: interface StoredFileLocation, readonly optional property path?: string | undefined
 ./contract: interface ValueObjectReference extends EntityCoordinate<'storage', 'valueObject'>
 ./contract: interface ValueObjectReference, readonly required property kind: 'valueObject'
 ./contract: interface ValueSetRef extends EntityCoordinate<'domain' | 'storage', 'enum' | 'valueSet'>
@@ -4329,7 +4384,6 @@
 ./contract: type ContractExecutionSection<THash extends string = string> = { readonly executionHash: ExecutionHashBase<THash>; readonly mutations: { readonly defaults: ReadonlyArray<ExecutionMutationDefault>; }; }
 ./contract: type ContractField = { readonly nullable: boolean; readonly type: ContractFieldType; readonly many?: false | { readonly elementNullable: boolean; }; readonly dict?: true; readonly valueSet?: ValueSetRef; }
 ./contract: type ContractFieldType = ScalarFieldType | UnionFieldType | ValueObjectReference
-./contract: type ContractFormatVersion = (typeof CONTRACT_FORMAT_VERSIONS)[number]
 ./contract: type ContractManyToManyRelation = { readonly to: CrossReference; readonly cardinality: 'N:M'; readonly on: ContractRelationOn; readonly through: ContractRelationThrough; }
 ./contract: type ContractNonJunctionRelation = ContractToManyRelation | ContractToOneRelation
 ./contract: type ContractReferenceRelation = ContractManyToManyRelation | ContractNonJunctionRelation
@@ -4364,6 +4418,7 @@
 ./contract: type NamespaceEnumAccessors<TContract extends Contract, NsId extends keyof TContract['domain']['namespaces']> = EnumEntriesToAccessors<NamespaceEnumEntries<TContract['domain']['namespaces'][NsId]>>
 ./contract: type NamespaceId = string & { readonly __brand: 'NamespaceId'; }
 ./contract: type NamespacedEnums<TContract extends Contract> = { readonly [Ns in keyof TContract['domain']['namespaces']]: NamespaceEnumAccessors<TContract, Ns>; }
+./contract: type NewestContractFormatVersion = NewestFormatVersion<typeof CONTRACT_FORMAT_VERSIONS_READ>
 ./contract: type NormalizeStorage = (storage: unknown) => unknown
 ./contract: type ParameterizedOutputType<TypeFunctions extends ParameterizedOutputTypesFunction, CodecId, TypeParams extends Record<string, unknown>, Plain> = [RefinedOutputType<TypeFunctions, CodecId, TypeParams>] extends [never] ? Plain : RefinedOutputType<TypeFunctions, CodecId, TypeParams>
 ./contract: type ProfileHashBase<THash extends string> = THash & Brand<'ProfileHash'>
@@ -4373,7 +4428,7 @@
 ./contract: type StorageEntitySlot = Readonly<Record<string, unknown>>
 ./contract: type StorageHashBase<THash extends string> = THash & Brand<'StorageHash'>
 ./contract: type StorageSortPathSegment = '*' | string
-./contract: type StoredFileKind = 'contract' | 'migration' | 'ref'
+./contract: type StoredDocument = Readonly<Record<string, unknown>>
 ./contract: type StoredValueType<Item, CodecId, TypeParams, Override, CodecTypes, ParameterizedOutputs extends ParameterizedOutputTypesFunction, Side extends ValueTypeSide> = Item extends { readonly many?: infer Many; readonly dict?: infer Dictionary; } ? ScalarValueType<CodecId, TypeParams, Override, NullableFlag<Item>, Many, Dictionary, CodecTypes, ParameterizedOutputs, Side> : never
 ./contract: type UnionFieldType = { readonly kind: 'union'; readonly members: ReadonlyArray<ScalarFieldType | ValueObjectReference>; }
 ./contract: type ValueObjectTypesFromStorage<StorageNamespaces, CodecTypes, ParameterizedOutputs extends ParameterizedOutputTypesFunction, Overrides, Side extends ValueTypeSide> = { readonly [Ns in keyof StorageNamespaces]: { readonly [V in keyof Lookup<Lookup<StorageNamespaces[Ns], 'entries'>, 'valueObject'>]: ValueObjectType<Ns, V, ContractParts<StorageNamespaces, Overrides>, CodecTypes, ParameterizedOutputs, Side>; }; }
@@ -4397,7 +4452,7 @@
 ./errors/control: function errorConfigVersionMarkerMissing(configPath?: string): CliStructuredError
 ./errors/control: function errorContractConfigMissing(options?: { readonly why?: string; }): CliStructuredError
 ./errors/control: function errorContractMissingExtensions(options: { readonly missingExtensions: readonly string[]; readonly providedComponentIds: readonly string[]; }): CliStructuredError
-./errors/control: function errorContractValidationFailed(reason: string, options?: { readonly where?: { readonly path?: string; readonly line?: number; }; readonly cause?: unknown; readonly meta?: Record<string, unknown> | undefined; }): CliStructuredError
+./errors/control: function errorContractValidationFailed(reason: string, options?: { readonly where?: { readonly path?: string; readonly line?: number; }; readonly cause?: unknown; readonly meta?: Record<string, unknown> | undefined; readonly artifact?: 'contract' | 'snapshot'; }): CliStructuredError
 ./errors/control: function errorDatabaseConnectionRequired(options?: { readonly why?: string; readonly commandName?: string; readonly retryCommand?: string; readonly missingFlags?: readonly string[]; }): CliStructuredError
 ./errors/control: function errorDriverRequired(options?: { readonly why?: string; }): CliStructuredError
 ./errors/control: function errorEnumCodecNotInPackStack(options: { readonly codecId: string; }): CliStructuredError
@@ -4475,7 +4530,7 @@
 ./errors: function errorConfigVersionMarkerMissing(configPath?: string): CliStructuredError
 ./errors: function errorContractConfigMissing(options?: { readonly why?: string; }): CliStructuredError
 ./errors: function errorContractMissingExtensions(options: { readonly missingExtensions: readonly string[]; readonly providedComponentIds: readonly string[]; }): CliStructuredError
-./errors: function errorContractValidationFailed(reason: string, options?: { readonly where?: { readonly path?: string; readonly line?: number; }; readonly cause?: unknown; readonly meta?: Record<string, unknown> | undefined; }): CliStructuredError
+./errors: function errorContractValidationFailed(reason: string, options?: { readonly where?: { readonly path?: string; readonly line?: number; }; readonly cause?: unknown; readonly meta?: Record<string, unknown> | undefined; readonly artifact?: 'contract' | 'snapshot'; }): CliStructuredError
 ./errors: function errorDataTransformContractMismatch(options: { readonly dataTransformName: string; readonly expected: string; readonly actual: string; }): CliStructuredError
 ./errors: function errorDatabaseConnectionRequired(options?: { readonly why?: string; readonly commandName?: string; readonly retryCommand?: string; readonly missingFlags?: readonly string[]; }): CliStructuredError
 ./errors: function errorDriverRequired(options?: { readonly why?: string; }): CliStructuredError
