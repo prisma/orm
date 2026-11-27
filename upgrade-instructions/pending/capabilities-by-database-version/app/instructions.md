@@ -9,7 +9,7 @@ changes:
         - '@prisma/orm-postgres/(?:config|contract-builder)[''"]'
   - id: postgres-config-without-define-config-passes-capabilities
     summary: |
-      A config that builds a PostgreSQL contract source itself, with `prismaContract` or `prisma7Contract` instead of the PostgreSQL `defineConfig`, passes the source `capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])` from `@prisma/orm-postgres/config`. Without it the contract lists no capabilities.
+      A config that builds a PostgreSQL contract source itself, with `prismaContract` or `prisma7Contract`, passes the source `capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])` from `@prisma/orm-postgres/config`. Without it, a source passed to the PostgreSQL `defineConfig` requires the newest version's list and the driver's and `prisma contract emit` warns, until Prisma 8.0; a config built without the PostgreSQL `defineConfig` writes a contract that lists no capabilities.
     detection:
       glob: "**/*.{ts,mts,cts,js,mjs,cjs}"
       matches:
@@ -56,9 +56,18 @@ These changes apply to a project on `@prisma/orm-postgres`. Do them in the order
 
 A capability is a fact that a database version or a connection provides, such as `sql.lateral` or `sql.interactiveTransactions`, and that a contract requires. A contract's capabilities used to come from the adapter. Now you write, where the contract is written, the list of every capability the contract requires. Nothing is added to it.
 
-The list is recommended now and required from Prisma 8.0. A contract that does not list them requires the newest PostgreSQL version's list and the driver's, the list `prisma orm init` writes, and `prisma contract emit` warns until you add it. For a Prisma schema contract the warning reads:
+The list is recommended now and required from Prisma 8.0. A contract that does not list them requires the newest PostgreSQL version's list and the driver's, the list `prisma orm init` writes, and the commands that load the contract source, `prisma contract emit` and `prisma contract print` among them, warn until you add it. The warning shows what to write, with its import, as `prisma orm init` writes it. For a Prisma schema given as `contract: './prisma/contract.prisma'` it reads:
 
-> Your contract does not list the capabilities it requires, so it requires those of the newest PostgreSQL version and of the driver. Add `requiredCapabilities: [...postgres18, ...postgresDriver]` beside the contract path './prisma/contract.prisma' in the config, as `contract: { path, requiredCapabilities }`, with `import { postgres18, postgresDriver } from '@prisma/orm-postgres/config';`. Prisma 8.0 removes this default and requires the list.
+```text
+Your contract does not list the capabilities it requires, so it requires those of the newest PostgreSQL version and of the driver. Prisma 8.0 removes this default and requires the list. Write this as the contract entry in the config, with its import:
+
+contract: {
+  path: "./prisma/contract.prisma",
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+}
+
+import { postgres18, postgresDriver } from '@prisma/orm-postgres/config';
+```
 
 Its code is `CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED`. It does not change emit's exit code.
 
@@ -142,7 +151,7 @@ import { defineConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/c
 export default definePrismaConfig({
   orm: defineConfig({
     contract: {
-      path: './prisma/contract.prisma',
+      path: "./prisma/contract.prisma",
       requiredCapabilities: [...postgres18, ...postgresDriver],
     },
   }),
@@ -167,9 +176,9 @@ contract: prisma7Schema('prisma/schema.prisma', {
 }),
 ```
 
-Without it, `prisma contract emit` warns, saying to add the list in the options of `prisma7Schema('prisma/schema.prisma')`.
+Without it, `prisma contract emit` warns and shows that call, with the import of `prisma7Schema` and the lists.
 
-The fourth form, a config built without this `defineConfig`, is in `postgres-config-without-define-config-passes-capabilities` below.
+The fourth form, a contract source the config builds itself, is in `postgres-config-without-define-config-passes-capabilities` below.
 
 ### 3. Emit the contract
 
@@ -193,7 +202,7 @@ Signing now checks that the database provides every capability the contract requ
 
 ## `postgres-config-without-define-config-passes-capabilities`
 
-A config that builds its contract source itself, with `prismaContract` from `@prisma/orm-family-sql/contract-psl/provider` or `prisma7Contract` from `@prisma/orm-family-sql/contract-prisma7/provider`, does not go through the PostgreSQL `defineConfig`. The target, adapter and driver in that config no longer add capabilities to the contract. So pass the source its capabilities, from `postgresContractCapabilities` in `@prisma/orm-postgres/config`. It takes the same list as the other forms.
+A config that builds its contract source itself, with `prismaContract` from `@prisma/orm-family-sql/contract-psl/provider` or `prisma7Contract` from `@prisma/orm-family-sql/contract-prisma7/provider`, passes the source its capabilities, from `postgresContractCapabilities` in `@prisma/orm-postgres/config`. It takes the same list as the other forms. The target, adapter and driver no longer add capabilities to the contract.
 
 Before:
 
@@ -220,7 +229,7 @@ contract: prismaContract('./prisma/contract.prisma', {
 }),
 ```
 
-A source given no `capabilities` writes a contract that lists none, with no warning, and `postgresContractCapabilities` refuses a missing list: only the PostgreSQL `defineConfig` knows the default. Then emit and sign, as in steps 3 and 4 above.
+A source given no `capabilities` and passed to the PostgreSQL `defineConfig`, as `contract: prismaContract(...)`, still works until Prisma 8.0: its contract requires the newest version's list and the driver's, and `prisma contract emit` warns and shows the `capabilities` line above with its import. A source given no `capabilities` in a config that names the target, adapter and driver itself, without the PostgreSQL `defineConfig`, writes a contract that lists none, with no warning: only the PostgreSQL `defineConfig` knows the default, and `postgresContractCapabilities` refuses a missing list. Then emit and sign, as in steps 3 and 4 above.
 
 ## `postgres-emitted-contract-is-emitted-again`
 
@@ -266,7 +275,7 @@ These flags are removed from PostgreSQL contracts. Nothing read them:
 - `sql.enums`. MySQL and MariaDB contracts keep it.
 - `postgres.pgvector.cosine` from `@prisma/orm-extension-pgvector`, `postgres.postgis.geometry` from `@prisma/orm-extension-postgis` and `postgres.paradedb/bm25` from `@prisma/orm-extension-paradedb`.
 
-Emitting the contract removes them from `contract.json` and `contract.d.ts`. Remove them from any list of required capabilities you write, from any contract you build by hand, and from any code or type that names them.
+Emitting the contract removes them from `contract.json` and `contract.d.ts`. A list of required capabilities that names one is refused with `CONTRACT.ARGUMENT_INVALID`, for example: ``requiredCapabilities in defineContract lists "postgres.orderBy", which is a retired capability: nothing reads it any more. Remove it from the list.`` Remove them from any list you write, from any contract you build by hand, and from any code or type that names them.
 
 ## `postgres-capability-exports-moved`
 

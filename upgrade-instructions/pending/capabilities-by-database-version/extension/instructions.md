@@ -76,7 +76,7 @@ export const contract = defineContract(
 );
 ```
 
-Without the list, the contract requires the newest PostgreSQL version's list and the driver's, and `prisma contract emit` warns with `CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED`. That default is a stopgap for contracts written before the list existed, and Prisma 8.0 requires the list. It is the wrong list for an extension, which should require the oldest version it supports, so write the list.
+Without the list, the contract requires the newest PostgreSQL version's list and the driver's, and the commands that load the contract source, such as `prisma contract emit`, warn with `CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED`. That default is a stopgap for contracts written before the list existed, and Prisma 8.0 requires the list. It is the wrong list for an extension, which should require the oldest version it supports, so write the list.
 
 An empty list throws:
 
@@ -90,7 +90,11 @@ An entry that is not a capability key is refused by name, for example:
 
 > requiredCapabilities in defineContract lists "returning", which is not a capability key. A key is a namespace and a flag joined by a dot, as error messages print it.
 
-The config and `prisma7Schema` refuse the same four cases, naming where they take the list.
+A retired capability, one of the flags the release candidates wrote and nothing reads, such as your extension's old flag, is refused by name too, for example:
+
+> requiredCapabilities in defineContract lists "postgres.pgvector.cosine", which is a retired capability: nothing reads it any more. Remove it from the list.
+
+The config, `prisma7Schema` and `postgresContractCapabilities` refuse the same cases, naming where they take the list.
 
 A contract written in the Prisma schema language, whose config builds the source with `prismaContract` from `@prisma/orm-family-sql/contract-psl/provider`, passes the source its capabilities. The target, adapter and driver in the config no longer add any, so a source given no `capabilities` writes a contract that lists none. Take them from `postgresContractCapabilities` in `@prisma/orm-postgres/config`, which takes the same list. Before:
 
