@@ -20,7 +20,7 @@ Slices 1 to 4 are in the order of what cannot be changed after release `8.0`; sl
 | 5 | Every release's notes have a "How to upgrade" section | prisma/orm | nothing | the next release candidate after slice 1 |
 | 6, [TML-3956](https://linear.app/prisma-company/issue/TML-3956) | Apps that create-prisma generates list the platform packages | prisma/create-prisma | the first release of prisma/orm that contains slice 1 | create-prisma's move to that release |
 
-Status: slice 1 merged in prisma/orm#31204, and slice 2 in prisma/orm#31212. Slice 3 is built as two pull requests, in the order its section gives; the first is in review. Slice 4's draft can be written while slice 3 is built. Slice 5 is independent of the others and starts after slice 1's pull request.
+Status: slice 1 merged in prisma/orm#31204, and slice 2 in prisma/orm#31212. Slice 4 is no longer part of this project (decided on 2026-11-27): the maturity levels on prisma.io belong to the compatibility stream's project for the public versioning policy, and what an application installs belongs to the GA plan's docs stream. A hand-over lists what each must say and its source on `main`. Slice 3 is built as two pull requests, in the order its section gives; the first is in review. Slice 4's draft can be written while slice 3 is built. Slice 5 is independent of the others and starts after slice 1's pull request.
 
 ### 6. Apps that create-prisma generates list the platform packages
 
