@@ -1,4 +1,4 @@
-import { deepStrictEqual, rejects, strictEqual } from 'node:assert/strict';
+import { deepStrictEqual, rejects, strictEqual, throws } from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -155,6 +155,26 @@ describe('packagesAtTag', () => {
       { name: '@prisma/orm-mysql', version: '8.0.1-ea.0' },
       { name: '@prisma/orm-postgres', version: '8.0.1' },
     ]);
+  });
+
+  it('fails on a package without a version at the tag, naming the file and the tag', () => {
+    const dir = join(repository, 'packages', '9-public', '@prisma', 'orm-broken');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: '@prisma/orm-broken' }));
+    git(repository, 'add', '.');
+    git(repository, 'commit', '--quiet', '-m', 'broken');
+    git(repository, 'tag', 'v8.2.0');
+    throws(
+      () => packagesAtTag('v8.2.0', repository),
+      (error) => {
+        strictEqual(error instanceof LastReleaseError, true);
+        strictEqual(
+          error.message,
+          'packages/9-public/@prisma/orm-broken/package.json at v8.2.0 has no version',
+        );
+        return true;
+      },
+    );
   });
 
   it('reads a package promoted after a release at the level it had at that release', () => {

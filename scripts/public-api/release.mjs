@@ -201,6 +201,9 @@ export function packagesAtTag(tag, root) {
   return files
     .map((file) => {
       const { name, version } = JSON.parse(git(['show', `${tag}:${file}`], root));
+      if (typeof version !== 'string' || !isVersion(version)) {
+        throw new LastReleaseError(`${file} at ${tag} has no version`);
+      }
       return { name, version };
     })
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
