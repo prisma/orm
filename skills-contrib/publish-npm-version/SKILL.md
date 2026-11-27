@@ -66,7 +66,7 @@ If either precondition is unmet, stop and surface the issue. Do **not** try to a
 
    This is what makes the skill safe to invoke from any worktree: the bump happens against a fresh checkout of `origin/main`, not against the maintainer's current branch. The branch name encodes the target version so reviewers can tell at a glance what the PR ships.
 
-3. **Bump.** From the new worktree, run `pnpm bump-version`. The script reads the root `package.json` `version` from `git show HEAD:package.json` (in this worktree, HEAD is `origin/main`), computes the next release version, and writes it to every workspace `package.json` via `scripts/set-version.ts`.
+3. **Bump.** From the new worktree, run `pnpm bump-version`. (For release 8.0 itself, run `node scripts/set-version.ts 8.0.1` here instead: `bump-version` can only raise the release-candidate number. [The releasing page](../../docs/oss/releasing.md#procedure-release-80) has the whole procedure for that release.) The script reads the root `package.json` `version` from `git show HEAD:package.json` (in this worktree, HEAD is `origin/main`), computes the next release version, and writes it to every workspace `package.json` via `scripts/set-version.ts`.
 
    Note: `bump-version` requires `node_modules` to resolve its dependencies (e.g. `pathe`). If the fresh worktree has no `node_modules`, run `pnpm install --frozen-lockfile --ignore-scripts` first.
 
