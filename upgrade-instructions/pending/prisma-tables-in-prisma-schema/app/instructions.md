@@ -9,7 +9,7 @@ changes:
         - '"@prisma/orm-postgres"\s*:'
   - id: name-the-prisma-schema
     summary: |
-      Anything in the project that names the schema `prisma_contract` in its own SQL or scripts must name `_prisma` instead: grants in infrastructure code, scripts that drop or reset the database, monitoring queries, row-level-security setup, and tests that reset the database.
+      Anything in the project that names the schema `prisma_contract` in its own SQL or scripts must name `_prisma` instead: grants in infrastructure code, scripts that drop or reset the database, monitoring queries, row-level-security setup, and tests that reset the database. Migrations that have been planned are not edited.
     detection:
       glob: "**/*"
       contains:
@@ -96,10 +96,10 @@ If `_prisma` holds any of those tables, do not drop either schema before you kno
 
 ```sql
 SELECT n.nspname, c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname IN ('prisma_contract', '_prisma') AND c.relkind = 'r' ORDER BY 1, 2;
+WHERE n.nspname IN ('prisma_contract', '_prisma') AND c.relkind IN ('r', 'p', 'f', 'v', 'm') ORDER BY 1, 2;
 ```
 
-This reads the catalogue, so it lists every table whatever the role's privileges on it. Then count the rows of `marker` and `ledger` in each schema that has them. If the role may not read one of them, ask the user to run the count as a role that may. Stop and ask the user, because a schema that is dropped loses its rows.
+This reads the catalogue, so it lists every table, partitioned table, foreign table and view whatever the role's privileges on it. Then count the rows of `marker` and `ledger` in each schema that has them. If the role may not read one of them, ask the user to run the count as a role that may. Stop and ask the user, because a schema that is dropped loses its rows.
 
 **A table in `prisma_contract` is in a form from before the release candidates.** Prisma checks the columns of each of its tables. A database set up by a `0.x` release can have tables in an older form, and those forms are not migrated. The command stops with an error that names the table and the column it expected. Stop and tell the user. Prisma's tables in such a database cannot be kept, but the application's own tables can. First list everything in `prisma_contract` and show it to the user:
 
@@ -157,7 +157,7 @@ Search the project for `prisma_contract`, outside `node_modules` and build outpu
 - Monitoring and alerting queries.
 - Row-level-security setup.
 
-Replace `prisma_contract` with `_prisma` in each. `_prisma` needs no quotes in SQL. For example:
+Replace `prisma_contract` with `_prisma` in each of these, except planned migrations, which stay as they are. `_prisma` needs no quotes in SQL. For example:
 
 ```sql
 -- Before
