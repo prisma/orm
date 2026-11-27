@@ -1,3 +1,4 @@
+import { SqlConnectionError } from '@internal/sql-errors';
 import type { MarkerReadResult, SqlQueryable } from '@internal/sql-relational-core/ast';
 import { describe, expect, it, vi } from 'vitest';
 import { withTransaction } from '../src/sql-runtime';
@@ -121,19 +122,31 @@ describe('a runtime-scope query inside a transaction callback after the runtime 
 });
 
 describe('a marker read that fails', () => {
-  it('is retried by the next query instead of failing every later query', async () => {
+  it('rejects the call when the database cannot be reached, and is retried by the next query instead of failing every later query', async () => {
+    const unreachable = new SqlConnectionError('connect ECONNREFUSED 127.0.0.1:5432');
     const readMarker = vi
       .fn<(queryable: SqlQueryable) => Promise<MarkerReadResult>>()
-      .mockRejectedValueOnce(new Error('simulated transient failure'))
+      .mockRejectedValueOnce(unreachable)
       .mockResolvedValue({ kind: 'absent' });
     const { runtime, driver } = setupWithMarkerReader(readMarker);
 
-    await expect(runtime.execute(affectedCountPlan())).rejects.toThrow(
-      'simulated transient failure',
-    );
+    await expect(runtime.execute(affectedCountPlan())).rejects.toBe(unreachable);
     await expect(runtime.execute(affectedCountPlan())).resolves.toEqual({ affectedRows: 1 });
 
     expect(readMarker).toHaveBeenCalledTimes(2);
     expect(driver.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs the query when the read fails for another reason, and is not tried again', async () => {
+    const readMarker = vi
+      .fn<(queryable: SqlQueryable) => Promise<MarkerReadResult>>()
+      .mockRejectedValue(new Error('relation "prisma_contract.marker" does not exist'));
+    const { runtime, driver } = setupWithMarkerReader(readMarker);
+
+    await expect(runtime.execute(affectedCountPlan())).resolves.toEqual({ affectedRows: 1 });
+    await expect(runtime.execute(affectedCountPlan())).resolves.toEqual({ affectedRows: 1 });
+
+    expect(readMarker).toHaveBeenCalledTimes(1);
+    expect(driver.execute).toHaveBeenCalledTimes(2);
   });
 });
