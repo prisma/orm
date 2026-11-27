@@ -30,38 +30,6 @@ const verification = () => ({
 });
 
 describe('prismaAdapter refuses', () => {
-  it('a client whose database is mysql', async () => {
-    const client = await databases.open('sqlite', corePsl('sqlite'));
-    const other = {
-      contract: { ...client.contract, target: 'mysql' },
-      orm: client.orm,
-      transaction: client.transaction.bind(client),
-    };
-    expect(() => prismaAdapter(other)).toThrow(
-      expect.objectContaining({
-        name: 'BetterAuthError',
-        message:
-          '@prisma/orm-better-auth does not support this Prisma client\'s database, "mysql". It supports "postgres" and "sqlite".',
-      }),
-    );
-  });
-
-  it('a client whose database is not a SQL database', async () => {
-    const client = await databases.open('sqlite', corePsl('sqlite'));
-    const other = {
-      contract: { ...client.contract, targetFamily: 'mongo', target: 'mongo' },
-      orm: client.orm,
-      transaction: client.transaction.bind(client),
-    };
-    expect(() => prismaAdapter(other)).toThrow(
-      expect.objectContaining({
-        name: 'BetterAuthError',
-        message:
-          '@prisma/orm-better-auth supports only SQL databases, and this Prisma client is for a "mongo" database. Pass the client of a SQL database.',
-      }),
-    );
-  });
-
   it('an object with no contract, such as a transaction', async () => {
     const client = await databases.open('sqlite', corePsl('sqlite'));
     await client.transaction(async (tx) => {

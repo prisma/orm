@@ -20,9 +20,10 @@ Everything the adapter must know about one database is in that database's target
 
 The supports contain codec ids, SQL text and functions only, and import no database package. `test/source-literals.test.ts` fails if a string literal or property name outside `src/targets/` is a target name or a codec id. `test/targets/shipped-supports.test.ts` reads every codec the published Postgres and SQLite target packages register and fails on one whose value kind the support does not state; when a target package adds a codec, add it to that support.
 
+The types a support sees are the ORM's published ones: a text column is an `Expression` with the `ComparisonMethods` of a `textual` codec, and the functions are the `raw`, `eq` and `ne` of `OrmFunctionsOf`, both from `@prisma/orm-family-sql/orm-client`. The adapter reaches fields by run-time name, so it checks that a field is such a column with `isExpression` and the methods `like` needs, before it hands the field to a support.
+
 Gaps in what Prisma publishes, which the supports work around:
 
-- The ORM's field accessor type (`ComparisonMethodFns`) is not exported, so a text column is the adapter's own structural type, `TextColumn`, recognised at run time by `isExpression` and its methods.
 - No published value says which kind of JavaScript value a codec reads, so each support keeps that table.
 - The runtime client does not carry the target's descriptor, so each support repeats its default namespace.
 - Postgres's `citext` extension codec is `textual`, so text filters accept it, but its `=` ignores case, so even a case-sensitive `eq` on a `citext` column matches another case.

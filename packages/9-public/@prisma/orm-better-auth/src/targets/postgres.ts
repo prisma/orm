@@ -49,7 +49,7 @@ const valueKind = valueKindOf(sqlFamilyCodecKinds, {
 
 /** A key that references a `uuid` id is a `Uuid`, since Postgres refuses a `text` foreign key to a `uuid` column. */
 function pslType(field: PslField): string {
-  return field.isIdReference && field.referencedIdKind === 'uuid' ? 'Uuid' : standardPslType(field);
+  return field.isIdReference && field.referencesUuidId ? 'Uuid' : standardPslType(field);
 }
 
 export const postgresSupport: TargetSupport = {

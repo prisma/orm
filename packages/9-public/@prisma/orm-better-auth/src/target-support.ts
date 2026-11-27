@@ -1,10 +1,9 @@
 import type { DBFieldAttribute } from '@better-auth/core/db';
 import { BetterAuthError } from '@better-auth/core/error';
-import type { Condition, OrmRawSqlTag } from '@prisma/orm-family-sql/orm-client';
+import type { ComparisonMethods, Condition } from '@prisma/orm-family-sql/orm-client';
 import { type Expression, isExpression } from '@prisma/orm-family-sql/relational-core/expression';
-import type { BuiltinFunctions } from '@prisma/orm-family-sql/relational-core/functions';
 import type { IdStrategy } from './models/better-auth-models';
-import { hasMethod } from './orm';
+import { hasMethod, type WhereFunctions } from './orm';
 
 export const valueKinds = [
   'string',
@@ -21,13 +20,8 @@ export const valueKinds = [
 export type ValueKind = (typeof valueKinds)[number];
 
 /** A field accessor of a column that holds text: one whose codec has the `textual` trait, so the ORM offers `like` on it. */
-export interface TextColumn extends Expression<{ codecId: string; nullable: boolean }> {
-  eq(value: string): Condition;
-  neq(value: string): Condition;
-  in(values: readonly string[]): Condition;
-  notIn(values: readonly string[]): Condition;
-  like(pattern: string): Condition;
-}
+export type TextColumn = Expression<{ codecId: string; nullable: boolean }> &
+  ComparisonMethods<string, 'equality' | 'textual', string>;
 
 const textColumnMethods = ['eq', 'neq', 'in', 'notIn', 'like'] as const;
 
@@ -35,14 +29,8 @@ export function isTextColumn(value: unknown): value is TextColumn {
   return isExpression(value) && textColumnMethods.every((method) => hasMethod(value, method));
 }
 
-type AnyCodecTypes = Record<string, { readonly input: unknown }>;
-
 /** The functions of the ORM's `where` callback a text comparison may use. */
-export interface TextFunctions {
-  readonly raw: OrmRawSqlTag;
-  readonly eq: BuiltinFunctions<AnyCodecTypes>['eq'];
-  readonly ne: BuiltinFunctions<AnyCodecTypes>['ne'];
-}
+export type TextFunctions = Pick<WhereFunctions, 'raw' | 'eq' | 'ne'>;
 
 /** One comparison of a text column that Better Auth asks for. A pattern is never empty and a list never empty: the adapter answers those itself. */
 export type TextComparison = (
@@ -64,8 +52,8 @@ export interface PslField {
   readonly idStrategy: IdStrategy;
   /** Whether the field holds the `id` of another model. */
   readonly isIdReference: boolean;
-  /** The value kind of the referenced model's `id`, when the field is an id reference to a model in the contract. */
-  readonly referencedIdKind: ValueKind | undefined;
+  /** Whether the field holds the `id` of a model in the contract whose `id` this support's `valueKind` calls `uuid`, under an id strategy that accepts UUIDs. */
+  readonly referencesUuidId: boolean;
 }
 
 /** What the adapter must know about one target. */

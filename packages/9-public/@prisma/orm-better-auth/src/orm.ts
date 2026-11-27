@@ -1,11 +1,14 @@
-import type { Condition } from '@prisma/orm-family-sql/orm-client';
+import type { Condition, OrmFunctionsOf } from '@prisma/orm-family-sql/orm-client';
+import type { CodecTypesBase } from '@prisma/orm-family-sql/relational-core/expression';
 import { blindCast } from '@prisma/orm-framework/utils/casts';
-import type { TextFunctions } from './target-support';
 
 export type Row = Record<string, unknown>;
 
+/** The `fns` of a `where` callback, for a contract whose codec and query-operation types are not known here. */
+export type WhereFunctions = OrmFunctionsOf<CodecTypesBase, Record<never, never>>;
+
 export interface WhereTools {
-  readonly fns: TextFunctions;
+  readonly fns: WhereFunctions;
 }
 
 /** The model accessor a `where` or `orderBy` callback receives. Its properties are the model's fields. */

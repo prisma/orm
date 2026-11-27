@@ -14,12 +14,11 @@ export function pslTypeOf(
   reference: BetterAuthReference | undefined,
   { idStrategy, uuidKeyedModels, support }: PslTypeContext,
 ): string {
-  const referencesUuidId = reference !== undefined && uuidKeyedModels.has(reference.model);
   return support.pslType({
     attribute,
     idStrategy,
     isIdReference: isIdReference(attribute),
-    referencedIdKind: referencesUuidId ? 'uuid' : undefined,
+    referencesUuidId: reference !== undefined && uuidKeyedModels.has(reference.model),
   });
 }
 
