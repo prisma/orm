@@ -115,7 +115,7 @@ For each version of each kind of file there is one unit of code. The newest vers
 
 ### What an author outside this repository owes
 
-The rule binds whoever defines a stored shape. A family's contract parser and operation reader refuse a key they do not define, outside the open places they declare. A SQL target supplies `readOperations` with a schema for its own fields. An extension pack's schemas for its entry kinds, its codecs' parameters and its index options refuse a key they do not define. Nothing in the framework checks this for them.
+The rule binds whoever defines a stored shape. A family reads a stored contract through `convertContractDocument`, which reads the version and converts an earlier one, and writes `NEWEST_CONTRACT_FORMAT_VERSION` into the contracts it prints; both are published at `@prisma/orm-framework/contract/format-version`. A family's contract parser and operation reader refuse a key they do not define, outside the open places they declare. A SQL target supplies `readOperations` with a schema for its own fields. An extension pack's schemas for its entry kinds, its codecs' parameters and its index options refuse a key they do not define. Nothing in the framework checks this for them.
 
 ## Why
 
