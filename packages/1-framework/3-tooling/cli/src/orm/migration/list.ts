@@ -19,6 +19,7 @@ import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { displayPath, migrationsDirFor } from './paths';
+import { unreadableMigrationDiagnostics } from './unreadable-migrations';
 
 function listPresentations(inputs: {
   readonly list: MigrationListResult;
@@ -120,7 +121,10 @@ export const migrationListCommand = defineOrmCommand({
 
     return ok(
       ctx.present(
-        { data: listed.value },
+        {
+          data: listed.value,
+          diagnostics: unreadableMigrationDiagnostics(aggregate, migrationsDir, ctx.cwd),
+        },
         listPresentations({
           list: listed.value,
           tree,

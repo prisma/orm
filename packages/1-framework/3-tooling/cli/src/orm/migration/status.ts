@@ -407,13 +407,14 @@ export const migrationStatusCommand = defineOrmCommand({
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));
     }
-    const { aggregate, contractHash, markerLocation } = loaded.value;
+    const { aggregate, contractHash, markerLocation, contractRefusal } = loaded.value;
 
     const contractConfig = {
       contract: ifDefined('output', contractPathFor(ctx.config)),
     };
     try {
       await readContractEnvelope(contractConfig);
+      if (contractRefusal !== undefined) findings.push(contractUnreadableFinding(contractRefusal));
     } catch (error) {
       findings.push(
         contractUnreadableFinding(error instanceof Error ? error.message : 'unknown error'),

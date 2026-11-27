@@ -19,6 +19,7 @@ import type { SnapshotContentVerifier } from '@internal/migration-tools/contract
 import { errorInvalidRefFile } from '@internal/migration-tools/errors';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { isInternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join, relative } from 'pathe';
 import { CliStructuredError } from '../../utils/cli-errors';
@@ -425,6 +426,8 @@ export async function buildReadAggregate(
       readonly markerLocation: string;
       /** The family's contract reader, for a command that reads a stored contract it holds. */
       readonly deserializeContract: (contractJson: unknown) => Contract;
+      /** Why the family refused `contract.json`, when it did; the aggregate then holds a stand-in with only its hash. */
+      readonly contractRefusal: string | undefined;
     },
     CliStructuredError
   >
@@ -450,13 +453,15 @@ export async function buildReadAggregate(
       targetId: config.target.id,
       targetFamily: config.target.familyId,
     });
+    let contractRefusal: string | undefined;
     if (contractRawForAggregate !== null) {
       try {
         appContractForLoad = deserializeContract(contractRawForAggregate);
       } catch (error) {
         const formatFailure = formatVersionFailure(error, resolveContractPath(config));
         if (formatFailure !== undefined) return notOk(formatFailure);
-        // Deserialization failed — identity-only stand-in fallback
+        if (isInternalError(error)) throw error;
+        contractRefusal = error instanceof Error ? error.message : String(error);
       }
     }
 
@@ -483,6 +488,7 @@ export async function buildReadAggregate(
         familyInstance.accessChangesOf(operations),
       markerLocation: familyInstance.markerLocation,
       deserializeContract,
+      contractRefusal,
     });
   } catch (error) {
     return notOk(

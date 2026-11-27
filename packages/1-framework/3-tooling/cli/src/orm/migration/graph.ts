@@ -28,6 +28,7 @@ import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { displayPath, migrationsDirFor } from './paths';
+import { unreadableMigrationDiagnostics } from './unreadable-migrations';
 
 /**
  * The `--dot` document. DOT is not a `--format` value — the engine owns that
@@ -170,7 +171,10 @@ export const migrationGraphCommand = defineOrmCommand({
 
     return ok(
       ctx.present(
-        { data: document },
+        {
+          data: document,
+          diagnostics: unreadableMigrationDiagnostics(aggregate, migrationsDir, ctx.cwd),
+        },
         graphPresentations({
           document,
           tree,
