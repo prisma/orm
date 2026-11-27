@@ -458,6 +458,19 @@ function createTargetExistsRefusal(
 }
 
 /**
+ * The way past a create with no after-check that leaves the migration as it is: apply what did not
+ * run by hand, then sign. `db sign` needs `reconcile`, so on a database whose policies the run
+ * checked and that permits only migrations, the text says this way is not open and offers nothing
+ * in its place (ADR 320).
+ */
+function signedByHandText(policies: DatabasePolicies | undefined): string {
+  if (policies !== undefined && !policies.change.includes('reconcile')) {
+    return "This database's change policy permits only migrations, so it cannot be signed past this create by hand. When neither of those two ways applies, this database's change policy permits no recovery for this create.";
+  }
+  return "Otherwise leave the migration as it is, apply the operations of this migration that did not run by hand, then run db sign with the name of this migration's directory. db sign checks the collections, their validators and their indexes against the contract this migration leads to, not the documents, so first check yourself that the documents are as the operations you applied leave them. It then records the database at that contract, so the next run starts after this migration. migration status then shows the database as up to date, but does not mark this migration as applied, since no run of it is recorded.";
+}
+
+/**
  * The failure when the before-check of a create with no after-check, as migrations emitted before
  * creates had one carry, finds a collection of that name. Nothing lets a run skip this create, so
  * the runner cannot tell whether an earlier run of the migration made the collection.
@@ -466,6 +479,7 @@ function uncheckedCreateTargetExistsRefusal(
   op: MongoMigrationPlanOperation,
   failed: MongoMigrationCheck,
   before: Ran,
+  policies: DatabasePolicies | undefined,
 ): MongoMigrationRunnerResult | undefined {
   const create = failedCreateOf(op, failed);
   if (create === undefined || op.postcheck.length > 0) return undefined;
@@ -475,7 +489,7 @@ function uncheckedCreateTargetExistsRefusal(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: collection ${name} already exists, and this migration's create has no after-check that lets a run skip it`,
     {
-      why: `This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection ${name}. If no other database has applied this migration, run its migration.ts with node, which writes its ops.json again with the after-check and changes the migration's hash, then run the command again${before.skips ? `: ${skipped}.` : ` with postchecks and idempotency checks on, since only they skip it: ${skipped}.`} ${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} Otherwise leave the migration as it is, apply the operations of this migration that did not run by hand, then run db sign with the name of this migration's directory: it checks that the database matches the contract this migration leads to and records the database there, so the next run starts after this migration. db sign refuses a database whose change policy does not include reconcile.`,
+      why: `This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection ${name}. If no other database has applied this migration, run its migration.ts with node, which writes its ops.json again with the after-check and changes the migration's hash, then run the command again${before.skips ? `: ${skipped}.` : ` with postchecks and idempotency checks on, since only they skip it: ${skipped}.`} ${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} ${signedByHandText(policies)}`,
       meta: { operationId: op.id },
     },
   );
@@ -1780,6 +1794,7 @@ export class MongoMigrationRunner {
     let operationsExecuted = 0;
 
     for (const [operationIndex, operation] of operations.entries()) {
+      progress.copyCounts = undefined;
       progress.copyCounts = await this.copyCountsBefore(operation);
       options.callbacks?.onOperationStart?.(operation);
       try {
@@ -1824,7 +1839,12 @@ export class MongoMigrationRunner {
             return (
               renameTargetExistsRefusal(operation, failing, ran(operationIndex)) ??
               createTargetExistsRefusal(operation, failing, ran(operationIndex)) ??
-              uncheckedCreateTargetExistsRefusal(operation, failing, ran(operationIndex)) ??
+              uncheckedCreateTargetExistsRefusal(
+                operation,
+                failing,
+                ran(operationIndex),
+                options.checkedPolicies,
+              ) ??
               (await this.documentsFailingValidatorRefusal(
                 operation,
                 failing,

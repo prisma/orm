@@ -17,38 +17,44 @@ import { joinedList } from './mongo-plan-text';
  * reads its target, adds documents of one source with `$unionWith` stages, and writes them all back
  * with `$out`. `filters` holds the `$match` of each `$unionWith` pipeline, one for each group of
  * models; it is empty for a copy of every document of the source, as the rename route prints.
+ * `pipelines` holds each `$unionWith` pipeline whole, in the same order, or one empty pipeline for
+ * a copy of every document.
  */
 export interface UnionCopy {
   readonly id: string;
   readonly into: string;
   readonly source: string;
   readonly filters: readonly Record<string, unknown>[];
+  readonly pipelines: readonly (readonly unknown[])[];
 }
 
 interface Union {
   readonly coll: string;
   readonly filter: Record<string, unknown> | undefined;
   readonly whole: boolean;
+  readonly pipeline: readonly unknown[];
 }
 
 function unionOf(stage: unknown): Union | undefined {
   if (typeof stage !== 'object' || stage === null) return undefined;
   const union: unknown = Reflect.get(stage, '$unionWith');
-  if (typeof union === 'string') return { coll: union, filter: undefined, whole: true };
+  if (typeof union === 'string')
+    return { coll: union, filter: undefined, whole: true, pipeline: [] };
   if (typeof union !== 'object' || union === null) return undefined;
   const coll: unknown = Reflect.get(union, 'coll');
   if (typeof coll !== 'string') return undefined;
   const pipeline: unknown = Reflect.get(union, 'pipeline');
-  if (pipeline === undefined) return { coll, filter: undefined, whole: true };
+  if (pipeline === undefined) return { coll, filter: undefined, whole: true, pipeline: [] };
   if (!Array.isArray(pipeline)) return undefined;
   const [first]: unknown[] = pipeline;
-  if (first === undefined) return { coll, filter: undefined, whole: true };
+  if (first === undefined) return { coll, filter: undefined, whole: true, pipeline: [] };
   const match: unknown =
     typeof first === 'object' && first !== null ? Reflect.get(first, '$match') : undefined;
   return {
     coll,
     filter: typeof match === 'object' && match !== null ? { ...match } : undefined,
     whole: false,
+    pipeline,
   };
 }
 
@@ -75,13 +81,23 @@ export function unionCopyOf(operation: AnyMongoMigrationOperation): UnionCopy | 
   const source = first.coll;
   if (source === into) return undefined;
   if (first.whole) {
-    return unions.length === 1 ? { id: operation.id, into, source, filters: [] } : undefined;
+    return unions.length === 1
+      ? { id: operation.id, into, source, filters: [], pipelines: [[]] }
+      : undefined;
   }
-  const filters = unions.map((union) =>
-    union?.coll === source && !union.whole ? union.filter : undefined,
+  const groups = unions.flatMap((union) =>
+    union?.coll === source && !union.whole && union.filter !== undefined
+      ? [{ filter: union.filter, pipeline: union.pipeline }]
+      : [],
   );
-  if (!filters.every((filter) => filter !== undefined)) return undefined;
-  return { id: operation.id, into, source, filters };
+  if (groups.length !== unions.length) return undefined;
+  return {
+    id: operation.id,
+    into,
+    source,
+    filters: groups.map(({ filter }) => filter),
+    pipelines: groups.map(({ pipeline }) => pipeline),
+  };
 }
 
 function dropsSource(operation: AnyMongoMigrationOperation, copy: UnionCopy): boolean {
@@ -141,15 +157,43 @@ function documentsText(count: number): string {
   return count === 1 ? '1 document' : `${count} documents`;
 }
 
+/**
+ * The mongosh query that lists the documents of `copy`'s source that one of its groups copied:
+ * those whose result through the group's `$unionWith` pipeline the target holds whole, under the
+ * same `_id`. The comparison ignores the order of top-level fields.
+ */
+function copiedQuery(copy: UnionCopy, pipeline: readonly unknown[]): string {
+  const sameDocument = {
+    $setEquals: [{ $objectToArray: '$$ROOT' }, { $objectToArray: '$$copied' }],
+  };
+  const stages = [
+    ...pipeline,
+    {
+      $lookup: {
+        from: copy.into,
+        localField: '_id',
+        foreignField: '_id',
+        let: { copied: '$$ROOT' },
+        pipeline: [{ $match: { $expr: sameDocument } }],
+        as: 'inTarget',
+      },
+    },
+    { $match: { inTarget: { $ne: [] } } },
+    { $project: { _id: 1 } },
+  ];
+  return `db.getCollection(${JSON.stringify(copy.source)}).aggregate(${JSON.stringify(stages)})`;
+}
+
 /** How to find the documents of `copy`'s source that it copied, so that only those are deleted by hand. */
 function comparisonText(copy: UnionCopy): string {
   const { into, source } = copy;
-  const filters = copy.filters.length;
-  const selected =
-    filters === 0
-      ? `each document of collection ${source}`
-      : `each document of collection ${source} that ${filters === 1 ? "the copy's $match filter" : "one of the copy's $match filters"} selects`;
-  return `compare the two collections: ${selected} that collection ${into} also holds, with the same _id and the same value in each field the copy does not change, was copied. Delete only those from collection ${source} yourself, then run the command again.`;
+  const groups = copy.filters.length;
+  const queries = joinedList(copy.pipelines.map((pipeline) => copiedQuery(copy, pipeline)));
+  const rule =
+    groups === 0
+      ? `a document of collection ${source} was copied when collection ${into} holds the same document, whole and under the same _id. List those with ${queries} in mongosh.`
+      : `a document of collection ${source} that ${groups === 1 ? "the copy's $match filter selects" : "one of the copy's $match filters selects"} was copied when collection ${into} holds, whole and under the same _id, the document the copy's stages make of it. List those with ${queries}${groups === 1 ? '' : ', one query for each $unionWith stage of the copy,'} in mongosh.`;
+  return `compare the two collections: ${rule} Delete only the listed documents from collection ${source} yourself, by their _id, then run the command again. A document that is not listed was not copied, or changed after the copy: the run copies it, and if collection ${into} already holds its earlier form under the same _id, it then holds both, so delete the earlier one there yourself. A document whose copied form is identical to one collection ${into} already held is listed as copied: its content is there under the same _id, so deleting it loses only a second identical copy. If you must keep such identical documents, keep collection ${source} as it is and reconcile the two collections by hand.`;
 }
 
 /** Why writes to both collections of `copy` must still be stopped before its source is emptied by hand, and what to do when that cannot be known. */
