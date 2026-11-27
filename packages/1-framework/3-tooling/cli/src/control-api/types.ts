@@ -1016,7 +1016,7 @@ export interface ControlClient {
 
   /**
    * First brings the Prisma space up to date, as {@link ControlClient.bringPrismaSpaceUpToDate} does, and returns a failure of that as its failure. Then advances the database along the migration graph to the target contract, with full execution checks.
-   * On a target whose DDL is transactional a failure rolls back every space; otherwise the operations that already ran stay applied.
+   * The Prisma space's phase commits first and stays applied when a later space fails. On a target whose DDL is transactional a failure rolls back every application and extension space; otherwise the operations that already ran stay applied.
    * Resume-safe: re-running after failure picks up from the marker of each space.
    *
    * @param options.contract - The target contract to migrate to

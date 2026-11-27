@@ -101,7 +101,21 @@ WHERE table_schema IN ('prisma_contract', '_prisma') ORDER BY 1, 2;
 
 Then count the rows of `marker` and `ledger` in each schema that has them; a table that the list does not show does not exist, and counting it fails. Stop and ask the user, because a schema that is dropped loses its rows.
 
-**A table in `prisma_contract` is in a form from before the release candidates.** Prisma checks the columns of each of its tables. A database set up by a `0.x` release can have tables in an older form, and those forms are not migrated. The command stops with an error that names the table and the column it expected. Stop and tell the user. Prisma's tables in such a database cannot be kept, but the application's own tables can: after a backup, drop the old schema (`DROP SCHEMA "prisma_contract" CASCADE`), then run `prisma db sign`, which checks that the database matches the contract and records it in a new `_prisma.marker`. The history of applied migrations in the old `ledger` is lost.
+**A table in `prisma_contract` is in a form from before the release candidates.** Prisma checks the columns of each of its tables. A database set up by a `0.x` release can have tables in an older form, and those forms are not migrated. The command stops with an error that names the table and the column it expected. Stop and tell the user. Prisma's tables in such a database cannot be kept, but the application's own tables can. First list everything in `prisma_contract` and show it to the user:
+
+```sql
+SELECT pg_describe_object(classid, objid, objsubid) FROM pg_depend
+WHERE refclassid = 'pg_namespace'::regclass AND refobjid = to_regnamespace('prisma_contract') AND deptype = 'n';
+```
+
+If it holds anything other than Prisma's tables `marker`, `ledger` and `contract`, ask the user whether to move each such object to another schema or drop it, and do neither without their approval. Then, after a backup and with the user's approval, drop Prisma's tables and the schema without `CASCADE`:
+
+```sql
+DROP TABLE IF EXISTS "prisma_contract"."marker", "prisma_contract"."ledger", "prisma_contract"."contract";
+DROP SCHEMA "prisma_contract";
+```
+
+Without `CASCADE`, PostgreSQL refuses and names the object when something outside the schema, such as a view, a foreign key or a function, depends on one of these tables, or when the schema still holds something else. Show that error to the user and ask what to do; do not add `CASCADE`, which drops those objects too. Then run `prisma db sign`, which checks that the database matches the contract and records it in a new `_prisma.marker`. The history of applied migrations in the old `ledger` is lost.
 
 **A table in `_prisma` is not in the form this release creates.** After the rename, Prisma checks the columns of each of its tables in `_prisma` too, because it reads and writes them only in the form it creates. The command stops with `MIGRATION.PRECHECK_FAILED`, names the table and the column it expected, and changes nothing. This happens when a table of that name in `_prisma` was not created by Prisma: for example, the project keeps a table of its own named `marker`, `ledger` or `contract` in a schema it created as `_prisma`. Stop and tell the user. Do not drop or change the table without asking. If it is the project's own table, it can be moved to another schema with `ALTER TABLE "_prisma"."<table>" SET SCHEMA <other schema>`, after which the command can run again; the project's code that names it must then name the other schema.
 

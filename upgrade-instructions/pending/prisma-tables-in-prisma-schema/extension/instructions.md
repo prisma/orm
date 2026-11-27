@@ -27,14 +27,14 @@ Search the extension's code, scripts and tests for `prisma_contract`, outside `n
   await driver.query('drop schema if exists _prisma cascade');
   ```
 
-- A test that reads the marker to check which contract a space was brought to:
+- A test that reads the marker to check which contract a space was brought to. The marker table now also has a row for the space `_prisma`, which holds Prisma's own tables, so leave it out of a query whose test expects only the application's and the extension's rows:
 
   ```sql
   -- Before
   select space, core_hash from prisma_contract.marker order by space;
 
   -- After
-  select space, core_hash from _prisma.marker order by space;
+  select space, core_hash from _prisma.marker where space <> '_prisma' order by space;
   ```
 
-- A test that creates Prisma's tables by hand must create them in `_prisma`. A test that runs the migration runner directly, without the commands above, now fails with `MIGRATION.PRISMA_TABLES_MISSING` until Prisma's tables exist; set the database up with `prisma db init`, or with the control client's `dbInit`, first.
+- A test that creates Prisma's tables by hand must create them in `_prisma`. A test that runs the migration runner directly, without the commands above, now fails with `MIGRATION.PRISMA_TABLES_MISSING` until Prisma's tables exist. Create only Prisma's tables first, with the control client's `bringPrismaSpaceUpToDate()`, or with `applyInstalledContractSpace` from `@prisma/orm-toolchain/migration-tools/spaces` when the test has no control client. Do not use `prisma db init` or `dbInit` for this: they also bring the application's or the extension's own space to its contract, so a test of that space's first migration no longer starts from an empty database.
