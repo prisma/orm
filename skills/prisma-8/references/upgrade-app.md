@@ -88,9 +88,11 @@ For each `(from, to)` step in the chain:
 
    **What to write, on the `8.0.0` release candidates.** Rewrite every entry to the exact `<to>` version, with no caret and no tilde. All entries move to the same version.
 
-   **What to write, from release 8.0.** The entries no longer share one version. Each moves to its own package's first version in the `<to>` release: the plain `X.Y.0` for a GA package and `X.Y.0-<level>.0` for one below GA. At release 8.0 those are `8.0.1` and `8.0.1-ea.0`. `pnpm view <name> versions --json` lists a package's versions. Which range goes in front depends on the database package, as [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#what-an-application-writes) describes:
+   **What to write, from release 8.0.** The entries no longer share one version. Each moves to its own package's first version in the `<to>` release. From release 8.1 on, that is the plain `X.Y.0` for a GA package and `X.Y.0-<level>.0` for one below GA. At release 8.0 it is `8.0.1` and `8.0.1-ea.0`. `pnpm view <name> versions --json` lists a package's versions. Which range goes in front depends on the database package, as [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#what-an-application-writes) describes:
    - beside a GA database package, a GA entry gets a caret and an entry below GA gets a tilde;
    - beside a database package below GA, every entry gets a tilde.
+
+   **Write a caret only when `<to>` is the newest published release,** which `pnpm view <database package> versions --json` shows. A caret accepts later releases, so at any other step the install would take a release later than `<to>`, whose instructions have not been applied. That is every step before the last one, and the last one too when the user's target is older than the newest release. At such a step write a tilde in place of the caret: a tilde stays within `<to>` and still takes its fixes. If the upgrade ends on a release that is not the newest, say in the final report that those entries have a tilde where [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#what-an-application-writes) gives a caret.
 
    **`@prisma/orm-extension-paradedb`** has version numbers of its own. Set it to the release the pre-flight noted for this step, as for an extension published by someone else.
 

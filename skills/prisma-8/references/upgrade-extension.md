@@ -55,11 +55,13 @@ For each `(from, to)` step in the chain:
 
 1. **Bump `@prisma/orm-*` deps.** What to write depends on the release:
    - **On the `8.0.0` release candidates,** rewrite every `@prisma/orm-*` entry in the extension's `package.json` to the exact `<to>` version, such as `"8.0.0-rc.11"`: no caret, no tilde, no range, and no `workspace:` specifier. The exact-pin rule below says why. All entries move to the same version. That includes another extension published from the Prisma repository, such as `@prisma/orm-extension-pgvector`: every `@prisma/orm-*` package is published at every release, and each lists the others at that release's version.
-   - **From release 8.0,** write the ranges that [the last section](#from-release-80-number-your-package-and-declare-ranges) gives.
+   - **From release 8.0,** the two sections of `package.json` differ.
+     - Under `peerDependencies`, write the ranges that [the last section](#from-release-80-number-your-package-and-declare-ranges) gives. They say which releases your package accepts, and a caret there need not change at every step.
+     - Under `devDependencies`, write each package's first version in the `<to>` release, so that your build and tests run against `<to>`: `8.2.0` for a GA package at the step to release 8.2, whatever the peer range says. Put a tilde in front of every one, such as `~8.2.0` or `~8.2.0-ea.0`. A tilde stays within `<to>` and still takes its fixes. A caret would let the install take a later release, whose instructions have not been applied, and would let a GA package move ahead of a package below GA that the tests use. `@prisma/orm-extension-paradedb` is the exception: it has version numbers of its own, so write the range the last section gives for it.
 
    Where each entry goes is the same on every release:
-   - A package that the extension's shipped code imports belongs under `peerDependencies`, and again under `devDependencies`, at the same version.
-   - A package that only the extension's tests use, such as a database package the tests run against, belongs under `devDependencies` alone, at the same version.
+   - A package that the extension's shipped code imports belongs under `peerDependencies`, and again under `devDependencies`.
+   - A package that only the extension's tests use, such as a database package the tests run against, belongs under `devDependencies` alone.
    - Move any entry that is still under `dependencies` or `optionalDependencies`. An extension written for an earlier release had the framework, the family and the toolchain as ordinary dependencies.
 
    The skill itself ships inside the Prisma packages, so bumping them is what updates it. There is no separate skill package to bump.
