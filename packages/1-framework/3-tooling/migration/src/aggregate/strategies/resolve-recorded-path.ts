@@ -3,7 +3,13 @@ import type {
   MigrationPlan,
   MigrationPlanOperation,
 } from '@internal/framework-components/control';
+import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
+import {
+  isStructuredError,
+  type StructuredError,
+  structuredError,
+} from '@internal/utils/structured-error';
 import { EMPTY_CONTRACT_HASH } from '../../constants';
 import { findPathWithDecision } from '../../migration-graph';
 import type { MigrationOps, OnDiskMigrationPackage } from '../../package';
@@ -43,6 +49,38 @@ export interface ResolveRecordedPathInputs {
   readonly accessChangesOf: (
     operations: readonly MigrationPlanOperation[],
   ) => readonly MigrationAccessChange[];
+}
+
+/** A refusal to read an operation that does not say which migration it is in, with that migration and space added. */
+function inMigration(error: StructuredError, dirName: string, spaceId: string): StructuredError {
+  return structuredError(error.code, error.message, {
+    why: `In migration "${dirName}" of space "${spaceId}": ${error.why ?? error.message}`,
+    ...ifDefined('fix', error.fix),
+    ...ifDefined('nextActions', error.nextActions),
+    ...ifDefined('docsUrl', error.docsUrl),
+    meta: { ...error.meta, migration: dirName, space: spaceId },
+    cause: error,
+  });
+}
+
+/** The access changes of one migration's operations; a family that refuses an operation names its position in the migration, and this names the migration. */
+function accessChangesOfMigration(
+  input: Pick<ResolveRecordedPathInputs, 'accessChangesOf'>,
+  pkg: OnDiskMigrationPackage,
+  spaceId: string,
+): readonly MigrationAccessChange[] {
+  try {
+    return input.accessChangesOf(pkg.ops);
+  } catch (error) {
+    if (
+      isStructuredError(error) &&
+      error.code === 'MIGRATION.INVALID_OPERATION_ENTRY' &&
+      error.meta?.['migration'] === undefined
+    ) {
+      throw inMigration(error, pkg.dirName, spaceId);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -95,7 +133,7 @@ export function resolveRecordedPath(input: ResolveRecordedPathInputs): ResolveRe
         `Migration package missing for edge ${edge.migrationHash} in space "${space.spaceId}". The hydrated migration graph and packagesByMigrationHash map are out of sync — this should be unreachable; report.`,
       );
     }
-    for (const change of input.accessChangesOf(pkg.ops)) {
+    for (const change of accessChangesOfMigration(input, pkg, space.spaceId)) {
       accessChanges.push({ ...change, operationIndex: pathOps.length + change.operationIndex });
     }
     for (const op of pkg.ops) pathOps.push(op);
