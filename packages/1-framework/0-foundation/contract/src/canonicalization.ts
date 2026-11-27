@@ -20,7 +20,6 @@ export type NormalizeStorage = (storage: unknown) => unknown;
 
 const TOP_LEVEL_ORDER = [
   'formatVersion',
-  'canonicalVersion',
   'targetFamily',
   'target',
   'profileHash',
