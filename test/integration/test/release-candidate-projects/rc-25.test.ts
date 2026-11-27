@@ -205,6 +205,7 @@ describe.each(projects)('the $name project, as the 8.0.0-rc.25 CLI wrote it', (p
   });
 
   it('has snapshots the snapshot store reads with their content verified', async () => {
+    expect(snapshots.length).toBe(2);
     for (const hash of snapshots) {
       const snapshot = await readContractSnapshotJson(migrationsDir, hash, verifier);
       expect(snapshot).toMatchObject({ formatVersion: 1, storage: { storageHash: hash } });
