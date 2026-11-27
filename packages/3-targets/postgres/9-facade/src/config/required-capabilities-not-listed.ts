@@ -26,6 +26,8 @@ export interface RequiredCapabilitiesPlace {
   readonly where: string;
   /** The contract source's path, which the warning is reported at. */
   readonly path: string;
+  /** The names the config that reaches this place already imports, which the warning leaves out of its import. */
+  readonly alreadyImported: readonly string[];
 }
 
 /** The place in `defineContract`, for a TypeScript contract. */
@@ -35,12 +37,23 @@ export function inDefineContract(path: string): RequiredCapabilitiesPlace {
     value: new RequiredCapabilitiesList(contractBuilderModule),
     where: 'in defineContract',
     path,
+    alreadyImported: [],
   };
 }
 
-/** The place in the config, where `entry` replaces the contract entry. */
-export function asTheContractEntry(entry: TsExpression, path: string): RequiredCapabilitiesPlace {
-  return { key: 'contract', value: entry, where: 'as the contract entry in the config', path };
+/** The place in the config, where `entry` replaces the contract entry of a config that already imports `alreadyImported`. */
+export function asTheContractEntry(
+  entry: TsExpression,
+  path: string,
+  alreadyImported: readonly string[] = [],
+): RequiredCapabilitiesPlace {
+  return {
+    key: 'contract',
+    value: entry,
+    where: 'as the contract entry in the config',
+    path,
+    alreadyImported,
+  };
 }
 
 class ContractCapabilitiesCall extends TsExpression {
@@ -64,7 +77,11 @@ export function requiredCapabilitiesNotListed(
   sourceId: string,
 ): ContractSourceDiagnostic {
   const line = `${place.key}: ${place.value.renderTypeScript()}`;
-  const imports = renderImports(place.value.importRequirements()).trim();
+  const imports = renderImports(
+    place.value
+      .importRequirements()
+      .filter(({ symbol }) => !place.alreadyImported.includes(symbol)),
+  ).trim();
   return {
     code: 'CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED',
     message: `Your contract does not list the capabilities it requires, so it requires those of the newest PostgreSQL version and of the driver. Prisma 8.0 removes this default and requires the list. Write this ${place.where}, with its import:\n\n${line}\n\n${imports}`,
@@ -115,6 +132,7 @@ const inTheSourceOptions: Omit<RequiredCapabilitiesPlace, 'path'> = {
   key: 'capabilities',
   value: new ContractCapabilitiesCall(),
   where: 'in the options of the contract source given to defineConfig',
+  alreadyImported: [],
 };
 
 function sourceWithDefaultCapabilities(

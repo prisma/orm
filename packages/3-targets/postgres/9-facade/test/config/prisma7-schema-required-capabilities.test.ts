@@ -41,8 +41,7 @@ describe('prisma7Schema', () => {
       sql: { ...postgresCapabilitiesByVersion[18].sql, interactiveTransactions: true },
     });
     const line = `contract: prisma7Schema(\n  ${JSON.stringify(schemaPath)},\n  { requiredCapabilities: [...postgres18, ...postgresDriver] },\n)`;
-    const imports =
-      "import { postgres18, postgresDriver, prisma7Schema } from '@internal/postgres/config';";
+    const imports = "import { postgres18, postgresDriver } from '@internal/postgres/config';";
     expect(result.sourceWarnings).toEqual([
       {
         code: 'CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED',

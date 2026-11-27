@@ -35,7 +35,7 @@ export function prisma7Schema(schemaPath: string, options?: Prisma7SchemaOptions
   );
   return warnWhenRequiredCapabilitiesDefaulted(
     prisma7Contract(schemaPath, { binding: prisma7PostgresBinding, capabilities }),
-    asTheContractEntry(new Prisma7SchemaContractEntry(schemaPath), schemaPath),
+    asTheContractEntry(new Prisma7SchemaContractEntry(schemaPath), schemaPath, ['prisma7Schema']),
     () => listed === undefined,
   );
 }
