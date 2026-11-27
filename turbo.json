@@ -6,6 +6,7 @@
       "inputs": [
         "src/**",
         "migrations/**",
+        "test/utils.ts",
         "package.json",
         "tsconfig.json",
         "tsconfig.prod.json",
