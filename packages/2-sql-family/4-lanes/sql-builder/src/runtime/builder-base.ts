@@ -6,12 +6,12 @@ import type {
   MutationDefaultsOptions,
   OperationKind,
 } from '@internal/framework-components/runtime';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import type { SqlOperationEntry } from '@internal/sql-operations';
 import {
   AndExpr,
   type AnyExpression as AstExpression,
-  capabilityUnavailableMessage,
   collectOrderedParamRefs,
   IdentifierRef,
   isAggregateProjection,

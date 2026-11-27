@@ -60,7 +60,7 @@ describe('transaction() on a role-bound client', () => {
     });
     const db = await supabase({ contract, jwtSecret, url: 'postgres://localhost/db' });
     await expect(
-      // @ts-expect-error the contract does not list sql.interactiveTransactions
+      // @ts-expect-error the contract declares no dependency on sql.interactiveTransactions
       db.asAnon().transaction(async () => 1),
     ).rejects.toMatchObject({
       code: 'ORM.CAPABILITY_MISSING',

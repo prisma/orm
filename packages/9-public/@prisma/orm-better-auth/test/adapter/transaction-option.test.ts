@@ -32,7 +32,7 @@ describe('the transaction option', () => {
       // @ts-expect-error the type already refuses it
       prismaAdapter(withoutTransactions, options),
     ).toThrow(
-      'The transaction option is unavailable: your contract declares no dependency on `sql.interactiveTransactions`. It runs Better Auth transactions through the client’s `transaction()`; without it, turn the option off. To enable it, add `sql.interactiveTransactions` to your contract’s required capabilities.',
+      "The transaction option is unavailable: your contract declares no dependency on `sql.interactiveTransactions`. The option runs Better Auth transactions through the client's `transaction()`, which needs it. To enable it, add `sql.interactiveTransactions` to your contract's required capabilities.",
     );
   });
 

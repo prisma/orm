@@ -63,11 +63,11 @@ describe("a client goes by the contract's capabilities, not its stack's", () => 
   it('refuses it to a contract that does not, though the adapter declares it', () => {
     const client = clientFor(withoutLocking);
     expect(() =>
-      // @ts-expect-error the contract does not list sql.forUpdate
+      // @ts-expect-error the contract declares no dependency on sql.forUpdate
       client.sql.public.users.select('id').forUpdate().build(),
     ).toThrow(capabilityMissing);
     expect(() =>
-      // @ts-expect-error the contract does not list sql.forUpdate
+      // @ts-expect-error the contract declares no dependency on sql.forUpdate
       client.orm.public.User.forUpdate(),
     ).toThrow(capabilityMissing);
   });

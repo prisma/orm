@@ -22,15 +22,15 @@ test('a contract that requires the driver’s capabilities can run transaction()
 
 test('for a contract whose list lacks interactive transactions, transaction() is a type error that names the capability', async () => {
   const db = postgres({ contract: withoutInteractiveTransactions, url });
-  // @ts-expect-error the contract does not list sql.interactiveTransactions
+  // @ts-expect-error the contract declares no dependency on sql.interactiveTransactions
   db.transaction(async () => 1);
   const connection = await postgresServerless({
     contract: withoutInteractiveTransactions,
   }).connect({ url });
-  // @ts-expect-error the contract does not list sql.interactiveTransactions
+  // @ts-expect-error the contract declares no dependency on sql.interactiveTransactions
   connection.transaction(async () => 1);
   expectTypeOf<Parameters<typeof db.transaction<number>>[0]>().toExtend<{
-    readonly 'the contract does not list sql.interactiveTransactions': never;
+    readonly '`transaction()` is unavailable: your contract declares no dependency on `sql.interactiveTransactions`': never;
   }>();
 });
 

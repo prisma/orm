@@ -11,6 +11,7 @@ import {
   type JoinConfig,
 } from '@better-auth/core/db/adapter';
 import { BetterAuthError } from '@better-auth/core/error';
+import { capabilityUnavailableMessage } from '@prisma/orm-family-sql/contract/capability-messages';
 import { blindCast } from '@prisma/orm-framework/utils/casts';
 import { createModelCollections, type ModelCollections } from './collections';
 import { compareContract } from './contract/compare';
@@ -75,12 +76,16 @@ function assertClient(db: PrismaClientLike, adapterOptions: PrismaAdapterOptions
   if (adapterOptions.transaction !== true) return;
   if (!hasTransaction(db)) {
     throw new BetterAuthError(
-      'The transaction option runs Better Auth transactions through the client’s transaction(), which this object does not have. Pass the Prisma client, or turn the option off.',
+      "The transaction option runs Better Auth transactions through the client's transaction(), which this object does not have. Pass the Prisma client, or turn the option off.",
     );
   }
   if (!listsInteractiveTransactions(contract)) {
     throw new BetterAuthError(
-      'The transaction option is unavailable: your contract declares no dependency on `sql.interactiveTransactions`. It runs Better Auth transactions through the client’s `transaction()`; without it, turn the option off. To enable it, add `sql.interactiveTransactions` to your contract’s required capabilities.',
+      capabilityUnavailableMessage(
+        'The transaction option',
+        ['sql.interactiveTransactions'],
+        "The option runs Better Auth transactions through the client's `transaction()`, which needs it.",
+      ),
     );
   }
 }

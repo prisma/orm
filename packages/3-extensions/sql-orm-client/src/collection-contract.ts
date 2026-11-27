@@ -5,12 +5,9 @@ import type {
   ContractRelationThrough,
   CrossReference,
 } from '@internal/contract/types';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
-import {
-  type CapabilityRequirement,
-  capabilityUnavailableMessage,
-  missingCapability,
-} from '@internal/sql-relational-core/ast';
+import { type CapabilityRequirement, missingCapability } from '@internal/sql-relational-core/ast';
 import { isExpression } from '@internal/sql-relational-core/expression';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';

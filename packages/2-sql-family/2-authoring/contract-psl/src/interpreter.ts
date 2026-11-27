@@ -87,6 +87,7 @@ import type {
   SyntaxNode,
 } from '@internal/psl-parser/syntax';
 import { NamespaceDeclarationAst } from '@internal/psl-parser/syntax';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import {
   type LoweredPackEntity,
   providesPslEntityPlacement,
@@ -1011,7 +1012,9 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       if (input.capabilities['sql']?.['checkConstraint'] !== true) {
         diagnostics.push({
           code: 'PSL_CHECK_UNSUPPORTED_TARGET',
-          message: `\`@@check\` on model "${model.name}" is unavailable: your contract declares no dependency on \`sql.checkConstraint\`. To enable it, add \`sql.checkConstraint\` to your contract's required capabilities.`,
+          message: capabilityUnavailableMessage(`\`@@check\` on model "${model.name}"`, [
+            'sql.checkConstraint',
+          ]),
           ...source.at(modelAttribute.span),
         });
         continue;

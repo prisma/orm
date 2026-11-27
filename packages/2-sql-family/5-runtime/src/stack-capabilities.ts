@@ -1,9 +1,9 @@
 import type { Contract } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   capabilityKeysText,
   capabilityUnavailableMessage,
-} from '@internal/sql-relational-core/ast';
+} from '@internal/sql-contract/capability-messages';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import { structuredError } from '@internal/utils/structured-error';
 import type { SqlExecutionStackWithDriver } from './sql-context';
 import type { RuntimeExecutionOptions } from './sql-runtime';
@@ -146,7 +146,7 @@ export type StackProvides<
   " is required by the contract but not provided by this client's connection"
 >;
 
-/** The capability a contract lists when the application runs transactions whose statements it sends one at a time. */
+/** The capability a contract requires when the application runs transactions whose statements it sends one at a time. */
 export interface InteractiveTransactionsCapability {
   readonly sql: { readonly interactiveTransactions: true };
 }
@@ -158,13 +158,14 @@ type InteractiveTransactionsNotListed<Capabilities> =
       ? never
       : 'sql.interactiveTransactions';
 
-/** What a `transaction()` callback must also be: nothing for a contract that lists interactive transactions; for one that does not, a type no callback is, whose error names the capability. */
+/** What a `transaction()` callback must also be: nothing for a contract that requires interactive transactions; for one that does not, a type no callback is, whose error names the capability. */
 export type InteractiveTransactionsListed<TContract extends Contract<SqlStorage>> = NoneMissing<
   InteractiveTransactionsNotListed<TContract['capabilities']>,
-  'the contract does not list '
+  '`transaction()` is unavailable: your contract declares no dependency on `',
+  '`'
 >;
 
-/** Refuses `transaction()` for a contract that does not list interactive transactions. */
+/** Refuses `transaction()` for a contract that does not require interactive transactions. */
 export function assertInteractiveTransactionsListed(contract: Contract<SqlStorage>): void {
   if (contract.capabilities['sql']?.['interactiveTransactions'] === true) return;
   throw structuredError(

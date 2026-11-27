@@ -380,7 +380,7 @@ describe('transaction() for a contract that does not list interactive transactio
     const db = postgres({ contract: withoutInteractiveTransactions, url, verifyMarker: false });
     recorded.statements.length = 0;
 
-    // @ts-expect-error the contract does not list sql.interactiveTransactions
+    // @ts-expect-error the contract declares no dependency on sql.interactiveTransactions
     await expect(db.transaction(async () => 1)).rejects.toMatchObject(refusal);
     expect(recorded.statements).toEqual([]);
     await db.close();
@@ -394,7 +394,7 @@ describe('transaction() for a contract that does not list interactive transactio
     await using db = await serverless.connect({ url });
     recorded.statements.length = 0;
 
-    // @ts-expect-error the contract does not list sql.interactiveTransactions
+    // @ts-expect-error the contract declares no dependency on sql.interactiveTransactions
     await expect(db.transaction(async () => 1)).rejects.toMatchObject(refusal);
     expect(recorded.statements).toEqual([]);
   });

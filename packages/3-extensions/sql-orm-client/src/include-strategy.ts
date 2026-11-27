@@ -1,6 +1,6 @@
 import type { Contract } from '@internal/contract/types';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { capabilityUnavailableMessage } from '@internal/sql-relational-core/ast';
 import { ormError } from './orm-errors';
 import type { CollectionState, IncludeExpr } from './types';
 
@@ -12,11 +12,15 @@ const oneQueryIncludeCapabilities = [
   'jsonAggWithoutTruncation',
 ] as const;
 
-export function selectIncludeStrategy(contract: Contract<SqlStorage>): IncludeStrategy {
+function oneQueryIncludeCapabilitiesMissing(contract: Contract<SqlStorage>): readonly string[] {
   const sql = contract.capabilities['sql'];
-  return oneQueryIncludeCapabilities.every((capability) => sql?.[capability] === true)
-    ? 'join'
-    : 'query';
+  return oneQueryIncludeCapabilities
+    .filter((capability) => sql?.[capability] !== true)
+    .map((capability) => `sql.${capability}`);
+}
+
+export function selectIncludeStrategy(contract: Contract<SqlStorage>): IncludeStrategy {
+  return oneQueryIncludeCapabilitiesMissing(contract).length === 0 ? 'join' : 'query';
 }
 
 /** Whether a read leaves its includes to statements of their own, one query per relation. */
@@ -38,13 +42,14 @@ export function assertPreparableIncludes(
   if (!loadsIncludesPerRelation(contract, state.includes)) {
     return;
   }
-  const capabilities = oneQueryIncludeCapabilities.map((capability) => `sql.${capability}`);
+  const capabilities = oneQueryIncludeCapabilitiesMissing(contract);
+  const them = capabilities.length === 1 ? 'it' : 'them';
   throw ormError(
     'ORM.CAPABILITY_MISSING',
     capabilityUnavailableMessage(
       `\`prepared.${method}()\` with includes`,
       capabilities,
-      'Without them includes load with one query per relation, and a prepared read is one statement.',
+      `Without ${them}, includes load with one query per relation, and a prepared read is one statement.`,
     ),
     { meta: { capabilities, method: `prepared.${method}` } },
   );

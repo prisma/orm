@@ -26,6 +26,7 @@ import {
   typeReferenceNode,
 } from '@internal/psl-parser';
 import type { PslSources } from '@internal/psl-parser/syntax';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import {
   type AuthoredColumnDefault,
   type EnumTypeHandle,
@@ -333,7 +334,10 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       if (capabilities['sql']?.['scalarList'] !== true) {
         diagnostics.push({
           code: 'PSL_SCALAR_LIST_UNSUPPORTED_TARGET',
-          message: `The scalar list field "${model.name}.${field.name}" is unavailable: your contract declares no dependency on \`sql.scalarList\`. To enable it, add \`sql.scalarList\` to your contract's required capabilities.`,
+          message: capabilityUnavailableMessage(
+            `The scalar list field "${model.name}.${field.name}"`,
+            ['sql.scalarList'],
+          ),
           ...source.at(field.span),
         });
         continue;

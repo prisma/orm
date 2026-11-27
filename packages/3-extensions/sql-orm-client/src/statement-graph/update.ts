@@ -1,6 +1,6 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import type { ProjectionItem, UpdateAst } from '@internal/sql-relational-core/ast';
-import { capabilityUnavailableMessage } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { hasContractCapability } from '../collection-contract';
 import { ormError } from '../orm-errors';

@@ -1,9 +1,9 @@
 import type { Contract } from '@internal/contract/types';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   ColumnRef,
-  capabilityUnavailableMessage,
   checkLimitOffset,
   type ProjectionItem,
   SelectAst,

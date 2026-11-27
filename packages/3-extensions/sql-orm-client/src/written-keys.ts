@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
-import { capabilityUnavailableMessage } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { isAutoIncrementColumn, resolveRowIdentityColumns } from './collection-contract';
 import { ormError } from './orm-errors';

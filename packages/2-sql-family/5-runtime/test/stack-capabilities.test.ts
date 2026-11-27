@@ -170,6 +170,26 @@ describe('warnOfCapabilitiesNotProvided', () => {
     ]);
   });
 
+  it('lists several missing capabilities and uses the plural', () => {
+    const log = spyLog();
+    warnOfCapabilitiesNotProvided(
+      contractRequiring({ http: { batch: true }, sql: { interactiveTransactions: true } }),
+      stackDeclaring({}),
+      { log },
+    );
+    expect(log.warn.mock.calls).toEqual([
+      [
+        {
+          code: 'CONTRACT.CAPABILITIES_NOT_PROVIDED',
+          scope: 'stack-verification',
+          missing: ['http.batch', 'sql.interactiveTransactions'],
+          message:
+            "Your contract requires `http.batch` and `sql.interactiveTransactions`, which this client's connection does not provide. Remove them from your contract's required capabilities, or connect with a driver that provides them.",
+        },
+      ],
+    ]);
+  });
+
   it('warns nothing when the stack provides them, or when verifyMarker is false', () => {
     const log = spyLog();
     warnOfCapabilitiesNotProvided(

@@ -4,6 +4,7 @@ import type { CodecRef, DataTypeLookup } from '@internal/framework-components/co
 import { dataTypeParams } from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import { runtimeError } from '@internal/framework-components/runtime';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import {
   nameIsCatalogText,
   sqlBaseName,
@@ -21,7 +22,6 @@ import {
   type CaseExpr,
   type CastExpr,
   type ColumnRef,
-  capabilityUnavailableMessage,
   collectOrderedParamRefs,
   type DeleteAst,
   type FunctionCallExpr,

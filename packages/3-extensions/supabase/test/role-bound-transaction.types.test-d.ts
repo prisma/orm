@@ -21,8 +21,8 @@ test('a role-bound client runs transaction() when its contract lists interactive
 test('transaction() is a type error on a role-bound client whose contract does not list them', () => {
   const user = {} as RoleBoundDb<WithoutInteractiveTransactions>;
   const service = {} as ServiceRoleDb<WithoutInteractiveTransactions>;
-  // @ts-expect-error the contract does not list sql.interactiveTransactions
+  // @ts-expect-error the contract declares no dependency on sql.interactiveTransactions
   user.transaction(async () => 1);
-  // @ts-expect-error the contract does not list sql.interactiveTransactions
+  // @ts-expect-error the contract declares no dependency on sql.interactiveTransactions
   service.transaction(async () => 1);
 });
