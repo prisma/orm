@@ -98,8 +98,8 @@ export interface CanonicalizeContractOptions {
    * the per-target serializer not putting them in the JSON shape.
    */
   readonly serializeContract: SerializeContract;
-  /** The family's normal form of `storage`. Families whose storage has no defaults to leave out and no arrays to order omit it. */
-  readonly normalizeStorage?: NormalizeStorage;
+  /** The family's normal form of `storage`. A family whose storage has no defaults to leave out and no arrays to order passes a function that returns the storage it is given. */
+  readonly normalizeStorage: NormalizeStorage;
 }
 
 /**
@@ -126,7 +126,7 @@ export function canonicalizeContractToObject(
     ...ifDefined('defaultControlPolicy', serialized['defaultControlPolicy']),
     meta: serialized['meta'],
   };
-  return orderTopLevel(canonicalizeSections(normalized, options));
+  return orderTopLevel(canonicalizeSections(normalized, options.normalizeStorage));
 }
 
 /**
@@ -134,11 +134,11 @@ export function canonicalizeContractToObject(
  */
 export function canonicalizeSections(
   sections: Record<string, unknown>,
-  hooks: Pick<CanonicalizeContractOptions, 'normalizeStorage'>,
+  normalizeStorage: NormalizeStorage,
 ): Record<string, unknown> {
   const withNormalStorage =
-    hooks.normalizeStorage && sections['storage'] !== undefined
-      ? { ...sections, storage: hooks.normalizeStorage(sections['storage']) }
+    sections['storage'] !== undefined
+      ? { ...sections, storage: normalizeStorage(sections['storage']) }
       : sections;
   return blindCast<Record<string, unknown>, 'sorting a record preserves its outer object shape'>(
     sortObjectKeys(withNormalStorage),

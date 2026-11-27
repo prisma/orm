@@ -6,7 +6,7 @@ import type { SerializeContract } from '@internal/contract/hashing';
 import type { Contract as FrameworkContract } from '@internal/contract/types';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';
 import mongoTargetPack from '@internal/target-mongo/pack';
@@ -49,7 +49,7 @@ async function emitNormalized(contract: FrameworkContract): Promise<Record<strin
   );
   const emitted = await emit(normalized, mongoStack, mongoFamilyDescriptor.emission, {
     serializeContract,
-    ...mongoContractCanonicalizationHooks,
+    normalizeStorage: normalizeMongoStorage,
   });
   return JSON.parse(emitted.contractJson) as Record<string, unknown>;
 }

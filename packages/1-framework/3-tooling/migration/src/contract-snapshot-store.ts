@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
+import type { NormalizeStorage } from '@internal/contract/hashing';
 import { CONTRACT_SNAPSHOTS_DIRNAME, storageHashHex } from '@internal/framework-components/control';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { blindCast } from '@internal/utils/casts';
@@ -13,10 +14,7 @@ import {
   errorInvalidJson,
   MigrationToolsError,
 } from './errors';
-import type { SnapshotCanonicalizationHooks } from './hash';
 import { recomputePublishedStorageHash } from './hash';
-
-export type { SnapshotCanonicalizationHooks } from './hash';
 
 const CONTRACT_JSON_FILE = 'contract.json';
 const CONTRACT_DTS_FILE = 'contract.d.ts';
@@ -72,7 +70,7 @@ export interface SnapshotContentVerifier {
 }
 
 export function createSnapshotContentVerifier(
-  hooks?: SnapshotCanonicalizationHooks,
+  normalizeStorage: NormalizeStorage,
 ): SnapshotContentVerifier {
   return {
     assertSnapshotContentMatches(contractJson, storageHash, jsonPath) {
@@ -84,7 +82,7 @@ export function createSnapshotContentVerifier(
         target: record.target,
         targetFamily: record.targetFamily,
         storage: record.storage,
-        hooks,
+        normalizeStorage,
       });
       if (computedHash !== storageHash) {
         throw errorContractSnapshotContentMismatch({ storageHash, computedHash, jsonPath });

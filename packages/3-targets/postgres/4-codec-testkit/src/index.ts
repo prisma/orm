@@ -41,6 +41,7 @@ import {
   dataTypeValuesEqual,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlBaseName, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
 import { SqlStorage } from '@internal/sql-contract/types';
 import {
@@ -193,7 +194,12 @@ function buildConformanceContract(): PostgresContract {
   const namespaces = {};
   const storage = new SqlStorage({
     namespaces,
-    storageHash: computeStorageHash({ target, targetFamily, storage: { namespaces } }),
+    storageHash: computeStorageHash({
+      target,
+      targetFamily,
+      storage: { namespaces },
+      normalizeStorage: normalizeSqlStorage,
+    }),
   });
 
   return {

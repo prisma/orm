@@ -1,5 +1,5 @@
 import { computeStorageHash } from '@internal/contract/hashing';
-import { mongoContractCanonicalizationHooks } from './canonicalization-hooks';
+import { normalizeMongoStorage } from './canonicalization-hooks';
 import { buildMongoNamespace } from './ir/build-mongo-namespace';
 import type { MongoCollectionInput } from './ir/mongo-collection';
 import { MongoStorage } from './ir/mongo-storage';
@@ -44,7 +44,7 @@ export function buildMongoStorage(input: {
         },
       },
     },
-    ...mongoContractCanonicalizationHooks,
+    normalizeStorage: normalizeMongoStorage,
   });
   return new MongoStorage({ storageHash, namespaces: { [input.namespaceId]: namespace } });
 }

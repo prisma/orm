@@ -33,7 +33,7 @@ export async function emit(
 
   const canonicalized = canonicalizeContractToObject(contract, {
     serializeContract: options.serializeContract,
-    ...ifDefined('normalizeStorage', options.normalizeStorage),
+    normalizeStorage: options.normalizeStorage,
   });
   const contractJsonString = JSON.stringify(
     {

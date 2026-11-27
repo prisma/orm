@@ -4,7 +4,7 @@ import { enrichContract } from '@internal/cli/control-api';
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import { loadConfig } from '@internal/config-loader';
 import { createControlStack } from '@internal/framework-components/control';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { timeouts } from '@repo/test-utils';
 import { join, relative, sep } from 'pathe';
@@ -203,30 +203,18 @@ describe('emit parity fixtures', () => {
         );
         expect(normalizedTs).toEqual(normalizedPsl);
 
-        const tsEmitFirst = await emit(
-          normalizedTs,
-          stack,
-          sqlEmission,
-          sqlContractCanonicalizationHooks,
-        );
-        const tsEmitSecond = await emit(
-          normalizedTs,
-          stack,
-          sqlEmission,
-          sqlContractCanonicalizationHooks,
-        );
-        const pslEmitFirst = await emit(
-          normalizedPsl,
-          stack,
-          sqlEmission,
-          sqlContractCanonicalizationHooks,
-        );
-        const pslEmitSecond = await emit(
-          normalizedPsl,
-          stack,
-          sqlEmission,
-          sqlContractCanonicalizationHooks,
-        );
+        const tsEmitFirst = await emit(normalizedTs, stack, sqlEmission, {
+          normalizeStorage: normalizeSqlStorage,
+        });
+        const tsEmitSecond = await emit(normalizedTs, stack, sqlEmission, {
+          normalizeStorage: normalizeSqlStorage,
+        });
+        const pslEmitFirst = await emit(normalizedPsl, stack, sqlEmission, {
+          normalizeStorage: normalizeSqlStorage,
+        });
+        const pslEmitSecond = await emit(normalizedPsl, stack, sqlEmission, {
+          normalizeStorage: normalizeSqlStorage,
+        });
 
         expect(tsEmitFirst).toMatchObject({
           contractJson: tsEmitSecond.contractJson,

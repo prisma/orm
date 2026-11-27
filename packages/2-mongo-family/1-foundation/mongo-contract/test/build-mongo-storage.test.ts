@@ -2,7 +2,7 @@ import { computeStorageHash } from '@internal/contract/hashing';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { buildMongoStorage } from '../src/build-mongo-storage';
-import { mongoContractCanonicalizationHooks } from '../src/canonicalization-hooks';
+import { normalizeMongoStorage } from '../src/canonicalization-hooks';
 import { MongoIndex } from '../src/ir/mongo-index';
 import { MongoStorage } from '../src/ir/mongo-storage';
 
@@ -53,7 +53,7 @@ describe('buildMongoStorage', () => {
             },
           },
         },
-        ...mongoContractCanonicalizationHooks,
+        normalizeStorage: normalizeMongoStorage,
       }),
     );
   });

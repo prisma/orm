@@ -32,6 +32,7 @@ function configDeclaringTypesFrom(output: string): configLoader.PrismaConfig {
       contractSerializer: {
         serializeContract: (contract: unknown) => contract,
         deserializeContract: (json: unknown) => json,
+        normalizeStorage: (storage: unknown) => storage,
       },
     },
     adapter: {

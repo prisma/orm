@@ -36,6 +36,7 @@ function createMockComponents(overrides?: { deserializeContract?: (json: unknown
     contractSerializer: {
       serializeContract: (contract: unknown) => contract,
       deserializeContract: (json: unknown) => json,
+      normalizeStorage: (storage: unknown) => storage,
     },
     // biome-ignore lint/suspicious/noExplicitAny: required for mock flexibility
   } as unknown as ControlTargetDescriptor<any, any, any>;

@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { blindCast, castAs } from '@internal/utils/casts';
-import { ifDefined } from '@internal/utils/defined';
 import { canonicalizeSections, type NormalizeStorage } from './canonicalization';
 import { contractError } from './contract-errors';
 import { isPlainRecord } from './is-plain-record';
@@ -33,18 +32,14 @@ function sha256(content: string): string {
   return hash.digest('hex');
 }
 
-interface CanonicalizationHooks {
-  readonly normalizeStorage?: NormalizeStorage | undefined;
-}
+const storageAsGiven: NormalizeStorage = (storage) => storage;
 
 function hashSection(
   input: { readonly target: string; readonly targetFamily: string } & Record<string, unknown>,
-  hooks: CanonicalizationHooks = {},
+  normalizeStorage: NormalizeStorage,
 ): string {
   const asJson = castAs<Record<string, unknown>>(JSON.parse(JSON.stringify(input)));
-  const canonical = canonicalizeSections(asJson, {
-    ...ifDefined('normalizeStorage', hooks.normalizeStorage),
-  });
+  const canonical = canonicalizeSections(asJson, normalizeStorage);
   return sha256(JSON.stringify(canonical, null, 2));
 }
 
@@ -52,7 +47,8 @@ export type ComputeStorageHashArgs = {
   target: string;
   targetFamily: string;
   storage: Record<string, unknown>;
-  readonly normalizeStorage?: NormalizeStorage;
+  /** The family's normal form of `storage`, the same function the family writes `storage` with. */
+  readonly normalizeStorage: NormalizeStorage;
 };
 
 export function computeStorageHash(args: ComputeStorageHashArgs): StorageHashBase<string> {
@@ -63,7 +59,7 @@ export function computeStorageHash(args: ComputeStorageHashArgs): StorageHashBas
         target: args.target,
         storage: omitNamespaceKindsForHash(args.storage),
       },
-      args,
+      args.normalizeStorage,
     ),
   );
 }
@@ -74,11 +70,14 @@ export function computeExecutionHash(args: {
   execution: Record<string, unknown>;
 }): ExecutionHashBase<string> {
   return blindCast<ExecutionHashBase<string>, 'sha256 digest of canonicalized execution'>(
-    hashSection({
-      targetFamily: args.targetFamily,
-      target: args.target,
-      execution: args.execution,
-    }),
+    hashSection(
+      {
+        targetFamily: args.targetFamily,
+        target: args.target,
+        execution: args.execution,
+      },
+      storageAsGiven,
+    ),
   );
 }
 
@@ -88,11 +87,14 @@ export function computeProfileHash(args: {
   capabilities: Record<string, Record<string, boolean>>;
 }): ProfileHashBase<string> {
   return blindCast<ProfileHashBase<string>, 'sha256 digest of canonicalized profile'>(
-    hashSection({
-      targetFamily: args.targetFamily,
-      target: args.target,
-      capabilities: args.capabilities,
-    }),
+    hashSection(
+      {
+        targetFamily: args.targetFamily,
+        target: args.target,
+        capabilities: args.capabilities,
+      },
+      storageAsGiven,
+    ),
   );
 }
 
@@ -117,11 +119,12 @@ export interface ExpectedContractHashes {
 
 export interface AssertContractHashesOptions {
   readonly contracts: readonly ExpectedContractHashes[];
-  readonly normalizeStorage?: NormalizeStorage;
+  /** The family's normal form of `storage`. */
+  readonly normalizeStorage: NormalizeStorage;
 }
 
 /**
- * Throws when the hash rules give any saved contract a storage, profile or execution hash other than the one expected, naming each contract and hash that differs. Families and targets call it from their tests, with their own canonicalization hooks, to hold their hashes fixed within a major.
+ * Throws when the hash rules give any saved contract a storage, profile or execution hash other than the one expected, naming each contract and hash that differs. Families and targets call it from their tests, with their family's normal form of `storage`, to hold their hashes fixed within a major. It holds only what its saved contracts contain, so they must cover every field the family's normal form names.
  */
 export function assertContractHashes(options: AssertContractHashesOptions): void {
   const failing = options.contracts
@@ -161,7 +164,7 @@ function contractHashDifferences(
       target: contract.target,
       targetFamily: contract.targetFamily,
       storage,
-      ...ifDefined('normalizeStorage', options.normalizeStorage),
+      normalizeStorage: options.normalizeStorage,
     }),
     expected.storageHash,
   );

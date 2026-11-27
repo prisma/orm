@@ -60,7 +60,7 @@ export function createContract<TStorage extends StorageBase = StorageBase>(
     target,
     targetFamily,
     storage: rawStorage as Record<string, unknown>,
-    ...ifDefined('normalizeStorage', overrides.normalizeStorage),
+    normalizeStorage: overrides.normalizeStorage ?? ((storage) => storage),
   });
 
   const storage = {

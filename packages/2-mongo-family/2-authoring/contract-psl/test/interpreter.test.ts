@@ -19,6 +19,7 @@ import {
   MongoStorage,
   MongoValidator,
 } from '@internal/mongo-contract';
+import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
 import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import {
   buildSymbolTable,
@@ -1204,6 +1205,7 @@ model Item {
       // the canonicalize → on-disk contract path.
       const canonical = canonicalizeContractToObject(ir as unknown as Contract, {
         serializeContract: (c) => JSON.parse(JSON.stringify(c)) as JsonObject,
+        normalizeStorage: normalizeMongoStorage,
       });
       const namespaces = (canonical['storage'] as Record<string, Record<string, unknown>>)[
         'namespaces'

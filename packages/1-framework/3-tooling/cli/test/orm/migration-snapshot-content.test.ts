@@ -25,6 +25,7 @@ const GENUINE_HASH = computeStorageHash({
   target: 'postgres',
   targetFamily: 'sql',
   storage: { namespaces: {} },
+  normalizeStorage: (storage) => storage,
 }) as string;
 
 afterEach(removeOfflineProjects);
@@ -37,7 +38,10 @@ function harness(project: OfflineProject) {
     groups: BIN_GROUPS,
     orm: {
       ...config,
-      target: { ...target, contractSerializer: { hashCanonicalizationHooks: {} } },
+      target: {
+        ...target,
+        contractSerializer: { normalizeStorage: (storage: unknown) => storage },
+      },
     },
   });
 }

@@ -245,6 +245,7 @@ describe('values the hashes keep', () => {
             public: { id: 'public', entries: { table: { t: { columns: { c: column } } } } },
           },
         },
+        normalizeStorage: (storage) => storage,
       });
     const base = { codecId: 'pg/text@1', nullable: false };
     expect(

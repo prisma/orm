@@ -152,7 +152,7 @@
 (not exported) type ClosedWhenEmpty<T> = [keyof T] extends [never] ? Record<string, never> : T
 (not exported) type CodecType<CodecTypes, CodecId, TypeParams, ParameterizedOutputs extends ParameterizedOutputTypesFunction, Side extends ValueTypeSide> = Side extends 'output' ? NonEmptyTypeParams<TypeParams> extends (infer Params extends Record<string, unknown>) ? ParameterizedOutputType<ParameterizedOutputs, CodecId, Params, PlainCodecType<CodecTypes, CodecId, Side>> : PlainCodecType<CodecTypes, CodecId, Side> : PlainCodecType<CodecTypes, CodecId, Side>
 (not exported) type ColumnHelperParams<D extends CodecDescriptorTemplate<any>> = Parameters<D['factory']>[0] extends Record<string, unknown> ? Parameters<D['factory']>[0] : undefined
-(not exported) type ComputeStorageHashArgs = { target: string; targetFamily: string; storage: Record<string, unknown>; readonly normalizeStorage?: NormalizeStorage; }
+(not exported) type ComputeStorageHashArgs = { target: string; targetFamily: string; storage: Record<string, unknown>; readonly normalizeStorage: NormalizeStorage; }
 (not exported) type ContextForRequirement<Req extends ArgTypeContext> = Req extends 'field' ? FieldAttributeCtx : Req extends 'model' ? ModelAttributeCtx : AttributeCtx
 (not exported) type ContractParts<StorageNamespaces, Overrides> = { readonly storage: StorageNamespaces; readonly overrides: Overrides; }
 (not exported) type ContributionsOf<Component> = Component extends { readonly generatorFunctions?: infer Contributions; } ? Contributions extends readonly (infer Contribution)[] ? Contribution : never : never
@@ -1001,8 +1001,8 @@
 ./components/control: interface CheckExpectation
 ./components/control: interface CheckExpectation, readonly required property expects: 'absent' | 'present'
 ./components/control: interface CheckExpectation, readonly required property object: string
-./components/control: interface ContractSerializer, readonly optional property hashCanonicalizationHooks?: { readonly normalizeStorage?: NormalizeStorage; }
-./components/control: interface ContractSerializer, readonly optional property normalizeStorage?: NormalizeStorage
+./components/control: interface ContractSerializer, readonly optional property skipsSnapshotContentVerification?: boolean
+./components/control: interface ContractSerializer, readonly required property normalizeStorage: NormalizeStorage
 ./components/control: interface ContractSerializer, required method deserializeContract<T extends TContract = TContract>(json: unknown): T
 ./components/control: interface ContractSerializer, required method serializeContract(contract: TContract): JsonObject
 ./components/control: interface ContractSerializer<TContract>
@@ -2588,8 +2588,8 @@
 ./components: interface ContractComponentRequirementsCheckResult, readonly optional property familyMismatch?: undefined | { readonly expected: string; readonly actual: string; }
 ./components: interface ContractComponentRequirementsCheckResult, readonly optional property targetMismatch?: undefined | { readonly expected: string; readonly actual: string; }
 ./components: interface ContractComponentRequirementsCheckResult, readonly required property missingExtensionPackIds: readonly string[]
-./components: interface ContractSerializer, readonly optional property hashCanonicalizationHooks?: { readonly normalizeStorage?: NormalizeStorage; }
-./components: interface ContractSerializer, readonly optional property normalizeStorage?: NormalizeStorage
+./components: interface ContractSerializer, readonly optional property skipsSnapshotContentVerification?: boolean
+./components: interface ContractSerializer, readonly required property normalizeStorage: NormalizeStorage
 ./components: interface ContractSerializer, required method deserializeContract<T extends TContract = TContract>(json: unknown): T
 ./components: interface ContractSerializer, required method serializeContract(contract: TContract): JsonObject
 ./components: interface ContractSerializer<TContract>
@@ -3915,10 +3915,10 @@
 ./contract/hashing: function computeProfileHash(args: { target: string; targetFamily: string; capabilities: Record<string, Record<string, boolean>>; }): ProfileHashBase<string>
 ./contract/hashing: function computeStorageHash(args: ComputeStorageHashArgs): StorageHashBase<string>
 ./contract/hashing: interface AssertContractHashesOptions
-./contract/hashing: interface AssertContractHashesOptions, readonly optional property normalizeStorage?: NormalizeStorage
 ./contract/hashing: interface AssertContractHashesOptions, readonly required property contracts: readonly ExpectedContractHashes[]
+./contract/hashing: interface AssertContractHashesOptions, readonly required property normalizeStorage: NormalizeStorage
 ./contract/hashing: interface CanonicalizeContractOptions
-./contract/hashing: interface CanonicalizeContractOptions, readonly optional property normalizeStorage?: NormalizeStorage
+./contract/hashing: interface CanonicalizeContractOptions, readonly required property normalizeStorage: NormalizeStorage
 ./contract/hashing: interface CanonicalizeContractOptions, readonly required property serializeContract: SerializeContract
 ./contract/hashing: interface ExpectedContractHashes
 ./contract/hashing: interface ExpectedContractHashes, readonly optional property executionHash?: string
@@ -4179,10 +4179,10 @@
 ./contract: interface ApplicationDomainNamespace, readonly optional property enum?: Record<string, ContractEnum>
 ./contract: interface ApplicationDomainNamespace, readonly required property models: Record<string, ContractModelBase>
 ./contract: interface AssertContractHashesOptions
-./contract: interface AssertContractHashesOptions, readonly optional property normalizeStorage?: NormalizeStorage
 ./contract: interface AssertContractHashesOptions, readonly required property contracts: readonly ExpectedContractHashes[]
+./contract: interface AssertContractHashesOptions, readonly required property normalizeStorage: NormalizeStorage
 ./contract: interface CanonicalizeContractOptions
-./contract: interface CanonicalizeContractOptions, readonly optional property normalizeStorage?: NormalizeStorage
+./contract: interface CanonicalizeContractOptions, readonly required property normalizeStorage: NormalizeStorage
 ./contract: interface CanonicalizeContractOptions, readonly required property serializeContract: SerializeContract
 ./contract: interface Contract, readonly optional property defaultControlPolicy?: ControlPolicy
 ./contract: interface Contract, readonly optional property execution?: ContractExecutionSection

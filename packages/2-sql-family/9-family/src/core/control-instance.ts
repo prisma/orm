@@ -46,7 +46,7 @@ import {
   UNBOUND_PSL_NAMESPACE_NAME,
 } from '@internal/framework-components/psl-ast';
 import { assertDescriptorSelfConsistency } from '@internal/migration-tools/spaces';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { requiresNameUniqueAcrossNamespaces } from '@internal/sql-contract/entity-handle-lowering-hook';
 import type { SqlControlDriverInstance, SqlStorage } from '@internal/sql-contract/types';
 import type {
@@ -536,7 +536,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
         extensionId: extension.id,
         contractJson,
         headRefHash: headRef.hash,
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       });
     }
   }

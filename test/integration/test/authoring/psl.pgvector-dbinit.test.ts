@@ -7,7 +7,7 @@ import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import { materialiseMigrationPackage } from '@internal/migration-tools/io';
 import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
@@ -107,7 +107,9 @@ describe(
       // arrays the SQL contract validator requires — production emit gets
       // these from `descriptor.contractSerializer`; this inline emit must
       // supply them the same way the side-by-side fixture test does.
-      const emitted = await emit(enrichedIR, stack, sqlEmission, sqlContractCanonicalizationHooks);
+      const emitted = await emit(enrichedIR, stack, sqlEmission, {
+        normalizeStorage: normalizeSqlStorage,
+      });
       return JSON.parse(emitted.contractJson) as Record<string, unknown>;
     }
 

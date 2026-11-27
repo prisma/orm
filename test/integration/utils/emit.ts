@@ -17,6 +17,7 @@ export function emit(
   return emitImpl(contract, stack, family, {
     serializeContract: (c) => stack.target.contractSerializer.serializeContract(c),
     typesModule: workspaceTypesModuleFor(stack.target.targetId),
+    normalizeStorage: stack.target.contractSerializer.normalizeStorage,
     ...options,
     deserializeContract: (json) => familyInstance.deserializeContract(json),
   });

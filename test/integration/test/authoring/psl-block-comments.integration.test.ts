@@ -4,7 +4,7 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import { enrichContract } from '@internal/cli/control-api';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prisma7Contract } from '@internal/sql-contract-prisma7/provider';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
@@ -130,12 +130,9 @@ model Event {
 
 async function emitted(loaded: Awaited<ReturnType<typeof load>>) {
   if (!loaded.ok) throw new Error(JSON.stringify(loaded.failure.diagnostics));
-  return emit(
-    enrichContract(loaded.value, [postgres, postgresAdapter]),
-    stack,
-    sqlEmission,
-    sqlContractCanonicalizationHooks,
-  );
+  return emit(enrichContract(loaded.value, [postgres, postgresAdapter]), stack, sqlEmission, {
+    normalizeStorage: normalizeSqlStorage,
+  });
 }
 
 describe('PSL block comments', () => {

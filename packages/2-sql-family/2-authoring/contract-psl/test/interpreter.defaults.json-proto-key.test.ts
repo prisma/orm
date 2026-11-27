@@ -1,4 +1,5 @@
 import { canonicalizeContractToObject } from '@internal/contract/hashing';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { castAs } from '@internal/utils/casts';
 import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';
@@ -40,6 +41,7 @@ function contractWithDefault(json: string) {
 function canonicalDefault(json: string): unknown {
   const canonical = canonicalizeContractToObject(contractWithDefault(json), {
     serializeContract: (contract) => castAs<JsonObject>(JSON.parse(JSON.stringify(contract))),
+    normalizeStorage: normalizeSqlStorage,
   });
   const storage = canonical['storage'] as {
     namespaces: Record<

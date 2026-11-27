@@ -7,7 +7,7 @@ import type {
 } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
@@ -37,7 +37,7 @@ export const FIXTURE_HASH = computeStorageHash({
       },
     },
   },
-  ...sqlContractCanonicalizationHooks,
+  normalizeStorage: normalizeSqlStorage,
 });
 
 export function buildContract(
@@ -97,6 +97,7 @@ export function makeStack(options?: {
       contractSerializer: {
         deserializeContract: (json) => json as never,
         serializeContract: (contract) => contract as never,
+        normalizeStorage: normalizeSqlStorage,
       },
       create: () => ({ familyId: 'sql', targetId: 'postgres' }),
     } as ControlTargetDescriptor<'sql', 'postgres'>,

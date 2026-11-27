@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { loadContractFromTs } from '@internal/cli';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -40,7 +40,7 @@ describe('emit command functionality', () => {
         target.contractSerializer.serializeContract(
           c as Parameters<typeof target.contractSerializer.serializeContract>[0],
         ),
-      ...sqlContractCanonicalizationHooks,
+      normalizeStorage: normalizeSqlStorage,
     });
   };
 

@@ -1,6 +1,7 @@
 import { computeStorageHash } from '@internal/contract/hashing';
 import { coreHash } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { PostgresNativeEnum } from '../src/core/postgres-native-enum';
@@ -313,6 +314,7 @@ describe('PostgresSchema — native_enum affects storageHash', () => {
     return computeStorageHash({
       target: 'postgres',
       targetFamily: 'sql',
+      normalizeStorage: normalizeSqlStorage,
       storage: {
         namespaces: {
           auth: new PostgresSchema({
@@ -339,6 +341,7 @@ describe('PostgresSchema — native_enum affects storageHash', () => {
     const withEnum = computeStorageHash({
       target: 'postgres',
       targetFamily: 'sql',
+      normalizeStorage: normalizeSqlStorage,
       storage: {
         namespaces: {
           auth: new PostgresSchema({
@@ -356,6 +359,7 @@ describe('PostgresSchema — native_enum affects storageHash', () => {
     const withoutEnum = computeStorageHash({
       target: 'postgres',
       targetFamily: 'sql',
+      normalizeStorage: normalizeSqlStorage,
       storage: {
         namespaces: {
           auth: new PostgresSchema({ id: 'auth', entries: { table: {} } }),

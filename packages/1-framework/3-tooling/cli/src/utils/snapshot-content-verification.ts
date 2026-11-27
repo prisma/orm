@@ -1,27 +1,21 @@
-import type {
-  SnapshotCanonicalizationHooks,
-  SnapshotContentVerifier,
-} from '@internal/migration-tools/contract-snapshot-store';
+import type { ContractSerializer } from '@internal/framework-components/control';
+import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { createSnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 
 /**
- * Build the per-command snapshot content verifier from the target
- * serializer's `hashCanonicalizationHooks` — the hooks the family's emit
- * pipeline computed the published storage hash with. A serializer that does
- * not declare its hashing hooks (structural test stand-ins) reads without
- * content verification. Build one verifier per command run and share it
- * across every load, so each snapshot hash is recomputed at most once per run.
+ * Build the per-command snapshot content verifier from the target serializer's `normalizeStorage`, the function the family's emit computed the published storage hash with. A target with no serializer (structural test stand-ins), or whose serializer sets `skipsSnapshotContentVerification`, reads without content verification. Build one verifier per command run and share it across every load, so each snapshot hash is recomputed at most once per run.
  */
 export function snapshotVerifierFor(config: {
   readonly target: {
-    readonly contractSerializer?: {
-      readonly hashCanonicalizationHooks?: SnapshotCanonicalizationHooks;
-    };
+    readonly contractSerializer?: Pick<
+      ContractSerializer<unknown>,
+      'normalizeStorage' | 'skipsSnapshotContentVerification'
+    >;
   };
 }): SnapshotContentVerifier | undefined {
-  const hooks = config.target.contractSerializer?.hashCanonicalizationHooks;
-  if (hooks === undefined) {
+  const serializer = config.target.contractSerializer;
+  if (serializer === undefined || serializer.skipsSnapshotContentVerification === true) {
     return undefined;
   }
-  return createSnapshotContentVerifier(hooks);
+  return createSnapshotContentVerifier(serializer.normalizeStorage);
 }

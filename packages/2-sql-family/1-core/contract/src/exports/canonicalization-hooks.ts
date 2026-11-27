@@ -1,1 +1,1 @@
-export { normalSqlDomain, sqlContractCanonicalizationHooks } from '../canonicalization-hooks';
+export { normalizeSqlDomain, normalizeSqlStorage } from '../canonicalization-hooks';

@@ -24,8 +24,8 @@ import {
   validateMongoStorage,
 } from '@internal/mongo-contract';
 import {
-  mongoContractCanonicalizationHooks,
-  normalMongoDomain,
+  normalizeMongoDomain,
+  normalizeMongoStorage,
 } from '@internal/mongo-contract/canonicalization-hooks';
 import { composeMongoEntityKinds } from '@internal/mongo-contract/entity-kinds';
 import { blindCast } from '@internal/utils/casts';
@@ -114,7 +114,7 @@ export abstract class MongoContractSerializerBase<TContract>
           domain: blindCast<
             JsonValue,
             'the domain normal form only leaves fields out of the printed JSON domain'
-          >(normalMongoDomain(printed['domain'])),
+          >(normalizeMongoDomain(printed['domain'])),
         };
       },
     },
@@ -149,16 +149,10 @@ export abstract class MongoContractSerializerBase<TContract>
     );
   }
 
-  normalizeStorage = mongoContractCanonicalizationHooks.normalizeStorage;
+  readonly normalizeStorage = normalizeMongoStorage;
 
-  // No hashCanonicalizationHooks: the Mongo emit pipeline hashes a projection
-  // of storage (`{ id, collections }` per namespace), not the persisted
-  // `{ id, entries: { collection } }` shape, so the published hash cannot be
-  // recomputed from a snapshot's content. Mongo snapshots therefore read
-  // without content verification until the hash covers the persisted shape.
-  // Snapshots written before ADR 317 were rewritten in place with index names
-  // and keep their old hash, which markers, the ledger and migration from/to
-  // name, so a future content check must accept them.
+  /** Snapshots written before ADR 317 were rewritten in place with index names and keep their old hash, which markers, the ledger and migration `from`/`to` name, so a content check would reject them. */
+  readonly skipsSnapshotContentVerification = true;
 
   /**
    * Family-shared structural validation: parse against the Mongo

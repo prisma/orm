@@ -14,7 +14,7 @@ import {
   type PslSourceSettings,
 } from '@internal/framework-components/control';
 import { printPsl } from '@internal/psl-printer';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';
@@ -139,7 +139,7 @@ export function serializedWithoutCapabilities(contract: Contract<SqlStorage>): u
     JSON.stringify(
       canonicalizeContractToObject(contract, {
         serializeContract: () => serializer.serializeContract(contract),
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       }),
     ),
   );

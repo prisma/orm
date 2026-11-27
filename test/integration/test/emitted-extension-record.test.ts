@@ -5,7 +5,7 @@ import postgresDriver from '@internal/driver-postgres/control';
 import pgvector from '@internal/extension-pgvector/control';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
@@ -64,7 +64,7 @@ describe('the record an emitted contract keeps of an extension', () => {
       enrichContract(loaded.value, [postgres, postgresAdapter, pgvector]),
       stack,
       sqlEmission,
-      sqlContractCanonicalizationHooks,
+      { normalizeStorage: normalizeSqlStorage },
     );
   }
 

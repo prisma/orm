@@ -9,7 +9,7 @@ import type {
 import { createControlStack } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -54,7 +54,7 @@ const FIXTURE_HEAD_HASH = computeStorageHash({
   target: TARGET,
   targetFamily: TARGET_FAMILY,
   storage: fixtureHashBody,
-  ...sqlContractCanonicalizationHooks,
+  normalizeStorage: normalizeSqlStorage,
 });
 
 function buildContract(): Contract<SqlStorage> {
@@ -127,6 +127,7 @@ function makeStack(
       contractSerializer: {
         deserializeContract: (json) => json as never,
         serializeContract: (contract) => contract as never,
+        normalizeStorage: normalizeSqlStorage,
       },
       create: () => ({ familyId: 'sql', targetId: 'postgres' }),
     } as ControlTargetDescriptor<'sql', 'postgres'>,

@@ -3,6 +3,7 @@ import type {
   ControlTargetDescriptor,
 } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { SqlIndexIR, SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
@@ -46,6 +47,7 @@ function createMockStack() {
       contractSerializer: {
         deserializeContract: (json) => json as never,
         serializeContract: (contract) => contract as never,
+        normalizeStorage: normalizeSqlStorage,
       },
       create: () => ({ familyId: 'sql', targetId: 'postgres' }),
     } as ControlTargetDescriptor<'sql', 'postgres'>,

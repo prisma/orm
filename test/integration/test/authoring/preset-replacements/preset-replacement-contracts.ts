@@ -9,13 +9,13 @@ import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import { defineContract as defineMongoContract } from '@internal/mongo/contract-builder';
-import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
 import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
 import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { defineContract as definePostgresContract } from '@internal/postgres/contract-builder';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { defineContract as defineSqliteContract } from '@internal/sqlite/contract-builder';
@@ -201,7 +201,7 @@ async function emitSql(
     .deserializeContract(serializeContract(enrichContract(contract, [target, adapter])));
   const emitted = await emit(normalized, stack, sql.emission, {
     serializeContract,
-    ...sqlContractCanonicalizationHooks,
+    normalizeStorage: normalizeSqlStorage,
   });
   return emitted.contractJson;
 }
@@ -225,7 +225,7 @@ export async function emitMongo(contract: Contract): Promise<string> {
     );
   const emitted = await emit(normalized, mongoStack, mongoFamilyDescriptor.emission, {
     serializeContract,
-    ...mongoContractCanonicalizationHooks,
+    normalizeStorage: normalizeMongoStorage,
   });
   return emitted.contractJson;
 }

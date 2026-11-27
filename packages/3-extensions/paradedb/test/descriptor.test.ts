@@ -2,7 +2,7 @@ import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { findPathWithDecision, reconstructGraph } from '@internal/migration-tools/migration-graph';
 import { assertDescriptorSelfConsistency } from '@internal/migration-tools/spaces';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { describe, expect, it } from 'vitest';
 import searchPathInstallOps from '../migrations/20261106T1401_install_pg_search_on_search_path/ops.json' with {
   type: 'json',
@@ -113,7 +113,7 @@ describe('paradedb extension descriptor', () => {
         extensionId: PARADEDB_SPACE_ID,
         contractJson: space.contractJson,
         headRefHash: space.headRef.hash,
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       }),
     ).not.toThrow();
   });

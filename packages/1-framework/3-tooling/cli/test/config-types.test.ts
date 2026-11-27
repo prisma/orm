@@ -69,6 +69,7 @@ describe('defineConfig', () => {
       contractSerializer: {
         deserializeContract: (json) => json as never,
         serializeContract: (contract) => contract as never,
+        normalizeStorage: (storage) => storage,
       },
       create: () => ({ familyId: 'sql', targetId: 'postgres' }),
     },

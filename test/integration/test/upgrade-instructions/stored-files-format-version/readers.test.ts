@@ -10,7 +10,7 @@ import {
   assertDescriptorSelfConsistency,
   contractSpaceFromJson,
 } from '@internal/migration-tools/spaces';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -147,7 +147,7 @@ describe('the extension package after the script', () => {
         extensionId: 'citext',
         contractJson: space.contractJson,
         headRefHash: space.headRef.hash,
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       }),
     ).not.toThrow();
   });

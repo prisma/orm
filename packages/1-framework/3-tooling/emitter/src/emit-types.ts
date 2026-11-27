@@ -22,20 +22,11 @@ export interface EmitStackInput {
 export interface EmitOptions {
   readonly outputJsonPath?: string;
   /**
-   * Per-target serializer that converts the in-memory contract into its
-   * canonical on-disk JsonObject shape before the framework's
-   * key-ordering runs. Threaded from the
-   * descriptor (`descriptor.contractSerializer.serializeContract`) at
-   * the CLI / control-API call site so target classes decide what
-   * appears in the JSON envelope rather than the framework guessing
-   * via property enumerability.
+   * Per-target serializer that converts the in-memory contract into its canonical on-disk JsonObject shape before the framework's key-ordering runs. Threaded from the descriptor (`descriptor.contractSerializer.serializeContract`) at the CLI / control-API call site so target classes decide what appears in the JSON envelope rather than the framework guessing via property enumerability.
    */
   readonly serializeContract: SerializeContract;
-  /**
-   * Optional family-contributed normal form of `storage`. Threaded from
-   * `descriptor.contractSerializer.normalizeStorage` when present.
-   */
-  readonly normalizeStorage?: NormalizeStorage;
+  /** The family's normal form of `storage`: `descriptor.contractSerializer.normalizeStorage`. */
+  readonly normalizeStorage: NormalizeStorage;
   /** The module the generated `contract.d.ts` imports the framework's and family's contract types from: the config's `contract.typesModule`. */
   readonly typesModule: string;
   /**

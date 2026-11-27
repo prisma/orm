@@ -2,7 +2,7 @@ import { applySpecifierDefaultControlPolicy } from '@internal/contract/apply-spe
 import { computeStorageHash } from '@internal/contract/hashing';
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { effectiveControlPolicy } from '@internal/contract/types';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import {
   checkConstraintInputFromSerialized,
   isMaterializedSqlNamespace,
@@ -139,7 +139,7 @@ export function stripDerivedChecksFromNonManagedTables(
         target: contract.target,
         targetFamily: contract.targetFamily,
         storage: storageWithoutHash,
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       }),
     }),
   };

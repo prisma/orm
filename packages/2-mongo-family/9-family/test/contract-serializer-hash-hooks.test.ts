@@ -1,11 +1,12 @@
+import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
 import { describe, expect, it } from 'vitest';
 import { MongoContractSerializer } from '../src/core/ir/mongo-contract-serializer';
 
-describe('MongoContractSerializer hash canonicalization hooks', () => {
-  it('publishes no hash recompute hooks: the emit hash input is a storage projection, not the persisted shape', () => {
-    const serializer = new MongoContractSerializer() as {
-      readonly hashCanonicalizationHooks?: object;
-    };
-    expect(serializer.hashCanonicalizationHooks).toBeUndefined();
+describe('MongoContractSerializer normal form of storage', () => {
+  it("is the MongoDB family's, and snapshots are read without content verification", () => {
+    expect(new MongoContractSerializer()).toMatchObject({
+      normalizeStorage: normalizeMongoStorage,
+      skipsSnapshotContentVerification: true,
+    });
   });
 });

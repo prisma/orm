@@ -1,4 +1,5 @@
 import type { ControlTargetDescriptor } from '@internal/framework-components/control';
+import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
 
 /**
  * Minimal stub `MigratableTargetDescriptor` for tests that only need a
@@ -24,6 +25,7 @@ export const stubMongoTargetDescriptor: ControlTargetDescriptor<'mongo', 'mongo'
     serializeContract() {
       throw new Error('stubMongoTargetDescriptor has no contract serializer');
     },
+    normalizeStorage: normalizeMongoStorage,
   },
   create() {
     return { familyId: 'mongo', targetId: 'mongo' };

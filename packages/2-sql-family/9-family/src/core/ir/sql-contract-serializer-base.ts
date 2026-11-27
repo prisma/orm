@@ -15,8 +15,8 @@ import {
   type Namespace,
 } from '@internal/framework-components/ir';
 import {
-  normalSqlDomain,
-  sqlContractCanonicalizationHooks,
+  normalizeSqlDomain,
+  normalizeSqlStorage,
 } from '@internal/sql-contract/canonicalization-hooks';
 import { composeSqlEntityKinds } from '@internal/sql-contract/entity-kinds';
 import {
@@ -131,7 +131,7 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
           domain: blindCast<
             JsonValue,
             'the domain normal form only leaves fields out of the printed JSON domain'
-          >(normalSqlDomain(printed['domain'])),
+          >(normalizeSqlDomain(printed['domain'])),
         };
       },
     },
@@ -165,9 +165,7 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
     >(contract);
   }
 
-  normalizeStorage = sqlContractCanonicalizationHooks.normalizeStorage;
-
-  hashCanonicalizationHooks = sqlContractCanonicalizationHooks;
+  readonly normalizeStorage = normalizeSqlStorage;
 
   protected parseSqlContractStructure(json: unknown): Contract<SqlStorage> {
     return validateSqlContractFully<Contract<SqlStorage>>(json, {

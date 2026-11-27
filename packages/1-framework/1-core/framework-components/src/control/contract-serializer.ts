@@ -43,14 +43,12 @@ export interface ContractSerializer<TContract> {
   serializeContract(contract: TContract): JsonObject;
 
   /**
-   * Optional family-contributed normal form of `storage` for the framework canonicalizer, which applies it to the serialized `storage` before the final key sort. The family leaves out the fields it defines as equal to their absence and orders its storage arrays; the framework itself leaves out nothing.
+   * The family's normal form of `storage`, which the framework applies both when it writes `storage` and when it computes or checks a storage hash, so the written section and the hash input are one form. The family leaves out the fields it defines as equal to their absence and orders its storage arrays; the framework itself leaves out nothing. A family with neither passes a function that returns the storage it is given. A target does not override its family's function.
    */
-  readonly normalizeStorage?: NormalizeStorage;
+  readonly normalizeStorage: NormalizeStorage;
 
   /**
-   * The canonicalization hooks storage hashes are recomputed with, the same hooks the family writes `storage` with. Integrity checks that recompute storage hashes (snapshot content verification, descriptor self-consistency) use these. A family whose hash input is not the persisted storage shape (Mongo hashes a projection) must not publish them; its snapshots then read without content verification.
+   * True when the target's migration snapshots are read without recomputing their storage hash from their content.
    */
-  readonly hashCanonicalizationHooks?: {
-    readonly normalizeStorage?: NormalizeStorage;
-  };
+  readonly skipsSnapshotContentVerification?: boolean;
 }

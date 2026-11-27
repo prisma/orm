@@ -11,9 +11,9 @@ import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type { MongoContract } from '@internal/mongo-contract';
-import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';
@@ -204,11 +204,11 @@ describe('side-by-side contract examples', () => {
         );
       const emittedTs = await emit(normalizedTs, sqlStack, sql.emission, {
         serializeContract: sqlSerializeContract,
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       });
       const emittedPsl = await emit(normalizedPsl, sqlStack, sql.emission, {
         serializeContract: sqlSerializeContract,
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       });
 
       expect(emittedTs.contractJson).toBe(emittedPsl.contractJson);
@@ -282,11 +282,11 @@ describe('side-by-side contract examples', () => {
       expect(normalizedTs).toEqual(normalizedPsl);
       const emittedTs = await emit(normalizedTs, mongoStack, mongoFamilyDescriptor.emission, {
         serializeContract: mongoSerializeContract,
-        ...mongoContractCanonicalizationHooks,
+        normalizeStorage: normalizeMongoStorage,
       });
       const emittedPsl = await emit(normalizedPsl, mongoStack, mongoFamilyDescriptor.emission, {
         serializeContract: mongoSerializeContract,
-        ...mongoContractCanonicalizationHooks,
+        normalizeStorage: normalizeMongoStorage,
       });
 
       expect(JSON.parse(emittedTs.contractJson)).toEqual(JSON.parse(emittedPsl.contractJson));

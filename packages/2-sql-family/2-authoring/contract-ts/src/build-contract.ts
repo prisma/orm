@@ -28,7 +28,7 @@ import type {
 } from '@internal/framework-components/codec';
 import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import {
   type CheckExpressionRenderer,
   discriminatorValueSet,
@@ -532,7 +532,7 @@ export function buildSqlContractFromDefinition(
           Record<string, unknown>,
           'the storage envelope is a plain object of namespaces; hashing reads it as a record'
         >(storageWithoutHash),
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       });
   const storage = new SqlStorage({ ...storageWithoutHash, storageHash });
 

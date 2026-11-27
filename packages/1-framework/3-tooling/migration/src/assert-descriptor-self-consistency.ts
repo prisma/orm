@@ -1,7 +1,6 @@
 import { CONTRACT_FORMAT_VERSIONS, readFormatVersion } from '@internal/contract/format-version';
 import type { NormalizeStorage } from '@internal/contract/hashing';
 import { blindCast } from '@internal/utils/casts';
-import { ifDefined } from '@internal/utils/defined';
 import { errorDescriptorHeadHashMismatch } from './errors';
 import { recomputePublishedStorageHash } from './hash';
 
@@ -16,7 +15,8 @@ export interface DescriptorSelfConsistencyInputs {
   /** The extension's bundled `contract.json`, as the descriptor imports it. */
   readonly contractJson: unknown;
   readonly headRefHash: string;
-  readonly normalizeStorage?: NormalizeStorage;
+  /** The family's normal form of `storage`. */
+  readonly normalizeStorage: NormalizeStorage;
 }
 
 /**
@@ -55,9 +55,7 @@ export function assertDescriptorSelfConsistency(inputs: DescriptorSelfConsistenc
     target: contract.target,
     targetFamily: contract.targetFamily,
     storage: contract.storage,
-    hooks: {
-      ...ifDefined('normalizeStorage', inputs.normalizeStorage),
-    },
+    normalizeStorage: inputs.normalizeStorage,
   });
   if (recomputed !== inputs.headRefHash) {
     throw errorDescriptorHeadHashMismatch({

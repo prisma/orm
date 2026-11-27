@@ -680,8 +680,8 @@
 ./contract-ts: type RefusalKey = { readonly kind: 'base'; readonly variant: string; } | { readonly kind: 'collectionSettings'; readonly model: string; } | { readonly kind: 'discriminator'; readonly model: string; } | { readonly kind: 'enum'; readonly enumName: string; } | { readonly kind: 'enumMember'; readonly enumName: string; readonly member: string; } | { readonly kind: 'field'; readonly owner: FieldOwner; readonly field: string; } | { readonly kind: 'index'; readonly model: string; readonly position: number; } | { readonly kind: 'model'; readonly model: string; } | { readonly kind: 'relation'; readonly model: string; readonly relation: string; } | { readonly kind: 'valueObject'; readonly valueObject: string; }
 ./contract-ts: type RelationNode = EmbedRelationNode | ReferenceRelationNode
 ./contract-ts: type RestatedFieldDifference = 'many' | 'nullable' | 'storedName' | 'type'
-./contract/canonicalization-hooks: const mongoContractCanonicalizationHooks: { readonly normalizeStorage: NormalizeStorage; }
-./contract/canonicalization-hooks: function normalMongoDomain(domain: unknown): unknown
+./contract/canonicalization-hooks: const normalizeMongoStorage: NormalizeStorage
+./contract/canonicalization-hooks: function normalizeMongoDomain(domain: unknown): unknown
 ./contract/data-type: function bsonTypesOfCodec(codecId: string, lookups: TypeLookups): readonly string[] | undefined
 ./contract/data-type: function codecTypeParamsProblem(codecId: string, typeParams: Readonly<Record<string, unknown>>, lookups: TypeLookups): DataTypeParamsProblem | undefined
 ./contract/data-type: function isMongoDataType(type: DataType): type is MongoDataType
@@ -1115,9 +1115,10 @@
 ./family/ir: class MongoContractSerializerBase, protected required method parseContractV1(document: unknown): TContract
 ./family/ir: class MongoContractSerializerBase, protected required method parseMongoContractStructure(json: unknown): MongoContract
 ./family/ir: class MongoContractSerializerBase, protected required method printContractV1(contract: TContract): JsonObject
+./family/ir: class MongoContractSerializerBase, readonly required property normalizeStorage: NormalizeStorage
+./family/ir: class MongoContractSerializerBase, readonly required property skipsSnapshotContentVerification = true
 ./family/ir: class MongoContractSerializerBase, required method deserializeContract<T extends TContract = TContract>(json: unknown): T
 ./family/ir: class MongoContractSerializerBase, required method serializeContract(contract: TContract): JsonObject
-./family/ir: class MongoContractSerializerBase, required property normalizeStorage: NormalizeStorage
 ./family/ir: class MongoSchemaVerifierBase, abstract protected required method verifyNamespace(options: { readonly contract: TContract; readonly schema: TSchema; readonly namespaceId: string; readonly namespace: Namespace; }): readonly SchemaDiffIssue[]
 ./family/ir: class MongoSchemaVerifierBase, abstract protected required method verifyTargetExtensions(options: SchemaVerifyOptions<TContract, TSchema>): readonly SchemaDiffIssue[]
 ./family/ir: class MongoSchemaVerifierBase, protected required method collectionControlPolicyForName(contract: TContract, collectionName: string): ControlPolicy
@@ -1159,9 +1160,10 @@
 ./family: class MongoContractSerializerBase, protected required method parseContractV1(document: unknown): TContract
 ./family: class MongoContractSerializerBase, protected required method parseMongoContractStructure(json: unknown): MongoContract
 ./family: class MongoContractSerializerBase, protected required method printContractV1(contract: TContract): JsonObject
+./family: class MongoContractSerializerBase, readonly required property normalizeStorage: NormalizeStorage
+./family: class MongoContractSerializerBase, readonly required property skipsSnapshotContentVerification = true
 ./family: class MongoContractSerializerBase, required method deserializeContract<T extends TContract = TContract>(json: unknown): T
 ./family: class MongoContractSerializerBase, required method serializeContract(contract: TContract): JsonObject
-./family: class MongoContractSerializerBase, required property normalizeStorage: NormalizeStorage
 ./family: class MongoSchemaVerifierBase, abstract protected required method verifyNamespace(options: { readonly contract: TContract; readonly schema: TSchema; readonly namespaceId: string; readonly namespace: Namespace; }): readonly SchemaDiffIssue[]
 ./family: class MongoSchemaVerifierBase, abstract protected required method verifyTargetExtensions(options: SchemaVerifyOptions<TContract, TSchema>): readonly SchemaDiffIssue[]
 ./family: class MongoSchemaVerifierBase, protected required method collectionControlPolicyForName(contract: TContract, collectionName: string): ControlPolicy

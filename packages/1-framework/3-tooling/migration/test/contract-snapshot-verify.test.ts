@@ -14,9 +14,15 @@ import { MigrationToolsError } from '../src/errors';
 
 const TARGET = 'postgres';
 const TARGET_FAMILY = 'sql';
+const storageAsGiven = (storage: unknown) => storage;
 
 function genuineContract(storage: Record<string, unknown>) {
-  const storageHash = computeStorageHash({ target: TARGET, targetFamily: TARGET_FAMILY, storage });
+  const storageHash = computeStorageHash({
+    target: TARGET,
+    targetFamily: TARGET_FAMILY,
+    storage,
+    normalizeStorage: storageAsGiven,
+  });
   return {
     contractJson: {
       formatVersion: 1,
@@ -32,7 +38,7 @@ describe('createSnapshotContentVerifier', () => {
   it('accepts a contract whose content reproduces its storage hash', () => {
     const { contractJson, storageHash } = genuineContract({ namespaces: {} });
 
-    const verifier = createSnapshotContentVerifier();
+    const verifier = createSnapshotContentVerifier(storageAsGiven);
 
     expect(() =>
       verifier.assertSnapshotContentMatches(contractJson, storageHash, '/store/contract.json'),
@@ -46,7 +52,7 @@ describe('createSnapshotContentVerifier', () => {
       storage: { ...contractJson.storage, namespaces: { sneaky: { entries: {} } } },
     };
 
-    const verifier = createSnapshotContentVerifier();
+    const verifier = createSnapshotContentVerifier(storageAsGiven);
     let thrown: unknown;
     try {
       verifier.assertSnapshotContentMatches(tampered, storageHash, '/store/contract.json');
@@ -74,7 +80,7 @@ describe('createSnapshotContentVerifier', () => {
       storage: { ...contractJson.storage } as Record<string, unknown>,
     };
 
-    const verifier = createSnapshotContentVerifier();
+    const verifier = createSnapshotContentVerifier(storageAsGiven);
     verifier.assertSnapshotContentMatches(mutable, storageHash, 'p');
     mutable.storage['namespaces'] = { sneaky: { entries: {} } };
 
@@ -105,7 +111,7 @@ describe('readContractSnapshotJson content verification', () => {
     const read = await readContractSnapshotJson(
       migrationsDir,
       storageHash,
-      createSnapshotContentVerifier(),
+      createSnapshotContentVerifier(storageAsGiven),
     );
 
     expect(read).toEqual(contractJson);
@@ -125,7 +131,11 @@ describe('readContractSnapshotJson content verification', () => {
     await writeFile(jsonPath, JSON.stringify(tampered), 'utf-8');
 
     await expect(
-      readContractSnapshotJson(migrationsDir, storageHash, createSnapshotContentVerifier()),
+      readContractSnapshotJson(
+        migrationsDir,
+        storageHash,
+        createSnapshotContentVerifier(storageAsGiven),
+      ),
     ).rejects.toMatchObject({ code: 'MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH' });
   });
 
@@ -143,7 +153,11 @@ describe('readContractSnapshotJson content verification', () => {
     await writeFile(jsonPath, JSON.stringify(tampered), 'utf-8');
 
     await expect(
-      readContractSnapshotJsonTolerant(migrationsDir, storageHash, createSnapshotContentVerifier()),
+      readContractSnapshotJsonTolerant(
+        migrationsDir,
+        storageHash,
+        createSnapshotContentVerifier(storageAsGiven),
+      ),
     ).resolves.toBeUndefined();
     await expect(readContractSnapshotJsonTolerant(migrationsDir, storageHash)).resolves.toEqual(
       tampered,

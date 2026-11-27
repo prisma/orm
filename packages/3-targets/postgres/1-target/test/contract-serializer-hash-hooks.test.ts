@@ -1,7 +1,7 @@
 import { canonicalizeContractToObject, computeStorageHash } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import { createSnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
@@ -20,15 +20,17 @@ const STORAGE_WITH_RESTRICTIVE_POLICY = {
   },
 };
 
-describe('PostgresContractSerializer hash canonicalization hooks', () => {
+describe('PostgresContractSerializer normal form of storage', () => {
   const serializer = new PostgresContractSerializer();
 
-  it('publishes the family hooks as hashCanonicalizationHooks', () => {
-    expect(serializer.hashCanonicalizationHooks).toBe(sqlContractCanonicalizationHooks);
-  });
-
-  it('writes storage with the same hook it hashes storage with', () => {
-    expect(serializer.normalizeStorage).toBe(sqlContractCanonicalizationHooks.normalizeStorage);
+  it("is the SQL family's, and snapshots are verified by their content", () => {
+    expect({
+      normalizeStorage: serializer.normalizeStorage,
+      skipsSnapshotContentVerification: serializer.skipsSnapshotContentVerification,
+    }).toEqual({
+      normalizeStorage: normalizeSqlStorage,
+      skipsSnapshotContentVerification: undefined,
+    });
   });
 
   it("covers a restrictive policy's permissive: false in the hash", () => {
@@ -37,7 +39,7 @@ describe('PostgresContractSerializer hash canonicalization hooks', () => {
         target: 'postgres',
         targetFamily: 'sql',
         storage: blindCast<Record<string, unknown>, 'test storage literal'>(storage),
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       });
     const permissive = structuredClone(STORAGE_WITH_RESTRICTIVE_POLICY);
     const { permissive: _off, ...policyWithoutFlag } =
@@ -61,7 +63,7 @@ describe('PostgresContractSerializer hash canonicalization hooks', () => {
       target: 'postgres',
       targetFamily: 'sql',
       storage: STORAGE_WITH_RESTRICTIVE_POLICY,
-      ...sqlContractCanonicalizationHooks,
+      normalizeStorage: normalizeSqlStorage,
     });
     const contractJson = {
       storage: { ...STORAGE_WITH_RESTRICTIVE_POLICY, storageHash: emitHash },
@@ -69,7 +71,7 @@ describe('PostgresContractSerializer hash canonicalization hooks', () => {
       targetFamily: 'sql',
     };
 
-    const verifier = createSnapshotContentVerifier(serializer.hashCanonicalizationHooks);
+    const verifier = createSnapshotContentVerifier(serializer.normalizeStorage);
 
     expect(() =>
       verifier.assertSnapshotContentMatches(contractJson, emitHash, '/store/contract.json'),
@@ -112,7 +114,7 @@ describe('PostgresContractSerializer hash canonicalization hooks', () => {
       target: 'postgres',
       targetFamily: 'sql',
       storage,
-      ...sqlContractCanonicalizationHooks,
+      normalizeStorage: normalizeSqlStorage,
     });
     const contract = serializer.deserializeContract({
       formatVersion: 1,
@@ -139,7 +141,7 @@ describe('PostgresContractSerializer hash canonicalization hooks', () => {
         target: 'postgres',
         targetFamily: 'sql',
         storage: writtenStorage,
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       }),
     ).toBe(hash);
   });

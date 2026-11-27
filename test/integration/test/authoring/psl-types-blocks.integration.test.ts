@@ -4,7 +4,7 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import { enrichContract } from '@internal/cli/control-api';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
@@ -57,12 +57,9 @@ types {
     if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
 
     await expect(
-      emit(
-        enrichContract(result.value, [postgres, postgresAdapter]),
-        stack,
-        sqlEmission,
-        sqlContractCanonicalizationHooks,
-      ),
+      emit(enrichContract(result.value, [postgres, postgresAdapter]), stack, sqlEmission, {
+        normalizeStorage: normalizeSqlStorage,
+      }),
     ).resolves.not.toThrow();
   });
 

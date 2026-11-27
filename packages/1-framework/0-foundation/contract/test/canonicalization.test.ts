@@ -22,18 +22,19 @@ import { applicationDomainOf } from './support/application-domain-of';
 // hook trivially passes through.
 const identityOptions = {
   serializeContract: (c: Contract): JsonObject => c as unknown as JsonObject,
+  normalizeStorage: (storage) => storage,
 } satisfies CanonicalizeContractOptions;
 
 function canonicalizeContractToObject(
   contract: Contract,
-  options?: Omit<CanonicalizeContractOptions, 'serializeContract'>,
+  options?: Partial<Omit<CanonicalizeContractOptions, 'serializeContract'>>,
 ): Record<string, unknown> {
   return canonicalizeContractToObjectRaw(contract, { ...identityOptions, ...options });
 }
 
 function canonicalizeContract(
   contract: Contract,
-  options?: Omit<CanonicalizeContractOptions, 'serializeContract'>,
+  options?: Partial<Omit<CanonicalizeContractOptions, 'serializeContract'>>,
 ): string {
   return canonicalizeContractRaw(contract, { ...identityOptions, ...options });
 }
@@ -126,6 +127,7 @@ describe('canonicalizeContractToObject', () => {
   it('puts the format version the serializer prints first', () => {
     const result = canonicalizeContractToObjectRaw(minimal(), {
       serializeContract: (c) => ({ ...(c as unknown as JsonObject), formatVersion: 1 }),
+      normalizeStorage: identityOptions.normalizeStorage,
     });
     expect(result['formatVersion']).toBe(1);
     expect(Object.keys(result)[0]).toBe('formatVersion');
