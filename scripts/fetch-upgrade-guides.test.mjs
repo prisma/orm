@@ -732,13 +732,15 @@ describe('fetch-upgrade-guides', () => {
         deepStrictEqual(await snapshot(project), before);
       }));
 
-    it('reports a command too old to write to the pack destination, and removes its tarball', () =>
+    it('reports a command too old to write to the pack destination, and leaves its tarball for the user', () =>
       inProject({}, async (project) => {
-        const before = await snapshot(project);
         const result = await fakeCommand('old-pack', [PACKAGE]);
         deepStrictEqual({ code: result.code, stdout: result.stdout }, { code: 1, stdout: '' });
-        match(result.stderr, /too old/);
-        deepStrictEqual(await snapshot(project), before);
+        match(result.stderr, /too old.*fake-orm-db-8\.1\.0\.tgz/);
+        strictEqual(
+          await readFile(join(project, 'fake-orm-db-8.1.0.tgz'), 'utf-8'),
+          'not really a tarball',
+        );
       }));
   });
 

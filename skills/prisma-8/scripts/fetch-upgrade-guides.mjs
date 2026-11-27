@@ -530,9 +530,8 @@ function commandSource(tool, { packageName, registry, projectDir, timeoutSeconds
       const packed = join(folder, expected);
       if (isFile(packed)) return readFile(packed);
       if (!existedBefore && isFile(misplaced)) {
-        await rm(misplaced, { force: true });
         throw new FetchUpgradeGuidesError(
-          `\`${PACKAGE_MANAGER} pack\` did not write to its --pack-destination, so the command is too old; update it (version 7.18 or later) and run this again`,
+          `\`${PACKAGE_MANAGER} pack\` did not write to its --pack-destination, so the command is too old; update it (version 7.18 or later) and run this again. It may have left ${expected} in the project folder; remove that file`,
         );
       }
       throw new FetchUpgradeGuidesError(
