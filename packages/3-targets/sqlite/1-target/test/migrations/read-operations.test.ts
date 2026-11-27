@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { RemoveStoredValueCall } from '../../src/core/migrations/op-factory-call';
 import { readSqliteOperations } from '../../src/core/migrations/read-operations';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../../..');
@@ -52,10 +53,39 @@ describe('readSqliteOperations', () => {
     expect(readSqliteOperations([rebuild])).toEqual([rebuild]);
   });
 
-  it('reads the schema name that releases up to 8.0.0-rc.19 wrote into target details', () => {
+  it('reads the schema name that releases up to 8.0.0-rc.19 wrote into target details, as details without it', () => {
     const op = structuredClone(rebuild);
     Reflect.set(op.target.details, 'schema', 'main');
-    expect(readSqliteOperations([op])).toEqual([op]);
+    expect(readSqliteOperations([op])).toEqual([rebuild]);
+  });
+
+  it('reads the removed-value mark that 8.0.0-rc.21 and rc.22 wrote, as the mark this release writes', () => {
+    const description =
+      'ensure column "state" of "task" takes NULL, or no row holds "archived" in it';
+    const sql = 'SELECT true AS result';
+    const enumValue = { enum: 'Status', member: 'ARCHIVED' };
+    const removal = (meta: Record<string, unknown>) => ({
+      id: 'removeStoredValue.task.state.archived',
+      label: 'Remove value "archived" from column "state" of "task"',
+      operationClass: 'destructive',
+      target: { id: 'sqlite', details: { objectType: 'column', name: 'state', table: 'task' } },
+      precheck: [{ description, sql, params: ['archived'], meta }],
+      execute: [],
+      postcheck: [],
+    });
+    expect(
+      readSqliteOperations([removal({ rowsHoldingValue: { enumValue, value: 'archived' } })]),
+    ).toEqual([
+      removal({
+        rowsHoldingValue: {
+          enumValue,
+          value: 'archived',
+          table: 'task',
+          column: 'state',
+          storedValue: 'archived',
+        },
+      }),
+    ]);
   });
 
   it('refuses a schema name other than main', () => {
@@ -95,7 +125,9 @@ describe('readSqliteOperations', () => {
   });
 
   it('reads every SQLite ops.json saved in the repository', () => {
-    const refused = savedOpsFiles('sqlite').flatMap((file) => {
+    const files = savedOpsFiles('sqlite');
+    expect(files.length).toBeGreaterThan(0);
+    const refused = files.flatMap((file) => {
       const reason = reasonOf(() =>
         readSqliteOperations(JSON.parse(readFileSync(join(repoRoot, file), 'utf-8'))),
       );
@@ -104,7 +136,28 @@ describe('readSqliteOperations', () => {
     expect(refused).toEqual([]);
   });
 
-  it('reads what the SQLite planner writes', () => {
+  it('reads what the SQLite planner writes for a removed enum value, through JSON', async () => {
+    const calls = [
+      new RemoveStoredValueCall('task', 'state', 'archived', undefined, {
+        enum: 'Status',
+        member: 'ARCHIVED',
+      }),
+      new RemoveStoredValueCall(
+        'task',
+        'doc',
+        'OPEN',
+        undefined,
+        { enum: 'Status', member: 'OPEN' },
+        '$.status',
+      ),
+    ];
+    const written = JSON.parse(JSON.stringify(await Promise.all(calls.map((c) => c.toOp()))));
+    expect(written[0].precheck[0].meta.rowsHoldingValue).toBeDefined();
+    expect(written[1].precheck[0].meta.rowsHoldingValue.path).toBe('$.status');
+    expect(readSqliteOperations(written)).toEqual(written);
+  });
+
+  it('reads the recording of what the SQLite planner wrote before 8.0.0-rc.20', () => {
     const golden = JSON.parse(
       readFileSync(
         join(repoRoot, 'test/integration/test/planner-golden/fixtures/sqlite/planned.golden.json'),
