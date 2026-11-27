@@ -1658,7 +1658,7 @@ try {
 |--------|-------------|
 | `connect(url)` | Establishes database connection |
 | `close()` | Closes connection (idempotent) |
-| `bringPrismaSpaceUpToDate()` | Applies the Prisma space, the contract space for what Prisma itself stores in the database that the target's control descriptor carries, as every command that changes a database does first, and throws when that fails. `dbInit` and `dbUpdate` in apply mode, `dbSign` and `migrate` do it themselves, return a failure of it as their own failure, and call their `onPrismaSpaceApplied` option when they applied it; the commands print one line then. Does nothing on a target that carries no such space |
+| `bringPrismaSpaceUpToDate()` | Applies the Prisma space, the contract space for what Prisma itself stores in the database that the target's control descriptor carries, as every command that changes a database does first, and throws when that fails. `dbInit` and `dbUpdate` in apply mode, `dbSign` and `migrate` do it themselves, return a failure of it as their own failure, and call their `onPrismaSpaceApplied` option when they applied it; the commands print one line then. Does nothing on a target that carries no such space, or that has no migrations capability to apply one |
 | `readMarker()` | Reads contract marker from database (null if none) |
 | `verify(options)` | Verifies database marker matches contract |
 | `schemaVerify(options)` | Verifies database schema satisfies contract |

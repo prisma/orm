@@ -95,11 +95,11 @@ If `_prisma` holds none of the tables `marker`, `ledger` and `contract`, what it
 If `_prisma` holds any of those tables, do not drop either schema before you know which holds the records. First list the tables in each:
 
 ```sql
-SELECT table_schema, table_name FROM information_schema.tables
-WHERE table_schema IN ('prisma_contract', '_prisma') ORDER BY 1, 2;
+SELECT n.nspname, c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname IN ('prisma_contract', '_prisma') AND c.relkind = 'r' ORDER BY 1, 2;
 ```
 
-Then count the rows of `marker` and `ledger` in each schema that has them; a table that the list does not show does not exist, and counting it fails. Stop and ask the user, because a schema that is dropped loses its rows.
+This reads the catalogue, so it lists every table whatever the role's privileges on it. Then count the rows of `marker` and `ledger` in each schema that has them. If the role may not read one of them, ask the user to run the count as a role that may. Stop and ask the user, because a schema that is dropped loses its rows.
 
 **A table in `prisma_contract` is in a form from before the release candidates.** Prisma checks the columns of each of its tables. A database set up by a `0.x` release can have tables in an older form, and those forms are not migrated. The command stops with an error that names the table and the column it expected. Stop and tell the user. Prisma's tables in such a database cannot be kept, but the application's own tables can. First list everything in `prisma_contract` and show it to the user:
 
@@ -150,7 +150,8 @@ Roles that were granted privileges on `prisma_contract`, such as `SELECT` on `pr
 
 Search the project for `prisma_contract`, outside `node_modules` and build output. Look in particular at:
 
-- SQL files and migrations the project runs itself.
+- SQL files the project runs itself.
+- Migrations: do not edit a migration that has been planned. Its hash covers its SQL, so an edited migration fails to load with `MIGRATION.HASH_MISMATCH`. A migration that names `prisma_contract` and has already been applied to every database needs no change. If one will still run on a database that has not applied it, stop and tell the user: from this release it fails there, because the schema it names no longer exists, and the user decides how to replace it.
 - Scripts that drop or reset the database, such as a `drop-db` or `reset` script, and test helpers that reset the database between tests.
 - Infrastructure code that grants privileges, such as Terraform, Pulumi, Helm charts or SQL run by a provisioning step.
 - Monitoring and alerting queries.
