@@ -1,5 +1,7 @@
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { executeContractEmit } from '@internal/cli/control-api';
+import { prisma7Contract } from '@internal/sql-contract-prisma7/provider';
+import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -76,6 +78,46 @@ describe('prisma7Schema', () => {
         ...postgresCapabilitiesByVersion[17],
         sql: { ...postgresCapabilitiesByVersion[17].sql, interactiveTransactions: true },
       },
+    });
+  });
+});
+
+describe('prisma7Contract given to defineConfig with no capabilities, as a release candidate’s docs built it', () => {
+  it('emits a schema with a scalar list with the newest version’s list and the driver’s, and warns with the option to add', async () => {
+    const dir = await scratchDir('postgres-prisma7-required-capabilities-');
+    tempDirs.push(dir);
+    const schemaPath = join(dir, 'schema.prisma');
+    await writeFile(
+      schemaPath,
+      'datasource db {\n  provider = "postgresql"\n}\nmodel User {\n  id Int @id\n  tags String[]\n}\n',
+      'utf-8',
+    );
+
+    const result = await executeContractEmit({
+      config: defineConfig({
+        contract: prisma7Contract(schemaPath, { binding: prisma7PostgresBinding }),
+      }),
+      cwd: dir,
+      outputPath: dir,
+    });
+    const contract = JSON.parse(await readFile(join(dir, 'contract.json'), 'utf-8'));
+
+    expect({ capabilities: contract.capabilities, warnings: result.sourceWarnings }).toEqual({
+      capabilities: {
+        ...postgresCapabilitiesByVersion[18],
+        sql: { ...postgresCapabilitiesByVersion[18].sql, interactiveTransactions: true },
+      },
+      warnings: [
+        expect.objectContaining({
+          code: 'CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED',
+          sourceId: schemaPath,
+          data: {
+            line: 'capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])',
+            imports:
+              "import { postgres18, postgresContractCapabilities, postgresDriver } from '@internal/postgres/config';",
+          },
+        }),
+      ],
     });
   });
 });

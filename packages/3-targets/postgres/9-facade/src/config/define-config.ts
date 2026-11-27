@@ -121,8 +121,9 @@ function resolveContractConfig(options: {
     contract.output ??
     (firstInput !== undefined ? defaultContractOutputPath(firstInput) : undefined);
   return {
-    ...defaultRequiredCapabilitiesOfReadySource(
-      refuseOtherTargetOnLoad(contract, postgresContractTarget),
+    ...refuseOtherTargetOnLoad(
+      defaultRequiredCapabilitiesOfReadySource(contract),
+      postgresContractTarget,
     ),
     ...ifDefined('output', output),
   };

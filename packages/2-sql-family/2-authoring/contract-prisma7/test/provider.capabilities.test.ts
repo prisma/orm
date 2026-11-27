@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { isSourceGivenNoCapabilities } from '@internal/sql-contract-psl/provider';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -49,5 +50,19 @@ describe('prisma7Contract capabilities', () => {
       sql: { ...without['sql'], interactiveTransactions: true },
       http: { batch: true },
     });
+  });
+});
+
+describe('the record of sources given no capabilities', () => {
+  it.each([
+    ['no capabilities option', undefined, true],
+    ['an empty matrix', {}, false],
+  ])('records a source given %s: %s', (_, capabilities, recorded) => {
+    const { source } = prisma7Contract('schema.prisma', {
+      binding: prisma7PostgresBinding,
+      ...(capabilities === undefined ? {} : { capabilities }),
+    });
+
+    expect(isSourceGivenNoCapabilities(source)).toBe(recorded);
   });
 });

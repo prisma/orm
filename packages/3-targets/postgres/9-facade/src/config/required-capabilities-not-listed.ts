@@ -2,9 +2,11 @@ import type {
   ContractConfig,
   ContractSourceContext,
   ContractSourceDiagnostic,
+  ContractSourceProvider,
 } from '@internal/config/config-types';
-import type { Contract } from '@internal/contract/types';
 import { mergeCapabilityMatrices } from '@internal/framework-components/components';
+import { hasPslInterpreter, type PslInterpretCapable } from '@internal/psl-parser/interpret';
+import { isSourceGivenNoCapabilities } from '@internal/sql-contract-psl/provider';
 import { capabilitiesFromKeys } from '@internal/sql-contract-ts/contract-builder';
 import { type ImportRequirement, renderImports, TsExpression } from '@internal/ts-render';
 import {
@@ -98,61 +100,61 @@ export function warnWhenRequiredCapabilitiesDefaulted(
   };
 }
 
-function requiresOnly(
-  contract: Contract,
-  declared: ContractSourceContext['capabilities'],
-): boolean {
-  return Object.entries(contract.capabilities).every(([namespace, flags]) =>
-    Object.entries(flags).every(
-      ([flag, required]) => !required || declared[namespace]?.[flag] === true,
-    ),
-  );
-}
-
 const defaultCapabilities = capabilitiesFromKeys(defaultRequiredCapabilities);
 
+function withDefaultCapabilities(context: ContractSourceContext): ContractSourceContext {
+  return {
+    ...context,
+    capabilities: mergeCapabilityMatrices(context.capabilities, [
+      { capabilities: defaultCapabilities },
+    ]),
+  };
+}
+
+const inTheSourceOptions: Omit<RequiredCapabilitiesPlace, 'path'> = {
+  key: 'capabilities',
+  value: new ContractCapabilitiesCall(),
+  where: 'in the options of the contract source given to defineConfig',
+};
+
+function sourceWithDefaultCapabilities(
+  source: ContractSourceProvider,
+  place: RequiredCapabilitiesPlace,
+): ContractSourceProvider {
+  const load: ContractSourceProvider['load'] = async (context) => {
+    const result = await source.load(withDefaultCapabilities(context));
+    if (result.ok) reportNotListed(context, place);
+    return result;
+  };
+  if (!hasPslInterpreter(source)) return { ...source, load };
+  const interpreting: PslInterpretCapable = {
+    ...source,
+    load,
+    interpret: (input, context) => source.interpret(input, withDefaultCapabilities(context)),
+  };
+  return interpreting;
+}
+
 /**
- * A ready `ContractConfig`, such as `prismaContract(...)` or `typescriptContract(contract)`, given the default required capabilities and the warning when its source lists none.
+ * A ready `ContractConfig`, such as `prismaContract(...)` or `typescriptContract(contract)`, given the default required capabilities and the warning when its source lists none. Prisma 8.0 removes this default and requires the list.
  *
- * A Prisma schema source given no `capabilities` takes the context's, which the PostgreSQL components leave empty, so its contract requires nothing they do not declare; it is loaded again with the default added to the context. A TypeScript contract built by `defineContract` without a list already has the default.
+ * A Prisma schema source built with no `capabilities` option loads, and is interpreted in the editor, with the default added to the capabilities it sees; one given `capabilities`, even `{}`, is left as written. A TypeScript contract built by `defineContract` without a list already has the default.
  */
 export function defaultRequiredCapabilitiesOfReadySource(config: ContractConfig): ContractConfig {
   const { source } = config;
-  const path = source.inputs?.[0] ?? 'config';
-  return {
-    ...config,
-    source: {
-      ...source,
-      load: async (context) => {
-        const held: ContractSourceDiagnostic[] = [];
-        const first = await source.load({ ...context, reportWarning: (d) => held.push(d) });
-        if (
-          first.ok &&
-          source.format === 'psl' &&
-          requiresOnly(first.value, context.capabilities)
-        ) {
-          const result = await source.load({
-            ...context,
-            capabilities: mergeCapabilityMatrices(context.capabilities, [
-              { capabilities: defaultCapabilities },
-            ]),
-          });
-          if (result.ok) {
-            reportNotListed(context, {
-              key: 'capabilities',
-              value: new ContractCapabilitiesCall(),
-              where: 'in the options of the contract source given to defineConfig',
-              path,
-            });
-          }
-          return result;
-        }
-        for (const warning of held) context.reportWarning?.(warning);
-        if (first.ok && hasDefaultRequiredCapabilities(first.value)) {
-          reportNotListed(context, inDefineContract(path));
-        }
-        return first;
-      },
-    },
-  };
+  const path = source.inputs?.[0];
+  if (isSourceGivenNoCapabilities(source)) {
+    return {
+      ...config,
+      source: sourceWithDefaultCapabilities(source, {
+        ...inTheSourceOptions,
+        path: path ?? 'config',
+      }),
+    };
+  }
+  return warnWhenRequiredCapabilitiesDefaulted(
+    config,
+    inDefineContract(path ?? 'typescriptContract'),
+    hasDefaultRequiredCapabilities,
+  );
 }

@@ -1,7 +1,8 @@
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { executeContractEmit } from '@internal/cli/control-api';
-import type { PrismaConfig } from '@internal/config/config-types';
+import type { ContractSourceContext, PrismaConfig } from '@internal/config/config-types';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
+import { hasPslInterpreter, type PslInterpretInput } from '@internal/psl-parser/interpret';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { typescriptContract } from '@internal/sql-contract-ts/config-types';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';
@@ -9,8 +10,9 @@ import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { ifDefined } from '@internal/utils/defined';
+import { notOk } from '@internal/utils/result';
 import { join, resolve } from 'pathe';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
 import {
   postgres17,
@@ -36,11 +38,13 @@ afterEach(async () => {
   }
 });
 
-async function schemaDir(): Promise<{ readonly dir: string; readonly schemaPath: string }> {
+async function schemaDir(
+  models = 'model User {\n  id Int @id\n}\n',
+): Promise<{ readonly dir: string; readonly schemaPath: string }> {
   const dir = await scratchDir('postgres-required-capabilities-');
   tempDirs.push(dir);
   const schemaPath = join(dir, 'contract.prisma');
-  await writeFile(schemaPath, '// use prisma-8\nmodel User {\n  id Int @id\n}\n', 'utf-8');
+  await writeFile(schemaPath, `// use prisma-8\n${models}`, 'utf-8');
   return { dir, schemaPath };
 }
 
@@ -266,6 +270,63 @@ describe('contract emit for a ready contract source given no required capabiliti
     });
   });
 
+  it.each([
+    ['a scalar list', 'model User {\n  id Int @id\n  tags String[]\n}\n'],
+    [
+      '@@check',
+      'model Order {\n  id Int @id\n  total Int\n  @@check(expression: sql`total > 0`, name: "order_total_positive")\n}\n',
+    ],
+  ])(
+    'emits a schema with %s, which loads only with the default, and warns once',
+    async (_, models) => {
+      const { dir, schemaPath } = await schemaDir(models);
+
+      const result = await emitted(defineConfig({ contract: prismaSchemaSource(schemaPath) }), dir);
+
+      expect(result).toEqual({
+        capabilities: withTheDriver,
+        warnings: [
+          expect.objectContaining({
+            code: 'CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED',
+            sourceId: schemaPath,
+          }),
+        ],
+      });
+    },
+  );
+
+  it.each([
+    ['an empty matrix', {}],
+    ['only false flags', { sql: { returning: false } }],
+  ])('leaves %s given to prismaContract as written, and warns nothing', async (_, capabilities) => {
+    const { dir, schemaPath } = await schemaDir();
+
+    const result = await emitted(
+      defineConfig({ contract: prismaSchemaSource(schemaPath, capabilities) }),
+      dir,
+    );
+
+    expect(result).toEqual({ capabilities: {}, warnings: [] });
+  });
+
+  it('gives the editor’s interpretation of prismaContract the default capabilities', () => {
+    const inner = prismaSchemaSource('contract.prisma').source;
+    if (!hasPslInterpreter(inner)) throw new Error('prismaContract gave no interpreter');
+    const seen: CapabilityMatrix[] = [];
+    vi.spyOn(inner, 'interpret').mockImplementation((_input, context) => {
+      seen.push(context.capabilities);
+      return notOk({ summary: 'stopped', diagnostics: [] });
+    });
+    const wrapped = defineConfig({ contract: { source: inner } }).contract?.source;
+    if (wrapped === undefined || !hasPslInterpreter(wrapped)) {
+      throw new Error('defineConfig dropped the interpreter');
+    }
+
+    wrapped.interpret({} as PslInterpretInput, { capabilities: {} } as ContractSourceContext);
+
+    expect(seen).toEqual([withTheDriver]);
+  });
+
   it('writes exactly the capabilities prismaContract is given, and warns nothing', async () => {
     const { dir, schemaPath } = await schemaDir();
 
@@ -300,6 +361,7 @@ describe('contract emit for a ready contract source given no required capabiliti
         expect.objectContaining({
           code: 'CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED',
           message: `Your contract does not list the capabilities it requires, so it requires those of the newest PostgreSQL version and of the driver. Prisma 8.0 removes this default and requires the list. Write this in defineContract, with its import:\n\nrequiredCapabilities: [...postgres18, ...postgresDriver]\n\nimport { postgres18, postgresDriver } from '@internal/postgres/contract-builder';`,
+          sourceId: 'typescriptContract',
         }),
       ],
     });

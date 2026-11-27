@@ -3,7 +3,7 @@ import { hasPslInterpreter } from '@internal/psl-parser/interpret';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { prismaContract } from '../src/exports/provider';
+import { isSourceGivenNoCapabilities, prismaContract } from '../src/exports/provider';
 import { createPostgresTestContext, postgresTarget } from './fixtures';
 
 const schema = `// use prisma-8
@@ -46,5 +46,22 @@ describe('prismaContract capabilities', () => {
       sql: { returning: true, lateral: true, interactiveTransactions: true },
       http: { batch: true },
     });
+  });
+});
+
+describe('the record of sources given no capabilities', () => {
+  const sourceWith = (capabilities?: Record<string, Record<string, boolean>>) =>
+    prismaContract('./schema.prisma', {
+      target: postgresTarget,
+      createNamespace: createTestSqlNamespace,
+      ...(capabilities === undefined ? {} : { capabilities }),
+    }).source;
+
+  it.each([
+    ['no capabilities option', undefined, true],
+    ['an empty matrix', {}, false],
+    ['only false flags', { sql: { returning: false } }, false],
+  ])('records a source given %s: %s', (_, capabilities, recorded) => {
+    expect(isSourceGivenNoCapabilities(sourceWith(capabilities))).toBe(recorded);
   });
 });

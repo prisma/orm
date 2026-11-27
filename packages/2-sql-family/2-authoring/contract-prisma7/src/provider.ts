@@ -13,6 +13,7 @@ import {
   validateModelStorageReferences,
   validateSqlStorageConsistency,
 } from '@internal/sql-contract/validators';
+import { recordSourceGivenNoCapabilities } from '@internal/sql-contract-psl/provider';
 import { applySqlSpecifierControlPolicy } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
@@ -101,7 +102,7 @@ export function prisma7Contract(
   options: Prisma7ContractOptions,
 ): ContractConfig {
   const parserOptions = { grammar: 'prisma-7' } as const;
-  return {
+  const config: ContractConfig = {
     source: {
       format: 'psl',
       inputs: [schemaPath],
@@ -222,4 +223,6 @@ export function prisma7Contract(
     },
     output: options.output ?? defaultOutputFromSchemaPath(schemaPath),
   };
+  if (options.capabilities === undefined) recordSourceGivenNoCapabilities(config.source);
+  return config;
 }
