@@ -44,7 +44,7 @@ Your contract requires database capabilities first available in PostgreSQL 17 (s
 
 Capabilities are a contract's dependencies. A database version or a connection **provides** a capability, and a contract **requires** it. Those two words are used everywhere, as package managers use them (`Provides` and `Requires` in RPM, `Provide-Capability` and `Require-Capability` in OSGi).
 
-1. **The author writes the whole list.** `requiredCapabilities` holds every capability the contract requires. Nothing is implied and there is no default, so a capability a message names is always one the author can find in their own source. The list must be present and not empty; that is the only check.
+1. **The author writes the whole list.** `requiredCapabilities` holds every capability the contract requires. Nothing is implied and there is no default, so a capability a message names is always one the author can find in their own source. The list must be present and not empty, and each entry must be a capability key (`namespace.flag`); nothing checks which capabilities it names.
 2. **A signed database provides them.** Verification checks the connected database against the contract's database capabilities before a signature is written. The client then checks only the signature.
 3. **The client's connection provides the rest.** The client offers what the contract requires and nothing more. The adapter and driver it is built from are checked against the contract when the code is compiled and when the client is created.
 

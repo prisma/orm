@@ -39,7 +39,7 @@ This replaces the recorded position that capabilities are reported by the adapte
 
 ### 4.1 The contract
 
-- The author writes one list, `requiredCapabilities`, and everything the contract requires is in it. Nothing is implied and there is no default. The list must be present and not empty; that is the only check.
+- The author writes one list, `requiredCapabilities`, and everything the contract requires is in it. Nothing is implied and there is no default. The list must be present and not empty, and each entry must be a capability key (`namespace.flag`); nothing checks which capabilities it names.
 - The target holds a table of which database version provides which capability, and exports each version's set. The driver exports the set its connection provides. The author composes the list from them: `requiredCapabilities: [...postgres17, ...postgresDriver]`. A capability is removed by leaving it out.
 - The contract stores capability keys. It never stores a database version.
 - The destination is the contract's own source. A contract written in TypeScript states the list in `defineContract`. A contract written in the Prisma schema language states it in the config's contract entry, beside the file path, until the schema language has syntax for it; that entry is a stopgap. The interpreter receives one capability list.
