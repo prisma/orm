@@ -129,6 +129,31 @@ describe('migration check across spaces', () => {
     expect(documentOf(run)).toEqual({ ok: true, failures: [], summary: 'All checks passed' });
   });
 
+  it('reports an unreadable extension migration alone, not the head ref it leaves outside the graph', async () => {
+    const project = await twoSpaceProject({});
+    await seedMigrationPackage({
+      appMigrationsDir: project.extMigrationsDir,
+      dirName: '20260602T0000_other',
+      from: null,
+      to: HASH_DANGLING,
+    });
+    const manifestPath = join(
+      project.extMigrationsDir,
+      '20260601T0000_install_postgis',
+      'migration.json',
+    );
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf-8')) as Record<string, unknown>;
+    await writeFile(manifestPath, JSON.stringify({ ...manifest, zzz: 1 }), 'utf-8');
+
+    const run = await harness(project).run(['migration', 'check', '--json'], {
+      cwd: project.dir,
+    });
+
+    expect(documentOf(run).failures.map(({ space, code }) => ({ space, code }))).toEqual([
+      { space: 'postgis', code: 'MIGRATION.CHECK_PACKAGE_UNLOADABLE' },
+    ]);
+  });
+
   it('surfaces an unreachable migration planted in a non-app space', async () => {
     const project = await createOfflineProject({ storageHash: HASH_APP });
     await seedMigrationPackage({
