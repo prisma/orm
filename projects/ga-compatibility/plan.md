@@ -35,6 +35,23 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 
 "Task N" is the number a piece of work had before 2026-11-24. The reports under [research/](research/) use those numbers. The facts about the code were read on 2026-11-23 and are rechecked when a project starts.
 
+## Status
+
+As of 2026-11-27. The GA plan (`planning/plan.md` on branch `planning/prisma-8-ga`, stream 7) carries the same status and is updated more often.
+
+| Project | State | Pull requests | Waits on |
+| --- | --- | --- | --- |
+| 2. Stored files and records | Built; in review | prisma/orm#31198 and #31200 ready; #31203 a draft with review fixes in progress; reading release-candidate files is on a local branch | Review. Which other hash-changing work lands with #31203 |
+| 3. Reduce exports | Design settled; session paused | None. Audit, spec and plan on a local branch | prisma/orm#31218 merging, since both change the PostgreSQL facade |
+| 4. API check in CI | Merged | prisma/orm#31201 and #31217 merged | TML-3977 before release 8.0: compare each package with its own last release |
+| 5. Additions that break | Not started | | A free session |
+| 6. Versions, levels, dependencies | Mostly merged | prisma/prisma-cli#405, prisma/orm#31204, #31212 and #31222 merged | A decision on publishing a fix from a branch per minor; then TML-3956 and TML-3942 |
+| 7. Prisma's own tables | Building | prisma/studio#1606 merged; nothing pushed in prisma/orm | A decision on applying Prisma's own tables in a first phase; merges after #31203 |
+| 12. Published policy | Not started | | |
+| 13. The `prisma` tool's interface | Not started; survey done | | Design discussion |
+
+Outside this stream, and blocking projects 2 and 3: capabilities by database version (GA plan, stream 6, row 10), prisma/orm#31218, a draft close to ready.
+
 ## Projects that GA requires
 
 ### 2. Make later releases read the files and database records of earlier releases
@@ -55,7 +72,7 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 - Turn each failure to read or decode the marker into a warning. Today such a failure fails the query (task 13). prisma/orm#30537, open since October, changes the same code.
 - When the formats are fixed at `8.0.0`, save one sample of each stored file and each database record, and a set of migrations with their snapshots. Test on every release that the current code reads the samples and applies the migrations, for PostgreSQL and MongoDB (task 12).
 
-**To decide when it starts.** Whether the format version also leaves the profile hash and the execution hash; the policy names only the storage hash. How an existing database moves to its new hash: `db sign`, or a migration with no operations. Whether the MongoDB runtime, which has no marker check today, gains one.
+**Decided when it started.** The design is in [designs/2-stored-files-and-records.md](designs/2-stored-files-and-records.md). Since then: the SQL profile hash covers the contract's capability list, because signing is the one check that a database provides them.
 
 ### 3. Minimize the exported TS APIs of GA packages and guarantee them until the next major version
 
@@ -100,7 +117,7 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 - A comparison of exported declarations does not see a change to a query's result type, which is computed from the user's input. Type tests written against the published packages cover that.
 - The check treats a new required member on an interface that users implement as a break. Project 5 records which interfaces those are.
 
-**To decide when it starts.** Which tool, and where the previous release's API is kept.
+**Decided when it started.** The checks compare each package's types and the example apps with the last published release, and fail on any break not recorded in the package's `api-breaks.json`. They fail now, during the release candidates. A name starting `ea_`, `preview_` or `rc_` may break, unless a promotion left it as another name for a GA API.
 
 ### 5. Prevent new error codes, built-in names and builder methods from breaking user code
 
@@ -147,7 +164,7 @@ Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are L
 - Make the `prisma` tool or the toolchain read the installed library's version and stop on a different major. Nothing compares them today (task 17).
 - Make create-prisma list the platform packages in the apps it generates, in its first release on an ORM version that contains prisma/orm#31204. That pull request makes the database packages name the platform packages (framework, family, target, toolchain) as peers, and `prisma orm init` writes them and every required peer they declare, such as `@prisma/cli-engine` and `temporal-polyfill`, into the app's `package.json`. create-prisma writes that file itself and does not run `init`, so its Yarn apps would get none of them, and npm, pnpm and Bun apps would fail the same way where installing peers is turned off. Generated apps list the same packages at the database package's version, for every package manager, for example by copying the database package's `peerDependencies` and adding the toolchain's required peers. The code is `writePrismaDependenciesEffect` in create-prisma's `src/tasks/install.ts`, and `src/constants/dependencies.ts`. create-prisma 0.14.10 lists only `@prisma/cli-engine`, for Yarn apps. Its CI builds one Yarn MongoDB app and no Yarn PostgreSQL app; add one.
 
-**To decide when it starts.** One decision is Will's: which packages are GA at `8.0.0`. The points in section 6 of [maturity-levels.md](maturity-levels.md) are details for whoever takes the project. This project replaces stream 6, row 4 of the GA plan, "Maturity per package".
+**Decided when it started.** The design is in [designs/6-maturity-versions-and-dependencies.md](designs/6-maturity-versions-and-dependencies.md), and the versioning page the project ships, `docs/oss/versioning.md`, is the authority for the points [maturity-levels.md](maturity-levels.md) listed as open.
 
 ### 7. Bring Prisma's own database tables up to date in each release, so no upgrade fails on them
 
