@@ -72,7 +72,7 @@ Application instances on an earlier release keep reading these tables while a de
 
 One thing must stay fixed for longer than a major: where a release finds the space's own row. Every release reads it from the marker table, through its columns, before it knows which form the tables are in. A later major that moved that table or removed one of those columns would make every earlier release see no row and plan from an empty database. So the marker table and the columns a release reads keep their place and form in every later major. Any change to them is made before `8.0.0`, and the marker table's planned split into a table of signatures and a table of configuration is done in the same release.
 
-The migrating role must own the schema and its tables, since a later migration that adds a column needs ownership of the table.
+The migrating role must own the schema and its tables, since a later migration that adds a column needs ownership of the table. The first migration checks that before it renames, and a later migration that alters a table checks it in its own precheck, so the role gets a message with the statement that fixes it rather than a database error.
 
 ### A database that is ahead of the installed release
 
@@ -95,7 +95,7 @@ On PostgreSQL the first migration:
 2. Renames the schema `prisma_contract` to `_prisma` ([ADR 338](ADR%20338%20-%20Names%20Prisma%20puts%20in%20a%20database%20or%20a%20query%20begin%20with%20_prisma.md)). `ALTER SCHEMA … RENAME` changes only the catalogue, so it is instant at any size.
 3. Creates the schema and each table that is missing, and checks the result.
 
-Two more cases stop it without changing anything. PostgreSQL lets only a role with the privileges of a schema's owner, and `CREATE` on the database, rename a schema; each condition is checked on its own and its message gives the statement that grants it. And a database that has both schemas, where `_prisma` holds anything, is not guessed at. An empty `_prisma` beside `prisma_contract` is dropped, with a statement the database refuses if the schema is not empty, and the rename goes ahead.
+More cases stop it without changing anything, each checked on its own with a message that gives the statement that fixes it: the role does not have the privileges of the owner of `prisma_contract` or of one of its tables; the role may not create schemas in the database, which PostgreSQL requires for a rename; `_prisma` already exists and holds anything, so it is not clear which schema to keep; `_prisma` exists and is empty but owned by another role. An empty `_prisma` the role owns is dropped, and the rename goes ahead.
 
 A user's own `_prisma.marker` that lacks the columns Prisma reads is treated as no row, so the first migration's checks run and stop the command with a message that names the table. A command that only reads gets the database's own error in that case.
 
