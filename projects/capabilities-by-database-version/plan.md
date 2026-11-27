@@ -64,6 +64,10 @@ The pull request that fixes the hash rules (prisma/orm#31203) makes the SQL prof
 - **Two messages,** in one form everywhere: a required capability that is not provided, and a feature that is unavailable because the contract does not declare the capability it needs. `missingCapabilityRemedy` goes.
 - **Records to update with the build:** the glossary ("Capability", "Adapter", "Driver"), the decision records on capabilities (ADR 031, 065, 117, 335), the subsystem docs (Data Contract, Adapters & Targets, Runtime & Middleware Framework, Migration System, CLI), the error reference, the upgrade instructions, and [psl-syntax-design.md](psl-syntax-design.md), which was designed for `databaseVersion`.
 
+## Before 8.0: remove the release candidate stopgap
+
+Built in [slice-rc-users-keep-working.md](slice-rc-users-keep-working.md) so that no project on a release candidate breaks. At `8.0` these go, in one change: the default for a missing `requiredCapabilities` and its emit warning, the retired capability flags and the check's exemption for them, and `transaction()` for a contract that lists a retired flag. The test that uses the release candidate's files goes with them, or is replaced by one for the last release before `8.0`.
+
 ## Must not be lost
 
 - By the end of the project the Prisma schema language syntax is at least designed.

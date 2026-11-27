@@ -46,7 +46,7 @@ Capabilities are a contract's dependencies. A database version or a connection *
 
 The three rules below are built for PostgreSQL. The other targets follow them when each is rebuilt (see Consequences).
 
-1. **The author writes the whole list.** `requiredCapabilities` holds every capability the contract requires. Nothing is implied and there is no default, so a capability a message names is always one the author can find in their own source. The list must be present and not empty, and each entry must be a capability key (`namespace.flag`); nothing checks which capabilities it names.
+1. **The author writes the whole list.** `requiredCapabilities` holds every capability the contract requires. From `8.0` nothing is implied and there is no default, so a capability a message names is always one the author can find in their own source. A list that is written must not be empty, and each entry must be a capability key (`namespace.flag`); nothing checks which capabilities it names. Until `8.0`, a contract with no list keeps working (see "Projects on a release candidate keep working").
 2. **A signed database provides them.** Verification checks the connected database against the contract's database capabilities before a signature is written. The client then checks only the signature.
 3. **The client's connection provides the rest.** The client offers what the contract requires and nothing more. The adapter and driver it is built from are checked against the contract when the code is compiled and when the client is created.
 
@@ -104,6 +104,14 @@ A method or a schema feature that needs a capability the contract does not requi
 `transaction()` is unavailable: your contract declares no dependency on `sql.interactiveTransactions`. To enable it, add `sql.interactiveTransactions` to your contract's required capabilities.
 ```
 
+### Projects on a release candidate keep working
+
+A project as the last release candidate left it, with its config, its contract source and its emitted `contract.json` unchanged, keeps type-checking, emitting and running after it upgrades. It gets warnings that say what to change, and no error. Three things make that so, and all three are removed at `8.0`:
+
+- **A missing list gets a default.** The facade uses the list `init` writes, the newest version's and the driver's, and `prisma contract emit` warns once (`CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED`) with the exact line and import to add. Only emit warns; loading a contract file elsewhere prints nothing.
+- **Retired capabilities are ignored.** A release candidate's `contract.json` lists flags that nothing read and that this design removed, such as `postgres.jsonAgg`. The PostgreSQL target names them (`retiredCapabilities`), and the client's check skips them, at compile time and when the client is created. A retired flag gates nothing and disappears when the contract is emitted again.
+- **A release candidate's contract may call `transaction()`.** No release candidate's contract lists `sql.interactiveTransactions`, because the flag did not exist. A contract that lists a retired flag was emitted by a release candidate, whose clients all offered `transaction()`, so it is allowed.
+
 ## Consequences
 
 - **A supported version's list does not change within a major version.** Adding a capability to PostgreSQL 17's list would change what every contract that spreads it requires without its author changing anything, so a database signed before was not checked against it. Where the profile hash covers the capability list ([ADR 004](ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md) says what it covers), every such database would also have to be signed again. A feature that needs a newer database can arrive in a minor release only with a new version's list. A test pins each list, and the driver's.
@@ -116,7 +124,7 @@ A method or a schema feature that needs a capability the contract does not requi
 ## Alternatives considered
 
 - **The author states a version number (`databaseVersion: 17`) and an optional list of connection capabilities with a default.** Built first. The default put capabilities into a contract that its author never wrote, so a message that said "remove it from your contract" pointed at nothing they could see. The number also read as the exact version the database runs, when it is the oldest the contract supports.
-- **A default list when none is written.** The same hidden requirements, and a default built from the newest version would change every such contract when a newer version is added.
+- **A default list when none is written, kept for good.** The same hidden requirements, and a default built from the newest version would change every such contract when a newer version is added. A default with a warning is kept only until `8.0`, so that projects on a release candidate do not break.
 - **One name for both sides (`capabilities`).** "The contract's capabilities" reads as what the contract can do. Naming the direction is what every dependency manager does.
 - **The list in the command settings (`db: { … }`).** The list is what the contract requires, so it belongs where the contract is written.
 - **Reading the database's capabilities when the client connects.** The signature is the one check of the database. A second check costs a query at every start, which matters on serverless platforms.
