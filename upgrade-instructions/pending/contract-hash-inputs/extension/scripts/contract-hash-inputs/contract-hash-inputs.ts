@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Gives every stored contract hash in a project the value this release computes. A contract's storage, profile and execution hashes used to cover a stand-in contract: the section, plus `schemaVersion: "1"` and blank `profileHash`, `roots`, `domain`, `extensions`, `meta` and `capabilities`. They now cover only the target, the family and their own section. The canonicalization rules are otherwise unchanged.
+ * Gives every stored contract hash in a project the value this release computes. A contract's storage, profile and execution hashes used to cover a stand-in contract: the section, plus `schemaVersion: "1"` and blank `profileHash`, `roots`, `domain`, `extensions`, `meta` and `capabilities`. They now cover only the target, the family and their own section. The canonicalization also used to leave out every `false`, empty list and empty object outside a list of kept paths; it now leaves out no value except the defaults each family names in its storage, so a value such as a restrictive policy's `permissive: false`, which the file kept and the hash left out, is now in the hash.
  *
  * Usage: node contract-hash-inputs.ts [project-root]
  *
@@ -316,10 +316,201 @@ function oldHash(contract: ContractSections, section: JsonRecord, hooks: Hooks):
   return sha256(JSON.stringify(ordered, null, 2));
 }
 
-/** The hash rule from this release: the target, the family and the section. The profile hash covers the contract's own capabilities in every family. */
-function newHash(contract: ContractSections, section: JsonRecord, hooks: Hooks): string {
-  const input = { targetFamily: contract.family, target: contract.target, ...section };
-  return sha256(JSON.stringify(canonicalSections(input, hooks), null, 2));
+// ---------------------------------------------------------------------------
+// The families' normal form of storage under the new rule. The canonicalizer leaves out no value; each family leaves out only the fields it names.
+
+type Normalize = (value: JsonRecord) => JsonRecord;
+
+function without(record: JsonRecord, leaveOut: (key: string, value: Json) => boolean): JsonRecord {
+  const kept: JsonRecord = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (!leaveOut(key, value)) defineOwn(kept, key, value);
+  }
+  return kept;
+}
+
+function withEntry(record: JsonRecord, key: string, value: Json | undefined): JsonRecord {
+  if (value === undefined) return record;
+  const next: JsonRecord = { ...record };
+  defineOwn(next, key, value);
+  return next;
+}
+
+function mapRecordValues(value: Json | undefined, map: Normalize): Json | undefined {
+  if (!isRecord(value)) return value;
+  const mapped: JsonRecord = {};
+  for (const [key, entry] of Object.entries(value)) {
+    defineOwn(mapped, key, isRecord(entry) ? map(entry) : entry);
+  }
+  return mapped;
+}
+
+function mapListItems(value: Json | undefined, map: Normalize): Json | undefined {
+  return Array.isArray(value)
+    ? value.map((entry) => (isRecord(entry) ? map(entry) : entry))
+    : value;
+}
+
+const isEmptyRecord = (value: Json): boolean => isRecord(value) && Object.keys(value).length === 0;
+const isEmptyList = (value: Json): boolean => Array.isArray(value) && value.length === 0;
+const withoutSingleValueMany: Normalize = (field) =>
+  without(field, (key, value) => key === 'many' && value === false);
+
+function normalValueObject(valueObject: JsonRecord): JsonRecord {
+  return withEntry(
+    valueObject,
+    'fields',
+    mapRecordValues(valueObject['fields'], withoutSingleValueMany),
+  );
+}
+
+function normalStorageWith(entriesOf: Normalize): (storage: JsonRecord) => JsonRecord {
+  return (storage) =>
+    withEntry(
+      storage,
+      'namespaces',
+      mapRecordValues(storage['namespaces'], (namespace) =>
+        isRecord(namespace['entries'])
+          ? withEntry(namespace, 'entries', entriesOf(namespace['entries']))
+          : namespace,
+      ),
+    );
+}
+
+function sqlIndex(index: JsonRecord): JsonRecord {
+  return without(
+    index,
+    (key, value) =>
+      (key === 'columns' && isEmptyList(value)) || (key === 'options' && isEmptyRecord(value)),
+  );
+}
+
+function sqlForeignKey(foreignKey: JsonRecord): JsonRecord {
+  return without(
+    foreignKey,
+    (key, value) =>
+      (key === 'index' && value === false) ||
+      ((key === 'onDelete' || key === 'onUpdate') && value === 'noAction'),
+  );
+}
+
+function sqlTable(table: JsonRecord): JsonRecord {
+  let next = without(table, (key, value) => key === 'checks' && isEmptyList(value));
+  next = withEntry(next, 'columns', mapRecordValues(next['columns'], withoutSingleValueMany));
+  next = withEntry(next, 'indexes', mapListItems(next['indexes'], sqlIndex));
+  return withEntry(next, 'foreignKeys', mapListItems(next['foreignKeys'], sqlForeignKey));
+}
+
+function sqlEntries(entries: JsonRecord): JsonRecord {
+  const kept = without(entries, (key, value) => key !== 'table' && isEmptyRecord(value));
+  const withTables = withEntry(kept, 'table', mapRecordValues(kept['table'], sqlTable));
+  return withEntry(
+    withTables,
+    'valueObject',
+    mapRecordValues(kept['valueObject'], normalValueObject),
+  );
+}
+
+function sqlNormalStorage(storage: JsonRecord): JsonRecord {
+  const withNamespaces = normalStorageWith(sqlEntries)(storage);
+  const withTypes = withEntry(
+    withNamespaces,
+    'types',
+    mapRecordValues(withNamespaces['types'], (storageType) =>
+      without(storageType, (key, value) => key === 'typeParams' && isEmptyRecord(value)),
+    ),
+  );
+  const sorted = sortSqlStorage(withTypes);
+  return isRecord(sorted) ? sorted : withTypes;
+}
+
+const MONGO_COLLATION_FLAGS = new Set([
+  'caseLevel',
+  'numericOrdering',
+  'backwards',
+  'normalization',
+]);
+const MONGO_INDEX_FLAGS = new Set(['unique', 'sparse']);
+const MONGO_SUBSCHEMA_KEYWORDS = new Set(['items', 'not', 'additionalProperties']);
+const MONGO_SUBSCHEMA_LIST_KEYWORDS = new Set(['oneOf', 'anyOf', 'allOf', 'items']);
+
+const mongoCollation: Normalize = (collation) =>
+  without(collation, (key, value) => MONGO_COLLATION_FLAGS.has(key) && value === false);
+
+function mongoIndex(index: JsonRecord): JsonRecord {
+  const kept = without(index, (key, value) => MONGO_INDEX_FLAGS.has(key) && value === false);
+  return isRecord(kept['collation'])
+    ? withEntry(kept, 'collation', mongoCollation(kept['collation']))
+    : kept;
+}
+
+function mongoJsonSchema(schema: JsonRecord): JsonRecord {
+  const kept = without(
+    schema,
+    (key, value) =>
+      (key === 'required' && isEmptyList(value)) || (key === 'properties' && isEmptyRecord(value)),
+  );
+  const next: JsonRecord = {};
+  for (const [key, value] of Object.entries(kept)) {
+    let mapped: Json | undefined = value;
+    if (key === 'properties') mapped = mapRecordValues(value, mongoJsonSchema);
+    else if (MONGO_SUBSCHEMA_LIST_KEYWORDS.has(key) && Array.isArray(value))
+      mapped = mapListItems(value, mongoJsonSchema);
+    else if (MONGO_SUBSCHEMA_KEYWORDS.has(key) && isRecord(value)) mapped = mongoJsonSchema(value);
+    defineOwn(next, key, mapped ?? value);
+  }
+  return next;
+}
+
+function mongoCollection(collection: JsonRecord): JsonRecord {
+  let next = without(collection, (key, value) => key === 'indexes' && isEmptyList(value));
+  next = withEntry(next, 'indexes', mapListItems(next['indexes'], mongoIndex));
+  const validator = next['validator'];
+  if (isRecord(validator) && isRecord(validator['jsonSchema'])) {
+    next = withEntry(
+      next,
+      'validator',
+      withEntry(validator, 'jsonSchema', mongoJsonSchema(validator['jsonSchema'])),
+    );
+  }
+  const options = next['options'];
+  if (isRecord(options) && isRecord(options['collation'])) {
+    next = withEntry(
+      next,
+      'options',
+      withEntry(options, 'collation', mongoCollation(options['collation'])),
+    );
+  }
+  return next;
+}
+
+function mongoEntries(entries: JsonRecord): JsonRecord {
+  const kept = without(entries, (key, value) => key !== 'collection' && isEmptyRecord(value));
+  const withCollections = withEntry(
+    kept,
+    'collection',
+    mapRecordValues(kept['collection'], mongoCollection),
+  );
+  return withEntry(
+    withCollections,
+    'valueObject',
+    mapRecordValues(kept['valueObject'], normalValueObject),
+  );
+}
+
+const NEW_NORMAL_STORAGE: Record<Family, Normalize> = {
+  sql: sqlNormalStorage,
+  mongo: normalStorageWith(mongoEntries),
+};
+
+/** The hash rule from this release: the target, the family and the section, with no value left out but the defaults the family names in its storage. The profile hash covers the contract's own capabilities in every family. */
+function newHash(contract: ContractSections, section: JsonRecord): string {
+  const storage = section['storage'];
+  const normal = isRecord(storage)
+    ? { ...section, storage: NEW_NORMAL_STORAGE[contract.family](storage) }
+    : section;
+  const input = { targetFamily: contract.family, target: contract.target, ...normal };
+  return sha256(JSON.stringify(sortKeys(input), null, 2));
 }
 
 function contractHashes(

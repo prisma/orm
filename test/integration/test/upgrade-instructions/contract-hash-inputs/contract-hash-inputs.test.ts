@@ -24,7 +24,7 @@ const NOTHING_CHANGED =
 const POSTGRES_HEAD_SNAPSHOT =
   'postgres-app/migrations/snapshots/6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1';
 const REMOVED_HASH = '6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1';
-const REMOVED_HASH_NEW_VALUE = '345059ad82748235deff6cf12d40690f582d2420e63dccaf41c1c3fe654777b4';
+const REMOVED_HASH_NEW_VALUE = 'ff745362b097d2c6a45dac30c7679674557f0d02bf9e8de489f29fa83c773deb';
 const BACKFILL_HASH = '5b423686089e2ada5ece2b224849ac73ce6b998fb062e88217d2f30a1a567748';
 const BACKFILL_HASH_NEW_VALUE = 'f6146e922053633f815e208705396f57f232a93ac6a95e78b39ee7fb695d0d70';
 const MONGO_CONTRACT = 'mongo-app/src/contract.json';
@@ -60,7 +60,7 @@ describe('an application and an extension with hashes under the old rules', () =
 
   it('reports each renamed snapshot directory and each replaced hash', () => {
     expect(run.stdout).toContain(
-      `  ${POSTGRES_HEAD_SNAPSHOT} -> 345059ad82748235deff6cf12d40690f582d2420e63dccaf41c1c3fe654777b4\n`,
+      `  ${POSTGRES_HEAD_SNAPSHOT} -> ff745362b097d2c6a45dac30c7679674557f0d02bf9e8de489f29fa83c773deb\n`,
     );
     expect(run.stdout).toContain(
       'Profile hashes (old -> new):\n' +

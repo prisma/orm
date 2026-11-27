@@ -14,7 +14,7 @@ afterAll(removeWorkDirs);
 
 const STOPPED = 70;
 const OLD_HEAD = '6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1';
-const NEW_HEAD = '345059ad82748235deff6cf12d40690f582d2420e63dccaf41c1c3fe654777b4';
+const NEW_HEAD = 'ff745362b097d2c6a45dac30c7679674557f0d02bf9e8de489f29fa83c773deb';
 const BACKFILL = 'mongo-app/migrations/app/20260513T0508_backfill_product_status';
 const MONGO_EARLIER_SNAPSHOT = 'fb3df4c4899adcd423e9b75164870cef1be789fe6871a24b7fda64e707f324ad';
 
