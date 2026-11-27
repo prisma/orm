@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-27
 **Domain:** Guardrails & CI
-**Related:** [ADR 242 — Public npm surface](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md) (which packages are published), [Versioning](../../oss/versioning.md) (how a release is versioned and tagged), [Public API compatibility checks](../../Public%20API%20Compatibility.md) (the contributor guide)
+**Related:** [ADR 242 — Public npm surface](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md) (which packages are published), [Versioning](../../oss/versioning.md) (the compatibility promise, maturity levels, and how a release is versioned), [Public API compatibility checks](../../Public%20API%20Compatibility.md) (the contributor guide)
 
 ---
 
@@ -74,7 +74,7 @@ A comparison in the type tests ends in one of four ways. The rest of this record
 
 ## Why
 
-Prisma 8's compatibility policy promises that, from `8.0.0`, an application that uses only APIs without a maturity level upgrades to any later `8.x` release without changing its code. A record of kind `break` is then an exception to that promise, which the release notes must name. A release candidate makes users no such promise. But a break in one should still be a decision someone made, so the checks apply to every release, release candidates included, and a record is how the decision is written down. That also proves the checks on real changes.
+The [versioning policy](../../oss/versioning.md#what-stays-compatible) promises that, from release 8.0, an application built on what is generally available upgrades to any later `8.x` release without changing its code. A record of kind `break` is then an exception to that promise, which the release notes must name. A release candidate makes users no such promise. But a break in one should still be a decision someone made, so the checks apply to every release, release candidates included, and a record is how the decision is written down. That also proves the checks on real changes.
 
 Three kinds of change go unnoticed without a check, and each needs a different one.
 
@@ -185,11 +185,11 @@ A check like this can pass because it compared nothing. Three safeguards prevent
 
 A database's package, such as `@prisma/orm-postgres`, re-exports most of what it offers from the packages it is built on (`export … from '@prisma/orm-family-sql/orm-client'`). The job's report calls these forwarded names. A forwarded name is only checked to still exist (`exists`). Its type is compared once, in the package that declares it.
 
-This relies on every package being released at one version, as the [versioning policy](../../oss/versioning.md) says they are. If `@prisma/orm-postgres` and `@prisma/orm-family-sql` were at different versions or maturity levels, a break in `Collection` would be judged by the family package's release, not by that of the package the user imports it from. Giving packages their own versions means making this rule, and the lookup of the last release, work per package.
+This relies on every package being released at one version, as every release candidate is. From release 8.0 the [versioning policy](../../oss/versioning.md#version-numbers) gives each package its own version and maturity level. If `@prisma/orm-postgres` and `@prisma/orm-family-sql` were at different versions or levels, a break in `Collection` would be judged by the family package's release, not by that of the package the user imports it from. Giving packages their own versions means making this rule, and the lookup of the last release, work per package.
 
 ### Names that carry a level
 
-An API that may still change has its maturity level at the start of its name: `ea_` (Early Access), `preview_` or `rc_` (Release Candidate), capitalised on a type or class, as in `Ea_Search`. A break in such an export is listed and does not fail.
+An API that may still change has its [maturity level](../../oss/versioning.md#maturity-levels) at the start of its name: `ea_` (Early Access), `preview_` or `rc_` (Release Candidate), capitalised on a type or class, as in `Ea_Search`. A break in such an export is listed and does not fail.
 
 The exception is a name left behind by a promotion. When an API is promoted, the release adds the new name and keeps the old one, deprecated, until the next major version, so that code written against the old name keeps working. The old name then stands for an API that may no longer break. So a name with a level fails like any other export when the last release also exports the same thing under a name without a level. These three forms count as the same thing:
 

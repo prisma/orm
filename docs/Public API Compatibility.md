@@ -11,7 +11,7 @@ CI checks every pull request for changes that would break code written against t
 | [A break against the last release](#a-break-against-the-last-release) | `API compatibility` (`pnpm api:compat`) | Code written against the last release still compiles against the build |
 | [The last release's example apps fail](#the-last-releases-example-apps-fail) | `API compatibility` (`pnpm api:compat:examples`) | The example apps, as they were at the last release, compile against the build |
 
-Each of them fails the job. The last release is the newest release tag at or below the version in the root `package.json` of the branch your pull request merges into, not whatever the registry tags as `latest`. A break is allowed only when you [record it](#recording-a-break-you-mean) as deliberate. A check that could not compare at all, for example because the registry was unreachable, also fails.
+Each of them fails the job. The last release is the newest release tag at or below the version in the root `package.json` of the branch your pull request merges into, not whatever the registry tags as `latest`. Every package is compared with that release's version of it. A break is allowed only when you [record it](#recording-a-break-you-mean) as deliberate. A check that could not compare at all, for example because the registry was unreachable, also fails.
 
 ## `api.txt` is out of date
 
@@ -139,7 +139,7 @@ In a package's first line, "forwarded names" are names the package re-exports fr
 
 ## An API that may still change
 
-An API that may still change starts its name with its maturity level: `ea_` (Early Access), `preview_` or `rc_` (Release Candidate). On a type or class the word is capitalised, as in `Ea_Search`. A break in such an export is listed as `break (maturity level, does not fail)` and does not fail the job, unless it is an old name kept after a promotion (below).
+An API that may still change starts its name with its [maturity level](oss/versioning.md#maturity-levels): `ea_` (Early Access), `preview_` or `rc_` (Release Candidate). On a type or class the word is capitalised, as in `Ea_Search`. A break in such an export is listed as `break (maturity level, does not fail)` and does not fail the job, unless it is an old name kept after a promotion (below).
 
 When you promote an API, keep the old name as a deprecated second name for the same thing, until the next major version. Code written against the old name must keep working. From the release that has both names, the check treats the old name like any other export, so removing it fails. Write the old name in one of the three forms the check recognises:
 
