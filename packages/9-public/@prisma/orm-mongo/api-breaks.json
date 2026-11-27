@@ -1,0 +1,11 @@
+[
+  {
+    "path": "./runtime",
+    "export": "MongoPrepareMember",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9d5e76fbd0dceaad",
+    "reason": "Unchanged since 8.0.0-rc.25: its return type MongoPreparedFrom resolves to never or any in that release's published declarations, so the comparison reports a break; the declaration is the same as on main."
+  }
+]

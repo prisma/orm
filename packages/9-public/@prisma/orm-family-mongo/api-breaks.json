@@ -23,7 +23,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3d4c70a5f41ba61c",
+    "fingerprint": "ba268d5520b73f3e",
     "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185)."
   },
   {
@@ -50,7 +50,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3d4c70a5f41ba61c",
+    "fingerprint": "ba268d5520b73f3e",
     "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185)."
   }
 ]
