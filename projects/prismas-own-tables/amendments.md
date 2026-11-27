@@ -95,3 +95,11 @@ The design says the space's row records the hash of its contract and that within
 - **One payload for `CONTRACT.PRISMA_SPACE_BEHIND`:** the space and `situation`. The extra fields of earlier rounds are gone.
 - **Message strings exported from published entry points** stay: the build has no way to keep one subpath of a published package unpublished without dropping an existing export, and a published package's imports from another must be published. A per-subpath "not published" setting in the build tooling would fix it; it is not part of this project.
 - **A user's own `_prisma.marker` of another shape** stops a command that changes the database with the first migration's column check. A command that only reads gets the database's own error.
+
+## 11. Found by the third review
+
+- **Where a release finds the space's own row is fixed for all later majors.** Each release reads that row from the marker table, through its columns, before it knows the tables' form; a later major that moved or reshaped it would make every earlier release plan from an empty database. So slice 2's split of the marker into signatures and configuration lands before `8.0.0`, in the same release as this slice, or keeps the marker table and its columns as they are.
+- **Ownership.** The advice for a role that may not rename the schema now also gives the statements that make it own the tables, since a later migration that adds a column needs table ownership. Dropping an empty `_prisma` checks first that the role owns it.
+- **The first migration's labels** use the same mood as the planner's ("Rename schema …"), since they are recorded in the ledger for good.
+- **A brand-new database's line** says the records were brought up to date, though they were created. Accepted: one line for every case.
+- **The upgrade instructions name the Studio pull request, not a release,** until Studio publishes one; whoever prepares the ORM release names the Studio version then.

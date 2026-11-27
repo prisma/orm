@@ -52,7 +52,7 @@ Three things differ from an extension's space:
 - **It is applied before anything is read.** Every command reads the rows of all spaces and the policies before the runner starts, and plans from what it read. A migration of these tables that ran inside the same runner call would move the rows after the plans were made.
 - **It is not part of the list of spaces built from the repository.** So no command lists it and no folder under `migrations/` is written for it. The checks for rows of undeclared spaces count it as declared. `migration log` does not show its ledger rows; a user can read them in the table.
 
-The phase is run by the control client, the programmatic interface the commands are built on, so a program that uses the client gets it too. Code that reaches the runner or the sign path without the client does not, so a program that does that calls `bringPrismaSpaceUpToDate` on the client first. On PostgreSQL such a caller is refused before anything runs when the tables are not up to date: with `MIGRATION.PRISMA_TABLES_MISSING` when they do not exist, and with `CONTRACT.PRISMA_SPACE_BEHIND` when they are still in a release candidate's schema.
+The phase is run by the control client, the programmatic interface the commands are built on, so a program that uses the client gets it too. Code that reaches the runner or the sign path without the client does not, so a program that does that calls `bringPrismaSpaceUpToDate` on the client first. On PostgreSQL such a caller is refused before anything runs when the tables do not exist in `_prisma`, which includes a database still in a release candidate's schema, with `MIGRATION.PRISMA_TABLES_MISSING`. A caller whose tables exist but are at an older contract of the space is not refused; it runs against tables that lack only what later releases added.
 
 ### The phase commits before the command's own checks
 
@@ -69,6 +69,10 @@ If the user's migration fails after the phase, Prisma's own tables stay up to da
 ### Within a major version its migrations only add
 
 Application instances on an earlier release keep reading these tables while a deploy is in progress, and a team may roll a release back. So within a major, a migration of this space after the first adds columns, tables or rows and changes nothing that exists. A test in the target package checks it. A change that is not an addition goes into the next major's migrations and is applied the same way.
+
+One thing must stay fixed for longer than a major: where a release finds the space's own row. Every release reads it from the marker table, through its columns, before it knows which form the tables are in. A later major that moved that table or removed one of those columns would make every earlier release see no row and plan from an empty database. So the marker table and the columns a release reads keep their place and form in every later major. Any change to them is made before `8.0.0`, and the marker table's planned split into a table of signatures and a table of configuration is done in the same release.
+
+The migrating role must own the schema and its tables, since a later migration that adds a column needs ownership of the table.
 
 ### A database that is ahead of the installed release
 
@@ -117,7 +121,7 @@ PostgreSQL follows this record. SQLite, MySQL, MariaDB and MongoDB still create 
 - On PostgreSQL the tables are described in four places: the contract, the statements that create them, the columns the first migration checks, and the table definitions the adapter reads and writes through. Tests keep them in agreement. With an emitted contract a target can query its own tables through a client typed from it, which would remove the last of these; that is not done yet.
 - This is a stated exception to [ADR 212](ADR%20212%20-%20Contract%20spaces.md), which says everything needed to apply and verify a database is in the user's repository. For this one space it is in the installed target package.
 - A refused, cancelled or failed command is no longer guaranteed to change nothing: it may have brought Prisma's own tables up to date.
-- `CONTRACT.PRISMA_SPACE_BEHIND` is raised by every command that only reads, and is also a finding of `db verify`, where findings exit with code 4 as the other drift findings do. Its payload is the same wherever it is raised: the space and `situation`, one of `releaseCandidateSchema`, `missingRow` or `olderContract`.
+- `CONTRACT.PRISMA_SPACE_BEHIND` is raised by every command that only reads, and is also a finding of `db verify`, where findings exit with code 4 as the other drift findings do. Wherever it is raised as an error its payload is the same: the space and `situation`, one of `releaseCandidateSchema`, `missingRow` or `olderContract`. The SQL client's warning carries the code and the same advice, without the payload.
 
 ## Alternatives considered
 
