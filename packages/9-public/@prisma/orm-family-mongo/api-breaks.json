@@ -23,7 +23,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "ba268d5520b73f3e",
+    "fingerprint": "94b08dbb429010d3",
     "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185)."
   },
   {
@@ -50,7 +50,25 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "ba268d5520b73f3e",
+    "fingerprint": "94b08dbb429010d3",
     "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185)."
+  },
+  {
+    "path": "./runtime",
+    "export": "MongoRuntime",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "ecad7e8954d8be79",
+    "reason": "Not a break for code written for 8.0.0-rc.25, which still compiles. prisma/orm#31192 gives RawAggregateCommand optional bypassDocumentValidation and collation properties, and RawDeleteManyCommand an optional collation property and options argument. Neither class is exported, and the change only adds optional members. The return type of its prepare method, MongoPreparedFor, is a conditional type that tests the plan's command type against unions of the command classes. TypeScript relates two such conditional types only when the types they test against are identical, and the release's classes and this build's now differ, so the comparison reports a break."
+  },
+  {
+    "path": "./runtime",
+    "export": "createMongoRuntime",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "ed9f124270bb1ba0",
+    "reason": "Not a break for code written for 8.0.0-rc.25, which still compiles. prisma/orm#31192 gives RawAggregateCommand optional bypassDocumentValidation and collation properties, and RawDeleteManyCommand an optional collation property and options argument. Neither class is exported, and the change only adds optional members. The return type of the prepare method of the runtime it returns, MongoPreparedFor, is a conditional type that tests the plan's command type against unions of the command classes. TypeScript relates two such conditional types only when the types they test against are identical, and the release's classes and this build's now differ, so the comparison reports a break."
   }
 ]
