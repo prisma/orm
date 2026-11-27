@@ -39,7 +39,7 @@ Every layer exposes an interface (the bare name) and a class. Callers and tests 
 
 Two refinements are worth stating because they bend the usual rules:
 
-- **`Impl` classes are exported**, not package-private. The classic pattern hides the concretion entirely, but `SupabaseRuntimeImpl` lives in a different package from `PostgresRuntimeImpl` and must extend it. So `Impl` classes are exported *solely as an extension seam* — to subclass, never to depend on as a type. The interface remains the only sanctioned dependency.
+- **`Impl` classes are exported**, not package-private. The classic pattern hides the concretion entirely, but `SupabaseRuntimeImpl` lives in a different package from `PostgresRuntimeImpl` and must extend it. So `Impl` classes are exported *solely as an extension seam* — to subclass, never to depend on as a type. The interface remains the only sanctioned dependency. The PostgreSQL facade exports its class under the Early Access name `Ea_PostgresRuntimeImpl`, which may change in any release: the seam's shape is not promised until it has a second user.
 - **The SQL family interface is named `Runtime`, not `SqlRuntime`.** It is the one place the bare-name scheme isn't followed: it predates the scheme and is the most widely imported symbol in the runtime package, so the symmetry isn't worth a sweeping rename. It lives inside the SQL package, where the ambiguity is low.
 
 Target interfaces start as empty extensions of `Runtime`. Their value is the *named dependency surface* — code can depend on `PostgresRuntime` today, and Postgres-specific runtime surface can be added later without a breaking change.
