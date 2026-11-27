@@ -204,8 +204,10 @@ export function throughProxy(connectionString: string, port: number): string {
   return url.toString();
 }
 
-/** The host and port `connectionString` names. */
+const POSTGRES_DEFAULT_PORT = 5432;
+
+/** The host and port `connectionString` names, with PostgreSQL's default port when it names none, as pg does. */
 export function targetOf(connectionString: string): { host: string; port: number } {
   const url = new URL(connectionString);
-  return { host: url.hostname, port: Number(url.port) };
+  return { host: url.hostname, port: url.port === '' ? POSTGRES_DEFAULT_PORT : Number(url.port) };
 }

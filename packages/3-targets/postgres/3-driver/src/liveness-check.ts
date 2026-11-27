@@ -1,3 +1,5 @@
+import { Pool } from 'pg';
+
 /** How long a pooled client may sit idle and still be used unchecked, and how long its liveness check may take. */
 export const livenessCheckLimits = {
   checkAfterIdleMillis: 1000,
@@ -36,12 +38,13 @@ class PoolLastUseRecord implements PoolLastUse {
   readonly #clock: Clock;
   readonly #lastUsed = new WeakMap<object, Instant>();
   #evictionCutoff: number | undefined;
-  #seenConnect = false;
+  #emitsConnect: boolean;
 
   constructor(pool: PoolEvents, clock: Clock) {
     this.#clock = clock;
+    this.#emitsConnect = pool instanceof Pool;
     pool.on('connect', (client) => {
-      this.#seenConnect = true;
+      this.#emitsConnect = true;
       this.#lastUsed.set(client, clock.now());
     });
     pool.on('release', (_error, client) => this.#lastUsed.set(client, clock.now()));
@@ -62,9 +65,9 @@ class PoolLastUseRecord implements PoolLastUse {
     return this.#clock.now();
   }
 
-  /** A pool that emitted `connect` while the record listened gives every client it opens since a record, so a client without one was last used before the record existed, and so before any cutoff. */
+  /** A `pg.Pool`, or a pool that emitted `connect` while the record listened, gives every client it opens since a record, so a client without one was last used before the record existed, and so before any cutoff. */
   #predatesRecord(): boolean {
-    return this.#seenConnect && this.#evictionCutoff !== undefined;
+    return this.#emitsConnect && this.#evictionCutoff !== undefined;
   }
 
   recordFailedCheck(startedAt: Instant): void {

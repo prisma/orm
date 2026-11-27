@@ -143,6 +143,15 @@ describe('the record of when each pooled client was last used', () => {
     expect(use.verdict({})).toBe('evict');
   });
 
+  it('evicts a client it has no record of, once a check failed, on a pg.Pool that has opened no client since', async () => {
+    const pool = new pg.Pool({ max: 1 });
+    const use = poolLastUse(pool, fakeClock());
+    use.recordFailedCheck(use.now());
+
+    expect(use.verdict({})).toBe('evict');
+    await pool.end();
+  });
+
   it('checks a client it has no record of on a pool that has emitted connect, while no check has failed', () => {
     const { pool, use } = setUp();
     pool.emit('connect', {});
