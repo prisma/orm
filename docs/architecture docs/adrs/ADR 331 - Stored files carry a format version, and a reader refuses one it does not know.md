@@ -3,8 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-24
 **Domain:** Contract & Schema, Migration System
-**In force from:** the first release candidate after `8.0.0-rc.25`
-**Supersedes:** the name `schemaVersion` for the field in `contract.json`, and the shapes of `migration.json` and of a ref file shown in [ADR 169](ADR%20169%20-%20On-disk%20migration%20persistence.md), [ADR 199](ADR%20199%20-%20Storage-only%20migration%20identity.md) and [ADR 218](ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md), which each gain `formatVersion`
+**Amends:** [ADR 169](ADR%20169%20-%20On-disk%20migration%20persistence.md), [ADR 199](ADR%20199%20-%20Storage-only%20migration%20identity.md) and [ADR 218](ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md): `migration.json` and ref files carry `formatVersion`
 
 Within Prisma 8, a later release reads every file an earlier release wrote, and the user regenerates nothing after an upgrade. This record is the part of that promise that concerns the files in a user's repository.
 
@@ -19,7 +18,7 @@ Every file Prisma writes into a user's repository and reads back later says whic
 
 ```json
 // migrations/app/20261124T0900_add_phone/migration.json
-{ "formatVersion": 1, "from": "6c26…", "to": "6b46…", "migrationHash": "9d1f…", "providedInvariants": [], "createdAt": "2026-11-24T09:00:00.000Z" }
+{ "formatVersion": 1, "from": "6c26…", "to": "6b46…", "providedInvariants": [], "createdAt": "2026-11-24T09:00:00.000Z", "migrationHash": "9d1f…" }
 ```
 
 ```json
@@ -31,7 +30,7 @@ A developer on `8.3` opens a repository where a teammate on `8.5` has planned a 
 
 ```text
 MIGRATION.FORMAT_VERSION_NEWER
-The migration file "migrations/app/20270301T1000_add_search/migration.json" was written by a newer release of Prisma
+The migration file (migration.json) "migrations/app/20270301T1000_add_search/migration.json" was written by a newer release of Prisma
 It is in format version 2, and this release of Prisma reads format version 1 only.
 Upgrade Prisma to the release that wrote the file, or a later one, and run the command again.
 ```
@@ -48,7 +47,7 @@ Nothing else in the file is interpreted, and nothing is changed in the repositor
 
 The field is `formatVersion`, a positive integer.
 
-The marker and the ledger are database records, not files, and get no format version. How Prisma's own tables change between releases is decided separately.
+The marker and the ledger are database records, not files, and get no format version.
 
 ### What a reader does
 
@@ -56,11 +55,21 @@ A reader looks at `formatVersion` before anything else in the file.
 
 - **A version it knows:** it reads the file. A release reads every format version an earlier release in the same major wrote.
 - **A version higher than any it knows:** it stops and says the file was written by a newer release of Prisma. It interprets nothing else in the file.
-- **No version:** it stops and names the upgrade instructions. Only a pre-release of Prisma 8 wrote such a file, including a contract that has a `schemaVersion` field in the place of `formatVersion`. The reader does not guess.
+- **No version, or a value that is neither a version it knows nor a higher integer:** it stops. For a file in the repository it names the upgrade instructions; for a file an extension package ships, it says to upgrade the extension. Only a pre-release of Prisma 8 wrote a file with no version, including a contract that has a `schemaVersion` field in the place of `formatVersion`. The reader does not guess.
 
-This holds for every read: a command that changes nothing, the runtime loading `contract.json`, and a contract, migration or ref that an extension package ships inside itself. A command or client entry point that accepts either a contract Prisma built in memory (from the TypeScript builder or by reading a file) or a file's content does not check the built contract; it tells the two apart by storage, which in a built contract is an object Prisma constructed rather than parsed JSON. A function that reads a file always expects the file: a serializer's `deserializeContract`, the snapshot writer and an extension's `contractJson` refuse a built contract.
+This holds for every read: a command that changes nothing, the runtime loading `contract.json`, and a contract, migration or ref that an extension package ships inside itself. A command or client entry point that accepts either a contract Prisma built in memory (from the TypeScript builder or by reading a file) or a file's content tells them apart this way: a value with no format version field, whose `storage` is an object Prisma constructed and not parsed JSON, is a built contract. It prints that contract in the current format and reads the result back. Anything else is read as a file. A function that reads a file always expects the file: a serializer's `deserializeContract`, the snapshot writer and an extension's `contractJson` refuse a built contract.
 
-A reader never skips a field it does not know. Because every reader is strict, a release cannot add a field to a format without raising its version.
+A reader refuses a field it does not know. Because every reader is strict, a release cannot add a field to a format without raising its version.
+
+The rule covers everything Prisma interprets. It stops at content Prisma carries without interpreting, where any key is accepted:
+
+- in a contract: `meta`, `capabilities`, each extension's own section under `extensions`, the parameters of a type or of a generator, the value of a literal default, an index's `options`, and the MongoDB documents handed to the database as they are, such as a collection's validator and an index's partial filter;
+- in a SQL operation: a step's `params`, the operation's `meta`, and the entries of a step's `meta` that no reader acts on;
+- in a MongoDB operation: the documents handed to the database as they are, such as a filter, an update and a pipeline.
+
+So a release that makes a reader act on something inside one of these, for example a new entry in a step's `meta`, must raise the format version, because an earlier reader would not notice the entry.
+
+A SQL operation is read strictly by everything that acts on its statements: the runners, the statement preview, and the checks a recorded path gets before it is applied. The commands that only list or compare migrations (`migration status`, `list`, `graph` and `check`) read the fields every target shares and do not read a target's own fields.
 
 ### What a writer does
 
@@ -75,9 +84,9 @@ The version describes how the JSON is written, not what the migration does. The 
 For each version of each kind of file there is one unit of code: a parser, which turns a file in that version into the document Prisma works with in memory, and a printer, which writes that document in that version. While there is one version, the in-memory document and the version's own shape are the same; a later version adds its own shape where it differs.
 
 - **Reading.** One shared function reads only the version number and reports the two refusals above. The caller then picks the unit for that version. The contents of a contract differ between families, so each family owns its contract units; the units for `migration.json` and ref files live with the migration tooling.
-- **Writing.** The writer tries the oldest version first. A printer either produces a complete document or says it cannot hold the data. It never leaves something out. If the choice errs, it picks a version higher than was needed, which an older release refuses outright; no release is ever handed a file it misreads.
+- **Writing.** The writer tries the oldest version first. From the second version on, a printer either produces a complete document or reports that its version cannot hold the data; it never leaves something out. A printer that wrongly reports this only makes the writer choose a higher version, which an older release refuses outright, so no release is handed a file it misreads.
 - **Converting.** A unit offers functions that turn a document of an earlier version into its own. Where one exists for the version on disk it is used directly; otherwise the document is converted one version at a time.
-- **Testing.** For each version: print, parse the result, and get the same data back.
+- **Testing.** For each version: print, parse the result, and get the same data back. A saved file of every earlier version still reads.
 
 While a file has one version, there is nothing to try in order and nothing to convert; both come into use with the first change to a format, and constrain only the releases after it.
 
@@ -93,7 +102,7 @@ Git treats a repository's format version this way, and Cargo refuses a lock file
 
 - An earlier release fails clearly on a file it cannot read, instead of reporting a validation error or reading the file wrongly.
 - A project whose members are on different releases of the same major keeps working until someone uses a feature that needs a newer format. From then, everyone who reads that file upgrades.
-- Adding an optional field to any of these files is a format change. It needs a new version unit, and the saved samples of earlier versions must still read.
+- Adding an optional field to any of these files is a format change. It needs a new version unit, and a saved file of every earlier version must still read.
 - Ref files are strict, so a hand-edited ref with a stray field is refused.
 
 ## Alternatives considered
