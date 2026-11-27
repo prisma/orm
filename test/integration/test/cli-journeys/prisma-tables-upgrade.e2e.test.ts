@@ -411,7 +411,7 @@ withTempDir(({ createTempDir }) => {
     );
   });
 
-  describe('a database whose tables are in a form from before the release candidates', () => {
+  describe('db migrate on a database whose tables are in a form from before the release candidates', () => {
     const db = useDevDatabase();
 
     it(
@@ -427,16 +427,19 @@ withTempDir(({ createTempDir }) => {
           code: 'MIGRATION.PRECHECK_FAILED',
           summary: "Prisma's own tables in this database could not be brought up to date",
           why: expect.stringContaining('"prisma_contract"."marker"'),
-          fix: expect.stringContaining(UPGRADE_INSTRUCTIONS),
           nextActions: [expect.objectContaining({ kind: 'open-url', url: UPGRADE_INSTRUCTIONS })],
         });
         expect(await schemas(db.connectionString)).toEqual(['prisma_contract']);
       },
       timeouts.spinUpPpgDev,
     );
+  });
+
+  describe('db sign on a database whose tables are in a form from before the release candidates', () => {
+    const db = useDevDatabase();
 
     it(
-      'stops db sign the same way',
+      'stops the same way',
       async () => {
         const { ctx } = await releaseCandidateProject(db.connectionString, createTempDir);
         await sql(
@@ -450,7 +453,7 @@ withTempDir(({ createTempDir }) => {
         expect(engineError(sign)).toMatchObject({
           code: 'MIGRATION.PRECHECK_FAILED',
           why: expect.stringContaining('"prisma_contract"."ledger"'),
-          fix: expect.stringContaining(UPGRADE_INSTRUCTIONS),
+          nextActions: [expect.objectContaining({ kind: 'open-url', url: UPGRADE_INSTRUCTIONS })],
         });
         expect(await schemas(db.connectionString)).toEqual(['prisma_contract']);
       },
