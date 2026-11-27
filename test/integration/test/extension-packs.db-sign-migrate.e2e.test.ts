@@ -306,16 +306,18 @@ withTempDir(({ createTempDir }) => {
       'Remove this declaration from the contract; the pack installs the extension.';
 
     function declareVector(project: { readonly contractPath: string }, declaration: string) {
-      const source = readFileSync(project.contractPath, 'utf8')
-        .replace(
-          "import { defineContract, field, model, postgres18, postgresDriver } from '@internal/postgres/contract-builder';",
-          "import { defineContract, extension, field, model, unbound } from '@internal/postgres/contract-builder';",
-        )
-        .replace(
-          'export const contract = defineContract({\n  requiredCapabilities: [...postgres18, ...postgresDriver],',
-          `export const contract = defineContract({\n  requiredCapabilities: [...postgres18, ...postgresDriver],\n  ${declaration}`,
-        );
-      writeFileSync(project.contractPath, source);
+      const fixture = readFileSync(project.contractPath, 'utf8');
+      const opening = 'export const contract = defineContract({';
+      if (!fixture.includes(opening)) {
+        throw new Error(`the fixture contract no longer contains "${opening}"`);
+      }
+      writeFileSync(
+        project.contractPath,
+        `import { extension, unbound } from '@internal/postgres/contract-builder';\n${fixture.replace(
+          opening,
+          `${opening}\n  ${declaration}`,
+        )}`,
+      );
     }
 
     function composePgvector(

@@ -29,7 +29,7 @@ describe('the capabilities of a defineContract contract are those of the emitted
     expect(built).toEqual(emitted);
   });
 
-  it('includes the adapter capabilities the type claims', () => {
+  it('includes the capabilities its type claims', () => {
     expect(postgresParitySource.capabilities.postgres.distinctOn).toBe(true);
     expect(sqliteParitySource.capabilities.sql.returning).toBe(true);
   });
