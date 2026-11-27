@@ -148,6 +148,7 @@ export const migrationCheckCommand = defineOrmCommand({
       migrationsDir,
       ctx.cwd,
       verifySnapshotContent,
+      loaded.value.deserializeContract,
     );
 
     let document: MigrationCheckResult;

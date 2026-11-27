@@ -20,6 +20,7 @@ import { errorInvalidRefFile } from '@internal/migration-tools/errors';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { join, relative } from 'pathe';
 import { CliStructuredError } from '../../utils/cli-errors';
 import { readContractEnvelope, resolveContractPath } from '../../utils/command-helpers';
 import { toDeclaredExtensionsFromRaw } from '../../utils/extension-pack-inputs';
@@ -199,7 +200,12 @@ export function mapIntegrityViolations(
   const spaceId = 'spaceId' in structural ? structural.spaceId : '*';
   return contractSpaceViolationError(`Contract-space integrity failure for "${spaceId}"`, {
     why: describeIntegrityViolation(structural),
-    fix: `Re-emit the affected migration package(s) or restore the on-disk \`${migrationsDir}\` directory from version control.`,
+    fix:
+      structural.kind === 'hashMismatch' ||
+      structural.kind === 'providedInvariantsMismatch' ||
+      structural.kind === 'packageUnloadable'
+        ? `Restore the migration package from version control, or write its migration.json and ops.json again by running \`node "${relative(process.cwd(), join(migrationsDir, structural.spaceId, structural.dirName, 'migration.ts'))}"\`.`
+        : `Restore the on-disk \`${migrationsDir}\` directory from version control.`,
     violations: [structural],
   });
 }
@@ -417,6 +423,8 @@ export async function buildReadAggregate(
       ) => readonly MigrationAccessChange[];
       /** Where the family keeps its markers, which an unreadable marker's error names. */
       readonly markerLocation: string;
+      /** The family's contract reader, for a command that reads a stored contract it holds. */
+      readonly deserializeContract: (contractJson: unknown) => Contract;
     },
     CliStructuredError
   >
@@ -474,6 +482,7 @@ export async function buildReadAggregate(
       accessChangesOf: (operations: readonly MigrationPlanOperation[]) =>
         familyInstance.accessChangesOf(operations),
       markerLocation: familyInstance.markerLocation,
+      deserializeContract,
     });
   } catch (error) {
     return notOk(

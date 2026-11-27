@@ -9,7 +9,7 @@ import { blindCast } from '@internal/utils/casts';
 import type { PresentedResult } from '@prisma/cli-engine';
 import type { Diagnostic } from '@prisma/cli-engine/protocol';
 import { createSqlContract } from '@repo/test-utils';
-import { join } from 'pathe';
+import { join, relative } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { MigrationCheckResult } from '../../src/commands/json/schemas';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
@@ -251,9 +251,11 @@ describe('migration check', () => {
       });
       expect(first?.meta).toEqual({ space: 'app' });
       expect(first?.nextActions).toEqual([
+        { kind: 'user-choice', label: 'Restore the migration package from version control' },
         {
-          kind: 'user-choice',
-          label: 'Re-emit the migration package, or restore it from version control',
+          kind: 'run-command',
+          label: 'Or write migration.json and ops.json again from its migration.ts',
+          command: `node "${relative(process.cwd(), join(dir, 'migrations', 'app', '20250102T0000_broken', 'migration.ts'))}"`,
         },
       ]);
     });

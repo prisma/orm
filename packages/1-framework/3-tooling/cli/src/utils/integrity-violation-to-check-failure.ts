@@ -1,7 +1,7 @@
 import type { IntegrityViolation } from '@internal/migration-tools/aggregate';
 import { join, relative } from 'pathe';
 import type { CheckFailure } from '../commands/json/schemas';
-import { chooseAction, runCommandAction } from './next-actions';
+import { chooseAction, migrationPackageRepairActions, runCommandAction } from './next-actions';
 
 export type { CheckFailure } from '../commands/json/schemas';
 
@@ -38,9 +38,9 @@ export function integrityViolationToCheckFailure(
           'migration.json',
         ),
         why: `Stored hash ${violation.stored} does not match recomputed hash ${violation.computed}`,
-        nextActions: [
-          chooseAction('Re-emit the migration package, or restore it from version control'),
-        ],
+        nextActions: migrationPackageRepairActions(
+          join(migrationsDir, violation.spaceId, violation.dirName),
+        ),
       };
     case 'providedInvariantsMismatch':
       return {
@@ -48,19 +48,19 @@ export function integrityViolationToCheckFailure(
         code: 'MIGRATION.CHECK_PROVIDED_INVARIANTS_MISMATCH',
         where: packageRelative(violation.spaceId, violation.dirName),
         why: `Migration "${violation.dirName}" providedInvariants in migration.json disagrees with ops.json.`,
-        nextActions: [
-          chooseAction('Re-emit the migration package so migration.json and ops.json agree'),
-        ],
+        nextActions: migrationPackageRepairActions(
+          join(migrationsDir, violation.spaceId, violation.dirName),
+        ),
       };
     case 'packageUnloadable':
       return {
         space: violation.spaceId,
         code: 'MIGRATION.CHECK_PACKAGE_UNLOADABLE',
         where: packageRelative(violation.spaceId, violation.dirName),
-        why: `Migration "${violation.dirName}" could not be loaded: ${violation.detail}`,
-        nextActions: [
-          chooseAction('Re-emit the migration package, or restore it from version control'),
-        ],
+        why: `Migration "${violation.dirName}" could not be loaded: ${violation.detail}. Until it is read, the checks that follow the migration graph of space "${violation.spaceId}" are not run.`,
+        nextActions: migrationPackageRepairActions(
+          join(migrationsDir, violation.spaceId, violation.dirName),
+        ),
       };
     case 'sameSourceAndTarget':
       return {
