@@ -64,6 +64,17 @@ describe('cross-shell tarball chain (target-postgres -> family-sql -> framework,
     expect(runInScratch(scratch, script)).toContain('prepared-query names ok');
   });
 
+  it('no longer exports the internal prepared-query path', () => {
+    const script = `
+      import { strict as assert } from 'node:assert';
+      await assert.rejects(import('@prisma/orm-family-sql/runtime/internal/prepared-query'), {
+        code: 'ERR_PACKAGE_PATH_NOT_EXPORTED',
+      });
+      console.log('prepared-query path removed');
+    `;
+    expect(runInScratch(scratch, script)).toContain('prepared-query path removed');
+  });
+
   it('exports the activity-starting functions from the public runtime entry', () => {
     const script = `
       import { strict as assert } from 'node:assert';
