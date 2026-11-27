@@ -28,11 +28,12 @@ import {
   twoFactorModel,
   withTwoFactorFields,
 } from './better-auth-project';
+import { versionOutsideTheRelease } from './skewed-version';
 
 const workspaceVersion = (
   JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as { version: string }
 ).version;
-const skewedVersion = workspaceVersion.replace(/\d+$/, (patch) => String(Number(patch) + 1));
+const skewedVersion = versionOutsideTheRelease(workspaceVersion);
 const adapterDir = join(repoRoot, 'packages/9-public/@prisma/orm-better-auth');
 const betterAuthFloor = (() => {
   const manifest = JSON.parse(readFileSync(join(adapterDir, 'package.json'), 'utf8')) as {

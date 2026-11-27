@@ -88,13 +88,7 @@ class PostgresAdapterImpl
         { meta: { surface: 'runtime-adapter' } },
       );
     }
-    return renderLoweredSql(
-      ast,
-      context.contract,
-      this.codecRegistry,
-      this.dataTypeLookup,
-      postgresAdapterCapabilities,
-    );
+    return renderLoweredSql(ast, context.contract, this.codecRegistry, this.dataTypeLookup);
   }
 }
 

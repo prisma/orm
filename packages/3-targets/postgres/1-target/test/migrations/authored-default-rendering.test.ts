@@ -58,7 +58,7 @@ function expectedColumn(dataType: string, codecId: string, expression: string): 
       namespaces: {},
       roles: [],
       existingSchemas: ['public'],
-      pgVersion: 'unknown',
+      serverVersionNumber: undefined,
     }),
     frameworkComponents: postgresTypeComponents,
   });

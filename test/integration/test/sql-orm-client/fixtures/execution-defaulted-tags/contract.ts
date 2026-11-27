@@ -1,5 +1,14 @@
 import { charColumn, int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, gen, model, rel, type } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  gen,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+  type,
+} from '@internal/postgres/contract-builder';
 
 // A pure-junction M:N (User.tags through user_tags) whose junction payload column
 // `created_at` carries an execution-time onCreate default (uuidv4) instead of a
@@ -45,5 +54,6 @@ const User = model('User', {
   .sql({ table: 'users' });
 
 export const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: { User, Tag, UserTag },
 });

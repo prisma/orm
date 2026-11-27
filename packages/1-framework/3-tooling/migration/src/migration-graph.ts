@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import { ifDefined } from '@internal/utils/defined';
 import { EMPTY_CONTRACT_HASH } from './constants';
 import type { MigrationEdge, MigrationGraph } from './graph';
@@ -71,15 +72,16 @@ export function reconstructGraph(packages: readonly OnDiskMigrationPackage[]): M
 // ---------------------------------------------------------------------------
 // Deterministic tie-breaking for BFS neighbour order.
 // Used by path-finders only; not a general-purpose utility.
-// Ordering: createdAt → to → migrationHash.
+// Ordering: createdAt → to → migrationHash, each by character code, so every
+// machine picks the same route whatever its locale.
 // ---------------------------------------------------------------------------
 
 function compareTieBreak(a: MigrationEdge, b: MigrationEdge): number {
-  const ca = a.createdAt.localeCompare(b.createdAt);
-  if (ca !== 0) return ca;
-  const tc = a.to.localeCompare(b.to);
-  if (tc !== 0) return tc;
-  return a.migrationHash.localeCompare(b.migrationHash);
+  return (
+    compareCodeUnits(a.createdAt, b.createdAt) ||
+    compareCodeUnits(a.to, b.to) ||
+    compareCodeUnits(a.migrationHash, b.migrationHash)
+  );
 }
 
 function sortedNeighbors(edges: readonly MigrationEdge[]): readonly MigrationEdge[] {

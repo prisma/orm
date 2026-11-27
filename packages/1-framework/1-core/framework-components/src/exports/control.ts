@@ -143,6 +143,16 @@ export {
   extractParameterizedOutputTypeImports,
   extractQueryOperationTypeImports,
 } from '../control/control-stack';
+export type {
+  CapabilityFirstAvailable,
+  DatabaseCapabilitiesNotProvided,
+  DatabaseCapabilitiesNotProvidedFinding,
+  DatabaseVersion,
+} from '../control/database-capabilities-not-provided';
+export {
+  databaseCapabilitiesNotProvidedIssue,
+  databaseCapabilitiesNotProvidedText,
+} from '../control/database-capabilities-not-provided';
 export {
   ACCESS_WIDENING_LEVELS,
   type AccessWideningLevel,
@@ -226,10 +236,12 @@ export {
   schemaIssuesWhy,
 } from '../control/runner-failure-why';
 export type {
+  DatabaseCapabilitiesNotProvidedExplanation,
   DiffableNode,
   ExpectationFailureReason,
   MismatchCause,
   MismatchExplanation,
+  NodeMismatchExplanation,
   SchemaDiffIssue,
   SchemaNodeRef,
 } from '../control/schema-diff';

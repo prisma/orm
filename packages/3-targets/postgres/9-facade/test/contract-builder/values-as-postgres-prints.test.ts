@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { defineContract, enumType, member } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  member,
+  postgres18,
+  postgresDriver,
+} from '../../src/exports/contract-builder';
 
 const pgNumeric = { codecId: 'pg/numeric@1' as const };
 const pgInet = { codecId: 'pg/inet@1' as const };
@@ -16,7 +22,10 @@ type EnumHandle = ReturnType<typeof enumType>;
 
 function contractWithEnum(handle: EnumHandle) {
   return defineContract(
-    { enums: { [handle.enumName]: handle } },
+    {
+      requiredCapabilities: [...postgres18, ...postgresDriver],
+      enums: { [handle.enumName]: handle },
+    },
     ({ field, model, gen, type }) => ({
       models: {
         Item: model('Item', {
@@ -31,19 +40,22 @@ function contractWithEnum(handle: EnumHandle) {
 }
 
 function storedDefaults(): Record<string, unknown> {
-  const contract = defineContract({}, ({ field, model, gen, type }) => ({
-    models: {
-      Item: model('Item', {
-        fields: {
-          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-          ratio: field.column(pgNumeric).default('01.5'),
-          zero: field.column(pgNumeric).default('-0'),
-          host: field.column(pgInet).default('10.0.0.1/32'),
-          mapped: field.column(pgInet).default('::FFFF:10.0.0.1'),
-        },
-      }),
-    },
-  }));
+  const contract = defineContract(
+    { requiredCapabilities: [...postgres18, ...postgresDriver] },
+    ({ field, model, gen, type }) => ({
+      models: {
+        Item: model('Item', {
+          fields: {
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+            ratio: field.column(pgNumeric).default('01.5'),
+            zero: field.column(pgNumeric).default('-0'),
+            host: field.column(pgInet).default('10.0.0.1/32'),
+            mapped: field.column(pgInet).default('::FFFF:10.0.0.1'),
+          },
+        }),
+      },
+    }),
+  );
   const columns = contract.storage.namespaces['public']?.entries.table?.['Item']?.columns;
   return {
     ratio: columns?.ratio?.default,

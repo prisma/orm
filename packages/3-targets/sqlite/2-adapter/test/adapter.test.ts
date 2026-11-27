@@ -92,6 +92,10 @@ const contract = new SqlContractSerializer().deserializeContract({
 describe('SQLite adapter', () => {
   const adapter = createSqliteAdapter();
 
+  it('lists interactive transactions, which the driver provides on a held connection, so a contract emitted for SQLite requires them', () => {
+    expect(sqliteAdapterDescriptorMeta.capabilities.sql.interactiveTransactions).toBe(true);
+  });
+
   it('SQLite adapter does not report sql.scalarList capability', () => {
     expect(adapter.profile.capabilities['sql']).not.toMatchObject({ scalarList: true });
   });

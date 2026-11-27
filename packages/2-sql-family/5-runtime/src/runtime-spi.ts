@@ -25,9 +25,11 @@ export interface RuntimeFamilyAdapter<TContract = unknown> {
 /**
  * Controls whether the runtime reads and checks the contract marker row on first use.
  *
- * - `'onFirstUse'` (default when omitted): the marker is read through the driver once per runtime lifetime, before the runtime's first use of the database: its first statement, or a connection taken to hold by `connection()`, a transaction or a subclass's raw connection, whichever comes first. Any hash mismatch or absent marker emits a structured `warn`-level log through the runtime's {@link RuntimeLog} and the work proceeds. A failed read rejects every call waiting on it, not only the one that started it, and the next call reads again. Once a read succeeds, later calls skip the marker reader entirely.
+ * - `'onFirstUse'` (default when omitted): the marker is read through the driver once per runtime lifetime, before the runtime's first use of the database: its first statement, or a connection taken to hold by `connection()`, a transaction or a subclass's raw connection, whichever comes first. Any hash mismatch or absent marker, and a marker that cannot be read or decoded, emits a structured `warn`-level log through the runtime's {@link RuntimeLog} and the work proceeds; a `warn` that throws is ignored. A read that cannot reach the database (a `SqlConnectionError`, `DRIVER.NOT_CONNECTED` or `DRIVER.CONNECTION_FAILED`) is the one exception: every call waiting on it rejects with that driver error, nothing is logged, and the next call reads again. Otherwise the check runs once whatever its outcome; later calls skip the marker reader entirely.
  * - `false`: the marker reader is never invoked. No log line is emitted. Use this to opt out of
  *   the diagnostic entirely (e.g. during a known deploy-skew window).
+ *
+ * A client that checks its stack against the contract when it is created (`CONTRACT.CAPABILITIES_NOT_PROVIDED`) reports that through the same setting: `false` turns that warning off too.
  *
  * The string-or-false shape is forward-compatible: future modes such as `'startup'` (eager check
  * inside the wrapper `connect()` step) can be added as additive union members without an API break.

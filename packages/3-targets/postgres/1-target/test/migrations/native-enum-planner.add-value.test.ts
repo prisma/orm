@@ -107,7 +107,7 @@ function liveTree(actualMembers: readonly string[]): PostgresDatabaseSchemaNode 
     },
     roles: [],
     existingSchemas: ['sales'],
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 

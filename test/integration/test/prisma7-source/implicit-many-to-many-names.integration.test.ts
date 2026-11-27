@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import type { Contract } from '@internal/contract/types';
 import { createControlStack } from '@internal/framework-components/control';
 import { flatPslModels, type PslModel } from '@internal/framework-components/psl-ast';
-import { prisma7Schema } from '@internal/postgres/config';
+import { postgres18, postgresDriver, prisma7Schema } from '@internal/postgres/config';
 import type { SqlModelStorage, SqlStorage } from '@internal/sql-contract/types';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
@@ -20,7 +20,7 @@ import {
   createFamilyInstance,
   postgres,
   postgresAdapter,
-  postgresDriver,
+  postgresDriverDescriptor,
   sql,
   withDriver,
 } from '../family.schema-verify.helpers';
@@ -34,10 +34,12 @@ async function interpret(schemaPath: string): Promise<Contract<SqlStorage>> {
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
-    driver: postgresDriver,
+    driver: postgresDriverDescriptor,
     extensions: [],
   });
-  const loaded = await prisma7Schema(schemaPath).source.load({
+  const loaded = await prisma7Schema(schemaPath, {
+    requiredCapabilities: [...postgres18, ...postgresDriver],
+  }).source.load({
     composedExtensions: [],
     defaultNamespaceId: stack.target.defaultNamespaceId,
     composedExtensionContracts: stack.extensionContracts,

@@ -1,268 +1,139 @@
 # Capabilities Reference
 
-This document defines the canonical capability keys and reserved namespaces used throughout Prisma 8 for adapter negotiation, feature gating, and extension integration.
-
-Capabilities describe **what the database environment can do**. Adapters report capabilities at connect time, and the runtime negotiates them with extension packs. The contract only **declares requirements** (`contract.capabilities`) and pins the resulting `profileHash`; it does not define capabilities.
-
-## Adapter (database) capabilities
-
-Adapter-reported features of the database runtime. These are not contract-owned; they are discovered and negotiated.
-
-### `sql`
-Common SQL features reported by adapters using the `sql` namespace. This is a naming convention for shared SQL keys, not a separate “SQL family” capability set.
-
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `lateral` | boolean | Supports LATERAL joins | Stable |
-| `returning` | boolean | Supports RETURNING clauses for DML operations (INSERT, UPDATE, DELETE) | Stable |
-| `jsonAgg` | boolean | Supports JSON aggregation functions. The ORM's one-query include needs it, with `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation` (see [Capabilities that choose how includes load](#capabilities-that-choose-how-includes-load)). | Stable |
-| `outerReferencesInDerivedTables` | boolean | Resolves a reference to the outer query from inside a derived table (`FROM (SELECT …) alias`) in a subquery. The ORM's one-query include needs it, because every row include reads from such a derived table. MariaDB does not report it. | Stable |
-| `jsonAggWithoutTruncation` | boolean | When the database aggregates rows into a JSON array that is too large, the query fails or the array cannot be decoded; it never returns a shorter valid array. The ORM's one-query include needs it. MariaDB does not report it: it cuts the array with only a warning. | Stable |
-| `enums` | boolean | Supports native enum storage types | Stable |
-| `foreignKeys` | boolean | Supports FOREIGN KEY constraint DDL | Stable |
-| `checkConstraint` | boolean | Supports CHECK constraint DDL. Gates the `@@check` authoring surface: a PSL contract declaring a check against an adapter that does not report this is refused at authoring. | Stable |
-| `autoIndexesForeignKeys` | boolean | Database automatically creates indexes for foreign keys | Stable |
-| `defaultInInsert` | boolean | Supports `DEFAULT` as a value in multi-row `INSERT ... VALUES` (e.g. `INSERT INTO t (a, b) VALUES (1, DEFAULT)`). When false, the ORM splits multi-row inserts by column signature so each statement has a uniform column list. | Stable |
-| `insertOnConflictSkip` | boolean | Can skip rows that collide with a unique constraint instead of failing the statement. Gates `createAll(rows, { onConflict: 'skip' })` and the same option on `createAndCount`. | Stable |
-| `insertOnConflictWithoutTarget` | boolean | Can skip colliding rows without naming the constraint that was violated. Gates the same option when `conflictOn` is omitted. It covers skipping only, not an upsert without conflict columns. | Stable |
-| `insertOnConflictTarget` | boolean | An insert's conflict clause applies only to the unique columns it names. MySQL's `ON DUPLICATE KEY UPDATE` fires on any unique key, so the MySQL adapter does not report it. When an adapter does not report it, the ORM sends an upsert as an insert whose update-on-conflict clause names no conflict columns, meaning any unique key; the adapter must render that clause as "any unique key" or refuse it. | Stable |
-| `forUpdate` | boolean | Can render the row-locking clause `FOR UPDATE` on a select. Gates `forUpdate()`. | Stable |
-| `forShare` | boolean | Can render `FOR SHARE` or its equivalent on a select. Gates `forShare()`. | Stable |
-| `lockOf` | boolean | Can limit a locking clause to named tables or aliases (`OF "t"`). Needed by the `of` option of the SQL builder's locking methods, and by all four ORM locking methods, which always render `OF` the model's table. | Stable |
-| `lockNowait` | boolean | Can make a locking clause fail at once on a locked row (`NOWAIT`). Gates the `nowait` option of the locking methods. | Stable |
-| `lockSkipLocked` | boolean | Can make a locking clause leave locked rows out of the result (`SKIP LOCKED`). Gates the `skipLocked` option of the locking methods. | Stable |
-
-### Capabilities that choose how includes load
-
-The ORM client loads includes with the one-query include, a correlated subquery per include that aggregates the related rows into JSON, only when the contract's `sql` group reports all three of `jsonAgg`, `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation`. A key reported only in another group, such as `postgres.jsonAgg`, does not count. When any of the three is missing or `false`, the ORM client loads includes with one query per relation: it reads the parent rows, then the related rows of all those parents in one statement per include, and attaches them in memory. A very large set of parents is split: each statement carries at most 10 000 bound parameters and about 1 MiB of key values, so one include can take several statements. Every parent table in the include tree needs a primary key or a unique key with no nullable column; without one the read fails with `ORM.ROW_IDENTITY_MISSING`. There is no user switch between the two ([ADR 164](../architecture%20docs/adrs/ADR%20164%20-%20Repository%20Layer.md)). The Postgres, SQLite and MySQL adapters report all three; the MariaDB adapter reports only `jsonAgg`.
-
-### `postgres`
-PostgreSQL-specific capabilities managed by the adapter.
-
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `partialIndex` | boolean | Supports partial/filtered indexes | Stable |
-| `deferrableConstraints` | boolean | Supports DEFERRABLE constraints | Stable |
-| `savepoints` | boolean | Supports savepoint transactions | Stable |
-| `transactionalDDL` | boolean | Supports transactional DDL | Stable |
-| `explainFormat` | enum | EXPLAIN output format (`text` \| `json`) | Stable |
-| `forNoKeyUpdate` | boolean | Can render the row-locking clause `FOR NO KEY UPDATE` on a select. Gates `forNoKeyUpdate()`. | Stable |
-| `forKeyShare` | boolean | Can render the row-locking clause `FOR KEY SHARE` on a select. Gates `forKeyShare()`. | Stable |
-
-### `mysql`
-MySQL-specific capabilities managed by the adapter.
-
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `jsonFunctions` | boolean | Supports JSON functions | Stable |
-| `generatedColumns` | boolean | Supports generated columns | Stable |
-| `checkConstraints` | boolean | Supports CHECK constraints | Stable |
-| `explainFormat` | enum | EXPLAIN output format (`text` \| `json`) | Stable |
-
-### `sqlite`
-SQLite-specific capabilities managed by the adapter.
-
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `json1` | boolean | Supports JSON1 extension | Stable |
-| `fts5` | boolean | Supports FTS5 full-text search | Stable |
-| `rtree` | boolean | Supports R*Tree spatial indexing | Stable |
-
-### Example adapter reports
-Postgres adapters should always report `sql.lateral: true` and `sql.returning: true`. The MySQL adapter reports neither.
-
-Postgres (example):
-```json
-{
-  "sql": { "lateral": true, "returning": true, "jsonAgg": true, "outerReferencesInDerivedTables": true, "jsonAggWithoutTruncation": true, "enums": true, "foreignKeys": true, "checkConstraint": true, "autoIndexesForeignKeys": false },
-  "postgres": { "partialIndex": true, "transactionalDDL": true, "explainFormat": "json" }
-}
-```
-
-MySQL (example):
-```json
-{
-  "sql": {
-    "orderBy": true,
-    "limit": true,
-    "foreignKeys": true,
-    "enums": true,
-    "defaultInInsert": true,
-    "jsonAgg": true,
-    "outerReferencesInDerivedTables": true,
-    "jsonAggWithoutTruncation": true
-  }
-}
-```
-
-## Extension pack capabilities
-
-Extension capabilities are prefixed by pack namespace to avoid collisions. These are negotiated alongside adapter capabilities at connect time.
-
-### `pgvector`
-PostgreSQL vector extension capabilities.
-
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `ivfflat` | boolean | Supports IVFFlat indexing | Stable |
-| `hnsw` | boolean | Supports HNSW indexing | Stable |
-| `vector` | object | Vector type support with params | Stable |
-
-### `postgis`
-PostGIS geospatial extension capabilities.
-
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `gist` | boolean | Supports GiST spatial indexing | Stable |
-| `geography` | boolean | Supports geography type | Stable |
-| `geometry` | boolean | Supports geometry type | Stable |
-| `srid` | array | Supported SRID values | Stable |
-
-### `pg_trgm`
-PostgreSQL trigram extension capabilities.
-
-| Capability | Type | Description | Stability |
-|------------|------|-------------|-----------|
-| `trigram` | boolean | Supports trigram similarity | Stable |
-| `gin` | boolean | Supports GIN trigram indexes | Stable |
-
-## Reserved Namespaces
-
-The following namespaces are reserved and cannot be used by extension packs:
-
-### Core Namespaces
-- `prisma` - Reserved for Prisma core features
-- `core` - Reserved for core adapter capabilities
-- `internal` - Reserved for internal implementation details
-- `sql` - Reserved for common SQL capability keys reported by adapters
-
-### Adapter Namespaces
-- `postgres` - PostgreSQL adapter capabilities
-- `mysql` - MySQL adapter capabilities
-- `sqlite` - SQLite adapter capabilities
-- `mongodb` - MongoDB adapter capabilities (future)
-
-### System Namespaces
-- `system` - System-level capabilities
-- `debug` - Debug and development capabilities
-- `test` - Testing and validation capabilities
-
-## Capability Key Rules
-
-### Naming Convention
-- Use lowercase with underscores or camelCase within namespaces (`jsonAgg`, `partial_index`)
-- Boolean capabilities use simple names: `lateral`, `savepoints`
-- Complex capabilities use descriptive names: `explainFormat`, `transactional_ddl`
-
-### Stability Contract
-- **Stable**: Core capabilities that cannot change meaning or be removed
-- **Deprecated**: Capabilities marked for removal with migration path
-- **Experimental**: New capabilities under evaluation
-
-### Versioning
-- Capability keys are immutable once published
-- New capabilities can be added as stable
-- Breaking changes require new capability keys
-
-## Capability Negotiation
-
-### Adapter Advertisement
-Adapters declare supported capabilities at connect time:
-
-```typescript
-interface AdapterCapabilities {
-  [namespace: string]: {
-    [capability: string]: boolean | string | object | array
-  }
-}
-```
-
-### Contract Requirements
-Contracts declare required capabilities in `contract.capabilities`:
+A capability is a fact that a database version or a connection provides, and that a contract requires, such as `RETURNING` or interactive transactions. On PostgreSQL the author lists the capabilities the contract requires as keys, such as `sql.returning`; on MySQL, MariaDB and SQLite the contract takes its adapter's fixed list at emit, and a MongoDB contract lists none. `contract.json` stores them in `contract.capabilities`, as flags grouped by namespace:
 
 ```json
 {
   "capabilities": {
-    "sql": { "lateral": true, "returning": true },
-    "postgres": { "transactionalDDL": true },
-    "pgvector": { "ivfflat": true }
+    "sql": { "returning": true, "interactiveTransactions": true },
+    "postgres": { "distinctOn": true }
   }
 }
 ```
 
-### Negotiation Process
-1. Adapter advertises available capabilities (discovered from the database environment)
-2. Runtime checks contract requirements against adapter capabilities
-3. Missing required capabilities cause connection failure
-4. Optional capabilities are noted but don't block connection
+The query builder and the ORM client offer a feature only when the contract lists its flag as `true`. The list is fixed when the contract is emitted. Nothing adds to it at run time, and the client does not ask the database.
 
-### Error Codes
-- `E_CAPABILITY_MISSING` - Required capability not available
-- `E_CAPABILITY_INCOMPATIBLE` - Capability value incompatible
-- `E_CAPABILITY_UNKNOWN` - Unknown capability key
+The decision record is [ADR 335](../architecture%20docs/adrs/ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md).
 
-## Extension Pack Guidelines
+## Who declares a capability
 
-### Namespace Selection
-- Use descriptive, lowercase names: `pgvector`, `postgis`, `pg_trgm`
-- Avoid generic terms: `vector`, `geo`, `search`
-- Check reserved namespaces before publishing
+On PostgreSQL, each capability is declared by the component that knows the fact:
 
-### Capability Declaration
-- Declare all capabilities your pack requires
-- Use stable capability keys from this reference
-- Document capability requirements in pack README
+| Component | Declares | Example |
+| --- | --- | --- |
+| Target | What the database provides, by version | `sql.lateral` on PostgreSQL 15 to 18 |
+| Driver | What the connection provides | `sql.interactiveTransactions` |
 
-### Compatibility Matrix
-- Test against multiple adapter versions
-- Document minimum capability requirements
-- Provide fallback behavior for missing capabilities
+No PostgreSQL capability is declared by the adapter, and extension packs declare none. On MySQL, MariaDB and SQLite, the adapter declares a fixed list that emit writes into every contract, the target and the driver declare none, and no client check runs yet. MongoDB's components declare none (see [MySQL, MariaDB, SQLite and MongoDB](#mysql-mariadb-sqlite-and-mongodb)).
 
-## Future Extensions
+Keys in the `sql` namespace are shared by every SQL target. They are not a separate set for the SQL family.
 
-### Planned Capabilities
-- `pg_stat_statements` - Query statistics
-- `pg_hint_plan` - Query plan hints
-- `pg_partman` - Partition management
-- `timescaledb` - Time-series extensions
+## PostgreSQL
 
-### Community Guidelines
-- Follow naming conventions
-- Document capability requirements
-- Provide migration paths for capability changes
-- Submit capability keys for review before publishing
+### The table of versions
+
+The PostgreSQL target holds the table of which version provides which capability: `postgresCapabilitiesByVersion` in `@prisma/orm-postgres/target/server-version`. Prisma supports PostgreSQL 15, 16, 17 and 18. No feature Prisma supports needs a version above 15, so the four rows are equal today:
+
+| Capability | 15 | 16 | 17 | 18 | What reads it |
+| --- | --- | --- | --- | --- | --- |
+| `postgres.distinctOn` | yes | yes | yes | yes | `distinctOn()` |
+| `postgres.forNoKeyUpdate` | yes | yes | yes | yes | `forNoKeyUpdate()` |
+| `postgres.forKeyShare` | yes | yes | yes | yes | `forKeyShare()` |
+| `sql.returning` | yes | yes | yes | yes | Reading back rows an insert, update or delete wrote |
+| `sql.defaultInInsert` | yes | yes | yes | yes | `DEFAULT` as a value in a multi-row insert; without it the ORM splits the insert by columns |
+| `sql.lateral` | yes | yes | yes | yes | Lateral joins |
+| `sql.scalarList` | yes | yes | yes | yes | A scalar list field in a Prisma schema |
+| `sql.checkConstraint` | yes | yes | yes | yes | `@@check` in a Prisma schema |
+| `sql.insertOnConflictSkip` | yes | yes | yes | yes | `createAll(rows, { onConflict: 'skip' })` and the same option of `createAndCount` |
+| `sql.insertOnConflictWithoutTarget` | yes | yes | yes | yes | The same option without `conflictOn` |
+| `sql.insertOnConflictTarget` | yes | yes | yes | yes | An upsert whose conflict clause names its columns |
+| `sql.forUpdate` | yes | yes | yes | yes | `forUpdate()` |
+| `sql.forShare` | yes | yes | yes | yes | `forShare()` |
+| `sql.lockOf` | yes | yes | yes | yes | The `of` option of the locking methods, and the ORM's locking methods |
+| `sql.lockNowait` | yes | yes | yes | yes | The `nowait` option of the locking methods |
+| `sql.lockSkipLocked` | yes | yes | yes | yes | The `skipLocked` option of the locking methods |
+| `sql.jsonAgg` | yes | yes | yes | yes | The one-query include (see below) |
+| `sql.outerReferencesInDerivedTables` | yes | yes | yes | yes | The one-query include |
+| `sql.jsonAggWithoutTruncation` | yes | yes | yes | yes | The one-query include |
+
+A supported version's row does not change within a major version, and a test pins each row. A feature that needs a newer database arrives with a new row.
+
+The PostgreSQL adapter declares no capabilities. The PostgreSQL driver declares `sql.interactiveTransactions`.
+
+### How a contract gets its list
+
+The author writes the list of every capability the contract requires, where the contract is written. Nothing is added to it. The facade exports what each supported version provides, `postgres15` to `postgres18`, built from the table above, and what the driver's connection provides, `postgresDriver`, from `@prisma/orm-postgres/contract-builder` and `@prisma/orm-postgres/config`. Each is a list of capability keys as messages print them.
+
+- A TypeScript contract lists them in `defineContract`: `defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }, …)`.
+- A Prisma schema lists them in the config's contract entry: `contract: { path: './prisma/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] }`. A `.ts` path with `requiredCapabilities` beside it is refused.
+- A Prisma 7 schema lists them in `prisma7Schema('prisma/schema.prisma', { requiredCapabilities: [...postgres18, ...postgresDriver] })`.
+- A config that builds its contract source itself, with `prismaContract` or `prisma7Contract`, passes `capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])` to the source.
+
+The list must be a list, not empty, and each entry a capability key that is not retired; otherwise `CONTRACT.ARGUMENT_INVALID` says which of the four it is.
+
+Until Prisma 8.0, the list may be left out, as a contract written for a release candidate leaves it out: in `defineContract`, in the config's contract entry (or a bare `.prisma` path), in `prisma7Schema`, and in a contract source the config builds itself and passes to the PostgreSQL `defineConfig`, such as `prismaContract(...)` without `capabilities` or `typescriptContract(contract)`. Such a contract requires the newest version's list and the driver's, `[...postgres18, ...postgresDriver]`, the list `prisma orm init` writes, and its type knows those keys. The commands that load the contract source, `prisma contract emit` and `prisma contract print` among them, report the warning `CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED` with what to write and its import, and emit's exit code does not change. A Prisma schema source given no `capabilities` is read with the default, so a scalar list (`String[]`) or `@@check` works. Building a TypeScript contract anywhere else prints nothing. `postgresContractCapabilities` has no default. Prisma 8.0 removes the default and requires the list.
+
+To leave a capability out, filter it out or write the keys yourself:
+
+```typescript
+requiredCapabilities: [
+  ...postgres18.filter((capability) => capability !== 'sql.insertOnConflictTarget'),
+  ...postgresDriver,
+]
+```
+
+A config built with the core `defineConfig`, which names the target, adapter and driver itself, gets no default and no warning: only the PostgreSQL `defineConfig` knows it. After the next `prisma contract emit`, a source given no `capabilities` writes a contract that lists no capabilities. The client then refuses the features that need a capability: `transaction()` is a type error and throws `ORM.CAPABILITY_MISSING`, and row locks, `distinctOn`, skip-on-conflict writes and prepared reads with includes are refused with the same code. Includes still work, with one query per relation. A schema with a scalar list (`String[]`) or `@@check` does not emit at all. Add `capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])` to its source, imported from `@prisma/orm-postgres/config`, before emitting.
+
+A list without `postgresDriver` does not require `sql.interactiveTransactions`, so `transaction()` is unavailable to it. Spreads of these lists, a filter by comparison and keys written out all stay literal in the contract's type, so the type-level checks below see each key. A list typed as `RequiredCapabilities` names no key in the type.
+
+Extensions listed in `extensions` add no flags. `contract.json` stores the flags as a nested object, namespace by namespace, and never a version.
+
+### Contracts emitted by a release candidate
+
+The release candidates wrote the adapter's fixed list into every PostgreSQL contract, with flags nothing reads any more: `postgres.orderBy`, `postgres.limit`, `postgres.lateral`, `postgres.jsonAgg`, `postgres.returning`, `sql.enums`, and the extensions' `postgres.pgvector.cosine`, `postgres.postgis.geometry` and `postgres.paradedb/bm25`. The PostgreSQL target declares them as retired (`retiredCapabilities` on its runtime descriptor). The client's check ignores a retired flag, at type level and when the client is created, and signing never checks it, because no row of the table names it. Those contracts also list no connection capability, so a contract that names a retired flag may call `transaction()` without `sql.interactiveTransactions`, as every client of that release could. The flags leave the contract when it is emitted again. The extensions' flags are declared by the target, not by each extension, because those releases wrote them into the `postgres` namespace and the client's type-level check sees the target but not the extensions.
+
+### Where each check happens
+
+| When | What is checked | On failure |
+| --- | --- | --- |
+| Authoring a Prisma schema | A feature that needs a flag, such as `@@check` or a scalar list | A diagnostic, such as `PSL_CHECK_UNSUPPORTED_TARGET` or `PSL_SCALAR_LIST_UNSUPPORTED_TARGET` |
+| Type-checking a query | A method that needs a flag, such as `forUpdate()` or `distinctOn()` | The method is not offered |
+| Running a query | The same methods, for a contract whose type does not say | `ORM.CAPABILITY_MISSING`; a locking clause the adapter cannot render fails with `RUNTIME.AST_UNSUPPORTED` |
+| Type-checking `transaction()` | `sql.interactiveTransactions`, unless a release candidate emitted the contract | The callback passed to `transaction()` is a type error that names the flag |
+| Calling `transaction()` | `sql.interactiveTransactions`, unless a release candidate emitted the contract | `ORM.CAPABILITY_MISSING` |
+| Creating the client | Flags that are not the database's, and not retired, must be provided by the client's adapter and driver | A type error, and a warning with code `CONTRACT.CAPABILITIES_NOT_PROVIDED` through the client's `log`, once. `verifyMarker: false` turns the warning off |
+| `db verify`, `db sign` | The database's flags against the server's version (`server_version_num`) | `CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED`; nothing is signed |
+| `db migrate`, `db update`, `db init` | The same, for every contract space, before anything runs | `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED`; nothing is changed |
+
+Only the flags in the target's table are checked against the database. A flag no row names, such as one a newer release added, is left to the client, which reports it with the flags its adapter and driver lack. A server older than PostgreSQL 15 is always refused. A server newer than the last row is treated as the last row. The refusal names the first version that provides each missing capability. The CLI offers no `db update` for it, since that cannot upgrade a server. [Error reference](./error-reference.md) has each code.
+
+## MySQL, MariaDB, SQLite and MongoDB
+
+These contracts take no version. They take a fixed list from their adapter, which emit writes into the contract:
+
+- MySQL: `mysqlAdapterCapabilities`. It has no `returning`, `lateral` or `insertOnConflictTarget`: `ON DUPLICATE KEY UPDATE` fires on any unique key.
+- MariaDB: MySQL's list, with `returning`, `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation` off.
+- SQLite: `sqliteAdapterCapabilities`. It has `returning` and no `lateral`.
+- MongoDB: no capabilities.
+
+Each of the SQL lists includes `sql.interactiveTransactions`.
+
+## Capabilities that choose how includes load
+
+The ORM client loads includes with one query, a correlated subquery per include that aggregates the related rows into JSON, only when the contract's `sql` namespace has all three of `jsonAgg`, `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation`. The same key in another namespace does not count. When any of the three is missing or `false`, the client loads includes with one query per relation: it reads the parent rows, then the related rows of all those parents in one statement per include, and joins them in memory. A very large set of parents is split: each statement carries at most 10 000 bound parameters and about 1 MiB of key values. Every parent table in the include tree needs a primary key or a unique key with no nullable column; without one the read fails with `ORM.ROW_IDENTITY_MISSING`. There is no user switch between the two ([ADR 164](../architecture%20docs/adrs/ADR%20164%20-%20Repository%20Layer.md)). PostgreSQL, SQLite and MySQL contracts have all three. MariaDB contracts have only `jsonAgg`.
+
+## Extension capability keys
+
+Extension descriptors declare no capability flags ([ADR 335](../architecture%20docs/adrs/ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md)). The namespacing rule of [ADR 117](../architecture%20docs/adrs/ADR%20117%20-%20Extension%20capability%20keys.md), under which an extension's keys would go under its own namespace such as `pgvector`, is background only.
+
+## Maturity and versioning of keys
+
+- A capability has no maturity level of its own. It has the level of the package that publishes it ([ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
+- There are no feature flags. A capability that is not ready ships in a package below Generally Available, or under a name that starts with its level, such as `preview_`.
+- A capability key is immutable once published. A new capability can be added in any release, as a new version's list on PostgreSQL. Changing what a published key means requires a new key.
 
 ## References
 
-- [ADR 065: Adapter capability schema & negotiation v1](../architecture%20docs/adrs/ADR%20065%20-%20Adapter%20capability%20schema%20&%20negotiation%20v1.md)
-- [ADR 117: Extension capability keys](../architecture%20docs/adrs/ADR%20117%20-%20Extension%20capability%20keys.md)
+- [ADR 335: A contract lists the capabilities it requires](../architecture%20docs/adrs/ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md)
+- [Capability gating](../architecture%20docs/patterns/capability-gating.md)
 - [Extensions Glossary](./extensions-glossary.md)
-
-## Capability Matrix
-
-Canonical capability keys with descriptions, typical implementers, and ADR references.
-
-| Capability key | Description | Implemented by | ADRs |
-|---|---|---|---|
-| sql.enums | Native enum storage types | adapters with native enums | ADR 065 |
-| sql.lateral | LATERAL join lowering | adapters that support LATERAL | ADR 065 |
-| sql.returning | RETURNING support for DML | adapters that support RETURNING | ADR 065 |
-| sql.jsonAgg | JSON aggregation support | adapters that support JSON aggregation | ADR 065 |
-| sql.outerReferencesInDerivedTables | Outer references resolve inside a derived table in a subquery | adapters whose database resolves them | — |
-| sql.jsonAggWithoutTruncation | An oversized JSON aggregate fails rather than returning a shorter array | adapters whose database never truncates silently | — |
-| sql.foreignKeys | FK constraint DDL support | adapters that support FOREIGN KEY | ADR 161 |
-| sql.checkConstraint | CHECK constraint DDL support; gates `@@check` | adapters that support CHECK | ADR 244 |
-| sql.autoIndexesForeignKeys | DB auto-indexes FKs | adapters where DB auto-creates FK indexes | ADR 161 |
-| sql.defaultInInsert | Supports DEFAULT in multi-row INSERT VALUES | adapters that support DEFAULT keyword as a value | — |
-| sql.insertOnConflictSkip | Skip rows colliding with a unique constraint; gates `onConflict: 'skip'` | adapters that can skip conflicting rows | — |
-| sql.insertOnConflictWithoutTarget | Skip colliding rows without naming the constraint | adapters that can skip without a conflict target | — |
-| sql.insertOnConflictTarget | A conflict clause applies only to the columns it names | adapters whose conflict clause can be limited to named columns | — |
-| postgres.partialIndex | Partial/filtered index support | postgres adapter | ADR 065 |
-| mysql.generatedColumns | Generated column support | mysql adapter | ADR 065 |
-| sqlite.fts5 | FTS5 support | sqlite adapter | ADR 065 |
-| pgvector.cosine | Cosine distance and similarity operations | pgvector pack | ADR 112–115 |
-| postgis.geometry | Geometry type support | postgis pack | ADR 112–115 |
-
-Notes
-- Capability keys are versioned and namespaced; see ADR 117 for stability rules.
-- Keep this matrix updated with adapter and pack changes.

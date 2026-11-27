@@ -28,6 +28,7 @@ import supabase from '../src/runtime/supabase';
 const base = createContract<SqlStorage>();
 const enumContract = {
   ...base,
+  capabilities: { sql: { interactiveTransactions: true } },
   domain: {
     namespaces: {
       public: {
@@ -59,6 +60,7 @@ const enumContract = {
 } as const;
 
 type EnumContract = Contract<SqlStorage> & {
+  readonly capabilities: (typeof enumContract)['capabilities'];
   readonly domain: (typeof enumContract)['domain'];
   readonly storage: (typeof enumContract)['storage'];
 };

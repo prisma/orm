@@ -3,6 +3,7 @@ import { defineConfig } from '@repo/tsdown';
 export default defineConfig({
   entry: [
     'src/exports/adapter.ts',
+    'src/exports/capabilities.ts',
     'src/exports/types.ts',
     'src/exports/column-types.ts',
     'src/exports/control.ts',

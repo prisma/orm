@@ -42,8 +42,8 @@ const createMockDriver = (
     if (sql.includes('pg_extension')) {
       return { rows: [] as Row[] };
     }
-    if (sql.includes('version()')) {
-      return { rows: [{ version: 'PostgreSQL 15.1' }] as Row[] };
+    if (sql.includes('server_version_num')) {
+      return { rows: [{ server_version_num: 150001 }] as Row[] };
     }
     return { rows: [] as Row[] };
   },

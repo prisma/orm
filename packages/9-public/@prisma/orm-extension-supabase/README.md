@@ -2,6 +2,8 @@
 
 Supabase's own database schema, its platform roles, and a role-binding runtime for Prisma 8.
 
+> **Maturity level: Early Access.** This package is published so that you can try it. It may have known failures, and any new version may change it. To move to a new release of it, you edit its line in your `package.json` by hand. Until release 8.0 it is published as `8.0.0-rc.N`, like every Prisma 8 package, and any of those versions may contain breaking changes. See [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+
 ```bash
 pnpm add @prisma/orm-extension-supabase
 ```

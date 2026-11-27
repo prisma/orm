@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 
 const rawContractSource = process.env['PRISMA_CONTRACT_SOURCE'];
 const contractSource =
@@ -15,7 +15,13 @@ if (contractSource !== 'psl' && contractSource !== 'ts') {
 // (`prisma contract emit`, CI typegen) work in fresh checkouts.
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: contractSource === 'ts' ? './src/prisma/contract.ts' : './src/prisma/contract.prisma',
+    contract:
+      contractSource === 'ts'
+        ? './src/prisma/contract.ts'
+        : {
+            path: './src/prisma/contract.prisma',
+            requiredCapabilities: [...postgres18, ...postgresDriver],
+          },
     ...(process.env['DATABASE_URL'] !== undefined && {
       db: { connection: process.env['DATABASE_URL'] },
     }),

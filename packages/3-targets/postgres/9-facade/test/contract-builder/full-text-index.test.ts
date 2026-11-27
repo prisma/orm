@@ -30,6 +30,8 @@ import {
   model,
   nativeEnum,
   pg,
+  postgres18,
+  postgresDriver,
   rel,
 } from '../../src/exports/contract-builder';
 
@@ -136,6 +138,7 @@ type MessageColumns = { readonly [K in keyof typeof messageFields]: ColumnRef<K>
 
 function indexesOf(indexes: (cols: MessageColumns) => readonly IndexConstraint[]) {
   const contract = defineContract({
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     models: {
       Message: model('Message', { fields: messageFields }).sql(({ cols }) => ({
         table: 'message',
@@ -311,6 +314,7 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
 
     expect(() =>
       defineContract({
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: {
           Message: model('Message', {
             fields: { id: field.column(intColumn).id(), mood: field.column(pg.enum(Mood)) },
@@ -398,7 +402,12 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
       ],
     }));
 
-    expect(() => defineContract({ models: { Author, Message } })).toThrow(
+    expect(() =>
+      defineContract({
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+        models: { Author, Message },
+      }),
+    ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.ARGUMENT_INVALID',
         message: expect.stringContaining(

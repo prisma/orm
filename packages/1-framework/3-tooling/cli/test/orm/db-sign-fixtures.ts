@@ -143,6 +143,36 @@ export const DRIFTED: VerifyDatabaseSchemaResult = {
   timings: { total: 1 },
 };
 
+export const OLDER_THAN_SUPPORTED =
+  'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 14.10. Upgrade the database to PostgreSQL 15 or later.';
+
+export const DATABASE_NOT_PROVIDED: SchemaDiffIssue = blindCast<
+  SchemaDiffIssue,
+  'The renderer reads the path, which side is present and the explanation'
+>({
+  path: ['capabilities'],
+  expected: { id: 'capabilities', nodeKind: 'database-capabilities' },
+  explanation: {
+    text: OLDER_THAN_SUPPORTED,
+    cause: 'database-capabilities-not-provided',
+    notProvided: {
+      database: 'PostgreSQL',
+      findings: [{ kind: 'older-than-supported', databaseVersion: '14.10', oldestSupported: 15 }],
+    },
+  },
+});
+
+export const NOT_PROVIDED: VerifyDatabaseSchemaResult = {
+  ok: false,
+  code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
+  summary: OLDER_THAN_SUPPORTED,
+  contract: { storageHash: HASH_A },
+  target: { expected: 'postgres' },
+  schema: { issues: [DATABASE_NOT_PROVIDED] },
+  meta: { strict: false },
+  timings: { total: 1 },
+};
+
 export function schemaResult(
   overrides: Partial<VerifyDatabaseSchemaResult> = {},
 ): VerifyDatabaseSchemaResult {
@@ -178,12 +208,16 @@ export function conflictSpace(space: string, storageHash: string): DbSignSpaceOu
   };
 }
 
-export function failedSpace(space: string, storageHash: string): DbSignSpaceOutcome {
+export function failedSpace(
+  space: string,
+  storageHash: string,
+  schema: VerifyDatabaseSchemaResult = DRIFTED,
+): DbSignSpaceOutcome {
   return {
     space,
     status: 'failed',
     contract: { storageHash, profileHash: PROFILE_HASH },
-    schema: DRIFTED,
+    schema,
   };
 }
 

@@ -21,7 +21,7 @@ alwaysApply: true
 
   When a comment needs to explain *why* something is the way it is, describe the constraint or behaviour itself; do not attribute it to the transient project artefact that introduced it.
 
-  Stable references that **are** fine: Linear ticket IDs (e.g. `TML-2397`), ADR numbers (e.g. `ADR 211`), and links to durable docs under `docs/architecture docs/`.
+  Stable references that **are** fine: Linear ticket IDs (e.g. `TML-2397`; not in an ADR, see `adr-writing.mdc`), ADR numbers, and links to durable docs under `docs/architecture docs/`.
 
   **Worked example.** Bad:
 

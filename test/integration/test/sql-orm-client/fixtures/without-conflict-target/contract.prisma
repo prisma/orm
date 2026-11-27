@@ -1,8 +1,6 @@
 // use prisma-8
 
-// Real emitted fixture for a contract emitted before the Postgres adapter reported
-// `sql.insertOnConflictTarget`: it is emitted against an adapter descriptor without that key
-// (see prisma.config.ts). Its users table matches the collection tests' schema.
+// Real emitted fixture for a contract that does not require `sql.insertOnConflictTarget`: its config leaves that key out of the required capabilities (see prisma.config.ts). Its users table matches the collection tests' schema.
 
 model User {
   id          Int    @id

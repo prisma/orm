@@ -22,6 +22,7 @@ function pslConfig(): string {
   return `import postgresAdapter from '@prisma/orm-postgres/adapter/control';
 import { definePrismaConfig } from '@prisma/cli-engine';
 import sql from '@prisma/orm-postgres/family/control';
+import { postgresContractCapabilities, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 import { prismaContract } from '@prisma/orm-family-sql/contract-psl/provider';
 import postgres from '@prisma/orm-postgres/target/control';
 import { postgresCreateNamespace } from '@prisma/orm-postgres/target/types';
@@ -34,6 +35,7 @@ export default definePrismaConfig({
   extensions: [],
   formatter: { newline: 'LF' },
   contract: prismaContract('./contract.prisma', {
+    capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
     output: 'output/contract.json',
     target: postgres,
     createNamespace: postgresCreateNamespace,

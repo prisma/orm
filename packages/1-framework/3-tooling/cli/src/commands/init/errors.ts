@@ -1,9 +1,8 @@
 import { ifDefined } from '@internal/utils/defined';
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { formatSourceDiagnostic } from '../../control-api/operations/load-contract-source';
-import { exactVersionOf } from '../../orm/init-required-peers';
 import { CliStructuredError } from '../../utils/cli-errors';
-import type { PackageManager } from './detect-package-manager';
+import { formatAddArgs, formatInstallCommand, type PackageManager } from './detect-package-manager';
 import type { Prisma6SideBySideSetup } from './prisma6-side-by-side';
 import {
   KNOWN_TARGET_PACKAGES,
@@ -490,6 +489,14 @@ export function errorInitPrisma7ConfigUnreadable(options: {
 }
 
 /**
+ * The sentence every advice to add or install a package ends with under `--skip-install`: a
+ * package manager can refuse the add, or leave the copy where it is, when an override, a
+ * resolution or the lockfile pins it, and init cannot see which.
+ */
+export const IF_SOMETHING_PINS_IT =
+  'If an add or an install is refused, or a copy stays at another version, an override, a resolution or the lockfile pins it, so remove that and install again.';
+
+/**
  * The project does not have the facade: `--skip-install` forbade installing it, or init's
  * install command succeeded and the package still cannot be found from the project. Init takes
  * every file it writes from that package, so it stops before writing any scaffold file.
@@ -518,7 +525,7 @@ export function errorInitTargetPackageNotInstalled(options: {
       ? `Check that \`${options.installCommand}\` makes ${packageName} resolvable from this directory, then run \`prisma orm init\` again.${plugNPlay}`
       : options.unlisted
         ? `Run \`prisma orm init\` again without \`--skip-install\`: it checks that ${packageName} lists the keyword \`${PRISMA_ORM_PACKAGE_KEYWORD}\` before installing it.${plugNPlay}`
-        : `Install it with \`${options.installCommand}\`, then run \`prisma orm init\` again, or run it without \`--skip-install\`.${plugNPlay}`;
+        : `Install it with \`${options.installCommand}\`. ${IF_SOMETHING_PINS_IT} Then run \`prisma orm init\` again, or run it without \`--skip-install\`.${plugNPlay}`;
   return new CliStructuredError(
     'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
     ranCommand !== undefined
@@ -717,7 +724,7 @@ export function errorInitRequiredPeersNotInstalled(options: {
     `${packageName} needs peer dependencies that are not installed`,
     {
       why: `${packageName} names ${listed(missing)} as required peer dependencies, and ${missing.length === 1 ? 'it cannot' : 'they cannot'} be found from the project or from where ${packageName} is installed. \`--skip-install\` forbids installing them. Nothing was changed.`,
-      fix: `${steps.join(', and ')}, then run \`prisma orm init\` again.`,
+      fix: `${steps.join(', and ')}. ${IF_SOMETHING_PINS_IT} Then run \`prisma orm init\` again.`,
       docsUrl: docsUrlFor('CLI.INIT_REQUIRED_PEERS_NOT_INSTALLED'),
       meta: {
         packageName,
@@ -730,43 +737,72 @@ export function errorInitRequiredPeersNotInstalled(options: {
   );
 }
 
+/**
+ * What a refused peer needs, decided from its `package.json` line, the requirement and the version
+ * installed: add it, which the project does not list; install, where the line already stands for
+ * the requirement and the copy is outside the line; change an exact line and install; make a line
+ * that points elsewhere (a catalog, a workspace, a path, an alias) resolve to the requirement; or
+ * replace any other line, a range or a dist-tag, with the requirement through `specifier`.
+ */
+export type RefusedPeerCase =
+  | { readonly case: 'add'; readonly specifier: string }
+  | { readonly case: 'install' }
+  | { readonly case: 'change-exact' }
+  | { readonly case: 'resolve' }
+  | { readonly case: 'change-range'; readonly specifier: string };
+
 export interface RequiredPeerAtAnotherVersion {
   readonly name: string;
   /** The version of the copy the project resolves. */
   readonly found: string;
-  /** The exact version the package that names it requires. */
+  /** The version or range the package that names it requires. */
   readonly required: string;
-  /** The project's `package.json` line for it, when that line asks for another version. */
+  /** The project's `package.json` line for it, when that line has to change. */
   readonly listed: string | undefined;
+  readonly fix: RefusedPeerCase;
 }
 
-/** Under `--skip-install`, a required peer is installed at a version other than the exact one required. */
+/** Under `--skip-install`, a required peer is installed at a version its requirement does not admit. */
 export function errorInitRequiredPeersAtAnotherVersion(options: {
   readonly packageName: string;
   readonly packages: readonly RequiredPeerAtAnotherVersion[];
-  /** The command that adds those `package.json` does not list; `undefined` when it lists them all. */
-  readonly installCommand: string | undefined;
-  /** Those `package.json` lists at the required version, which the package manager's install puts in place. */
+  /** Those `package.json` lists at a line that stands for the requirement; reported in `meta`. */
   readonly listedAtRequired: readonly string[];
-  /** The package manager's own install command. */
-  readonly restoreCommand: string;
+  readonly packageManager: PackageManager;
 }): CliStructuredError {
-  const { packageName, packages, listedAtRequired } = options;
-  const relisted = packages.filter((pkg) => pkg.listed !== undefined);
-  const steps: string[] = relisted.map((pkg) =>
-    pkg.listed !== undefined && exactVersionOf(pkg.listed) === undefined
-      ? `Make the line for ${pkg.name} in package.json resolve to ${pkg.required} (it is \`${pkg.listed}\` now, so change the version where it points, such as the catalog entry or the workspace package) and run \`${options.restoreCommand}\``
-      : `Change the line for ${pkg.name} in package.json from ${pkg.listed} to ${pkg.required} and run \`${options.restoreCommand}\``,
-  );
-  if (listedAtRequired.length > 0) {
-    steps.push(
-      `${steps.length === 0 ? 'Run' : 'run'} \`${options.restoreCommand}\` to install ${listed(listedAtRequired)} at the version package.json lists`,
-    );
+  const { packageName, packages, packageManager } = options;
+  const restoreCommand = formatInstallCommand(packageManager);
+  const addCommand = (specifiers: readonly string[]) =>
+    [packageManager, ...formatAddArgs(packageManager, [...specifiers])].join(' ');
+  const steps: string[] = packages.flatMap((pkg) => {
+    switch (pkg.fix.case) {
+      case 'change-exact':
+        return [
+          `Change the line for ${pkg.name} in package.json from ${pkg.listed} to ${pkg.required} and run \`${restoreCommand}\``,
+        ];
+      case 'resolve':
+        return [
+          `Make the line for ${pkg.name} in package.json resolve to ${pkg.required} (it is \`${pkg.listed}\` now, so change the version where it points, such as the catalog entry or the workspace package) and run \`${restoreCommand}\``,
+        ];
+      case 'change-range':
+        return [
+          `package.json lists ${pkg.name} at ${pkg.listed}, which does not keep it within ${pkg.required}, the range ${packageName} requires, and ${pkg.found} is installed: change the line to ${pkg.required} with \`${addCommand([pkg.fix.specifier])}\``,
+        ];
+      default:
+        return [];
+    }
+  });
+  for (const pkg of packages) {
+    if (pkg.fix.case === 'install') {
+      steps.push(
+        `package.json already lists ${pkg.name} at a version ${packageName} accepts, but ${pkg.found} is installed: run \`${restoreCommand}\``,
+      );
+    }
   }
-  if (options.installCommand !== undefined) {
-    steps.push(
-      `${steps.length === 0 ? 'Add them' : 'add the others'} with \`${options.installCommand}\``,
-    );
+  const toAdd = packages.flatMap((pkg) => (pkg.fix.case === 'add' ? [pkg.fix.specifier] : []));
+  const installCommand = toAdd.length === 0 ? undefined : addCommand(toAdd);
+  if (installCommand !== undefined) {
+    steps.push(`${steps.length === 0 ? 'Add them' : 'add the others'} with \`${installCommand}\``);
   }
   const found = packages.map(
     (pkg) => `${pkg.name} at ${pkg.found}, where ${pkg.required} is required`,
@@ -775,8 +811,8 @@ export function errorInitRequiredPeersAtAnotherVersion(options: {
     'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
     `${packageName} needs peer dependencies at versions that are not installed`,
     {
-      why: `${packageName} needs its required peer dependencies at exact versions, and the project has ${listed(found)}. A copy at another version does not stand for the one required, and init cannot tell which peers the required version needs in turn. \`--skip-install\` forbids installing them. Nothing was changed.`,
-      fix: `${steps.join(', and ')}, then run \`prisma orm init\` again.`,
+      why: `${packageName} needs its required peer dependencies at the versions it names, and the project has ${listed(found)}. A copy at another version does not stand for the one required, and init cannot tell which peers the required version needs in turn. \`--skip-install\` forbids installing them. Nothing was changed.`,
+      fix: `${steps.join(', and ')}. ${IF_SOMETHING_PINS_IT} Then run \`prisma orm init\` again.`,
       docsUrl: docsUrlFor('CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION'),
       meta: {
         packageName,
@@ -786,9 +822,9 @@ export function errorInitRequiredPeersAtAnotherVersion(options: {
           required: pkg.required,
           ...ifDefined('listed', pkg.listed),
         })),
-        listedAtRequired,
-        ...ifDefined('installCommand', options.installCommand),
-        restoreCommand: options.restoreCommand,
+        listedAtRequired: options.listedAtRequired,
+        ...ifDefined('installCommand', installCommand),
+        restoreCommand,
       },
     },
   );
@@ -875,12 +911,12 @@ export function errorInitPrisma7SourceUnavailable(
     | { readonly reason: 'unlisted' }
     | {
         readonly reason: 'not-resolvable';
-        /** The config module the contribution names. */
+        /** The config module the contribution names, or a module its contract entry calls into. */
         readonly module: string;
       }
     | {
         readonly reason: 'unloadable';
-        /** The config module the contribution names. */
+        /** The config module the contribution names, or a module its contract entry calls into. */
         readonly module: string;
         readonly cause: string;
       }
@@ -897,7 +933,7 @@ export function errorInitPrisma7SourceUnavailable(
       : options.reason === 'not-resolvable'
         ? {
             summary: `Could not load ${options.module} from the project`,
-            why: `${packageName} was installed, but the project cannot find \`${options.module}\`, the config module its init contribution names, so init cannot check that Prisma 8 reads ${schemaPath}.`,
+            why: `${packageName} was installed, but the project cannot find \`${options.module}\`, a module its init contribution names, so init cannot check that Prisma 8 reads ${schemaPath}.`,
             fix: `Check that ${packageName} is installed and exports ${options.module}, resolvable from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`,
           }
         : options.reason === 'unlisted'

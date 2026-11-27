@@ -47,13 +47,16 @@ export async function syncPackageSkills(packageName: string): Promise<string> {
   await fs.rm(destination, { recursive: true, force: true });
   await fs.cp(source, destination, { recursive: true });
 
-  // The source tree names one canonical package; each copy names its own, so
-  // a consumer reading the copy sees the package it resolved it from.
+  // The source tree names one canonical package and the root version; each
+  // copy names its own package and that package's version, which differ
+  // between packages once they are released at their own levels, so a
+  // consumer comparing the copy with its installed package sees a match.
   const skillMd = path.join(destination, 'SKILL.md');
-  await fs.writeFile(
-    skillMd,
-    stampSkillMetadata(await fs.readFile(skillMd, 'utf-8'), 'library', packageName),
+  const { version } = JSON.parse(
+    await fs.readFile(path.join(rootDir, packageDir, 'package.json'), 'utf-8'),
   );
+  const named = stampSkillMetadata(await fs.readFile(skillMd, 'utf-8'), 'library', packageName);
+  await fs.writeFile(skillMd, stampSkillMetadata(named, 'library_version', version));
 
   return destination;
 }

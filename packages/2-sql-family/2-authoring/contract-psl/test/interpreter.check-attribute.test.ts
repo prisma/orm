@@ -347,7 +347,7 @@ model Order {
         expect.objectContaining({
           code: 'PSL_CHECK_UNSUPPORTED_TARGET',
           message:
-            'Model "Order" declares "@@check", but target "sqlite" does not support check constraints (the adapter does not report the "checkConstraint" capability). Remove the check or author it against a target that supports check constraints.',
+            '`@@check` on model "Order" is unavailable: your contract declares no dependency on `sql.checkConstraint`. To enable it, add `sql.checkConstraint` to your contract\'s required capabilities.',
         }),
       ]),
     );

@@ -9,6 +9,7 @@ import {
   comparePrecedence,
   manifestShapeIgnoringVersions,
   parseChangesFrontmatter,
+  parseTransitionLabel,
   parseVersion,
   transitionLabel,
 } from './check-upgrade-coverage.mjs';
@@ -72,13 +73,27 @@ describe('version and format helpers', () => {
     assert.deepEqual(parseVersion('8.0.0-rc.3'), { major: 8, minor: 0, patch: 0, rc: 3 });
     assert.equal(parseVersion('8.0.0-dev.7').rc, null);
     assert.throws(() => parseVersion('invalid'));
+    assert.throws(() => parseVersion('8.0.0-beta.1'), /8\.0\.0-beta\.1/);
+    assert.throws(() => parseVersion('8.1.0-preview.0'), /8\.1\.0-preview\.0/);
     assert.equal(transitionLabel(parseVersion('0.7.3'), parseVersion('0.9.0')), '0.7-to-0.9');
     assert.equal(
-      transitionLabel(parseVersion('8.0.0-rc.7'), parseVersion('8.0.0')),
+      transitionLabel(parseVersion('8.0.0-rc.7'), parseVersion('8.0.1')),
       '8.0.0-rc.7-to-8.0',
     );
+    assert.equal(transitionLabel(parseVersion('8.0.1'), parseVersion('8.1.0')), '8.0-to-8.1');
     assert.ok(comparePrecedence(parseVersion('8.0.0-rc.9'), parseVersion('8.0.1-rc.1')) < 0);
-    assert.ok(comparePrecedence(parseVersion('8.0.0-rc.9'), parseVersion('8.0.0')) < 0);
+    assert.ok(comparePrecedence(parseVersion('8.0.0-rc.35'), parseVersion('8.0.1')) < 0);
+  });
+  it('reads a release segment of a transition label back as that release’s root version', () => {
+    assert.deepEqual(parseTransitionLabel('8.0.0-rc.35-to-8.0'), {
+      from: parseVersion('8.0.0-rc.35'),
+      to: parseVersion('8.0.1'),
+    });
+    assert.deepEqual(parseTransitionLabel('8.0-to-8.1'), {
+      from: parseVersion('8.0.1'),
+      to: parseVersion('8.1.0'),
+    });
+    assert.deepEqual(parseTransitionLabel('0.7-to-0.9').to, parseVersion('0.9.0'));
   });
   it('reads empty, flow and block lists without enforcing entry schemas', () => {
     for (const value of ['[]', '[foo]', '[a, b]', '\n  - summary: prose\n    id: x'])
@@ -415,7 +430,8 @@ describe('publish defaults and CLI', () => {
   for (const [from, to, label] of [
     ['0.7.0', '0.9.0', '0.7-to-0.9'],
     ['8.0.0-rc.1', '8.0.0-rc.7', '8.0.0-rc.1-to-8.0.0-rc.7'],
-    ['8.0.0-rc.7', '8.0.0', '8.0.0-rc.7-to-8.0'],
+    ['8.0.0-rc.7', '8.0.1', '8.0.0-rc.7-to-8.0'],
+    ['8.0.1', '8.1.0', '8.0-to-8.1'],
   ]) {
     it(`resolves ${label}, skips dev/beta and supports already-tagged republish`, () => {
       version(from);

@@ -165,7 +165,7 @@ describe('renameTableInPostgresSchema', () => {
       },
       roles: [],
       existingSchemas: ['public'],
-      pgVersion: '16',
+      serverVersionNumber: 160000,
     });
 
     const table = tableIn(renameTableInPostgresSchema(schema, RENAME), 'UserProfile');
@@ -248,7 +248,7 @@ describe('WorkingSchema.apply', () => {
       },
       roles: [],
       existingSchemas: ['public'],
-      pgVersion: '16',
+      serverVersionNumber: 160000,
     });
 
     const working = createWorkingSchema(schema);
@@ -299,7 +299,7 @@ describe('WorkingSchema.apply', () => {
       },
       roles: [],
       existingSchemas: ['public'],
-      pgVersion: '16',
+      serverVersionNumber: 160000,
     });
 
     const working = createWorkingSchema(schema);
@@ -354,7 +354,7 @@ describe('moveTableInPostgresSchema', () => {
       },
       roles: [],
       existingSchemas: ['billing'],
-      pgVersion: '17',
+      serverVersionNumber: 170000,
     });
 
     const moved = moveTableInPostgresSchema(schema, {

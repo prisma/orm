@@ -1,0 +1,11 @@
+[
+  {
+    "path": "./pack",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e8cfd4b27ee9d063",
+    "reason": "An extension pack declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
+  }
+]

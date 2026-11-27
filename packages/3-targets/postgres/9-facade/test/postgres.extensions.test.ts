@@ -24,7 +24,7 @@ function createTestExtensionPack(id: string): SqlRuntimeExtensionDescriptor<'pos
 }
 
 describe('postgres extensions', () => {
-  it('builds db.context with a contract-required extension pack instead of throwing', () => {
+  it('builds db.context with a contract-required extension pack instead of throwing, keeping the contract’s capabilities', () => {
     const extensionPackId = 'test-pack';
     const pack = createTestExtensionPack(extensionPackId);
     const contract = createContract<SqlStorage>({
@@ -39,7 +39,7 @@ describe('postgres extensions', () => {
       extensions: [pack],
     });
 
-    expect(db.context.contract.capabilities['postgres']?.[extensionPackId]).toBe(true);
+    expect(db.context.contract.capabilities).toEqual(contract.capabilities);
   });
 
   it('throws when the contract requires an extension pack that is not provided', () => {

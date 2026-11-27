@@ -323,7 +323,7 @@ function mapTables(
     roles: schema.roles,
     extensions: schema.extensions,
     existingSchemas: schema.existingSchemas,
-    pgVersion: schema.pgVersion,
+    serverVersionNumber: schema.serverVersionNumber,
   });
 }
 
@@ -437,7 +437,7 @@ export function moveTableInPostgresSchema(
     roles: rewritten.roles,
     extensions: rewritten.extensions,
     existingSchemas: rewritten.existingSchemas,
-    pgVersion: rewritten.pgVersion,
+    serverVersionNumber: rewritten.serverVersionNumber,
   });
 }
 
@@ -494,7 +494,7 @@ export function renameSchemaInPostgresSchema(
     roles: rewritten.roles,
     extensions: rewritten.extensions,
     existingSchemas: rewritten.existingSchemas.map((name) => (name === from ? to : name)),
-    pgVersion: rewritten.pgVersion,
+    serverVersionNumber: rewritten.serverVersionNumber,
   });
 }
 
@@ -508,7 +508,7 @@ function withSchema(
     roles: schema.roles,
     extensions: schema.extensions,
     existingSchemas: [...schema.existingSchemas, schemaName],
-    pgVersion: schema.pgVersion,
+    serverVersionNumber: schema.serverVersionNumber,
   });
 }
 

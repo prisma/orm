@@ -232,7 +232,6 @@ export default function sqlite<
   const context = createExecutionContext<TContract, SqliteTargetId>({
     contract,
     stack,
-    driver: sqliteDriver,
   });
   const {
     sql,

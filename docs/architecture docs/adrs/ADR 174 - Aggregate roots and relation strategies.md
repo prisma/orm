@@ -185,6 +185,3 @@ This design means:
 - [ADR 172 — Contract domain-storage separation](ADR%20172%20-%20Contract%20domain-storage%20separation.md) — why `model.storage` stays on the model
 - [ADR 173 — Polymorphism via discriminator and variants](ADR%20173%20-%20Polymorphism%20via%20discriminator%20and%20variants.md) — why strategy labels are problematic
 - [ADR 177 — Ownership replaces relation strategy](ADR%20177%20-%20Ownership%20replaces%20relation%20strategy.md) — supersedes the relation `strategy` design; `owner` on models replaces `strategy` on relations
-- [design-questions.md § DQ #1](../../planning/mongo-target/1-design-docs/design-questions.md) — embedded documents resolution
-- [cross-cutting-learnings.md § learning #1](../../planning/mongo-target/cross-cutting-learnings.md) — explicit aggregate roots
-- [cross-cutting-learnings.md § learning #5](../../planning/mongo-target/cross-cutting-learnings.md) — models are entities, not just data descriptions

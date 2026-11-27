@@ -107,12 +107,15 @@ If you use a framework like Next.js or Vite, the Prisma ORM plugin will do this 
 
 \`\`\`typescript
 import 'dotenv/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver } from '@internal/postgres/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig } from '@internal/postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './src/prisma/contract.prisma',
+    contract: {
+      path: "./src/prisma/contract.prisma",
+      requiredCapabilities: [...postgres18, ...postgresDriver],
+    },
     db: {
       connection: process.env['DATABASE_URL']!,
     },
@@ -221,10 +224,10 @@ This project is set up for PostgreSQL. Prisma ORM also supports other databases.
 Your data contract is the heart of your application. It lives at [\`src/prisma/contract.ts\`](src/prisma/contract.ts) and describes your models:
 
 \`\`\`typescript
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract(
-  {},
+  { requiredCapabilities: [...postgres18, ...postgresDriver] },
   ({ field, model, gen, type }) => ({
     models: {
       User: model('User', {
@@ -268,12 +271,12 @@ If you use a framework like Next.js or Vite, the Prisma ORM plugin will do this 
 
 \`\`\`typescript
 import 'dotenv/config';
-import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '@internal/postgres/config';
+import { definePrismaConfig } from '@prisma/cli-engine';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './src/prisma/contract.ts',
+    contract: "./src/prisma/contract.ts",
     db: {
       connection: process.env['DATABASE_URL']!,
     },
@@ -325,9 +328,9 @@ If this project lives inside a pnpm workspace, a few things are worth knowing:
 `;
 
 exports[`templates > per-cell snapshots (FR5.4) > postgres + typescript > starterSchema is stable 1`] = `
-"import { defineContract, now } from '@internal/postgres/contract-builder';
+"import { defineContract, now, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 
-export const contract = defineContract({}, ({ field, model, rel, gen, type }) => {
+export const contract = defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }, ({ field, model, rel, gen, type }) => {
   const User = model('User', {
     fields: {
       id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),

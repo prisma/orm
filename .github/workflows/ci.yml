@@ -109,6 +109,8 @@ jobs:
         run: pnpm lint:rules:footprint
       - name: Validate package READMEs
         run: pnpm lint:docs
+      - name: Check Markdown links
+        run: pnpm lint:doc-links
       - name: Validate package manifests (license declarations)
         run: pnpm lint:manifests
       - name: Lint workflow triggers (forbid Pwn Request pattern)
@@ -148,6 +150,39 @@ jobs:
         env:
           BASE: ${{ github.base_ref || 'main' }}
         run: pnpm check:release-notes --mode pr --prev "origin/$BASE"
+
+  api-compat:
+    name: API compatibility
+    # Depends on build only for its caches, as Lint does.
+    needs: [build, changes]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch the base branch this PR targets
+        # The last release is read from the root package.json version on the base branch.
+        if: needs.changes.outputs.inert != 'true'
+        env:
+          BASE: ${{ github.base_ref || 'main' }}
+        run: git fetch --no-tags --depth=1 origin "$BASE:refs/remotes/origin/$BASE"
+      - uses: ./.github/actions/setup
+      - name: Install dependencies
+        if: needs.changes.outputs.inert != 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Build packages (restored from Turbo cache)
+        id: api-compat-build
+        if: needs.changes.outputs.inert != 'true'
+        run: pnpm build
+      - name: Find breaks since the last release
+        if: needs.changes.outputs.inert != 'true'
+        # The largest packages take up to about 6 GB each; two at once fit the runner's 16 GB.
+        run: pnpm api:compat --jobs 2
+      - name: Type check the last release's example apps against this build
+        # Runs when the step above found breaks too, so both reports are in the summary.
+        if: ${{ !cancelled() && steps.api-compat-build.outcome == 'success' }}
+        run: pnpm api:compat:examples
 
   fixtures:
     name: Fixtures

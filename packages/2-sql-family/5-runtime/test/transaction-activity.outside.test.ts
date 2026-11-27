@@ -1,3 +1,4 @@
+import { SqlConnectionError } from '@internal/sql-errors';
 import { RawQueryAst } from '@internal/sql-relational-core/ast';
 import type { AffectedCount } from '@internal/sql-relational-core/expression';
 import { planFromAst } from '@internal/sql-relational-core/plan';
@@ -187,20 +188,17 @@ describe('a statement outside a transaction', () => {
       ]);
     });
 
-    it('ends failed and finalizes unknown when the marker read fails', async () => {
+    it('ends failed and finalizes unknown when the marker read cannot reach the database', async () => {
+      const unreachable = new SqlConnectionError('connect ECONNREFUSED 127.0.0.1:5432');
       const setup = createSetup({
         readMarker: async () => {
-          throw new Error('marker read failed');
+          throw unreachable;
         },
       });
       const queryable = setup.runtime;
 
-      await expect(queryable.execute(rawPlan('update t set x = 1'))).rejects.toThrow(
-        'marker read failed',
-      );
-      await expect(queryable.query(rawPlan('select 1')).toArray()).rejects.toThrow(
-        'marker read failed',
-      );
+      await expect(queryable.execute(rawPlan('update t set x = 1'))).rejects.toBe(unreachable);
+      await expect(queryable.query(rawPlan('select 1')).toArray()).rejects.toBe(unreachable);
 
       expect(afterHookNames(setup.events)).toEqual([
         'ended:statement:failed',
@@ -209,18 +207,51 @@ describe('a statement outside a transaction', () => {
         'finalized:statement:unknown',
       ]);
     });
+
+    it('ends succeeded and finalizes committed when the marker read fails for another reason', async () => {
+      const setup = createSetup({
+        readMarker: async () => {
+          throw new Error('marker read failed');
+        },
+      });
+      const queryable = setup.runtime;
+
+      await queryable.execute(rawPlan('update t set x = 1'));
+      await queryable.query(rawPlan('select 1')).toArray();
+
+      expect(afterHookNames(setup.events)).toEqual([
+        'ended:statement:succeeded',
+        'finalized:statement:committed',
+        'ended:statement:succeeded',
+        'finalized:statement:committed',
+      ]);
+    });
   });
 
-  it('rejects connection() with a failed marker read, before any statement starts', async () => {
+  it('rejects connection() when the marker read cannot reach the database, before any statement starts', async () => {
+    const unreachable = new SqlConnectionError('connect ECONNREFUSED 127.0.0.1:5432');
+    const setup = createSetup({
+      readMarker: async () => {
+        throw unreachable;
+      },
+    });
+
+    await expect(setup.runtime.connection()).rejects.toBe(unreachable);
+
+    expect(setup.events).toEqual([]);
+  });
+
+  it('returns a connection when the marker read fails for another reason, before any statement starts', async () => {
     const setup = createSetup({
       readMarker: async () => {
         throw new Error('marker read failed');
       },
     });
 
-    await expect(setup.runtime.connection()).rejects.toThrow('marker read failed');
+    const connection = await setup.runtime.connection();
 
     expect(setup.events).toEqual([]);
+    await connection.release();
   });
 
   it('passes the same activity and context to every hook of a statement', async () => {

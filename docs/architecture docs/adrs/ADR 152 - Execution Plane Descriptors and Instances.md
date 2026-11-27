@@ -276,7 +276,7 @@ Non-goals for this ADR:
 
 - [ADR 159 — Driver Terminology and Lifecycle](./ADR%20159%20-%20Driver%20Terminology%20and%20Lifecycle.md) — Extends driver lifecycle: `create(options?)` without connection, `connect(binding)` at boundary
 - [ADR 005 - Thin Core Fat Targets](./ADR%20005%20-%20Thin%20Core%20Fat%20Targets.md)
-- [ADR 011 - Unified Plan Model](./ADR%20011%20-%20Unified%20Plan%20model%20across%20lanes.md)
+- [ADR 011 - Unified Plan Model](./ADR%20011%20-%20Unified%20Plan%20Model.md)
 - [ADR 124 - Unified Async Iterable Execution Surface](./ADR%20124%20-%20Unified%20Async%20Iterable%20Execution%20Surface.md)
 - [ADR 125 - Execution Mode Selection & Streaming Semantics](./ADR%20125%20-%20Execution%20Mode%20Selection%20&%20Streaming%20Semantics.md)
 - [ADR 151 - Control Plane Descriptors and Instances](./ADR%20151%20-%20Control%20Plane%20Descriptors%20and%20Instances.md)
