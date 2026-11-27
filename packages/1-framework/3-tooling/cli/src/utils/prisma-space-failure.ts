@@ -16,10 +16,10 @@ export function prismaSpaceRunnerFailureError(failure: MigrationRunnerFailure): 
   const next = failedCheck
     ? `stopped at the check above. The upgrade instructions at ${APP_UPGRADE_GUIDES_URL} say what to do when one of these checks fails; follow them, then run the command again.`
     : 'stopped there; correct the cause above and run the command again.';
-  const fix = `${state} Prisma brings its own tables up to date before anything else, and ${next}`;
+  const fix = `${state} Prisma brings the records it keeps for itself up to date before anything else, and ${next}`;
   return new ActionableCliError(
     failure.code,
-    "Prisma's own tables in this database could not be brought up to date",
+    'The records Prisma keeps for itself in this database could not be brought up to date',
     {
       why: failure.why ?? failure.message,
       fix,

@@ -222,7 +222,7 @@ export function errorInstalledSpaceUnreachable(args: {
   const recorded = `The database records contract space "${spaceId}" at ${markerHash}, which the installed Prisma packages never reach: their newest is ${headRefHash}.`;
   const why =
     reason === 'laterMajor'
-      ? `${recorded} The row also records an invariant that no migration of the installed packages provides, which only a release of a later major version of Prisma writes. That release changed these tables in a way this release cannot read.`
+      ? `${recorded} The row also records an invariant that no migration of the installed packages provides, which only a release of a later major version of Prisma writes. That release changed these records in a way this release cannot read.`
       : `${recorded} The space's ledger never recorded ${headRefHash}, so no release of this major version brought the database there from this release's form; a release of another major version, or a change by hand, did.`;
   const fix =
     reason === 'laterMajor'

@@ -661,13 +661,13 @@ describe('errorPrismaSpaceBehind', () => {
     }).toEqual({
       code: 'CONTRACT.PRISMA_SPACE_BEHIND',
       message:
-        "Prisma's own tables in this database are not up to date with the installed release of Prisma",
+        'The records Prisma keeps for itself in this database are not up to date with the installed release of Prisma',
       why: 'The row records an earlier contract.',
-      fix: "Run `{bin} db migrate`, which brings Prisma's own tables up to date before it does anything else; `{bin} db init`, `{bin} db update` and `{bin} db sign` do the same.",
+      fix: 'Run `{bin} db migrate`, which brings the records Prisma keeps for itself up to date before it does anything else; `{bin} db init`, `{bin} db update` and `{bin} db sign` do the same.',
       nextActions: [
         {
           kind: 'run-command',
-          label: "Bring Prisma's own tables up to date",
+          label: 'Bring the records Prisma keeps for itself up to date',
           command: '{bin} db migrate',
         },
       ],

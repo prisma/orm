@@ -71,8 +71,8 @@ describe('db verify and the Prisma space', () => {
     }).toEqual({
       code: 'CONTRACT.PRISMA_SPACE_BEHIND',
       message:
-        "Prisma's own tables in this database are not up to date with the installed release of Prisma",
-      fix: "Run `{bin} db migrate`, which brings Prisma's own tables up to date before it does anything else; `{bin} db init`, `{bin} db update` and `{bin} db sign` do the same.",
+        'The records Prisma keeps for itself in this database are not up to date with the installed release of Prisma',
+      fix: 'Run `{bin} db migrate`, which brings the records Prisma keeps for itself up to date before it does anything else; `{bin} db init`, `{bin} db update` and `{bin} db sign` do the same.',
       meta: { spaceId: PRISMA_SPACE_ID, markerHash: 'first', headRefHash: 'second' },
     });
   });

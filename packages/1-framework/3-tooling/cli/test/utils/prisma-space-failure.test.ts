@@ -41,9 +41,10 @@ describe('prismaSpaceRunnerFailureError', () => {
       meta: error.meta,
     }).toEqual({
       code: 'MIGRATION.PRECHECK_FAILED',
-      message: "Prisma's own tables in this database could not be brought up to date",
+      message:
+        'The records Prisma keeps for itself in this database could not be brought up to date',
       why: failedPrecheck(true).why,
-      fix: `The database is unchanged. Prisma brings its own tables up to date before anything else, and stopped at the check above. The upgrade instructions at ${APP_UPGRADE_GUIDES_URL} say what to do when one of these checks fails; follow them, then run the command again.`,
+      fix: `The database is unchanged. Prisma brings the records it keeps for itself up to date before anything else, and stopped at the check above. The upgrade instructions at ${APP_UPGRADE_GUIDES_URL} say what to do when one of these checks fails; follow them, then run the command again.`,
       nextActions: [
         { kind: 'open-url', label: 'Follow the upgrade instructions', url: APP_UPGRADE_GUIDES_URL },
       ],
@@ -53,7 +54,7 @@ describe('prismaSpaceRunnerFailureError', () => {
 
   it('says what stays applied when the target could not roll the failure back', () => {
     expect(prismaSpaceRunnerFailureError(failedPrecheck(false)).fix).toBe(
-      `The operations that ran before the failure stay applied. Prisma brings its own tables up to date before anything else, and stopped at the check above. The upgrade instructions at ${APP_UPGRADE_GUIDES_URL} say what to do when one of these checks fails; follow them, then run the command again.`,
+      `The operations that ran before the failure stay applied. Prisma brings the records it keeps for itself up to date before anything else, and stopped at the check above. The upgrade instructions at ${APP_UPGRADE_GUIDES_URL} say what to do when one of these checks fails; follow them, then run the command again.`,
     );
   });
 
@@ -66,9 +67,10 @@ describe('prismaSpaceRunnerFailureError', () => {
 
     expect(prismaSpaceRunnerFailureError(failure)).toMatchObject({
       code: 'MIGRATION.EXECUTION_FAILED',
-      message: "Prisma's own tables in this database could not be brought up to date",
+      message:
+        'The records Prisma keeps for itself in this database could not be brought up to date',
       why: 'permission denied for database',
-      fix: 'The database is unchanged. Prisma brings its own tables up to date before anything else, and stopped there; correct the cause above and run the command again.',
+      fix: 'The database is unchanged. Prisma brings the records it keeps for itself up to date before anything else, and stopped there; correct the cause above and run the command again.',
     });
   });
 });

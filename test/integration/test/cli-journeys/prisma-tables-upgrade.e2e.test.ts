@@ -45,7 +45,8 @@ const FIRST_PRISMA_TABLES_MIGRATION =
 const PRISMA_SPACE_BEHIND = 'CONTRACT.PRISMA_SPACE_BEHIND';
 const UPGRADE_INSTRUCTIONS =
   'https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading/app';
-const BROUGHT_UP_TO_DATE = "Prisma's own tables in this database were brought up to date.";
+const BROUGHT_UP_TO_DATE =
+  'The records Prisma keeps for itself in this database were brought up to date.';
 /** A space key in a command's JSON output that names the Prisma space. */
 const LISTS_PRISMA_SPACE = /"(space|spaceId|id)":\s*"_prisma"/;
 
@@ -425,7 +426,8 @@ withTempDir(({ createTempDir }) => {
         expect(migrate.exitCode).not.toBe(0);
         expect(engineError(migrate)).toMatchObject({
           code: 'MIGRATION.PRECHECK_FAILED',
-          summary: "Prisma's own tables in this database could not be brought up to date",
+          summary:
+            'The records Prisma keeps for itself in this database could not be brought up to date',
           why: expect.stringContaining('"prisma_contract"."marker"'),
           nextActions: [expect.objectContaining({ kind: 'open-url', url: UPGRADE_INSTRUCTIONS })],
         });

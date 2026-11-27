@@ -16,7 +16,7 @@ import {
 const earlierRelease = expect.objectContaining({
   code: 'CONTRACT.PRISMA_SPACE_BEHIND',
   message:
-    "Prisma's own tables in this database are not up to date with the installed release of Prisma",
+    'The records Prisma keeps for itself in this database are not up to date with the installed release of Prisma',
   why: expect.stringContaining('`prisma_contract`'),
   fix: expect.stringContaining('`{bin} db migrate'),
 });

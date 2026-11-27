@@ -641,12 +641,16 @@ export function errorPrismaSpaceBehind(options: {
   const migrate = '{bin} db migrate';
   return new CliStructuredError(
     'CONTRACT.PRISMA_SPACE_BEHIND',
-    "Prisma's own tables in this database are not up to date with the installed release of Prisma",
+    'The records Prisma keeps for itself in this database are not up to date with the installed release of Prisma',
     {
       why: options.why,
-      fix: `Run \`${migrate}\`, which brings Prisma's own tables up to date before it does anything else; \`{bin} db init\`, \`{bin} db update\` and \`{bin} db sign\` do the same.`,
+      fix: `Run \`${migrate}\`, which brings the records Prisma keeps for itself up to date before it does anything else; \`{bin} db init\`, \`{bin} db update\` and \`{bin} db sign\` do the same.`,
       nextActions: [
-        { kind: 'run-command', label: "Bring Prisma's own tables up to date", command: migrate },
+        {
+          kind: 'run-command',
+          label: 'Bring the records Prisma keeps for itself up to date',
+          command: migrate,
+        },
       ],
       meta: options.meta,
     },
