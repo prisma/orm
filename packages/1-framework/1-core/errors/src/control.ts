@@ -228,11 +228,11 @@ export function errorContractValidationFailed(
     readonly cause?: unknown;
     /** What the refusal is about, such as the columns whose defaults were refused. */
     readonly meta?: Record<string, unknown> | undefined;
-    /** The refused contract is a migration snapshot, which no command rewrites, so it can only be upgraded or restored. */
-    readonly snapshot?: boolean;
+    /** Which file was refused: the emitted contract (the default), or a migration's contract snapshot, which no command writes again, so it can only be upgraded or restored. */
+    readonly artifact?: 'contract' | 'snapshot';
   },
 ): CliStructuredError {
-  if (options?.snapshot === true) {
+  if (options?.artifact === 'snapshot') {
     return new CliStructuredError('CONTRACT.VALIDATION_FAILED', 'Contract validation failed', {
       why: reason,
       fix: `If an earlier release wrote this snapshot, follow the app upgrade instructions of each release since, which rewrite the contract and its migration snapshots: ${APP_UPGRADE_GUIDES_URL}. Otherwise restore the snapshot from version control; no command rewrites it`,

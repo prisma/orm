@@ -37,7 +37,7 @@ export function mapContractAtError(
               where: { path: filePath },
               cause: error,
               meta: contractValidationMeta(error),
-              snapshot: true,
+              artifact: 'snapshot',
             },
           ),
         );
@@ -53,7 +53,7 @@ export function mapContractAtError(
             role === 'to'
               ? `Target contract at ${filePath} failed to deserialize: ${message}`
               : `Predecessor contract at ${filePath} failed to deserialize: ${message}`,
-            { where: { path: filePath }, cause: error },
+            { where: { path: filePath }, cause: error, artifact: 'snapshot' },
           ),
         );
       }
@@ -77,7 +77,7 @@ export function mapContractAtError(
               role === 'to'
                 ? `Target migration is missing its contract snapshot at ${expectedPath}`
                 : `Predecessor migration is missing its contract snapshot at ${expectedPath}`,
-            fix: 'Restore migrations/snapshots/ from version control, or re-run the command that produced this migration to regenerate its snapshot.',
+            fix: 'Restore migrations/snapshots/ from version control.',
             cause: error,
           }),
         );
