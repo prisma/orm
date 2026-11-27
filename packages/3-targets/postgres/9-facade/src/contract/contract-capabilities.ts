@@ -28,35 +28,41 @@ export type RequiredCapabilities = readonly CapabilityKey[];
 export type PostgresContractCapabilities<Required extends RequiredCapabilities> =
   CapabilitiesFromKeys<Required[number]>;
 
-function isListed<Required extends RequiredCapabilities>(
-  required: Required | undefined,
-): required is Required {
-  return Array.isArray(required) && required.length > 0;
-}
-
 function isCapabilityKey(key: unknown): key is CapabilityKey {
   if (typeof key !== 'string') return false;
   const dot = key.indexOf('.');
   return dot > 0 && dot < key.length - 1;
 }
 
+function refuseList(message: string): never {
+  throw postgresError('CONTRACT.ARGUMENT_INVALID', message);
+}
+
 /**
- * The capabilities a contract records for `required`, refusing a list that is missing or empty. `where` names where the author writes the list, for the refusal.
+ * The capabilities a contract records for `required`, refusing a list that is missing, empty, not a list, or holds an entry that is not a capability key. `where` names where the author writes the list, for the refusal.
  */
 export function requiredCapabilitiesFor<const Required extends RequiredCapabilities>(
   required: Required | undefined,
   where: string,
 ): PostgresContractCapabilities<Required> {
-  if (!isListed(required)) {
-    throw postgresError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `State the capabilities your contract requires in requiredCapabilities ${where}. The list is missing or empty.`,
+  if (required === undefined) {
+    refuseList(
+      `State the capabilities your contract requires in requiredCapabilities ${where}. The list is missing.`,
+    );
+  }
+  if (!Array.isArray(required)) {
+    refuseList(
+      `requiredCapabilities ${where} is not a list. State the capabilities your contract requires as a list of capability keys.`,
+    );
+  }
+  if (required.length === 0) {
+    refuseList(
+      `State the capabilities your contract requires in requiredCapabilities ${where}. The list is empty.`,
     );
   }
   const notAKey = required.find((key) => !isCapabilityKey(key));
   if (notAKey !== undefined) {
-    throw postgresError(
-      'CONTRACT.ARGUMENT_INVALID',
+    refuseList(
       `requiredCapabilities ${where} lists ${JSON.stringify(notAKey)}, which is not a capability key. A key is a namespace and a flag joined by a dot, as error messages print it.`,
     );
   }

@@ -98,25 +98,45 @@ describe('the required capabilities of a TypeScript contract', () => {
   });
 });
 
-describe('a contract that lists no required capabilities', () => {
-  const refusal = expect.objectContaining({
-    message:
-      'State the capabilities your contract requires in requiredCapabilities in defineContract. The list is missing or empty.',
-  });
-
+describe('a contract whose required capabilities are not a list of keys', () => {
   it('is refused when the list is missing, with no example', () => {
-    expect(() => defineContract({} as { requiredCapabilities: [] })).toThrow(refusal);
+    expect(() => defineContract({} as { requiredCapabilities: [] })).toThrow(
+      expect.objectContaining({
+        message:
+          'State the capabilities your contract requires in requiredCapabilities in defineContract. The list is missing.',
+      }),
+    );
   });
 
   it('is refused when the list is empty', () => {
-    expect(() => defineContract({ requiredCapabilities: [] })).toThrow(refusal);
+    expect(() => defineContract({ requiredCapabilities: [] })).toThrow(
+      expect.objectContaining({
+        message:
+          'State the capabilities your contract requires in requiredCapabilities in defineContract. The list is empty.',
+      }),
+    );
+  });
+
+  it.each([
+    ['a capability set, as the removed capabilities option took', { sql: { returning: true } }],
+    ['a single key', 'sql.returning'],
+    ['null', null],
+  ])('is refused when it is not a list: %s', (_case, value) => {
+    expect(() =>
+      defineContract({ requiredCapabilities: value as unknown as ['sql.returning'] }),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          'requiredCapabilities in defineContract is not a list. State the capabilities your contract requires as a list of capability keys.',
+      }),
+    );
   });
 
   it('is refused by postgresContractCapabilities too', () => {
     expect(() => postgresContractCapabilities([])).toThrow(
       expect.objectContaining({
         message:
-          'State the capabilities your contract requires in requiredCapabilities given to postgresContractCapabilities. The list is missing or empty.',
+          'State the capabilities your contract requires in requiredCapabilities given to postgresContractCapabilities. The list is empty.',
       }),
     );
   });
@@ -127,7 +147,7 @@ describe('an entry that is not a capability key', () => {
     ['a key without a namespace', 'returning'],
     ['a key with an empty namespace', '.returning'],
     ['a key with an empty flag', 'sql.'],
-    ['a capability set, as the removed capabilities option took', { sql: { returning: true } }],
+    ['a capability set inside the list', { sql: { returning: true } }],
   ])('is refused: %s', (_case, entry) => {
     expect(() =>
       defineContract({ requiredCapabilities: [entry] as unknown as ['sql.returning'] }),

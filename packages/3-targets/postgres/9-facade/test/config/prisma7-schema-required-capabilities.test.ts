@@ -18,7 +18,7 @@ afterEach(async () => {
 
 describe('prisma7Schema', () => {
   const missingList =
-    "State the capabilities your contract requires in requiredCapabilities in the options of prisma7Schema('./prisma/schema.prisma'). The list is missing or empty.";
+    "State the capabilities your contract requires in requiredCapabilities in the options of prisma7Schema('./prisma/schema.prisma'). The list is missing.";
 
   it('refuses a call that lists no required capabilities, with no example', () => {
     expect(() =>

@@ -92,7 +92,7 @@ describe('the Prisma 7 check runs the contract entry node', {
 
     await expect(check(contribution)).rejects.toMatchObject({
       code: 'CONTRACT.ARGUMENT_INVALID',
-      message: expect.stringContaining('The list is missing or empty.'),
+      message: expect.stringContaining('The list is missing.'),
     });
     expect(readdirSync(projectDir, { recursive: true })).toEqual(before);
   });
@@ -103,7 +103,7 @@ describe('the Prisma 7 check runs the contract entry node', {
 
     await expect(check(contribution)).rejects.toMatchObject({
       code: 'CONTRACT.ARGUMENT_INVALID',
-      message: `State the capabilities your contract requires in requiredCapabilities in the options of prisma7Schema('${SCHEMA_PATH}'). The list is missing or empty.`,
+      message: `State the capabilities your contract requires in requiredCapabilities in the options of prisma7Schema('${SCHEMA_PATH}'). The list is missing.`,
     });
     expect(imports).toEqual([[projectDir, TARGET_CONFIG]]);
   });

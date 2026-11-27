@@ -53,19 +53,35 @@ const withTheDriver = {
 };
 
 describe('the contract entry of the config', () => {
-  const missingList =
-    "State the capabilities your contract requires in requiredCapabilities beside the contract path './prisma/contract.prisma' in the config. The list is missing or empty.";
+  const stateTheList =
+    "State the capabilities your contract requires in requiredCapabilities beside the contract path './prisma/contract.prisma' in the config.";
 
   it('refuses a Prisma schema path that lists no required capabilities, with no example', () => {
     expect(() => defineConfig({ contract: './prisma/contract.prisma' as `${string}.ts` })).toThrow(
-      expect.objectContaining({ message: missingList }),
+      expect.objectContaining({ message: `${stateTheList} The list is missing.` }),
     );
   });
 
   it('refuses an empty list', () => {
     expect(() =>
       defineConfig({ contract: { path: './prisma/contract.prisma', requiredCapabilities: [] } }),
-    ).toThrow(expect.objectContaining({ message: missingList }));
+    ).toThrow(expect.objectContaining({ message: `${stateTheList} The list is empty.` }));
+  });
+
+  it('refuses a capability set, as the removed capabilities option took, as not a list', () => {
+    expect(() =>
+      defineConfig({
+        contract: {
+          path: './prisma/contract.prisma',
+          requiredCapabilities: { sql: { returning: true } } as unknown as ['sql.returning'],
+        },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          "requiredCapabilities beside the contract path './prisma/contract.prisma' in the config is not a list. State the capabilities your contract requires as a list of capability keys.",
+      }),
+    );
   });
 
   it('refuses a list for a TypeScript contract, which lists its own in defineContract', () => {
