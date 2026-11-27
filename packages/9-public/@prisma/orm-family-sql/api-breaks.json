@@ -573,6 +573,6 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "e3b0c44298fc1c14",
-    "reason": "The internal prepared-query entry is removed; an extension imports ea_preparedStatementQuery, ea_preparedStatementExecute, ea_transactionStart, ea_createTransactionStart and their Ea_ target types from ./runtime."
+    "reason": "The internal prepared-query entry is removed; an extension imports ea_preparedStatementQuery, ea_preparedStatementExecute, ea_transactionStart, ea_createTransactionStart and their Ea_ target types from ./runtime; its other names (settlementOf, transactionSettlement, wasRefusedBeforeBegin, SettledTransactionTarget, TransactionSettlementState, TransactionStart) are no longer exported."
   }
 ]
