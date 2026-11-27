@@ -37,6 +37,11 @@ describe('LibSQL error handling', () => {
         { kind: 'NullConstraintViolation', constraint: { fields: ['name'] } },
       ],
       [
+        'not null on a column named like another constraint',
+        'NOT NULL constraint failed: User.UNIQUE constraint failed',
+        { kind: 'NullConstraintViolation', constraint: { fields: ['UNIQUE constraint failed'] } },
+      ],
+      [
         'foreign key',
         'FOREIGN KEY constraint failed',
         { kind: 'ForeignKeyConstraintViolation', constraint: { foreignKey: {} } },
