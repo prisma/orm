@@ -16,7 +16,7 @@ A pull request makes the options of `createCacheMiddleware` required:
 +export function createCacheMiddleware<TMeta = unknown>(options: CacheMiddlewareOptions<TMeta>): CacheMiddleware<TMeta>;
 ```
 
-Every application that calls `createCacheMiddleware()` stops compiling when it upgrades. No reviewer has to spot the missing `?`. CI compares the build with the last release and fails:
+Every application that calls `createCacheMiddleware()` would stop compiling when it upgrades. No reviewer has to spot the missing `?`. CI compares the build with the last release and fails:
 
 ```text
   break  @prisma/orm-extension-middleware-cache: createCacheMiddleware (value): Type 'undefined' is not assignable to type 'CacheMiddlewareOptions<TMeta>'.
@@ -46,21 +46,20 @@ CI posts the changed lines as a comment on the pull request. The author sees the
 
 ## Decision
 
-Once Prisma 8 is generally available (GA), an application that uses only what is GA must be able to upgrade to any later `8.x` release without changing its code. CI checks every pull request against that promise in three ways.
+CI checks every pull request for changes that would break code written against the last release, in three ways.
 
 | Check | What it catches | How | When it fails |
 | --- | --- | --- | --- |
-| Type tests | A changed declaration: an export removed, a parameter narrowed, a required member added to an interface users implement | For each export of the last release, a generated test asks TypeScript whether the current export can stand where the old one stood | On a break, once the last release is GA |
-| The last release's example apps | A changed query result type, which is computed from the user's contract and can change while no declaration does | The apps under `examples/`, as they were at the last release, are compiled against the current build | On a compile error, once the last release is GA |
+| Type tests | A changed declaration: an export removed, a parameter narrowed, a required member added to an interface users implement | For each export of the last release, a generated test asks TypeScript whether the current export can stand where the old one stood | On a break nobody has recorded |
+| The last release's example apps | A changed query result type, which is computed from the user's contract and can change while no declaration does | The apps under `examples/`, as they were at the last release, are compiled against the current build | On an error nobody has recorded |
 | The API list and the description | A new or changed export, including one made by accident | Each package commits a generated `api.txt`. A pull request that changes one must name each changed export in its description, with a reason | Always |
 
-Five rules complete the decision:
+Four rules complete the decision:
 
 - **The last release** is the newest release tag at or below the version in the root `package.json` of the branch the pull request merges into. Development builds do not count, and the registry's `latest` tag is not consulted.
-- **The last release is GA when its version has no pre-release part**, such as `8.1.0`. Against a pre-release, such as `8.0.0-rc.25`, the first two checks list what they find and pass, because breaking a pre-release is allowed.
-- **An API below GA may break.** A break in an export whose name carries a maturity level (`ea_`, `preview_` or `rc_`) is listed and never fails, with one exception described under [Names below GA](#names-below-ga).
-- **A break that is meant is recorded, with a reason,** in a file beside the package. The record stops applying when the export changes again.
-- **A check that could not compare fails, at any version.** A registry that cannot be reached, or a package that cannot be read, must not look like a pass.
+- **A break fails unless it is recorded as deliberate,** with a reason, in a file beside the package. The record stops applying when the export changes again.
+- **An API whose name carries a maturity level may break.** A break in an export named `ea_…`, `preview_…` or `rc_…` is listed and never fails, with one exception described under [Names that carry a level](#names-that-carry-a-level).
+- **A check that could not compare fails.** A registry that cannot be reached, or a package that cannot be read, must not look like a pass.
 
 Whether a failing check blocks a merge is set in the repository's branch rules, outside the code.
 
@@ -69,17 +68,19 @@ A comparison in the type tests ends in one of four ways. The rest of this record
 | Result | Meaning | Effect on the job |
 | --- | --- | --- |
 | Pass | TypeScript accepts the current export where the last release's stood | None |
-| **Break** | It does not, and the check has confirmed that the failure is real ([below](#when-typescript-cannot-settle-a-comparison)) | Fails, once the last release is GA and unless recorded |
+| **Break** | It does not, and the check has confirmed that the failure is real ([below](#when-typescript-cannot-settle-a-comparison)) | Fails, unless recorded |
 | **Undecided** | TypeScript cannot settle the comparison | None. It is listed, so a person can look |
 | **Not compared** | The test would pass whatever the export is, so it proves nothing. The usual cause is a generic type ([below](#the-test)) | None. It is listed |
 
 ## Why
 
-Three kinds of change undo the promise without anyone meaning to, and each needs a different check.
+Prisma 8's compatibility policy promises that, from `8.0.0`, an application upgrades to any later `8.x` release without changing its code. Each part of the policy is in force from the first release candidate after the pull request that brings it merges. Before `8.0.0` a break is still possible, but only as a decision someone has made and written down, with upgrade instructions. So the checks fail on a break from the start, and a record is how a break is decided. This is also how the checks are proven before anyone relies on them.
+
+Three kinds of change break code without anyone meaning to, and each needs a different check.
 
 - **A changed declaration** stops existing code compiling. The compiler is the best judge of that, given the old declarations and the new ones.
 - **A changed result type.** The type of a query's result is computed from the user's contract and the query. It can change while every exported declaration stays the same, so only real code against a real contract shows it. The example apps are that code.
-- **An accidental export.** Once a GA release exports something, it stays until the next major version. An addition breaks nothing, so no test against the last release can find it. A person has to see it, and the list makes it visible.
+- **An accidental export.** Once a release exports something, users can depend on it, and from `8.0.0` it stays until the next major version. An addition breaks nothing, so no test against the last release can find it. A person has to see it, and the list makes it visible.
 
 ## How the type tests work
 
@@ -184,13 +185,13 @@ A check like this can pass because it compared nothing. Three safeguards prevent
 
 A database's package, such as `@prisma/orm-postgres`, re-exports most of what it offers from the packages it is built on (`export … from '@prisma/orm-family-sql/orm-client'`). The job's report calls these forwarded names. A forwarded name is only checked to still exist (`exists`). Its type is compared once, in the package that declares it.
 
-This relies on every package being released at one version, which the [versioning policy](../../oss/versioning.md) guarantees. If `@prisma/orm-postgres` and `@prisma/orm-family-sql` were at different versions or maturity levels, a break in `Collection` would be judged by the family package's release and level, not by those of the package the user imports it from. Giving packages their own versions means making this rule, and the lookup of the last release, work per package.
+This relies on every package being released at one version, as the [versioning policy](../../oss/versioning.md) says they are. If `@prisma/orm-postgres` and `@prisma/orm-family-sql` were at different versions or maturity levels, a break in `Collection` would be judged by the family package's release, not by that of the package the user imports it from. Giving packages their own versions means making this rule, and the lookup of the last release, work per package.
 
-### Names below GA
+### Names that carry a level
 
-An API inside a GA package can be below GA. Its name then starts with its level: `ea_` (Early Access), `preview_` or `rc_` (Release Candidate), capitalised on a type or class, as in `Ea_Search`. A break in such an export is listed and does not fail.
+An API that may still change has its maturity level at the start of its name: `ea_` (Early Access), `preview_` or `rc_` (Release Candidate), capitalised on a type or class, as in `Ea_Search`. A break in such an export is listed and does not fail.
 
-The exception is a name left behind by a promotion. When an API moves up to GA, the release adds the new name and keeps the old one, deprecated, until the next major version, so that code written against the old name keeps working. The old name then stands for a GA API. So a prefixed name fails like any GA export when the last release also exports the same thing under a name without a prefix. These three forms count as the same thing:
+The exception is a name left behind by a promotion. When an API is promoted, the release adds the new name and keeps the old one, deprecated, until the next major version, so that code written against the old name keeps working. The old name then stands for an API that may no longer break. So a name with a level fails like any other export when the last release also exports the same thing under a name without a level. These three forms count as the same thing:
 
 ```ts
 export declare function search(query: string): Result[];
@@ -206,10 +207,10 @@ A similar name does not count. An `ea_createClient` with its own declaration, be
 Under each break, the job prints a record. The author pastes it into the package's `api-breaks.json` and writes the reason:
 
 ```json
-{"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"A cache always needs a store; see the release notes."}
+{"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"A cache always needs a store; see the upgrade instructions."}
 ```
 
-`kind` is `break` for a break of a GA API, which the release notes must name. It is `allowed` for a change the promise permits and the check reports anyway: either the change is safe for users, or it breaks only an API below GA that the check cannot recognise as one. The fingerprint covers the export's lines in `api.txt` and the lines of every type of the same package that they use. When any of them changes, the record stops applying and the break is reported again, so a record cannot hide a later, different break. A record whose export no longer breaks fails the job, so it cannot outlive its break either. Changing a record file is itself an API change, which the description must name.
+`kind` is `break` for a deliberate break, which the release's upgrade instructions must name. It is `allowed` for a change the policy permits and the check reports anyway: either the change is safe for users, or it breaks only an API with a level that the check cannot recognise as one. The fingerprint covers the export's lines in `api.txt` and the lines of every type of the same package that they use. When any of them changes, the record stops applying and the break is reported again, so a record cannot hide a later, different break. A record whose export no longer breaks fails the job, so it cannot outlive its break either. Changing a record file is itself an API change, which the description must name.
 
 ## How the example apps cover result types
 
@@ -237,9 +238,9 @@ Reviewers, people and agents, then judge what CI cannot: whether each addition i
 
 ## Consequences
 
-- Where the checks are required, a break in a GA export cannot merge unless someone records why, and a new export cannot merge unless the description names it.
-- The release notes must name each record of kind `break`. No check enforces that.
-- Some reported breaks are permitted by the promise, and someone has to record them as `allowed`.
+- Where the checks are required, a break cannot merge unless someone records why, and a new export cannot merge unless the description names it.
+- The upgrade instructions must name each record of kind `break`. No check enforces that.
+- Some reported breaks are permitted by the policy, and someone has to record them as `allowed`.
 - Some changed lines in an `api.txt` are not API changes, and the description must still name their package.
 - The type tests install a release on every run, so they need the registry. A full run takes several minutes, and several gigabytes of memory for the largest packages.
 - When a new release becomes the last release, the records made against the earlier one stop applying, and the job lists them as removable.
@@ -253,7 +254,7 @@ Reviewers, people and agents, then judge what CI cannot: whether each addition i
 - **Generic types.** A generic type, interface or class is compared only with its type parameters' defaults, or `never`. A change that shows only for other type arguments is not seen, and a type that evaluates to `never` is not compared at all.
 - **Some other type changes:** a property made `readonly`, and a change to a type inside a namespace that holds only types, which is listed as not compared.
 - **A method users override.** If a class's method is not abstract, a subclass users write can still override it. A narrower return type on that method stops their override compiling. The check does not see it, because it treats a class as something users call, not something they extend, except for abstract members.
-- **A level on a member.** Only an export's own name is read, so a member named with a level, such as `Client.preview_run`, is treated as GA when its export is. Its break is permitted and still reported, and is recorded as `allowed`.
+- **A level on a member.** Only an export's own name is read, so a member named with a level, such as `Client.preview_run`, is checked like its export. Its break is permitted and still reported, and is recorded as `allowed`.
 - **Third-party types.** Both sides use the same versions of third-party packages, so a dependency upgrade that changes what our packages expose is not seen.
 - **The `exports` field.** Each package's `exports` is written by the build and committed. One that is out of date is not seen.
 

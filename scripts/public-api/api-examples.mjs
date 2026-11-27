@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Usage: node scripts/public-api/api-examples.mjs [--ga] [--only <app>,…], run as
+// Usage: node scripts/public-api/api-examples.mjs [--only <app>,…], run as
 // `pnpm api:compat:examples`.
 //
 // Type-checks each app under examples/ as it was at the last release's git tag, type tests
@@ -18,8 +18,7 @@
 // it, with `import("…")` qualifiers left out. Each record must match exactly one error (line 0 for
 // an error with no location); one that matches none fails the run.
 //
-// An error that is not recorded fails the run when the last release has no pre-release part
-// (`--ga` treats it as if it had none); otherwise it is reported. Needs network access to the
+// An error that is not recorded fails the run. Needs network access to the
 // origin remote, for the release tags.
 
 import { execFileSync, spawn } from 'node:child_process';

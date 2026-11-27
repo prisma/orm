@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Usage: node scripts/public-api/api-compat.mjs [--jobs <n>] [--only <package>,…] [--ga]
+// Usage: node scripts/public-api/api-compat.mjs [--jobs <n>] [--only <package>,…]
 //
 // Reports the breaks in each published package since the last release (release.mjs says which
 // that is). The design and its reasons are in docs/architecture docs/adrs, "CI finds breaking and
@@ -18,10 +18,9 @@
 // settled is reported as undecided, with where it stopped: native, structural, member or shared
 // marker. The guide says what each means.
 //
-// A break fails the run when the last release has no pre-release part (`--ga` treats it as if it
-// had none) and the export is generally available: its name does not start with a level (ea_,
-// preview_, rc_, capitalised on a type or class), or the release also exports the same thing
-// under a name without one. Otherwise the break is only reported. A break that is meant is
+// A break fails the run unless it is recorded, or the export's name starts with a maturity level
+// (ea_, preview_, rc_, capitalised on a type or class) and the release does not also export the
+// same thing under a name without one. Such a break is only reported. A break that is meant is
 // recorded in the package's api-breaks.json, and a deleted package in
 // packages/9-public/removed-packages.json (records.mjs).
 //

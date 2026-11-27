@@ -1,17 +1,17 @@
 # Public API compatibility checks
 
-Once Prisma 8 is generally available (GA), an application that uses only what is GA must be able to upgrade to any later `8.x` release without changing its code. CI checks every pull request against that promise. This guide says what each check does, and what to do when one fails. The reasons behind the design are in [ADR 336](architecture%20docs/adrs/ADR%20336%20-%20CI%20finds%20breaking%20and%20accidental%20API%20changes%20against%20the%20last%20release.md).
+CI checks every pull request for changes that would break code written against the last release, and for new exports nobody meant to publish. This guide says what each check does, and what to do when one fails. The promise these checks protect, and the reasons behind their design, are in [ADR 336](architecture%20docs/adrs/ADR%20336%20-%20CI%20finds%20breaking%20and%20accidental%20API%20changes%20against%20the%20last%20release.md).
 
 ## The checks
 
-| What you see fail | Job | What it checks | Fails |
-| --- | --- | --- | --- |
-| [`api.txt` is out of date](#apitxt-is-out-of-date) | `Lint` (`pnpm api:check`) | Each published package's committed `api.txt` matches the build | Always |
-| [The description does not name a change](#the-description-does-not-name-a-change) | `API changes named` | A pull request that changes an `api.txt` names each changed export in its description, with a reason | Always |
-| [A break against the last release](#a-break-against-the-last-release) | `API compatibility` (`pnpm api:compat`) | Code written against the last release still compiles against the build | Once the last release is GA |
-| [The last release's example apps fail](#the-last-releases-example-apps-fail) | `API compatibility` (`pnpm api:compat:examples`) | The example apps, as they were at the last release, compile against the build | Once the last release is GA |
+| What you see fail | Job | What it checks |
+| --- | --- | --- |
+| [`api.txt` is out of date](#apitxt-is-out-of-date) | `Lint` (`pnpm api:check`) | Each published package's committed `api.txt` matches the build |
+| [The description does not name a change](#the-description-does-not-name-a-change) | `API changes named` | A pull request that changes an `api.txt` names each changed export in its description, with a reason |
+| [A break against the last release](#a-break-against-the-last-release) | `API compatibility` (`pnpm api:compat`) | Code written against the last release still compiles against the build |
+| [The last release's example apps fail](#the-last-releases-example-apps-fail) | `API compatibility` (`pnpm api:compat:examples`) | The example apps, as they were at the last release, compile against the build |
 
-The last release is the newest release tag at or below the version in the root `package.json` of the branch your pull request merges into. It is not whatever the registry tags as `latest`. Every package has that one version. The last release is GA when its version has no pre-release part, such as `8.1.0`. Against a pre-release, such as `8.0.0-rc.25`, the last two checks list what they find in the job summary and pass, because breaking a pre-release is allowed. A check that could not compare at all, for example because the registry was unreachable, fails at any version.
+Each of them fails the job. The last release is the newest release tag at or below the version in the root `package.json` of the branch your pull request merges into, not whatever the registry tags as `latest`. A break is allowed only when you [record it](#recording-a-break-you-mean) as deliberate. A check that could not compare at all, for example because the registry was unreachable, also fails.
 
 ## `api.txt` is out of date
 
@@ -73,7 +73,7 @@ The `API compatibility` job installs the last release of each package beside you
     to record it: {"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"…"}
 ```
 
-The break line names the package and import path, the export, the test that failed in brackets, and TypeScript's message. While the last release is a pre-release, the line reads `break (reported only)` and the job passes.
+The break line names the package and import path, the export, the test that failed in brackets, and TypeScript's message.
 
 Each export gets one or more of these tests:
 
@@ -105,7 +105,7 @@ Run `pnpm build`, then check the one package you changed:
 pnpm api:compat --only @prisma/orm-extension-middleware-cache
 ```
 
-Add `--ga` to treat the last release as GA and see what would fail. Do not run it over all packages on your machine: by default it compares three packages at a time, and the largest need about 6 GB of memory each. CI does that run.
+Do not run it over all packages on your machine: by default it compares three packages at a time, and the largest need about 6 GB of memory each. CI does that run.
 
 ### The other entries in the report
 
@@ -136,11 +136,11 @@ A closing line, `Not checked, no release <version>: …`, names packages that ha
 
 In a package's first line, "forwarded names" are names the package re-exports from another of our packages, such as `Collection` in `@prisma/orm-postgres`. They only get the `exists` test; their types are compared in the package that declares them.
 
-## An API below GA
+## An API that may still change
 
-An API that is not ready to be kept until the next major version starts its name with its maturity level: `ea_` (Early Access), `preview_` or `rc_` (Release Candidate). On a type or class the word is capitalised, as in `Ea_Search`. A break in such an export is reported and never fails the job.
+An API that may still change starts its name with its maturity level: `ea_` (Early Access), `preview_` or `rc_` (Release Candidate). On a type or class the word is capitalised, as in `Ea_Search`. A break in such an export is listed as `break (maturity level, does not fail)` and never fails the job.
 
-When you promote an API, keep the old name as a deprecated second name for the same thing, until the next major version. Code written against the old name must keep working. From the release that has both names, the check treats the old name as GA, so removing it fails. Write the old name in one of the three forms the check recognises:
+When you promote an API, keep the old name as a deprecated second name for the same thing, until the next major version. Code written against the old name must keep working. From the release that has both names, the check treats the old name like any other export, so removing it fails. Write the old name in one of the three forms the check recognises:
 
 ```ts
 export function search(query: string): Result[] { … }
@@ -157,25 +157,25 @@ export type Ea_Options<T> = Options<T>;                // an alias that passes i
 
 Keep the `typeof` annotation on a constant. Without it, TypeScript writes out the value's type for an object or a primitive, and the check can no longer see that the two names are one thing. An `interface Ea_Options extends Options {}` is not recognised either.
 
-A level on a member, such as a method named `preview_run` on a GA class, is not read: the member is checked as GA. Its break is permitted, so record it as `allowed`.
+A level on a member, such as a method named `preview_run` on a class, is not read: the member is checked like its class. Its break is permitted, so record it as `allowed`.
 
 ## Recording a break you mean
 
-A break in a GA export is an exception to the promise. It needs a reason a user would accept, and the release notes must name it.
+A deliberate break needs a reason a user would accept, and the release's upgrade instructions must name it.
 
 1. Run `pnpm build` and `pnpm api:update`, so that the fingerprint in the printed record is taken from the lists you will commit.
 2. Copy the record the job prints under the break (`to record it: …`) into the package's `api-breaks.json`, which is a JSON array beside its `api.txt`.
-3. Replace the `…` in `reason` with one line that says why. If the promise permits the change, change `kind` to `allowed`.
+3. Replace the `…` in `reason` with one line that says why. If the policy permits the change, change `kind` to `allowed`.
 4. Name the package in your description's `## API changes` section. The `API changes named` job treats a changed record as an API change.
 
 ```json
-[{"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"A cache always needs a store; see the release notes."}]
+[{"path":".","export":"createCacheMiddleware","test":"value","kind":"break","lastRelease":"8.1.0","fingerprint":"b0e322358c4a297e","reason":"A cache always needs a store; see the upgrade instructions."}]
 ```
 
-`kind` is `break` for a break of a GA API. It is `allowed` for a change the promise permits and the check reports anyway. There are two such cases:
+`kind` is `break` for a deliberate break. It is `allowed` for a change the policy permits and the check reports anyway. There are two such cases:
 
 - The change is safe for users. The check cannot know whether users implement a type or only receive it, so it tests both. A wider return type on a method of an interface that users only implement is safe for them, and is still reported.
-- The change breaks only an API below GA that the check cannot recognise as one, such as a member named with a level.
+- The change breaks only an API with a level that the check cannot recognise as one, such as a member named `preview_run`.
 
 A record covers the export only as it is now. `fingerprint` is taken from the export's lines in `api.txt` and from the types of the same package those lines use. When any of them changes, the record stops applying, and the break is reported again for you to judge afresh. Some changes that are not API changes also change a fingerprint: a renumbered `(not exported)` type, or an upgrade of TypeScript or API Extractor. After one of those, paste the printed record again.
 

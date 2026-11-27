@@ -22,12 +22,12 @@ reviews:
     - path: "packages/9-public/@prisma/*/api.txt"
       instructions: >-
         This generated file lists everything users can import from a published package: one line for each export
-        of each import path, and one for each of its members. Once a generally available (GA) release exports an API, it must be kept, without
+        of each import path, and one for each of its members. Once a release exports an API, users can depend on it, and from 8.0.0 it must be kept, without
         breaking changes, until the next major release, so review each added and removed line as a promise to users. Follow the review
         criteria in packages/9-public/AGENTS.md: is each addition meant to be supported until the next major,
         at the right maturity (a name starting with ea_, preview_ or rc_, capitalised on a type or class as in
-        Ea_Search, is below GA); is a new member on an interface that users implement optional; is each removal
-        or change either below GA or recorded as a deliberate break with a reason. Lines that changed only
+        Ea_Search, may still change); is a new member on an interface that users implement optional; is each removal
+        or change either to a name that carries a level, or recorded as a deliberate break with a reason. Lines that changed only
         because a non-exported type was renumbered (such as Options_2) or an outside type gained its package
         prefix are not API changes; say so. Check that the pull request description's "API changes" section
         names each changed export with a reason that matches the change.
@@ -35,7 +35,7 @@ reviews:
       instructions: >-
         These files record changes that CI would otherwise report as breaking code written against the last
         release. A new record lets one through, so follow the criteria in packages/9-public/AGENTS.md ("A change to a record"): a record of kind break needs a reason a user would accept and a mention
-        in the release notes; a record of kind allowed claims the change is permitted (it is safe for users, or it breaks only an API below GA), so
+        in the release notes; a record of kind allowed claims the change is permitted (it is safe for users, or it breaks only an API whose name carries a level), so
         check that claim, because calling a real break allowed hides it from users. A record replaced with a new
         fingerprint covers whatever the export's test reports now, not only the break it first covered: check the
         current break the job reports, not only the reason.
@@ -50,6 +50,6 @@ reviews:
         This file records errors that the last release's example apps get against the current build, which CI
         would otherwise report. A new record lets one through, so follow the criteria in
         packages/9-public/AGENTS.md ("A change to a record"): a record of kind break needs a
-        reason a user would accept and a mention in the release notes; a record of kind allowed claims the change is permitted (it is safe for users, or it breaks only an API below GA), so check that claim, because calling a real break allowed hides
+        reason a user would accept and a mention in the release notes; a record of kind allowed claims the change is permitted (it is safe for users, or it breaks only an API whose name carries a level), so check that claim, because calling a real break allowed hides
         it from users. A record replaced with a new message covers the error the job reports now: compare the
         new message with the old one, and check that the reason still fits it.
