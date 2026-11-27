@@ -146,7 +146,8 @@
             }
           }
         },
-        "id": "auth"
+        "id": "auth",
+        "kind": "postgres-schema"
       },
       "public": {
         "entries": {
@@ -199,7 +200,8 @@
             }
           }
         },
-        "id": "public"
+        "id": "public",
+        "kind": "postgres-schema"
       }
     },
     "storageHash": "5d35feb43b8b8b6e047bff80a4053eb75d2dd6ebe2140e5bdf7e1280cc539bab"

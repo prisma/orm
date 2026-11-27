@@ -66,7 +66,8 @@
             }
           }
         },
-        "id": "public"
+        "id": "public",
+        "kind": "postgres-schema"
       }
     },
     "storageHash": "6b15dfcd92ef4818859a0106cadf06886c723d0010a986481436b3742da26a0c"

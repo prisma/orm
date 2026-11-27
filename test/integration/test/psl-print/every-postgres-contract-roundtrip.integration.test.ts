@@ -141,8 +141,7 @@ function comparable(contract: Contract<SqlStorage>): unknown {
       serializer.serializeContract(
         blindCast<Contract<SqlStorage>, 'this test canonicalizes Postgres contracts only'>(value),
       ),
-    shouldPreserveEmpty: serializer.shouldPreserveEmpty,
-    sortStorage: serializer.sortStorage,
+    normalizeStorage: serializer.normalizeStorage,
   });
   return rest;
 }

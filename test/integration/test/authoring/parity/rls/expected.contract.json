@@ -87,7 +87,8 @@
           },
           "table": {}
         },
-        "id": "__unbound__"
+        "id": "__unbound__",
+        "kind": "postgres-unbound-schema"
       },
       "public": {
         "entries": {
@@ -233,7 +234,8 @@
             }
           }
         },
-        "id": "public"
+        "id": "public",
+        "kind": "postgres-schema"
       }
     },
     "storageHash": "47d3083cdb24b5f5c8ad60e38b52d4ecfcff7f5aa133ed9d6af41a6955bf4b01"
