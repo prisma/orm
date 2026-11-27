@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { Contract } from '@internal/contract/types';
+import { probeUnknownKeys, SQL_OPERATIONS_OPEN_PLACES } from '@internal/family-sql/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -93,6 +94,19 @@ describe('readMysqlOperations', () => {
       return reason === 'accepted' ? [] : [`${file}: ${reason}`];
     });
     expect(refused).toEqual([]);
+  });
+
+  it('refuses a key the format does not define at every object of each MySQL and MariaDB ops.json saved in the repository, outside the places the format leaves open', () => {
+    const files = savedOpsFiles(['mysql', 'mariadb']);
+    expect(files.length).toBeGreaterThan(0);
+    const accepted = files.flatMap((file) =>
+      probeUnknownKeys(
+        JSON.parse(readFileSync(join(repoRoot, file), 'utf-8')),
+        (operations) => readMysqlOperations(Array.isArray(operations) ? operations : []),
+        SQL_OPERATIONS_OPEN_PLACES,
+      ).accepted.map((place) => `${file}: ${place}`),
+    );
+    expect(accepted).toEqual([]);
   });
 
   it('reads what the MySQL planner writes', async () => {

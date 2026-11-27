@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { probeUnknownKeys, SQL_OPERATIONS_OPEN_PLACES } from '@internal/family-sql/control';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { RemoveStoredValueCall } from '../../src/core/migrations/op-factory-call';
@@ -134,6 +135,19 @@ describe('readSqliteOperations', () => {
       return reason === 'accepted' ? [] : [`${file}: ${reason}`];
     });
     expect(refused).toEqual([]);
+  });
+
+  it('refuses a key the format does not define at every object of each SQLite ops.json saved in the repository, outside the places the format leaves open', () => {
+    const files = savedOpsFiles('sqlite');
+    expect(files.length).toBeGreaterThan(0);
+    const accepted = files.flatMap((file) =>
+      probeUnknownKeys(
+        JSON.parse(readFileSync(join(repoRoot, file), 'utf-8')),
+        (operations) => readSqliteOperations(Array.isArray(operations) ? operations : []),
+        SQL_OPERATIONS_OPEN_PLACES,
+      ).accepted.map((place) => `${file}: ${place}`),
+    );
+    expect(accepted).toEqual([]);
   });
 
   it('reads what the SQLite planner writes for a removed enum value, through JSON', async () => {
