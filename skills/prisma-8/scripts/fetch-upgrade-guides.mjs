@@ -7,9 +7,9 @@
  */
 
 import { execFile, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { accessSync, constants, realpathSync, statSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,12 +17,18 @@ import { parseArgs } from 'node:util';
 import { gunzipSync } from 'node:zlib';
 
 const SKILL_NAME = 'prisma-8';
+const SKILL_MAJOR = 8;
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 const DEFAULT_FOLDER = '.prisma-upgrade-guides';
-const TIMEOUT_MILLIS = 60_000;
+const DEFAULT_TIMEOUT_SECONDS = 60;
+const DEPRECATION_LIMIT = 10;
+const STALE_MILLIS = 60 * 60 * 1000;
 const PACKAGE_MANAGER = ['n', 'pm'].join('');
+const PACKAGE_NAME = /^(?:@[a-z0-9~][a-z0-9-._~]*\/)?[a-z0-9~][a-z0-9-._~]*$/;
+const TEMPORARY_ENTRY =
+  /^\.(?:download|partial|old)-(.+)-(\d+\.\d+\.\d+(?:-(?:ea|preview|rc)\.\d+)?)-[A-Za-z0-9]{6}$/;
 const USAGE =
-  'usage: node fetch-upgrade-guides.mjs <package> [--major <n>] [--registry <url>] [--out <dir>]';
+  'usage: node fetch-upgrade-guides.mjs <package> [--major <n>] [--registry <url>] [--out <dir>] [--timeout <seconds>]';
 const RELEASED_VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-(ea|preview|rc)\.(\d+))?$/;
 const LEVEL_RANK = { ea: 0, preview: 1, rc: 2 };
 const NETWORK_CODES = new Set([
@@ -65,12 +71,19 @@ export function releaseCandidates(versions, major) {
     .map(({ version }) => version);
 }
 
-/** The first candidate that is not deprecated, or the first candidate when all are. */
-export async function chooseRelease(candidates, isDeprecated) {
-  for (const version of candidates) {
-    if (!(await isDeprecated(version))) return { version, deprecated: false };
-  }
-  return candidates.length === 0 ? undefined : { version: candidates[0], deprecated: true };
+/**
+ * The newest of the first `limit` candidates that is not deprecated, or the first candidate when
+ * all of those are. `deprecatedAmong` answers, for a list of versions, which are deprecated.
+ */
+export async function chooseRelease(candidates, deprecatedAmong, limit) {
+  if (candidates.length === 0) return undefined;
+  const checked = candidates.slice(0, limit);
+  const deprecated = await deprecatedAmong(checked);
+  const usable = checked.find((version) => !deprecated.has(version));
+  const limited = checked.length < candidates.length;
+  return usable === undefined
+    ? { version: candidates[0], deprecated: true, limited }
+    : { version: usable, deprecated: false, limited: false };
 }
 
 async function readIfExists(path) {
@@ -129,19 +142,28 @@ function yarnSettings(text, scope) {
   return { plain, scoped };
 }
 
+function scopeOf(packageName) {
+  return packageName.startsWith('@') ? packageName.split('/')[0] : undefined;
+}
+
+/** The registry a Yarn project's `.yarnrc.yml` or `YARN_NPM_REGISTRY_SERVER` sets, if any. */
+export async function yarnRegistry({ packageName, projectDir, env }) {
+  const yarnrc = await readIfExists(join(projectDir, '.yarnrc.yml'));
+  if (yarnrc === undefined) return undefined;
+  const yarn = yarnSettings(yarnrc, scopeOf(packageName));
+  const value = yarn.scoped ?? lookUp(env, 'YARN_NPM_REGISTRY_SERVER') ?? yarn.plain;
+  return value === undefined || value.trim() === '' ? undefined : settingValue(value, env);
+}
+
 /**
  * The registry the built-in download reads `packageName` from. In a Yarn project, `.yarnrc.yml`
  * and `YARN_NPM_REGISTRY_SERVER`; otherwise a scoped `registry` setting from the environment, the
  * project's `.npmrc` or the user's, then a plain one in the same order; then the public registry.
  */
 export async function configuredRegistry({ packageName, projectDir, homeDir, env }) {
-  const scope = packageName.startsWith('@') ? packageName.split('/')[0] : undefined;
-  const yarnrc = await readIfExists(join(projectDir, '.yarnrc.yml'));
-  if (yarnrc !== undefined) {
-    const yarn = yarnSettings(yarnrc, scope);
-    const value = yarn.scoped ?? lookUp(env, 'YARN_NPM_REGISTRY_SERVER') ?? yarn.plain;
-    if (value !== undefined && value.trim() !== '') return settingValue(value, env);
-  }
+  const scope = scopeOf(packageName);
+  const yarn = await yarnRegistry({ packageName, projectDir, env });
+  if (yarn !== undefined) return yarn;
   const environment = new Map();
   for (const key of ['registry', `${scope}:registry`]) {
     const value = lookUp(env, `npm_config_${key}`);
@@ -314,16 +336,25 @@ export function findPackageManager(env, platform) {
   return undefined;
 }
 
-function toolFailure(error) {
+function toolFailure({ stdout, stderr, exit }) {
   try {
-    const parsed = JSON.parse(String(error.stdout ?? '')).error;
+    const parsed = JSON.parse(String(stdout ?? '')).error;
     if (parsed !== undefined) return { code: parsed.code, summary: String(parsed.summary ?? '') };
   } catch {}
-  const lines = String(error.stderr ?? '')
+  const all = String(stderr ?? '')
     .split(/\r?\n/)
+    .filter((line) => line.trim() !== '');
+  const lines = all
     .filter((line) => line.startsWith(`${PACKAGE_MANAGER} error `))
     .map((line) => line.slice(PACKAGE_MANAGER.length + 7))
     .filter((line) => !line.startsWith('A complete log'));
+  if (lines.length === 0) {
+    const last = all.at(-1);
+    return {
+      code: undefined,
+      summary: `it ended with ${exit}${last === undefined ? '' : `: ${last}`}`,
+    };
+  }
   const code = /^code (\S+)/.exec(lines[0] ?? '')?.[1];
   return { code, summary: lines.filter((line) => !line.startsWith('code ')).join(' ') };
 }
@@ -341,18 +372,39 @@ function describeToolFailure({ code, summary }, subcommand, what) {
   return `\`${PACKAGE_MANAGER} ${subcommand}\` failed for ${what}${code === undefined ? '' : ` (${code})`}: ${summary || 'no message'}`;
 }
 
-function commandSource(tool, { packageName, registry, projectDir }) {
-  const common = ['--loglevel=error', '--update-notifier=false'];
-  if (registry !== undefined) common.push('--registry', registry);
+function commandSource(tool, { packageName, registry, projectDir, timeoutSeconds }) {
+  const childTimeout = (timeoutSeconds * 2 + 2) * 1000;
+  const common = [
+    '--loglevel=error',
+    '--update-notifier=false',
+    `--fetch-timeout=${timeoutSeconds * 1000}`,
+    '--fetch-retries=1',
+    '--fetch-retry-mintimeout=1000',
+    '--fetch-retry-maxtimeout=1000',
+  ];
+  if (registry !== undefined) common.push(`--registry=${registry}`);
   const runTool = (subcommand, args, what) =>
     new Promise((resolvePromise, reject) => {
       execFile(
         tool.command,
         [...tool.args, subcommand, ...args, ...common],
-        { cwd: projectDir, maxBuffer: 64 * 1024 * 1024, windowsHide: true },
+        {
+          cwd: projectDir,
+          maxBuffer: 64 * 1024 * 1024,
+          windowsHide: true,
+          timeout: childTimeout,
+        },
         (error, stdout, stderr) => {
           if (error === null) {
             resolvePromise(stdout);
+            return;
+          }
+          if (error.killed) {
+            reject(
+              new FetchUpgradeGuidesError(
+                `\`${PACKAGE_MANAGER} ${subcommand}\` did not finish within ${childTimeout / 1000} seconds for ${what}`,
+              ),
+            );
             return;
           }
           if (typeof error.code === 'string') {
@@ -363,9 +415,13 @@ function commandSource(tool, { packageName, registry, projectDir }) {
             );
             return;
           }
+          const exit =
+            error.signal === null || error.signal === undefined
+              ? `exit code ${error.code}`
+              : `signal ${error.signal}`;
           reject(
             new FetchUpgradeGuidesError(
-              describeToolFailure(toolFailure({ stdout, stderr }), subcommand, what),
+              describeToolFailure(toolFailure({ stdout, stderr, exit }), subcommand, what),
             ),
           );
         },
@@ -388,29 +444,40 @@ function commandSource(tool, { packageName, registry, projectDir }) {
       );
       return Array.isArray(listed) ? listed : listed === undefined ? [] : [String(listed)];
     },
-    async isDeprecated(version) {
-      const label = `${packageName}@${version}`;
-      const message = parse(await runTool('view', [label, 'deprecated', '--json'], label), label);
-      return message !== undefined && message !== '';
+    async deprecatedAmong(versions) {
+      const spec = `${packageName}@${versions.join(' || ')}`;
+      const listed = parse(await runTool('view', [spec, '--json'], packageName), packageName);
+      const manifests = Array.isArray(listed) ? listed : listed === undefined ? [] : [listed];
+      return new Set(
+        manifests
+          .filter(
+            (manifest) => typeof manifest?.deprecated === 'string' && manifest.deprecated !== '',
+          )
+          .map((manifest) => String(manifest.version)),
+      );
     },
     async tarball(version, folder) {
       const label = `${packageName}@${version}`;
       const output = await runTool(
         'pack',
-        [label, '--pack-destination', folder, '--json', '--ignore-scripts', '--prefer-online'],
+        [label, `--pack-destination=${folder}`, '--json', '--ignore-scripts', '--prefer-online'],
         label,
       );
-      const filename = parse(output, label)?.[0]?.filename;
-      const packed =
-        typeof filename === 'string'
-          ? filename
-          : (await readdir(folder)).find((name) => name.endsWith('.tgz'));
-      if (packed === undefined) {
+      const reported = parse(output, label)?.[0]?.filename;
+      const filename =
+        typeof reported === 'string' ? reported : `${folderBase(packageName)}-${version}.tgz`;
+      const packed = join(folder, filename);
+      if (isFile(packed)) return readFile(packed);
+      const misplaced = join(projectDir, filename);
+      if (isFile(misplaced)) {
+        await rm(misplaced, { force: true });
         throw new FetchUpgradeGuidesError(
-          `\`${PACKAGE_MANAGER} pack\` wrote no tarball for ${label}`,
+          `\`${PACKAGE_MANAGER} pack\` did not write to its --pack-destination, so the command is too old; update it (version 7.18 or later) and run this again`,
         );
       }
-      return readFile(join(folder, packed));
+      throw new FetchUpgradeGuidesError(
+        `\`${PACKAGE_MANAGER} pack\` wrote no tarball for ${label}`,
+      );
     },
   };
 }
@@ -421,11 +488,11 @@ function describeFailure(error) {
   return typeof code === 'string' ? code : (cause ?? error).message;
 }
 
-async function download(url, what, accept) {
+async function download(url, what, accept, timeoutSeconds) {
   try {
     const response = await fetch(url, {
       headers: { accept },
-      signal: AbortSignal.timeout(TIMEOUT_MILLIS),
+      signal: AbortSignal.timeout(timeoutSeconds * 1000),
     });
     if (response.status === 404) {
       throw new FetchUpgradeGuidesError(`${what} was not found at ${url}`);
@@ -449,7 +516,7 @@ async function download(url, what, accept) {
   }
 }
 
-function builtInSource({ packageName, registry }) {
+function builtInSource({ packageName, registry, timeoutSeconds }) {
   const base = registry.replace(/\/+$/, '');
   const url = `${base}/${packageName.replace('/', '%2f')}`;
   let packument;
@@ -459,6 +526,7 @@ function builtInSource({ packageName, registry }) {
       url,
       packageName,
       'application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8',
+      timeoutSeconds,
     );
     try {
       packument = JSON.parse(body.toString('utf-8'));
@@ -475,9 +543,13 @@ function builtInSource({ packageName, registry }) {
     async versions() {
       return Object.keys((await metadata()).versions ?? {});
     },
-    async isDeprecated(version) {
-      const { deprecated } = await manifest(version);
-      return typeof deprecated === 'string' && deprecated !== '';
+    async deprecatedAmong(versions) {
+      const deprecated = new Set();
+      for (const version of versions) {
+        const message = (await manifest(version)).deprecated;
+        if (typeof message === 'string' && message !== '') deprecated.add(version);
+      }
+      return deprecated;
     },
     async tarball(version) {
       const label = `${packageName}@${version}`;
@@ -485,7 +557,12 @@ function builtInSource({ packageName, registry }) {
       if (typeof dist.tarball !== 'string') {
         throw new FetchUpgradeGuidesError(`${base} gives no tarball for ${label}`);
       }
-      const content = await download(dist.tarball, `the tarball of ${label}`, '*/*');
+      const content = await download(
+        dist.tarball,
+        `the tarball of ${label}`,
+        '*/*',
+        timeoutSeconds,
+      );
       checkIntegrity(content, dist, label);
       return content;
     },
@@ -506,32 +583,97 @@ async function removeOtherVersions(root, packageName, keep) {
   }
 }
 
+async function removeStaleTemporaryFolders(root, packageName) {
+  const base = folderBase(packageName);
+  for (const entry of await readdir(root)) {
+    if (TEMPORARY_ENTRY.exec(entry)?.[1] !== base) continue;
+    const path = join(root, entry);
+    try {
+      if (Date.now() - statSync(path).mtimeMs > STALE_MILLIS) {
+        await rm(path, { recursive: true, force: true });
+      }
+    } catch {}
+  }
+}
+
+function randomSuffix() {
+  return randomBytes(6)
+    .toString('base64')
+    .replace(/[^A-Za-z0-9]/g, 'x')
+    .slice(0, 6);
+}
+
+async function moveAsideAndRename(root, name, partial) {
+  const folder = join(root, name);
+  const aside = join(root, `.old-${name}-${randomSuffix()}`);
+  try {
+    await rename(folder, aside);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  try {
+    await rename(partial, folder);
+  } finally {
+    await rm(aside, { recursive: true, force: true });
+  }
+}
+
+async function putInPlace(root, name, partial) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await moveAsideAndRename(root, name, partial);
+      return;
+    } catch (error) {
+      const raced = ['ENOTEMPTY', 'EEXIST', 'EPERM'].includes(error?.code);
+      if (raced && isFile(join(root, name, SKILL_NAME, 'SKILL.md'))) return;
+      if (!raced || attempt === 5) throw error;
+    }
+  }
+}
+
 /**
- * Finds the newest release of `packageName` (in `major`, when given), downloads it through
- * `source`, and extracts its skill into `<root>/<name>-<version>/prisma-8`.
+ * Finds the newest release of `packageName` in `major`, downloads it through `source`, and
+ * extracts its skill into `<root>/<name>-<version>/prisma-8`.
  */
-export async function fetchUpgradeGuides({ packageName, major, root, source }) {
+export async function fetchUpgradeGuides({ packageName, major, root, source, deprecationLimit }) {
+  await removeStaleTemporaryFolders(root, packageName);
   const candidates = releaseCandidates(await source.versions(), major);
-  const chosen = await chooseRelease(candidates, (version) => source.isDeprecated(version));
+  const chosen = await chooseRelease(
+    candidates,
+    (versions) => source.deprecatedAmong(versions),
+    deprecationLimit,
+  );
   if (chosen === undefined) {
-    const which = major === undefined ? 'release' : `${major}.x release`;
-    throw new FetchUpgradeGuidesError(`${packageName} has no published ${which}`);
+    throw new FetchUpgradeGuidesError(`${packageName} has no published ${major}.x release`);
   }
   const name = `${folderBase(packageName)}-${chosen.version}`;
-  const download = await mkdtemp(join(root, `.download-${name}-`));
-  const partial = await mkdtemp(join(root, `.partial-${name}-`));
+  const download = join(root, `.download-${name}-${randomSuffix()}`);
+  const partial = join(root, `.partial-${name}-${randomSuffix()}`);
+  await mkdir(download);
+  await mkdir(partial);
   try {
     const tarball = await source.tarball(chosen.version, download);
     await extractSkill(tarball, join(partial, SKILL_NAME));
-    const folder = join(root, name);
-    await rm(folder, { recursive: true, force: true });
-    await rename(partial, folder);
+    await putInPlace(root, name, partial);
   } finally {
     await rm(download, { recursive: true, force: true });
     await rm(partial, { recursive: true, force: true });
   }
   await removeOtherVersions(root, packageName, name);
   return { ...chosen, folder: join(root, name, SKILL_NAME) };
+}
+
+function checkedRegistry(value, origin) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    url = undefined;
+  }
+  if (url === undefined || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
+    throw new FetchUpgradeGuidesError(`${origin} "${value}" is not an http or https URL`);
+  }
+  return value;
 }
 
 function parseArguments(argv) {
@@ -544,6 +686,7 @@ function parseArguments(argv) {
         major: { type: 'string' },
         registry: { type: 'string' },
         out: { type: 'string' },
+        timeout: { type: 'string' },
       },
     });
   } catch (error) {
@@ -554,12 +697,27 @@ function parseArguments(argv) {
   if (values.major !== undefined && !/^\d+$/.test(values.major)) {
     throw new FetchUpgradeGuidesError(`--major "${values.major}" is not a major version number`);
   }
+  if (values.timeout !== undefined && !/^[1-9]\d*$/.test(values.timeout)) {
+    throw new FetchUpgradeGuidesError(`--timeout "${values.timeout}" is not a number of seconds`);
+  }
+  const [packageName] = positionals;
+  if (!PACKAGE_NAME.test(packageName)) {
+    throw new FetchUpgradeGuidesError(
+      `"${packageName}" is not a package name, such as @prisma/orm-postgres`,
+    );
+  }
   return {
-    packageName: positionals[0],
-    major: values.major === undefined ? undefined : Number(values.major),
-    registry: values.registry,
+    packageName,
+    major: values.major === undefined ? SKILL_MAJOR : Number(values.major),
+    registry:
+      values.registry === undefined ? undefined : checkedRegistry(values.registry, '--registry'),
     out: values.out,
+    timeoutSeconds: values.timeout === undefined ? DEFAULT_TIMEOUT_SECONDS : Number(values.timeout),
   };
+}
+
+function optionalRegistry(value, origin) {
+  return value === undefined ? undefined : checkedRegistry(value, origin);
 }
 
 function proxyIsIgnored(env) {
@@ -568,7 +726,9 @@ function proxyIsIgnored(env) {
 }
 
 async function main() {
-  const { packageName, major, registry, out } = parseArguments(process.argv.slice(2));
+  const { packageName, major, registry, out, timeoutSeconds } = parseArguments(
+    process.argv.slice(2),
+  );
   const tool = findPackageManager(process.env, process.platform);
   if (tool === undefined && proxyIsIgnored(process.env)) {
     const child = spawnSync(
@@ -583,29 +743,39 @@ async function main() {
   const root = resolve(out ?? join(projectDir, DEFAULT_FOLDER));
   await mkdir(root, { recursive: true });
   if (out === undefined) await writeFile(join(root, '.gitignore'), '*\n');
+  const env = process.env;
   const source =
     tool === undefined
       ? builtInSource({
           packageName,
+          timeoutSeconds,
+          registry: checkedRegistry(
+            registry ??
+              (await configuredRegistry({ packageName, projectDir, homeDir: homedir(), env })),
+            'the configured registry',
+          ),
+        })
+      : commandSource(tool, {
+          packageName,
+          projectDir,
+          timeoutSeconds,
           registry:
             registry ??
-            (await configuredRegistry({
-              packageName,
-              projectDir,
-              homeDir: homedir(),
-              env: process.env,
-            })),
-        })
-      : commandSource(tool, { packageName, registry, projectDir });
-  const { version, deprecated, folder } = await fetchUpgradeGuides({
+            optionalRegistry(await yarnRegistry({ packageName, projectDir, env }), '.yarnrc.yml'),
+        });
+  const { version, deprecated, limited, folder } = await fetchUpgradeGuides({
     packageName,
     major,
     root,
     source,
+    deprecationLimit: DEPRECATION_LIMIT,
   });
   if (deprecated) {
+    const which = limited
+      ? `The newest ${DEPRECATION_LIMIT} ${major}.x releases`
+      : `Every ${major}.x release`;
     process.stderr.write(
-      `Every candidate release of ${packageName} is deprecated, so this used the newest, ${version}.\n`,
+      `${which} of ${packageName} are deprecated, so this used the newest, ${version}.\n`,
     );
   }
   process.stderr.write(

@@ -1,6 +1,16 @@
 import { deepStrictEqual, match, strictEqual } from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  utimes,
+  writeFile,
+} from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
@@ -54,6 +64,7 @@ const PACKAGES = {
       ['8.0.0-rc.25', release('8.0.0-rc.25', 'rc text\n')],
       ['8.1.0', release('8.1.0', 'original text\n')],
       ['8.2.0-ea.0', release('8.2.0-ea.0', 'corrected text\n')],
+      ['8.2.0', release('8.2.0', 'withdrawn 8 text\n'), { deprecated: 'broken, use 8.2.0-ea.0' }],
       ['8.3.0-ea.1-dev.3', release('8.3.0-ea.1-dev.3', 'development build text\n')],
       ['9.0.0-ea.0', release('9.0.0-ea.0', 'newest text\n')],
       ['9.0.0', release('9.0.0', 'withdrawn text\n'), { deprecated: 'broken, use 9.0.0-ea.0' }],
@@ -64,6 +75,20 @@ const PACKAGES = {
     versions: versions([
       ['8.0.1', release('8.0.1', 'older withdrawn\n'), { deprecated: 'bad' }],
       ['8.1.0', release('8.1.0', 'newest withdrawn\n'), { deprecated: 'bad' }],
+    ]),
+  },
+  '@fake/orm-single': {
+    tags: { latest: '8.1.0' },
+    versions: versions([['8.1.0', release('8.1.0', 'single text\n')]]),
+  },
+  '@fake/orm-many-withdrawn': {
+    tags: { latest: '8.12.0' },
+    versions: versions([
+      ['8.0.1', release('8.0.1', 'not withdrawn\n')],
+      ...Array.from({ length: 12 }, (_, index) => {
+        const version = `8.${index + 1}.0`;
+        return [version, release(version, `withdrawn ${version}\n`), { deprecated: 'bad' }];
+      }),
     ]),
   },
   '@fake/orm-tampered': {
@@ -134,6 +159,7 @@ function serve(request, response) {
     }
   }
   const name = path.slice(1);
+  if (name === '@fake/orm-hang') return;
   if (name === '@fake/orm-locked') {
     response.statusCode = 401;
     response.end('{"error":"login first"}');
@@ -154,6 +180,30 @@ function serve(request, response) {
 }
 
 const packageManager = findPackageManager(process.env, process.platform);
+const PM = ['n', 'pm'].join('');
+
+const FAKE_COMMAND = `
+const { copyFileSync, writeFileSync } = require('node:fs');
+const { join } = require('node:path');
+const [subcommand, ...rest] = process.argv.slice(2);
+const mode = process.env.FAKE_MODE;
+if (mode === 'hang') setInterval(() => {}, 1000);
+else if (mode === 'crash') {
+  process.stderr.write('starting\\nSegmentation fault\\n');
+  process.exit(139);
+} else if (subcommand === 'view' && rest.includes('versions')) {
+  process.stdout.write(JSON.stringify(mode === 'single' ? '8.1.0' : ['8.1.0']));
+} else if (subcommand === 'view') {
+  process.stdout.write(JSON.stringify({ version: '8.1.0' }));
+} else if (subcommand === 'pack' && mode === 'single') {
+  const destination = rest.find((arg) => arg.startsWith('--pack-destination=')).split('=')[1];
+  copyFileSync(process.env.FAKE_TARBALL, join(destination, 'fake-orm-db-8.1.0.tgz'));
+  process.stdout.write(JSON.stringify([{ filename: 'fake-orm-db-8.1.0.tgz' }]));
+} else if (subcommand === 'pack') {
+  writeFileSync('fake-orm-db-8.1.0.tgz', 'not really a tarball');
+  process.stdout.write(JSON.stringify([{ filename: 'fake-orm-db-8.1.0.tgz' }]));
+}
+`;
 const DEAD = 'http://127.0.0.1:1';
 
 describe('fetch-upgrade-guides', () => {
@@ -168,6 +218,7 @@ describe('fetch-upgrade-guides', () => {
   });
 
   after(async () => {
+    server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
   });
 
@@ -227,10 +278,12 @@ describe('fetch-upgrade-guides', () => {
       how === 'command'
         ? [dirname(process.execPath), dirname(packageManager.command)].join(delimiter)
         : join(sandbox, 'empty');
+    const timeout = how === 'fake' ? 30_000 : 0;
     try {
       const { stdout, stderr } = await run(process.execPath, [script, ...args], {
         cwd: join(sandbox, 'project'),
         env: environment(path, extra),
+        timeout,
       });
       return { code: 0, stdout, stderr };
     } catch (error) {
@@ -256,7 +309,7 @@ describe('fetch-upgrade-guides', () => {
       it('extracts the skill of the newest release, which is not under latest', () =>
         inProject({}, async (project) => {
           const before = await snapshot(project);
-          const result = await fetchGuides(how, [PACKAGE, '--registry', origin, '--major', '8']);
+          const result = await fetchGuides(how, [PACKAGE, '--registry', origin]);
           strictEqual(result.code, 0, result.stderr);
           const folder = join(
             project,
@@ -289,13 +342,92 @@ describe('fetch-upgrade-guides', () => {
           );
         }));
 
-      it('takes the newest release of any major, skipping deprecated ones and development builds', () =>
+      it('takes the newest Prisma 8 release, skipping deprecated ones, development builds and other majors', () =>
         inProject({}, async (project) => {
           const result = await fetchGuides(how, [PACKAGE, '--registry', origin]);
           strictEqual(result.code, 0, result.stderr);
-          strictEqual(await readFile(join(result.stdout.trim(), STEP), 'utf-8'), 'newest text\n');
+          strictEqual(
+            await readFile(join(result.stdout.trim(), STEP), 'utf-8'),
+            'corrected text\n',
+          );
           strictEqual(result.stdout.trim().startsWith(project), true);
         }));
+
+      it('takes another major when --major names it', () =>
+        inProject({}, async () => {
+          const result = await fetchGuides(how, [PACKAGE, '--registry', origin, '--major', '9']);
+          strictEqual(result.code, 0, result.stderr);
+          strictEqual(await readFile(join(result.stdout.trim(), STEP), 'utf-8'), 'newest text\n');
+        }));
+
+      it('reads a package with a single version', () =>
+        inProject({}, async () => {
+          const result = await fetchGuides(how, ['@fake/orm-single', '--registry', origin]);
+          strictEqual(result.code, 0, result.stderr);
+          strictEqual(await readFile(join(result.stdout.trim(), STEP), 'utf-8'), 'single text\n');
+        }));
+
+      it('stops looking past deprecated versions after ten and takes the newest', () =>
+        inProject({}, async () => {
+          const result = await fetchGuides(how, ['@fake/orm-many-withdrawn', '--registry', origin]);
+          strictEqual(result.code, 0, result.stderr);
+          strictEqual(
+            await readFile(join(result.stdout.trim(), STEP), 'utf-8'),
+            'withdrawn 8.12.0\n',
+          );
+          match(result.stderr, /newest 10 .*deprecated/);
+        }));
+
+      it('lets concurrent runs for the same version all succeed', () =>
+        inProject({}, async () => {
+          for (let round = 0; round < 2; round++) {
+            const results = await Promise.all(
+              Array.from({ length: 8 }, () => fetchGuides(how, [PACKAGE, '--registry', origin])),
+            );
+            deepStrictEqual(
+              results.map((result) => result.code),
+              results.map(() => 0),
+              results.map((result) => result.stderr).join(''),
+            );
+            const folders = new Set(results.map((result) => result.stdout));
+            strictEqual(folders.size, 1);
+            strictEqual(
+              await readFile(join([...folders][0].trim(), STEP), 'utf-8'),
+              'corrected text\n',
+            );
+          }
+        }));
+
+      it("removes this package's stale temporary folders, and no others", () =>
+        inProject(
+          {
+            [`project/.prisma-upgrade-guides/.download-${FOLDER}-8.1.0-aaaaaa/x.tgz`]: 'x',
+            [`project/.prisma-upgrade-guides/.partial-${FOLDER}-8.1.0-bbbbbb/prisma-8/SKILL.md`]:
+              'x',
+            [`project/.prisma-upgrade-guides/.old-${FOLDER}-8.1.0-cccccc/prisma-8/SKILL.md`]: 'x',
+            [`project/.prisma-upgrade-guides/.partial-${FOLDER}-8.2.0-ea.0-young1/prisma-8/SKILL.md`]:
+              'x',
+            'project/.prisma-upgrade-guides/.partial-fake-orm-db-extra-1.0.0-dddddd/SKILL.md': 'x',
+            'project/.prisma-upgrade-guides/.partial-unrelated/SKILL.md': 'x',
+          },
+          async (project) => {
+            const root = join(project, '.prisma-upgrade-guides');
+            const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+            for (const entry of await readdir(root)) {
+              if (!entry.includes('young'))
+                await utimes(join(root, entry), twoHoursAgo, twoHoursAgo);
+            }
+            const result = await fetchGuides(how, [PACKAGE, '--registry', origin]);
+            strictEqual(result.code, 0, result.stderr);
+            deepStrictEqual((await readdir(root)).sort(), [
+              '.gitignore',
+              `.partial-${FOLDER}-8.2.0-ea.0-young1`,
+              '.partial-fake-orm-db-extra-1.0.0-dddddd',
+              '.partial-unrelated',
+              `${FOLDER}-8.2.0-ea.0`,
+            ]);
+          },
+        ));
 
       it('takes the newest deprecated release when every release is deprecated', () =>
         inProject({}, async () => {
@@ -344,7 +476,7 @@ describe('fetch-upgrade-guides', () => {
           const out = join(sandbox, 'out');
           const result = await fetchGuides(how, [PACKAGE, '--registry', origin, '--out', out]);
           strictEqual(result.code, 0, result.stderr);
-          strictEqual(result.stdout, `${join(out, `${FOLDER}-9.0.0-ea.0`, 'prisma-8')}\n`);
+          strictEqual(result.stdout, `${join(out, `${FOLDER}-8.2.0-ea.0`, 'prisma-8')}\n`);
         }));
 
       it('fails clearly when the registry does not have the package', () =>
@@ -453,24 +585,100 @@ describe('fetch-upgrade-guides', () => {
           { HTTP_PROXY: origin },
         );
         strictEqual(result.code, 0, result.stderr);
-        strictEqual(await readFile(join(result.stdout.trim(), STEP), 'utf-8'), 'newest text\n');
+        strictEqual(await readFile(join(result.stdout.trim(), STEP), 'utf-8'), 'corrected text\n');
+      }));
+  });
+
+  describe('through the command only', () => {
+    it("gives up on a registry that does not answer, within the command's own fetch timeout", () =>
+      inProject({}, async () => {
+        const result = await fetchGuides('command', [
+          '@fake/orm-hang',
+          '--registry',
+          origin,
+          '--timeout',
+          '1',
+        ]);
+        deepStrictEqual({ code: result.code, stdout: result.stdout }, { code: 1, stdout: '' });
+        strictEqual(result.stderr.includes('did not finish'), false, result.stderr);
+      }));
+
+    it("passes the registry in a Yarn project's .yarnrc.yml to the command", () =>
+      inProject({ 'project/.yarnrc.yml': `npmRegistryServer: "${origin}"\n` }, async () => {
+        const result = await fetchGuides('command', [PACKAGE]);
+        strictEqual(result.code, 0, result.stderr);
+      }));
+  });
+
+  describe('through a command that misbehaves', () => {
+    async function fakeCommand(mode, args) {
+      const bin = join(sandbox, 'fake-bin');
+      await mkdir(bin, { recursive: true });
+      const path = join(bin, PM);
+      await writeFile(path, `#!${process.execPath}\n${FAKE_COMMAND}`);
+      await chmod(path, 0o755);
+      const tarballPath = join(bin, 'release.tgz');
+      await writeFile(tarballPath, release('8.1.0', 'single string text\n'));
+      return fetchGuides('fake', args, { FAKE_MODE: mode, PATH: bin, FAKE_TARBALL: tarballPath });
+    }
+
+    it('reads a version list given as a single string', () =>
+      inProject({}, async () => {
+        const result = await fakeCommand('single', [PACKAGE]);
+        strictEqual(result.code, 0, result.stderr);
+        strictEqual(
+          await readFile(join(result.stdout.trim(), STEP), 'utf-8'),
+          'single string text\n',
+        );
+      }));
+
+    it('is stopped when it does not finish in time', () =>
+      inProject({}, async () => {
+        const result = await fakeCommand('hang', [PACKAGE, '--timeout', '1']);
+        deepStrictEqual({ code: result.code, stdout: result.stdout }, { code: 1, stdout: '' });
+        match(result.stderr, /did not finish within 4 seconds/);
+      }));
+
+    it('reports the exit code and the last line it printed when it crashes', () =>
+      inProject({}, async () => {
+        const result = await fakeCommand('crash', [PACKAGE]);
+        deepStrictEqual({ code: result.code, stdout: result.stdout }, { code: 1, stdout: '' });
+        match(result.stderr, /exit code 139.*Segmentation fault/);
+      }));
+
+    it('reports a command too old to write to the pack destination, and removes its tarball', () =>
+      inProject({}, async (project) => {
+        const before = await snapshot(project);
+        const result = await fakeCommand('old-pack', [PACKAGE]);
+        deepStrictEqual({ code: result.code, stdout: result.stdout }, { code: 1, stdout: '' });
+        match(result.stderr, /too old/);
+        deepStrictEqual(await snapshot(project), before);
       }));
   });
 
   describe('arguments', () => {
     for (const [args, message] of [
-      [[PACKAGE, '--major', ''], /--major/],
-      [[PACKAGE, '--major', '8x'], /--major/],
-      [[PACKAGE, '--frobnicate'], /usage/],
-      [[], /usage/],
+      [[PACKAGE, '--major', '', '--registry', DEAD], /--major/],
+      [[PACKAGE, '--major', '8x', '--registry', DEAD], /--major/],
+      [[PACKAGE, '--timeout', '0', '--registry', DEAD], /--timeout/],
+      [[PACKAGE, '--frobnicate', '--registry', DEAD], /usage/],
+      [['--registry', DEAD], /usage/],
+      [['--registry', DEAD, '--', '--userconfig=/etc/evil'], /not a package name/],
+      [['https://example.invalid/x.tgz', '--registry', DEAD], /not a package name/],
+      [[`${PACKAGE}@8.1.0`, '--registry', DEAD], /not a package name/],
+      [['@Fake/Orm-db', '--registry', DEAD], /not a package name/],
+      [[PACKAGE, '--registry=--userconfig=/etc/evil'], /not an http or https URL/],
+      [[PACKAGE, '--registry', 'ftp://registry.example'], /not an http or https URL/],
     ]) {
-      it(`refuses ${JSON.stringify(args)}`, () =>
-        inProject({}, async () => {
-          const result = await fetchGuides('built-in download', [...args, '--registry', DEAD]);
-          deepStrictEqual({ code: result.code, stdout: result.stdout }, { code: 1, stdout: '' });
-          match(result.stderr, message);
-          strictEqual(result.stderr.includes('    at '), false);
-        }));
+      for (const how of ['command', 'built-in download']) {
+        it(`refuses ${JSON.stringify(args)} through the ${how}`, () =>
+          inProject({}, async () => {
+            const result = await fetchGuides(how, args);
+            deepStrictEqual({ code: result.code, stdout: result.stdout }, { code: 1, stdout: '' });
+            match(result.stderr, message);
+            strictEqual(result.stderr.includes('    at '), false);
+          }));
+      }
     }
   });
 });

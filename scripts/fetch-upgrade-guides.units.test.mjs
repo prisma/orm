@@ -83,23 +83,60 @@ describe('releaseCandidates', () => {
 });
 
 describe('chooseRelease', () => {
-  it('skips deprecated versions', async () => {
-    const deprecated = new Set(['8.3.0']);
+  const deprecatedAmong = (deprecated, asked) => async (versions) => {
+    asked.push(versions);
+    return new Set(versions.filter((version) => deprecated.includes(version)));
+  };
+
+  it('skips deprecated versions, asking about them in one call', async () => {
+    const asked = [];
     deepStrictEqual(
-      await chooseRelease(['8.3.0', '8.2.0', '8.1.0'], async (v) => deprecated.has(v)),
-      { version: '8.2.0', deprecated: false },
+      {
+        chosen: await chooseRelease(
+          ['8.3.0', '8.2.0', '8.1.0'],
+          deprecatedAmong(['8.3.0'], asked),
+          10,
+        ),
+        asked,
+      },
+      {
+        chosen: { version: '8.2.0', deprecated: false, limited: false },
+        asked: [['8.3.0', '8.2.0', '8.1.0']],
+      },
     );
   });
 
   it('takes the newest when every version is deprecated', async () => {
-    deepStrictEqual(await chooseRelease(['8.3.0', '8.2.0'], async () => true), {
-      version: '8.3.0',
-      deprecated: true,
-    });
+    deepStrictEqual(
+      await chooseRelease(['8.3.0', '8.2.0'], deprecatedAmong(['8.3.0', '8.2.0'], []), 10),
+      {
+        version: '8.3.0',
+        deprecated: true,
+        limited: false,
+      },
+    );
+  });
+
+  it('asks about the newest versions up to the limit only', async () => {
+    const asked = [];
+    deepStrictEqual(
+      {
+        chosen: await chooseRelease(
+          ['8.3.0', '8.2.0', '8.1.0'],
+          deprecatedAmong(['8.3.0', '8.2.0'], asked),
+          2,
+        ),
+        asked,
+      },
+      {
+        chosen: { version: '8.3.0', deprecated: true, limited: true },
+        asked: [['8.3.0', '8.2.0']],
+      },
+    );
   });
 
   it('gives nothing for no candidates', async () => {
-    strictEqual(await chooseRelease([], async () => false), undefined);
+    strictEqual(await chooseRelease([], deprecatedAmong([], []), 10), undefined);
   });
 });
 
