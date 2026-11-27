@@ -177,6 +177,10 @@ export function update(options: {
   readonly destination?: Contract;
   readonly mode?: 'plan' | 'apply';
   readonly unreadableOrigin?: boolean;
+  readonly onUnreadableOrigin?: (unreadable: {
+    readonly path: string;
+    readonly reason: string;
+  }) => void;
   readonly verifySnapshotContent?: SnapshotContentVerifier;
   readonly migrations: TargetMigrationsCapability<
     'sql',
@@ -199,6 +203,9 @@ export function update(options: {
     answerQuestions: async () => [],
     targetId: 'postgres',
     statements: [...renameStatements(options.renames), ...(options.fieldStatements ?? [])],
+    ...(options.onUnreadableOrigin === undefined
+      ? {}
+      : { onUnreadableOrigin: options.onUnreadableOrigin }),
     ...(options.verifySnapshotContent === undefined
       ? {}
       : { verifySnapshotContent: options.verifySnapshotContent }),

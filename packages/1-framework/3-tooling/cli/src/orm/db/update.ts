@@ -72,7 +72,7 @@ import {
 } from '../../utils/printed-command';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag, permitPolicyChangeFlag } from '../flags';
-import { migrationsDirFor } from '../migration/paths';
+import { displayPath, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { promptPlanQuestions } from '../plan-question-prompt';
 import { controlProgressReporter } from '../progress';
@@ -465,6 +465,12 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           },
           ...ifDefined('emittedContractHash', storageHashOf(prepared.value.contractJson)),
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
+          onUnreadableOrigin: ({ path, reason }) =>
+            ctx.report({
+              kind: 'message',
+              severity: 'warn',
+              text: `Could not read the contract snapshot ${displayPath(path, ctx.cwd)}, which holds the contract the database is at: ${reason}. db update plans without it, so the questions about data it would lose name tables and columns by their storage names, and a rename statement cannot be resolved.`,
+            }),
           onProgress: controlProgressReporter(ctx.report),
         });
         if (!result.ok) {

@@ -447,6 +447,7 @@ class ControlClientImpl implements ControlClient {
       driver,
       invocation: options.invocation,
       ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
+      ...ifDefined('onUnreadableOrigin', options.onUnreadableOrigin),
       adapter,
       familyInstance,
       contract,

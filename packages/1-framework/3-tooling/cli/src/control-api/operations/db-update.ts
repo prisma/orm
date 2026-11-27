@@ -17,7 +17,12 @@ import { errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import type { AnswerPlanQuestions } from '../statements/plan-questions';
 import type { StatementText } from '../statements/statement-text';
-import type { DbUpdateResult, OnControlProgress, PlannerWarningsListener } from '../types';
+import type {
+  DbUpdateResult,
+  OnControlProgress,
+  PlannerWarningsListener,
+  UnreadableStoredFile,
+} from '../types';
 import { executeRun } from './db-run';
 import { DB_UPDATE_POLICY } from './db-update-policy';
 
@@ -69,6 +74,8 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
   /** The command line the advice of a failure repeats. */
   readonly invocation: CliInvocation;
   readonly onProgress?: OnControlProgress;
+  /** Called when the contract snapshot the database's marker names cannot be read: the run plans on without the contract the database is at. */
+  readonly onUnreadableOrigin?: (unreadable: UnreadableStoredFile) => void;
 }
 
 /** Execute `db update` against the configured contract. */
@@ -117,6 +124,7 @@ export async function executeDbUpdate<TFamilyId extends string, TTargetId extend
     ...ifDefined('emittedContractHash', options.emittedContractHash),
     ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
     ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
+    ...ifDefined('onUnreadableOrigin', options.onUnreadableOrigin),
     ...ifDefined('onProgress', options.onProgress),
   })) as DbUpdateResult;
 }
