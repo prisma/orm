@@ -24,7 +24,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "2de67dd3460900ac",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Also, prisma/orm#31192 renames the runner's execute option `checkedPolicies` to `policiesInForce` and passes it to every contract space."
   },
   {
     "path": "./target",
@@ -33,7 +33,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "2de67dd3460900ac",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Also, prisma/orm#31192 renames the runner's execute option `checkedPolicies` to `policiesInForce` and passes it to every contract space."
   },
   {
     "path": "./target",
@@ -42,7 +42,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "34c62ef3198e7001",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Also, prisma/orm#31192 renames the runner's execute option `checkedPolicies` to `policiesInForce` and passes it to every contract space."
   },
   {
     "path": "./target",
@@ -114,7 +114,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "2de67dd3460900ac",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Also, prisma/orm#31192 renames the runner's execute option `checkedPolicies` to `policiesInForce` and passes it to every contract space."
   },
   {
     "path": "./target/control",
@@ -123,7 +123,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "2de67dd3460900ac",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Also, prisma/orm#31192 renames the runner's execute option `checkedPolicies` to `policiesInForce` and passes it to every contract space."
   },
   {
     "path": "./target/control",
@@ -132,7 +132,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "34c62ef3198e7001",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Also, prisma/orm#31192 renames the runner's execute option `checkedPolicies` to `policiesInForce` and passes it to every contract space."
   },
   {
     "path": "./target/control",
