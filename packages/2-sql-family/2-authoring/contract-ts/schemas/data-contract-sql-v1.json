@@ -36,7 +36,8 @@
                                 "type": "boolean"
                               }
                             },
-                            "required": ["column"]
+                            "required": ["column"],
+                            "additionalProperties": false
                           }
                         },
                         "namespaceId": {
@@ -46,7 +47,8 @@
                           "type": "string"
                         }
                       },
-                      "required": ["fields", "namespaceId", "table"]
+                      "required": ["fields", "namespaceId", "table"],
+                      "additionalProperties": false
                     },
                     "base": {
                       "type": "object",
@@ -71,7 +73,8 @@
                           "type": "string"
                         }
                       },
-                      "required": ["field"]
+                      "required": ["field"],
+                      "additionalProperties": false
                     },
                     "fields": {
                       "type": "object",
@@ -232,7 +235,8 @@
                                 "type": "string"
                               }
                             },
-                            "required": ["entityKind", "entityName", "namespaceId", "plane"]
+                            "required": ["entityKind", "entityName", "namespaceId", "plane"],
+                            "additionalProperties": false
                           }
                         },
                         "required": ["nullable", "type"],
@@ -479,7 +483,8 @@
                       }
                     }
                   },
-                  "required": ["storage"]
+                  "required": ["storage"],
+                  "additionalProperties": false
                 }
               },
               "enum": {
@@ -522,7 +527,8 @@
                             ]
                           }
                         },
-                        "required": ["name", "value"]
+                        "required": ["name", "value"],
+                        "additionalProperties": false
                       }
                     }
                   },
@@ -531,11 +537,13 @@
                 }
               }
             },
-            "required": ["models"]
+            "required": ["models"],
+            "additionalProperties": false
           }
         }
       },
-      "required": ["namespaces"]
+      "required": ["namespaces"],
+      "additionalProperties": false
     },
     "profileHash": {
       "type": "string"
@@ -589,7 +597,8 @@
                                         "const": "function"
                                       }
                                     },
-                                    "required": ["expression", "kind"]
+                                    "required": ["expression", "kind"],
+                                    "additionalProperties": false
                                   },
                                   {
                                     "type": "object",
@@ -621,7 +630,8 @@
                                         ]
                                       }
                                     },
-                                    "required": ["kind", "value"]
+                                    "required": ["kind", "value"],
+                                    "additionalProperties": false
                                   }
                                 ]
                               },
@@ -665,7 +675,8 @@
                                     "type": "string"
                                   }
                                 },
-                                "required": ["entityKind", "entityName", "namespaceId", "plane"]
+                                "required": ["entityKind", "entityName", "namespaceId", "plane"],
+                                "additionalProperties": false
                               }
                             },
                             "required": ["codecId", "dataType", "nullable"],
@@ -768,7 +779,8 @@
                                 "enum": ["cascade", "noAction", "restrict", "setDefault", "setNull"]
                               }
                             },
-                            "required": ["source", "target"]
+                            "required": ["source", "target"],
+                            "additionalProperties": false
                           }
                         },
                         "indexes": {
@@ -805,7 +817,8 @@
                                 "type": "string"
                               }
                             },
-                            "required": ["name", "unique"]
+                            "required": ["name", "unique"],
+                            "additionalProperties": false
                           }
                         },
                         "uniques": {
@@ -823,7 +836,8 @@
                                 "type": "string"
                               }
                             },
-                            "required": ["columns"]
+                            "required": ["columns"],
+                            "additionalProperties": false
                           }
                         },
                         "checks": {
@@ -861,7 +875,8 @@
                               "type": "string"
                             }
                           },
-                          "required": ["columns"]
+                          "required": ["columns"],
+                          "additionalProperties": false
                         }
                       },
                       "required": ["columns", "foreignKeys", "indexes", "uniques"],
@@ -1014,7 +1029,8 @@
                           }
                         }
                       },
-                      "required": ["kind", "values"]
+                      "required": ["kind", "values"],
+                      "additionalProperties": false
                     }
                   }
                 },
@@ -1057,7 +1073,8 @@
                 "additionalProperties": {}
               }
             },
-            "required": ["codecId", "dataType", "kind"]
+            "required": ["codecId", "dataType", "kind"],
+            "additionalProperties": false
           }
         }
       },
