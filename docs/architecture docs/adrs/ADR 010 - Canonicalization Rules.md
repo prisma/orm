@@ -2,7 +2,7 @@
 
 **Revised:** 2026-07-23 — hashes are represented as bare lowercase hex; the former `sha256:` algorithm prefix was dropped before the RC format freeze (TML-2756). The prefix carried no information — the algorithm never varies per hash — and a change to the hashing rules is signalled by re-emit, not by an in-band marker, the same no-in-band-version reasoning [ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md) records. Examples below use the bare form.
 
-**Partly superseded by** [ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md): the canonicalization rules that hashes use do not change within a major, so a rule change is no longer handled by emitting and signing again. The hashes cover only `targetFamily`, `target` and their own section.
+Hashes cover only `targetFamily`, `target` and their own section, and the rules that compute them do not change within a major version: see [ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md).
 
 ## Context
 
@@ -18,7 +18,7 @@
 - Compute `storageHash` plus `profileHash` over canonical bytes, and include `executionHash` only when execution defaults are emitted in the canonical artifact
 - Treat any divergence from these rules as an emitter bug
 - State that TS-first and PSL-first must canonicalize to the identical JSON and `storageHash` for equivalent intent
-- When the canonicalization rules change, the change is breaking — the new ruleset produces different bytes for the same logical contract, so every consumer that hashed or stored the old form must re-emit. This is handled by re-emit / re-sign rather than by versioning the algorithm at runtime.
+- The canonicalization rules that hashes use do not change within a major version (ADR 332). A change to them ships only in a major release, with a way to move existing files and databases.
 
 ## Canonical JSON profile
 
@@ -51,14 +51,14 @@ This project adopts a pragmatic subset inspired by RFC 8785 with additional doma
   - It only makes reviews easier by keeping “header” fields (identity + hashes) grouped, followed by the large semantic sections, with `meta` last.
   - Within each section (and for any non-top-level object), standard lexicographic sort applies, except where domain-specific ordering rules are defined below.
 
-**Source of truth:** the exact top-level ordering is defined by the emitter implementation (see `TOP_LEVEL_ORDER` in `packages/1-framework/1-core/control-plane/src/emission/canonicalization.ts`). Any new top-level section that becomes part of the canonical artifact must be added there (and covered by tests) to keep diffs stable.
+**Source of truth:** the exact top-level ordering is defined by `TOP_LEVEL_ORDER` in `packages/1-framework/0-foundation/contract/src/canonicalization.ts`. Any new top-level section that becomes part of the canonical artifact must be added there (and covered by tests) to keep diffs stable.
 
 ### Arrays
 
 - Arrays are preserved in the order that is semantically meaningful
 - Where order is not semantically meaningful, arrays are canonically sorted
 - Column lists in composite keys retain declared order
-- Lists of constraints and indexes are sorted by their canonical names per ADR 009
+- Lists whose order means nothing to the database are ordered by the family, in its normal form: the SQL family orders a table's checks, foreign keys, indexes and unique constraints by name, and an entry without a name by its content; the MongoDB family orders a collection's indexes by name. Reordering them in the contract source changes no hash
 - Model and table registries are represented as objects, not arrays, to avoid order-dependence
 
 ### Optional and default fields
@@ -71,6 +71,8 @@ Each family owns the normal form of its own content, and gives it to the framewo
 - Nothing is left out because of the shape of its value. Data a family does not own is kept exactly as given: a type's parameters, an index's options, a MongoDB partial filter expression, a generator's parameters, the members of a value set, and every field of an entry an extension pack defines.
 - `nullable` is always written — see ADR 172.
 - A capability flag that is off is left out by the code that builds the capability list.
+- A family also leaves its own defaults out of the `domain` section when it writes it, for example a field's `many: false`. `domain` is not hashed.
+- Only a family names defaults. Every field of an entry that a target or an extension pack defines is hashed exactly as given, so its author gives each field one form: the field is required, or its constructor stores the default in one way only. Otherwise the same meaning has two storage hashes, and after `8.0.0` that cannot be corrected within the major.
 
 An earlier rule had the framework drop every `false`, `[]` and `{}` unless a path was on an exception list. It dropped values that were not defaults: `{ "fastupdate": false }` in an index's options was written as `{}`, a MongoDB partial filter `{ "isAdmin": false }` was written as a filter that matches every document, and two types whose parameters differed only by such a value had one storage hash.
 
@@ -162,8 +164,7 @@ An earlier rule had the framework drop every `false`, `[]` and `{}` unless a pat
 ## Backwards compatibility
 
 - Older contracts without canonicalization are re-emitted on first emit and pick up hashes accordingly
-- Schema version bump if canonicalization rules change in a breaking way
-- Canonicalization rule changes are breaking: hashes change because canonical bytes change. Existing stored contract blobs and DB markers must be re-emitted / re-signed against the new ruleset; there is no in-band version field on the contract or marker for the canonicalizer (the earlier `canonicalVersion` field was retired — tracked separately under the migration-area Linear project).
+- The rules do not change within a major version (ADR 332). The one change made before `8.0.0` was handled by the upgrade instructions of that release.
 
 ## Open questions
 
