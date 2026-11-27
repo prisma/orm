@@ -5,6 +5,7 @@ export {
   reportedCappedSize,
   reportsValidator,
 } from '../core/reported-collection-options';
+export { collationsMatch } from '../core/schema-verify/canonicalize-introspection';
 export {
   type VerifyMongoSchemaOptions,
   verifyMongoSchema,

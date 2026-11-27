@@ -24,6 +24,7 @@ import type {
   UpdateOneResult,
   UpdateOneWireCommand,
 } from '@internal/mongo-wire';
+import { ifDefined } from '@internal/utils/defined';
 import { assertNever } from '@internal/utils/internal-error';
 import { BSON, type Db, type Document, MongoClient } from 'mongodb';
 import { DRIVER_INFO } from './core/driver-info';
@@ -198,7 +199,7 @@ export class MongoDriverImpl implements MongoQueryable {
     cmd: DeleteManyWireCommand,
   ): AsyncIterable<DeleteManyResult> {
     const collection = this.db.collection(cmd.collection);
-    const result = await collection.deleteMany(cmd.filter);
+    const result = await collection.deleteMany(cmd.filter, ifDefined('collation', cmd.collation));
     yield { deletedCount: result.deletedCount };
   }
 
@@ -230,10 +231,10 @@ export class MongoDriverImpl implements MongoQueryable {
 
   protected async *executeAggregateCommand<Row>(cmd: AggregateWireCommand): AsyncIterable<Row> {
     const collection = this.db.collection(cmd.collection);
-    const cursor = collection.aggregate(
-      cmd.pipeline as Record<string, unknown>[],
-      cmd.bypassDocumentValidation ? { bypassDocumentValidation: true } : {},
-    );
+    const cursor = collection.aggregate(cmd.pipeline as Record<string, unknown>[], {
+      ...(cmd.bypassDocumentValidation ? { bypassDocumentValidation: true } : {}),
+      ...ifDefined('collation', cmd.collation),
+    });
     yield* cursor as AsyncIterable<Row>;
   }
 

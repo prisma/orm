@@ -1,6 +1,10 @@
 import type { CodecCallContext } from '@internal/framework-components/codec';
 import type { AnyMongoDdlCommand } from '@internal/mongo-query-ast/control';
-import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type {
+  MongoQueryPlan,
+  RawAggregateCommand,
+  RawDeleteManyCommand,
+} from '@internal/mongo-query-ast/execution';
 import type {
   AnyMongoDdlWireCommand,
   AnyMongoDmlWireCommand,
@@ -99,6 +103,7 @@ export type MongoLoweredDraft =
       readonly kind: 'rawDeleteMany';
       readonly collection: string;
       readonly filter: Record<string, unknown>;
+      readonly collation?: RawDeleteManyCommand['collation'];
     }
   | {
       readonly kind: 'rawFindOneAndUpdate';
@@ -120,6 +125,7 @@ export type MongoLoweredDraft =
       readonly collection: string;
       readonly pipeline: ReadonlyArray<Record<string, unknown>>;
       readonly bypassDocumentValidation?: true;
+      readonly collation?: RawAggregateCommand['collation'];
     };
 
 /** Wraps a DDL command for passage to `MongoAdapter.lower`. */

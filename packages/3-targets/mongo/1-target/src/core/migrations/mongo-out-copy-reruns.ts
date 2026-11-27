@@ -154,37 +154,6 @@ function removalsOf(
   return found.every((removal) => removal !== -1) ? found : undefined;
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null) return false;
-  const prototype: unknown = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-/** Whether part of a filter compares a string, which a collation changes. The operand of `$type` names a BSON type, not a value. */
-function comparesStrings(value: unknown): boolean {
-  if (typeof value === 'string') return true;
-  if (Array.isArray(value)) return value.some(comparesStrings);
-  return (
-    isPlainObject(value) &&
-    Object.entries(value).some(([key, operand]) => key !== '$type' && comparesStrings(operand))
-  );
-}
-
-/**
- * The copy at `index` when its documents are then deleted from its source by its filters and one
- * of them compares strings. Its `$unionWith` stages read the source with the target's collation
- * and the deletes with the source's own, so with two collations they can select other documents.
- */
-export function collationSensitiveCopyOf(
-  operations: readonly AnyMongoMigrationOperation[],
-  index: number,
-): UnionCopy | undefined {
-  const operation = operations[index];
-  const copy = operation === undefined ? undefined : unionCopyOf(operation);
-  if (copy === undefined || !copy.filters.some(comparesStrings)) return undefined;
-  return removalsOf(operations, index, copy) === undefined ? undefined : copy;
-}
-
 function duplicatesText(into: string): string {
   return `To find them, group collection ${into} by _id and keep each _id that appears more than once, for example with db.getCollection(${JSON.stringify(into)}).aggregate([{ $group: { _id: '$_id', n: { $sum: 1 } } }, { $match: { n: { $gt: 1 } } }]) in mongosh.`;
 }
@@ -215,9 +184,9 @@ function runningCopyQuery(into: string): string {
   return `db.getSiblingDB("admin").aggregate([{ $currentOp: { allUsers: true } }, { $match: { "command.$db": db.getName(), $expr: { $let: { vars: { last: { $arrayElemAt: [{ $objectToArray: { $last: "$command.pipeline" } }, 0] } }, in: { $and: [{ $in: ["$$last.k", [{ $literal: "$out" }, { $literal: "$merge" }]] }, { $in: [${JSON.stringify(into)}, ["$$last.v", "$$last.v.coll", "$$last.v.into", "$$last.v.into.coll"]] }] } } } } }])`;
 }
 
-/** How to tell that a copy whose connection dropped has ended: MongoDB keeps running an aggregate that writes with `$out` after its client goes, and `killOp` only marks it to end. */
-function copyEndedText(into: string): string {
-  return `first check that it is no longer running: MongoDB keeps running an aggregate that ends in $out after the connection that sent it drops. In mongosh, connected to this database, ${runningCopyQuery(into)} lists the copy while it runs. Wait until it lists nothing, or end the copy with db.killOp(<the opid it lists>) and run the query again until it lists nothing: killOp only marks the copy to end, and it can run on for a moment.`;
+/** How to tell that a copy whose connection dropped has ended: MongoDB keeps running an aggregate that writes with `$out` or `$merge` after its client goes, and `killOp` only marks it to end. */
+function copyEndedText(into: string, stage: '$out' | '$merge' = '$out'): string {
+  return `first check that it is no longer running: MongoDB keeps running an aggregate that ends in ${stage} after the connection that sent it drops. In mongosh, connected to this database, ${runningCopyQuery(into)} lists the copy while it runs. Wait until it lists nothing, or end the copy with db.killOp(<the opid it lists>) and run the query again until it lists nothing: killOp only marks the copy to end, and it can run on for a moment.`;
 }
 
 const UNCHANGED = 'nothing wrote to or deleted from either collection since the apply started';
@@ -246,8 +215,8 @@ function unfinishedDeleteText(copy: UnionCopy, deleteIds: readonly string[]): st
     ? `operation ${deleteIds[0]}, which deletes them from collection ${source}, has not finished`
     : `operations ${joinedList(deleteIds)}, which delete them from collection ${source}, have not finished`;
   const finish = one
-    ? `finish that delete yourself, on collection ${source} with the filter of its deleteDocuments call in the migration's migration.ts`
-    : `finish those deletes yourself, on collection ${source}, each with the filter of its deleteDocuments call in the migration's migration.ts`;
+    ? `finish that delete yourself, on collection ${source} with the filter and collation of its deleteDocuments call in the migration's migration.ts`
+    : `finish those deletes yourself, on collection ${source}, each with the filter and collation of its deleteDocuments call in the migration's migration.ts`;
   return `Operation ${id} copied documents into collection ${into} with an $out stage, and ${deletes}. ${writesStoppedUnlessUnsureText(copy, one)}, before you run the command again, ${finish}: the copy has no check, so it runs again, and it would add the documents still in collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the command was already run again before the ${one ? 'delete' : 'deletes'} finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
@@ -258,6 +227,19 @@ function undroppedText(copy: UnionCopy, dropId: string, running: boolean): strin
     ? `was running when the apply stopped and may not have finished. If collection ${source} is gone, run the command again. ${writesStoppedUnlessUnsureText(copy, true)}, before you run the command again, delete the documents of collection ${source} or drop it yourself`
     : `has not run. ${writesStoppedUnlessUnsureText(copy, true)}, before you run the command again, delete the documents of collection ${source} or drop it yourself`;
   return `Operation ${id} copied the documents of collection ${source} into collection ${into} with an $out stage, and operation ${dropId}, which drops collection ${source}, ${drop}: the copy has no check, so it runs again, and it would add the documents of collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the command was already run again before collection ${source} was dropped, its documents are in collection ${into} more than once: each of them is there two or more times, under the same _id. ${duplicatesText(into)}`;
+}
+
+/**
+ * The advice for a data transform whose aggregate writes into `target` and threw while
+ * it ran, when it is not a copy the planner prints, so the runner cannot tell what it read or what
+ * a re-run does: it may have finished, and the user settles the collections by hand.
+ */
+export function unrecognisedCopyText(
+  id: string,
+  target: { readonly stage: '$out' | '$merge'; readonly collection: string; readonly name: string },
+): string {
+  const { stage, collection, name: into } = target;
+  return `Operation ${id} writes into collection ${into} with an aggregate that ends in ${stage}, and the error does not show whether it finished: it may have. Before you do anything else, ${copyEndedText(collection, stage)} Then compare collection ${into} with the collections the operation reads by hand, and settle which documents each should keep. Do not run the command again until you have: the run would copy the documents again, and could write them into collection ${into} a second time.`;
 }
 
 /**
@@ -293,8 +275,8 @@ function interruptedCopyText(
   const finish = whole
     ? `delete the documents of collection ${source} or drop it yourself`
     : one
-      ? `run that delete yourself, on collection ${source} with the filter of its deleteDocuments call in the migration's migration.ts`
-      : `run those deletes yourself, on collection ${source}, each with the filter of its deleteDocuments call in the migration's migration.ts`;
+      ? `run that delete yourself, on collection ${source} with the filter and collation of its deleteDocuments call in the migration's migration.ts`
+      : `run those deletes yourself, on collection ${source}, each with the filter and collation of its deleteDocuments call in the migration's migration.ts`;
   return `${stopped} The error does not show whether the copy finished. ${removals}. Before the copy, collection ${into} held ${documentsText(counts.target)}, and the copy was to add ${documentsText(counts.selected)} of collection ${source}. To tell whether it finished, ${copyEndedText(into)} Then count the documents of collection ${into} that a majority of the replica set has written, which a failover cannot roll back, for example with db.getCollection(${JSON.stringify(into)}).countDocuments({}, { readConcern: { level: "majority" } }) in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${settleByHandText(copy)} If it holds ${counts.target + counts.selected}, and ${UNCHANGED}, the copy finished. ${writesStoppedText(copy, one)} Before you run the command again, ${finish}. The copy has no check, so it runs again, and it would add ${whole ? 'the documents of' : 'the documents still in'} collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If it holds ${counts.target}, and ${UNCHANGED}, the copy most likely did not finish, but a majority count can lag behind the copy's last writes: wait a moment and count again. If it still holds ${counts.target}, delete nothing, and run the command again as it is. Even then the copy may have finished, and the run then adds ${whole ? 'the documents of' : 'the documents it selects in'} collection ${source} to collection ${into} a second time: the query below finds them. If it holds any other number, something else wrote to or deleted from collection ${into}, or the command was already run again: ${settleByHandText(copy)} If the command was already run again after the copy finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 

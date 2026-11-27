@@ -405,6 +405,21 @@ function canonicalizeExpectedOptions(
  * server-attached collation/timeseries/clusteredIndex that the contract
  * never asked for, hiding real drift.)
  */
+/**
+ * Whether a collection with collation `live` compares strings as one with `expected` does, by the
+ * verifier's rule: the `simple` collation is the same as none, and of a collation MongoDB reports
+ * only the fields `expected` gives are compared, since MongoDB fills in the rest.
+ */
+export function collationsMatch(
+  expected: CollationOptions | undefined,
+  live: CollationOptions | undefined,
+): boolean {
+  const given = isSimpleCollation(expected) ? undefined : expected;
+  const reported = isSimpleCollation(live) ? undefined : live;
+  if (given === undefined || reported === undefined) return given === reported;
+  return canonicalize(stripCollationFields(reported, given)) === canonicalize(given);
+}
+
 function stripCollationFields(
   live: CollationOptions,
   expected: CollationOptions | undefined,

@@ -5,7 +5,7 @@ import type {
   MarkerOperations,
   MongoRunnerDependencies,
 } from '@internal/family-mongo/control-adapter';
-import { verifyMongoSchema } from '@internal/family-mongo/schema-verify';
+import { collationsMatch, verifyMongoSchema } from '@internal/family-mongo/schema-verify';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import {
   APP_SPACE_ID,
@@ -80,6 +80,7 @@ import {
   RawDeleteManyCommand,
   RawUpdateManyCommand,
 } from '@internal/mongo-query-ast/execution';
+import type { CollationOptions } from '@internal/mongo-value/mongodb-types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError, isInternalError } from '@internal/utils/internal-error';
@@ -103,10 +104,10 @@ import {
 } from './mongo-apply-progress';
 import { deserializeMongoOps } from './mongo-ops-serializer';
 import {
-  collationSensitiveCopyOf,
   outCopyRerunText,
   type UnionCopy,
   unionCopyOf,
+  unrecognisedCopyText,
 } from './mongo-out-copy-reruns';
 import { byHandRenamePlacement } from './mongo-plan-text';
 import { type RewriteCollection, rewriteRefusals } from './mongo-rewrite-refusals';
@@ -281,6 +282,39 @@ function thrownFailure(
       cause: error,
     },
   );
+}
+
+/**
+ * The failure for an error thrown while a data transform that copies with `$out` or `$merge` ran,
+ * when the runner does not recognise the copy: it may have finished, and a re-run copies again.
+ */
+function thrownCopyFailure(
+  operation: AnyMongoMigrationOperation,
+  error: unknown,
+  copy: CopyTarget,
+): MongoMigrationRunnerFailure {
+  const reason = error instanceof Error ? error.message : String(error);
+  const name =
+    copy.database === undefined ? copy.collection : `${copy.database}.${copy.collection}`;
+  return migrationRunnerFailure(
+    'MIGRATION.EXECUTION_FAILED',
+    `Operation ${operation.id} failed: ${reason}`,
+    {
+      why: unrecognisedCopyText(operation.id, { ...copy, name }),
+      meta: { operationId: operation.id },
+      cause: error,
+    },
+  );
+}
+
+/** Where a data transform's aggregate copies to with `$out` or `$merge`, if it does. */
+function copyTargetOfTransform(operation: AnyMongoMigrationOperation): CopyTarget | undefined {
+  if (!isMongoDmlOperation(operation) || operation.operationClass !== 'data') return undefined;
+  for (const plan of operation.run) {
+    const target = copyTargetOf(plan);
+    if (target !== undefined) return target;
+  }
+  return undefined;
 }
 
 /** Whether a run skips an operation whose check shows it already ran. */
@@ -1833,6 +1867,12 @@ function exactCount(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
 }
 
+function isCollation(value: unknown): value is CollationOptions {
+  return (
+    typeof value === 'object' && value !== null && typeof Reflect.get(value, 'locale') === 'string'
+  );
+}
+
 export class MongoMigrationRunner {
   constructor(private readonly deps: MongoRunnerDependencies) {}
 
@@ -1859,14 +1899,22 @@ export class MongoMigrationRunner {
       const text = advice();
       const { operations, finished, inFlight } = progress;
       const stopped = operations[inFlight ? finished : finished - 1];
-      if (text === undefined || stopped === undefined) throw error;
-      if (isStructuredError(error)) throw withStructuredAdvice(error, text);
-      result = notOk(
-        thrownFailure(stopped, error, !inFlight, {
-          operations: operationsThatMayHaveRun(progress),
-          skips: runSkips(options.executionChecks),
-        }),
-      );
+      if (stopped === undefined) throw error;
+      if (text === undefined) {
+        const copy =
+          inFlight && !isStructuredError(error) ? copyTargetOfTransform(stopped) : undefined;
+        if (copy === undefined) throw error;
+        result = notOk(thrownCopyFailure(stopped, error, copy));
+      } else if (isStructuredError(error)) {
+        throw withStructuredAdvice(error, text);
+      } else {
+        result = notOk(
+          thrownFailure(stopped, error, !inFlight, {
+            operations: operationsThatMayHaveRun(progress),
+            skips: runSkips(options.executionChecks),
+          }),
+        );
+      }
     }
     return result.ok
       ? ok({ ...result.value, changedDatabase })
@@ -1918,12 +1966,6 @@ export class MongoMigrationRunner {
 
     for (const [operationIndex, operation] of operations.entries()) {
       progress.copyCounts = undefined;
-      const collationRefusal = await this.differentCollationsRefusal(
-        operations,
-        operationIndex,
-        ran(operationIndex),
-      );
-      if (collationRefusal) return collationRefusal;
       progress.copyCounts = await this.copyCountsBefore(operation);
       options.callbacks?.onOperationStart?.(operation);
       try {
@@ -2673,37 +2715,6 @@ export class MongoMigrationRunner {
   }
 
   /**
-   * The refusal of the copy at `index` when its filters compare strings, its deletes follow, and
-   * its two collections have different collations: the copy and the deletes could then select
-   * other documents, and a delete would remove a document the copy did not take.
-   */
-  private async differentCollationsRefusal(
-    operations: readonly AnyMongoMigrationOperation[],
-    index: number,
-    before: Ran,
-  ): Promise<MongoMigrationRunnerResult | undefined> {
-    const copy = collationSensitiveCopyOf(operations, index);
-    if (copy === undefined || (await this.sameCollation(copy))) return undefined;
-    const { id, into, source } = copy;
-    const one = copy.filters.length === 1;
-    const filters = one
-      ? 'the filter of its $unionWith stage compares'
-      : 'a filter of its $unionWith stages compares';
-    const rewrite = rerunText(
-      `In the migration's migration.ts, write ${one ? 'the filter of the copy and of its delete' : 'the filters of the copy and of its deletes'} so that ${one ? 'it compares' : 'they compare'} no string, for example { <a field only the moving models store>: { $exists: true } }: values of other types, such as numbers and dates, compare alike under every collation. Run the file with node, then run the command again`,
-      before,
-    );
-    return runnerFailure(
-      'MIGRATION.PRECHECK_FAILED',
-      `Operation ${id} was not run: collections ${into} and ${source} have different collations, and ${filters} strings`,
-      {
-        why: `The copy's $unionWith ${one ? 'stage reads' : 'stages read'} collection ${source} with the collation of collection ${into}, and ${one ? 'the delete after it reads' : 'the deletes after it read'} collection ${source} with its own, so a filter that compares strings can select other documents in the two: a delete would remove documents the copy did not take, or leave documents it took. ${rewrite}`,
-        meta: { operationId: id },
-      },
-    );
-  }
-
-  /**
    * Whether the two collections of `copy` have the same collation. The copy's `$unionWith` stage
    * reads the source with the target's collation, and a count of the source with its own, so with
    * different collations the count can select other documents than the copy.
@@ -2714,14 +2725,13 @@ export class MongoMigrationRunner {
     );
     const collationOf = (name: string) => {
       const options: unknown = collections.find((info) => info['name'] === name)?.['options'];
-      return typeof options === 'object' && options !== null
-        ? Reflect.get(options, 'collation')
-        : undefined;
+      const collation: unknown =
+        typeof options === 'object' && options !== null
+          ? Reflect.get(options, 'collation')
+          : undefined;
+      return isCollation(collation) ? collation : undefined;
     };
-    return (
-      canonicalize(collationOf(copy.into) ?? null) ===
-      canonicalize(collationOf(copy.source) ?? null)
-    );
+    return collationsMatch(collationOf(copy.into), collationOf(copy.source));
   }
 
   /**

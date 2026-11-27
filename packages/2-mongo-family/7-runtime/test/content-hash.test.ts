@@ -1,6 +1,7 @@
 import type { PlanMeta } from '@internal/contract/types';
 import {
   AggregateWireCommand,
+  DeleteManyWireCommand,
   DeleteOneWireCommand,
   InsertOneWireCommand,
   UpdateOneWireCommand,
@@ -169,6 +170,34 @@ describe('computeMongoContentHash', () => {
           (await computeMongoContentHash(makeExec({ command: on }))) ===
           (await computeMongoContentHash(makeExec({ command: off }))),
       }).toEqual({ off: ['collection', 'kind', 'pipeline'], on: true, sameHash: false });
+    });
+  });
+
+  describe('deleteMany and collation', () => {
+    const filter = { kind: 'sample' };
+
+    it('keeps the fields and hash of a delete without a collation', async () => {
+      const command = new DeleteManyWireCommand('events', filter);
+      expect({
+        fields: Object.keys({ ...command }).sort(),
+        hash: await computeMongoContentHash(makeExec({ command })),
+      }).toEqual({
+        fields: ['collection', 'filter', 'kind'],
+        hash: 'sha512:ae26a094087f58cd66ffad858da225596a57c06cf9d900e4f750204a0c2912b3d9f2f0903b2ae49e0108766ed91e819cbe020fee3b0d9a54077ed32942e5990c',
+      });
+    });
+
+    it('hashes a delete with a collation apart from one without', async () => {
+      const plain = new DeleteManyWireCommand('events', filter);
+      const collated = new DeleteManyWireCommand('events', filter, {
+        collation: { locale: 'simple' },
+      });
+      expect({
+        collation: collated.collation,
+        sameHash:
+          (await computeMongoContentHash(makeExec({ command: collated }))) ===
+          (await computeMongoContentHash(makeExec({ command: plain }))),
+      }).toEqual({ collation: { locale: 'simple' }, sameHash: false });
     });
   });
 

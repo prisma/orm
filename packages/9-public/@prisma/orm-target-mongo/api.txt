@@ -135,6 +135,7 @@
 (not exported) interface CastFieldOptions, readonly required property from: readonly string[]
 (not exported) interface CastFieldOptions, readonly required property to: string
 (not exported) interface DeleteDocumentsOptions
+(not exported) interface DeleteDocumentsOptions, readonly optional property collation?: CollationOptions
 (not exported) interface DeleteDocumentsOptions, readonly required property collection: string
 (not exported) interface DeleteDocumentsOptions, readonly required property filter: Document
 (not exported) interface FieldRewriteOptions

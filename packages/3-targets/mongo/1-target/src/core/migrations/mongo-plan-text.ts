@@ -100,6 +100,9 @@ function oneLine(source: string): string {
 
 const CODE_INDENT = '  ';
 
+/** The collation of a collection that has none: MongoDB compares strings by their bytes. */
+const SIMPLE_COLLATION = { locale: 'simple' };
+
 /**
  * How a move's copy writes into its target. `$merge` cannot write into a time-series collection,
  * and `$out` replaces everything the collection holds, so a copy into one reads what the
@@ -184,24 +187,33 @@ function unionCall(move: DocumentMove): string {
 function unionDeletesText(
   move: DocumentMove,
   deletes: string,
-  deleteCall: (filter: string) => string,
+  deleteCall: (filter: string, collation?: string) => string,
 ): string {
   const { from, to, copies } = move;
   const one = copies.length === 1;
+  const collation = oneLine(jsonToTsSource(move.destinationCollation ?? SIMPLE_COLLATION));
   const calls = one
-    ? deleteCall('<the same filter>')
+    ? deleteCall('<the same filter>', collation)
     : copies
         .map((copy) =>
-          deleteCall(`<the filter of the $unionWith stage of ${modelNamesText(copy.models)}>`),
+          deleteCall(
+            `<the filter of the $unionWith stage of ${modelNamesText(copy.models)}>`,
+            collation,
+          ),
         )
         .join('\n');
+  const simple =
+    move.destinationCollation === undefined
+      ? `, the simple one, since collection "${to}" has none`
+      : '';
+  const collationWhy = `The $unionWith ${one ? 'stage reads' : 'stages read'} collection "${from}" with the collation of collection "${to}", so the ${one ? 'delete selects' : 'deletes select'} with that collation too${simple}: with the collation of collection "${from}", ${one ? 'it' : 'they'} could remove documents the copy did not take, or leave documents it took.`;
   const after = one
     ? `After it, add ${deletes}:`
     : `After it, add the operations that delete the documents of ${movingText(move)} from collection "${from}", one for each $unionWith stage, with that stage's filter:`;
   const stop = one
-    ? `If the apply stops after the copy and before the delete has finished, finish that delete yourself, on collection "${from}" with the same filter,`
-    : `If the apply stops after the copy and before the deletes have finished, finish them yourself, on collection "${from}", each with its stage's filter,`;
-  return `${after}\n\n${calls}\n\nThe copy has no check, so it runs again on every run of the migration, and a run after the ${one ? 'delete has' : 'deletes have'} finished writes back what collection "${to}" already holds. ${stop} before you run db migrate again: otherwise the copy adds the documents still in collection "${from}" to collection "${to}" a second time. Do not delete documents from collection "${to}" instead: a time-series collection does not enforce a unique _id, so a delete by _id there can also remove a document it already held.`;
+    ? `If the apply stops after the copy and before the delete has finished, finish that delete yourself, on collection "${from}" with the same filter and collation,`
+    : `If the apply stops after the copy and before the deletes have finished, finish them yourself, on collection "${from}", each with its stage's filter and that collation,`;
+  return `${after}\n\n${calls}\n\n${collationWhy}\n\nThe copy has no check, so it runs again on every run of the migration, and a run after the ${one ? 'delete has' : 'deletes have'} finished writes back what collection "${to}" already holds. ${stop} before you run db migrate again: otherwise the copy adds the documents still in collection "${from}" to collection "${to}" a second time. Do not delete documents from collection "${to}" instead: a time-series collection does not enforce a unique _id, so a delete by _id there can also remove a document it already held.`;
 }
 
 /**
@@ -211,8 +223,8 @@ function unionDeletesText(
 function copiesText(move: DocumentMove, write: CopyWrite): string {
   const { from, to, copies } = move;
   const [only] = copies;
-  const deleteCall = (filter: string) =>
-    `${CODE_INDENT}deleteDocuments({ collection: ${jsonToTsSource(from)}, filter: ${filter} })`;
+  const deleteCall = (filter: string, collation?: string) =>
+    `${CODE_INDENT}deleteDocuments({ collection: ${jsonToTsSource(from)}, filter: ${filter}${collation === undefined ? '' : `, collation: ${collation}`} })`;
   const deletes = `the operation that deletes the documents of ${movingText(move)} from collection "${from}"`;
   const sameFilter =
     copies.length === 1
@@ -248,18 +260,11 @@ function filterText(move: DocumentMove): string {
     : `Each copy's filter must select only the documents of its own models, apart from those of the other models that move and from ${shared}. Filter each copy by a field only its models store. ${byId}`;
 }
 
-/** Why the filters of a `$unionWith` copy and its delete must compare no string when the two collections have different collations; the runner refuses the copy otherwise. */
-function collationText({ from, to, copies }: DocumentMove): string {
-  const one = copies.length === 1;
-  return ` Collections "${from}" and "${to}" have different collations. The $unionWith ${one ? 'stage reads' : 'stages read'} collection "${from}" with the collation of collection "${to}", and the ${one ? 'delete reads' : 'deletes read'} it with its own, so a filter that compares strings can select other documents in the two, and a delete would remove documents the copy did not take. So write ${one ? 'the filter' : 'each filter'} so that it compares no string, for example { <a field only those models store>: { $exists: true } }: values of other types, such as numbers and dates, compare alike under every collation. db migrate refuses the copy if ${one ? 'its filter compares' : 'a filter compares'} a string.`;
-}
-
 function moveText(move: DocumentMove, naming: boolean, write: CopyWrite): string {
   const placement = naming
     ? `For ${movingText(move)}, ${placementClause(move)},`
     : `${capitalized(placementClause(move))},`;
-  const collations = write === 'unionOut' && move.collationsDiffer ? collationText(move) : '';
-  return `${placement} ${copiesText(move, write)}\n\n${filterText(move)}${collations}${droppedText(move)}${bypassText(move)}`;
+  return `${placement} ${copiesText(move, write)}\n\n${filterText(move)}${droppedText(move)}${bypassText(move)}`;
 }
 
 function applyText(count: number): string {

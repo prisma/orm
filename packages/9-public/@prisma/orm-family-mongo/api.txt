@@ -92,6 +92,9 @@
 (not exported) interface PipelineChainState, readonly required property storageHash: string
 (not exported) interface RawAggregateOptions
 (not exported) interface RawAggregateOptions, readonly optional property bypassDocumentValidation?: boolean
+(not exported) interface RawAggregateOptions, readonly optional property collation?: CollationOptions
+(not exported) interface RawDeleteManyOptions
+(not exported) interface RawDeleteManyOptions, readonly optional property collation?: CollationOptions
 (not exported) interface RawUpdateManyOptions
 (not exported) interface RawUpdateManyOptions, readonly optional property bypassDocumentValidation?: boolean
 (not exported) interface RelationNodeBase
@@ -1136,6 +1139,7 @@
 ./family/runtime: const defaultMongoDomainNamespaceId: "__unbound__"
 ./family/runtime: const defaultMongoStorageNamespaceId: "__unbound__"
 ./family/runtime: function timestampNowRuntimeGenerator(): RuntimeMutationDefaultGenerator
+./family/schema-verify: function collationsMatch(expected: CollationOptions | undefined, live: CollationOptions | undefined): boolean
 ./family/schema-verify: function isDisabledChangeStream(value: undefined | { readonly enabled: boolean; }): boolean
 ./family/schema-verify: function isSimpleCollation(value: undefined | { readonly locale: string; }): boolean
 ./family/schema-verify: function reportedCappedMax(max: number): number
@@ -1177,6 +1181,7 @@
 ./family: const mongoFamilyEntityTypes: AuthoringEntityTypeNamespace
 ./family: const mongoFamilyPslBlockDescriptors: { readonly enum: { kind: "pslBlock"; keyword: string; documentation: string; discriminator: string; name: { required: true; }; spec: typeof mongoFamilyEnumSpec; attributes: { type: () => AttributeSpec<{ codecId: string; }, BlockAttributeCtx>; }; }; }
 ./family: function canonicalizeSchemasForVerification(live: MongoSchemaIR, expected: MongoSchemaIR): CanonicalizedSchemas
+./family: function collationsMatch(expected: CollationOptions | undefined, live: CollationOptions | undefined): boolean
 ./family: function contractToMongoSchemaIR(contract: MongoContract | null): MongoSchemaIR
 ./family: function createMongoFamilyInstance(controlStack: ControlStack): MongoControlFamilyInstance
 ./family: function diffMongoSchemas(live: MongoSchemaIR, expected: MongoSchemaIR, strict: boolean, collectionControlPolicy: (collectionName: string) => ControlPolicy): MongoSchemaDiff
@@ -1251,7 +1256,7 @@
 ./lowering: interface MongoQueryable
 ./lowering: interface MongoQueryable, required method execute<Row>(wireCommand: AnyMongoDmlWireCommand): AsyncIterable<Row>
 ./lowering: interface MongoQueryable, required method run(wireCommand: AnyMongoDdlWireCommand): Promise<void>
-./lowering: type MongoLoweredDraft = { readonly kind: 'aggregate'; readonly collection: string; readonly pipeline: ReadonlyArray<Record<string, unknown>>; } | { readonly kind: 'deleteMany'; readonly collection: string; readonly filter: Record<string, unknown>; } | { readonly kind: 'deleteOne'; readonly collection: string; readonly filter: Record<string, unknown>; } | { readonly kind: 'findOneAndDelete'; readonly collection: string; readonly filter: Record<string, unknown>; readonly sort: Record<string, -1 | 1> | undefined; } | { readonly kind: 'findOneAndUpdate'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly upsert: boolean | undefined; readonly sort: Record<string, -1 | 1> | undefined; readonly returnDocument: 'after' | 'before' | undefined; } | { readonly kind: 'insertMany'; readonly collection: string; readonly documents: ReadonlyArray<Record<string, unknown>>; } | { readonly kind: 'insertOne'; readonly collection: string; readonly document: Record<string, unknown>; } | { readonly kind: 'rawAggregate'; readonly collection: string; readonly pipeline: ReadonlyArray<Record<string, unknown>>; readonly bypassDocumentValidation?: true; } | { readonly kind: 'rawDeleteMany'; readonly collection: string; readonly filter: Record<string, unknown>; } | { readonly kind: 'rawDeleteOne'; readonly collection: string; readonly filter: Record<string, unknown>; } | { readonly kind: 'rawFindOneAndDelete'; readonly collection: string; readonly filter: Record<string, unknown>; readonly sort: Record<string, -1 | 1> | undefined; } | { readonly kind: 'rawFindOneAndUpdate'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly upsert: boolean; readonly sort: Record<string, -1 | 1> | undefined; readonly returnDocument: 'after' | 'before' | undefined; } | { readonly kind: 'rawInsertMany'; readonly collection: string; readonly documents: ReadonlyArray<Record<string, unknown>>; } | { readonly kind: 'rawInsertOne'; readonly collection: string; readonly document: Record<string, unknown>; } | { readonly kind: 'rawUpdateMany'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly bypassDocumentValidation: boolean; } | { readonly kind: 'rawUpdateOne'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; } | { readonly kind: 'updateMany'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly upsert: boolean | undefined; } | { readonly kind: 'updateOne'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly upsert: boolean | undefined; }
+./lowering: type MongoLoweredDraft = { readonly kind: 'aggregate'; readonly collection: string; readonly pipeline: ReadonlyArray<Record<string, unknown>>; } | { readonly kind: 'deleteMany'; readonly collection: string; readonly filter: Record<string, unknown>; } | { readonly kind: 'deleteOne'; readonly collection: string; readonly filter: Record<string, unknown>; } | { readonly kind: 'findOneAndDelete'; readonly collection: string; readonly filter: Record<string, unknown>; readonly sort: Record<string, -1 | 1> | undefined; } | { readonly kind: 'findOneAndUpdate'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly upsert: boolean | undefined; readonly sort: Record<string, -1 | 1> | undefined; readonly returnDocument: 'after' | 'before' | undefined; } | { readonly kind: 'insertMany'; readonly collection: string; readonly documents: ReadonlyArray<Record<string, unknown>>; } | { readonly kind: 'insertOne'; readonly collection: string; readonly document: Record<string, unknown>; } | { readonly kind: 'rawAggregate'; readonly collection: string; readonly pipeline: ReadonlyArray<Record<string, unknown>>; readonly bypassDocumentValidation?: true; readonly collation?: RawAggregateCommand['collation']; } | { readonly kind: 'rawDeleteMany'; readonly collection: string; readonly filter: Record<string, unknown>; readonly collation?: RawDeleteManyCommand['collation']; } | { readonly kind: 'rawDeleteOne'; readonly collection: string; readonly filter: Record<string, unknown>; } | { readonly kind: 'rawFindOneAndDelete'; readonly collection: string; readonly filter: Record<string, unknown>; readonly sort: Record<string, -1 | 1> | undefined; } | { readonly kind: 'rawFindOneAndUpdate'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly upsert: boolean; readonly sort: Record<string, -1 | 1> | undefined; readonly returnDocument: 'after' | 'before' | undefined; } | { readonly kind: 'rawInsertMany'; readonly collection: string; readonly documents: ReadonlyArray<Record<string, unknown>>; } | { readonly kind: 'rawInsertOne'; readonly collection: string; readonly document: Record<string, unknown>; } | { readonly kind: 'rawUpdateMany'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly bypassDocumentValidation: boolean; } | { readonly kind: 'rawUpdateOne'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; } | { readonly kind: 'updateMany'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly upsert: boolean | undefined; } | { readonly kind: 'updateOne'; readonly collection: string; readonly filter: Record<string, unknown>; readonly update: ReadonlyArray<Record<string, unknown>> | Record<string, unknown>; readonly upsert: boolean | undefined; }
 ./orm: export type SimplifyDeep from @prisma/orm-framework/utils/simplify-deep
 ./orm: function compileMongoQuery(collection: string, state: MongoCollectionState, storageHash: string, model: ContractModel<MongoModelStorage>, storage: Pick<StorageBase, 'namespaces'>): MongoQueryPlan<Record<string, unknown>>
 ./orm: function createFieldAccessor<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>, ModelName extends string & keyof MongoModelsMap<TContract>, TCodecTypes extends Record<string, { output: unknown; }> = ExtractMongoCodecTypes<TContract>>(): FieldAccessor<TContract, ModelName, TCodecTypes>
@@ -1974,11 +1979,13 @@
 ./query-ast/execution: class RawAggregateCommand extends MongoAstNode
 ./query-ast/execution: class RawAggregateCommand, constructor(collection: string, pipeline: ReadonlyArray<Document>, options?: RawAggregateOptions)
 ./query-ast/execution: class RawAggregateCommand, readonly optional property bypassDocumentValidation?: boolean
+./query-ast/execution: class RawAggregateCommand, readonly optional property collation?: CollationOptions
 ./query-ast/execution: class RawAggregateCommand, readonly required property collection: string
 ./query-ast/execution: class RawAggregateCommand, readonly required property kind: "rawAggregate"
 ./query-ast/execution: class RawAggregateCommand, readonly required property pipeline: ReadonlyArray<Document>
 ./query-ast/execution: class RawDeleteManyCommand extends MongoAstNode
-./query-ast/execution: class RawDeleteManyCommand, constructor(collection: string, filter: Document)
+./query-ast/execution: class RawDeleteManyCommand, constructor(collection: string, filter: Document, options?: RawDeleteManyOptions)
+./query-ast/execution: class RawDeleteManyCommand, readonly optional property collation?: CollationOptions
 ./query-ast/execution: class RawDeleteManyCommand, readonly required property collection: string
 ./query-ast/execution: class RawDeleteManyCommand, readonly required property filter: Document
 ./query-ast/execution: class RawDeleteManyCommand, readonly required property kind: "rawDeleteMany"
@@ -2657,11 +2664,13 @@
 ./query-ast: class RawAggregateCommand extends MongoAstNode
 ./query-ast: class RawAggregateCommand, constructor(collection: string, pipeline: ReadonlyArray<Document>, options?: RawAggregateOptions)
 ./query-ast: class RawAggregateCommand, readonly optional property bypassDocumentValidation?: boolean
+./query-ast: class RawAggregateCommand, readonly optional property collation?: CollationOptions
 ./query-ast: class RawAggregateCommand, readonly required property collection: string
 ./query-ast: class RawAggregateCommand, readonly required property kind: "rawAggregate"
 ./query-ast: class RawAggregateCommand, readonly required property pipeline: ReadonlyArray<Document>
 ./query-ast: class RawDeleteManyCommand extends MongoAstNode
-./query-ast: class RawDeleteManyCommand, constructor(collection: string, filter: Document)
+./query-ast: class RawDeleteManyCommand, constructor(collection: string, filter: Document, options?: RawDeleteManyOptions)
+./query-ast: class RawDeleteManyCommand, readonly optional property collation?: CollationOptions
 ./query-ast: class RawDeleteManyCommand, readonly required property collection: string
 ./query-ast: class RawDeleteManyCommand, readonly required property filter: Document
 ./query-ast: class RawDeleteManyCommand, readonly required property kind: "rawDeleteMany"
@@ -3359,8 +3368,9 @@
 ./value: type MongoValue = LiteralValue | MongoArray | MongoDocument | MongoParamRef | MongoPreparedParamRef
 ./value: type RawPipeline = ReadonlyArray<Record<string, unknown>>
 ./wire: class AggregateWireCommand extends MongoWireCommand
-./wire: class AggregateWireCommand, constructor(collection: string, pipeline: RawPipeline, options?: { readonly bypassDocumentValidation?: boolean; })
+./wire: class AggregateWireCommand, constructor(collection: string, pipeline: RawPipeline, options?: { readonly bypassDocumentValidation?: boolean; readonly collation?: CollationOptions; })
 ./wire: class AggregateWireCommand, readonly optional property bypassDocumentValidation?: true
+./wire: class AggregateWireCommand, readonly optional property collation?: CollationOptions
 ./wire: class AggregateWireCommand, readonly required property kind: "aggregate"
 ./wire: class AggregateWireCommand, readonly required property pipeline: RawPipeline
 ./wire: class CollModWireCommand extends MongoWireCommand
@@ -3398,7 +3408,8 @@
 ./wire: class CreateIndexWireCommand, readonly required property key: Record<string, MongoIndexKeyDirection>
 ./wire: class CreateIndexWireCommand, readonly required property kind: "createIndex"
 ./wire: class DeleteManyWireCommand extends MongoWireCommand
-./wire: class DeleteManyWireCommand, constructor(collection: string, filter: Document)
+./wire: class DeleteManyWireCommand, constructor(collection: string, filter: Document, options?: { readonly collation?: CollationOptions; })
+./wire: class DeleteManyWireCommand, readonly optional property collation?: CollationOptions
 ./wire: class DeleteManyWireCommand, readonly required property filter: Document
 ./wire: class DeleteManyWireCommand, readonly required property kind: "deleteMany"
 ./wire: class DeleteOneWireCommand extends MongoWireCommand

@@ -128,6 +128,31 @@ describe('deserializeDmlCommand', () => {
       expect(result).toMatchObject({ collection: 'users', filter: { status: 'inactive' } });
     });
 
+    it('round-trips a collation on rawDeleteMany, and writes a rawDeleteMany without one as before', () => {
+      const filter = { kind: 'sample' };
+      const collated = deserializeDmlCommand(
+        JSON.parse(
+          JSON.stringify(
+            new RawDeleteManyCommand('events', filter, {
+              collation: { locale: 'en', strength: 2 },
+            }),
+          ),
+        ),
+      );
+      expect({
+        collated: JSON.parse(JSON.stringify(collated)),
+        plain: JSON.stringify(new RawDeleteManyCommand('events', filter)),
+      }).toEqual({
+        collated: {
+          kind: 'rawDeleteMany',
+          collection: 'events',
+          filter,
+          collation: { locale: 'en', strength: 2 },
+        },
+        plain: '{"kind":"rawDeleteMany","collection":"events","filter":{"kind":"sample"}}',
+      });
+    });
+
     it('round-trips rawAggregate', () => {
       const cmd = new RawAggregateCommand('users', [
         { $match: { status: 'active' } },
@@ -166,6 +191,23 @@ describe('deserializeDmlCommand', () => {
           bypassDocumentValidation: true,
         },
         plain: { kind: 'rawAggregate', collection: 'users', pipeline },
+      });
+    });
+
+    it('round-trips a collation on rawAggregate', () => {
+      const pipeline = [{ $match: { kind: 'sample' } }, { $limit: 1 }];
+      const collated = deserializeDmlCommand(
+        JSON.parse(
+          JSON.stringify(
+            new RawAggregateCommand('events', pipeline, { collation: { locale: 'simple' } }),
+          ),
+        ),
+      );
+      expect(JSON.parse(JSON.stringify(collated))).toEqual({
+        kind: 'rawAggregate',
+        collection: 'events',
+        pipeline,
+        collation: { locale: 'simple' },
       });
     });
 

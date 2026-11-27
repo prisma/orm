@@ -171,7 +171,7 @@ describe('MongoMigrationPlanner and runner - a move into a new time-series colle
         ...(await state()),
       }).toEqual({
         advice: expect.stringContaining(
-          `Operation data_transform.move Measurement documents to measurements copied documents into collection measurements with an $out stage, and operation ${deletion.id}, which deletes them from collection events, has not finished. ${STOPPED}, before you run the command again, finish that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts`,
+          `Operation data_transform.move Measurement documents to measurements copied documents into collection measurements with an $out stage, and operation ${deletion.id}, which deletes them from collection events, has not finished. ${STOPPED}, before you run the command again, finish that delete yourself, on collection events with the filter and collation of its deleteDocuments call in the migration's migration.ts`,
         ),
         second: 'applied',
         ...moved,
@@ -226,7 +226,7 @@ describe('MongoMigrationPlanner and runner - a move into a time-series collectio
         events: await live.documents('events'),
       }).toEqual({
         advice: expect.stringContaining(
-          `${counts}, on collection events with the filter of its deleteDocuments call in the migration's migration.ts. The copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If it holds 1, and ${UNCHANGED}, the copy most likely did not finish, but a majority count can lag behind the copy's last writes: wait a moment and count again. If it still holds 1, delete nothing, and run the command again as it is. Even then the copy may have finished, and the run then adds the documents it selects in collection events to collection measurements a second time: the query below finds them.`,
+          `${counts}, on collection events with the filter and collation of its deleteDocuments call in the migration's migration.ts. The copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If it holds 1, and ${UNCHANGED}, the copy most likely did not finish, but a majority count can lag behind the copy's last writes: wait a moment and count again. If it still holds 1, delete nothing, and run the command again as it is. Even then the copy may have finished, and the run then adds the documents it selects in collection events to collection measurements a second time: the query below finds them.`,
         ),
         count: 1,
         second: 'applied',
@@ -711,6 +711,7 @@ describe('MongoMigrationRunner - a move into a time-series collection with anoth
   const caseInsensitive: MongoCollationOptionsInput = { locale: 'en', strength: 2 };
   const sample = { at, kind: 'sample', value: 1 };
   const capitalSample = { at, kind: 'Sample', value: 2 };
+  const other = { at, kind: 'other', value: 3 };
   const fields = ['_id', 'at', 'kind', 'value'];
   const collations = (
     source: MongoCollationOptionsInput | undefined,
@@ -737,7 +738,10 @@ describe('MongoMigrationRunner - a move into a time-series collection with anoth
       },
     ),
   });
-  const moveBy = (moveFilter: Record<string, unknown>) => [
+  const moveBy = (
+    moveFilter: Record<string, unknown>,
+    target: MongoCollationOptionsInput | undefined,
+  ) => [
     dataTransform('move Measurement documents to measurements', {
       run: () =>
         rawAggregate('measurements', [
@@ -745,7 +749,11 @@ describe('MongoMigrationRunner - a move into a time-series collection with anoth
           { $out: 'measurements' },
         ]),
     }),
-    deleteDocuments({ collection: 'events', filter: moveFilter }),
+    deleteDocuments({
+      collection: 'events',
+      filter: moveFilter,
+      collation: target ?? { locale: 'simple' },
+    }),
   ];
   const setUp = async (
     source: MongoCollationOptionsInput | undefined,
@@ -757,7 +765,7 @@ describe('MongoMigrationRunner - a move into a time-series collection with anoth
       timeseries: { timeField: 'at' },
       ...(target === undefined ? {} : { collation: target }),
     });
-    await db.collection('events').insertMany([{ ...sample }, { ...capitalSample }]);
+    await db.collection('events').insertMany([{ ...sample }, { ...capitalSample }, { ...other }]);
     const contracts = collations(source, target);
     await live.initMarker(contracts.from);
     return contracts;
@@ -769,16 +777,34 @@ describe('MongoMigrationRunner - a move into a time-series collection with anoth
       .find({}, { projection: { _id: 0 }, sort: { value: 1 } })
       .toArray();
 
-  it.each([
-    ['a case-insensitive source and a case-sensitive target', caseInsensitive, undefined],
-    ['a case-sensitive source and a case-insensitive target', undefined, caseInsensitive],
-  ])(
-    'refuses a copy whose filter compares strings, before it copies or deletes anything, with %s',
-    async (_label, source, target) => {
+  const pairs = [
+    {
+      pair: 'a case-insensitive source and a case-sensitive target',
+      source: caseInsensitive,
+      target: undefined,
+      moved: [sample],
+      kept: [capitalSample, other],
+    },
+    {
+      pair: 'a case-sensitive source and a case-insensitive target',
+      source: undefined,
+      target: caseInsensitive,
+      moved: [sample, capitalSample],
+      kept: [other],
+    },
+  ];
+  const filters = [
+    { by: 'a string', moveFilter: { kind: 'sample' } },
+    { by: '$in', moveFilter: { kind: { $in: ['sample'] } } },
+  ];
+
+  it.each(pairs.flatMap((pair) => filters.map((filter) => ({ ...pair, ...filter }))))(
+    "moves every document the copy selects exactly once, with a filter by $by and a delete that has the target's collation, for $pair",
+    async ({ source, target, moved, kept, moveFilter }) => {
       const { from: fromContract, to: toContract } = await setUp(source, target);
 
       const result = await live.runOperations(
-        moveBy({ kind: 'sample' }),
+        moveBy(moveFilter, target),
         fromContract,
         toContract,
         {
@@ -787,39 +813,10 @@ describe('MongoMigrationRunner - a move into a time-series collection with anoth
       );
 
       expect({
-        failure: result.ok ? 'applied' : result.failure,
-        events: await projected('events'),
-        measurements: await projected('measurements'),
-      }).toEqual({
-        failure: expect.objectContaining({
-          code: 'MIGRATION.PRECHECK_FAILED',
-          message:
-            'Operation data_transform.move Measurement documents to measurements was not run: collections measurements and events have different collations, and the filter of its $unionWith stage compares strings',
-        }),
-        events: [sample, capitalSample],
-        measurements: [],
-      });
-    },
-    timeouts.spinUpMongoMemoryServer,
-  );
-
-  it(
-    'moves every document once with a filter that compares no strings',
-    async () => {
-      const { from: fromContract, to: toContract } = await setUp(caseInsensitive, undefined);
-
-      const result = await live.runOperations(
-        moveBy({ kind: { $exists: true } }),
-        fromContract,
-        toContract,
-        { policy },
-      );
-
-      expect({
         result: result.ok ? 'applied' : result.failure,
         events: await projected('events'),
         measurements: await projected('measurements'),
-      }).toEqual({ result: 'applied', events: [], measurements: [sample, capitalSample] });
+      }).toEqual({ result: 'applied', events: kept, measurements: moved });
     },
     timeouts.spinUpMongoMemoryServer,
   );

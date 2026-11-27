@@ -46,6 +46,7 @@ import {
 import { createFieldAccessor } from '@internal/mongo-query-builder';
 import { collection } from '@internal/mongo-query-builder/contract-free';
 import type { Document, MongoValue } from '@internal/mongo-value';
+import type { CollationOptions } from '@internal/mongo-value/mongodb-types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { mongoTargetError } from '../mongo-target-errors';
@@ -614,10 +615,18 @@ function noDocumentMatches(
   collectionName: string,
   match: Document,
   description: string,
+  collation?: CollationOptions,
 ): MongoDmlCheck {
   return {
     description,
-    source: rawAggregate(collectionName, [{ $match: match }, { $limit: 1 }]),
+    source: rewritePlan(
+      collectionName,
+      new RawAggregateCommand(
+        collectionName,
+        [{ $match: match }, { $limit: 1 }],
+        ifDefined('collation', collation),
+      ),
+    ),
     filter: MATCH_ALL_FILTER,
     expect: 'notExists',
   };
@@ -1067,6 +1076,8 @@ export function removeStoredValue(options: RemoveStoredValueOptions): MongoDmlOp
 export interface DeleteDocumentsOptions {
   readonly collection: string;
   readonly filter: Document;
+  /** The collation the delete and its check select with, in place of the collection's own. */
+  readonly collation?: CollationOptions;
 }
 
 /** The documents a filter selects, in words where the planner wrote it, for an operation's label. */
@@ -1081,7 +1092,7 @@ function selectedText(filter: Document): string {
 
 /** Deletes the documents of a collection that `filter` selects, as a variant's documents are deleted. */
 export function deleteDocuments(options: DeleteDocumentsOptions): MongoDmlOperation {
-  const { collection: collectionName, filter } = options;
+  const { collection: collectionName, filter, collation } = options;
   const id = `documents.${collectionName}.delete${idSuffix(filter)}`;
   return {
     id,
@@ -1089,12 +1100,18 @@ export function deleteDocuments(options: DeleteDocumentsOptions): MongoDmlOperat
     operationClass: 'destructive',
     name: id,
     precheck: [],
-    run: [rewritePlan(collectionName, new RawDeleteManyCommand(collectionName, filter))],
+    run: [
+      rewritePlan(
+        collectionName,
+        new RawDeleteManyCommand(collectionName, filter, ifDefined('collation', collation)),
+      ),
+    ],
     postcheck: [
       noDocumentMatches(
         collectionName,
         filter,
         `no document in ${collectionName} matches ${JSON.stringify(filter)}`,
+        collation,
       ),
     ],
   };
