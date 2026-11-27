@@ -138,18 +138,18 @@ export const migrationCheckCommand = defineOrmCommand({
     const loaded = await buildReadAggregate(ctx.config, {
       migrationsDir,
       ...ifDefined('verifySnapshotContent', verifySnapshotContent),
-      tolerateUnreadableRefs: true,
+      unreadableFiles: 'report',
     });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));
     }
-    const spaces = await enumerateCheckSpaces(
-      loaded.value.aggregate,
-      migrationsDir,
-      ctx.cwd,
-      verifySnapshotContent,
-      loaded.value.deserializeContract,
-    );
+    const spaces = await enumerateCheckSpaces({
+      aggregate: loaded.value.aggregate,
+      projectMigrationsDir: migrationsDir,
+      cwd: ctx.cwd,
+      ...ifDefined('verifySnapshotContent', verifySnapshotContent),
+      deserializeContract: loaded.value.deserializeContract,
+    });
 
     let document: MigrationCheckResult;
     let resolvedSpaceId: string | undefined;
@@ -194,15 +194,22 @@ export const migrationCheckCommand = defineOrmCommand({
         return notOk(normalizeError(loadedViolations.failure));
       }
       const violations = loadedViolations.value;
-      const scoped =
-        spaceFilter === undefined
-          ? violations
-          : violations.filter(
-              (violation) => violation.kind !== 'disjointness' && violation.spaceId === spaceFilter,
-            );
+      const spacesNotReadInFull = new Set(
+        spaces
+          .filter((space) => space.unreadableMigrations.length > 0)
+          .map((space) => space.spaceId),
+      );
+      const scoped = violations.filter(
+        (violation) =>
+          (spaceFilter === undefined ||
+            (violation.kind !== 'disjointness' && violation.spaceId === spaceFilter)) &&
+          !(violation.kind === 'headRefNotInGraph' && spacesNotReadInFull.has(violation.spaceId)),
+      );
       const failures: readonly CheckFailure[] = [
         ...checked.value.failures,
-        ...scoped.map((violation) => integrityViolationToCheckFailure(violation, migrationsDir)),
+        ...scoped.map((violation) =>
+          integrityViolationToCheckFailure(violation, migrationsDir, ctx.cwd),
+        ),
       ];
       document =
         failures.length === 0

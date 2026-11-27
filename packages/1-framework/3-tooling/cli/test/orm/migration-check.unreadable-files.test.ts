@@ -10,6 +10,7 @@ import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { blindCast } from '@internal/utils/casts';
+import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { createSqlContract } from '@repo/test-utils';
 import { join, relative } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -144,7 +145,7 @@ function failuresOf(run: { readonly presented?: { readonly data: unknown } | und
 }
 
 describe('migration check on a file it cannot read', () => {
-  it('reports a contract snapshot the family refuses, with the refusal, and advises only restoring it', async () => {
+  it('reports the snapshot the head of the graph ends at when the family refuses it, with the refusal and the advice', async () => {
     const dir = await projectDir();
     const migrationsDir = join(dir, 'migrations');
     await seedMigration(migrationsDir);
@@ -171,10 +172,42 @@ describe('migration check on a file it cannot read', () => {
         code: 'MIGRATION.CHECK_SNAPSHOT_UNPARSEABLE',
         why: `Migration "20250101T0000_initial" ends at the contract snapshot ${snapshotPath}, which this release of Prisma cannot read: zzz must be removed`,
         nextActions: [
+          {
+            kind: 'open-url',
+            label: 'If an earlier release wrote the snapshot, follow the app upgrade instructions',
+            url: APP_UPGRADE_GUIDES_URL,
+          },
           { kind: 'user-choice', label: 'Restore migrations/snapshots/ from version control' },
         ],
       },
     ]);
+  });
+
+  it('checks only the hash of a snapshot that an already written migration ends at, which nothing plans from', async () => {
+    const dir = await projectDir();
+    const migrationsDir = join(dir, 'migrations');
+    await seedMigration(migrationsDir);
+    await seedMigration(migrationsDir, { dirName: '20250102T0000_next', from: HASH_A, to: HASH_B });
+    for (const hash of [HASH_A, HASH_B]) {
+      await writeContractSnapshot(migrationsDir, hash, {
+        contractJson: {
+          formatVersion: 1,
+          ...TEST_CONTRACT,
+          storage: { ...TEST_CONTRACT.storage, storageHash: hash },
+        },
+        contractDts: 'export type Contract = never;\n',
+      });
+    }
+    await addUnknownKey(join(contractSnapshotDir(migrationsDir, HASH_A), 'contract.json'));
+
+    const run = await harness(strictFamilyConfig()).run(['migration', 'check', '--json'], {
+      cwd: dir,
+    });
+
+    expect({ exitCode: run.exitCode, failures: failuresOf(run) }).toEqual({
+      exitCode: 0,
+      failures: [],
+    });
   });
 
   it('reports an unreadable migration.json with the command that rewrites it, and no finding that only follows from it', async () => {
@@ -204,7 +237,7 @@ describe('migration check on a file it cannot read', () => {
           {
             kind: 'run-command',
             label: 'Or write migration.json and ops.json again from its migration.ts',
-            command: `node "${relative(process.cwd(), join(first, 'migration.ts'))}"`,
+            command: `node "${relative(dir, join(first, 'migration.ts'))}"`,
           },
         ],
       },
