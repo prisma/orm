@@ -14,7 +14,7 @@ pnpm add @prisma/orm-postgres@latest
 prisma db migrate
 ```
 
-Before `db migrate` reads anything, it brings Prisma's own tables to the form the installed release expects. On a database created by a release candidate that means renaming the schema `prisma_contract` to `_prisma`. On a new database it means creating the tables. On a database already up to date it means reading one row. The user writes nothing and is asked nothing, and these tables are not listed among the user's own migrations. When the step changed something, the command says so and lists what it did, such as `Renamed schema prisma_contract to _prisma`.
+Before `db migrate` reads anything, it brings Prisma's own tables to the form the installed release expects. On a database created by a release candidate that means renaming the schema `prisma_contract` to `_prisma`. On a new database it means creating the tables. On a database already up to date it means reading one row. The user writes nothing and is asked nothing, and these tables are not listed among the user's own migrations. When the step changed something, the command says so in one line. It does not list what it did: the runner's result does not say which operations ran, and adding that to a framework type was not worth it for a line that appears once per database. The upgrade instructions say that the first such command renames the schema.
 
 The tables are a contract space, named `_prisma`, that the target package carries: a contract and migrations in the same form an application's or an extension's have. This record calls it the Prisma space.
 
