@@ -237,9 +237,13 @@ function undroppedText(copy: UnionCopy, dropId: string, running: boolean): strin
 export function unrecognisedCopyText(
   id: string,
   target: { readonly stage: '$out' | '$merge'; readonly collection: string; readonly name: string },
+  checked: boolean,
 ): string {
   const { stage, collection, name: into } = target;
-  return `Operation ${id} writes into collection ${into} with an aggregate that ends in ${stage}, and the error does not show whether it finished: it may have. Before you do anything else, ${copyEndedText(collection, stage)} Then compare collection ${into} with the collections the operation reads by hand, and settle which documents each should keep. Do not run the command again until you have: the run would copy the documents again, and could write them into collection ${into} a second time.`;
+  const rerun = checked
+    ? "unless the operation's check shows it already ran, the run copies the documents again"
+    : 'the run would copy the documents again';
+  return `Operation ${id} writes into collection ${into} with an aggregate that ends in ${stage}, and the error does not show whether it finished: it may have. Before you do anything else, ${copyEndedText(collection, stage)} Then compare collection ${into} with the collections the operation reads by hand, and settle which documents each should keep. Do not run the command again until you have: ${rerun}, and could write them into collection ${into} a second time.`;
 }
 
 /**

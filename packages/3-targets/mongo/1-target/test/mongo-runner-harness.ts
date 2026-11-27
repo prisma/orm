@@ -76,6 +76,7 @@ export class StubMongoDriver implements MongoQueryable {
         readonly error: unknown;
         passes: number;
         readonly once: boolean;
+        readonly when?: () => boolean;
       }
     | undefined;
 
@@ -88,6 +89,17 @@ export class StubMongoDriver implements MongoQueryable {
   /** Fails every aggregate after the first `passes`, which answer as usual. */
   failAggregateWith(error: unknown, passes = 0): void {
     this.failure = { kind: 'aggregate', error, passes, once: false };
+  }
+
+  /** Fails every aggregate whose plan, the last one `adapter` lowered, ends in `$out` or `$merge`. */
+  failCopiesWith(error: unknown, adapter: StubMongoAdapter): void {
+    const copying = () => {
+      const command = adapter.loweredPlans.at(-1)?.command;
+      const last =
+        command !== undefined && 'pipeline' in command ? command.pipeline.at(-1) : undefined;
+      return last !== undefined && ('$out' in last || '$merge' in last);
+    };
+    this.failure = { kind: 'aggregate', error, passes: 0, once: false, when: copying };
   }
 
   /** Fails only the next aggregate. */
@@ -103,7 +115,11 @@ export class StubMongoDriver implements MongoQueryable {
     this.executeCalls.push(wireCommand);
     this.log?.record(`dml:${wireCommand.kind}:${wireCommand.collection}`);
     let failure: unknown;
-    if (this.failure !== undefined && wireCommand.kind === this.failure.kind) {
+    if (
+      this.failure !== undefined &&
+      wireCommand.kind === this.failure.kind &&
+      (this.failure.when?.() ?? true)
+    ) {
       if (this.failure.passes > 0) this.failure.passes -= 1;
       else {
         failure = this.failure.error;

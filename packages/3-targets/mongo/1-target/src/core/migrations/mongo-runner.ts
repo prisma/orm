@@ -286,12 +286,14 @@ function thrownFailure(
 
 /**
  * The failure for an error thrown while a data transform that copies with `$out` or `$merge` ran,
- * when the runner does not recognise the copy: it may have finished, and a re-run copies again.
+ * when the runner does not recognise the copy: it may have finished, and a re-run copies again
+ * unless `skips` and the operation's check shows it ran.
  */
 function thrownCopyFailure(
   operation: AnyMongoMigrationOperation,
   error: unknown,
   copy: CopyTarget,
+  skips: boolean,
 ): MongoMigrationRunnerFailure {
   const reason = error instanceof Error ? error.message : String(error);
   const name =
@@ -300,21 +302,57 @@ function thrownCopyFailure(
     'MIGRATION.EXECUTION_FAILED',
     `Operation ${operation.id} failed: ${reason}`,
     {
-      why: unrecognisedCopyText(operation.id, { ...copy, name }),
+      why: unrecognisedCopyText(operation.id, { ...copy, name }, skips && hasCheck(operation)),
       meta: { operationId: operation.id },
       cause: error,
     },
   );
 }
 
-/** Where a data transform's aggregate copies to with `$out` or `$merge`, if it does. */
+/**
+ * Where a data transform's aggregate copies to with `$out` or `$merge`, if it does. `undefined`
+ * for the move the planner prints into a collection that is not time-series, which a re-run can
+ * repeat safely: its `$merge` matches each document by `_id`.
+ */
 function copyTargetOfTransform(operation: AnyMongoMigrationOperation): CopyTarget | undefined {
   if (!isMongoDmlOperation(operation) || operation.operationClass !== 'data') return undefined;
+  if (isPlannerMergeMove(operation.run)) return undefined;
   for (const plan of operation.run) {
     const target = copyTargetOf(plan);
     if (target !== undefined) return target;
   }
   return undefined;
+}
+
+/**
+ * Whether `run` is the copy the planner prints for a move into a collection that is not
+ * time-series: an aggregate of a `$match`, then `$set` and `$unset` stages that keep each
+ * document's `_id`, ending in `$merge` with only its `into` collection.
+ */
+function isPlannerMergeMove(run: readonly MongoQueryPlan[]): boolean {
+  const [plan, ...more] = run;
+  const command = plan?.command;
+  if (more.length > 0 || !(command instanceof RawAggregateCommand)) return false;
+  const [first, ...rest] = command.pipeline;
+  const last = rest.at(-1);
+  const renames = (stage: Record<string, unknown>) =>
+    (Object.hasOwn(stage, '$set') || Object.hasOwn(stage, '$unset')) && keepsId(stage);
+  const merge: unknown = last?.['$merge'];
+  return (
+    first !== undefined &&
+    Object.keys(first).join() === '$match' &&
+    last !== undefined &&
+    Object.keys(last).join() === '$merge' &&
+    typeof merge === 'object' &&
+    merge !== null &&
+    Object.keys(merge).join() === 'into' &&
+    typeof Reflect.get(merge, 'into') === 'string' &&
+    rest.slice(0, -1).every(renames)
+  );
+}
+
+function hasCheck(operation: AnyMongoMigrationOperation): boolean {
+  return operation.postcheck.length > 0;
 }
 
 /** Whether a run skips an operation whose check shows it already ran. */
@@ -1904,7 +1942,7 @@ export class MongoMigrationRunner {
         const copy =
           inFlight && !isStructuredError(error) ? copyTargetOfTransform(stopped) : undefined;
         if (copy === undefined) throw error;
-        result = notOk(thrownCopyFailure(stopped, error, copy));
+        result = notOk(thrownCopyFailure(stopped, error, copy, runSkips(options.executionChecks)));
       } else if (isStructuredError(error)) {
         throw withStructuredAdvice(error, text);
       } else {

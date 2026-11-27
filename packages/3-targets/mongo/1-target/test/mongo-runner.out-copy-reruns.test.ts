@@ -71,6 +71,11 @@ const UNCHANGED = 'nothing wrote to or deleted from either collection since the 
 const COPY_ENDED =
   'first check that it is no longer running: MongoDB keeps running an aggregate that ends in $out after the connection that sent it drops. In mongosh, connected to this database, db.getSiblingDB("admin").aggregate([{ $currentOp: { allUsers: true } }, { $match: { "command.$db": db.getName(), $expr: { $let: { vars: { last: { $arrayElemAt: [{ $objectToArray: { $last: "$command.pipeline" } }, 0] } }, in: { $and: [{ $in: ["$$last.k", [{ $literal: "$out" }, { $literal: "$merge" }]] }, { $in: ["measurements", ["$$last.v", "$$last.v.coll", "$$last.v.into", "$$last.v.into.coll"]] }] } } } } }]) lists the copy while it runs. Wait until it lists nothing, or end the copy with db.killOp(<the opid it lists>) and run the query again until it lists nothing: killOp only marks the copy to end, and it can run on for a moment.';
 
+const CHECKED_RERUN =
+  "unless the operation's check shows it already ran, the run copies the documents again";
+const UNRECOGNISED = (id: string, into: string, stage: string, rerun: string) =>
+  `Operation ${id} writes into collection ${into} with an aggregate that ends in ${stage}, and the error does not show whether it finished: it may have. Before you do anything else, first check that it is no longer running: MongoDB keeps running an aggregate that ends in ${stage} after the connection that sent it drops. In mongosh, connected to this database, db.getSiblingDB("admin").aggregate([{ $currentOp: { allUsers: true } }, { $match: { "command.$db": db.getName(), $expr: { $let: { vars: { last: { $arrayElemAt: [{ $objectToArray: { $last: "$command.pipeline" } }, 0] } }, in: { $and: [{ $in: ["$$last.k", [{ $literal: "$out" }, { $literal: "$merge" }]] }, { $in: [${JSON.stringify(into)}, ["$$last.v", "$$last.v.coll", "$$last.v.into", "$$last.v.into.coll"]] }] } } } } }]) lists the copy while it runs. Wait until it lists nothing, or end the copy with db.killOp(<the opid it lists>) and run the query again until it lists nothing: killOp only marks the copy to end, and it can run on for a moment. Then compare collection ${into} with the collections the operation reads by hand, and settle which documents each should keep. Do not run the command again until you have: ${rerun}, and could write them into collection ${into} a second time. The operations that ran before the failure stay applied.`;
+
 const MAJORITY_COUNT =
   'Then count the documents of collection measurements that a majority of the replica set has written, which a failover cannot roll back, for example with db.getCollection("measurements").countDocuments({}, { readConcern: { level: "majority" } }) in mongosh.';
 
@@ -542,7 +547,9 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
           { name: 'measurements', options: { collation: { locale: 'en', strength: 2 } } },
           { name: 'events', options: {} },
         ];
-        harness.driver.failAggregateWith(LOST);
+        harness.driver.queueResponse([{ documents: 3 }]);
+        harness.driver.queueResponse([{ documents: 2 }]);
+        harness.driver.failCopiesWith(LOST, harness.adapter);
       },
     },
   ])(
@@ -561,23 +568,42 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     },
   );
 
-  it('counts a copy whose two collections have the same collation', async () => {
-    const harness = makeHarness();
-    const collation = { locale: 'en', strength: 2 };
-    harness.inspectionExecutor.collections = [
-      { name: 'measurements', options: { collation } },
-      { name: 'events', options: { collation } },
-    ];
-    harness.driver.queueResponse([{ documents: 3 }]);
-    harness.driver.queueResponse([{ documents: 2 }]);
-    harness.driver.failAggregateWith(LOST, COPY_COUNTS.length);
+  it.each([
+    { form: 'as the contract gives it', collation: { locale: 'en', strength: 2 } },
+    {
+      form: 'in the full form MongoDB reports',
+      collation: {
+        locale: 'en',
+        caseLevel: false,
+        caseFirst: 'off',
+        strength: 2,
+        numericOrdering: false,
+        alternate: 'non-ignorable',
+        maxVariable: 'punct',
+        normalization: false,
+        backwards: false,
+        version: '57.1',
+      },
+    },
+  ])(
+    'counts a copy whose two collections have the same collation, $form',
+    async ({ collation }) => {
+      const harness = makeHarness();
+      harness.inspectionExecutor.collections = [
+        { name: 'measurements', options: { collation } },
+        { name: 'events', options: { collation } },
+      ];
+      harness.driver.queueResponse([{ documents: 3 }]);
+      harness.driver.queueResponse([{ documents: 2 }]);
+      harness.driver.failAggregateWith(LOST, COPY_COUNTS.length);
 
-    const result = await execute(harness, [unionCopy, deletion]);
+      const result = await execute(harness, [unionCopy, deletion]);
 
-    expect(failureFields(result.assertNotOk()).why).toContain(
-      'Before the copy, collection measurements held 3 documents, and the copy was to add 2 documents of collection events.',
-    );
-  });
+      expect(failureFields(result.assertNotOk()).why).toContain(
+        'Before the copy, collection measurements held 3 documents, and the copy was to add 2 documents of collection events.',
+      );
+    },
+  );
 
   it('says to count again after a moment when the target holds what it held before a copy of the whole source, since the re-run may add its documents again', async () => {
     const harness = makeHarness();
@@ -606,9 +632,26 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
       stage: '$out',
     },
     {
-      shape: 'a $merge copy',
+      shape: 'a $merge copy with options the planner does not write',
       copy: dataTransform('move Member to members', {
-        run: () => rawAggregate('events', [{ $match: FILTER }, { $merge: { into: 'members' } }]),
+        run: () =>
+          rawAggregate('events', [
+            { $match: FILTER },
+            { $merge: { into: 'members', on: 'email' } },
+          ]),
+      }),
+      into: 'members',
+      stage: '$merge',
+    },
+    {
+      shape: 'a $merge copy that sets _id',
+      copy: dataTransform('move Member to members', {
+        run: () =>
+          rawAggregate('events', [
+            { $match: FILTER },
+            { $set: { _id: '$email' } },
+            { $merge: { into: 'members' } },
+          ]),
       }),
       into: 'members',
       stage: '$merge',
@@ -624,9 +667,68 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
       expect(failureFields(result.assertNotOk())).toEqual({
         code: 'MIGRATION.EXECUTION_FAILED',
         message: `Operation ${copy.id} failed: connection 3 to 127.0.0.1:27017 closed`,
-        why: `Operation ${copy.id} writes into collection ${into} with an aggregate that ends in ${stage}, and the error does not show whether it finished: it may have. Before you do anything else, first check that it is no longer running: MongoDB keeps running an aggregate that ends in ${stage} after the connection that sent it drops. In mongosh, connected to this database, db.getSiblingDB("admin").aggregate([{ $currentOp: { allUsers: true } }, { $match: { "command.$db": db.getName(), $expr: { $let: { vars: { last: { $arrayElemAt: [{ $objectToArray: { $last: "$command.pipeline" } }, 0] } }, in: { $and: [{ $in: ["$$last.k", [{ $literal: "$out" }, { $literal: "$merge" }]] }, { $in: [${JSON.stringify(into)}, ["$$last.v", "$$last.v.coll", "$$last.v.into", "$$last.v.into.coll"]] }] } } } } }]) lists the copy while it runs. Wait until it lists nothing, or end the copy with db.killOp(<the opid it lists>) and run the query again until it lists nothing: killOp only marks the copy to end, and it can run on for a moment. Then compare collection ${into} with the collections the operation reads by hand, and settle which documents each should keep. Do not run the command again until you have: the run would copy the documents again, and could write them into collection ${into} a second time. The operations that ran before the failure stay applied.`,
+        why: UNRECOGNISED(copy.id, into, stage, 'the run would copy the documents again'),
         meta: { operationId: copy.id, databaseUnchanged: false },
       });
+    },
+  );
+
+  it.each([
+    { when: 'with postchecks on', executionChecks: undefined, rerun: CHECKED_RERUN },
+    {
+      when: 'not with postchecks off',
+      executionChecks: { prechecks: true, postchecks: false, idempotencyChecks: true },
+      rerun: 'the run would copy the documents again',
+    },
+  ])(
+    'says a re-run copies again unless the check of a copy the runner does not recognise shows it ran, $when',
+    async ({ executionChecks, rerun }) => {
+      const copy = dataTransform('move Member to members', {
+        check: { source: () => rawAggregate('members', [{ $match: FILTER }, { $limit: 1 }]) },
+        run: () =>
+          rawAggregate('events', [
+            { $match: FILTER },
+            { $merge: { into: 'members', on: 'email' } },
+          ]),
+      });
+      const harness = makeHarness();
+      for (const _ of ['idempotency check', 'precheck']) harness.driver.queueResponse([{ _id: 1 }]);
+      harness.driver.failCopiesWith(LOST, harness.adapter);
+
+      const result = await execute(harness, [copy, deletion], executionChecks);
+
+      expect(failureFields(result.assertNotOk()).why).toBe(
+        UNRECOGNISED(copy.id, 'members', '$merge', rerun),
+      );
+    },
+  );
+
+  it.each([
+    {
+      shape: 'with no stage between its $match and $merge',
+      pipeline: [{ $match: FILTER }, { $merge: { into: 'members' } }],
+      options: undefined,
+    },
+    {
+      shape: 'with the $set and $unset stages that rename fields, skipping validation',
+      pipeline: [
+        { $match: FILTER },
+        { $set: { fullName: '$name', kind: { $literal: 'member' } } },
+        { $unset: ['name'] },
+        { $merge: { into: 'members' } },
+      ],
+      options: { bypassDocumentValidation: true },
+    },
+  ])(
+    'passes on what a move the planner prints into a collection that is not time-series throws, since its merge stage matches by _id and a re-run is safe: $shape',
+    async ({ pipeline, options }) => {
+      const copy = dataTransform('move Member to members', {
+        run: () => rawAggregate('events', pipeline, options),
+      });
+      const harness = makeHarness();
+      harness.driver.failAggregateWith(LOST);
+
+      await expect(execute(harness, [copy, deletion])).rejects.toBe(LOST);
     },
   );
 
