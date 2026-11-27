@@ -287,6 +287,45 @@ describe('SQL storage defaults the family leaves out', () => {
         }),
       ],
       [
+        "a value-object field's union member's empty typeParams",
+        storageWith({
+          valueObject: {
+            Address: {
+              fields: {
+                contact: {
+                  nullable: true,
+                  type: {
+                    kind: 'union',
+                    members: [
+                      { kind: 'scalar', codecId: 'pg/text@1', typeParams: {} },
+                      { kind: 'scalar', codecId: 'pg/int4@1' },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        }),
+        storageWith({
+          valueObject: {
+            Address: {
+              fields: {
+                contact: {
+                  nullable: true,
+                  type: {
+                    kind: 'union',
+                    members: [
+                      { kind: 'scalar', codecId: 'pg/text@1' },
+                      { kind: 'scalar', codecId: 'pg/int4@1' },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        }),
+      ],
+      [
         'foreign keys in another order',
         storageWithTable(
           tableWith({

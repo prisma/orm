@@ -33,13 +33,13 @@ describe('SQL contract hashes', () => {
           {
             name: 'postgres, with every default the family leaves out written out and its ordered lists out of order',
             contract: savedContract('postgres-every-default-written'),
-            storageHash: '429421a05f4dca63b8ec8deff2422feabc21b9537706bdd7f4b061a1bde42c2c',
+            storageHash: '103bfcd5ba155e67f0ddeda73386902ed2d02739e50a86f46ce85f94ebafbb7b',
             profileHash: 'ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632',
           },
           {
             name: 'postgres, with every default the family leaves out absent and its ordered lists in order',
             contract: savedContract('postgres-every-default-absent'),
-            storageHash: '429421a05f4dca63b8ec8deff2422feabc21b9537706bdd7f4b061a1bde42c2c',
+            storageHash: '103bfcd5ba155e67f0ddeda73386902ed2d02739e50a86f46ce85f94ebafbb7b',
             profileHash: 'ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632',
           },
         ],

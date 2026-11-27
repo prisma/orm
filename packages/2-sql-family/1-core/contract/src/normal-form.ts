@@ -68,11 +68,16 @@ const withoutEmptyTypeParams = (record: JsonRecord): JsonRecord =>
 const normalColumn = (column: JsonRecord): JsonRecord =>
   withoutEmptyTypeParams(withoutManyFalse(column));
 
+function normalFieldType(fieldType: JsonRecord): JsonRecord {
+  const kept = withoutEmptyTypeParams(fieldType);
+  return Array.isArray(kept['members'])
+    ? { ...kept, members: mapList(kept['members'], withoutEmptyTypeParams) }
+    : kept;
+}
+
 function normalValueObjectField(field: JsonRecord): JsonRecord {
   const kept = withoutManyFalse(field);
-  return isPlainRecord(kept['type'])
-    ? { ...kept, type: withoutEmptyTypeParams(kept['type']) }
-    : kept;
+  return isPlainRecord(kept['type']) ? { ...kept, type: normalFieldType(kept['type']) } : kept;
 }
 
 function normalIndex(index: JsonRecord): JsonRecord {
@@ -128,7 +133,7 @@ function normalNamespace(namespace: JsonRecord): JsonRecord {
 }
 
 /**
- * The SQL family's normal form of `storage`. It leaves out the fields the family defines as equal to their absence, each named here: `many: false` on a column or a value-object field, an empty `typeParams` on a column, a value-object field's type or a storage type, an empty `checks` list, an index's empty `columns` and empty `options`, a foreign key's `true` or `false` `index` (the flag of contracts emitted before 0.16, which reads as absent) and its `onDelete`/`onUpdate` of `noAction`, and a namespace's empty entity-kind slot other than `table`. Every other value, including the contents of type parameters, index options and every entry a pack contributes, is kept as given. It then orders each table's `checks`, `foreignKeys`, `indexes` and `uniques` by name, and entries with no name, or the same name, by their content.
+ * The SQL family's normal form of `storage`. It leaves out the fields the family defines as equal to their absence, each named here: `many: false` on a column or a value-object field, an empty `typeParams` on a column, a value-object field's type, a member of its union type or a storage type, an empty `checks` list, an index's empty `columns` and empty `options`, a foreign key's `true` or `false` `index` (the flag of contracts emitted before 0.16, which reads as absent) and its `onDelete`/`onUpdate` of `noAction`, and a namespace's empty entity-kind slot other than `table`. Every other value, including the contents of type parameters, index options and every entry a pack contributes, is kept as given. It then orders each table's `checks`, `foreignKeys`, `indexes` and `uniques` by name, and entries with no name, or the same name, by their content.
  */
 export const normalizeSqlStorage: NormalizeStorage = (storage) => {
   const plain: unknown = storage === undefined ? storage : JSON.parse(JSON.stringify(storage));

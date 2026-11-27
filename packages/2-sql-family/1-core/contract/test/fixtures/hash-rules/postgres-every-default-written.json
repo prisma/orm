@@ -255,6 +255,23 @@
                   },
                   "many": false
                 },
+                "contact": {
+                  "nullable": true,
+                  "type": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "scalar",
+                        "codecId": "pg/text@1",
+                        "typeParams": {}
+                      },
+                      {
+                        "kind": "scalar",
+                        "codecId": "pg/int4@1"
+                      }
+                    ]
+                  }
+                },
                 "lines": {
                   "nullable": false,
                   "type": {

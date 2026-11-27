@@ -4,7 +4,7 @@
   "targetFamily": "sql",
   "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "storage": {
-    "storageHash": "429421a05f4dca63b8ec8deff2422feabc21b9537706bdd7f4b061a1bde42c2c",
+    "storageHash": "103bfcd5ba155e67f0ddeda73386902ed2d02739e50a86f46ce85f94ebafbb7b",
     "namespaces": {
       "public": {
         "id": "public",
@@ -294,6 +294,23 @@
                     "typeParams": {}
                   },
                   "many": false
+                },
+                "contact": {
+                  "nullable": true,
+                  "type": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "scalar",
+                        "codecId": "pg/text@1",
+                        "typeParams": {}
+                      },
+                      {
+                        "kind": "scalar",
+                        "codecId": "pg/int4@1"
+                      }
+                    ]
+                  }
                 },
                 "lines": {
                   "nullable": false,
