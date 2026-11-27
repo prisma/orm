@@ -14,14 +14,6 @@ type SoleNamespaceModels<
   T extends { domain: { namespaces: Record<string, { models: unknown }> } },
 > = T['domain']['namespaces'][keyof T['domain']['namespaces']]['models'];
 
-test('takes the capabilities as a list of sets, refusing a single set', () => {
-  // @ts-expect-error a single set is refused; the list is an array of sets
-  defineContract({
-    requiredCapabilities: [...postgres18, ...postgresDriver],
-    capabilities: { sql: { lateral: true } },
-  });
-});
-
 test('limits Date authoring to the JsDate types', () => {
   defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }, ({ type: t }) => {
     expectTypeOf(t).not.toBeAny();

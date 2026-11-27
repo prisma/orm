@@ -91,9 +91,9 @@ test('defineContract rejects a model whose sql() stage reuses an index name', ()
       fullTextIndex(text, { language: 'german', name: 'message_search' }),
     ],
   });
-  // @ts-expect-error the sql() stage resolved to never
   defineContract({
     requiredCapabilities: [...postgres18, ...postgresDriver],
+    // @ts-expect-error the sql() stage resolved to never
     models: { Message: message },
   });
 });
