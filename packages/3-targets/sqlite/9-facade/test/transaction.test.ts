@@ -434,4 +434,89 @@ describe('sqlite transaction()', () => {
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
+
+  it('treats mode=memory in a filename as a file-backed database rather than in-memory', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'prisma-sqlite-mode-memory-name-'));
+    const dbPath = join(tempDir, 'mode=memory.db');
+    const fileUri = pathToFileURL(dbPath).href;
+    const db1 = sqlite({ contract, path: dbPath });
+    const db2 = sqlite({ contract, path: fileUri });
+    let activeTransactions = 0;
+    let maxActiveTransactions = 0;
+
+    try {
+      await Promise.all([
+        db1.transaction(async () => {
+          activeTransactions += 1;
+          maxActiveTransactions = Math.max(maxActiveTransactions, activeTransactions);
+          try {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          } finally {
+            activeTransactions -= 1;
+          }
+        }),
+        db2.transaction(async () => {
+          activeTransactions += 1;
+          maxActiveTransactions = Math.max(maxActiveTransactions, activeTransactions);
+          try {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          } finally {
+            activeTransactions -= 1;
+          }
+        }),
+      ]);
+
+      expect(maxActiveTransactions).toBe(1);
+    } finally {
+      await db1.close();
+      await db2.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps file: URIs with ?mode=memory query isolated from file-backed queues', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'prisma-sqlite-query-memory-'));
+    const dbPath = join(tempDir, 'shared.db');
+    const memoryUri = `${pathToFileURL(dbPath).href}?mode=memory&cache=shared`;
+    const db1 = sqlite({ contract, path: memoryUri });
+    const db2 = sqlite({ contract, path: memoryUri });
+    let activeTransactions = 0;
+    let maxActiveTransactions = 0;
+    let bothStarted!: () => void;
+    const bothActive = new Promise<void>((resolve) => {
+      bothStarted = resolve;
+    });
+
+    try {
+      await Promise.all([
+        db1.transaction(async () => {
+          activeTransactions += 1;
+          maxActiveTransactions = Math.max(maxActiveTransactions, activeTransactions);
+          if (activeTransactions === 2) bothStarted();
+          try {
+            await bothActive;
+          } finally {
+            activeTransactions -= 1;
+          }
+        }),
+        db2.transaction(async () => {
+          activeTransactions += 1;
+          maxActiveTransactions = Math.max(maxActiveTransactions, activeTransactions);
+          if (activeTransactions === 2) bothStarted();
+          try {
+            await bothActive;
+          } finally {
+            activeTransactions -= 1;
+          }
+        }),
+      ]);
+
+      expect(maxActiveTransactions).toBe(2);
+    } finally {
+      bothStarted?.();
+      await db1.close();
+      await db2.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 });

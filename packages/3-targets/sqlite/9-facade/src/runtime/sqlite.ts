@@ -78,11 +78,14 @@ function resolveDatabaseQueueKey(binding: { readonly path: string } | undefined)
     const queryOrFragmentIndex = filePath.search(/[?#]/);
     const uriWithoutQuery =
       queryOrFragmentIndex >= 0 ? filePath.slice(0, queryOrFragmentIndex) : filePath;
-    if (
-      filePath.includes('mode=memory') ||
-      uriWithoutQuery === 'file:' ||
-      uriWithoutQuery === 'file::memory:'
-    ) {
+    const queryIndex = filePath.indexOf('?');
+    const fragmentIndex = filePath.indexOf('#');
+    const hasQuery = queryIndex >= 0 && (fragmentIndex < 0 || queryIndex < fragmentIndex);
+    const queryString = hasQuery
+      ? filePath.slice(queryIndex + 1, fragmentIndex >= 0 ? fragmentIndex : undefined)
+      : '';
+    const isMemoryMode = hasQuery && new URLSearchParams(queryString).get('mode') === 'memory';
+    if (isMemoryMode || uriWithoutQuery === 'file:' || uriWithoutQuery === 'file::memory:') {
       return null;
     }
 
