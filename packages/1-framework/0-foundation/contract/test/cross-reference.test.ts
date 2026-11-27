@@ -10,6 +10,15 @@ describe('crossRef', () => {
   it('uses the provided namespace when supplied', () => {
     expect(crossRef('User', 'auth')).toEqual({ namespace: 'auth', model: 'User' });
   });
+
+  it('names the contract space when one is given, and omits the key otherwise', () => {
+    expect(crossRef('User', 'auth', 'billing')).toEqual({
+      namespace: 'auth',
+      model: 'User',
+      space: 'billing',
+    });
+    expect(crossRef('User', 'auth')).not.toHaveProperty('space');
+  });
 });
 
 describe('CrossReferenceSchema', () => {
