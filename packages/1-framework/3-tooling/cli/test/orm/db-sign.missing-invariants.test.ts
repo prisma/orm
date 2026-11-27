@@ -4,9 +4,11 @@ import type { DbSignSpaceOutcome } from '../../src/control-api/operations/db-sig
 import { issueNodes } from '../../src/orm/db/verification';
 import {
   cleanupProjectDirs,
+  DATABASE_NOT_PROVIDED,
   DRIFTED,
   diagnosticsOf,
   envelopeOf,
+  failedSpace,
   HASH_A,
   HASH_EXT,
   HASH_PREVIOUS,
@@ -14,6 +16,7 @@ import {
   MISSING_COLUMN,
   mocks,
   NOT_PROVIDED,
+  OLDER_THAN_SUPPORTED,
   ormConfig,
   PROFILE_HASH,
   projectDir,
@@ -220,5 +223,37 @@ describe('db sign refusing a space whose database also does not provide what its
         },
       ],
     });
+  });
+});
+
+describe('db sign refusing a space that lacks invariants beside another space whose database does not provide what its contract requires', () => {
+  beforeEach(() => {
+    mocks.dbSign.mockResolvedValue(
+      ok({ spaces: [failedSpace('app', HASH_A, NOT_PROVIDED), refused] }),
+    );
+  });
+
+  it('offers no db migrate, and says why, since db update, db init and db migrate refuse the database', async () => {
+    const dir = await projectDir();
+
+    const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+    expect(diagnosticsOf(run)).toEqual([
+      {
+        code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
+        severity: 'error',
+        summary: OLDER_THAN_SUPPORTED,
+        nextActions: [],
+        meta: { space: 'app', schemaIssues: [DATABASE_NOT_PROVIDED] },
+      },
+      {
+        code: 'MIGRATION.SIGN_INVARIANTS_MISSING',
+        severity: 'error',
+        summary: 'Space "pgvector" requires invariants its marker does not record',
+        why: `The head ref of space "pgvector" requires the invariant "${INSTALL_VECTOR}", which the database marker does not record. An invariant records that a migration ran, and db sign never runs migrations, so it did not sign this space. \`db update\`, \`db init\` and \`db migrate\` refuse this database until it provides what the contract of another space requires.`,
+        nextActions: [],
+        meta: { space: 'pgvector', missingInvariants: [INSTALL_VECTOR] },
+      },
+    ]);
   });
 });

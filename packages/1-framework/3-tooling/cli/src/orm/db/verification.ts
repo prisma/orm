@@ -171,7 +171,11 @@ export function databaseRefusedInRun(
   return issuesBySpace.some(includesDatabaseCapabilitiesNotProvided);
 }
 
-const REFUSED_COMMANDS = '`db update`, `db init` and `db migrate` refuse this database';
+/** Why no space in a refused run gets advice that would change the database, naming whose contract the database does not provide for. */
+export function databaseRefusedWhy(requiredBy: 'its contract' | 'another space'): string {
+  const contract = requiredBy === 'its contract' ? 'the contract' : 'the contract of another space';
+  return `\`db update\`, \`db init\` and \`db migrate\` refuse this database until it provides what ${contract} requires.`;
+}
 
 export function issueNodes(
   issues: readonly SchemaDiffIssue[],
@@ -251,10 +255,10 @@ function schemaVerdictWhy(
   const drift = driftIssues(issues);
   if (drift.length === 0) return undefined;
   if (includesDatabaseCapabilitiesNotProvided(issues)) {
-    return `${REFUSED_COMMANDS} until it provides what the contract requires. ${schemaIssuesWhy('The live schema also differs', drift)}`;
+    return `${databaseRefusedWhy('its contract')} ${schemaIssuesWhy('The live schema also differs', drift)}`;
   }
   if (databaseRefused) {
-    return `${REFUSED_COMMANDS} until it provides what the contract of another space requires. ${schemaIssuesWhy('The live schema differs', drift)}`;
+    return `${databaseRefusedWhy('another space')} ${schemaIssuesWhy('The live schema differs', drift)}`;
   }
   return schemaIssuesWhy('The live schema differs', drift);
 }

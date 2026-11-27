@@ -45,6 +45,7 @@ import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
   databaseRefusedInRun,
+  databaseRefusedWhy,
   driftIssues,
   includesDatabaseCapabilitiesNotProvided,
   issueNodes,
@@ -322,28 +323,31 @@ function markerConflictDiagnostic(
 
 function missingInvariantsDiagnostic(
   outcome: Extract<DbSignSpaceOutcome, { readonly status: 'missing-invariants' }>,
-  migrate: string | undefined,
+  inputs: { readonly migrate: string; readonly databaseRefused: boolean },
 ): Diagnostic {
   const missing = outcome.missingInvariants.map((id) => `"${id}"`).join(', ');
   const required =
     outcome.missingInvariants.length === 1
       ? `the invariant ${missing}, which the database marker does not record`
       : `the invariants ${missing}, which the database marker does not record`;
+  const refusal = inputs.databaseRefused
+    ? databaseRefusedWhy(refusedForDatabaseCapabilities(outcome) ? 'its contract' : 'another space')
+    : undefined;
   return {
     code: 'MIGRATION.SIGN_INVARIANTS_MISSING',
     severity: 'error',
     summary: `Space "${outcome.space}" requires invariants its marker does not record`,
-    why: `The head ref of space "${outcome.space}" requires ${required}. An invariant records that a migration ran, and db sign never runs migrations, so it did not sign this space.`,
+    why: `The head ref of space "${outcome.space}" requires ${required}. An invariant records that a migration ran, and db sign never runs migrations, so it did not sign this space.${refusal === undefined ? '' : ` ${refusal}`}`,
     nextActions:
-      migrate === undefined
-        ? []
-        : [
+      refusal === undefined
+        ? [
             {
               kind: 'run-command',
               label: 'Run the migrations that provide the invariants, then sign again',
-              command: migrate,
+              command: inputs.migrate,
             },
-          ],
+          ]
+        : [],
     meta: { space: outcome.space, missingInvariants: outcome.missingInvariants },
   };
 }
@@ -700,7 +704,7 @@ export function createDbSignCommand(
               return [markerConflictDiagnostic(outcome, rerun)];
             case 'missing-invariants':
               return [
-                missingInvariantsDiagnostic(outcome, databaseRefused ? undefined : migrate),
+                missingInvariantsDiagnostic(outcome, { migrate, databaseRefused }),
                 ...(outcome.schema === undefined
                   ? []
                   : [verdictDiagnostic(outcome.space, outcome.schema)]),
