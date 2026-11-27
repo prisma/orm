@@ -63,5 +63,4 @@ No migration required — the existing `@internal/extension-pgvector` package al
 ## Related
 
 - [Extension-Packs-Naming-and-Layout.md](../../reference/Extension-Packs-Naming-and-Layout.md) — Updated naming conventions
-- [Package-Naming-Consistency-Report.md](../../reference/Package-Naming-Consistency-Report.md) — Package naming audit
 - [ADR 112 - Target Extension Packs](ADR%20112%20-%20Target%20Extension%20Packs.md) — Extension pack architecture
