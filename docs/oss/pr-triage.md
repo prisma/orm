@@ -12,6 +12,8 @@ A PR is external when its author does not hold `admin` or `write` permission on 
 
 An agent account that belongs to a team member is team, whatever its own permission and whether or not it works from a fork. Its profile bio usually says so (for example "Belongs to @<maintainer>"), but the account's owner writes the bio, so it is a lead, not evidence. Treat the account as external until a maintainer confirms it belongs to a team member who holds `admin` or `write`.
 
+The [`notify-external-contributions`](../../.github/workflows/notify-external-contributions.yml) workflow uses this definition to post each new external issue and pull request to Slack, through the webhook in the `EXTERNAL_CONTRIBUTIONS_SLACK_WEBHOOK_URL` repository secret. The confirmed team agent accounts are listed in [its script](../../.github/workflows/scripts/notify-external-contributions.mjs); add one there once a maintainer confirms it.
+
 ## Step 0 — Is it safe to run CI?
 
 Approving a workflow run executes the contributor's code on our runners. Decide this before reading the change for quality, and decide it by reading the diff rather than by trusting the title.
