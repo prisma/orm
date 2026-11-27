@@ -11,6 +11,9 @@ import { Migration, MigrationCLI, rawSql } from '../../src/exports/migration';
 
 const SCHEMA = '_prisma';
 const RELEASE_CANDIDATE_SCHEMA = 'prisma_contract';
+/** Written out, not imported: a check's text is part of the migration's hash, which must not change once released. */
+const UPGRADE_INSTRUCTIONS_URL =
+  'https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading/app';
 
 interface ExpectedColumn {
   readonly name: string;
@@ -124,7 +127,7 @@ function checkColumns(table: (typeof tables)[number], schema: string, id: string
     operationClass: 'additive',
     target: { id: 'postgres', details: { schema, objectType: 'table', name: table.name } },
     precheck: table.columns.map((column) => ({
-      description: `ensure table ${qualified(table.name, schema)}${origin} has column "${column.name}" ${column.type} ${nullability(column)}: it has no such column, or the column has another type or nullability. Prisma cannot bring a table of another form up to date: the upgrade instructions of Prisma 8 say what to do`,
+      description: `ensure table ${qualified(table.name, schema)}${origin} has column "${column.name}" ${column.type} ${nullability(column)}: it has no such column, or the column has another type or nullability. Prisma cannot bring a table of another form up to date: the upgrade instructions at ${UPGRADE_INSTRUCTIONS_URL} say what to do`,
       sql: absentOrColumnHasForm,
       params: [schema, table.name, column.name, column.type, column.notNull],
     })),
