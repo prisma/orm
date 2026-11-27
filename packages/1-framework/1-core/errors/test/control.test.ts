@@ -24,6 +24,7 @@ import {
   errorMigrationCliUnknownFlag,
   errorMigrationPlanningFailed,
   errorOutputFormatMutex,
+  errorPrismaSpaceBehind,
   errorQueryRunnerFactoryRequired,
   errorTargetMigrationNotSupported,
   errorUnexpected,
@@ -640,5 +641,37 @@ describe('Generic Error', () => {
   it('errorUnexpected without cause leaves no own cause property', () => {
     const error = errorUnexpected('Unexpected error occurred');
     expect(Object.hasOwn(error, 'cause')).toBe(false);
+  });
+});
+
+describe('errorPrismaSpaceBehind', () => {
+  it('says the tables are not up to date, keeps the explanation it is given, and names the command that brings them up to date', () => {
+    const error = errorPrismaSpaceBehind({
+      why: 'The row records an earlier contract.',
+      meta: { spaceId: '_prisma' },
+    });
+
+    expect({
+      code: error.code,
+      message: error.message,
+      why: error.why,
+      fix: error.fix,
+      nextActions: error.nextActions,
+      meta: error.meta,
+    }).toEqual({
+      code: 'CONTRACT.PRISMA_SPACE_BEHIND',
+      message:
+        "Prisma's own tables in this database are not up to date with the installed release of Prisma",
+      why: 'The row records an earlier contract.',
+      fix: "Run `{bin} db migrate`, which brings Prisma's own tables up to date before it does anything else; `{bin} db init`, `{bin} db update` and `{bin} db sign` do the same.",
+      nextActions: [
+        {
+          kind: 'run-command',
+          label: "Bring Prisma's own tables up to date",
+          command: '{bin} db migrate',
+        },
+      ],
+      meta: { spaceId: '_prisma' },
+    });
   });
 });

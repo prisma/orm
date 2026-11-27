@@ -20,7 +20,9 @@ export {
   errorMigrationCliUnknownFlag,
   errorMigrationPlanningFailed,
   errorOutputFormatMutex,
+  errorPrismaSpaceBehind,
   errorQueryRunnerFactoryRequired,
   errorTargetMigrationNotSupported,
   errorUnexpected,
 } from '../control';
+export { APP_UPGRADE_GUIDES_URL } from '../upgrade-guides';

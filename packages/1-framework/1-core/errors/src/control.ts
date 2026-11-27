@@ -630,3 +630,25 @@ export function errorUnexpected(
     ...ifDefined('cause', options?.cause),
   });
 }
+
+/**
+ * The Prisma space in the database is behind the installed release, which every command that changes the database brings up to date first. One code whatever the cause, since the user runs the same command; `why` says what was found.
+ */
+export function errorPrismaSpaceBehind(options: {
+  readonly why: string;
+  readonly meta: Record<string, unknown>;
+}): CliStructuredError {
+  const migrate = '{bin} db migrate';
+  return new CliStructuredError(
+    'CONTRACT.PRISMA_SPACE_BEHIND',
+    "Prisma's own tables in this database are not up to date with the installed release of Prisma",
+    {
+      why: options.why,
+      fix: `Run \`${migrate}\`, which brings Prisma's own tables up to date before it does anything else; \`{bin} db init\`, \`{bin} db update\` and \`{bin} db sign\` do the same.`,
+      nextActions: [
+        { kind: 'run-command', label: "Bring Prisma's own tables up to date", command: migrate },
+      ],
+      meta: options.meta,
+    },
+  );
+}

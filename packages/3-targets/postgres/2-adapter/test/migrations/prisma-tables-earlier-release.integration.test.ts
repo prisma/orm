@@ -14,8 +14,10 @@ import {
 } from './fixtures/runner-fixtures';
 
 const earlierRelease = expect.objectContaining({
-  code: 'CONTRACT.PRISMA_TABLES_FROM_EARLIER_RELEASE',
-  message: "Prisma's own tables in this database were written by an earlier release of Prisma",
+  code: 'CONTRACT.PRISMA_SPACE_BEHIND',
+  message:
+    "Prisma's own tables in this database are not up to date with the installed release of Prisma",
+  why: expect.stringContaining('`prisma_contract`'),
   fix: expect.stringContaining('`{bin} db migrate'),
 });
 

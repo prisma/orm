@@ -26,11 +26,18 @@ const installedSpace: ContractSpace = {
 
 function verifyWithPrismaRowAt(
   storageHash: string,
-  target: { readonly prismaTables?: ContractSpace } = { prismaTables: installedSpace },
+  options: {
+    readonly target?: { readonly prismaSpace?: ContractSpace };
+    readonly invariants?: readonly string[];
+    readonly ledgerTo?: readonly string[];
+  } = {},
 ) {
+  const { target = { prismaSpace: installedSpace }, invariants = [], ledgerTo = [] } = options;
   const familyInstance = {
     readAllMarkers: async () =>
-      new Map([[PRISMA_SPACE_ID, { storageHash, profileHash: 'p', invariants: [] }]]),
+      new Map([[PRISMA_SPACE_ID, { storageHash, profileHash: 'p', invariants }]]),
+    readLedger: async ({ space }: { readonly space?: string }) =>
+      ledgerTo.map((to) => ({ space, to })),
     deserializeContract: (json: unknown) => json as Contract,
   } as unknown as ControlFamilyInstance<string, unknown>;
   return executeDbVerify({
@@ -48,7 +55,7 @@ function verifyWithPrismaRowAt(
   });
 }
 
-describe("db verify and the space for Prisma's own tables", () => {
+describe('db verify and the Prisma space', () => {
   it("finds nothing when the space's row is at the installed head", async () => {
     expect((await verifyWithPrismaRowAt('second')).assertOk().markerDrift).toBeNull();
   });
@@ -63,17 +70,54 @@ describe("db verify and the space for Prisma's own tables", () => {
       meta: drift?.meta,
     }).toEqual({
       code: 'CONTRACT.PRISMA_SPACE_BEHIND',
-      message: "Prisma's own tables in this database are in the form an earlier release left them",
+      message:
+        "Prisma's own tables in this database are not up to date with the installed release of Prisma",
       fix: "Run `{bin} db migrate`, which brings Prisma's own tables up to date before it does anything else; `{bin} db init`, `{bin} db update` and `{bin} db sign` do the same.",
       meta: { spaceId: PRISMA_SPACE_ID, markerHash: 'first', headRefHash: 'second' },
     });
   });
 
-  it('finds nothing when the row records a contract the installed release does not know, which a later release wrote', async () => {
-    expect((await verifyWithPrismaRowAt('third')).assertOk().markerDrift).toBeNull();
+  it('finds nothing when a later release of this major version brought the row further', async () => {
+    const verified = await verifyWithPrismaRowAt('third', {
+      ledgerTo: ['first', 'second', 'third'],
+    });
+
+    expect(verified.assertOk().markerDrift).toBeNull();
+  });
+
+  it('reports what a command that changes the database would refuse when the ledger never recorded the installed head', async () => {
+    const drift = (
+      await verifyWithPrismaRowAt('third', { ledgerTo: ['first', 'third'] })
+    ).assertOk().markerDrift;
+
+    expect({ code: drift?.code, meta: drift?.meta }).toEqual({
+      code: 'MIGRATION.INSTALLED_SPACE_UNREACHABLE',
+      meta: {
+        spaceId: PRISMA_SPACE_ID,
+        markerHash: 'third',
+        headRefHash: 'second',
+        reason: 'unknownContract',
+      },
+    });
+  });
+
+  it('reports a row a later major version wrote, though the ledger recorded the installed head', async () => {
+    const drift = (
+      await verifyWithPrismaRowAt('third', {
+        invariants: ['_prisma:major-9'],
+        ledgerTo: ['first', 'second', 'third'],
+      })
+    ).assertOk().markerDrift;
+
+    expect({ code: drift?.code, reason: drift?.meta?.['reason'] }).toEqual({
+      code: 'MIGRATION.INSTALLED_SPACE_UNREACHABLE',
+      reason: 'laterMajor',
+    });
   });
 
   it('does not report the row as one of a space the project does not declare on a target that carries no space', async () => {
-    expect((await verifyWithPrismaRowAt('first', {})).assertOk().markerDrift).toBeNull();
+    expect(
+      (await verifyWithPrismaRowAt('first', { target: {} })).assertOk().markerDrift,
+    ).toBeNull();
   });
 });

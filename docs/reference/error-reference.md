@@ -688,11 +688,12 @@ An RLS policy declaration is invalid: it targets a model in another contract spa
 
 ### CONTRACT.PRISMA_SPACE_BEHIND
 
-`db verify` found the row of the `_prisma` contract space, which records the form of Prisma's own tables, at a contract that the installed release's migrations of that space lead on from: Prisma was upgraded and no command that changes the database has run since. Reported as a finding on a completed run that exits `4`. Run `prisma db migrate`, or `db init`, `db update` or `db sign`; each brings the tables up to date before it does anything else. A row at a contract the installed release does not know was written by a later release and is not reported. Payload: `spaceId`, `markerHash`, `headRefHash`.
+Prisma's own tables in the database are not up to date with the installed release of Prisma. Every command that changes the database (`db init`, `db update`, `db migrate`, `db sign`) brings them up to date before it does anything else, so the fix is always to run one of them, usually `prisma db migrate`. Two situations raise it, and the `why` says which:
 
-### CONTRACT.PRISMA_TABLES_FROM_EARLIER_RELEASE
+- On PostgreSQL, the tables are in the schema `prisma_contract`, where the release candidates of Prisma 8 kept them, and there is no `_prisma.marker`. A command that only reads the database (`db verify`, including `db verify --schema-only`, `migration status`, `migration log`, `db migrate --show`, or a dry run of `db init` or `db update`) cannot read which contract the database matches, so it stops with this error instead of reporting an unsigned database. Payload: `spaceId`, `schema`.
+- `db verify` found the row of the `_prisma` space, which records the form of Prisma's own tables, at a contract that the installed release's migrations of that space lead on from: Prisma was upgraded and no command that changes the database has run since. Reported as a finding on a completed run that exits `4`. Payload: `spaceId`, `markerHash`, `headRefHash`.
 
-On PostgreSQL, a command that only reads the database (`db verify`, `migration status`, `migration log`, `db migrate --show`, or a dry run of `db init` or `db update`) found Prisma's own tables in the schema `prisma_contract`, where the release candidates of Prisma 8 kept them, and no `_prisma.marker`. It cannot read which contract the database matches, so it stops instead of reporting an unsigned database. Run `prisma db migrate`, or `db init`, `db update` or `db sign`, which rename the schema to `_prisma` before they read anything. The runtime's marker check reports the same code as a warning and runs. Payload: `schema`.
+The runtime's marker check reports the same code as a warning, and runs. `db verify` judges the row exactly as the commands that change the database do: a row a later release of the same major version wrote is not reported, and a row this release cannot use is reported as `MIGRATION.INSTALLED_SPACE_UNREACHABLE`.
 
 ### CONTRACT.RELATION_INVALID
 
@@ -1839,7 +1840,12 @@ A contract hash the user supplied (or that a ref resolved to) is not a node in t
 
 ### MIGRATION.INSTALLED_SPACE_UNREACHABLE
 
-The database records a contract space that the installed Prisma packages carry, such as `_prisma` for Prisma's own tables, at a contract that the space's installed migrations never pass through, and the space's ledger never recorded the installed head. A later release of the same major version, which only adds to the space, leaves the installed head in the ledger, so an earlier release then applies nothing and carries on; this error means a release of another major version, or a change by hand, brought the database there. Install the Prisma release that last changed the database, or a later one of the same major version, and run the command again. Payload: `spaceId`, `markerHash`, `headRefHash`.
+The database records the `_prisma` space, which holds the form of Prisma's own tables, at a contract that the installed Prisma packages' migrations of that space never reach, and this release cannot use the tables. Raised by every command that changes the database, before it does anything else, and reported by `db verify` as a finding. The payload's `reason` says why:
+
+- `laterMajor`: the row records an invariant that no migration of the installed packages provides. Only a release of a later major version of Prisma writes one, when it changes these tables in a way an earlier major version cannot read. Use that release, or a newer one, for every command against the database.
+- `unknownContract`: the row's contract is unknown and the space's ledger never recorded the installed head, so no release of this major version brought the database there from this release's form; a release of another major version, or a change by hand, did. Use the release that last changed the database, or a newer one.
+
+A row at an unknown contract whose invariants the installed migrations all provide, and whose ledger recorded the installed head, was written by a later release of the same major version, which only adds to these tables; this release then applies nothing and carries on. Payload: `spaceId`, `markerHash`, `headRefHash`, `reason`.
 
 ### MIGRATION.INVALID_DEFAULT_EXPORT
 
@@ -2015,7 +2021,7 @@ Payload: `failedCheck` (`operationId`, `phase`, `description`, and `expectation`
 
 ### MIGRATION.PRISMA_TABLES_MISSING
 
-On PostgreSQL, the migration runner was asked to apply a contract space before Prisma's own tables existed: `_prisma.marker` does not exist. Those tables are created, or moved from the schema `prisma_contract` that the release candidates of Prisma 8 used, by applying the target's `_prisma` contract space, which `db init`, `db update`, `db migrate` and `db sign` do before anything else. Code that runs the migration runner directly must apply that space first, with `applyInstalledContractSpace` from `@internal/migration-tools/spaces`. The runner fails before running any operation, so the database is unchanged. Payload: `markerLocation`, `failingSpace`, `databaseUnchanged`.
+On PostgreSQL, a contract space was about to be applied or signed before Prisma's own tables existed: `_prisma.marker` does not exist. Those tables are created, or moved from the schema `prisma_contract` that the release candidates of Prisma 8 used, by applying the target's `_prisma` contract space, which `db init`, `db update`, `db migrate` and `db sign` do before anything else. Raised by the migration runner, before it runs any operation, and by the SQL family's sign path, before it writes a marker row, so the database is unchanged. Code that runs the migration runner or signs a database without those commands or the control client must apply that space first, with `applyInstalledContractSpace` from `@prisma/orm-toolchain/migration-tools/spaces`. Payload: `markerLocation`, and from the runner `failingSpace` and `databaseUnchanged`.
 
 ### MIGRATION.PROVIDED_INVARIANTS_MISMATCH
 

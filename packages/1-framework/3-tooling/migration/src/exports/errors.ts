@@ -3,6 +3,7 @@ export {
   errorContractSnapshotHashMismatch,
   errorContractSnapshotMissing,
   errorDescriptorHeadHashMismatch,
+  errorInstalledSpaceUnreachable,
   errorInvalidJson,
   errorInvalidRefFile,
   errorInvalidRefName,

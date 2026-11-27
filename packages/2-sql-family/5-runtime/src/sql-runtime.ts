@@ -1602,7 +1602,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
 
     if (readResult.kind === 'earlier-release') {
       this.sqlCtx.log.warn({
-        code: 'CONTRACT.PRISMA_TABLES_FROM_EARLIER_RELEASE',
+        code: 'CONTRACT.PRISMA_SPACE_BEHIND',
         scope: 'marker-verification',
         expected,
         actual: null,

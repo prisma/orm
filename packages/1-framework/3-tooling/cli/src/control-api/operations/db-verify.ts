@@ -1,4 +1,5 @@
 import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
+import { errorPrismaSpaceBehind } from '@internal/errors/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
   ContractSpace,
@@ -20,7 +21,11 @@ import {
   verifyMigration,
 } from '@internal/migration-tools/aggregate';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
-import { reconstructGraph } from '@internal/migration-tools/migration-graph';
+import { errorInstalledSpaceUnreachable } from '@internal/migration-tools/errors';
+import {
+  classificationNeedsLedger,
+  classifyInstalledSpaceRow,
+} from '@internal/migration-tools/spaces';
 import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -63,8 +68,8 @@ export interface ExecuteDbVerifyOptions<TFamilyId extends string, TTargetId exte
   readonly skipMarker: boolean;
   /** Content check for contract snapshots the aggregate loader resolves. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
-  /** The space for Prisma's own tables the target's control descriptor carries, whose row is checked against it. */
-  readonly prismaTables?: ContractSpace;
+  /** The Prisma space the target's control descriptor carries, whose row is checked against it. */
+  readonly prismaSpace?: ContractSpace;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -164,44 +169,55 @@ export async function executeDbVerify<TFamilyId extends string, TTargetId extend
     skipMarker,
     onProgress,
     migrationsDir: options.migrationsDir,
-    prismaTablesBehind:
-      options.prismaTables === undefined
-        ? undefined
-        : prismaTablesBehind(options.prismaTables, markersBySpaceId.get(PRISMA_SPACE_ID)),
+    prismaSpaceFinding:
+      skipMarker || options.prismaSpace === undefined
+        ? null
+        : await prismaSpaceFinding(
+            options,
+            options.prismaSpace,
+            markersBySpaceId.get(PRISMA_SPACE_ID),
+          ),
   });
 }
 
 /**
- * The row of the space for Prisma's own tables, when it records a contract the installed release's migrations of the space lead on from. A row at a contract they never reach was written by a later release, which within a major version only added to the tables, so it is not reported.
+ * What the commands that change the database would do with the Prisma space's row, as a finding: nothing at or ahead of the head, `CONTRACT.PRISMA_SPACE_BEHIND` when there is no row or it is behind the head, and `MIGRATION.INSTALLED_SPACE_UNREACHABLE` when this release cannot use it. The application's own marker finding, such as a database with no marker at all, is reported in its place.
  */
-function prismaTablesBehind(
-  space: ContractSpace,
+async function prismaSpaceFinding<TFamilyId extends string, TTargetId extends string>(
+  options: ExecuteDbVerifyOptions<TFamilyId, TTargetId>,
+  contractSpace: ContractSpace,
   row: ContractMarkerRecord | undefined,
-): PrismaTablesBehind | undefined {
-  if (row === undefined || row.storageHash === space.headRef.hash) return undefined;
-  if (!reconstructGraph(space.migrations).nodes.has(row.storageHash)) return undefined;
-  return { markerHash: row.storageHash, headRefHash: space.headRef.hash };
-}
-
-interface PrismaTablesBehind {
-  readonly markerHash: string;
-  readonly headRefHash: string;
-}
-
-function errorPrismaTablesBehind(behind: PrismaTablesBehind): CliStructuredError {
-  const migrate = '{bin} db migrate';
-  return new CliStructuredError(
-    'CONTRACT.PRISMA_SPACE_BEHIND',
-    "Prisma's own tables in this database are in the form an earlier release left them",
-    {
-      why: `The installed release of Prisma keeps them in a later form. The row of the \`${PRISMA_SPACE_ID}\` space records contract ${behind.markerHash}, and the newest the installed release knows is ${behind.headRefHash}.`,
-      fix: `Run \`${migrate}\`, which brings Prisma's own tables up to date before it does anything else; \`{bin} db init\`, \`{bin} db update\` and \`{bin} db sign\` do the same.`,
-      nextActions: [
-        { kind: 'run-command', label: "Bring Prisma's own tables up to date", command: migrate },
-      ],
-      meta: { spaceId: PRISMA_SPACE_ID, ...behind },
-    },
-  );
+): Promise<CliStructuredError | null> {
+  const { driver, familyInstance } = options;
+  const ledger = classificationNeedsLedger(contractSpace, row ?? null)
+    ? await familyInstance.readLedger({ driver, space: PRISMA_SPACE_ID })
+    : [];
+  const position = classifyInstalledSpaceRow({ contractSpace, row: row ?? null, ledger });
+  const headRefHash = contractSpace.headRef.hash;
+  switch (position.kind) {
+    case 'atHead':
+    case 'ahead':
+      return null;
+    case 'behind':
+      return errorPrismaSpaceBehind({
+        why:
+          row === undefined
+            ? `The database has no row of the \`${PRISMA_SPACE_ID}\` space, and the newest contract of that space the installed release knows is ${headRefHash}.`
+            : `The row of the \`${PRISMA_SPACE_ID}\` space records contract ${row.storageHash}, and the newest the installed release knows is ${headRefHash}.`,
+        meta: {
+          spaceId: PRISMA_SPACE_ID,
+          markerHash: row?.storageHash ?? null,
+          headRefHash,
+        },
+      });
+    case 'unreachable':
+      return errorInstalledSpaceUnreachable({
+        spaceId: PRISMA_SPACE_ID,
+        markerHash: position.markerHash,
+        headRefHash,
+        reason: position.reason,
+      });
+  }
 }
 
 function buildLoadInputs<TFamilyId extends string, TTargetId extends string>(
@@ -314,7 +330,7 @@ function finaliseVerifyResult(args: {
   skipMarker: boolean;
   onProgress: OnControlProgress | undefined;
   migrationsDir: string;
-  prismaTablesBehind: PrismaTablesBehind | undefined;
+  prismaSpaceFinding: CliStructuredError | null;
 }): ExecuteDbVerifyResult {
   const { verifyResult, aggregate, skipMarker, onProgress, migrationsDir } = args;
   if (!verifyResult.ok) {
@@ -337,10 +353,7 @@ function finaliseVerifyResult(args: {
         aggregate.app.spaceId,
         verifyResult.value.markerCheck,
         migrationsDir,
-      ) ??
-      (args.prismaTablesBehind === undefined
-        ? null
-        : errorPrismaTablesBehind(args.prismaTablesBehind)));
+      ) ?? args.prismaSpaceFinding);
   emitVerifySpan(onProgress, markerDrift === null ? 'spanEndOk' : 'spanEndError');
   return ok({
     schemaResults: verifyResult.value.schemaCheck.perSpace,
