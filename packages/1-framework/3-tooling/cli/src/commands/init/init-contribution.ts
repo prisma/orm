@@ -15,7 +15,7 @@ export type ContractEntryInput =
 export type ConfigModuleExports = Readonly<Record<string, unknown>>;
 
 /**
- * The config's `contract:` entry as a TypeScript expression node, as a migration's operation calls are: it renders itself and the imports it needs into `prisma.config.ts`, and builds the value that expression computes, so `init` can run the entry to check a Prisma 7 schema before it writes anything. The package that returns it may depend on another installed copy of the framework, so `init` calls these methods and never checks the node's class.
+ * The config's `contract:` entry as a TypeScript expression node, as a migration's operation calls are: it renders itself and the imports it needs into `prisma.config.ts`, and builds the value that expression computes, so `init` can run the entry to check a Prisma 7 schema before it writes anything. The package that returns it may depend on another installed copy of the framework, so `init` calls these methods and never checks the node's class. The CLI re-indents the rendered text to its place in the config, so its line breaks must be layout only.
  */
 export interface ContractEntryNode
   extends Pick<TsExpression, 'renderTypeScript' | 'importRequirements'> {

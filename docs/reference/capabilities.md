@@ -23,8 +23,8 @@ Each capability is declared by the component that knows the fact:
 | --- | --- | --- |
 | Target | What the database provides, by version | `sql.lateral` on PostgreSQL 15 to 18 |
 | Driver | What the connection provides | `sql.interactiveTransactions` |
-| Adapter | What it can write as a query, beyond the database's facts | none on PostgreSQL today |
-| Extension pack | Flags of its own namespace, through the `capabilities` of its descriptor | none of the shipped packs declares one |
+
+No PostgreSQL capability is declared by the adapter, and extension packs declare none. The adapters of targets not yet rebuilt this way still declare a fixed list, which the client counts with the driver's as the connection's (see [MySQL, MariaDB, SQLite and MongoDB](#mysql-mariadb-sqlite-and-mongodb)).
 
 Keys in the `sql` namespace are shared by every SQL target. They are not a separate set for the SQL family.
 

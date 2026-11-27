@@ -168,6 +168,32 @@ describe('templates', () => {
         }),
       );
     });
+
+    it('refuses to build its value from a config module whose export is of the wrong kind', () => {
+      const newestList = `postgres${POSTGRES_NEWEST_VERSION}`;
+      const entry = contractEntryOf({
+        kind: 'starter',
+        mode: 'psl',
+        path: './prisma/contract.prisma',
+      });
+
+      expect(() => entry.contractValue({ [newestList]: 'x', postgresDriver: [] })).toThrow(
+        expect.objectContaining({
+          message: `@internal/postgres/config exports a ${newestList} that is not a list.`,
+        }),
+      );
+      expect(() =>
+        contractEntryOf({ kind: 'prisma7-schema', path: 'prisma/schema.prisma' }).contractValue({
+          prisma7Schema: 1,
+          [newestList]: [],
+          postgresDriver: [],
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          message: '@internal/postgres/config exports a prisma7Schema that is not a function.',
+        }),
+      );
+    });
   });
 
   describe('the quick references show the config init writes', () => {
