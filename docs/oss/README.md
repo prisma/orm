@@ -15,8 +15,8 @@ These pages are written for maintainers and curious contributors who want to und
 | Curious about supply-chain hygiene | [Supply chain](./supply-chain.md) |
 | Wondering how PR CI is structured for cost | [PR CI pipeline](./ci-pipeline.md) |
 | Asking which version line takes a change, or how long Prisma 7 is maintained | [Versioning](./versioning.md#supported-versions) |
-| Reasoning about the version contract (consumer or extension author) | [Versioning](./versioning.md) |
-| Cutting a release (or auditing how) | [Versioning](./versioning.md) |
+| Finding out what is supported, what a version means and what stays compatible | [Versions and support](./versioning.md) |
+| Cutting a release (or auditing how) | [Releasing](./releasing.md) |
 
 ## Pages in this directory
 
@@ -24,4 +24,5 @@ These pages are written for maintainers and curious contributors who want to und
 - [`supply-chain.md`](./supply-chain.md) — License declarations, NOTICE audit, npm provenance, Dependabot soak window.
 - [`ci-pipeline.md`](./ci-pipeline.md) — How PR CI builds once, caches deterministic tasks, and skips heavy work on inert diffs.
 - [`pr-triage.md`](./pr-triage.md) — Criteria for triaging external contributor PRs: fork-CI safety, version-line scope, direction fit, staleness, and the verdict vocabulary.
-- [`versioning.md`](./versioning.md) — Which versions are supported and what each receives, release-candidate cadence and breaking-change policy, lockstep contract (and what it means for skill/extension authors), dist-tag convention, release procedure.
+- [`versioning.md`](./versioning.md) — For users and extension authors: which versions are supported, the four maturity levels, what stays compatible within a major, version numbers, and how to upgrade.
+- [`releasing.md`](./releasing.md) — For maintainers: who can publish, how the root version and the release plan decide what is published, the publish workflow and its checks, and the release procedures.

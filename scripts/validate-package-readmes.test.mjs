@@ -53,4 +53,93 @@ describe('validate package READMEs', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('requires each published package to state the level levels.ts declares', () => {
+    const root = mkdtempSync(join(tmpdir(), 'validate-package-readmes-'));
+    const run = () =>
+      spawnSync(process.execPath, [join(process.cwd(), 'scripts/validate-package-readmes.mjs')], {
+        cwd: root,
+        encoding: 'utf8',
+      });
+
+    try {
+      const dir = join(root, 'packages/9-public/@prisma/orm-mongo');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: '@prisma/orm-mongo' }));
+      writeFileSync(
+        join(dir, 'README.md'),
+        '# @prisma/orm-mongo\n\n> **Maturity level: Generally Available.**\n',
+      );
+      const wrong = run();
+      writeFileSync(
+        join(dir, 'README.md'),
+        '# @prisma/orm-mongo\n\n> **Maturity level: Early Access.**\n',
+      );
+      const right = run();
+
+      assert.deepEqual(
+        {
+          wrong: wrong.status,
+          names: wrong.stderr.includes('orm-mongo/README.md'),
+          right: right.status,
+        },
+        { wrong: 1, names: true, right: 0 },
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('requires each install command to write each package at its level, with a caret only beside a GA database package', () => {
+    const root = mkdtempSync(join(tmpdir(), 'validate-package-readmes-'));
+    const run = () =>
+      spawnSync(process.execPath, [join(process.cwd(), 'scripts/validate-package-readmes.mjs')], {
+        cwd: root,
+        encoding: 'utf8',
+      });
+    const readme = (command) =>
+      `# @prisma/orm-sqlite\n\n> **Maturity level: Early Access.**\n\n\`\`\`sh\n${command}\n\`\`\`\n`;
+
+    try {
+      const dir = join(root, 'packages/9-public/@prisma/orm-sqlite');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: '@prisma/orm-sqlite' }));
+      const outcome = (command) => {
+        writeFileSync(join(dir, 'README.md'), readme(command));
+        const result = run();
+        return { status: result.status, names: result.stderr.includes('orm-sqlite/README.md') };
+      };
+
+      assert.deepEqual(
+        {
+          right: outcome(
+            'pnpm add "@prisma/orm-sqlite@~8.0.1-ea.0" "@prisma/orm-framework@~8.0.1" "@prisma/orm-target-sqlite@~8.0.1-ea.0"',
+          ).status,
+          gaSuffix: outcome(
+            'pnpm add "@prisma/orm-sqlite@~8.0.1-ea.0" "@prisma/orm-framework@~8.0.1-ea.0"',
+          ),
+          missingSuffix: outcome('pnpm add "@prisma/orm-sqlite@~8.0.1"'),
+          caretBelowGaFacade: outcome(
+            'pnpm add "@prisma/orm-sqlite@~8.0.1-ea.0" "@prisma/orm-framework@^8.0.1"',
+          ),
+          tildeBesideGaFacade: outcome(
+            '# beside @prisma/orm-postgres\npnpm add "@prisma/orm-better-auth@~8.0.1"',
+          ),
+          caretBesideGaFacade: outcome(
+            '# beside @prisma/orm-postgres\npnpm add "@prisma/orm-better-auth@^8.0.1"',
+          ).status,
+        },
+        {
+          right: 0,
+          gaSuffix: { status: 1, names: true },
+          missingSuffix: { status: 1, names: true },
+          caretBelowGaFacade: { status: 1, names: true },
+          tildeBesideGaFacade: { status: 1, names: true },
+          caretBesideGaFacade: 0,
+        },
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
