@@ -2,7 +2,7 @@
 
 Canonical DoD (the shape) lives in [`docs/drive/principles/definition-of-done.md`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/definition-of-done.md). This file holds the **team's overlays + validation gates** — the concrete items the agile orchestrator checks at handoff time, in addition to the canonical items each scope already requires.
 
-> **Inherited by every project spec.** This file is the team's DoD floor; per [`drive-specify-project`](../../skills-contrib/drive-specify-project/SKILL.md), every project's `## Project Definition of Done` section inherits these items and adds project-specific conditions on top — it does not restate them.
+> **Inherited by every project spec.** This file is the team's DoD floor; per [`drive-specify-project`](https://github.com/prisma/ignite/blob/main/skills/.pilot/drive-specify-project/SKILL.md), every project's `## Project Definition of Done` section inherits these items and adds project-specific conditions on top — it does not restate them.
 
 Overlays grow by retro accretion (per [`README.md § Maintenance discipline`](./README.md#maintenance-discipline)): a retro reveals a handoff-time gap, the matching scope's overlay grows by one item. Never delete — overlay items become baseline.
 

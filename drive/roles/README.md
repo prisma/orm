@@ -311,7 +311,7 @@ The per-project sub-agent registry is the Orchestrator's working record of which
 
 Each project maintains its registry at `projects/<x>/subagent-registry.md`. This is the **working position** established by the slice that introduced the registry pattern; the final location (separate file vs. `code-review.md § Subagent IDs` vs. `spec.md`) is a slice-author decision. The rationale for the separate-file working position: the registry covers roles beyond `drive-build-workflow`'s implementer/reviewer scope (notably `setup-specialist` and `scaffolder` which operate in the project-setup phase, before `code-review.md` exists). Tying it to `code-review.md` would awkwardly co-locate unrelated artefacts.
 
-See [Alternatives considered — registry location](#registry-location-q6-working-position) below for the full decision record.
+See [Alternatives considered — registry location](#registry-location--working-position) below for the full decision record.
 
 ### Why resumption matters
 
@@ -412,6 +412,6 @@ The layered convention approach is strictly more portable and nearly as strong a
 
 - [`docs/drive/principles/roles-and-personas.md`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/roles-and-personas.md) — process roles (project owner / implementer / reviewer / orchestrator hat). Covers *who owns what across a project lifecycle*, not the execution-layer structural constraint.
 - [`docs/drive/principles/decomposition-and-cost.md`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/decomposition-and-cost.md) — sub-agent continuity and role-variant design: the *why* (context preservation, cost optimization, named-roles-make-dispatch-reproducible). This doc covers the *how* (registry shape, ID-resumption mechanics, escape-hatch).
-- [`.claude/skills/drive-agent-personas/SKILL.md`](../../.claude/skills/drive-agent-personas/SKILL.md) — persona library. Roles and personas are orthogonal; see the role-vs-persona table above for the interaction.
+- [`drive-agent-personas/SKILL.md`](https://github.com/prisma/ignite/blob/main/skills/.pilot/drive-agent-personas/SKILL.md) — persona library. Roles and personas are orthogonal; see the role-vs-persona table above for the interaction.
 - [`drive/triage/README.md`](../triage/README.md) — triage heuristics and ticket-shape patterns. Triage determines which workflow skill runs, which determines which role the agent enters.
 - [Linear: TML-2587](https://linear.app/prisma-data/issue/TML-2587) — the project ticket that introduced this vocabulary.
