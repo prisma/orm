@@ -100,6 +100,7 @@ A `pg.Pool` notices that an idle connection died only when it emits `error`, and
 
 It does not cover:
 
+- a connection that died silently and is used again within the second, which is not checked. Its statement fails with `SqlConnectionError`, or waits with no limit if the peer never answers. The one second is a known limit, and is what keeps a busy application from paying for a check;
 - a connection that dies between the check and the statement, or while a statement runs. That statement fails with `SqlConnectionError`, and the driver never sends it again ([ADR 337](../../../../docs/architecture%20docs/adrs/ADR%20337%20-%20A%20SQL%20driver%20does%20not%20resend%20a%20statement%20after%20its%20connection%20fails.md));
 - the application's own `pool.query()` and `pool.connect()`, which do not pass through the driver;
 - a connection the application holds with `acquireConnection()`, which is checked when it is taken, not later;

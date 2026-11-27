@@ -66,7 +66,7 @@ The check does not break that promise. It is driver behaviour that manages conne
 
 This record accepts the check on these terms:
 
-- **It is one extra round trip, documented, on a connection idle for a second or more.** A connection used within the last second is used without one, so a busy application pays nothing. The Postgres driver's README describes it and lists every statement the driver sends that the user did not write.
+- **It is at most one extra round trip for each connection the driver takes, documented, and only on a connection idle for a second or more.** Usually that is one per request; a request that finds dead connections pays one for each it checks. A connection used within the last second by both the wall clock and the monotonic clock is used without one, so a busy application pays nothing; a clock that moved backwards forces a check, and a connection last used before another connection's failed check started is evicted without one. The Postgres driver's README describes it and lists every statement the driver sends that the user did not write.
 - **It sends no user statement twice.** The caller's statement is compiled to one statement, as ADR 003 says, and is sent once, whatever the check finds.
 - **Taking another connection happens before any user statement is sent.** The caller asked for its statement to run on a live connection, and that is what it gets. The driver does not fall back to a second attempt after the caller's statement failed; that is the resend this record declines.
 
@@ -85,8 +85,9 @@ This record accepts the check on these terms:
 
 ## Consequences
 
-- A request no longer fails, or waits with no limit, because the pool handed the driver a connection that died while idle.
-- A busy application pays nothing: a connection used within the last second is used without a check.
+- A request no longer fails, or waits with no limit, because the pool handed the driver a connection that died while it sat idle for a second or more.
+- A connection that died silently and is used again within the second is not checked, so the caller's statement still fails, or waits with no limit. The one second is a known limit: it is what keeps a busy application from paying for a check.
+- A busy application pays nothing: a connection used within the last second, by both clocks, is used without a check. A clock that moved backwards forces a check, and a connection last used before another connection's failed check started is evicted without one.
 - A connection that fails between the check and the statement still fails that statement. The application sees it as `SqlConnectionError` and decides what to do.
 - The Postgres driver's README lists each statement the driver sends on its own account, so the extra round trips are documented and bounded.
 - A check can time out on a healthy connection, for example behind a transaction-mode pooler that is out of server connections, or when the process's event loop is blocked for longer than the time limit. The driver then evicts that connection and the older idle ones, which costs reconnects and up to the time limit in latency, never a wrong result.

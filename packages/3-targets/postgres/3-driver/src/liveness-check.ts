@@ -38,13 +38,14 @@ class PoolLastUseRecord implements PoolLastUse {
   readonly #clock: Clock;
   readonly #lastUsed = new WeakMap<object, Instant>();
   #evictionCutoff: number | undefined;
-  #emitsConnect: boolean;
+  /** True for a `pg.Pool`, or a pool that emitted `connect` while the record listened: every client it opens has a record, so a client without one was last used before the record existed, and so before any cutoff. */
+  #recordsEveryNewClient: boolean;
 
   constructor(pool: PoolEvents, clock: Clock) {
     this.#clock = clock;
-    this.#emitsConnect = pool instanceof Pool;
+    this.#recordsEveryNewClient = pool instanceof Pool;
     pool.on('connect', (client) => {
-      this.#emitsConnect = true;
+      this.#recordsEveryNewClient = true;
       this.#lastUsed.set(client, clock.now());
     });
     pool.on('release', (_error, client) => this.#lastUsed.set(client, clock.now()));
@@ -52,7 +53,8 @@ class PoolLastUseRecord implements PoolLastUse {
 
   verdict(client: object): CheckoutVerdict {
     const lastUsed = this.#lastUsed.get(client);
-    if (lastUsed === undefined) return this.#predatesRecord() ? 'evict' : 'check';
+    if (lastUsed === undefined)
+      return this.#recordsEveryNewClient && this.#evictionCutoff !== undefined ? 'evict' : 'check';
     if (this.#evictionCutoff !== undefined && lastUsed.monotonic < this.#evictionCutoff)
       return 'evict';
     const now = this.#clock.now();
@@ -63,11 +65,6 @@ class PoolLastUseRecord implements PoolLastUse {
 
   now(): Instant {
     return this.#clock.now();
-  }
-
-  /** A `pg.Pool`, or a pool that emitted `connect` while the record listened, gives every client it opens since a record, so a client without one was last used before the record existed, and so before any cutoff. */
-  #predatesRecord(): boolean {
-    return this.#emitsConnect && this.#evictionCutoff !== undefined;
   }
 
   recordFailedCheck(startedAt: Instant): void {

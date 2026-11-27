@@ -198,13 +198,14 @@ export async function startDyingConnectionsProxy(target: {
   };
 }
 
-/** A connection string like `connectionString`, through the proxy on `port`. */
-/** A connection string like `connectionString`, through the proxy on `port`. It drops `host` and `port` query parameters, which pg would let override the proxy's address. */
+/**
+ * A connection string like `connectionString`, through the proxy on `port`. It drops `host` and `port` query parameters, which pg would let override the proxy's address, and turns TLS off: the proxy reads the protocol in plaintext and connects to the database in plaintext, so a server that only accepts TLS refuses the connection at startup.
+ */
 export function throughProxy(connectionString: string, port: number): string {
   const url = new URL(connectionString);
   url.host = `127.0.0.1:${port}`;
-  url.searchParams.delete('host');
-  url.searchParams.delete('port');
+  for (const name of ['host', 'port', 'ssl', 'sslmode']) url.searchParams.delete(name);
+  url.searchParams.set('sslmode', 'disable');
   return url.toString();
 }
 
