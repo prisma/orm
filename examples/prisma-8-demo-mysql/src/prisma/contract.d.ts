@@ -19,7 +19,7 @@ export type StorageHash =
   StorageHashBase<'830c1f9f99482cc314ddb14721e47c4de93723363e9ac7bab71519db37917560'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'bbed4a8a3ca809c6b70154a0eccd13351c38e39386cf820a33c7fbca88a16c42'>;
+  ProfileHashBase<'ee8405be69c28f45e79c40c3c7d60135a2860ef72b192ab25d0cbac6cc2d3ca6'>;
 
 export type CodecTypes = MysqlTypes;
 export type LaneCodecTypes = CodecTypes;

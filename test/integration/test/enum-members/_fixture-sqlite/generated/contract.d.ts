@@ -19,7 +19,7 @@ export type StorageHash =
   StorageHashBase<'b5c5ecb5802caec4da4e4343f2b5789aa04da1c5284382636529d9c92237d4da'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'0f0eba589e341f164b3bab67df828ca46ed7d829e29febd6c6082c7efc2a259d'>;
+  ProfileHashBase<'e1a41dfc64a304f5b58ec3d267de00969dbb0440228c8b54a2bacda212dff73a'>;
 
 export type CodecTypes = SqliteTypes;
 export type LaneCodecTypes = CodecTypes;

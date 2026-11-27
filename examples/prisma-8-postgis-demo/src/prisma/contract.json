@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "fd50ef880cba9fa35c36360592d3224bae5806380197f5f41e8eb3cdf3ca3597",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "cafe": {
       "model": "Cafe",

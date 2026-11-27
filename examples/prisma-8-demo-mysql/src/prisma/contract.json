@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "mysql",
-  "profileHash": "bbed4a8a3ca809c6b70154a0eccd13351c38e39386cf820a33c7fbca88a16c42",
+  "profileHash": "ee8405be69c28f45e79c40c3c7d60135a2860ef72b192ab25d0cbac6cc2d3ca6",
   "roots": {
     "Event": {
       "model": "Event",

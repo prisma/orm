@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "sqlite",
-  "profileHash": "0b7236063a7d94092f09f3dce01e900196c981fa611ee453220e2ef934d2553f",
+  "profileHash": "e7debde2409bac5e63af349ff6787bbf01ec56a9876d92891cb0c141dfafe0ba",
   "roots": {
     "accounts": {
       "model": "Account",

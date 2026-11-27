@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "sqlite",
-  "profileHash": "0f0eba589e341f164b3bab67df828ca46ed7d829e29febd6c6082c7efc2a259d",
+  "profileHash": "e1a41dfc64a304f5b58ec3d267de00969dbb0440228c8b54a2bacda212dff73a",
   "roots": {
     "scalar": {
       "model": "Scalar",

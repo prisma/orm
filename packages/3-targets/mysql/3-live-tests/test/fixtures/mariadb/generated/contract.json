@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "mariadb",
-  "profileHash": "c467a4c53127c1ddb3272d03cff89ac3a4ccd64d2924465e168c3b235930b02a",
+  "profileHash": "3d8dc347b4e4421c35fa29ce4db91822d5726765f0ebf8d3a5deea2103a4027f",
   "roots": {
     "Account": {
       "model": "Account",

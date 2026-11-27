@@ -128,10 +128,10 @@ interface ContractHashes {
   readonly profileHash: string;
 }
 
-const POSTGRES_PROFILE_HASH = '833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174';
+const POSTGRES_PROFILE_HASH = '18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619';
 const MONGO_PROFILE_HASH = '8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69';
-const SQLITE_PROFILE_HASH = '0f0eba589e341f164b3bab67df828ca46ed7d829e29febd6c6082c7efc2a259d';
-const MYSQL_PROFILE_HASH = 'bbed4a8a3ca809c6b70154a0eccd13351c38e39386cf820a33c7fbca88a16c42';
+const SQLITE_PROFILE_HASH = 'e1a41dfc64a304f5b58ec3d267de00969dbb0440228c8b54a2bacda212dff73a';
+const MYSQL_PROFILE_HASH = 'ee8405be69c28f45e79c40c3c7d60135a2860ef72b192ab25d0cbac6cc2d3ca6';
 
 /** The hashes of each starter's contract. A template change that changes a starter's contract changes them. */
 const CELLS: ReadonlyArray<{

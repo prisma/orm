@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "sqlite",
-  "profileHash": "40aa60aeb69c26d51ca49298da28d336f934e5f524bf7b06475484e113c23a4d",
+  "profileHash": "4d0d33fe7360f3c57c83aa84cf19205d0e904a6574628af2afd7f0dfe5c1effc",
   "roots": {
     "tasks": {
       "model": "Task",

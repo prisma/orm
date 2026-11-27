@@ -286,38 +286,8 @@
     }
   },
   "extensions": {},
-  "capabilities": {
-    "postgres": {
-      "distinctOn": true,
-      "forKeyShare": true,
-      "forNoKeyUpdate": true,
-      "jsonAgg": true,
-      "lateral": true,
-      "limit": true,
-      "orderBy": true,
-      "returning": true
-    },
-    "sql": {
-      "checkConstraint": true,
-      "defaultInInsert": true,
-      "enums": true,
-      "forShare": true,
-      "forUpdate": true,
-      "insertOnConflictSkip": true,
-      "insertOnConflictTarget": true,
-      "insertOnConflictWithoutTarget": true,
-      "jsonAgg": true,
-      "jsonAggWithoutTruncation": true,
-      "lateral": true,
-      "lockNowait": true,
-      "lockOf": true,
-      "lockSkipLocked": true,
-      "outerReferencesInDerivedTables": true,
-      "returning": true,
-      "scalarList": true
-    }
-  },
-  "profileHash": "833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174",
+  "capabilities": {},
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
     "storageHash": "765caee7120444e2bba25a3b8b456114981ab5ff5f2031d563bc0a1867b65858",
