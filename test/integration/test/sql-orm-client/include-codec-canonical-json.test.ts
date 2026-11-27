@@ -9,7 +9,14 @@ import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { vector } from '@internal/extension-pgvector/column-types';
 import pgvector from '@internal/extension-pgvector/pack';
 import pgvectorRuntime from '@internal/extension-pgvector/runtime';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -73,7 +80,7 @@ const ReadingWithStations = Reading.relations({
 }).sql({ table: 'canonical_readings' });
 
 const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   extensions: { pgvector },
   models: { Reading: ReadingWithStations, Station },
 });

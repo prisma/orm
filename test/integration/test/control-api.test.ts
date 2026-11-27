@@ -4,10 +4,16 @@ import { int4Column, textColumn } from '@internal/adapter-postgres/column-types'
 import postgresAdapter from '@internal/adapter-postgres/control';
 import { createControlClient } from '@internal/cli/control-api';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { sqlEmission } from '@internal/sql-contract-emitter';
@@ -28,7 +34,7 @@ const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: fa
  */
 function createTestContract(): Contract<SqlStorage> {
   return defineContract({
-    databaseVersion: 18,
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     models: {
       User: model('User', {
         fields: {
@@ -103,7 +109,7 @@ describe('control-api', () => {
               family: sql,
               target: postgres,
               adapter: postgresAdapter,
-              driver: postgresDriver,
+              driver: postgresDriverDescriptor,
               extensions: [],
             });
 
@@ -122,7 +128,7 @@ describe('control-api', () => {
               family: sql,
               target: postgres,
               adapter: postgresAdapter,
-              driver: postgresDriver,
+              driver: postgresDriverDescriptor,
               extensions: [],
             });
 
@@ -152,7 +158,7 @@ describe('control-api', () => {
               family: sql,
               target: postgres,
               adapter: postgresAdapter,
-              driver: postgresDriver,
+              driver: postgresDriverDescriptor,
               extensions: [],
             });
 
@@ -187,7 +193,7 @@ describe('control-api', () => {
               family: sql,
               target: postgres,
               adapter: postgresAdapter,
-              driver: postgresDriver,
+              driver: postgresDriverDescriptor,
               extensions: [],
             });
 
@@ -231,7 +237,7 @@ describe('control-api', () => {
               family: sql,
               target: postgres,
               adapter: postgresAdapter,
-              driver: postgresDriver,
+              driver: postgresDriverDescriptor,
               extensions: [],
             });
 
@@ -269,7 +275,7 @@ describe('control-api', () => {
               family: sql,
               target: postgres,
               adapter: postgresAdapter,
-              driver: postgresDriver,
+              driver: postgresDriverDescriptor,
               extensions: [],
             });
 
@@ -316,7 +322,7 @@ describe('control-api', () => {
               family: sql,
               target: postgres,
               adapter: postgresAdapter,
-              driver: postgresDriver,
+              driver: postgresDriverDescriptor,
               extensions: [],
             });
 
@@ -374,7 +380,7 @@ describe('control-api', () => {
               family: sql,
               target: postgres,
               adapter: postgresAdapter,
-              driver: postgresDriver,
+              driver: postgresDriverDescriptor,
               extensions: [],
             });
 
@@ -395,7 +401,7 @@ describe('control-api', () => {
                   family: sql,
                   target: postgres,
                   adapter: postgresAdapter,
-                  driver: postgresDriver,
+                  driver: postgresDriverDescriptor,
                   extensions: [],
                 }),
               );
@@ -433,7 +439,7 @@ describe('control-api', () => {
               family: sql,
               target: postgres,
               adapter: postgresAdapter,
-              driver: postgresDriver,
+              driver: postgresDriverDescriptor,
               extensions: [],
             });
 

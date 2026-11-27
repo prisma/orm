@@ -20,6 +20,8 @@ import {
   int4Column,
   model,
   now,
+  postgres18,
+  postgresDriver,
   runSchemaVerify,
   textColumn,
   timeouts,
@@ -57,7 +59,7 @@ describe('db verify against the DDL Prisma 7 generates', () => {
           )`,
       ]);
       const contract = defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: {
           Tag: model('Tag', {
             fields: {
@@ -94,7 +96,7 @@ describe('db verify against the DDL Prisma 7 generates', () => {
           )`,
       ]);
       const contract = defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: {
           Timestamps: model('Timestamps', {
             fields: {
@@ -109,7 +111,7 @@ describe('db verify against the DDL Prisma 7 generates', () => {
       expect(currentTimestamp).toMatchObject({ ok: true, schema: { issues: [] } });
 
       const withoutPrecision = defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: {
           Timestamps: model('Timestamps', {
             fields: {
@@ -155,7 +157,7 @@ describe('db verify against the DDL Prisma 7 generates', () => {
           )`,
       ]);
       const contract = defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: {
           NativeTypes: model('NativeTypes', {
             fields: {
@@ -190,7 +192,10 @@ describe('db verify against the DDL Prisma 7 generates', () => {
           )`,
       ]);
       const contract = defineContract(
-        { databaseVersion: 18, extensions: { citext: citextPack } },
+        {
+          requiredCapabilities: [...postgres18, ...postgresDriver],
+          extensions: { citext: citextPack },
+        },
         ({ field, model }) => ({
           models: {
             Citext: model('Citext', {
@@ -235,7 +240,7 @@ describe('db verify against the DDL Prisma 7 generates', () => {
         `ALTER TABLE "Post" ADD CONSTRAINT "Post_legacyThingId_fkey" FOREIGN KEY ("legacyThingId") REFERENCES "LegacyThing"("id") ON DELETE SET NULL ON UPDATE CASCADE`,
       ]);
       const contract = defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: {
           User: model('User', {
             fields: {

@@ -1,6 +1,14 @@
 import { int4Column, rawColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { defineContract, field, model, rel, sql } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+  sql,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -34,7 +42,10 @@ const Shelf = ShelfBase.relations({
   books: rel.hasMany(() => Book, { by: 'shelfId' }),
 }).sql({ table: 'raw_shelves' });
 
-const contract = defineContract({ databaseVersion: 18, models: { Shelf, Book } });
+const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Shelf, Book },
+});
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
     contract: withIncludeStrategy(contract, strategy),

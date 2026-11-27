@@ -1,7 +1,14 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { Contract } from '@internal/contract/types';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
@@ -41,7 +48,10 @@ const Account = AccountBase.relations({
   notes: rel.hasMany(() => Note, { by: ['tenantId', 'accountId'] }),
 }).sql({ table: 'cpk_accounts' });
 
-const accountsContract = defineContract({ databaseVersion: 18, models: { Account, Note } });
+const accountsContract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Account, Note },
+});
 function accountsContext(strategy: IncludeStrategy) {
   return createExecutionContext({
     contract: withIncludeStrategy(accountsContract, strategy),

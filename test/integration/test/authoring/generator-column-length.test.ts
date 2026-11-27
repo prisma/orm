@@ -5,7 +5,14 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import sqliteAdapter from '@internal/adapter-sqlite/control';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { defineContract, field, gen, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  gen,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
@@ -125,7 +132,7 @@ describe('a generator call in a TypeScript contract on a Postgres column with a 
   function build(value: ReturnType<typeof field.column>) {
     return () =>
       defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: {
           Row: model('Row', { fields: { id: field.column(varcharColumn(36)).id(), value } }),
         },

@@ -1,11 +1,11 @@
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { test } from 'vitest';
 import { vector } from '../src/exports/column-types';
 import pgvector from '../src/exports/pack';
 
 test('.default() on a vector field takes the input type of pg/vector@1', () => {
   defineContract(
-    { databaseVersion: 18, extensions: { pgvector } },
+    { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
     ({ field, model, type, gen }) => {
       const Embedding = field.column(type.pgvector.Vector(3));
       return {

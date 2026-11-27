@@ -7,10 +7,17 @@ import {
   numericStringColumn,
   textColumn,
 } from '@internal/adapter-postgres/column-types';
-import { autoincrement, defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  autoincrement,
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 
 export const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     T: model('T', {
       fields: {

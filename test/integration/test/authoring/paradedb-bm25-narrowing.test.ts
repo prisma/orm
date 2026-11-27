@@ -9,13 +9,22 @@
  */
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import paradedbPack from '@internal/extension-paradedb/pack';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 describe('paradedb bm25 narrowing in TS authoring DSL', () => {
   it('typechecks and accepts a well-formed bm25 index via the helpers factory', () => {
     const contract = defineContract(
-      { databaseVersion: 18, extensions: { paradedb: paradedbPack } },
+      {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+        extensions: { paradedb: paradedbPack },
+      },
       ({ model: helperModel, field: helperField }) => {
         const Doc = helperModel('Doc', {
           fields: {
@@ -50,7 +59,10 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
   it('rejects a bm25 index with an unknown options key at compile time', () => {
     expect(() =>
       defineContract(
-        { databaseVersion: 18, extensions: { paradedb: paradedbPack } },
+        {
+          requiredCapabilities: [...postgres18, ...postgresDriver],
+          extensions: { paradedb: paradedbPack },
+        },
         ({ model: helperModel, field: helperField }) => {
           const Doc = helperModel('Doc', {
             fields: {
@@ -76,7 +88,10 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
   it('rejects a bm25 index missing the required key_field at compile time', () => {
     expect(() =>
       defineContract(
-        { databaseVersion: 18, extensions: { paradedb: paradedbPack } },
+        {
+          requiredCapabilities: [...postgres18, ...postgresDriver],
+          extensions: { paradedb: paradedbPack },
+        },
         ({ model: helperModel, field: helperField }) => {
           const Doc = helperModel('Doc', {
             fields: {
@@ -102,7 +117,10 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
   it('rejects an unregistered index type at compile time', () => {
     expect(() =>
       defineContract(
-        { databaseVersion: 18, extensions: { paradedb: paradedbPack } },
+        {
+          requiredCapabilities: [...postgres18, ...postgresDriver],
+          extensions: { paradedb: paradedbPack },
+        },
         ({ model: helperModel, field: helperField }) => {
           const Doc = helperModel('Doc', {
             fields: {
@@ -128,7 +146,10 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
   it('rejects options without a type at compile time', () => {
     expect(() =>
       defineContract(
-        { databaseVersion: 18, extensions: { paradedb: paradedbPack } },
+        {
+          requiredCapabilities: [...postgres18, ...postgresDriver],
+          extensions: { paradedb: paradedbPack },
+        },
         ({ model: helperModel, field: helperField }) => {
           const Doc = helperModel('Doc', {
             fields: {
@@ -165,9 +186,9 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
       ],
     }));
 
-    expect(() => defineContract({ databaseVersion: 18, models: { Doc } })).toThrow(
-      /unregistered index type "made-up"/,
-    );
+    expect(() =>
+      defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver], models: { Doc } }),
+    ).toThrow(/unregistered index type "made-up"/);
   });
 
   it('imported bare model() still accepts a default index with no type/options', () => {
@@ -182,12 +203,15 @@ describe('paradedb bm25 narrowing in TS authoring DSL', () => {
     }));
     expectTypeOf<typeof Doc.__indexTypes>().toEqualTypeOf<Record<never, never>>();
 
-    defineContract({ databaseVersion: 18, models: { Doc } });
+    defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver], models: { Doc } });
   });
 
   it("helpers-bound model() carries the merged packs' index-type map", () => {
     defineContract(
-      { databaseVersion: 18, extensions: { paradedb: paradedbPack } },
+      {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+        extensions: { paradedb: paradedbPack },
+      },
       ({ model: helperModel, field: helperField }) => {
         const Doc = helperModel('Doc', {
           fields: {

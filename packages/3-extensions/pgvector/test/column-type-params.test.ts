@@ -1,11 +1,11 @@
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { vector } from '../src/exports/column-types';
 import pgvector from '../src/exports/pack';
 
 function buildWithEmbedding(length: number) {
   return defineContract(
-    { databaseVersion: 18, extensions: { pgvector } },
+    { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
     ({ field, model, gen, type }) => ({
       models: {
         Doc: model('Doc', {

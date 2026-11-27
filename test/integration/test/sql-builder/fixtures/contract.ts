@@ -7,6 +7,8 @@ import {
   fullTextIndex,
   gen,
   model,
+  postgres18,
+  postgresDriver,
   rel,
   sql,
   type,
@@ -97,7 +99,7 @@ const User = UserBase.relations({
 }).sql({ table: 'users' });
 
 export const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   extensions: { pgvector },
   models: {
     User,

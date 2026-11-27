@@ -1,5 +1,11 @@
 import { float4Column, float8Column, int4Column } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 
@@ -18,7 +24,10 @@ const Reading = model('Reading', {
   },
 }).sql({ table: 'float_default_readings' });
 
-const contract = defineContract({ databaseVersion: 18, models: { Reading } });
+const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Reading },
+});
 
 describe('a NaN or infinite float default authored in TypeScript', () => {
   it(

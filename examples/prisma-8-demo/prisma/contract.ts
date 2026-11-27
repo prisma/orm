@@ -5,6 +5,8 @@ import {
   enumType,
   fullTextIndex,
   member,
+  postgres18,
+  postgresDriver,
   rel,
   sql,
 } from '@prisma/orm-postgres/contract-builder';
@@ -22,7 +24,7 @@ const Priority = enumType(
 const UserEnum = enumType('user_type', pgText, member('admin', 'admin'), member('user', 'user'));
 
 export const contract = defineContract(
-  { databaseVersion: 18, extensions: { pgvector } },
+  { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
   ({ field, model, type, gen }) => {
     const Embedding1536 = field.column(type.pgvector.Vector(1536));
 

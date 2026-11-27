@@ -1,5 +1,11 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 
 /**
  * To-state for the nullable-tightening journey: `User.name`,
@@ -10,7 +16,7 @@ import { defineContract, field, model } from '@internal/postgres/contract-builde
  * tightened.
  */
 export const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     User: model('User', {
       fields: {

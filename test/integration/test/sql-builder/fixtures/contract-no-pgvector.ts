@@ -5,7 +5,16 @@
 // package cannot resolve degrades to `any` under `skipLibCheck`, which makes
 // every codec-resolved type assertion vacuous.
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, gen, model, rel, type } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  gen,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+  type,
+} from '@internal/postgres/contract-builder';
 
 const UserBase = model('User', {
   fields: {
@@ -60,7 +69,7 @@ const User = UserBase.relations({
 }).sql({ table: 'users' });
 
 export const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     User,
     Post,

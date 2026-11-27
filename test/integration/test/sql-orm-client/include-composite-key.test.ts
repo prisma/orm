@@ -1,6 +1,13 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -42,7 +49,10 @@ const Customer = CustomerBase.relations({
   orders: rel.hasMany(() => Order, { by: ['tenantId', 'customerId'] }),
 }).sql({ table: 'composite_customers' });
 
-const contract = defineContract({ databaseVersion: 18, models: { Customer, Order } });
+const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Customer, Order },
+});
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
     contract: withIncludeStrategy(contract, strategy),

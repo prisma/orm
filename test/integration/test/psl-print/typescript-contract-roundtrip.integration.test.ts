@@ -6,6 +6,8 @@ import {
   defineContract,
   field,
   model,
+  postgres18,
+  postgresDriver,
   rel,
   sql,
 } from '@internal/postgres/contract-builder';
@@ -49,7 +51,10 @@ const Session = model('Session', {
   indexes: [constraints.index([cols.accountId])],
 }));
 
-const checksAndRelations = defineContract({ databaseVersion: 18, models: { Account, Session } });
+const checksAndRelations = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Account, Session },
+});
 
 const Author = model('Author', {
   fields: { id: field.column(int4Column).default(autoincrement()).id() },
@@ -63,7 +68,10 @@ const Article = model('Article', {
   },
 }).sql({ table: 'article' });
 
-const oneSidedRelation = defineContract({ databaseVersion: 18, models: { Author, Article } });
+const oneSidedRelation = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Author, Article },
+});
 
 const cases: ReadonlyArray<{ readonly name: string; readonly contract: Contract<SqlStorage> }> = [
   {

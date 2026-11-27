@@ -1,11 +1,12 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import {
-  type CapabilityMatrix,
-  defaultConnectionCapabilities,
   defineContract,
   field,
   model,
+  postgres18,
+  postgresDriver,
+  type RequiredCapabilities,
   rel,
 } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
@@ -44,22 +45,19 @@ const Owner = OwnerBase.relations({
   items: rel.hasMany(() => Item, { by: 'ownerId' }),
 }).sql({ table: 'write_owners' });
 
-// Each case states its capabilities list. The lists are typed as arrays, which add nothing to a contract's type, so both contracts have one type and each case's collections take it; the values differ by `returning`.
-const withReturning: CapabilityMatrix[] = [...defaultConnectionCapabilities];
-const withoutReturning: CapabilityMatrix[] = [
-  ...defaultConnectionCapabilities,
-  { sql: { returning: false } },
-];
+// Each case states its list of required capabilities. The lists are typed as `RequiredCapabilities`, which names no key, so both contracts have one type and each case's collections take it; the values differ by `sql.returning`.
+const withReturning: RequiredCapabilities = [...postgres18, ...postgresDriver];
+const withoutReturning: RequiredCapabilities = withReturning.filter(
+  (capability) => capability !== 'sql.returning',
+);
 const contract = defineContract({
-  databaseVersion: 18,
-  capabilities: withReturning,
+  requiredCapabilities: withReturning,
   models: { Owner, Item },
 });
 const contracts = {
   'with returning': contract,
   'without returning': defineContract({
-    databaseVersion: 18,
-    capabilities: withoutReturning,
+    requiredCapabilities: withoutReturning,
     models: { Owner, Item },
   }),
 };

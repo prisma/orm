@@ -1,5 +1,5 @@
 import type { ExtensionPackRef } from '@internal/framework-components/components';
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 
 function contractWithAlias(output: Record<string, unknown>) {
@@ -11,7 +11,12 @@ function contractWithAlias(output: Record<string, unknown>) {
     targetId: 'postgres',
     authoring: { type: { ids: { Short: { kind: 'typeAlias', output } } } },
   } as unknown as ExtensionPackRef<'sql', 'postgres'>;
-  return () => defineContract({ databaseVersion: 18, extensions: { shortIds }, models: {} });
+  return () =>
+    defineContract({
+      requiredCapabilities: [...postgres18, ...postgresDriver],
+      extensions: { shortIds },
+      models: {},
+    });
 }
 
 describe('a Postgres TypeScript contract whose extension contributes a type alias', () => {

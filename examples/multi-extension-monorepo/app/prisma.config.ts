@@ -8,13 +8,16 @@
  */
 
 import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 import audit from '../packages/audit/src/control';
 import featureFlags from '../packages/feature-flags/src/control';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: { path: './src/contract.prisma', databaseVersion: 18 },
+    contract: {
+      path: './src/contract.prisma',
+      requiredCapabilities: [...postgres18, ...postgresDriver],
+    },
     extensions: [audit, featureFlags],
     migrations: { dir: 'migrations' },
   }),

@@ -1,9 +1,14 @@
 import { vector } from '@prisma/orm-extension-pgvector/column-types';
 import pgvector from '@prisma/orm-extension-pgvector/pack';
-import { defineContract, rel } from '@prisma/orm-postgres/contract-builder';
+import {
+  defineContract,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@prisma/orm-postgres/contract-builder';
 
 export const contract = defineContract(
-  { databaseVersion: 18, extensions: { pgvector } },
+  { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
   ({ field, model, type, gen }) => {
     const Embedding3 = field.column(type.pgvector.Vector(3));
     const User = model('User', {

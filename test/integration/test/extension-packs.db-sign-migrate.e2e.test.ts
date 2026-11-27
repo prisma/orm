@@ -308,12 +308,12 @@ withTempDir(({ createTempDir }) => {
     function declareVector(project: { readonly contractPath: string }, declaration: string) {
       const source = readFileSync(project.contractPath, 'utf8')
         .replace(
-          "import { defineContract, field, model } from '@internal/postgres/contract-builder';",
+          "import { defineContract, field, model, postgres18, postgresDriver } from '@internal/postgres/contract-builder';",
           "import { defineContract, extension, field, model, unbound } from '@internal/postgres/contract-builder';",
         )
         .replace(
-          'export const contract = defineContract({\n  databaseVersion: 18,',
-          `export const contract = defineContract({\n  databaseVersion: 18,\n  ${declaration}`,
+          'export const contract = defineContract({\n  requiredCapabilities: [...postgres18, ...postgresDriver],',
+          `export const contract = defineContract({\n  requiredCapabilities: [...postgres18, ...postgresDriver],\n  ${declaration}`,
         );
       writeFileSync(project.contractPath, source);
     }

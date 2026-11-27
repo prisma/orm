@@ -1,6 +1,13 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -30,7 +37,10 @@ const Owner = OwnerBase.relations({
   items: rel.hasMany(() => Item, { by: 'ownerCode' }),
 }).sql({ table: 'ci_owners' });
 
-const contract = defineContract({ databaseVersion: 18, models: { Owner, Item } });
+const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Owner, Item },
+});
 
 describe.each(includeStrategies)('includes matched by a case-insensitive key (%s)', (strategy) => {
   it(

@@ -43,6 +43,8 @@ import {
   model,
   nativeEnum,
   pg,
+  postgres18,
+  postgresDriver,
 } from '@internal/postgres/contract-builder';
 
 const Mood = nativeEnum('Mood', 'happy', 'sad');
@@ -88,7 +90,7 @@ const Money = field.column({
 const Embedding = field.column({ codecId: 'pg/vector@1', typeParams: { length: 3 } } as const);
 
 export const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   extensions: { pgvector, postgis },
   models: {
     Scalar: model('Scalar', {

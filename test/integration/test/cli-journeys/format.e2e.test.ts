@@ -34,7 +34,7 @@ export default definePrismaConfig({
   extensions: [],
   formatter: { newline: 'LF' },
   contract: prismaContract('./contract.prisma', {
-  capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
+  capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
     output: 'output/contract.json',
     target: postgres,
     createNamespace: postgresCreateNamespace,
@@ -82,7 +82,7 @@ withTempDir(({ createTempDir }) => {
 import { definePrismaConfig } from '@prisma/cli-engine';
 import sql from '@prisma/orm-postgres/family/control';
 import postgres from '@prisma/orm-postgres/target/control';
-import { postgresContractCapabilities } from '@prisma/orm-postgres/config';
+import { postgresContractCapabilities, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: {

@@ -1,5 +1,5 @@
 import type { ColumnTypeDescriptor } from '@internal/framework-components/codec';
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { pgGeometryColumn } from '../src/core/codecs';
 import { geometry } from '../src/exports/column-types';
@@ -7,7 +7,7 @@ import postgis from '../src/exports/pack';
 
 function buildWithLocation(descriptor: ColumnTypeDescriptor) {
   return defineContract(
-    { databaseVersion: 18, extensions: { postgis } },
+    { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { postgis } },
     ({ field, model, gen, type }) => ({
       models: {
         Place: model('Place', {

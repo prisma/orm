@@ -14,7 +14,7 @@
  * contract and verify reports the index not-equal.
  */
 
-import { sql } from '@internal/postgres/contract-builder';
+import { postgres18, postgresDriver, sql } from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 import {
   defineContract,
@@ -49,7 +49,7 @@ describe('index drift', () => {
         });
 
         const contract = defineContract({
-          databaseVersion: 18,
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           models: {
             User: model('User', {
               fields: {
@@ -97,7 +97,7 @@ describe('index drift', () => {
         });
 
         const contract = defineContract(
-          { databaseVersion: 18 },
+          { requiredCapabilities: [...postgres18, ...postgresDriver] },
           ({ field: packField, model: packModel }) => ({
             models: {
               User: packModel('User', {
@@ -143,7 +143,7 @@ describe('index drift', () => {
         });
 
         const contract = defineContract({
-          databaseVersion: 18,
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           models: {
             User: model('User', {
               fields: {

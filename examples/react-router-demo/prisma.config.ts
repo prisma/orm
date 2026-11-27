@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 
 const rawContractSource = process.env['PRISMA_CONTRACT_SOURCE'];
 const contractSource =
@@ -18,7 +18,10 @@ export default definePrismaConfig({
     contract:
       contractSource === 'ts'
         ? './src/prisma/contract.ts'
-        : { path: './src/prisma/contract.prisma', databaseVersion: 18 },
+        : {
+            path: './src/prisma/contract.prisma',
+            requiredCapabilities: [...postgres18, ...postgresDriver],
+          },
     ...(process.env['DATABASE_URL'] !== undefined && {
       db: { connection: process.env['DATABASE_URL'] },
     }),

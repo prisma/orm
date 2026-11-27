@@ -2,7 +2,11 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { float4Column, int4Column } from '@internal/adapter-postgres/column-types';
 import type { Contract } from '@internal/contract/types';
-import { postgresContractCapabilities } from '@internal/postgres/config';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
 import { defineContract, field, model } from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
@@ -21,7 +25,7 @@ async function load(schema: string) {
   const path = join(mkdtempSync(join(tmpdir(), 'psl-codec-reads-')), 'schema.prisma');
   writeFileSync(path, `// use prisma-8\n\n${schema}`, 'utf-8');
   return prismaContract(path, {
-    capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
+    capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
     target: postgresPackRef,
     createNamespace: postgresCreateNamespace,
     enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
@@ -429,7 +433,7 @@ model Tag {
     ])('refuses %s when the TypeScript contract is built', (_name, value, codecId, message) => {
       const build = () =>
         defineContract({
-          databaseVersion: 18,
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           models: {
             Reading: model('Reading', {
               fields: { id: field.column(int4Column).id(), value: value() },

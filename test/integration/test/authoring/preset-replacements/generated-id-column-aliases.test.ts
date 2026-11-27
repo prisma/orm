@@ -1,5 +1,9 @@
 import type { Contract } from '@internal/contract/types';
-import { defineContract as definePostgresContract } from '@internal/postgres/contract-builder';
+import {
+  defineContract as definePostgresContract,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import { defineContract as defineSqliteContract } from '@internal/sqlite/contract-builder';
 import { describe, expect, it } from 'vitest';
 import {
@@ -107,19 +111,22 @@ describe('a generator on a generated id column alias', () => {
 });
 
 function postgresKeyAndForeignKey(written: 'alias' | 'char'): Contract {
-  return definePostgresContract({ databaseVersion: 18 }, ({ field, model, rel, gen, type }) => {
-    const column = () => field.column(written === 'alias' ? type.Ulid() : type.Char(26));
-    const Author = model('Author', { fields: { id: column().id().onCreate(gen.ulid()) } });
-    const Post = model('Post', {
-      fields: { id: field.column(type.Int()).id(), authorId: column() },
-    });
-    return {
-      models: {
-        Author: Author.relations({ posts: rel.hasMany(Post, { by: 'authorId' }) }),
-        Post: Post.relations({ author: rel.belongsTo(Author, { from: 'authorId', to: 'id' }) }),
-      },
-    };
-  });
+  return definePostgresContract(
+    { requiredCapabilities: [...postgres18, ...postgresDriver] },
+    ({ field, model, rel, gen, type }) => {
+      const column = () => field.column(written === 'alias' ? type.Ulid() : type.Char(26));
+      const Author = model('Author', { fields: { id: column().id().onCreate(gen.ulid()) } });
+      const Post = model('Post', {
+        fields: { id: field.column(type.Int()).id(), authorId: column() },
+      });
+      return {
+        models: {
+          Author: Author.relations({ posts: rel.hasMany(Post, { by: 'authorId' }) }),
+          Post: Post.relations({ author: rel.belongsTo(Author, { from: 'authorId', to: 'id' }) }),
+        },
+      };
+    },
+  );
 }
 
 function sqliteKeyAndForeignKey(written: 'alias' | 'char'): Contract {

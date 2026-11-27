@@ -1,6 +1,13 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -22,7 +29,10 @@ function wideContract(wideColumns: readonly string[]) {
     relations: { comments: rel.hasMany(() => Comment, { by: 'postId' }) },
   }).sql({ table: 'wide_posts' });
 
-  return defineContract({ databaseVersion: 18, models: { Post, Comment } });
+  return defineContract({
+    requiredCapabilities: [...postgres18, ...postgresDriver],
+    models: { Post, Comment },
+  });
 }
 
 describe.each(includeStrategies)(

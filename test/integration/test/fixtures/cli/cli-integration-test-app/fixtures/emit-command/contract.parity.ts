@@ -14,6 +14,8 @@ import {
   member,
   model,
   now,
+  postgres18,
+  postgresDriver,
 } from '@internal/postgres/contract-builder';
 
 const pgText = { codecId: 'pg/text@1' } as const;
@@ -58,7 +60,7 @@ const Post = model('Post', {
   }));
 
 export const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   enums,
   models: {
     User,

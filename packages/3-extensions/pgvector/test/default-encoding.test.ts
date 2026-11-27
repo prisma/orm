@@ -1,11 +1,11 @@
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { vector } from '../src/exports/column-types';
 import pgvector from '../src/exports/pack';
 
 function embeddingDefault(literal: number[], form: 'typeHelper' | 'column'): unknown {
   const contract = defineContract(
-    { databaseVersion: 18, extensions: { pgvector } },
+    { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
     ({ field, model, type, gen }) => {
       const embedding = field.column(form === 'typeHelper' ? type.pgvector.Vector(3) : vector(3));
       return {
@@ -64,7 +64,7 @@ describe('literal defaults on a codec contributed through extensions', () => {
     'stores a default without a dimension through %s',
     (form) => {
       const contract = defineContract(
-        { databaseVersion: 18, extensions: { pgvector } },
+        { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
         ({ field, model, type, gen }) => {
           const embedding = field.column(form === 'typeHelper' ? type.pgvector.Vector() : vector());
           return {
@@ -93,7 +93,7 @@ describe('literal defaults on a codec contributed through extensions', () => {
     it('reports the type parameters, not the default', () => {
       expect(() =>
         defineContract(
-          { databaseVersion: 18, extensions: { pgvector } },
+          { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
           ({ field, model, gen, type }) => ({
             models: {
               Doc: model('Doc', {

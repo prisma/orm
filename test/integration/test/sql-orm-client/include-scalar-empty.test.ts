@@ -1,6 +1,13 @@
 import { int4Column } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -29,7 +36,10 @@ const Owner = OwnerBase.relations({
   scores: rel.hasMany(() => Score, { by: 'ownerId' }),
 }).sql({ table: 'score_owners' });
 
-const contract = defineContract({ databaseVersion: 18, models: { Owner, Score } });
+const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Owner, Score },
+});
 
 function ownersOf(
   runtime: Parameters<Parameters<typeof withPushedContractRuntime>[1]>[0],

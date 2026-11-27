@@ -1,8 +1,8 @@
 import pgvector from '@internal/extension-pgvector/pack';
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 
 export const pgvectorContract = defineContract(
-  { databaseVersion: 18, extensions: { pgvector } },
+  { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
   ({ type, field, model }) => ({
     models: {
       Item: model('Item', {

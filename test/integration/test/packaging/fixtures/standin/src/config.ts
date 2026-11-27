@@ -5,7 +5,11 @@ import {
   defineConfig as defineFrameworkConfig,
   type PrismaConfig,
 } from '@prisma/orm-framework/config/config-types';
-import { postgresContractCapabilities } from '@prisma/orm-postgres/config';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@prisma/orm-postgres/config';
 import postgresPack from '@prisma/orm-target-postgres/target/pack';
 import { postgresCreateNamespace } from '@prisma/orm-target-postgres/target/types';
 import { adapter, driver, family, migrationModule, target, typesModule } from './components';
@@ -26,7 +30,7 @@ export function defineConfig(options: StandinConfigOptions): PrismaConfig<'sql',
     extensions: options.extensions ?? [],
     contract: {
       ...prismaContract(options.contract, {
-        capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
+        capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
         output: options.output ?? defaultContractOutputPath(options.contract),
         target: postgresPack,
         createNamespace: postgresCreateNamespace,

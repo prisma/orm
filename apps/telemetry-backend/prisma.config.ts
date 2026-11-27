@@ -1,5 +1,5 @@
 import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 
 function readRequiredEnv(name: string): string {
   const value = process.env[name];
@@ -13,7 +13,10 @@ const databaseUrl = readRequiredEnv('DATABASE_URL');
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: { path: './src/prisma/contract.prisma', databaseVersion: 18 },
+    contract: {
+      path: './src/prisma/contract.prisma',
+      requiredCapabilities: [...postgres18, ...postgresDriver],
+    },
     db: {
       connection: databaseUrl,
     },

@@ -1,6 +1,10 @@
 import type { ContractSourceContext } from '@internal/config/config-types';
 import type { ControlStack } from '@internal/framework-components/control';
-import { postgresContractCapabilities } from '@internal/postgres/config';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
 import { contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 
 /**
@@ -8,6 +12,6 @@ import { contractSourceContextFromControlStack } from '@internal/psl-parser/test
  */
 export function postgresPslContext(stack: ControlStack): ContractSourceContext {
   return contractSourceContextFromControlStack(stack, {
-    capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
+    capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
   });
 }

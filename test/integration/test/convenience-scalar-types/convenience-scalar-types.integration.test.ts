@@ -6,7 +6,11 @@ import {
   isAuthoringTypeChoiceDescriptor,
   isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
-import { postgresContractCapabilities } from '@internal/postgres/config';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import postgresPackRef from '@internal/target-postgres/pack';
@@ -165,7 +169,7 @@ async function emitWithWarnings(text: string) {
     writeFileSync(path, text);
     const warnings: ContractSourceDiagnostic[] = [];
     const result = await prismaContract(path, {
-      capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
+      capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
       target: postgresPackRef,
       createNamespace: postgresCreateNamespace,
       enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },

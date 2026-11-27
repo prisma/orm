@@ -306,7 +306,7 @@ function buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily) {
       `import { prismaContract } from '${sqlContractPslProvider}';\n` +
       `import postgresPackRef from '${targetPostgresPack}';\n` +
       `import { postgresCreateNamespace } from '${targetPostgresTypes}';\n` +
-      `import { postgresContractCapabilities } from '${postgresConfig}';\n` +
+      `import { postgres18, postgresContractCapabilities, postgresDriver } from '${postgresConfig}';\n` +
       `import realConfig from '${realConfigAbsPath}';\n\n` +
       'export default definePrismaConfig({\n' +
       '  orm: defineConfig({\n' +
@@ -315,7 +315,7 @@ function buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily) {
       `      ...prismaContract('${schemaSrc}', {\n` +
       '        target: postgresPackRef,\n' +
       '        createNamespace: postgresCreateNamespace,\n' +
-      '        capabilities: postgresContractCapabilities({ databaseVersion: 18 }),\n' +
+      '        capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),\n' +
       '      }),\n' +
       '      typesModule: realConfig.orm.contract.typesModule,\n' +
       '    },\n' +

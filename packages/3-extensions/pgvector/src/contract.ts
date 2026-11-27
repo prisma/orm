@@ -41,7 +41,13 @@
  */
 
 import { assembleDataTypes } from '@internal/framework-components/codec';
-import { defineContract, extension, unbound } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  extension,
+  postgres15,
+  postgresDriver,
+  unbound,
+} from '@internal/postgres/contract-builder';
 import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { VECTOR_CODEC_ID } from './core/constants';
@@ -59,7 +65,7 @@ const codecLookup = assemblePostgresCodecRegistryWithBuiltins(
 );
 
 export const contract = defineContract(
-  { databaseVersion: 15, codecLookup, dataTypeLookup },
+  { requiredCapabilities: [...postgres15, ...postgresDriver], codecLookup, dataTypeLookup },
   () => ({
     databaseTypes: {
       [PGVECTOR_NATIVE_TYPE]: {

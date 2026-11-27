@@ -1,5 +1,12 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, gen, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  gen,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 
 const Event = model('Event', {
   fields: {
@@ -9,4 +16,7 @@ const Event = model('Event', {
   },
 }).sql({ table: 'event' });
 
-export const contract = defineContract({ databaseVersion: 18, models: { Event } });
+export const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Event },
+});

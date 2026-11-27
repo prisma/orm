@@ -36,6 +36,8 @@ import {
   field,
   model,
   policySelect,
+  postgres18,
+  postgresDriver,
   rlsEnabled,
   role,
   type SqlExpression,
@@ -100,7 +102,7 @@ function buildTsContract(input: {
 }): Contract<SqlStorage> {
   const profile = makeProfile();
   return defineContract({
-    databaseVersion: 18,
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     models: { profile },
     entities: [
       rlsEnabled(profile),

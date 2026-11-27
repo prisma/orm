@@ -8,6 +8,8 @@ import {
   policyInsert,
   policySelect,
   policyUpdate,
+  postgres18,
+  postgresDriver,
   rlsEnabled,
   role,
   sql,
@@ -32,7 +34,7 @@ const AuditLog = model('AuditLog', {
 }).sql({ table: 'audit_log' });
 
 export const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: { Profile, AuditLog },
   entities: [
     rlsEnabled(Profile),

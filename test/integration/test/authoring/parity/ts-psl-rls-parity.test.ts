@@ -24,6 +24,8 @@ import {
   policyInsert,
   policySelect,
   policyUpdate,
+  postgres18,
+  postgresDriver,
   rlsEnabled,
   role,
   sql,
@@ -234,7 +236,7 @@ function unboundNamespace(contract: {
 describe('TS and PSL RLS authoring parity with real packs', () => {
   const models = buildTsModels();
   const tsContract = defineContract({
-    databaseVersion: 18,
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     models,
     entities: buildTsEntities(models),
   });

@@ -1,9 +1,9 @@
 import { geometry } from '@prisma/orm-extension-postgis/column-types';
 import postgis from '@prisma/orm-extension-postgis/pack';
-import { defineContract } from '@prisma/orm-postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@prisma/orm-postgres/contract-builder';
 
 export const geo = defineContract(
-  { databaseVersion: 18, extensions: { postgis } },
+  { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { postgis } },
   ({ field, model, gen, type }) => {
     const Place = model('Place', {
       fields: {

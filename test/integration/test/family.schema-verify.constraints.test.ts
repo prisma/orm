@@ -8,6 +8,8 @@ import {
   field,
   int4Column,
   model,
+  postgres18,
+  postgresDriver,
   rel,
   runSchemaVerify,
   textColumn,
@@ -37,7 +39,7 @@ describe('family instance schemaVerify - constraints', () => {
       'returns ok=false with a not-equal issue for the primary key',
       async () => {
         const contract = defineContract({
-          databaseVersion: 18,
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           models: {
             User: model('User', {
               fields: {
@@ -78,7 +80,7 @@ describe('family instance schemaVerify - constraints', () => {
       'returns ok=false with a not-found issue for the missing unique constraint',
       async () => {
         const contract = defineContract({
-          databaseVersion: 18,
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           models: {
             User: model('User', {
               fields: {
@@ -145,7 +147,7 @@ describe('family instance schemaVerify - constraints', () => {
         }).sql({ table: 'post' });
 
         const contract = defineContract({
-          databaseVersion: 18,
+          requiredCapabilities: [...postgres18, ...postgresDriver],
           models: {
             User: User.relations({
               posts: rel.hasMany(Post, { by: 'userId' }),

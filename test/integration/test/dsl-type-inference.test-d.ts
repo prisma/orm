@@ -1,6 +1,13 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import type { ResultType } from '@internal/framework-components/runtime';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { sql } from '@internal/sql-builder/runtime';
 import { createStubAdapter, createTestContext } from '@internal/sql-runtime/test/utils';
 import { expectTypeOf, test } from 'vitest';
@@ -49,7 +56,10 @@ const Post = model('Post', {
 
 // -- Single-model contract --------------------------------------------------
 
-const singleModelContract = defineContract({ databaseVersion: 18, models: { User } });
+const singleModelContract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { User },
+});
 
 test('table name literals survive in storage.tables (single model)', () => {
   expectTypeOf<
@@ -118,7 +128,7 @@ test('ResultType inference produces literal field keys', () => {
 // -- Multi-model contract preserves all literals ----------------------------
 
 const multiModelContract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     User,
     Post,

@@ -1,6 +1,13 @@
 import { byteaColumn, int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -29,7 +36,10 @@ const Document = DocumentBase.relations({
   revisions: rel.hasMany(() => Revision, { by: 'documentId' }),
 }).sql({ table: 'bpk_documents' });
 
-const documentsContract = defineContract({ databaseVersion: 18, models: { Document, Revision } });
+const documentsContract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Document, Revision },
+});
 const documentsContext = createExecutionContext({
   contract: documentsContract,
   stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),

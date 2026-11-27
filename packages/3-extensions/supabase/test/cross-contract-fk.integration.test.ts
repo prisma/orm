@@ -23,10 +23,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import { createControlClient } from '@internal/cli/control-api';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import postgres from '@internal/target-postgres/control';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { createDevDatabase, timeouts, withClient } from '@repo/test-utils';
@@ -70,7 +77,7 @@ function buildAppContract() {
   }));
 
   return defineContract({
-    databaseVersion: 18,
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     extensions: { supabase: supabasePack },
     models: { Profile },
   });
@@ -150,7 +157,7 @@ describe('AC7 — cross-contract FK: public.profile.user_id → auth.users.id', 
         family: sql,
         target: postgres,
         adapter: postgresAdapter,
-        driver: postgresDriver,
+        driver: postgresDriverDescriptor,
         extensions: [supabasePack],
       });
 

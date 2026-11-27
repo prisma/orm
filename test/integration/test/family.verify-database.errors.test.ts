@@ -3,13 +3,19 @@ import { dirname, join, resolve } from 'node:path';
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import {
   createControlStack,
   type VerifyDatabaseResult,
 } from '@internal/framework-components/control';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { sqlEmission } from '@internal/sql-contract-emitter';
@@ -27,7 +33,7 @@ import { createIntegrationTestDir } from './utils/cli-test-helpers';
  */
 function createTestContract(): Contract<SqlStorage> {
   const contractObj = defineContract({
-    databaseVersion: 18,
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     models: {
       User: model('User', {
         fields: {
@@ -61,7 +67,7 @@ async function emitContract(
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
-    driver: postgresDriver,
+    driver: postgresDriverDescriptor,
     extensions: [],
   });
 
@@ -99,7 +105,7 @@ function loadContract(testDir: string): { contract: Contract; contractPath: stri
       family: sql,
       target: postgres,
       adapter: postgresAdapter,
-      driver: postgresDriver,
+      driver: postgresDriverDescriptor,
       extensions: [],
     }),
   );
@@ -119,14 +125,14 @@ async function verifyDatabase(options: {
 }): Promise<VerifyDatabaseResult> {
   const { contract, dbUrl, contractPath, configPath } = options;
 
-  const driver = await postgresDriver.create(dbUrl);
+  const driver = await postgresDriverDescriptor.create(dbUrl);
   try {
     const familyInstance = sql.create(
       createControlStack({
         family: sql,
         target: postgres,
         adapter: postgresAdapter,
-        driver: postgresDriver,
+        driver: postgresDriverDescriptor,
         extensions: [],
       }),
     );

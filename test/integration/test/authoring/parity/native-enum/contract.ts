@@ -6,13 +6,15 @@ import {
   model,
   nativeEnum,
   pg,
+  postgres18,
+  postgresDriver,
 } from '@internal/postgres/contract-builder';
 
 const Role = nativeEnum('Role', 'user', 'admin');
 const AalLevel = nativeEnum('AalLevel', 'aal1', 'aal2', 'aal3').map('aal_level');
 
 export const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   namespaces: ['auth'],
   models: {
     Account: model('Account', {

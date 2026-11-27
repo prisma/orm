@@ -1,9 +1,9 @@
-import { defineContract } from '@prisma/orm-postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@prisma/orm-postgres/contract-builder';
 import { citext } from '@prisma/orm-postgres-contrib/citext/column-types';
 import citextPack from '@prisma/orm-postgres-contrib/citext/pack';
 
 export const contract = defineContract(
-  { databaseVersion: 18, extensions: { citext: citextPack } },
+  { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { citext: citextPack } },
   ({ field, model, type }) => ({
     models: {
       User: model('User', {

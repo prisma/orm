@@ -17,7 +17,14 @@ import postgresAdapter from '@internal/adapter-postgres/runtime';
  */
 
 import { int4Column, int8BigIntColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { type AggregateSpec, Collection } from '@internal/sql-orm-client';
 import type { SqlAggregateDescriptor } from '@internal/sql-relational-core/aggregate-descriptor-registry';
 import { AggregateExpr, FunctionCallExpr } from '@internal/sql-relational-core/ast';
@@ -98,7 +105,7 @@ const ReadingWithSamples = Reading.relations({
 }).sql({ table: 'contributed_readings' });
 
 const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: { Reading: ReadingWithSamples, Sample },
 });
 function contextOf(strategy: IncludeStrategy) {

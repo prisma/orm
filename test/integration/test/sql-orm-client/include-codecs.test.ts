@@ -13,7 +13,14 @@ import {
   type ColumnTypeDescriptor,
   type DataTypeValue,
 } from '@internal/framework-components/codec';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import {
   createExecutionContext,
@@ -126,7 +133,7 @@ const Branch = model('Branch', {
 }).sql({ table: 'codec_branches' });
 
 const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   codecLookup: createPostgresCodecRegistryWithBuiltins([includedTextDescriptor]),
   models: { Project, Branch },
 });

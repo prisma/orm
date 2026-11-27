@@ -15,11 +15,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import { createControlClient } from '@internal/cli/control-api';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { issueOutcome } from '@internal/framework-components/control';
 import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import postgres from '@internal/target-postgres/control';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { createDevDatabase, timeouts, withClient } from '@repo/test-utils';
@@ -40,7 +46,7 @@ function buildAppContract() {
   }).sql({ table: 'item' });
 
   return defineContract({
-    databaseVersion: 18,
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     extensions: { supabase: supabasePack },
     models: { Item },
   });
@@ -94,7 +100,7 @@ describe('roles enter db verify — declared in the pack contract, checked again
         family: sql,
         target: postgres,
         adapter: postgresAdapter,
-        driver: postgresDriver,
+        driver: postgresDriverDescriptor,
         extensions: [supabasePack],
       });
 
@@ -151,7 +157,7 @@ describe('roles enter db verify — declared in the pack contract, checked again
         family: sql,
         target: postgres,
         adapter: postgresAdapter,
-        driver: postgresDriver,
+        driver: postgresDriverDescriptor,
         extensions: [supabasePack],
       });
 

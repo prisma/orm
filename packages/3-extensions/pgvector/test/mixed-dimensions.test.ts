@@ -1,4 +1,4 @@
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import postgresStatic from '@internal/postgres/static';
 import { deriveParamMetadata, encodeParamsWithMetadata } from '@internal/sql-runtime';
 import { describe, expect, it } from 'vitest';
@@ -7,7 +7,7 @@ import pgvector from '../src/exports/pack';
 import pgvectorRuntime from '../src/exports/runtime';
 
 const contract = defineContract(
-  { databaseVersion: 18, extensions: { pgvector } },
+  { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
   ({ field, model, type }) => ({
     models: {
       Doc: model('Doc', {

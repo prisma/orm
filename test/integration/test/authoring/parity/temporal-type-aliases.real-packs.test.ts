@@ -2,7 +2,7 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import sqliteAdapter from '@internal/adapter-sqlite/control';
 import sqlFamilyControl from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
@@ -118,19 +118,22 @@ describe('the temporal type aliases with real packs', () => {
   });
 
   it('give the TypeScript builder on Postgres what DateTime with the matching generators gives it', () => {
-    const throughAliases = defineContract({ databaseVersion: 18 }, ({ type, field, model }) => ({
-      models: {
-        Event: model('Event', {
-          fields: {
-            id: field.column(type.Int()).id(),
-            createdAt: field.column(type.temporal.CreatedAt()),
-            updatedAt: field.column(type.temporal.UpdatedAt()),
-          },
-        }).sql({ table: 'Event' }),
-      },
-    }));
+    const throughAliases = defineContract(
+      { requiredCapabilities: [...postgres18, ...postgresDriver] },
+      ({ type, field, model }) => ({
+        models: {
+          Event: model('Event', {
+            fields: {
+              id: field.column(type.Int()).id(),
+              createdAt: field.column(type.temporal.CreatedAt()),
+              updatedAt: field.column(type.temporal.UpdatedAt()),
+            },
+          }).sql({ table: 'Event' }),
+        },
+      }),
+    );
     const throughGenerators = defineContract(
-      { databaseVersion: 18 },
+      { requiredCapabilities: [...postgres18, ...postgresDriver] },
       ({ type, field, model, gen }) => ({
         models: {
           Event: model('Event', {

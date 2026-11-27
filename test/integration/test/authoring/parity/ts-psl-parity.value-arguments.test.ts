@@ -13,7 +13,11 @@ import postgisControl from '@internal/extension-postgis/control';
 import postgisPack from '@internal/extension-postgis/pack';
 import sqlFamilyControl from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { defineContract as definePostgresContract } from '@internal/postgres/contract-builder';
+import {
+  defineContract as definePostgresContract,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import { sql } from '@internal/sql-contract/sql-expression';
@@ -118,7 +122,7 @@ function thrownMessage(build: () => unknown): string | undefined {
 describe('type-constructor value arguments give the same contract from PSL and TypeScript', () => {
   it('on Postgres: sql.Varchar and Raw through TypeScript helpers that read value arguments, and Varchar and Numeric, which TypeScript writes with fixed column helpers', () => {
     const tsContract = definePostgresContract(
-      { databaseVersion: 18 },
+      { requiredCapabilities: [...postgres18, ...postgresDriver] },
       ({ field, model, type }) => ({
         models: {
           Account: model('Account', {
@@ -151,7 +155,10 @@ describe('type-constructor value arguments give the same contract from PSL and T
 
   it('on Postgres with extensions: pgvector.Vector and postgis.Geometry, through TypeScript helpers that read value arguments', () => {
     const tsContract = definePostgresContract(
-      { databaseVersion: 18, extensions: { pgvector: pgvectorPack, postgis: postgisPack } },
+      {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+        extensions: { pgvector: pgvectorPack, postgis: postgisPack },
+      },
       ({ field, model, type }) => ({
         models: {
           Place: model('Place', {
@@ -214,16 +221,19 @@ describe('a value its argument’s data type cannot hold is refused with the sam
       ? []
       : interpreted.failure.diagnostics.map(({ message }) => message);
     const tsMessage = thrownMessage(() =>
-      definePostgresContract({ databaseVersion: 18 }, ({ field, model, type }) => ({
-        models: {
-          Account: model('Account', {
-            fields: {
-              id: field.column(int4Column).id(),
-              name: field.column(type.sql.Varchar(3000000000)),
-            },
-          }),
-        },
-      })),
+      definePostgresContract(
+        { requiredCapabilities: [...postgres18, ...postgresDriver] },
+        ({ field, model, type }) => ({
+          models: {
+            Account: model('Account', {
+              fields: {
+                id: field.column(int4Column).id(),
+                name: field.column(type.sql.Varchar(3000000000)),
+              },
+            }),
+          },
+        }),
+      ),
     );
 
     expect(pslMessages).toHaveLength(1);

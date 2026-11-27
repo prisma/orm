@@ -9,7 +9,13 @@ import {
   planOriginOf,
 } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   sqlCharColumn,
@@ -233,7 +239,7 @@ describe('a TypeScript numeric or inet default in a spelling Postgres prints dif
     'applies, then verifies strictly against the database with no issue and plans no change',
     async () => {
       const contract = defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: {
           Reading: model('Reading', {
             fields: {
@@ -390,7 +396,7 @@ model Flag {
     'in TypeScript, bare sql/char@1, pg/char@1 and pg/bit@1 columns apply, verify strictly and plan no change',
     async () => {
       const contract = defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: {
           Flag: model('Flag', {
             fields: {
@@ -418,7 +424,7 @@ model Flag {
     'in TypeScript, the family column helpers, whose native types are PostgreSQL aliases such as char and varchar, apply, verify strictly and plan no change',
     async () => {
       const contract = defineContract({
-        databaseVersion: 18,
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         models: {
           AliasRow: model('AliasRow', {
             fields: {

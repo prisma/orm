@@ -129,7 +129,7 @@ model User {
 
 const POSTGRES_CONFIG = `import postgresAdapter from '@internal/adapter-postgres/control';
 import { defineConfig as ormConfig } from '@internal/cli/config-types';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
@@ -141,11 +141,11 @@ export default definePrismaConfig({
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
-    driver: postgresDriver,
+    driver: postgresDriverDescriptor,
     extensions: [],
     contract: {
       ...prismaContract('./contract.prisma', {
-  capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
+  capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
         output: 'contract.json',
         target: postgres,
         createNamespace: postgresCreateNamespace,
@@ -160,7 +160,7 @@ export default definePrismaConfig({
 
 const MONGO_CONFIG = `import { defineConfig as ormConfig } from '@internal/mongo/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
-import { postgresContractCapabilities } from '@internal/postgres/config';
+import { postgresContractCapabilities, postgres18, postgresDriver } from '@internal/postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({

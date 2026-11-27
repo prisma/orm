@@ -1,7 +1,15 @@
-import { defineContract, field, gen, model, type } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  gen,
+  model,
+  postgres18,
+  postgresDriver,
+  type,
+} from '@internal/postgres/contract-builder';
 
 export const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     User: model('User', {
       fields: {

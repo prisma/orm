@@ -13,7 +13,11 @@ import {
   readJsonString,
 } from '@internal/framework-components/codec';
 import { createControlStack } from '@internal/framework-components/control';
-import { postgresContractCapabilities } from '@internal/postgres/config';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
 import { sqlDataType } from '@internal/sql-contract/data-type';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -110,7 +114,7 @@ async function author(schema: string) {
   const schemaPath = join(folder, 'schema.prisma');
   writeFileSync(schemaPath, `// use prisma-8\n\n${schema}`, 'utf-8');
   const result = await prismaContract(schemaPath, {
-    capabilities: postgresContractCapabilities({ databaseVersion: 18 }),
+    capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
     target: postgresPackRef,
     createNamespace: postgresCreateNamespace,
   }).source.load({

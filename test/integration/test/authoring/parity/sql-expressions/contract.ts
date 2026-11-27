@@ -10,6 +10,8 @@ import {
   fullTextIndex,
   model,
   policyUpdate,
+  postgres18,
+  postgresDriver,
   rlsEnabled,
   role,
   sql,
@@ -83,7 +85,7 @@ const Post = model('Post', {
 }));
 
 export const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: { Post },
   entities: [
     rlsEnabled(Post),

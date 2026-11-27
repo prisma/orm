@@ -1,8 +1,15 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import postgresDriver from '@internal/driver-postgres/runtime';
+import postgresDriverDescriptor from '@internal/driver-postgres/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
@@ -26,7 +33,7 @@ const Child = model('Child', {
   relations: { parent: rel.belongsTo(Parent, { from: 'parentId', to: 'id' }) },
 }).sql({ table: 'children' });
 const contract = defineContract({
-  databaseVersion: 18,
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     Parent: Parent.relations({ children: rel.hasMany(() => Child, { by: 'parentId' }) }),
     Child,
@@ -69,8 +76,8 @@ async function createPooledRuntime(pool: Pool, strategy: IncludeStrategy) {
     target: postgresTarget,
     adapter: postgresAdapter,
     driver: {
-      ...postgresDriver,
-      create: () => postgresDriver.create({ cursor: { disabled: true } }),
+      ...postgresDriverDescriptor,
+      create: () => postgresDriverDescriptor.create({ cursor: { disabled: true } }),
     },
     extensions: [],
   });
