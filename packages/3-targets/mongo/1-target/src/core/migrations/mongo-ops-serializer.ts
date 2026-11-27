@@ -49,6 +49,7 @@ import {
 } from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { isStructuredError, type StructuredError } from '@internal/utils/structured-error';
 import { type } from 'arktype';
 import { mongoTargetError } from '../mongo-target-errors';
 
@@ -441,6 +442,32 @@ type SerializedSlot =
   | null
   | undefined;
 
+function isInvalidEntry(error: unknown): error is StructuredError {
+  return isStructuredError(error) && error.code === 'MIGRATION.INVALID_OPERATION_ENTRY';
+}
+
+function placeOfRefusal(error: StructuredError): readonly string[] {
+  const at = error.meta?.['at'];
+  return Array.isArray(at) ? at.map(String) : [];
+}
+
+/** Reads the part of an operation at `segment`, so a refusal inside it says where in the operation it is. */
+function at<T>(segment: string, read: () => T): T {
+  try {
+    return read();
+  } catch (error) {
+    if (!isInvalidEntry(error)) throw error;
+    throw mongoTargetError('MIGRATION.INVALID_OPERATION_ENTRY', error.message, {
+      meta: { ...error.meta, at: [segment, ...placeOfRefusal(error)] },
+      cause: error.cause ?? error,
+    });
+  }
+}
+
+function eachAt<T, R>(name: string, items: readonly T[], read: (item: T) => R): R[] {
+  return items.map((item, index) => at(`${name}[${index}]`, () => read(item)));
+}
+
 function recordValue(json: unknown, key: string, context: string): SerializedSlot {
   if (json === null || typeof json !== 'object') {
     throw mongoTargetError(
@@ -541,15 +568,15 @@ function deserializeFilterExpr(json: unknown): MongoFilterExpr {
     }
     case 'and': {
       const data = validate(AndFilterJson, json, 'and filter');
-      return MongoAndExpr.of(data.exprs.map(deserializeFilterExpr));
+      return MongoAndExpr.of(eachAt('exprs', data.exprs, deserializeFilterExpr));
     }
     case 'or': {
       const data = validate(OrFilterJson, json, 'or filter');
-      return MongoOrExpr.of(data.exprs.map(deserializeFilterExpr));
+      return MongoOrExpr.of(eachAt('exprs', data.exprs, deserializeFilterExpr));
     }
     case 'not': {
       const data = validate(NotFilterJson, json, 'not filter');
-      return new MongoNotExpr(deserializeFilterExpr(data.expr));
+      return new MongoNotExpr(at('expr', () => deserializeFilterExpr(data.expr)));
     }
     case 'exists': {
       const data = validate(ExistsFilterJson, json, 'exists filter');
@@ -573,7 +600,7 @@ export function deserializePipelineStage(json: unknown): MongoPipelineStage {
   switch (kind) {
     case 'match': {
       const data = validate(MatchStageJson, json, 'match stage');
-      return new MongoMatchStage(deserializeFilterExpr(data.filter));
+      return new MongoMatchStage(at('filter', () => deserializeFilterExpr(data.filter)));
     }
     case 'limit': {
       const data = validate(LimitStageJson, json, 'limit stage');
@@ -610,7 +637,8 @@ export function deserializePipelineStage(json: unknown): MongoPipelineStage {
       };
       if (data.localField !== undefined) opts.localField = data.localField;
       if (data.foreignField !== undefined) opts.foreignField = data.foreignField;
-      if (data.pipeline !== undefined) opts.pipeline = data.pipeline.map(deserializePipelineStage);
+      if (data.pipeline !== undefined)
+        opts.pipeline = eachAt('pipeline', data.pipeline, deserializePipelineStage);
       if (data.let_ !== undefined)
         opts.let_ = blindCast<
           Record<string, never>,
@@ -638,7 +666,7 @@ export function deserializePipelineStage(json: unknown): MongoPipelineStage {
             : blindCast<
                 MongoUpdatePipelineStage[],
                 'merge stage whenMatched non-string branch is an update pipeline array'
-              >(whenMatched.map(deserializePipelineStage));
+              >(eachAt('whenMatched', whenMatched, deserializePipelineStage));
       }
       return new MongoMergeStage(opts);
     }
@@ -708,7 +736,7 @@ export function deserializeDmlCommand(json: unknown): AnyMongoCommand {
     }
     case 'aggregate': {
       const data = validate(TypedAggregateJson, json, 'aggregate command');
-      const pipeline = data.pipeline.map(deserializePipelineStage);
+      const pipeline = eachAt('pipeline', data.pipeline, deserializePipelineStage);
       return new AggregateCommand(data.collection, pipeline);
     }
     default:
@@ -726,7 +754,7 @@ export function deserializeDmlCommand(json: unknown): AnyMongoCommand {
 
 export function deserializeMongoQueryPlan(json: unknown): MongoQueryPlan {
   const data = validate(QueryPlanJson, json, 'Mongo query plan');
-  const command = deserializeDmlCommand(data.command);
+  const command = at('command', () => deserializeDmlCommand(data.command));
   const m = data.meta;
   const meta: PlanMeta = {
     target: m.target,
@@ -835,8 +863,8 @@ function deserializeCheck(json: unknown): MongoMigrationCheck {
   const data = validate(CheckJson, json, 'migration check');
   return {
     description: data.description,
-    source: deserializeCheckSource(data.source),
-    filter: deserializeFilterExpr(data.filter),
+    source: at('source', () => deserializeCheckSource(data.source)),
+    filter: at('filter', () => deserializeFilterExpr(data.filter)),
     expect: data.expect,
     ...ifDefined('object', data.object),
   };
@@ -846,7 +874,7 @@ function deserializeStep(json: unknown): MongoMigrationStep {
   const data = validate(StepJson, json, 'migration step');
   return {
     description: data.description,
-    command: deserializeDdlCommand(data.command),
+    command: at('command', () => deserializeDdlCommand(data.command)),
   };
 }
 
@@ -861,9 +889,9 @@ function deserializeDdlOp(json: unknown): MongoMigrationPlanOperation {
     label: data.label,
     operationClass: data.operationClass,
     ...ifDefined('meta', data.meta),
-    precheck: data.precheck.map(deserializeCheck),
-    execute: data.execute.map(deserializeStep),
-    postcheck: data.postcheck.map(deserializeCheck),
+    precheck: eachAt('precheck', data.precheck, deserializeCheck),
+    execute: eachAt('execute', data.execute, deserializeStep),
+    postcheck: eachAt('postcheck', data.postcheck, deserializeCheck),
   };
 }
 
@@ -871,8 +899,8 @@ function deserializeDmlCheck(json: unknown): MongoDmlCheck {
   const data = validate(DmlCheckJson, json, 'DML operation check');
   return {
     description: data.description,
-    source: deserializeMongoQueryPlan(data.source),
-    filter: deserializeFilterExpr(data.filter),
+    source: at('source', () => deserializeMongoQueryPlan(data.source)),
+    filter: at('filter', () => deserializeFilterExpr(data.filter)),
     expect: data.expect,
   };
 }
@@ -886,9 +914,9 @@ function deserializeDmlOp(json: unknown): MongoDmlOperation {
     name: data.name,
     ...ifDefined('invariantId', data.invariantId),
     ...ifDefined('meta', data.meta),
-    precheck: data.precheck.map(deserializeDmlCheck),
-    run: data.run.map(deserializeMongoQueryPlan),
-    postcheck: data.postcheck.map(deserializeDmlCheck),
+    precheck: eachAt('precheck', data.precheck, deserializeDmlCheck),
+    run: eachAt('run', data.run, deserializeMongoQueryPlan),
+    postcheck: eachAt('postcheck', data.postcheck, deserializeDmlCheck),
   };
 }
 
@@ -899,8 +927,76 @@ export function deserializeMongoOp(json: unknown): AnyMongoMigrationOperation {
   return deserializeDdlOp(json);
 }
 
-export function deserializeMongoOps(json: readonly unknown[]): AnyMongoMigrationOperation[] {
-  return json.map(deserializeMongoOp);
+/** Which migrations the operations being read belong to, in order, so a refusal can name one. */
+export interface MongoOperationsLocation {
+  readonly space?: string;
+  readonly migrations?: readonly { readonly dirName: string; readonly operationCount: number }[];
+}
+
+function placeOf(
+  index: number,
+  location: MongoOperationsLocation | undefined,
+): { readonly position: number; readonly migration: string | undefined } {
+  let start = 0;
+  for (const migration of location?.migrations ?? []) {
+    if (index < start + migration.operationCount) {
+      return { position: index - start, migration: migration.dirName };
+    }
+    start += migration.operationCount;
+  }
+  return { position: index, migration: undefined };
+}
+
+function operationIdOf(operation: unknown): string | undefined {
+  if (operation === null || typeof operation !== 'object') return undefined;
+  const id: unknown = Reflect.get(operation, 'id');
+  return typeof id === 'string' ? id : undefined;
+}
+
+function refusalOfOperation(
+  error: StructuredError,
+  operation: unknown,
+  index: number,
+  location: MongoOperationsLocation | undefined,
+): StructuredError {
+  const { position, migration } = placeOf(index, location);
+  const operationId = operationIdOf(operation);
+  const path = placeOfRefusal(error).join('.');
+  const named = operationId === undefined ? '' : ` ("${operationId}")`;
+  const inMigration =
+    migration === undefined
+      ? ''
+      : ` of migration "${migration}"${location?.space === undefined ? '' : ` in space "${location.space}"`}`;
+  const { at: _place, ...innerMeta } = error.meta ?? {};
+  return mongoTargetError('MIGRATION.INVALID_OPERATION_ENTRY', error.message, {
+    why: `Operation ${position}${named}${inMigration} is not in a format this release of Prisma reads: ${path === '' ? '' : `at ${path}: `}${error.message}.`,
+    fix: "If the migration's migration.ts builds this operation, change it so the operation holds only the fields the format defines, and emit the migration again. If ops.json was edited by hand, restore it from version control. Otherwise Prisma wrote an operation it cannot read, which is a bug in Prisma: please report it with the operation.",
+    meta: {
+      ...innerMeta,
+      index: position,
+      ...ifDefined('operationId', operationId),
+      ...ifDefined('migration', migration),
+      ...ifDefined('space', location?.space),
+      ...(path === '' ? {} : { path }),
+      reason: error.message,
+    },
+    cause: error,
+  });
+}
+
+/** Reads the operations of a migration plan; a refusal names the operation, the migration `location` places it in, and the path of the refused part from the operation. */
+export function deserializeMongoOps(
+  json: readonly unknown[],
+  location?: MongoOperationsLocation,
+): AnyMongoMigrationOperation[] {
+  return json.map((operation, index) => {
+    try {
+      return deserializeMongoOp(operation);
+    } catch (error) {
+      if (!isInvalidEntry(error)) throw error;
+      throw refusalOfOperation(error, operation, index, location);
+    }
+  });
 }
 
 export function serializeMongoOps(ops: readonly AnyMongoMigrationOperation[]): string {
