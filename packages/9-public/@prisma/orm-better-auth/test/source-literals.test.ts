@@ -10,8 +10,7 @@ const exportsRoot = join(sourceRoot, 'exports');
 const shippedSupports = join(targetsRoot, 'shipped');
 
 const targetNameAtWordStart = /\b(?:pg|postgres|sqlite|mysql|mariadb|mongo)/i;
-const targetNameInCamelCase =
-  /(?<=[a-z])(?:Pg|Postgres|Sqlite|SQLite|MySql|MySQL|MariaDb|MariaDB|Mongo)/;
+const targetNameInCamelCase = /(?<=[a-z])(?:P(?i:g|ostgres)|S(?i:qlite)|M(?i:ysql|ariadb|ongo))/;
 const codecId = /[\w-]+\/[\w-]+@\d+/;
 
 /** The text of every string and template literal, and every name: variables, properties, property accesses, members, methods and enum members. */
@@ -98,6 +97,7 @@ describe('what the main code knows about databases', () => {
           'const k = { mongo() { return 1; } };',
           'enum L { MySql, Other }',
           'const m = isPostgresClient;',
+          'const n = isMysqlClient(toMariadb(upgrade));',
         ].join('\n'),
       ),
     ).toEqual([
@@ -116,11 +116,15 @@ describe('what the main code knows about databases', () => {
       'mongo',
       'MySql',
       'isPostgresClient',
+      'isMysqlClient',
+      'toMariadb',
     ]);
   });
 
-  it('no literal or name outside src/targets is a target name or a codec id', async () => {
-    const files = (await sourceFiles()).filter((file) => !isUnder(file, targetsRoot));
+  it('no literal or name outside src/targets and src/exports is a target name or a codec id', async () => {
+    const files = (await sourceFiles()).filter(
+      (file) => !isUnder(file, targetsRoot) && !isUnder(file, exportsRoot),
+    );
     expect(files.length).toBeGreaterThan(10);
     const offenders: string[] = [];
     for (const file of files) {
@@ -160,6 +164,26 @@ describe('what the main code knows about databases', () => {
       for (const specifier of importedModules(file, await readFile(file, 'utf8'))) {
         if (reachesIntoTargets(file, specifier)) {
           offenders.push(`${relative(sourceRoot, file)}: ${specifier}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('src/exports holds only re-exports, so its exemption from both checks lets no per-database code in', async () => {
+    const files = (await sourceFiles()).filter((file) => isUnder(file, exportsRoot));
+    expect(files.length).toBeGreaterThan(0);
+    const offenders: string[] = [];
+    for (const file of files) {
+      const source = ts.createSourceFile(
+        file,
+        await readFile(file, 'utf8'),
+        ts.ScriptTarget.Latest,
+        true,
+      );
+      for (const statement of source.statements) {
+        if (!ts.isExportDeclaration(statement) || statement.moduleSpecifier === undefined) {
+          offenders.push(`${relative(sourceRoot, file)}: ${statement.getText(source)}`);
         }
       }
     }
