@@ -2,7 +2,7 @@
 changes:
   - id: prisma-tables-move-to-prisma-schema
     summary: |
-      On PostgreSQL, Prisma's own tables (`marker`, `ledger` and `contract`) move from the schema `prisma_contract` to the schema `_prisma`. The first command that changes the database (`prisma db init`, `db update`, `db migrate` or `db sign`) renames the schema and keeps every row. Run one of them against each database once, with the new release, before the application on the new release reads it. It stops without changing anything when the role that runs it may not rename the schema, or when both schemas exist.
+      On PostgreSQL, Prisma's own tables (`marker`, `ledger` and `contract`) move from the schema `prisma_contract` to the schema `_prisma`. The first command that changes the database (`prisma db init`, `db update`, `db migrate` or `db sign`) renames the schema and keeps every row. Run one of them against each database once, with the new release, before the application on the new release reads it. After that, only the new release may change the database: a release candidate's command applies every migration again. The command stops without changing anything when the role that runs it may not rename the schema, when `_prisma` already holds tables beside `prisma_contract`, or when one of Prisma's tables is in a form this release does not bring up to date.
     detection:
       glob: "**/package.json"
       matches:
@@ -28,17 +28,25 @@ Prisma now creates and updates these tables with migrations of its own, which it
 
 The first command that changes the database, `prisma db init`, `prisma db update`, `prisma db migrate` or `prisma db sign`, run with the new release, brings Prisma's tables up to date before it reads anything else. On a database a release candidate set up, it renames the schema `prisma_contract` to `_prisma`. Every row is kept. Renaming a schema changes only PostgreSQL's catalogue, so it is instant however large the tables are.
 
-For each database the project deploys to (development, staging, production), run the command the project already uses to change it, usually `prisma db migrate`, once with the new release. Do this before the application on the new release is deployed against that database.
+For each database the project deploys to (development, staging, production), run the command the project already uses to change it, `prisma db migrate`, `prisma db update` or `prisma db sign`, once with the new release. Do this before the application on the new release is deployed against that database.
+
+### Move every tool that changes the database to this release at once
+
+Once a database has been brought up to date, a release candidate's `prisma db migrate`, or any other of its commands that change a database, does not see the records Prisma keeps in `_prisma`. It creates a new, empty `prisma_contract` schema, concludes that no migration was ever applied, and applies every migration again from the beginning. Operations whose result already holds are skipped. A data migration, or raw SQL with no check that its result already holds, runs again on live data.
+
+So every service, deploy script and continuous-integration pipeline that changes the database must move to this release together, and from then on only the new release runs migrations against it. Tell the user this before the first database is brought up to date, and list every place in the project that runs a `prisma` command against a database.
 
 The command renames the schema first, before its own checks. So a command that the database's change policy then refuses, such as `prisma db update` on a database whose policy permits only `db migrate`, or a command the user cancels at a prompt, has still renamed the schema. This is harmless: the rename changes only Prisma's own tables, keeps every row, and is what the next command would do anyway.
 
-Commands that only read the database do not rename anything: `prisma db verify`, `prisma migration status`, `prisma migration log`, a dry run of a command, and the check the client runs when it is first used. Pointed at a database that still has `prisma_contract`, they stop with `CONTRACT.PRISMA_SPACE_BEHIND`, which says that the records Prisma keeps for itself are not up to date with the installed release and names `prisma db migrate`. This includes `prisma db verify --schema-only`. Run that command, then run the read again.
+Commands that only read the database do not rename anything: `prisma db verify`, `prisma migration status`, `prisma migration log` and a dry run of a command. Pointed at a database that still has `prisma_contract`, they stop with `CONTRACT.PRISMA_SPACE_BEHIND`, which says that the records Prisma keeps for itself are not up to date with the installed release of Prisma. It tells the user to run the command the project already uses to change its database: `prisma db migrate` in a project that applies migrations, `prisma db update` in one that changes its database with `db update`, or `prisma db sign` in one that only signs it. Each brings the records up to date before it does its usual work, so `prisma db migrate` also applies the pending migrations. This includes `prisma db verify --schema-only`. Run that command, then run the read again.
+
+The application's check when the client is first used does not stop queries. On such a database it logs a warning with the same code, summary and advice, and runs the query. It logs the warning only when the application gives the client a `log`; by default the client says nothing.
 
 ### When the command stops
 
 The command checks the following before it renames, and stops without changing anything if one of them fails.
 
-**The role that runs it may not rename the schema.** PostgreSQL lets a role rename a schema only if it has the privileges of the schema's owner and the CREATE privilege on the database. Creating tables never needed this. If an administrator role created `prisma_contract` and the role that runs migrations only has grants on it, the command stops and names the problem. This query names the owner:
+**The role that runs it does not have the privileges of the schema's owner.** PostgreSQL lets a role rename a schema only if it has the privileges of the schema's owner and the CREATE privilege on the database. Creating tables never needed this. If an administrator role created `prisma_contract` and the role that runs migrations only has grants on it, the command stops with `MIGRATION.PRECHECK_FAILED` and says that the role that runs it must have the privileges of the role that owns `prisma_contract`. This query names the owner:
 
 ```sql
 SELECT nspowner::regrole FROM pg_namespace WHERE nspname = 'prisma_contract';
@@ -53,17 +61,32 @@ There are two fixes. Ask the user which one to use, because both need a person w
    ALTER SCHEMA "prisma_contract" OWNER TO <migrating role>;
    ```
 
-The migrating role also needs CREATE on the database. If it does not have it, grant it, or use the first fix.
+**The role that runs it does not have the CREATE privilege on the database.** The command stops with `MIGRATION.PRECHECK_FAILED` and says that the role that runs it must have the CREATE privilege on the database. This can happen even when the role owns `prisma_contract`. Ask the user whether to grant it, or to run the command once as a role that has it:
 
-**Both `prisma_contract` and `_prisma` exist, and Prisma's own row is not in `_prisma`.** The new release keeps its tables in `_prisma`; `prisma_contract` was created by a release candidate. Prisma cannot tell which schema holds the tables to keep, so it changes nothing. This happens, for example, when someone created a `_prisma` schema by hand. Do not drop either schema before you know which holds the records: count the rows of `marker` and `ledger` in each, and stop and ask the user, because a schema that is dropped loses its rows.
+```sql
+GRANT CREATE ON DATABASE <database> TO <migrating role>;
+```
 
-**A table is in a form from before the release candidates.** Prisma checks the columns of each of its tables. A database set up by a `0.x` release can have tables in an older form, and those forms are not migrated. The command stops with an error that names the table and the column it expected. Stop and tell the user. Prisma's tables in such a database cannot be kept, but the application's own tables can: after a backup, drop the old schema (`DROP SCHEMA "prisma_contract" CASCADE`), then run `prisma db sign`, which checks that the database matches the contract and records it in a new `_prisma.marker`. The history of applied migrations in the old `ledger` is lost.
+**`prisma_contract` exists and `_prisma` holds tables.** When `_prisma` exists but holds no tables, for example because someone created the schema by hand, the command drops it before the rename, with a plain `DROP SCHEMA "_prisma"`. PostgreSQL refuses that drop when anything else, such as a function or a type, is in the schema; the command then fails with that error and changes nothing. When `_prisma` holds tables, Prisma does not choose between the two schemas and changes nothing.
+
+Do not drop either schema before you know which holds the records. First list the tables in each:
+
+```sql
+SELECT table_schema, table_name FROM information_schema.tables
+WHERE table_schema IN ('prisma_contract', '_prisma') ORDER BY 1, 2;
+```
+
+Then count the rows of `marker` and `ledger` in each schema that has them; a table that the list does not show does not exist, and counting it fails. Stop and ask the user, because a schema that is dropped loses its rows.
+
+**A table in `prisma_contract` is in a form from before the release candidates.** Prisma checks the columns of each of its tables. A database set up by a `0.x` release can have tables in an older form, and those forms are not migrated. The command stops with an error that names the table and the column it expected. Stop and tell the user. Prisma's tables in such a database cannot be kept, but the application's own tables can: after a backup, drop the old schema (`DROP SCHEMA "prisma_contract" CASCADE`), then run `prisma db sign`, which checks that the database matches the contract and records it in a new `_prisma.marker`. The history of applied migrations in the old `ledger` is lost.
+
+**A table in `_prisma` is not in the form this release creates.** After the rename, Prisma checks the columns of each of its tables in `_prisma` too, because it reads and writes them only in the form it creates. The command stops with `MIGRATION.PRECHECK_FAILED`, names the table and the column it expected, and changes nothing. This happens when a table of that name in `_prisma` was not created by Prisma: for example, the project keeps a table of its own named `marker`, `ledger` or `contract` in a schema it created as `_prisma`. Stop and tell the user. Do not drop or change the table without asking. If it is the project's own table, it can be moved to another schema with `ALTER TABLE "_prisma"."<table>" SET SCHEMA <other schema>`, after which the command can run again; the project's code that names it must then name the other schema.
 
 ### After the database is brought up to date
 
-A release candidate's application pointed at the database finds no marker in `prisma_contract`. It logs a warning and keeps running, so instances of the old application that run during a deploy keep working.
+A release candidate's application pointed at the database finds no marker in `prisma_contract` and keeps running, so instances of the old application that run during a deploy keep working. It logs a warning about the missing marker only when the application gives its client a `log`.
 
-A release candidate's command-line tool must not be used against the database again. It does not know `_prisma`: it creates a new `prisma_contract` schema beside it and writes its records there, and the new release neither reads those records nor reports them. Upgrade the `prisma` command-line tool in every place that runs it against the database, such as continuous integration and deploy scripts, together with the application.
+A release candidate's command-line tool must not be used against the database again. As the section on moving every tool at once says, it creates a new `prisma_contract` schema beside `_prisma`, writes its records there, and applies every migration again; the new release neither reads those records nor reports them. Its `prisma db verify` reports that the database is not signed and suggests `prisma db sign`, which would also write into a new `prisma_contract`.
 
 If a release candidate's tool may have run against the database after it was brought up to date, check whether a `prisma_contract` schema exists again:
 
@@ -71,7 +94,18 @@ If a release candidate's tool may have run against the database after it was bro
 SELECT count(*) FROM pg_namespace WHERE nspname = 'prisma_contract';
 ```
 
-If it does, compare `prisma_contract.ledger` with `_prisma.ledger`: a migration recorded only in `prisma_contract` was applied by the older tool and is not in the new release's history. Stop and tell the user what you found before dropping anything.
+If it does, the older tool ran migrations against the database from the beginning. List what it recorded:
+
+```sql
+SELECT space, migration_name, destination_core_hash FROM prisma_contract.ledger ORDER BY id;
+```
+
+Compare each row with `_prisma.ledger` by space and `destination_core_hash`, not by migration name. A database first set up by `prisma db init` has a ledger row with an empty `migration_name` for the contract `db init` reached, so a migration that leads to the same contract has a name only in `prisma_contract`.
+
+- A row whose destination is also a destination in `_prisma.ledger` for the same space is a migration the older tool ran again. Its operations whose result already held were skipped, but its data migrations, and raw SQL with no such check, ran a second time.
+- A row whose destination is not in `_prisma.ledger` is a migration only the older tool applied, and it is not in the new release's history.
+
+Stop and tell the user what you found before dropping anything.
 
 ## `name-the-prisma-schema`
 
