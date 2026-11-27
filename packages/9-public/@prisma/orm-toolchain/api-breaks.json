@@ -131,8 +131,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "7cdf8e675b6a6f7f",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). It also takes the option `onUnreadableFile`: by default a ref or migration file it cannot read fails the load, and `'report'` keeps the aggregate without it for a command that lists and reports each such file, as `migration list`, `graph`, `status` and `check` do (prisma/orm#31200)."
+    "fingerprint": "6e28b630bd92e8bc",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). It also takes the option `whenFileUnreadable`: by default a ref or migration file it cannot read fails the load, and `'report'` keeps the aggregate without it for a command that lists and reports each such file, as `migration list`, `graph`, `status` and `check` do (prisma/orm#31200)."
   },
   {
     "path": "./cli/control-api",
