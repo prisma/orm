@@ -151,7 +151,7 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     }).toEqual({
       code: 'MIGRATION.PRECHECK_FAILED',
       message: expect.stringContaining(
-        '"prisma_contract"."marker", which the release candidates of Prisma 8 created, has column "invariants"',
+        'Table "prisma_contract"."marker", which the release candidates of Prisma 8 created, must have column "invariants" of type text[], NOT NULL.',
       ),
       databaseUnchanged: true,
     });
@@ -164,7 +164,23 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     });
   });
 
-  it('stops when both the old and the new schema exist', {
+  it('stops when the old schema exists and the new one holds a table', {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query('create schema _prisma');
+    await driver.query('create table _prisma.kept (id int)');
+
+    expect(await failureMessage()).toContain(
+      'Schema "_prisma" must hold no tables or other relations while schema "prisma_contract" exists.',
+    );
+    expect({ schemas: await schemas(), tables: await tablesIn('_prisma') }).toEqual({
+      schemas: ['_prisma', 'prisma_contract'],
+      tables: ['kept'],
+    });
+  });
+
+  it('drops an empty _prisma beside the schema of a release candidate, then renames', {
     timeout: testTimeout,
   }, async () => {
     await createReleaseCandidateTables();
@@ -172,7 +188,26 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
 
     const result = await apply();
 
-    expect(result.ok ? result.value : result.failure.code).toBe('MIGRATION.PRECHECK_FAILED');
+    expect(result.ok && result.value.outcome).toBe('applied');
+    expect({ schemas: await schemas(), markers: await markers() }).toEqual({
+      schemas: ['_prisma'],
+      markers: [
+        { space: '_prisma', core_hash: headHash, invariants: '{}' },
+        { space: 'app', core_hash: 'app-hash', invariants: '{app:invariant}' },
+      ],
+    });
+  });
+
+  it('leaves both schemas when _prisma holds no relation but another object, which the database refuses to drop', {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query('create schema _prisma');
+    await driver.query("create function _prisma.kept() returns int language sql as 'select 1'");
+
+    const result = await apply();
+
+    expect(result.ok ? result.value : result.failure.meta.databaseUnchanged).toBe(true);
     expect(await schemas()).toEqual(['_prisma', 'prisma_contract']);
   });
 
@@ -253,7 +288,7 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     );
 
     expect(await failureMessage()).toContain(
-      '"prisma_contract"."ledger", which the release candidates of Prisma 8 created, has column "migration_name" text NOT NULL',
+      'Table "prisma_contract"."ledger", which the release candidates of Prisma 8 created, must have column "migration_name" of type text, NOT NULL.',
     );
     expect(await schemas()).toEqual(['prisma_contract']);
   });
@@ -262,7 +297,7 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     for (const statement of releaseCandidatePrismaTables) await driver.query(statement);
     await driver.query('alter table prisma_contract.marker alter column app_tag set not null');
 
-    expect(await failureMessage()).toContain('has column "app_tag" text nullable');
+    expect(await failureMessage()).toContain('must have column "app_tag" of type text, nullable.');
     expect(await schemas()).toEqual(['prisma_contract']);
   });
 
@@ -274,8 +309,24 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
 
     const message = await failureMessage();
 
-    expect(message).toContain('"_prisma"."ledger" has column "id" bigint NOT NULL');
+    expect(message).toContain(
+      'Table "_prisma"."ledger" must have column "id" of type bigint, NOT NULL.',
+    );
     expect(message).not.toContain('release candidates');
+  });
+
+  it('stops at the column checks, naming the table, when _prisma holds a marker table Prisma did not create', {
+    timeout: testTimeout,
+  }, async () => {
+    await driver.query('create schema _prisma');
+    await driver.query('create table _prisma.marker (space text primary key, note text)');
+
+    const message = await failureMessage();
+
+    expect(message).toContain(
+      'Table "_prisma"."marker" must have column "core_hash" of type text, NOT NULL.',
+    );
+    expect(await tablesIn('_prisma')).toEqual(['marker']);
   });
 
   it("stops, saying what it needs, when the role does not own the release candidate's schema", {
@@ -293,7 +344,36 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
       await driver.query('reset role');
     }
 
-    expect(message).toContain('may rename schema "prisma_contract"');
+    expect(message).toContain(
+      'The role that runs this command must have the privileges of the role that owns schema "prisma_contract"',
+    );
+    expect(message).not.toContain('CREATE privilege');
+    expect(await schemas()).toEqual(['prisma_contract']);
+  });
+
+  it("stops, saying what it needs, when the role owns the release candidate's schema but may not create in the database", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query('alter schema prisma_contract owner to prisma_migrator');
+    const { rows } = await driver.query<{ name: string }>('select current_database() as name');
+    const database = `"${rows[0]?.name}"`;
+    await driver.query(`revoke create on database ${database} from public`);
+
+    await driver.query('set role prisma_migrator');
+    let message: string;
+    try {
+      message = await failureMessage();
+    } finally {
+      await driver.query('reset role');
+      await driver.query(`grant create on database ${database} to public`);
+    }
+
+    expect(message).toContain(
+      'The role that runs this command must have the CREATE privilege on the database',
+    );
+    expect(message).toContain('GRANT CREATE ON DATABASE <database> TO <migrating role>');
+    expect(message).not.toContain('privileges of the role that owns');
     expect(await schemas()).toEqual(['prisma_contract']);
   });
 
