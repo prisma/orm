@@ -76,6 +76,13 @@ describe('a Mongo contract with a key its format does not define', () => {
     expect(MongoContractSchema(contractJson())).not.toBeInstanceOf(type.errors);
   });
 
+  it('is refused with a sources section, which no release writes', () => {
+    const result = MongoContractSchema({ ...contractJson(), sources: {} });
+    expect(result instanceof type.errors ? result.summary : 'accepted').toContain(
+      'sources must be removed',
+    );
+  });
+
   it.each(
     [
       ['domain'],

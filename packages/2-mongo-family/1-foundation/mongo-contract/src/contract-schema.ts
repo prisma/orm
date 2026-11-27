@@ -441,7 +441,6 @@ export function createMongoContractSchema(
     'meta?': 'Record<string, unknown>',
     'defaultControlPolicy?': ControlPolicySchema,
     'execution?': ContractExecutionSectionSchema,
-    'sources?': 'Record<string, unknown>',
     '_generated?': 'Record<string, unknown>',
     domain: type({
       '+': 'reject',
