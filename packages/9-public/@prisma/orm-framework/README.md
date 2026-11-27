@@ -41,7 +41,7 @@ assertContractHashes({
 
 A family outside the SQL family passes its own normal form the same way.
 
-Only a family names fields to leave out; every field of an entry kind that a target or an extension pack defines is hashed exactly as given. So an author who defines an entry kind gives each field one form: make it required, or have the constructor store its default in one way only. A value written out and the same value left out otherwise give two storage hashes, which cannot be fixed within the major.
+Only a family names fields to leave out; every field of an entry kind that a target or an extension pack defines is hashed exactly as given. So an author who defines an entry kind gives each field one form: make it required, or have the constructor always write the default out, or always leave the field out when its value is the default. A value written out and the same value left out otherwise give two storage hashes, which cannot be fixed within the major.
 
 ## Responsibilities
 
