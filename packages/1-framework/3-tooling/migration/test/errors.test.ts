@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   errorBundleNotFoundForGraphNode,
   errorContractDeserializationFailed,
+  errorContractSnapshotContentMismatch,
   errorContractSnapshotHashMismatch,
   errorContractSnapshotMissing,
   errorDescribeInvalidMetadata,
@@ -361,5 +362,19 @@ describe('errorInvalidRefFile', () => {
         { path: 'extra', problem: 'must be removed' },
       ]).fix,
     ).toBe('Set policies.change[1] to "migrate" or "reconcile". Remove policies.extra.');
+  });
+});
+
+describe('errorContractSnapshotContentMismatch', () => {
+  it('advises restoring the snapshot, or deleting it and writing it again, never re-running a command over it', () => {
+    const error = errorContractSnapshotContentMismatch({
+      storageHash: 'a'.repeat(64),
+      computedHash: 'b'.repeat(64),
+      jsonPath: `/p/migrations/snapshots/${'a'.repeat(64)}/contract.json`,
+    });
+
+    expect(error.fix).toBe(
+      'Restore the snapshot from version control. A command writes a snapshot only where none exists, so to write it again, delete its folder first: `{bin} db migrate --advance-ref db` then writes the snapshot of the emitted contract from contract.json, and `{bin} contract emit` writes the head snapshot of each extension from the installed extension.',
+    );
   });
 });

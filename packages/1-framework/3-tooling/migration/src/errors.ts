@@ -655,7 +655,7 @@ export function errorContractSnapshotContentMismatch(args: {
     'Contract snapshot content does not match its hash',
     {
       why: `The contract snapshot at "${jsonPath}" is addressed by storage hash ${storageHash}, but its content recomputes to ${computedHash}. The file has been edited (or corrupted) since it was written.`,
-      fix: 'Restore migrations/snapshots/ from version control, or re-run the command that authored the migration referencing this hash to regenerate the snapshot.',
+      fix: 'Restore the snapshot from version control. A command writes a snapshot only where none exists, so to write it again, delete its folder first: `{bin} db migrate --advance-ref db` then writes the snapshot of the emitted contract from contract.json, and `{bin} contract emit` writes the head snapshot of each extension from the installed extension.',
       meta: { storageHash, computedHash, jsonPath },
     },
   );
