@@ -34,6 +34,29 @@ function isCapabilityKey(key: unknown): key is CapabilityKey {
   return dot > 0 && dot < key.length - 1;
 }
 
+function describeEntry(entry: unknown): string {
+  switch (typeof entry) {
+    case 'string':
+      return JSON.stringify(entry);
+    case 'bigint':
+      return `${entry}n`;
+    case 'function':
+      return 'a function';
+    case 'object':
+      return entry === null ? 'null' : describeObject(entry);
+    default:
+      return String(entry);
+  }
+}
+
+function describeObject(entry: object): string {
+  try {
+    return JSON.stringify(entry) ?? 'an object';
+  } catch {
+    return 'an object';
+  }
+}
+
 function refuseList(message: string): never {
   throw postgresError('CONTRACT.ARGUMENT_INVALID', message);
 }
@@ -60,10 +83,10 @@ export function requiredCapabilitiesFor<const Required extends RequiredCapabilit
       `State the capabilities your contract requires in requiredCapabilities ${where}. The list is empty.`,
     );
   }
-  const notAKey = required.find((key) => !isCapabilityKey(key));
-  if (notAKey !== undefined) {
+  const notAKey = required.findIndex((key) => !isCapabilityKey(key));
+  if (notAKey >= 0) {
     refuseList(
-      `requiredCapabilities ${where} lists ${JSON.stringify(notAKey)}, which is not a capability key. A key is a namespace and a flag joined by a dot, as error messages print it.`,
+      `requiredCapabilities ${where} lists ${describeEntry(required[notAKey])}, which is not a capability key. A key is a namespace and a flag joined by a dot, as error messages print it.`,
     );
   }
   return capabilitiesFromKeys<Required[number]>(required);

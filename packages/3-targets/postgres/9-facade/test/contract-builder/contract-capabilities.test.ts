@@ -157,4 +157,21 @@ describe('an entry that is not a capability key', () => {
       }),
     );
   });
+
+  it.each([
+    ['undefined', ['sql.returning', undefined], 'undefined'],
+    ['a gap in the list', Object.assign(new Array(2), { 1: 'sql.returning' }), 'undefined'],
+    ['a symbol', [Symbol('returning')], 'Symbol(returning)'],
+    ['a function', [() => 'sql.returning'], 'a function'],
+    ['a BigInt', [1n], '1n'],
+    ['null', [null], 'null'],
+  ])('is refused, never thrown as a TypeError: %s', (_case, entries, described) => {
+    expect(() =>
+      defineContract({ requiredCapabilities: entries as unknown as ['sql.returning'] }),
+    ).toThrow(
+      expect.objectContaining({
+        message: `requiredCapabilities in defineContract lists ${described}, which is not a capability key. A key is a namespace and a flag joined by a dot, as error messages print it.`,
+      }),
+    );
+  });
 });
