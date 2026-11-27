@@ -19,7 +19,7 @@ This skill is for an ADR that already exists and that someone has asked you to r
    - why: what goes wrong without it, before any mechanism;
    - how, and the consequences, built up step by step, with each term explained where it is first used;
    - the alternatives considered, last.
-3. **Run the two reviews** from `doc-review` on each rewrite, and stop where that skill says to stop.
+3. **Run the `doc-review` skill** on each rewrite. Its table says which reviewers the change needs: a rewritten ADR gets a cold reader and a fact checker. Stop where that skill says to stop.
 4. **Report** your analysis, what the reviewers found, and what you changed.
 
 An ADR has no ticket numbers, no pull request numbers, no milestones, and no account of states the system passed through. `adr-writing.mdc` says why, and which history may stay.

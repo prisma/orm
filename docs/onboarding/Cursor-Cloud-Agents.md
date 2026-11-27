@@ -32,7 +32,7 @@ flowchart LR
 | Snapshot ID | Personal or team config in dashboard | Tied to a Cursor account, not committed by default — see [Snapshot ownership](#snapshot-ownership) |
 | Secrets, MCPs, network policy, defaults | Cursor dashboard (not in repo) | <https://cursor.com/dashboard/cloud-agents> |
 
-`.gitignore` ignores most of `.cursor/` (rules, commands, etc. are local-only) and currently un-ignores only `environment.json` (alongside `rules-footprint.config.json`). If you start using a `.cursor/Dockerfile` or `.cursor/hooks.json`, add a matching `!.cursor/<file>` entry to `.gitignore` so the file is committed alongside the rest of the cloud-agent config.
+`.gitignore` ignores most of `.cursor/` and un-ignores only `environment.json` and `rules-footprint.config.json`. `.cursor/rules/` is generated and never committed. `.cursor/commands/` is also ignored, but the five command files already in it are tracked, so edits to them are committed and a new command file is not unless you add it with `git add -f`. If you start using a `.cursor/Dockerfile` or `.cursor/hooks.json`, add a matching `!.cursor/<file>` entry to `.gitignore` so the file is committed alongside the rest of the cloud-agent config.
 
 ## What our `environment.json` does
 
@@ -203,7 +203,7 @@ This repo intentionally supports multiple agent runtimes. The hierarchy:
 | [`AGENTS.md`](../../AGENTS.md) (symlinked to `CLAUDE.md`) | All agent runtimes | **Source of truth.** Agent-agnostic. |
 | `.cursor/environment.json` | Cursor cloud only | Committed; documented here. |
 | `.cursor/rules/` | Cursor desktop | Local-only (gitignored); generated from `.agents/rules/`. |
-| `.cursor/commands/` | Cursor desktop | Committed. |
+| `.cursor/commands/` | Cursor desktop | The existing files are committed. The folder is gitignored, so a new file needs `git add -f`. |
 | `.claude/skills/`, `.claude/rules/` | Claude Code | Local-only (gitignored); generated from `skills-contrib/` and `.agents/rules/`. |
 | `.claude/scripts/`, `.claude/settings.json` | Claude Code | Committed. `.claude/settings.local.json` is local-only. |
 | `.agents/rules/` | Rules for every agent | Committed. |
