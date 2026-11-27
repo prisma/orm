@@ -23,8 +23,11 @@ import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-post
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import {
+  type DefaultRequiredCapabilities,
+  defaultRequiredCapabilities,
   type PostgresContractCapabilities,
   type RequiredCapabilities,
+  recordDefaultRequiredCapabilities,
   requiredCapabilitiesFor,
 } from './contract-capabilities';
 import type { ExtensionHandle } from './extension';
@@ -92,8 +95,10 @@ type PostgresBaseScaffold<
 > & {
   /**
    * Everything the contract requires of its database and its connection, each capability as its key: `[...postgres18, ...postgresDriver]`, with what the application does not use filtered or left out. The list must not be empty.
+   *
+   * A contract that leaves it out requires the newest PostgreSQL version's list and the driver's, and `prisma contract emit` warns. That default is a stopgap for contracts written before the list existed: Prisma 8.0 removes it and requires the list.
    */
-  readonly requiredCapabilities: Required;
+  readonly requiredCapabilities?: Required;
   /** Contract-wide defaults for foreign keys' `constraint` and `index`. */
   readonly foreignKeyDefaults?: ForeignKeyDefaults;
   /** Overrides the codecs of the target and the extensions. */
@@ -140,9 +145,9 @@ type PostgresScaffold<
   readonly namespaces?: Namespaces;
 };
 
-/** Defines a PostgreSQL contract. `requiredCapabilities` lists everything it requires of the database and the connection. */
+/** Defines a PostgreSQL contract. `requiredCapabilities` lists everything it requires of the database and the connection; a contract that leaves it out requires the newest version's list and the driver's, until Prisma 8.0. */
 export function defineContract<
-  const Required extends RequiredCapabilities,
+  const Required extends RequiredCapabilities = DefaultRequiredCapabilities,
   const DatabaseTypes extends DatabaseTypesConstraint = Record<never, never>,
   const Models extends ModelsConstraint = Record<never, never>,
   const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined,
@@ -170,7 +175,7 @@ export function defineContract<
 >;
 
 export function defineContract<
-  const Required extends RequiredCapabilities,
+  const Required extends RequiredCapabilities = DefaultRequiredCapabilities,
   const DatabaseTypes extends DatabaseTypesConstraint = Record<never, never>,
   const Models extends ModelsConstraint = Record<never, never>,
   const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined,
@@ -220,7 +225,10 @@ export function defineContract(
   ForeignKeyDefaultsConstraint
 > {
   const { requiredCapabilities, ...rest } = definition;
-  const required = requiredCapabilitiesFor(requiredCapabilities, 'in defineContract');
+  const required = requiredCapabilitiesFor(
+    requiredCapabilities === undefined ? defaultRequiredCapabilities : requiredCapabilities,
+    'in defineContract',
+  );
   const extensions: readonly ExtensionPackRef<'sql', string>[] = Object.values(
     definition.extensions ?? {},
   );
@@ -237,8 +245,10 @@ export function defineContract(
       assemblePostgresCodecRegistryWithBuiltins(extensions, dataTypeLookup),
     dataTypeLookup,
   };
-  if (factory !== undefined) {
-    return buildBoundContract(sqlFamilyPack, postgresPack, bound, factory);
-  }
-  return buildBoundContract(sqlFamilyPack, postgresPack, bound);
+  const contract =
+    factory === undefined
+      ? buildBoundContract(sqlFamilyPack, postgresPack, bound)
+      : buildBoundContract(sqlFamilyPack, postgresPack, bound, factory);
+  if (requiredCapabilities === undefined) recordDefaultRequiredCapabilities(contract);
+  return contract;
 }

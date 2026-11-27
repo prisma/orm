@@ -2,7 +2,7 @@ import type { ContractSourceFormat } from '@internal/config/config-types';
 import { POSTGRES_MIN_SERVER_VERSION } from '@internal/target-postgres/server-version-range';
 import { renderImports, tsObjectSource } from '@internal/ts-render';
 import { moduleBase } from '../config/module-base';
-import { RequiredCapabilitiesList } from './contract-entry';
+import { RequiredCapabilitiesList } from '../contract/required-capabilities-list';
 
 const builder = `${moduleBase}/contract-builder`;
 const required = new RequiredCapabilitiesList(builder);

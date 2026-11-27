@@ -15,24 +15,31 @@ import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 import {
+  defaultRequiredCapabilities,
+  hasDefaultRequiredCapabilities,
   type RequiredCapabilities,
   requiredCapabilitiesFor,
 } from '../contract/contract-capabilities';
 import { postgresError } from '../errors';
 import { contractBuilderModule, contractTypesModule, controlComponents } from './components';
-import { moduleBase } from './module-base';
+import { configModule, moduleBase } from './module-base';
+import { warnWhenRequiredCapabilitiesDefaulted } from './required-capabilities-not-listed';
 
-/** The contract entry of a PostgreSQL config: a Prisma schema (`.prisma`, a glob or a directory) lists the capabilities it requires here, in `requiredCapabilities`; a TypeScript contract (`.ts`) lists them in `defineContract`, so its entry takes none. */
+/**
+ * The contract entry of a PostgreSQL config: a Prisma schema (`.prisma`, a glob or a directory) lists the capabilities it requires here, in `requiredCapabilities`; a TypeScript contract (`.ts`) lists them in `defineContract`, so its entry takes none.
+ *
+ * A Prisma schema whose entry leaves the list out, or that is given as a bare path, requires the newest PostgreSQL version's list and the driver's, and `prisma contract emit` warns. That default is a stopgap for configs written before the list existed: Prisma 8.0 removes it and requires the list.
+ */
 export type PostgresContractEntry<Path extends string = string> = {
   readonly path: Path;
 } & (Path extends `${string}.ts`
   ? { readonly requiredCapabilities?: never }
-  : { readonly requiredCapabilities: RequiredCapabilities });
+  : { readonly requiredCapabilities?: RequiredCapabilities });
 
 /** The options of the PostgreSQL `defineConfig`. */
 export interface PostgresConfigOptions<Path extends string = string> {
-  /** The contract entry, a TypeScript contract path, or a ready `ContractConfig` such as `prisma7Schema(...)`. A ready `ContractConfig` writes the capabilities it was given and no others. */
-  readonly contract: `${string}.ts` | PostgresContractEntry<Path> | ContractConfig;
+  /** The contract entry, a contract path, or a ready `ContractConfig` such as `prisma7Schema(...)`. A ready `ContractConfig` writes the capabilities it was given and no others. */
+  readonly contract: string | PostgresContractEntry<Path> | ContractConfig;
   readonly output?: string;
   readonly db?: {
     readonly connection?: string;
@@ -64,23 +71,39 @@ function contractConfigFromEntry(entry: UntypedEntry, output: string): ContractC
         { meta: { contract: entry.path } },
       );
     }
-    return typescriptContractFromPath(entry.path, output, postgresContractTarget);
+    return warnWhenRequiredCapabilitiesDefaulted(
+      typescriptContractFromPath(entry.path, output, postgresContractTarget),
+      { where: 'in defineContract', module: contractBuilderModule, path: entry.path },
+      hasDefaultRequiredCapabilities,
+    );
   }
+  const where = `beside the contract path '${entry.path}' in the config`;
   const capabilities = requiredCapabilitiesFor(
-    entry.requiredCapabilities,
-    `beside the contract path '${entry.path}' in the config`,
+    entry.requiredCapabilities === undefined
+      ? defaultRequiredCapabilities
+      : entry.requiredCapabilities,
+    where,
   );
-  return prismaContract(entry.path, {
+  const config = prismaContract(entry.path, {
     output,
     target: postgresPackRef,
     createNamespace: postgresCreateNamespace,
     enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
     capabilities,
   });
+  return warnWhenRequiredCapabilitiesDefaulted(
+    config,
+    {
+      where: `${where}, as \`contract: { path, requiredCapabilities }\``,
+      module: configModule,
+      path: entry.path,
+    },
+    () => entry.requiredCapabilities === undefined,
+  );
 }
 
 function resolveContractConfig(options: {
-  readonly contract: `${string}.ts` | UntypedEntry | ContractConfig;
+  readonly contract: string | UntypedEntry | ContractConfig;
   readonly output?: string | undefined;
 }): ContractConfig {
   const explicitOutput =

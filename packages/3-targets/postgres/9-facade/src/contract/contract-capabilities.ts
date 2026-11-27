@@ -7,6 +7,7 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { postgresError } from '../errors';
+import { defaultRequiredCapabilityLists } from './default-required-capability-lists';
 
 /** The capabilities PostgreSQL 15 provides, as keys for `requiredCapabilities`. */
 export const postgres15 = capabilityKeysOf(postgresCapabilitiesByVersion[15]);
@@ -18,6 +19,47 @@ export const postgres17 = capabilityKeysOf(postgresCapabilitiesByVersion[17]);
 export const postgres18 = capabilityKeysOf(postgresCapabilitiesByVersion[18]);
 /** The capabilities the connection of the PostgreSQL driver provides, as keys for `requiredCapabilities`. */
 export const postgresDriver = capabilityKeysOf(postgresDriverCapabilities);
+
+const providedCapabilityLists = {
+  postgres15,
+  postgres16,
+  postgres17,
+  postgres18,
+  postgresDriver,
+} as const;
+
+/**
+ * What a contract that lists no required capabilities requires: the newest PostgreSQL version's list and the driver's, as `init` writes them. A stopgap for contracts written before the list existed: `prisma contract emit` warns where it is used, and Prisma 8.0 removes it and requires the list.
+ */
+export type DefaultRequiredCapabilities =
+  (typeof providedCapabilityLists)[(typeof defaultRequiredCapabilityLists)[number]];
+
+/** The capabilities of `DefaultRequiredCapabilities`, as one list. */
+export const defaultRequiredCapabilities: readonly DefaultRequiredCapabilities[number][] =
+  Object.freeze(defaultRequiredCapabilityLists.flatMap((list) => providedCapabilityLists[list]));
+
+const contractsWithDefaultKey = Symbol.for(
+  'prisma.orm.postgres.contractsWithDefaultRequiredCapabilities',
+);
+
+// Kept on `globalThis`, as `validateContractOnce` keeps its record, because the contract file and the config import this package through different entrypoints.
+function contractsWithDefault(): WeakSet<object> {
+  const existing: unknown = Reflect.get(globalThis, contractsWithDefaultKey);
+  if (existing instanceof WeakSet) return existing;
+  const created = new WeakSet<object>();
+  Object.defineProperty(globalThis, contractsWithDefaultKey, { value: created });
+  return created;
+}
+
+/** Records that `contract` was built with `defaultRequiredCapabilities`, so that emitting it warns. */
+export function recordDefaultRequiredCapabilities(contract: object): void {
+  contractsWithDefault().add(contract);
+}
+
+/** Whether `contract` was built with `defaultRequiredCapabilities`, because its source listed none. */
+export function hasDefaultRequiredCapabilities(contract: unknown): boolean {
+  return typeof contract === 'object' && contract !== null && contractsWithDefault().has(contract);
+}
 
 /**
  * Everything a contract requires of its database and its connection, each capability as its key, such as `sql.returning`. Spread the lists of what the database version and the driver provide, and filter out or leave out what the application does not use: `[...postgres18, ...postgresDriver]`. The list must not be empty.

@@ -30,13 +30,23 @@ async function schemaDir(): Promise<{ readonly dir: string; readonly schemaPath:
   return { dir, schemaPath };
 }
 
+async function emitted(
+  config: PrismaConfig<'sql', 'postgres'>,
+  outputPath: string,
+): Promise<{
+  readonly capabilities: Record<string, Record<string, boolean>>;
+  readonly warnings: readonly unknown[];
+}> {
+  const result = await executeContractEmit({ config, cwd: outputPath, outputPath });
+  const contract = JSON.parse(await readFile(join(outputPath, 'contract.json'), 'utf-8'));
+  return { capabilities: contract.capabilities, warnings: result.sourceWarnings ?? [] };
+}
+
 async function emittedCapabilities(
   config: PrismaConfig<'sql', 'postgres'>,
   outputPath: string,
 ): Promise<Record<string, Record<string, boolean>>> {
-  await executeContractEmit({ config, cwd: outputPath, outputPath });
-  const contract = JSON.parse(await readFile(join(outputPath, 'contract.json'), 'utf-8'));
-  return contract.capabilities;
+  return (await emitted(config, outputPath)).capabilities;
 }
 
 function expectNoRemovedFlags(capabilities: Record<string, Record<string, boolean>>) {
@@ -56,10 +66,9 @@ describe('the contract entry of the config', () => {
   const stateTheList =
     "State the capabilities your contract requires in requiredCapabilities beside the contract path './prisma/contract.prisma' in the config.";
 
-  it('refuses a Prisma schema path that lists no required capabilities, with no example', () => {
-    expect(() => defineConfig({ contract: './prisma/contract.prisma' as `${string}.ts` })).toThrow(
-      expect.objectContaining({ message: `${stateTheList} The list is missing.` }),
-    );
+  it('takes a Prisma schema path that lists no required capabilities, as a release candidate wrote it', () => {
+    expect(() => defineConfig({ contract: './prisma/contract.prisma' })).not.toThrow();
+    expect(() => defineConfig({ contract: { path: './prisma/contract.prisma' } })).not.toThrow();
   });
 
   it('refuses an empty list', () => {
@@ -145,6 +154,70 @@ describe('contract emit', () => {
       http: { batch: true },
     });
     expectNoRemovedFlags(capabilities);
+  });
+});
+
+describe('contract emit for a contract that lists no required capabilities', () => {
+  const notListed = (where: string, module: string) =>
+    `Your contract does not list the capabilities it requires, so it requires those of the newest PostgreSQL version and of the driver. Add \`requiredCapabilities: [...postgres18, ...postgresDriver]\` ${where}, with \`import { postgres18, postgresDriver } from '${module}';\`. Prisma 8.0 removes this default and requires the list.`;
+
+  it.each([
+    ['a bare path', (schemaPath: string) => schemaPath],
+    ['an entry without the list', (schemaPath: string) => ({ path: schemaPath })],
+  ])(
+    'writes the newest version’s list and the driver’s for a Prisma schema given as %s, and warns once with what to add',
+    async (_, contractOf) => {
+      const { dir, schemaPath } = await schemaDir();
+
+      const result = await emitted(defineConfig({ contract: contractOf(schemaPath) }), dir);
+
+      expect(result).toEqual({
+        capabilities: withTheDriver,
+        warnings: [
+          {
+            code: 'CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED',
+            message: notListed(
+              `beside the contract path '${schemaPath}' in the config, as \`contract: { path, requiredCapabilities }\``,
+              '@internal/postgres/config',
+            ),
+            sourceId: schemaPath,
+            severity: 'warning',
+            data: {
+              line: 'requiredCapabilities: [...postgres18, ...postgresDriver]',
+              imports: "import { postgres18, postgresDriver } from '@internal/postgres/config';",
+            },
+          },
+        ],
+      });
+    },
+  );
+
+  it('writes the same list for a TypeScript contract, and warns with the import of its contract builder', async () => {
+    const dir = await scratchDir('postgres-required-capabilities-');
+    tempDirs.push(dir);
+    const contractPath = `${resolve(import.meta.dirname, 'fixtures', 'unlisted-contract')}.ts`;
+
+    const result = await emitted(defineConfig({ contract: contractPath }), dir);
+
+    expect(result.capabilities).toEqual(withTheDriver);
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        code: 'CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED',
+        message: notListed('in defineContract', '@internal/postgres/contract-builder'),
+        sourceId: contractPath,
+      }),
+    ]);
+  });
+
+  it('warns nothing for a contract that lists them', async () => {
+    const { dir, schemaPath } = await schemaDir();
+
+    const result = await emitted(
+      defineConfig({ contract: { path: schemaPath, requiredCapabilities: [...postgres18] } }),
+      dir,
+    );
+
+    expect(result.warnings).toEqual([]);
   });
 });
 

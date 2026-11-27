@@ -8,8 +8,8 @@ import type {
 import { POSTGRES_MIN_SERVER_VERSION } from '@internal/target-postgres/server-version-range';
 import { renderImports } from '@internal/ts-render';
 import { dirname, isAbsolute } from 'pathe';
-import { moduleBase } from '../config/module-base';
-import { configModule, contractEntry } from './contract-entry';
+import { configModule, moduleBase } from '../config/module-base';
+import { contractEntry } from './contract-entry';
 import { probePostgres } from './probe';
 import { renderTemplate } from './render';
 import {

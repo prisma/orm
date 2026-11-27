@@ -3,7 +3,6 @@ import type {
   ContractEntryInput,
   ContractEntryNode,
 } from '@internal/cli/init-contribution';
-import { POSTGRES_NEWEST_VERSION } from '@internal/target-postgres/server-version-range';
 import {
   type ImportRequirement,
   jsonToTsSource,
@@ -11,47 +10,8 @@ import {
   tsObjectSource,
 } from '@internal/ts-render';
 import { InternalError } from '@internal/utils/internal-error';
-import { moduleBase } from '../config/module-base';
-
-export const configModule = `${moduleBase}/config`;
-
-/** `name` from `exports`, refusing an export the module does not have. */
-function exportOf(exports: ConfigModuleExports, name: string, module: string): unknown {
-  if (!Object.hasOwn(exports, name)) {
-    throw new InternalError(
-      `${module} exports no ${name}, which the config's contract entry imports.`,
-    );
-  }
-  return exports[name];
-}
-
-/** The required capabilities of a new project: the newest PostgreSQL version's list and the driver's, spread into one array and imported from `module`. */
-export class RequiredCapabilitiesList extends TsExpression {
-  readonly #lists = [`postgres${POSTGRES_NEWEST_VERSION}`, 'postgresDriver'] as const;
-
-  constructor(private readonly module: string) {
-    super();
-  }
-
-  renderTypeScript(): string {
-    return `[${this.#lists.map((list) => `...${list}`).join(', ')}]`;
-  }
-
-  importRequirements(): readonly ImportRequirement[] {
-    return this.#lists.map((symbol) => ({ moduleSpecifier: this.module, symbol }));
-  }
-
-  /** The list the rendered array holds, from the exports of `module`. */
-  valueIn(exports: ConfigModuleExports): unknown[] {
-    return this.#lists.flatMap((list) => {
-      const keys = exportOf(exports, list, this.module);
-      if (!Array.isArray(keys)) {
-        throw new InternalError(`${this.module} exports a ${list} that is not a list.`);
-      }
-      return keys;
-    });
-  }
-}
+import { configModule } from '../config/module-base';
+import { exportOf, RequiredCapabilitiesList } from '../contract/required-capabilities-list';
 
 /** A call of `callee` with arguments that are already source, on one line when it fits and one argument per line when it does not. */
 function callSource(callee: string, args: readonly string[]): string {

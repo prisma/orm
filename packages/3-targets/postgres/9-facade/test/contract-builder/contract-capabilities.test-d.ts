@@ -51,8 +51,7 @@ test('a list typed as RequiredCapabilities names no capability in the type, and 
   postgres({ contract, url: 'postgres://localhost/db' });
 });
 
-test('the list is required, and its entries are capability keys', () => {
-  // @ts-expect-error the list is required
+test('the list may be left out, as a release candidate wrote it, and its entries are capability keys', () => {
   defineContract({});
   // @ts-expect-error a capability is a key with a namespace
   defineContract({ requiredCapabilities: ['returning'] });

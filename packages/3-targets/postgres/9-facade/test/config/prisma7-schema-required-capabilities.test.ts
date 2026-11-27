@@ -17,19 +17,35 @@ afterEach(async () => {
 });
 
 describe('prisma7Schema', () => {
-  const missingList =
-    "State the capabilities your contract requires in requiredCapabilities in the options of prisma7Schema('./prisma/schema.prisma'). The list is missing.";
+  it('writes the newest version’s list and the driver’s for a call with no list, and emit warns', async () => {
+    const dir = await scratchDir('postgres-prisma7-required-capabilities-');
+    tempDirs.push(dir);
+    const schemaPath = join(dir, 'schema.prisma');
+    await writeFile(
+      schemaPath,
+      'datasource db {\n  provider = "postgresql"\n}\nmodel User {\n  id Int @id\n}\n',
+      'utf-8',
+    );
 
-  it('refuses a call that lists no required capabilities, with no example', () => {
-    expect(() =>
-      prisma7Schema('./prisma/schema.prisma', {} as { requiredCapabilities: [] }),
-    ).toThrow(expect.objectContaining({ message: missingList }));
-  });
+    const result = await executeContractEmit({
+      config: defineConfig({ contract: prisma7Schema(schemaPath) }),
+      cwd: dir,
+      outputPath: dir,
+    });
+    const contract = JSON.parse(await readFile(join(dir, 'contract.json'), 'utf-8'));
 
-  it('refuses a call with no options', () => {
-    expect(() =>
-      prisma7Schema('./prisma/schema.prisma', undefined as unknown as { requiredCapabilities: [] }),
-    ).toThrow(expect.objectContaining({ message: missingList }));
+    expect(contract.capabilities).toEqual({
+      ...postgresCapabilitiesByVersion[18],
+      sql: { ...postgresCapabilitiesByVersion[18].sql, interactiveTransactions: true },
+    });
+    expect(result.sourceWarnings).toEqual([
+      expect.objectContaining({
+        code: 'CONTRACT.REQUIRED_CAPABILITIES_NOT_LISTED',
+        message: expect.stringContaining(
+          `Add \`requiredCapabilities: [...postgres18, ...postgresDriver]\` in the options of prisma7Schema('${schemaPath}')`,
+        ),
+      }),
+    ]);
   });
 
   it("emits the list it states, which the config's target does not carry", async () => {

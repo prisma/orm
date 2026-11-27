@@ -1,5 +1,5 @@
 import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { postgresContractCapabilities } from '../../src/exports/config';
 import {
   defineContract,
@@ -98,16 +98,33 @@ describe('the required capabilities of a TypeScript contract', () => {
   });
 });
 
-describe('a contract whose required capabilities are not a list of keys', () => {
-  it('is refused when the list is missing, with no example', () => {
-    expect(() => defineContract({} as { requiredCapabilities: [] })).toThrow(
-      expect.objectContaining({
-        message:
-          'State the capabilities your contract requires in requiredCapabilities in defineContract. The list is missing.',
-      }),
+describe('a TypeScript contract that lists no required capabilities, as a release candidate wrote it', () => {
+  it('requires the newest version’s list and the driver’s, which init writes', () => {
+    expect(defineContract({}).capabilities).toEqual(
+      defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }).capabilities,
     );
   });
 
+  it('knows those capabilities in its type', () => {
+    expectTypeOf(defineContract({}).capabilities).toEqualTypeOf(
+      defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }).capabilities,
+    );
+  });
+
+  it('prints nothing when it is built: only emit warns', () => {
+    const emitWarning = vi.spyOn(process, 'emitWarning');
+    const consoleWarn = vi.spyOn(console, 'warn');
+    try {
+      defineContract({});
+      expect([emitWarning.mock.calls, consoleWarn.mock.calls]).toEqual([[], []]);
+    } finally {
+      emitWarning.mockRestore();
+      consoleWarn.mockRestore();
+    }
+  });
+});
+
+describe('a contract whose required capabilities are not a list of keys', () => {
   it('is refused when the list is empty', () => {
     expect(() => defineContract({ requiredCapabilities: [] })).toThrow(
       expect.objectContaining({

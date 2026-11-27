@@ -17,11 +17,9 @@ it('accepts a contract path and a ContractConfig', () => {
   defineConfig({ contract: 42 });
 });
 
-it('reads prisma7Schema from the schema path and the required capabilities; the output directory is set on defineConfig', () => {
+it('reads prisma7Schema from the schema path and the required capabilities, which a call written before the list existed leaves out; the output directory is set on defineConfig', () => {
   prisma7Schema('x.prisma', { requiredCapabilities: ['sql.returning'] });
-  // @ts-expect-error the list is required
   prisma7Schema('x.prisma');
-  // @ts-expect-error the list is required
   prisma7Schema('x.prisma', {});
   // @ts-expect-error a capability is a key with a namespace
   prisma7Schema('x.prisma', { requiredCapabilities: ['returning'] });
@@ -29,10 +27,8 @@ it('reads prisma7Schema from the schema path and the required capabilities; the 
   prisma7Schema('x.prisma', { databaseVersion: 18 });
 });
 
-it('refuses, at type level, a Prisma schema path without a list and a TypeScript entry with one', () => {
-  // @ts-expect-error a Prisma schema path lists its required capabilities in the contract entry
+it('takes a Prisma schema path without a list, as a release candidate wrote it, and refuses a TypeScript entry with one', () => {
   defineConfig({ contract: './prisma/contract.prisma' });
-  // @ts-expect-error the entry of a Prisma schema needs the list
   defineConfig({ contract: { path: './prisma/contract.prisma' } });
   // @ts-expect-error a TypeScript contract lists its required capabilities in defineContract
   defineConfig({ contract: { path: './prisma/contract.ts', requiredCapabilities: required } });
