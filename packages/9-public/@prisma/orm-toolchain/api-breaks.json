@@ -1,0 +1,56 @@
+[
+  {
+    "path": "./migration-tools",
+    "export": "DescriptorSelfConsistencyInputs",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "cdf641fa74af1df7",
+    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools",
+    "export": "assertDescriptorSelfConsistency",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "7e6931d67e1a255b",
+    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools",
+    "export": "contractSpaceFromJson",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "181952587e5c9e11",
+    "reason": "contractSpaceFromJson requires the extension’s spaceId, so an error in a file the extension ships names the extension and the user knows to upgrade it (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools/spaces",
+    "export": "DescriptorSelfConsistencyInputs",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "cdf641fa74af1df7",
+    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools/spaces",
+    "export": "assertDescriptorSelfConsistency",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "7e6931d67e1a255b",
+    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools/spaces",
+    "export": "contractSpaceFromJson",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "181952587e5c9e11",
+    "reason": "contractSpaceFromJson requires the extension’s spaceId, so an error in a file the extension ships names the extension and the user knows to upgrade it (prisma/orm#31200)."
+  }
+]
