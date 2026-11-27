@@ -10,6 +10,14 @@ describe('crossRef', () => {
   it('uses the provided namespace when supplied', () => {
     expect(crossRef('User', 'auth')).toEqual({ namespace: 'auth', model: 'User' });
   });
+
+  it('carries the contract space when supplied', () => {
+    expect(crossRef('User', 'auth', 'identity')).toEqual({
+      namespace: 'auth',
+      model: 'User',
+      space: 'identity',
+    });
+  });
 });
 
 describe('CrossReferenceSchema', () => {
