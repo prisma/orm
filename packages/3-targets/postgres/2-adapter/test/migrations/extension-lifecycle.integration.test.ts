@@ -28,6 +28,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   controlAdapter,
   createDriver,
+  createPrismaTables,
   createTestDatabase,
   emptySchema,
   familyInstance,
@@ -172,6 +173,7 @@ describe('Postgres extensions against a live database', { concurrent: false }, (
     contract: Contract<SqlStorage>,
     policy: MigrationOperationPolicy,
   ): Promise<readonly string[]> {
+    await createPrismaTables(driver);
     const result = await postgresTargetDescriptor.createRunner(familyInstance).execute({
       driver,
       perSpaceOptions: [
@@ -317,6 +319,7 @@ describe('Postgres extensions in the unbound namespace against a live database',
     expect(operations.find((op) => op.id === 'extension.vector')?.execute).toEqual([
       expect.objectContaining({ sql: 'CREATE EXTENSION IF NOT EXISTS "vector"' }),
     ]);
+    await createPrismaTables(driver);
     const result = await postgresTargetDescriptor.createRunner(familyInstance).execute({
       driver,
       perSpaceOptions: [
@@ -407,6 +410,7 @@ describe('Postgres extensions in the unbound namespace against a live database',
       schemaName: 'extensions',
     });
 
+    await createPrismaTables(driver);
     const result = await postgresTargetDescriptor.createRunner(familyInstance).execute({
       driver,
       perSpaceOptions: [
@@ -463,6 +467,7 @@ describe('Postgres extensions in the unbound namespace against a live database',
     });
     if (planned.kind !== 'success') throw new Error(JSON.stringify(planned));
     const operations = await Promise.all(planned.plan.operations);
+    await createPrismaTables(driver);
     const result = await postgresTargetDescriptor.createRunner(familyInstance).execute({
       driver,
       perSpaceOptions: [
