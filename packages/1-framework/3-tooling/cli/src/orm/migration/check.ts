@@ -141,7 +141,7 @@ export const migrationCheckCommand = defineOrmCommand({
     const loaded = await buildReadAggregate(ctx.config, {
       migrationsDir,
       ...ifDefined('verifySnapshotContent', verifySnapshotContent),
-      onUnreadableFile: 'report',
+      whenFileUnreadable: 'report',
     });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));

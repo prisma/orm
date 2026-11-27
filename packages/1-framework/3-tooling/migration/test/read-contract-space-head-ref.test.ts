@@ -87,9 +87,9 @@ describe('readContractSpaceHeadRef', () => {
     });
 
     it('reads a head ref a release candidate wrote with no format version', async () => {
-      await writeHead({ hash: 'abc', invariants: [] });
+      await writeHead({ hash: 'a'.repeat(64), invariants: [] });
       expect(await readContractSpaceHeadRef(migrationsDir, 'cipherstash')).toEqual({
-        hash: 'abc',
+        hash: 'a'.repeat(64),
         invariants: [],
       });
     });
@@ -112,6 +112,28 @@ describe('readContractSpaceHeadRef', () => {
       await writeHead({ formatVersion: 1, hash: 'abc', invariants: [], policies: {} });
       await expect(readContractSpaceHeadRef(migrationsDir, 'cipherstash')).rejects.toMatchObject({
         code: 'MIGRATION.INVALID_REF_FILE',
+      });
+    });
+  });
+
+  describe('a hash that is not a contract hash', () => {
+    it.each([
+      ['a prefixed hash', `sha256:${'a'.repeat(64)}`],
+      ['an empty string', ''],
+      ['the empty contract', 'empty'],
+    ])('refuses %s, naming the file', async (_, hash) => {
+      const dir = join(migrationsDir, 'cipherstash', 'refs');
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        join(dir, 'head.json'),
+        JSON.stringify({ formatVersion: 1, hash, invariants: [] }),
+      );
+      await expect(readContractSpaceHeadRef(migrationsDir, 'cipherstash')).rejects.toMatchObject({
+        code: 'MIGRATION.INVALID_REF_FILE',
+        meta: { path: join(dir, 'head.json') },
+        why: expect.stringContaining(
+          `hash must be a contract hash of 64 lowercase hex characters (got "${hash}")`,
+        ),
       });
     });
   });

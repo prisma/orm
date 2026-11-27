@@ -5,7 +5,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import type { PrismaConfig } from '@internal/config-loader';
-import { createControlStack } from '@internal/framework-components/control';
+import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
 import type {
   ContractSpaceAggregate,
   IntegrityViolation,
@@ -36,6 +36,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
+import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { basename, join, relative } from 'pathe';
 import type { CheckFailure, MigrationCheckResult } from '../../commands/json/schemas';
 import { INTEGRITY_FAILED, OK, PRECONDITION } from '../../commands/migration-check/exit-codes';
@@ -63,7 +64,7 @@ import {
   runCommandAction,
   snapshotRepairActions,
 } from '../../utils/next-actions';
-import { formatVersionFailure } from './caught-errors';
+import { formatVersionFailure, reasonOf } from './caught-errors';
 import { mapContractAtError } from './contract-at-errors';
 import { unreadableFiles } from './contract-space-aggregate-loader';
 
@@ -95,15 +96,6 @@ function checkFileExists(
     };
   }
   return null;
-}
-
-function snapshotRewriteActions(snapshotDir: string): CheckFailure['nextActions'] {
-  return [
-    chooseAction(`Restore "${snapshotDir}" from version control`),
-    chooseAction(
-      `Or delete "${snapshotDir}" and write it again, since no command replaces a snapshot directory that exists. For an app-space migration planned to the emitted contract, emit that contract again and re-run the \`migration plan\` that wrote this migration, with its \`--from\` and no \`--to\`, then delete the new migration directory it writes, which repeats this one. For an extension's snapshot in an application, run \`prisma contract emit\` without \`--output-path\`, which writes the head snapshot of each installed extension again; a snapshot of an earlier version of the extension can only be restored from version control. In an extension package, re-run its contract-space build`,
-    ),
-  ];
 }
 
 /**
@@ -155,11 +147,25 @@ async function checkSnapshotConsistency(
       spaceId,
       hash: pkg.metadata.to,
       headHash: space.headHash,
+      headReachedByMigration: true,
       migrationsDir,
       cwd: space.cwd,
     },
     { refNames },
   );
+  const withoutUpgrade = repairActions.filter((action) => action.kind !== 'open-url');
+  const mismatchActions: CheckFailure['nextActions'] =
+    spaceId === APP_SPACE_ID
+      ? [
+          {
+            kind: 'open-url',
+            label:
+              'If the project was upgraded from an earlier release of Prisma 8, follow the app upgrade instructions, which rewrite every contract hash',
+            url: APP_UPGRADE_GUIDES_URL,
+          },
+          ...withoutUpgrade,
+        ]
+      : withoutUpgrade;
   let raw: unknown;
   try {
     raw = await readContractSnapshotJson(migrationsDir, pkg.metadata.to);
@@ -167,10 +173,7 @@ async function checkSnapshotConsistency(
     if (MigrationToolsError.is(error) && error.code === 'MIGRATION.CONTRACT_SNAPSHOT_MISSING') {
       return null;
     }
-    return unreadable(
-      reasonOf(error),
-      repairActions.filter((action) => action.kind !== 'open-url'),
-    );
+    return unreadable(reasonOf(error), withoutUpgrade);
   }
   const record = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const storage = record['storage'] as Record<string, unknown> | undefined;
@@ -181,14 +184,7 @@ async function checkSnapshotConsistency(
       code: 'MIGRATION.CHECK_SNAPSHOT_HASH_MISMATCH',
       where: migrationPathRelative(space.cwd, pkg.dirPath),
       why: `Migration "${pkg.dirName}" declares to=${pkg.metadata.to} but its contract snapshot has storageHash=${snapshotHash}`,
-      nextActions: [
-        ...snapshotRewriteActions(snapshotDir),
-        ...migrationPackageRepairActions({
-          spaceId: space.spaceId,
-          packageDir: pkg.dirPath,
-          cwd: space.cwd,
-        }),
-      ],
+      nextActions: mismatchActions,
     };
   }
   if (space.verifySnapshotContent !== undefined) {
@@ -206,7 +202,7 @@ async function checkSnapshotConsistency(
         code: 'MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH',
         where: migrationPathRelative(space.cwd, jsonPath),
         why: `Migration "${pkg.dirName}": ${error.why}`,
-        nextActions: error.nextActions === undefined ? [] : [...error.nextActions],
+        nextActions: mismatchActions,
       };
     }
   }
@@ -222,11 +218,6 @@ async function checkSnapshotConsistency(
     return unreadable(reasonOf(error), repairActions);
   }
   return null;
-}
-
-function reasonOf(error: unknown): string {
-  if (MigrationToolsError.is(error)) return error.why;
-  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -283,7 +274,7 @@ export interface EnumerateCheckSpacesInputs {
  * contract-space directory, in the aggregate's `app`-first ordering. Mirrors
  * `migration list`'s `migrationSpaceListEntriesFromAggregate`: space
  * membership matches the on-disk directories, package / ref / graph data come
- * from `aggregate.space(id)`. Load the aggregate with `onUnreadableFile: 'report'`, so each migration it could not read is reported here.
+ * from `aggregate.space(id)`. Load the aggregate with `whenFileUnreadable: 'report'`, so each migration it could not read is reported here.
  */
 export async function enumerateCheckSpaces(
   inputs: EnumerateCheckSpacesInputs,

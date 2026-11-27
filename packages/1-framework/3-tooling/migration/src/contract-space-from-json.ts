@@ -8,6 +8,7 @@ import type {
 } from '@internal/framework-components/control';
 import { blindCast } from '@internal/utils/casts';
 import { errorInvalidManifest, errorInvalidRefFile } from './errors';
+import { notContractHashText } from './formats/contract-hash';
 import { parseMigrationMetadataDocument } from './formats/migration-metadata/versions';
 import { parseRefDocument } from './formats/ref/versions';
 
@@ -92,5 +93,8 @@ function bundledHeadRef(spaceId: string, document: unknown): ContractSpaceHeadRe
   if (content.value.policies !== undefined) {
     throw errorInvalidRefFile(bundledFileLabel(spaceId, file), 'the head ref declares no policies');
   }
+  const hashProblem = notContractHashText('hash', content.value.hash);
+  if (hashProblem !== undefined)
+    throw errorInvalidRefFile(bundledFileLabel(spaceId, file), hashProblem);
   return { hash: content.value.hash, invariants: content.value.invariants };
 }

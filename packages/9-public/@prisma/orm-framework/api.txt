@@ -4452,7 +4452,7 @@
 ./errors/control: function errorConfigVersionMarkerMissing(configPath?: string): CliStructuredError
 ./errors/control: function errorContractConfigMissing(options?: { readonly why?: string; }): CliStructuredError
 ./errors/control: function errorContractMissingExtensions(options: { readonly missingExtensions: readonly string[]; readonly providedComponentIds: readonly string[]; }): CliStructuredError
-./errors/control: function errorContractValidationFailed(reason: string, options?: { readonly where?: { readonly path?: string; readonly line?: number; }; readonly cause?: unknown; readonly meta?: Record<string, unknown> | undefined; readonly artifact?: 'contract' | 'snapshot'; readonly rewrittenBy?: { readonly snapshotDirectory: string; readonly command: string; readonly source: string; }; }): CliStructuredError
+./errors/control: function errorContractValidationFailed(reason: string, options?: { readonly where?: { readonly path?: string; readonly line?: number; }; readonly cause?: unknown; readonly meta?: Record<string, unknown> | undefined; readonly artifact?: 'contract' | 'snapshot'; readonly rewrittenBy?: { readonly snapshotDirectory: string; readonly command: string; readonly effect: string; }; }): CliStructuredError
 ./errors/control: function errorDatabaseConnectionRequired(options?: { readonly why?: string; readonly commandName?: string; readonly retryCommand?: string; readonly missingFlags?: readonly string[]; }): CliStructuredError
 ./errors/control: function errorDriverRequired(options?: { readonly why?: string; }): CliStructuredError
 ./errors/control: function errorEnumCodecNotInPackStack(options: { readonly codecId: string; }): CliStructuredError
@@ -4530,7 +4530,7 @@
 ./errors: function errorConfigVersionMarkerMissing(configPath?: string): CliStructuredError
 ./errors: function errorContractConfigMissing(options?: { readonly why?: string; }): CliStructuredError
 ./errors: function errorContractMissingExtensions(options: { readonly missingExtensions: readonly string[]; readonly providedComponentIds: readonly string[]; }): CliStructuredError
-./errors: function errorContractValidationFailed(reason: string, options?: { readonly where?: { readonly path?: string; readonly line?: number; }; readonly cause?: unknown; readonly meta?: Record<string, unknown> | undefined; readonly artifact?: 'contract' | 'snapshot'; readonly rewrittenBy?: { readonly snapshotDirectory: string; readonly command: string; readonly source: string; }; }): CliStructuredError
+./errors: function errorContractValidationFailed(reason: string, options?: { readonly where?: { readonly path?: string; readonly line?: number; }; readonly cause?: unknown; readonly meta?: Record<string, unknown> | undefined; readonly artifact?: 'contract' | 'snapshot'; readonly rewrittenBy?: { readonly snapshotDirectory: string; readonly command: string; readonly effect: string; }; }): CliStructuredError
 ./errors: function errorDataTransformContractMismatch(options: { readonly dataTransformName: string; readonly expected: string; readonly actual: string; }): CliStructuredError
 ./errors: function errorDatabaseConnectionRequired(options?: { readonly why?: string; readonly commandName?: string; readonly retryCommand?: string; readonly missingFlags?: readonly string[]; }): CliStructuredError
 ./errors: function errorDriverRequired(options?: { readonly why?: string; }): CliStructuredError

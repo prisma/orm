@@ -26,6 +26,7 @@ import { join, relative } from 'pathe';
 import { CliStructuredError } from '../../utils/cli-errors';
 import { readContractEnvelope, resolveContractPath } from '../../utils/command-helpers';
 import { toDeclaredExtensionsFromRaw } from '../../utils/extension-pack-inputs';
+import { migrationTsKeepsItsHash } from '../../utils/next-actions';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import { errorFromCaught, formatVersionFailure } from './caught-errors';
 
@@ -214,8 +215,8 @@ export function mapIntegrityViolations(
 
 function extensionHeadSnapshotFix(migrationsDir: string, hash: string | undefined): string {
   return hash === undefined
-    ? 'Run `{bin} contract emit`, which writes the head ref and the head snapshot of each extension from the installed extension.'
-    : `Delete ${relative(process.cwd(), contractSnapshotDir(migrationsDir, hash))} and run \`{bin} contract emit\`, which writes it again from the installed extension. If the file was edited by hand, restore it from version control.`;
+    ? 'Run `{bin} contract emit`, which emits contract.json from the contract source and writes the head ref and the head snapshot of each extension from the installed extension.'
+    : `If the file was edited by hand, restore it from version control. Or delete ${relative(process.cwd(), contractSnapshotDir(migrationsDir, hash))} and run \`{bin} contract emit\`, which emits contract.json from the contract source and writes the snapshot again from the installed extension.`;
 }
 
 function migrationPackageRepairText(
@@ -223,10 +224,14 @@ function migrationPackageRepairText(
   spaceId: string,
   dirName: string,
 ): string {
-  const packageDir = relative(process.cwd(), join(migrationsDir, spaceId, dirName));
-  return spaceId === APP_SPACE_ID
+  const absolutePackageDir = join(migrationsDir, spaceId, dirName);
+  const packageDir = relative(process.cwd(), absolutePackageDir);
+  if (spaceId !== APP_SPACE_ID) {
+    return `Restore the migration package from version control, or delete the folder ${packageDir} and run \`{bin} contract emit\`, which emits contract.json from the contract source and writes the folder again from the installed extension when that version of the extension ships this migration; otherwise install a version of the extension that ships its migrations.`;
+  }
+  return migrationTsKeepsItsHash(absolutePackageDir)
     ? `Restore the migration package from version control, or write its migration.json and ops.json again by running \`node "${join(packageDir, 'migration.ts')}"\`.`
-    : `Restore the migration package from version control, or delete the folder ${packageDir} and run \`{bin} contract emit\`, which writes it again from the installed extension when that version of the extension ships this migration; otherwise install a version of the extension that ships its migrations.`;
+    : `Restore the migration package from version control. If no database has applied this migration and no ref names where it or a later migration ends, you can instead delete the folder ${packageDir} and the folders of the migrations after it, then plan again from the contract it started from with \`{bin} migration plan --from <hash>\`, where the hash is that of the start snapshot its migration.ts imports, or @empty when it imports none.`;
 }
 
 /** A stored file of the migrations directory the aggregate could not read: a ref, or a migration's `migration.json`. */
@@ -274,7 +279,7 @@ export interface BuildAggregateInputs<TFamilyId extends string, TTargetId extend
   /**
    * What the load does with a ref or migration whose file it could not read: refuse (the default), or keep the aggregate without the file, for a command that only lists and reports each one with {@link unreadableFiles}. A command that acts on the migrations refuses, so a file it could not read is never silently left out.
    */
-  readonly onUnreadableFile?: 'refuse' | 'report';
+  readonly whenFileUnreadable?: 'refuse' | 'report';
 }
 
 function declaredExtensionsFromInputs(
@@ -322,7 +327,7 @@ export async function loadContractSpaceAggregateForCli<
     appContract: inputs.appContract,
     ...ifDefined('verifySnapshotContent', inputs.verifySnapshotContent),
   });
-  if (inputs.onUnreadableFile !== 'report') {
+  if (inputs.whenFileUnreadable !== 'report') {
     const refusal = mapIntegrityViolations(unreadableFiles(aggregate), inputs.migrationsDir);
     if (refusal !== null) return notOk(refusal);
   }
@@ -443,7 +448,7 @@ export async function buildReadAggregate(
     readonly migrationsDir: string;
     /** Command-scoped verifier to share the verified-hash memo; defaults to one built from `config`. */
     readonly verifySnapshotContent?: SnapshotContentVerifier;
-    readonly onUnreadableFile?: 'refuse' | 'report';
+    readonly whenFileUnreadable?: 'refuse' | 'report';
   },
 ): Promise<
   Result<
@@ -515,7 +520,7 @@ export async function buildReadAggregate(
         'verifySnapshotContent',
         options.verifySnapshotContent ?? snapshotVerifierFor(config),
       ),
-      ...ifDefined('onUnreadableFile', options.onUnreadableFile),
+      ...ifDefined('whenFileUnreadable', options.whenFileUnreadable),
     });
     if (!loaded.ok) {
       return loaded;

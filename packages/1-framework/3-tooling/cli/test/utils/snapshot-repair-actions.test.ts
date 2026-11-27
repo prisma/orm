@@ -5,24 +5,47 @@ import { snapshotRepairActions, snapshotRewrite } from '../../src/utils/next-act
 const HEAD = 'a'.repeat(64);
 const OLDER = 'b'.repeat(64);
 
-function place(spaceId: string, hash: string) {
-  return { spaceId, hash, headHash: HEAD, migrationsDir: '/work/migrations', cwd: '/work' };
+function place(spaceId: string, hash: string, headReachedByMigration = true) {
+  return {
+    spaceId,
+    hash,
+    headHash: HEAD,
+    headReachedByMigration,
+    migrationsDir: '/work/migrations',
+    cwd: '/work',
+  };
 }
 
+const RESTORE = {
+  kind: 'user-choice',
+  label: 'If the file was edited by hand, restore it from version control',
+};
+
 describe('snapshotRewrite', () => {
-  it('names db migrate for the application snapshot at the emitted contract', () => {
+  it('names db migrate, and says it applies pending migrations, when a migration ends at the emitted contract', () => {
     expect(snapshotRewrite(place('app', HEAD))).toEqual({
       snapshotDirectory: `migrations/snapshots/${HEAD}`,
       command: '{bin} db migrate --advance-ref db',
-      source: 'contract.json',
+      effect:
+        'applies any pending migrations to the configured database, then moves the db ref to contract.json and writes the snapshot again from it',
     });
   });
 
-  it('names contract emit for the snapshot at the head of an extension', () => {
-    expect(snapshotRewrite(place('pgvector', HEAD))).toEqual({
+  it('names db sign, and says it records the contract in the database, when no migration ends at the emitted contract', () => {
+    expect(snapshotRewrite(place('app', HEAD, false))).toEqual({
+      snapshotDirectory: `migrations/snapshots/${HEAD}`,
+      command: '{bin} db sign',
+      effect:
+        'checks that the configured database matches contract.json and records that in the database, then moves the db ref to contract.json and writes the snapshot again from it',
+    });
+  });
+
+  it('names contract emit, and says it emits contract.json, for the snapshot at the head of an extension', () => {
+    expect(snapshotRewrite(place('pgvector', HEAD, false))).toEqual({
       snapshotDirectory: `migrations/snapshots/${HEAD}`,
       command: '{bin} contract emit',
-      source: 'the installed extension',
+      effect:
+        'emits contract.json from the contract source and writes the snapshot again from the installed extension',
     });
   });
 
@@ -33,8 +56,9 @@ describe('snapshotRewrite', () => {
 });
 
 describe('snapshotRepairActions', () => {
-  it('for the application snapshot at the emitted contract: upgrade, delete and write again, or restore an edited file', () => {
+  it('for the application snapshot at the emitted contract: restore, upgrade, or delete and write again', () => {
     expect(snapshotRepairActions(place('app', HEAD))).toEqual([
+      RESTORE,
       {
         kind: 'open-url',
         label: 'If an earlier release wrote the snapshot, follow the app upgrade instructions',
@@ -42,41 +66,31 @@ describe('snapshotRepairActions', () => {
       },
       {
         kind: 'run-command',
-        label: `Or delete migrations/snapshots/${HEAD} and write it again from contract.json`,
+        label: `Or delete migrations/snapshots/${HEAD} and run this command, which applies any pending migrations to the configured database, then moves the db ref to contract.json and writes the snapshot again from it`,
         command: '{bin} db migrate --advance-ref db',
-      },
-      {
-        kind: 'user-choice',
-        label: 'If the file was edited by hand, restore it from version control',
       },
     ]);
   });
 
-  it('for an older application snapshot a ref names: upgrade, move the ref, or restore an edited file', () => {
-    expect(snapshotRepairActions(place('app', OLDER), { refNames: ['production'] })).toEqual([
+  it('for an older application snapshot refs name: restore, upgrade, or move each ref but the db ref', () => {
+    expect(snapshotRepairActions(place('app', OLDER), { refNames: ['db', 'production'] })).toEqual([
+      RESTORE,
       expect.objectContaining({ kind: 'open-url' }),
       {
         kind: 'run-command',
         label: 'Or point the ref "production" at a migration whose snapshot this release reads',
         command: '{bin} migration ref set production <hash>',
       },
-      {
-        kind: 'user-choice',
-        label: 'If the file was edited by hand, restore it from version control',
-      },
     ]);
   });
 
-  it('for the head snapshot of an extension: write it again from the installed extension, never the app upgrade instructions', () => {
+  it('for the head snapshot of an extension: restore, or write it again from the installed extension, never the app upgrade instructions', () => {
     expect(snapshotRepairActions(place('pgvector', HEAD))).toEqual([
+      RESTORE,
       {
         kind: 'run-command',
-        label: `Delete migrations/snapshots/${HEAD} and write it again from the installed extension`,
+        label: `Or delete migrations/snapshots/${HEAD} and run this command, which emits contract.json from the contract source and writes the snapshot again from the installed extension`,
         command: '{bin} contract emit',
-      },
-      {
-        kind: 'user-choice',
-        label: 'If the file was edited by hand, restore it from version control',
       },
     ]);
   });

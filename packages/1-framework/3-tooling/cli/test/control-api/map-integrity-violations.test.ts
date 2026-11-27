@@ -29,7 +29,7 @@ describe('mapIntegrityViolations', () => {
       join(process.cwd(), 'migrations'),
     );
     expect(error?.fix).toBe(
-      `Delete migrations/snapshots/${HEAD} and run \`{bin} contract emit\`, which writes it again from the installed extension. If the file was edited by hand, restore it from version control.`,
+      `If the file was edited by hand, restore it from version control. Or delete migrations/snapshots/${HEAD} and run \`{bin} contract emit\`, which emits contract.json from the contract source and writes the snapshot again from the installed extension.`,
     );
   });
 
@@ -46,13 +46,13 @@ describe('mapIntegrityViolations', () => {
       why: 'The head contract snapshot of space "ext" is unreadable: zzz must be removed',
       nextActions: [
         {
-          kind: 'run-command',
-          label: `Delete migrations/snapshots/${HEAD} and write it again from the installed extension`,
-          command: '{bin} contract emit',
-        },
-        {
           kind: 'user-choice',
           label: 'If the file was edited by hand, restore it from version control',
+        },
+        {
+          kind: 'run-command',
+          label: `Or delete migrations/snapshots/${HEAD} and run this command, which emits contract.json from the contract source and writes the snapshot again from the installed extension`,
+          command: '{bin} contract emit',
         },
       ],
     });

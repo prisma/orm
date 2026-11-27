@@ -646,8 +646,8 @@ export function errorContractSnapshotHashMismatch(
   );
 }
 
-const SNAPSHOT_REWRITE_STEPS =
-  "For an app-space migration planned to the emitted contract, emit that contract again and re-run the `migration plan` that wrote the migration ending at this hash, with its `--from` and no `--to`, then delete the new migration directory it writes, which repeats the existing migration. For an extension's snapshot in an application, run `prisma contract emit` without `--output-path`, which writes the head snapshot of each installed extension again; a snapshot of an earlier version of the extension can only be restored from version control. In an extension package, re-run its contract-space build.";
+const SNAPSHOT_REWRITE_RECIPE =
+  'If it is the snapshot of the emitted contract or the head snapshot of an extension, you can instead delete its folder and write it again, since a command writes a snapshot only where none exists. For the emitted contract, run `{bin} db migrate --advance-ref db` when a migration ends at it, which first applies any pending migrations to the configured database, or `{bin} db sign` when none does, which first checks that the configured database matches contract.json and records that in the database; each then moves the db ref to contract.json and writes the snapshot from it. For an extension, run `{bin} contract emit`, which also emits contract.json from the contract source.';
 
 export function errorContractSnapshotContentMismatch(args: {
   readonly storageHash: string;
@@ -655,24 +655,21 @@ export function errorContractSnapshotContentMismatch(args: {
   readonly jsonPath: string;
 }): MigrationToolsError {
   const { storageHash, computedHash, jsonPath } = args;
-  const snapshotDir = dirname(jsonPath);
   return new MigrationToolsError(
     'MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH',
     'Contract snapshot content does not match its hash',
     {
-      why: `The contract snapshot at "${jsonPath}" is addressed by storage hash ${storageHash}, but its content recomputes to ${computedHash}. Either the project was upgraded from an earlier release of Prisma 8 without following the upgrade instructions of each release since, which rewrite the snapshots, or the file has been edited or corrupted since it was written.`,
-      fix: `If you just upgraded Prisma, follow the app upgrade instructions of each release since the one you upgraded from: ${APP_UPGRADE_GUIDES_URL}. Otherwise restore "${snapshotDir}" from version control, or delete "${snapshotDir}" and write it again; no command replaces a snapshot directory that exists. ${SNAPSHOT_REWRITE_STEPS}`,
+      why: `The contract snapshot at "${jsonPath}" is addressed by storage hash ${storageHash}, but its content recomputes to ${computedHash}. Either the project was upgraded from an earlier release of Prisma 8 without the upgrade step that rewrites every contract hash, or the file has been edited (or corrupted) since it was written.`,
+      fix: `If the project was upgraded from an earlier release of Prisma 8, follow the app upgrade instructions of each release since, which rewrite every contract hash: ${APP_UPGRADE_GUIDES_URL}. Otherwise restore the snapshot from version control. ${SNAPSHOT_REWRITE_RECIPE}`,
       nextActions: [
         {
           kind: 'open-url',
-          label: 'If you just upgraded Prisma, follow the app upgrade instructions',
+          label:
+            'If the project was upgraded from an earlier release of Prisma 8, follow the app upgrade instructions, which rewrite every contract hash',
           url: APP_UPGRADE_GUIDES_URL,
         },
-        { kind: 'user-choice', label: `Restore "${snapshotDir}" from version control` },
-        {
-          kind: 'user-choice',
-          label: `Delete "${snapshotDir}" and write it again. ${SNAPSHOT_REWRITE_STEPS}`,
-        },
+        { kind: 'user-choice', label: 'Otherwise restore the snapshot from version control' },
+        { kind: 'user-choice', label: SNAPSHOT_REWRITE_RECIPE },
       ],
       meta: { storageHash, computedHash, jsonPath },
     },

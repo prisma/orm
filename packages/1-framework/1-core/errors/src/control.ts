@@ -230,11 +230,11 @@ export function errorContractValidationFailed(
     readonly meta?: Record<string, unknown> | undefined;
     /** Which file was refused: the emitted contract (the default), or a contract snapshot in the migrations directory. */
     readonly artifact?: 'contract' | 'snapshot';
-    /** For a snapshot a command writes again once it is deleted: the snapshot's folder, that command, and what it writes the snapshot from. */
+    /** For a snapshot a command writes again once it is deleted: the snapshot's folder, that command, and everything it does, ending with writing the snapshot. */
     readonly rewrittenBy?: {
       readonly snapshotDirectory: string;
       readonly command: string;
-      readonly source: string;
+      readonly effect: string;
     };
   },
 ): CliStructuredError {
@@ -243,15 +243,19 @@ export function errorContractValidationFailed(
     return new CliStructuredError('CONTRACT.VALIDATION_FAILED', 'Contract validation failed', {
       why: reason,
       fix: [
+        'If the file was edited by hand, restore it from version control.',
         `If an earlier release wrote this snapshot, follow the app upgrade instructions of each release since, which rewrite the contract and its migration snapshots: ${APP_UPGRADE_GUIDES_URL}.`,
         ...(rewrite === undefined
           ? []
           : [
-              `Or delete ${rewrite.snapshotDirectory} and run \`${rewrite.command}\`, which writes it again from ${rewrite.source}.`,
+              `Or delete ${rewrite.snapshotDirectory} and run \`${rewrite.command}\`, which ${rewrite.effect}.`,
             ]),
-        'If the file was edited by hand, restore it from version control.',
       ].join(' '),
       nextActions: [
+        {
+          kind: 'user-choice',
+          label: 'If the file was edited by hand, restore it from version control',
+        },
         {
           kind: 'open-url',
           label: 'If an earlier release wrote the snapshot, follow the app upgrade instructions',
@@ -262,14 +266,10 @@ export function errorContractValidationFailed(
           : [
               {
                 kind: 'run-command' as const,
-                label: `Or delete ${rewrite.snapshotDirectory} and write it again from ${rewrite.source}`,
+                label: `Or delete ${rewrite.snapshotDirectory} and run this command, which ${rewrite.effect}`,
                 command: rewrite.command,
               },
             ]),
-        {
-          kind: 'user-choice',
-          label: 'If the file was edited by hand, restore it from version control',
-        },
       ],
       docsUrl: docsUrlFor('CONTRACT.VALIDATION_FAILED'),
       ...(options.where ? { where: options.where } : {}),

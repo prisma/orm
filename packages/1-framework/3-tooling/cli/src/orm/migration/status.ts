@@ -407,7 +407,7 @@ export const migrationStatusCommand = defineOrmCommand({
 
     const loaded = await buildReadAggregate(ctx.config, {
       migrationsDir,
-      onUnreadableFile: 'report',
+      whenFileUnreadable: 'report',
     });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));
@@ -534,7 +534,7 @@ export const migrationStatusCommand = defineOrmCommand({
       [];
     const emptySpaces: string[] = [];
     let divergedMarker: { readonly space: string; readonly markerHash: string } | undefined;
-    let noPath: Parameters<typeof buildNoPathSummary>[0] | undefined | undefined;
+    let noPath: Parameters<typeof buildNoPathSummary>[0] | undefined;
     let firstPlan: PrintedPlan | undefined;
     let headlineTargetHash = activeRefHash ?? contractHash;
     let totalPending = 0;

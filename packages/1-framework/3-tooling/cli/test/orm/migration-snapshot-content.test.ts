@@ -130,9 +130,21 @@ describe('contract snapshot content verification', () => {
     expect(failure).toBeDefined();
     expect(failure?.why).toContain(GENUINE_HASH);
     expect(failure?.nextActions).toEqual([
-      expect.objectContaining({ kind: 'open-url', url: APP_UPGRADE_GUIDES_URL }),
-      expect.objectContaining({ label: expect.stringContaining('Restore') }),
-      expect.objectContaining({ label: expect.stringContaining('Delete') }),
+      {
+        kind: 'open-url',
+        label:
+          'If the project was upgraded from an earlier release of Prisma 8, follow the app upgrade instructions, which rewrite every contract hash',
+        url: APP_UPGRADE_GUIDES_URL,
+      },
+      {
+        kind: 'user-choice',
+        label: 'If the file was edited by hand, restore it from version control',
+      },
+      {
+        kind: 'run-command',
+        label: `Or delete migrations/snapshots/${GENUINE_HASH} and run this command, which applies any pending migrations to the configured database, then moves the db ref to contract.json and writes the snapshot again from it`,
+        command: '{bin} db migrate --advance-ref db',
+      },
     ]);
   });
 

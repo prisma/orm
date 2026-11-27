@@ -1,5 +1,6 @@
 import { isFormatVersionError } from '@internal/contract/format-version';
 import { formatVersionErrorAt } from '@internal/contract/internal/format-version';
+import { MigrationToolsError } from '@internal/migration-tools/errors';
 import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
 import {
@@ -118,4 +119,10 @@ function diagnosticWithoutConnectionString(diagnostic: Diagnostic, connection: s
         : metaWithoutConnectionString(diagnostic.meta, connection),
     ),
   };
+}
+
+/** The reason a stored file could not be read, from the error its reader threw. */
+export function reasonOf(error: unknown): string {
+  if (MigrationToolsError.is(error)) return error.why;
+  return error instanceof Error ? error.message : String(error);
 }

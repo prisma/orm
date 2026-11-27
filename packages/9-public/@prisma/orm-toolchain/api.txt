@@ -173,10 +173,13 @@
 (not exported) interface SingleTargetInputs, readonly required property appMigrationsRelative: string
 (not exported) interface SingleTargetInputs, readonly required property cwd: string
 (not exported) interface SingleTargetInputs, readonly required property spaces: readonly CheckSpace[]
+(not exported) interface SnapshotHead
+(not exported) interface SnapshotHead, readonly required property reachedByMigration: boolean
+(not exported) interface SnapshotHead, readonly required property spaceId: string
 (not exported) interface SnapshotRewrite
 (not exported) interface SnapshotRewrite, readonly required property command: string
+(not exported) interface SnapshotRewrite, readonly required property effect: string
 (not exported) interface SnapshotRewrite, readonly required property snapshotDirectory: string
-(not exported) interface SnapshotRewrite, readonly required property source: string
 (not exported) interface StoredSnapshotSource
 (not exported) interface StoredSnapshotSource, readonly required property rewrittenBy: SnapshotRewrite | undefined
 (not exported) interface TemporaryValueReport
@@ -321,7 +324,7 @@
 ./cli/control-api: function appliedHashesFromLedger(ledgerEntries: ReadonlyArray<{ readonly migrationHash: string; }>): ReadonlySet<string>
 ./cli/control-api: function buildContractSpaceAggregate<TFamilyId extends string, TTargetId extends string>(inputs: BuildAggregateInputs<TFamilyId, TTargetId>): Promise<Result<ContractSpaceAggregate, CliStructuredError>>
 ./cli/control-api: function buildMigrationSpaceGraphEntries(args: { readonly aggregate: ContractSpaceAggregate; readonly scopedSpaces: readonly MigrationSpaceListEntry[]; }): readonly MigrationSpaceGraphEntry[]
-./cli/control-api: function buildReadAggregate(config: PrismaConfig, options: { readonly migrationsDir: string; readonly verifySnapshotContent?: SnapshotContentVerifier; readonly onUnreadableFile?: 'refuse' | 'report'; }): Promise<Result<{ readonly aggregate: ContractSpaceAggregate; readonly contractHash: string; readonly storageNameOf: (operation: MigrationPlanOperation) => string; readonly accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]; readonly markerLocation: string; readonly deserializeContract: (contractJson: unknown) => Contract; readonly contractRefusal: string | undefined; }, CliStructuredError>>
+./cli/control-api: function buildReadAggregate(config: PrismaConfig, options: { readonly migrationsDir: string; readonly verifySnapshotContent?: SnapshotContentVerifier; readonly whenFileUnreadable?: 'refuse' | 'report'; }): Promise<Result<{ readonly aggregate: ContractSpaceAggregate; readonly contractHash: string; readonly storageNameOf: (operation: MigrationPlanOperation) => string; readonly accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]; readonly markerLocation: string; readonly deserializeContract: (contractJson: unknown) => Contract; readonly contractRefusal: string | undefined; }, CliStructuredError>>
 ./cli/control-api: function buildRefAdvancementFields(options: { readonly name: string; readonly refsDir: string; readonly migrationsDir: string; readonly contractIR: ContractIR; readonly mode: 'apply' | 'plan'; readonly hash: string; }): Promise<Result<RefAdvancementFields, CliStructuredError>>
 ./cli/control-api: function checkSingleTarget(target: string, inputs: SingleTargetInputs): Promise<MigrationCheckOutcome>
 ./cli/control-api: function computeRefAdvancementName(options: { readonly advanceRef?: string; readonly db?: string; }): null | string
@@ -349,7 +352,7 @@
 ./cli/control-api: function loadContractRawSafely(config: { contract?: { output?: string; }; }): Promise<null | unknown>
 ./cli/control-api: function loadContractSource(config: PrismaConfig, options?: { readonly signal?: AbortSignal; }): Promise<Result<LoadedContractSource, ContractSourceFailure>>
 ./cli/control-api: function loadContractSpaceAggregateForCli<TFamilyId extends string, TTargetId extends string>(inputs: BuildAggregateInputs<TFamilyId, TTargetId>): Promise<Result<ContractSpaceAggregate, CliStructuredError>>
-./cli/control-api: function mapContractAtError(error: unknown, options?: { readonly artifactRole?: 'from' | 'to'; readonly atHeadOf?: string; }): Result<never, CliStructuredError>
+./cli/control-api: function mapContractAtError(error: unknown, options?: { readonly artifactRole?: 'from' | 'to'; readonly atHeadOf?: SnapshotHead; }): Result<never, CliStructuredError>
 ./cli/control-api: function mapIntegrityViolations(violations: readonly IntegrityViolation[], migrationsDir: string): CliStructuredError | null
 ./cli/control-api: function migrationSpaceListEntriesFromAggregate(aggregate: ContractSpaceAggregate, projectMigrationsDir: string): Promise<readonly MigrationSpaceListEntry[]>
 ./cli/control-api: function preflightRefAdvancement(args: { readonly name: string; readonly contractJson: Record<string, unknown>; readonly contractJsonPath: string; readonly config: { readonly contract?: { readonly typesModule?: string; }; }; readonly client: Pick<ControlClient, 'renderContractDts'>; readonly snapshot?: StoredSnapshotSource; }): Promise<Result<ContractIR, CliStructuredError>>
@@ -373,8 +376,8 @@
 ./cli/control-api: interface AskedSubject extends MigrationOperationSubject
 ./cli/control-api: interface AskedSubject, readonly optional property removedNamespace?: string
 ./cli/control-api: interface AskedSubject, readonly required property text: string
-./cli/control-api: interface BuildAggregateInputs, readonly optional property onUnreadableFile?: 'refuse' | 'report'
 ./cli/control-api: interface BuildAggregateInputs, readonly optional property verifySnapshotContent?: SnapshotContentVerifier
+./cli/control-api: interface BuildAggregateInputs, readonly optional property whenFileUnreadable?: 'refuse' | 'report'
 ./cli/control-api: interface BuildAggregateInputs, readonly required property appContract: Contract
 ./cli/control-api: interface BuildAggregateInputs, readonly required property deserializeContract: (contractJson: unknown) => Contract
 ./cli/control-api: interface BuildAggregateInputs, readonly required property extensions: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>

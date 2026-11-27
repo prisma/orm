@@ -174,7 +174,14 @@ async function resolveContractRef(
   } catch (error) {
     return mapContractAtError(error, {
       ...ifDefined('artifactRole', options?.artifactRole),
-      ...(space.headRef?.hash === hash ? { atHeadOf: space.spaceId } : {}),
+      ...(space.headRef?.hash === hash
+        ? {
+            atHeadOf: {
+              spaceId: space.spaceId,
+              reachedByMigration: space.packages.some((pkg) => pkg.metadata.to === hash),
+            },
+          }
+        : {}),
     });
   }
 }

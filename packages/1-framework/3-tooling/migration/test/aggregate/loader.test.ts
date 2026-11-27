@@ -119,7 +119,7 @@ describe('loadContractSpaceAggregate', () => {
         'not json',
       );
       await writeFile(join(migrationsDir, 'beta', '20260101T0000_broken', 'ops.json'), '[]');
-      await writeHeadRef('beta', { hash: 'b1', invariants: [] });
+      await writeHeadRef('beta', { hash: 'b'.repeat(64), invariants: [] });
 
       const aggregate = await load();
       expect(aggregate.listSpaces()).toEqual(['app', 'alpha', 'beta']);
@@ -204,7 +204,7 @@ describe('loadContractSpaceAggregate', () => {
     it('reports headRefNotInGraph for a migration-backed space whose head hash is not in graph', async () => {
       // A loadable package with a known graph node, but head.json points elsewhere.
       await writePackage('backed', '20260101T0000_init', { from: null, to: 'b1' });
-      await writeHeadRef('backed', { hash: 'not-in-graph', invariants: [] });
+      await writeHeadRef('backed', { hash: 'f'.repeat(64), invariants: [] });
 
       const aggregate = await load();
       const violations = aggregate.checkIntegrity();
@@ -364,10 +364,10 @@ describe('loadContractSpaceAggregate', () => {
         'not json',
       );
       await writeFile(join(migrationsDir, 'beta', '20260101T0000_broken', 'ops.json'), '[]');
-      await writeHeadRef('beta', { hash: 'b1', invariants: [] });
+      await writeHeadRef('beta', { hash: 'b'.repeat(64), invariants: [] });
       // gamma: loadable package but head.json points to a hash not in graph → headRefNotInGraph.
       await writePackage('gamma', '20260101T0000_init', { from: null, to: 'g1' });
-      await writeHeadRef('gamma', { hash: 'not-in-graph', invariants: [] });
+      await writeHeadRef('gamma', { hash: 'f'.repeat(64), invariants: [] });
 
       const violations = (await load()).checkIntegrity();
 

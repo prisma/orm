@@ -11,7 +11,7 @@ function leftOutText(file: ReturnType<typeof unreadableFiles>[number]): string {
 }
 
 /**
- * A warning for each ref and migration a listing leaves out because its file cannot be read, so the listing never hides it. It is a warning: the command still lists everything it could read. Load the aggregate with `onUnreadableFile: 'report'` to list past such a file.
+ * A warning for each ref and migration a listing leaves out because its file cannot be read, so the listing never hides it. It is a warning: the command still lists everything it could read. Load the aggregate with `whenFileUnreadable: 'report'` to list past such a file.
  */
 export function unreadableFileDiagnostics(
   aggregate: ContractSpaceAggregate,
