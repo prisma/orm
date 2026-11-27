@@ -251,6 +251,7 @@
 ./driver: everything from @prisma/orm-target-postgres/driver
 ./family-contract/authored-check-naming: everything from @prisma/orm-family-sql/contract/authored-check-naming
 ./family-contract/canonicalization-hooks: everything from @prisma/orm-family-sql/contract/canonicalization-hooks
+./family-contract/capability-messages: everything from @prisma/orm-family-sql/contract/capability-messages
 ./family-contract/check-expressions: everything from @prisma/orm-family-sql/contract/check-expressions
 ./family-contract/codec-json-type: everything from @prisma/orm-family-sql/contract/codec-json-type
 ./family-contract/contract-view: everything from @prisma/orm-family-sql/contract/contract-view

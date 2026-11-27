@@ -1744,6 +1744,8 @@
 ./contract/authored-check-naming: function lowerAuthoredCheck(tableName: string, authored: AuthoredCheckInput, warnings?: AuthoringWarningSink): CheckConstraintInput
 ./contract/authored-check-naming: type AuthoredCheckInput = { readonly expression: string; readonly map: string | undefined; readonly name: string | undefined; }
 ./contract/canonicalization-hooks: const sqlContractCanonicalizationHooks: { readonly shouldPreserveEmpty: PreserveEmptyPredicate; readonly sortStorage: StorageSort; }
+./contract/capability-messages: function capabilityKeysText(capabilities: readonly string[]): string
+./contract/capability-messages: function capabilityUnavailableMessage(feature: string, capabilities: readonly string[], reason?: string): string
 ./contract/check-expressions: function discriminatorValueSet(baseModelName: string, discriminatorField: string, variantValues: readonly string[]): { readonly name: string; readonly values: readonly string[]; }
 ./contract/check-expressions: function reachesAny(storage: Pick<StorageBase, 'namespaces'>, from: EntityCoordinate<'storage', 'valueObject'>, targets: ReadonlySet<string>): boolean
 ./contract/check-expressions: function referenceKey(reference: EntityCoordinate<'storage', 'valueObject'>): string
@@ -2341,6 +2343,8 @@
 ./contract: function assertNothingCastsFromSqlExpression(declaredDataTypes: ReadonlyArray<{ readonly type: DataType; readonly contributedBy: string; }>): void
 ./contract: function buildSqlSchemaQualifiedView<TContract extends Contract<SqlStorage>>(contract: TContract): SqlSchemaQualifiedView<TContract>
 ./contract: function buildSqlSingleNamespaceView<TContract extends Contract<SqlStorage>>(contract: TContract): SqlSingleNamespaceView<TContract>
+./contract: function capabilityKeysText(capabilities: readonly string[]): string
+./contract: function capabilityUnavailableMessage(feature: string, capabilities: readonly string[], reason?: string): string
 ./contract: function checkConstraintInputFromSerialized(flat: SerializedCheckConstraint): CheckConstraintInput
 ./contract: function checkRawTypeText(text: string): string | undefined
 ./contract: function checkSqlDefaultText(text: string): string | undefined
@@ -4893,8 +4897,6 @@
 ./relational-core/ast: export type CodecDescriptor from @prisma/orm-framework/components/codec
 ./relational-core/ast: export type CodecRef from @prisma/orm-framework/components/codec
 ./relational-core/ast: export type CodecTrait from @prisma/orm-framework/components/codec
-./relational-core/ast: function capabilityKeysText(capabilities: readonly string[]): string
-./relational-core/ast: function capabilityUnavailableMessage(feature: string, capabilities: readonly string[], reason?: string): string
 ./relational-core/ast: function checkLimitOffset(argument: 'limit' | 'offset', value: LimitOffsetValue | undefined): void
 ./relational-core/ast: function collectOrderedParamRefs(ast: AnyQueryAst): ReadonlyArray<AnyParamRef>
 ./relational-core/ast: function collectTableSources(ast: AnyQueryAst): readonly TableSource[]
@@ -5964,8 +5966,6 @@
 ./relational-core: export type CodecRef from @prisma/orm-framework/components/codec
 ./relational-core: export type CodecTrait from @prisma/orm-framework/components/codec
 ./relational-core: function buildOperation<R extends ScopeField>(spec: BuildOperationSpec<R>): Expression<R>
-./relational-core: function capabilityKeysText(capabilities: readonly string[]): string
-./relational-core: function capabilityUnavailableMessage(feature: string, capabilities: readonly string[], reason?: string): string
 ./relational-core: function checkLimitOffset(argument: 'limit' | 'offset', value: LimitOffsetValue | undefined): void
 ./relational-core: function codecOf(value: unknown): CodecRef | undefined
 ./relational-core: function collectOrderedParamRefs(ast: AnyQueryAst): ReadonlyArray<AnyParamRef>
@@ -6568,7 +6568,7 @@
 ./runtime: type DeclaredNullable<S> = S extends { readonly nullable: true; } ? true : false
 ./runtime: type DelegatingRuntime = Pick<Runtime, 'connection' | 'execute' | 'prepare' | 'query'> & ActivitySourceTarget
 ./runtime: type HashablePlan = BoundPreparedStatement | SqlExecutionPlan | SqlQueryPlan
-./runtime: type InteractiveTransactionsListed<TContract extends Contract<SqlStorage>> = NoneMissing<InteractiveTransactionsNotListed<TContract['capabilities']>, 'the contract does not list '>
+./runtime: type InteractiveTransactionsListed<TContract extends Contract<SqlStorage>> = NoneMissing<InteractiveTransactionsNotListed<TContract['capabilities']>, '`transaction()` is unavailable: your contract declares no dependency on `', '`'>
 ./runtime: type MarkerReadResult = { readonly kind: 'absent'; } | { readonly kind: 'no-table'; } | { readonly kind: 'present'; readonly record: ContractMarkerRecord; }
 ./runtime: type ParamSpec<CT extends CodecTypesBase = CodecTypesBase> = (keyof CT & string) | { readonly codecId: keyof CT & string; readonly typeParams?: JsonValue; readonly nullable?: boolean; }
 ./runtime: type ParamsFromDeclaration<D, CT extends CodecTypesBase> = { readonly [K in keyof D]: CodecValue<DeclaredCodecId<D[K]>, DeclaredNullable<D[K]>, CT>; }
