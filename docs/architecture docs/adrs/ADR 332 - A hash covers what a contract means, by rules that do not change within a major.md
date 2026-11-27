@@ -31,17 +31,17 @@ A team on `8.0.0` emits a contract and migrates a database. On `8.4`, with the s
 | Profile hash | `targetFamily`, `target`, `capabilities` | The capabilities a contract requires |
 | Execution hash | `targetFamily`, `target`, `execution` | The execution defaults a contract carries |
 
-In every family the profile hash covers the contract's capability list, its `capabilities` section, the capabilities the contract requires of the database and the connection. Two contracts that require different capabilities have different profile hashes, so the profile hash a database's marker records names the capabilities the database was signed for.
+In every family the profile hash covers the contract's `capabilities` section: the capabilities the contract requires of the database and the connection. Two contracts that require different capabilities have different profile hashes, so the profile hash a database's marker records names the capabilities the database was signed for.
 
 A hash covers the sections named above and nothing else in the file, so the file's `formatVersion` ([ADR 331](ADR%20331%20-%20Stored%20files%20carry%20a%20format%20version%2C%20and%20a%20reader%20refuses%20one%20it%20does%20not%20know.md)) is not an input. Where a hash is checked against a stored contract, such as a snapshot or the contract an extension package ships, the stored section is put into the family's normal form and hashed. A stored section in an earlier format version that lays it out differently is first converted to the newest layout, so that the same contract written in two format versions has the same hashes.
 
-The framework sorts the keys of the input and encodes it; it leaves out no value. Before that, the family puts `storage` into its normal form with one function, which leaves out only the fields the family names as its own defaults and orders the storage entries ([ADR 010](ADR%20010%20-%20Canonicalization%20Rules.md)). The same function is applied when the section is written, so a value is in the hash input exactly when it is in the written section. A value the family does not own, such as a type's parameters or an index's options, is hashed exactly as given, so two contracts that differ in one have different hashes. A namespace's `kind` is left out of the storage hash.
+The framework sorts the keys of the input and encodes it. It leaves out no value except the section's own `storageHash`, which each caller removes, and each namespace's `kind`, which it removes itself. Before that, the family puts `storage` into its normal form with one function, `normalizeStorage` on the family's contract serializer (`normalizeSqlStorage`, `normalizeMongoStorage`), which leaves out only the fields the family names as its own defaults and orders the lists whose order means nothing ([ADR 010](ADR%20010%20-%20Canonicalization%20Rules.md)). The same function is applied when the section is written. The contents of a value the family does not own, such as a type's parameters or an index's options, are hashed exactly as given, so two contracts that differ inside one have different hashes; only an empty one is left out as a whole.
 
 ### The rules do not change within a major
 
-Within a major version, the code that computes a hash may change only in ways that give the same hash for the same contract. A test holds a set of saved contracts with their expected hashes written as literals, and every release must compute the same hashes.
+Within a major version, the code that computes a hash may change only in ways that give the same hash for the same contract. Each family has a test that holds saved contracts to expected hashes written as literals, and every release must compute the same hashes.
 
-The part of the rules a family or target supplies is bound by the same guarantee, including a family or target built outside this repository. Its author runs the same test on their own saved contracts with `assertContractHashes`, which the contract package publishes beside the hash functions. It takes the saved contracts, the hashes expected and the family's `normalizeStorage`.
+The part of the rules a family or target supplies is bound by the same guarantee, including a family or target built outside this repository. Its author runs the same test on their own saved contracts with `assertContractHashes`, published at `@prisma/orm-framework/contract/hashing`. It takes the saved contracts, the hashes expected and the family's `normalizeStorage`.
 
 One project never holds hashes computed in two ways. A mistake found in the rules after `8.0.0` therefore stays until the next major. That is accepted: a hash that is stable still identifies a contract.
 
@@ -49,26 +49,24 @@ A release that writes different `storage` content for a contract produces a diff
 
 ### The capability list does not change within a major
 
-Within a major version, the capability list Prisma writes for an unchanged contract source and the same configuration does not change either, so the profile hash of an unchanged contract does not change. A release may add a capability only to a list that no existing contract was emitted with. Where a configuration states a database version, a version value that a release accepts gives the same list for the rest of the major.
+Within a major version, the capability list Prisma writes for an unchanged contract source and the same configuration does not change either, so the profile hash of an unchanged contract does not change. A release may add a capability only to a list that no existing contract was emitted with.
 
-This binds every component that declares capabilities, inside or outside this repository: a target, an adapter, an extension or a driver. A component that adds a capability on a database version already supported changes the list of every contract that uses it, so that change ships only in a major release: a Prisma major for Prisma's own components, and a major release of the component itself for one built outside this repository. This is the cost of the rule: a feature that needs a new capability flag on a supported database version, such as the PostgreSQL adapter's `insertOnConflictTarget`, waits for a major.
-
-The reason is that a marker's profile hash moves only when a command writes the marker: `prisma db sign`, `prisma db update`, which writes it on every run, and `prisma db migrate` when it applies a migration. Deploys run `prisma db migrate`, and a capability change arrives with no migration, so `prisma db migrate` reports the database as up to date and leaves the marker as it is, `prisma db verify` then fails on every signed database, and the runtime reports the marker as mismatched.
-
-Holding the rule takes a test in each target that pins, as literals, the capability list each supported database version gives, and fails with a message that a change to it needs a major. A target without that test relies on review.
+This binds every component that declares capabilities, inside or outside this repository: a target, an adapter, an extension or a driver. A component that adds a capability on a database version already supported changes the list of every contract that uses it, so that change ships only in a major release: a Prisma major for Prisma's own components, and a major release of the component itself for one built outside this repository. This is the cost of the rule: a feature that needs a new capability flag on a database version already supported waits for the next major, even when the database has always offered it.
 
 ## Why
 
 Prisma records these hashes in the user's files and database: in `contract.json`, in each migration's `from` and `to`, in the name of each snapshot, in each ref file, and in the database's marker. If a release computed a different hash for the same contract, every migration would be cut off from the one before it, every snapshot would read as tampered with, and every database's marker would stop matching its contract. A user could only repair that by hand.
+
+The capability list is frozen because a marker's profile hash moves only when a command writes the marker: `prisma db sign`, `prisma db update`, which writes it on every run, and `prisma db migrate` when it applies a migration. Deploys run `prisma db migrate`, and a capability change arrives with no migration, so `prisma db migrate` reports the database as up to date and leaves the marker as it is, `prisma db verify` then fails on every signed database, and the runtime reports the marker as mismatched.
 
 Each hash covers only what it identifies, so that nothing else can move it. A hash that also covered how the file is written, or parts of the contract it does not describe, would change whenever those did.
 
 ## Consequences
 
 - An upgrade within a major changes no hash, so it needs no change to a user's files or databases.
-- A mistake in the rules, and a capability a supported database version lacks in its list, both wait for the next major.
+- A mistake in the rules, and a capability a supported database version lacks in its list, both wait for the next major. No test pins a target's whole capability list, so a change to one is caught by review.
 - A family or target built outside this repository carries the same obligation for its part of the rules, and has the same test to hold it.
-- A project created by a release candidate of Prisma 8 holds hashes computed by other rules. The migration system has no mechanism for moving a hash. Such a project moves by the upgrade instructions of the release that introduced these rules: a script rewrites the hashes in its files, and each database is signed again with `prisma db sign`.
+- A project whose hashes were computed by other rules, such as one created by a Prisma 8 pre-release, cannot be moved by the migration system, which has no mechanism for changing a hash. The upgrade instructions move it: a script rewrites the hashes in its files, and each database is signed again with `prisma db sign`.
 - `prisma db sign --force` exists for that move. A database whose change policy allows only migrations refuses `db sign` ([ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md)), and `--force` overrides that one refusal. It changes no schema, still checks that the database satisfies the contract before it writes the marker, and leaves the database's policies as they were. No error or advice offers the flag; the upgrade instructions do.
 - A database's ledger keeps the migration hashes it recorded. A migration hash covers the storage hashes of its ends, so after such a move `migration status` marks no earlier migration as applied. Nothing is applied or refused because of the ledger.
 
