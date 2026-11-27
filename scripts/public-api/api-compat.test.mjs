@@ -155,7 +155,7 @@ describe('the report', () => {
     const levels = {
       version: '8.0.1',
       results: [result({}), result({ name: '@prisma/orm-ea' })],
-      versions: { '@prisma/orm-a': '8.0.1', '@prisma/orm-ea': '8.0.1-ea.0' },
+      releasedAt: { '@prisma/orm-a': '8.0.1', '@prisma/orm-ea': '8.0.1-ea.0' },
       notReleased: [],
     };
     const text = reportText(levels);
@@ -465,19 +465,28 @@ describe('main', () => {
   it('looks up and installs each package at the version it was released at', async () => {
     const asked = [];
     let installed;
+    let pinned;
     const { code, out } = await run([], '8.0.1', {
-      packagesAt: () => [{ name: '@prisma/orm-framework', version: '8.0.1-ea.0' }],
+      packagesAt: () => [
+        { name: '@prisma/orm-family-sql', version: '8.0.1' },
+        { name: '@prisma/orm-framework', version: '8.0.1-ea.0' },
+      ],
       released: async (name, version) => {
         asked.push([name, version]);
         return true;
       },
       install: (options) => {
         installed = options.packages.map(({ name, version }) => ({ name, version }));
+        pinned = options.released;
       },
     });
     strictEqual(code, 1);
     deepStrictEqual(asked, [['@prisma/orm-framework', '8.0.1-ea.0']]);
     deepStrictEqual(installed, [{ name: '@prisma/orm-framework', version: '8.0.1-ea.0' }]);
+    deepStrictEqual(pinned, {
+      '@prisma/orm-family-sql': '8.0.1',
+      '@prisma/orm-framework': '8.0.1-ea.0',
+    });
     match(out, /^api:compat: last release 8\.0\.1; breaks fail unless recorded\n/);
     match(out, /\n@prisma\/orm-framework at 8\.0\.1-ea\.0: 1 exports/);
   });

@@ -247,17 +247,17 @@ const FROM_DISK =
 const breakLabel = (each) => (each.failsRun ? 'break' : 'break (maturity level, does not fail)');
 
 // A package's name, with the version it was released at where that is not the release's.
-const packageHeading = (name, version, versions = {}) =>
-  versions[name] === undefined || versions[name] === version
+const packageHeading = (name, version, releasedAt = {}) =>
+  releasedAt[name] === undefined || releasedAt[name] === version
     ? name
-    : `${name} at ${versions[name]}`;
+    : `${name} at ${releasedAt[name]}`;
 
-export function reportText({ version, results, versions, notReleased }) {
+export function reportText({ version, results, releasedAt, notReleased }) {
   const lines = [`api:compat: last release ${version}; breaks fail unless recorded`];
   for (const result of results) {
     const counts = result.counts;
     const head = counts
-      ? `${packageHeading(result.name, version, versions)}: ${counts.exports} exports on ${counts.paths} paths; ${counts.tests} comparisons, and ${counts.forwarded} forwarded names checked only for existence (they are compared in the package that declares them); breaks ${result.breaks.length}, undecided ${result.undecided.length}, not compared ${result.notCompared.length}, recorded ${result.recorded.length}; ${(result.ms / 1000).toFixed(1)} s, ${result.maxRssMb} MB`
+      ? `${packageHeading(result.name, version, releasedAt)}: ${counts.exports} exports on ${counts.paths} paths; ${counts.tests} comparisons, and ${counts.forwarded} forwarded names checked only for existence (they are compared in the package that declares them); breaks ${result.breaks.length}, undecided ${result.undecided.length}, not compared ${result.notCompared.length}, recorded ${result.recorded.length}; ${(result.ms / 1000).toFixed(1)} s, ${result.maxRssMb} MB`
       : result.removed
         ? `${result.name}: removed from the repository`
         : result.recordsFile
@@ -315,7 +315,7 @@ const cell = (text) =>
     .replaceAll('|', '\\|')
     .replaceAll('\n', ' ');
 
-export function reportMarkdown({ version, results, versions, notReleased }, { maxBytes } = {}) {
+export function reportMarkdown({ version, results, releasedAt, notReleased }, { maxBytes } = {}) {
   const lines = [
     `## Breaks since the last release, ${version}`,
     '',
@@ -325,7 +325,7 @@ export function reportMarkdown({ version, results, versions, notReleased }, { ma
     '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
     ...results.map(
       (result) =>
-        `| ${packageHeading(result.name, version, versions)} | ${result.counts?.tests ?? '–'} | ${result.counts?.forwarded ?? '–'} | ${result.breaks?.length ?? '–'} | ${result.undecided?.length ?? '–'} | ${result.notCompared?.length ?? '–'} | ${recordedOfKind(result, 'break').length} | ${recordedOfKind(result, 'allowed').length} | ${result.problems.length} |`,
+        `| ${packageHeading(result.name, version, releasedAt)} | ${result.counts?.tests ?? '–'} | ${result.counts?.forwarded ?? '–'} | ${result.breaks?.length ?? '–'} | ${result.undecided?.length ?? '–'} | ${result.notCompared?.length ?? '–'} | ${recordedOfKind(result, 'break').length} | ${recordedOfKind(result, 'allowed').length} | ${result.problems.length} |`,
     ),
     '',
   ];
@@ -375,7 +375,7 @@ export function reportMarkdown({ version, results, versions, notReleased }, { ma
       );
     }
     if (items.length > 0) {
-      lines.push(`### ${packageHeading(result.name, version, versions)}`, '', ...items, '');
+      lines.push(`### ${packageHeading(result.name, version, releasedAt)}`, '', ...items, '');
     }
   }
   if (notReleased.length > 0) {
@@ -443,6 +443,7 @@ export async function main({
   let selected;
   let version;
   let releasedAt;
+  let released;
   let plan;
   try {
     selected = selectPackages(inRepository, values.only);
@@ -450,7 +451,9 @@ export async function main({
     version = release.version;
     fetchTag(release.tag, root);
     const selectedNames = new Set(selected.map(({ name }) => name));
-    const atTag = packagesAt(release.tag, root).filter(
+    const everyAtTag = packagesAt(release.tag, root);
+    released = Object.fromEntries(everyAtTag.map((each) => [each.name, each.version]));
+    const atTag = everyAtTag.filter(
       ({ name }) => values.only === undefined || selectedNames.has(name),
     );
     releasedAt = Object.fromEntries(atTag.map((each) => [each.name, each.version]));
@@ -469,7 +472,7 @@ export async function main({
     }
     throw error;
   }
-  const released = plan.check;
+  const toCheck = plan.check;
   const notReleased = plan.notReleased;
 
   const results = [...plan.problems];
@@ -505,7 +508,7 @@ export async function main({
   }
   const jobs = [];
   const installDir = join(root, INSTALL_FOLDER);
-  for (const { dir, name } of released) {
+  for (const { dir, name } of toCheck) {
     try {
       jobs.push({
         name,
@@ -525,7 +528,7 @@ export async function main({
     }
   }
 
-  const { versions, conflicts } = thirdPartyVersions(
+  const { versions: thirdParty, conflicts } = thirdPartyVersions(
     inRepository.map(({ dir }) => dir),
     ownNames,
   );
@@ -535,12 +538,13 @@ export async function main({
   try {
     install({
       dir: installDir,
-      packages: released,
-      overrides: versions,
+      packages: toCheck,
+      released,
+      thirdParty,
       peers: peerDependencies(
         inRepository.map(({ dir }) => dir),
         ownNames,
-        versions,
+        thirdParty,
       ),
       ownNames,
       settings: supplyChainSettings(readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8')),
@@ -553,7 +557,7 @@ export async function main({
   results.push(...(await check(jobs, Math.min(workers, Math.max(jobs.length, 1)))));
   results.sort((a, b) => compareCodeUnits(a.name, b.name));
 
-  const report = { version, results, versions: releasedAt, notReleased };
+  const report = { version, results, releasedAt, notReleased };
   stdout.write(reportText(report));
   if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, reportMarkdown(report));
   return results.some(failsRun) ? 1 : 0;

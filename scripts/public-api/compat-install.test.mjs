@@ -7,6 +7,7 @@ import {
   aliasOf,
   makeTwin,
   peerDependencies,
+  releaseInstall,
   supplyChainSettings,
   thirdPartyVersions,
 } from './compat-install.mjs';
@@ -205,6 +206,40 @@ describe('makeTwin', () => {
     deepStrictEqual(
       twins.map((twin, index) => sharedOf(twin).includes(join(root, ['one', 'two'][index]))),
       [true, true],
+    );
+  });
+});
+
+describe('releaseInstall', () => {
+  it('installs each package at the version the release published it at, and pins all of ours to the release', () => {
+    deepStrictEqual(
+      releaseInstall({
+        packages: [
+          { name: '@prisma/orm-postgres', version: '8.0.1' },
+          { name: '@prisma/orm-mysql', version: '8.0.1-ea.0' },
+        ],
+        released: {
+          '@prisma/orm-family-sql': '8.0.1',
+          '@prisma/orm-mysql': '8.0.1-ea.0',
+          '@prisma/orm-postgres': '8.0.1',
+        },
+        peers: { pg: '8.13.0' },
+        thirdParty: { pg: '8.13.0', 'x>y': '2.0.0' },
+      }),
+      {
+        dependencies: {
+          pg: '8.13.0',
+          'release-orm-postgres': 'npm:@prisma/orm-postgres@8.0.1',
+          'release-orm-mysql': 'npm:@prisma/orm-mysql@8.0.1-ea.0',
+        },
+        overrides: {
+          '@prisma/orm-family-sql': '8.0.1',
+          '@prisma/orm-mysql': '8.0.1-ea.0',
+          '@prisma/orm-postgres': '8.0.1',
+          pg: '8.13.0',
+          'x>y': '2.0.0',
+        },
+      },
     );
   });
 });

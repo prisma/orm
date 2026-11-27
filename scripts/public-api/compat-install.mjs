@@ -222,16 +222,35 @@ export function makeTwin({ releaseDir, twinRoot, ownNames, copies = new Map() })
   return dir;
 }
 
+// The install folder's dependencies and overrides. Each package is installed under an alias at the
+// version the release published it at. Every package of ours the release has is pinned at its
+// version from the release too, so that a range one of them names another by resolves to the
+// release, not to something published since; third-party packages are pinned as `thirdParty` says.
+export function releaseInstall({ packages, released, peers, thirdParty }) {
+  return {
+    dependencies: {
+      ...peers,
+      ...Object.fromEntries(
+        packages.map(({ name, version }) => [aliasOf('release', name), `npm:${name}@${version}`]),
+      ),
+    },
+    overrides: sortedObject({ ...thirdParty, ...released }),
+  };
+}
+
 // Writes the install folder's manifest and workspace, installs, stamps every copy of our packages
 // with a version of its own, and links each current package beside its release.
-export function installRelease({ dir, packages, overrides, peers, ownNames, settings = {} }) {
+export function installRelease({
+  dir,
+  packages,
+  released,
+  thirdParty,
+  peers,
+  ownNames,
+  settings = {},
+}) {
   mkdirSync(dir, { recursive: true });
-  const dependencies = {
-    ...peers,
-    ...Object.fromEntries(
-      packages.map(({ name, version }) => [aliasOf('release', name), `npm:${name}@${version}`]),
-    ),
-  };
+  const { dependencies, overrides } = releaseInstall({ packages, released, peers, thirdParty });
   writeFileSync(
     join(dir, 'package.json'),
     `${JSON.stringify({ name: 'api-compat', private: true, type: 'module', dependencies }, null, 2)}\n`,
