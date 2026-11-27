@@ -21,6 +21,7 @@ import {
   type InstallReason,
   type PackagesAdded,
   packagesAddedAction,
+  type RefusedPeerCase,
 } from '../commands/init/errors';
 import type { InitContribution } from '../commands/init/init-contribution';
 import {
@@ -31,13 +32,14 @@ import {
 import { chooseAction } from '../utils/next-actions';
 import { ENGINE_PACKAGE, installProjectDependencies } from './init-packages';
 import {
-  exactVersionOf,
   installedManifests,
   type RequiredPeer,
   type RequiredPeers,
   requiredPeerSpecifier,
+  requirementSpecifier,
   resolveRequiredPeers,
 } from './init-required-peers';
+import { exactVersionOf, requirementAdmits } from './init-version-lines';
 import { normalizeError } from './normalize-error';
 import { keywordsOf } from './package-manifest';
 import { type ImportFromProject, installedManifest } from './project-modules';
@@ -213,7 +215,7 @@ export function createTargetPackagePreparation(ctx: {
       packageName,
       read: manifests.read,
       installedVersion: manifests.installedVersion,
-      ownsFacadeLine: installsTarget,
+      facadeLine: declaredBefore.has(packageName) ? 'keep' : installsTarget ? 'write' : 'report',
       installedElsewhere: INSTALLED_ELSEWHERE,
       declared: () => declaredPackages(ctx.cwd),
       install: ctx.install
@@ -260,7 +262,7 @@ export function createTargetPackagePreparation(ctx: {
         installCommand:
           toAdd.length === 0
             ? undefined
-            : installCommand(ctx.packageManager, toAdd.map(requiredPeerSpecifier)),
+            : installCommand(ctx.packageManager, toAdd.map(requirementSpecifier)),
         listedMissing: missing.filter((peer) => declared.has(peer.name)).map((peer) => peer.name),
         restoreCommand: formatInstallCommand(ctx.packageManager),
       });
@@ -287,7 +289,7 @@ export function createTargetPackagePreparation(ctx: {
 }
 
 /**
- * Under `--skip-install`, a required peer installed at a version other than the exact one required
+ * Under `--skip-install`, a required peer installed at a version its requirement does not admit
  * cannot be corrected, and its own peers stay unknown, so init stops before it writes anything.
  */
 function refuseRequiredPeersAtAnotherVersion(
@@ -299,31 +301,49 @@ function refuseRequiredPeersAtAnotherVersion(
   const declared = declaredPackages(ctx.cwd);
   const wrong = peers.flatMap((peer) => {
     const found = installedVersion(peer.name);
-    const required = exactVersionOf(peer.version);
-    return found === undefined || required === undefined || exactVersionOf(found) === required
+    const required = exactVersionOf(peer.requirement) ?? peer.requirement;
+    const checked =
+      exactVersionOf(peer.requirement) !== undefined || peer.name.startsWith('@prisma/orm-');
+    return found === undefined || !checked || requirementAdmits(peer.requirement, found) !== false
       ? []
       : [{ peer, found, required }];
   });
   if (wrong.length === 0) return;
-  const toAdd = wrong.filter(({ peer }) => peer.outcome === 'to-install').map(({ peer }) => peer);
   throw errorInitRequiredPeersAtAnotherVersion({
     packageName,
-    packages: wrong.map(({ peer, found, required }) => ({
-      name: peer.name,
-      found,
-      required,
-      listed: peer.outcome === 'left-at-another-version' ? declared.get(peer.name) : undefined,
-    })),
-    installCommand:
-      toAdd.length === 0
-        ? undefined
-        : installCommand(ctx.packageManager, toAdd.map(requiredPeerSpecifier)),
+    packages: wrong.map(({ peer, found, required }) => {
+      const line = declared.get(peer.name);
+      const fix = refusedPeerCase(peer, line, found);
+      return {
+        name: peer.name,
+        found,
+        required,
+        listed: fix.case === 'add' || fix.case === 'install' ? undefined : line,
+        fix,
+      };
+    }),
     listedAtRequired: wrong
       .filter(({ peer }) => peer.outcome === 'already-listed')
       .map(({ peer }) => peer.name),
-    restoreCommand: formatInstallCommand(ctx.packageManager),
+    packageManager: ctx.packageManager,
   });
 }
+
+function refusedPeerCase(
+  peer: RequiredPeer,
+  line: string | undefined,
+  found: string,
+): RefusedPeerCase {
+  if (line === undefined) return { case: 'add', specifier: requirementSpecifier(peer) };
+  const admits = requirementAdmits(line, found);
+  if (peer.outcome === 'already-listed' && admits === false) return { case: 'install' };
+  if (exactVersionOf(line) !== undefined) return { case: 'change-exact' };
+  if (admits === undefined && POINTS_ELSEWHERE.test(line.trim())) return { case: 'resolve' };
+  return { case: 'change-range', specifier: requirementSpecifier(peer) };
+}
+
+/** A line whose version is set somewhere else: a catalog, a workspace package, a path or an alias. */
+const POINTS_ELSEWHERE = /^(?:catalog|workspace|link|file|portal|npm):/;
 
 /**
  * Installing a package runs its install scripts, so a name that is not meant for Prisma 8, such as
@@ -457,7 +477,7 @@ async function loadContribution(
         missingPeersCommand:
           missing.length === 0
             ? undefined
-            : installCommand(ctx.packageManager, missing.map(requiredPeerSpecifier)),
+            : installCommand(ctx.packageManager, missing.map(requirementSpecifier)),
       });
     case 'loaded':
       break;

@@ -199,11 +199,45 @@ The code was raised by the commander `orm init` (deleted in the S5 cutover), who
 
 ### CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION
 
-`prisma orm init --skip-install` found every required peer of the database package, but one the database package or another of its peers requires at an exact version is installed at another version. That copy does not stand for the version required, and init cannot tell which peers the required version needs in turn, so it stops before loading the database package's `init` entrypoint and changes nothing. The error names each such package, the version found and the version required. The fix says, for a package `package.json` lists at another version, to change that line to the required version and run the package manager's install command, or, for a `catalog:`, `workspace:` or other protocol line, to change the version where the line points, such as the catalog entry or the workspace package; for one it lists at the required version, to run the install command; and for one it does not list, it names the command that adds it at the required version. It then says to run init again. Without `--skip-install`, init installs the required version of a package `package.json` does not list, and warns about one it lists at another version. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `packages` (each with `name`, `found`, `required`, and `listed` when `package.json` lists it at another version), `listedAtRequired`, `installCommand` when some package is not listed, and `restoreCommand`.
+`prisma orm init --skip-install` found every package the database package requires, but one of them is installed at a version that the database package, or another of those packages, does not accept. Init checks the `@prisma/orm-*` packages, and any other package that is required at one exact version. Init stops before it loads the database package, and changes nothing.
+
+How strict the requirement is depends on the release:
+
+- Until release 8.0 the database package requires an exact version, such as `8.0.0-rc.25`. Any other version is refused.
+- From release 8.0 it requires a range, such as `~8.1.0`. A version from another release, such as `8.2.0`, is refused.
+
+The error lists each such package, with the version found and the version required. The fix depends on that package's line in `package.json`:
+
+| The line in `package.json` | What the fix says to do |
+| --- | --- |
+| There is no line | Run the command it gives, which adds the package at the required version or range. |
+| The line already accepts the required version, but another version is installed | Run the package manager's install command. |
+| An exact version | Change it to the required version, and install. |
+| A reference to somewhere else: `catalog:`, `workspace:`, `link:`, `file:`, `portal:` or an `npm:` alias | Change the version in the place the line refers to, such as the catalog entry or the workspace package, and install. |
+| Any other range or tag. For a requirement of `~8.1.0`, examples are `^8.1.0`, `>=8.1.0`, `~8.0.0` and `latest`. | Run the command it gives, which sets the line to the required range. |
+
+Every fix ends with the same advice. If the package manager refuses the add or the install, or the package stays at the other version, something pins it: an override, a resolution or the lockfile. Remove that and install again. Then run init again.
+
+The required range is the one the installed database package accepts, which is a tilde. Beside a Generally Available database package whose own line has a caret, change these lines to carets afterwards, such as `^8.1.0`, so that an update moves them together with the database package.
+
+Without `--skip-install`, init installs the required version of a package that `package.json` does not list, and warns about one that it lists at another version.
+
+Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `packages` (each with `name`, `found`, `required`, and `listed` when `package.json` lists it at another version), `listedAtRequired`, `installCommand` when some package is not listed, and `restoreCommand`.
 
 ### CLI.INIT_REQUIRED_PEERS_NOT_INSTALLED
 
-`prisma orm init --skip-install` found the database package installed, but could not find every package it needs as a required peer dependency, from the project or from the database package's own folder (where pnpm puts the peers it installs itself): the `@prisma/orm-*` packages it names as peers, directly or through another, and the other required peers those name, such as `temporal-polyfill`. A package manager that installs no peer dependencies, such as Yarn, leaves them out. Init stops before loading the database package's `init` entrypoint and changes nothing. For a missing package that `package.json` already lists, for example on a `catalog:` or `workspace:` line, the fix says to run the package manager's install command, which leaves the line as it is. For the others it names the command that adds them, at the version or range the manifests give, with each range in double quotes. It then says to run init again. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `missing`, `listedMissing`, `installCommand` when some missing package is not listed, and `restoreCommand` when some is.
+`prisma orm init --skip-install` found the database package, but not every package it requires. Init stops before it loads the database package, and changes nothing.
+
+The required packages are the `@prisma/orm-*` packages that the database package lists as peer dependencies, the ones those list in turn, and the other packages they require, such as `temporal-polyfill`. Init looks for each one from the project, and from the database package's own folder, which is where pnpm puts the peer dependencies it installs by itself. Yarn installs no peer dependencies, so under Yarn they are missing unless `package.json` lists them.
+
+The fix depends on whether `package.json` lists the missing package:
+
+- **It is listed,** for example on a `catalog:` or `workspace:` line. Run the package manager's install command. The line stays as it is.
+- **It is not listed.** Run the command the error gives, which adds the package at the version or range the database package requires. Each range is in double quotes. The range is the one the installed database package accepts, which is a tilde, such as `~8.1.0`. Beside a Generally Available database package whose own line has a caret, init itself would write `^8.1.0`; change the new lines to carets afterwards, so that an update moves them together with the database package.
+
+Every fix ends with the same advice. If the package manager refuses the add or the install, or the package stays at the other version, something pins it: an override, a resolution or the lockfile. Remove that and install again. Then run init again.
+
+Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `missing`, `listedMissing`, `installCommand` when some missing package is not listed, and `restoreCommand` when some is.
 
 ### CLI.INIT_SKILL_INSTALL_FAILED
 
@@ -215,7 +249,26 @@ Retired. `prisma orm init` used to fetch the agent skills from GitHub with `skil
 
 ### CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED
 
-`prisma orm init` cannot find the database package from the project, so it cannot read the init contribution it writes every scaffold file from, and it stops before writing any of them. Either `--skip-install` forbade installing the package and the project does not have it, in which case nothing at all was changed, or init's install command exited successfully and the package still cannot be found from the project (for example under Yarn Plug'n'Play), in which case the install may have changed `package.json` and the lockfile. The summary and `why` say which, and the second names the command that ran. The next action names the install command, for example `pnpm add @prisma/orm-postgres pg`. For a package in no list that is missing under `--skip-install`, it names no install command: it says to run init again without `--skip-install`, which checks the package's keyword before installing it. For a package in no list, `why` first says the value is not one of the short names and was therefore taken as a package name, and the fix adds that a listed package is named by its short name. When init's install added declarations to `package.json`, the next actions name them and give the command that removes them; when it only rewrote a declared range, `packagesAdded` is empty and the next action names the declaration and its old range to restore. When the install changed nothing, there is no such action. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `installCommand`, `takenAsPackageName: true` for a package in no list, and `packagesAdded` when init's install changed `package.json`: the declarations it added, or an empty list when it only rewrote a declared range.
+`prisma orm init` cannot find the database package from the project. Init reads everything it writes from that package, so it stops before it writes any file. There are two cases, and the summary and `why` say which:
+
+- **`--skip-install` was given, and the package is not installed.** Nothing was changed.
+- **Init's own install command succeeded, but the package still cannot be found.** This happens, for example, under Yarn Plug'n'Play. The install may have changed `package.json` and the lockfile. `why` names the command that ran.
+
+The next action gives the install command, such as `pnpm add @prisma/orm-postgres pg`. Under `--skip-install` it adds this advice: if the package manager refuses the add or an install, or a package stays at another version, something pins it (an override, a resolution or the lockfile), so remove that and install again. npm, for one, refuses to install a project that both lists a package and overrides it.
+
+Two things differ when the database was given as a package name and not as one of the short names, such as `postgres`:
+
+- `why` first says that the value is not a short name and was therefore taken as a package name. The fix adds that a package with a short name is named by it.
+- If that package is missing under `--skip-install`, the next action gives no install command. It says to run init again without `--skip-install`, because init then checks the package's keyword before it installs it.
+
+When init's install changed `package.json`, the next actions say how to undo the change:
+
+- If it added lines, they name the lines and give the command that removes them.
+- If it only changed the range on a line that was already there, they name that line and its old range. `packagesAdded` is then empty.
+
+When the install changed nothing, there is no such action.
+
+Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `installCommand` (absent for a package with no short name under `--skip-install`), `takenAsPackageName: true` for a package with no short name, and `packagesAdded` when init's install changed `package.json`.
 
 ### CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED
 
@@ -1436,7 +1489,16 @@ Statistics execution was requested for a Mongo command that does not expose affe
 
 Retired. 8.0.0-rc.22 raised this when Prisma ORM was loaded from more than one folder, and commands and clients refused to start. Later releases removed the check, because a host that loads the ORM in two module instances, such as Prisma Composer's boot wrapper beside the application bundle, cannot satisfy it. Nothing raises this code.
 
-A second copy still breaks values that cross between copies: the platform packages recognise a data-type value by which copy made it, and refuse one another copy made. List the database package (such as `@prisma/orm-postgres`) and every `@prisma/orm-*` package it and each extension name as peer dependencies in the application's `package.json`, all at the same version, with a `prisma` CLI that runs it. `prisma orm init` writes that list for the database package; a package an extension names as a peer is one you add when you add the extension. A monorepo whose applications are on different Prisma versions can still get two copies under npm workspaces and Bun's hoisted linker; keep such applications on one version, or use pnpm, Yarn or Bun's isolated linker. `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework` shows which package brought each copy.
+Two copies still do not work together. The framework does not accept a value that another copy of itself created, and the error it then gives does not name the cause ([ADR 329](../architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)). To have one copy of each package:
+
+- List the database package, such as `@prisma/orm-postgres`, and every `@prisma/orm-*` package it requires, in the application's `package.json`. `prisma orm init` writes these lines.
+- Keep them on one release: one exact `8.0.0-rc.N` until release 8.0, and from release 8.0 the lines that [Versions and support](../oss/versioning.md#what-an-application-writes) shows.
+- When you add an extension, also add any package it requires that `package.json` does not list yet.
+- Use a `prisma` CLI whose ORM commands come from the same ORM release. The CLI has version numbers of its own, so check which ORM release it carries when an ORM command fails after you update it.
+
+A monorepo whose applications are on different Prisma releases can still get two copies under npm workspaces and under Bun's hoisted linker. Keep its applications on one release, or use pnpm, Yarn or Bun's isolated linker.
+
+To see which package brought each copy, run `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework`.
 
 ### RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING
 

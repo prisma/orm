@@ -116,6 +116,12 @@ The ORM client loads includes with one query, a correlated subquery per include 
 
 Extension descriptors declare no capability flags ([ADR 335](../architecture%20docs/adrs/ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md)). The namespacing rule of [ADR 117](../architecture%20docs/adrs/ADR%20117%20-%20Extension%20capability%20keys.md), under which an extension's keys would go under its own namespace such as `pgvector`, is background only.
 
+## Maturity and versioning of keys
+
+- A capability has no maturity level of its own. It has the level of the package that publishes it ([ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
+- There are no feature flags. A capability that is not ready ships in a package below Generally Available, or under a name that starts with its level, such as `preview_`.
+- A capability key is immutable once published. A new capability can be added in any release, as a new version's list on PostgreSQL. Changing what a published key means requires a new key.
+
 ## References
 
 - [ADR 335: A contract lists the capabilities it requires](../architecture%20docs/adrs/ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md)

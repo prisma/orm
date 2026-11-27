@@ -2,6 +2,8 @@
 
 Opt-in query caching for Prisma 8 runtimes, for both the SQL and Mongo families.
 
+> **Maturity level: Generally Available.** From release 8.0, no later 8.x release breaks code that uses this package. Until release 8.0 it is published as `8.0.0-rc.N`, like every Prisma 8 package, and any of those versions may contain breaking changes. See [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
+
 ```bash
 pnpm add @prisma/orm-extension-middleware-cache
 ```

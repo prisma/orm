@@ -39,7 +39,15 @@ import { existsSync } from 'node:fs';
 import { argv, cwd, exit, stderr, stdout } from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import { parseVersion } from '../packages/0-shared/publish-surface/src/release-plan.ts';
+
 const RELEASES_DIR = 'docs/releases';
+
+/** A version read with the release plan's parser, which stops on one this repository does not publish. */
+function checkedVersion(version) {
+  parseVersion(version);
+  return version;
+}
 
 /**
  * The committed notes file whose contents become the GitHub Release
@@ -130,7 +138,7 @@ export function parseArgs(args) {
  */
 export function runCheck({ repoRoot, mode, head, prev, version }) {
   if (mode === 'publish') {
-    const targetVersion = version ?? readVersionAtRef(repoRoot, head);
+    const targetVersion = checkedVersion(version ?? readVersionAtRef(repoRoot, head));
     const notesFile = notesFileForVersion(targetVersion);
     const present = existsSync(`${repoRoot}/${notesFile}`);
     return {
@@ -144,8 +152,8 @@ export function runCheck({ repoRoot, mode, head, prev, version }) {
     };
   }
 
-  const headVersion = version ?? readVersionAtRef(repoRoot, head);
-  const prevVersion = readVersionAtRef(repoRoot, prev);
+  const headVersion = checkedVersion(version ?? readVersionAtRef(repoRoot, head));
+  const prevVersion = checkedVersion(readVersionAtRef(repoRoot, prev));
   const bumped = headVersion !== prevVersion;
   if (!bumped) {
     return {

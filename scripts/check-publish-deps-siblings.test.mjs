@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 
-import { findSiblingDependencies, runCheck } from './check-publish-deps.mjs';
+import { findPlanMismatches, findSiblingDependencies, runCheck } from './check-publish-deps.mjs';
 
 const siblings = new Set(['@prisma/orm-framework', '@prisma/orm-family-sql']);
 
@@ -45,7 +45,7 @@ describe('findSiblingDependencies', () => {
 });
 
 describe('runCheck sibling-dependency rule', () => {
-  function io(packed) {
+  function io(packed, planRanges = () => undefined) {
     const written = [];
     return {
       written,
@@ -67,6 +67,7 @@ describe('runCheck sibling-dependency rule', () => {
         packAll: () => 0,
         stdoutWrite: (s) => written.push(s),
         stderrWrite: (s) => written.push(s),
+        planRanges,
       },
     };
   }
@@ -84,4 +85,49 @@ describe('runCheck sibling-dependency rule', () => {
     const run = io({ peerDependencies: { '@prisma/orm-framework': '8.1.0' } });
     assert.equal(runCheck({ argv: [], io: run.io }), 0);
   });
+
+  it('fails a published package whose ranges on ours differ from the release plan', () => {
+    const run = io({ peerDependencies: { '@prisma/orm-framework': '8.1.0' } }, (name) =>
+      name === '@prisma/orm-better-auth' ? { '@prisma/orm-framework': '^8.1.0' } : undefined,
+    );
+    assert.equal(runCheck({ argv: [], io: run.io }), 1);
+    assert.match(
+      run.written.join(''),
+      /\[plan\]\s+peerDependencies\.@prisma\/orm-framework = 8\.1\.0, the plan says \^8\.1\.0/,
+    );
+  });
+
+  it('passes a published package whose ranges on ours are the plan’s', () => {
+    const run = io({ peerDependencies: { '@prisma/orm-framework': '^8.1.0' } }, (name) =>
+      name === '@prisma/orm-better-auth' ? { '@prisma/orm-framework': '^8.1.0' } : undefined,
+    );
+    assert.equal(runCheck({ argv: [], io: run.io }), 0);
+  });
+});
+
+describe('findPlanMismatches', () => {
+  for (const [title, packed, ranges, expected] of [
+    [
+      'none when every range is the plan’s',
+      { peerDependencies: { a: '~8.1.0', pg: '^8' } },
+      { a: '~8.1.0' },
+      [],
+    ],
+    [
+      'a range that differs',
+      { peerDependencies: { a: '8.1.0' } },
+      { a: '~8.1.0' },
+      [{ name: 'a', spec: '8.1.0', planned: '~8.1.0' }],
+    ],
+    [
+      'a package the plan names that the manifest does not',
+      { peerDependencies: {} },
+      { a: '~8.1.0' },
+      [{ name: 'a', spec: undefined, planned: '~8.1.0' }],
+    ],
+  ]) {
+    it(title, () => {
+      assert.deepEqual(findPlanMismatches(packed, ranges), expected);
+    });
+  }
 });
