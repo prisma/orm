@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Capability Ownership
 
-**Capabilities are dependencies.** A database version or a connection *provides* a capability. On PostgreSQL the component that knows the fact declares it: the target (by version) or the driver. MySQL, MariaDB and SQLite still take a fixed list from their adapter, and MongoDB declares none. A contract *requires* capabilities, in the list its author writes (`requiredCapabilities`). See ADR 335.
+**Capabilities are dependencies.** A database version or a connection *provides* a capability. On PostgreSQL the component that knows the fact declares it: the target (by version) or the driver. MySQL, MariaDB and SQLite still take a fixed list from their adapter, and MongoDB declares none. A contract *requires* capabilities; on PostgreSQL its author writes the list (`requiredCapabilities`). See ADR 335.
 
 ## Do
 
@@ -16,5 +16,5 @@ alwaysApply: false
 ## Avoid
 
 - "The contract's capabilities", which reads as what the contract can do; and "does not require", which reads as nothing being wrong
-- Wording that implies a default or implied list, or that the client reads capabilities from the database at connect time
+- For PostgreSQL, wording that implies a default or implied list; for any target, that the client reads capabilities from the database at connect time
 - Treating `sql.*` as a separate “SQL family” capability set rather than keys shared across targets
