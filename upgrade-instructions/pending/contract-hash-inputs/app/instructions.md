@@ -2,7 +2,7 @@
 changes:
   - id: contract-hash-inputs
     summary: |
-      Every storage, profile and execution hash takes a new value, once: each now covers only the target, the family and its own section of the contract, and the rules that compute them do not change again within Prisma 8. Before upgrading, deploy every pending migration, the application's and every extension's, to every database with the release you are on: the upgrade assumes every database is at the newest contract. Then upgrade Prisma in a release of its own: run the colocated script on the project, which rewrites every hash in the emitted contract, `contract.d.ts`, the snapshot directories, each `migration.json` and `ops.json`, each ref file and each `migration.ts`, then `prisma contract emit`, and commit. That release's deploy runs `prisma db sign --no-advance-ref` (with `--force` where the change policy permits only migrations) and then `prisma db migrate` against every database that existed before it; a database created later needs only `prisma db migrate`. A database still behind on the application's migrations only is signed at the directory of the migration it is at.
+      Every storage, profile and execution hash takes a new value, once: each now covers only the target, the family and its own section of the contract, and the rules that compute them do not change again within Prisma 8. Before upgrading, deploy every pending migration, the application's and every extension's, to every database with the release you are on: the upgrade assumes every database is at the newest contract. Then upgrade Prisma in a release of its own: run the colocated script on the project, which rewrites every hash in the emitted contract, `contract.d.ts`, the snapshot directories, each `migration.json` and `ops.json`, each ref file and each `migration.ts`, then `prisma contract emit`, and commit. If the emitted contract's storage hash then differs from the one the script wrote, because the contract source holds a `false`, `[]` or `{}` that the earlier release left out of `contract.json`, plan a migration for it in the same release. That release's deploy runs `prisma db sign --no-advance-ref` (signed at the directory of the migration before that new one, if there is one; with `--force` where the change policy permits only migrations) and then `prisma db migrate` against every database that existed before it; a database created later needs only `prisma db migrate`. A database still behind on the application's migrations only is signed at the directory of the migration it is at.
     script: ./scripts/contract-hash-inputs/contract-hash-inputs.ts
 ---
 
@@ -18,13 +18,13 @@ The storage hash names a contract everywhere Prisma refers to one: the snapshot 
 
 This is the normal path. The release that upgrades Prisma assumes that every database is at the newest contract, the application's and every extension's.
 
-Before you upgrade Prisma, deploy every pending migration to every database the project uses (development, staging, production and any other) with the release you are on now, application and extension migrations alike. Upgrade each extension to its latest version for that release first, and deploy its migrations too: an extension's version for this release adds no migration. Each database is then at the newest contract, and the upgrade's own release carries no migration. `prisma migration status`, run against a database, lists the migrations still pending in each space.
+Before you upgrade Prisma, deploy every pending migration to every database the project uses (development, staging, production and any other) with the release you are on now, application and extension migrations alike. Upgrade each extension to its latest version for that release first, and deploy its migrations too: an extension's version for this release adds no migration. Each database is then at the newest contract, and the upgrade's own release carries no migration, except in the one case step 4 describes. `prisma migration status`, run against a database, lists the migrations still pending in each space.
 
 The upgrade signs each database at the newest contract, which is safe only for a database that is already there. Signing a database that is behind either fails, because its schema does not match, and leaves `db migrate` refusing to run, or, when its pending migrations only drop something or move data, succeeds and marks it as up to date, so those migrations never run. A database that is still behind when the upgrade is deployed is covered in step 5, under "A database that is still behind".
 
 ### 2. Upgrade Prisma and run the script
 
-Upgrade Prisma in a release of its own, with no new migration in it. Run the upgrade step for the stored-file format version (`stored-files-format-version`) first, if you have not: this script refuses a file without `formatVersion`. Commit your work, so the script's changes can be reviewed and undone with git. Then run the script from the project root:
+Upgrade Prisma in a release of its own, with no new migration of your own in it. Run the upgrade step for the stored-file format version (`stored-files-format-version`) first, if you have not: this script refuses a file without `formatVersion`. Commit your work, so the script's changes can be reviewed and undone with git. Then run the script from the project root:
 
 ```sh
 node <path-to-this-guide>/scripts/contract-hash-inputs/contract-hash-inputs.ts
@@ -59,6 +59,12 @@ An extension package bundles a contract and migrations with its hashes, and this
 
 Run `prisma contract emit` and commit the result with the script's changes. It writes the emitted contract, with the storage and execution hashes the script wrote, and the files Prisma keeps for each extension under `migrations/<extension>/`. The profile hash covers the contract's `capabilities`, which `contract emit` takes from the target, the adapter and the extensions. When this release lists the same capabilities as your release, the emitted contract keeps the profile hash the script wrote. When it lists different ones (more or fewer, for example after an extension upgrade in step 3), the emitted contract has this release's list and the profile hash of that list. That is expected: step 5 signs each database with the emitted contract.
 
+#### When the emitted contract gets a different storage hash
+
+The earlier release left out every `false`, `[]` and `{}` inside some values when it wrote `contract.json`: a PostgreSQL index's options, a MongoDB index's partial filter expression, a generator's parameters, a type's parameters. For example, an index with the options `{ fastupdate: false }` was written with the options `{}`, and its migration created the index without `fastupdate = false`. This release keeps those values. If your contract source holds one, the script gives the stored contract, without the value, its new hash, and `prisma contract emit` then writes the value back and a different storage hash. To tell, compare the emitted contract's `storageHash` with the new hash the script printed for it under "Storage hashes (old -> new)"; `git diff` on `contract.json` also shows the value restored.
+
+The emitted contract then truly differs from your databases, which were built without the value, so this is the one case where the release that upgrades Prisma carries a migration. Plan it with `prisma migration plan` and review it: it applies the value to the database for the first time. Each database is then at the contract the script's hashes name, which is the `to` of the migration before the new one, not at the emitted contract. So in step 5 sign each database at that migration's directory, `prisma db sign --no-advance-ref <migration directory>` (with `--force` where the change policy permits only migrations), and then `prisma db migrate` applies the new migration. This is the route under "A database that is still behind" in step 5, with the directory of your last migration before the new one.
+
 ### 5. Sign every database in that release's deploy
 
 Each database records the storage and profile hash of the contract it was last moved to, in its marker. That is the old hash, so each database must be signed with this release. `db sign` checks that the database's schema matches the contract and then writes the new hashes into the marker; it changes no table.
@@ -69,6 +75,8 @@ In the deploy of the release that upgrades Prisma, run these two lines, in place
 prisma db sign --no-advance-ref
 prisma db migrate
 ```
+
+If step 4 gave the release a migration, name the directory of the migration before it in the first line, as step 4 says.
 
 `--no-advance-ref` keeps `db sign` from writing files into the checkout the deploy runs from. Without it, `db sign` moves the `db` ref of each space it signs, writing `migrations/<space>/refs/db.json` and a snapshot of the signed contract.
 
