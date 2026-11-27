@@ -537,7 +537,7 @@
 ./adapter/control: function quoteIdentifier(identifier: string): string
 ./adapter/runtime: export default = const postgresRuntimeAdapterDescriptor: Omit<SqlRuntimeAdapterDescriptor<'postgres', SqlRuntimeAdapter>, 'capabilities'> & { readonly capabilities: typeof postgresAdapterCapabilities; }
 ./adapter/runtime: interface SqlRuntimeAdapter extends RuntimeAdapterInstance<'sql', 'postgres'>, Adapter<AnyQueryAst, PostgresContract, PostgresLoweredStatement>
-./adapter/sql-renderer: function renderLoweredSql(ast: AnyQueryAst, contract: PostgresContract, codecDescriptorRegistry: PostgresCodecDescriptorRegistry, dataTypeLookup: DataTypeLookup): { readonly sql: string; readonly params: readonly LoweredParam[]; }
+./adapter/sql-renderer: function renderLoweredSql(ast: AnyQueryAst, contract: PostgresContract, codecDescriptorRegistry: PostgresCodecDescriptorRegistry, dataTypeLookup: DataTypeLookup, _capabilities?: CapabilityMatrix): { readonly sql: string; readonly params: readonly LoweredParam[]; }
 ./adapter/types: export type BinaryExpr from @prisma/orm-family-sql/relational-core/ast
 ./adapter/types: export type ColumnRef from @prisma/orm-family-sql/relational-core/ast
 ./adapter/types: export type Direction from @prisma/orm-family-sql/relational-core/ast
@@ -624,7 +624,7 @@
 ./adapter: function qualifyName(schemaName: string, objectName: string): string
 ./adapter: function quoteIdentifier(identifier: string): string
 ./adapter: function rawColumn(definition: SqlExpression): ColumnTypeDescriptor<typeof SQL_RAW_CODEC_ID> & { readonly typeParams: { readonly sql: string; }; }
-./adapter: function renderLoweredSql(ast: AnyQueryAst, contract: PostgresContract, codecDescriptorRegistry: PostgresCodecDescriptorRegistry, dataTypeLookup: DataTypeLookup): { readonly sql: string; readonly params: readonly LoweredParam[]; }
+./adapter: function renderLoweredSql(ast: AnyQueryAst, contract: PostgresContract, codecDescriptorRegistry: PostgresCodecDescriptorRegistry, dataTypeLookup: DataTypeLookup, _capabilities?: CapabilityMatrix): { readonly sql: string; readonly params: readonly LoweredParam[]; }
 ./adapter: function timeStringColumn(): ColumnTypeDescriptor<typeof PG_TIME_STRING_CODEC_ID>
 ./adapter: function timeStringColumn(precision?: number): ColumnTypeDescriptor<typeof PG_TIME_STRING_CODEC_ID> & { readonly typeParams?: { readonly precision: number; }; }
 ./adapter: function timeStringColumn<const Precision extends number>(precision: Precision): ColumnTypeDescriptor<typeof PG_TIME_STRING_CODEC_ID> & { readonly typeParams: { readonly precision: Precision; }; }

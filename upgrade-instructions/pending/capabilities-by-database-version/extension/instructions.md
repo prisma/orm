@@ -26,7 +26,7 @@ changes:
         - 'pgvector\.cosine|postgis\.geometry|paradedb/bm25'
   - id: extension-client-goes-by-the-contract
     summary: |
-      The SQL runtime no longer adds the target's, adapter's, driver's and extensions' capabilities to the contract's. `createExecutionContext` takes no `driver` option. A contract built by hand, as in a test, lists every capability the code uses, and `transaction()` needs it to require `sql.interactiveTransactions`.
+      The SQL runtime no longer adds the target's, adapter's, driver's and extensions' capabilities to the contract's. `createExecutionContext` ignores its `driver` option, and Prisma 8.0 removes it. A contract built by hand, as in a test, lists every capability the code uses, and `transaction()` needs it to require `sql.interactiveTransactions`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -34,11 +34,12 @@ changes:
         - '\.transaction\s*\('
   - id: extension-capability-exports-moved
     summary: |
-      `postgresAdapterCapabilities` moved from `@prisma/orm-target-postgres/adapter/adapter` to `@prisma/orm-target-postgres/adapter/capabilities`, and is now empty. `renderLoweredSql` takes no capabilities argument. `PostgresDatabaseSchemaNode.pgVersion` is replaced by `serverVersionNumber`.
+      `postgresAdapterCapabilities` is now empty, and `@prisma/orm-target-postgres/adapter/capabilities` is its new home. `POSTGRES_MIN_SERVER_VERSION`'s new home is `@prisma/orm-target-postgres/target/server-version-range`. Their old import paths keep working until Prisma 8.0 removes them. `renderLoweredSql` ignores its last argument, the capabilities, and Prisma 8.0 removes it. `PostgresDatabaseSchemaNode.pgVersion` is replaced by `serverVersionNumber`.
     detection:
       glob: "**/*.{ts,mts,cts,js,mjs,cjs}"
       matches:
-        - '@prisma/orm-target-postgres/adapter/adapter[''"]'
+        - '\bpostgresAdapterCapabilities\b'
+        - '\bPOSTGRES_MIN_SERVER_VERSION\b'
         - '\brenderLoweredSql\s*\('
         - '\bpgVersion\b'
 ---
@@ -223,7 +224,7 @@ Remove any code, type or test fixture of the extension that reads or writes them
 
 The SQL runtime used to add the capabilities of the target, adapter, driver and extensions to the contract's. It no longer does: the contract's list is the list, and the query builder and the ORM client offer exactly what it holds.
 
-`createExecutionContext` from `@prisma/orm-family-sql/runtime` takes no `driver` option. Before:
+`createExecutionContext` from `@prisma/orm-family-sql/runtime` ignores its `driver` option, and Prisma 8.0 removes it. Remove it now. Before:
 
 ```ts
 const context = createExecutionContext({ contract, stack, driver });
@@ -247,13 +248,13 @@ A package that adds a SQL target can declare its database's flags as `databaseCa
 
 ## `extension-capability-exports-moved`
 
-Change these, if the extension has them:
+Change these, if the extension has them. The old forms keep compiling until Prisma 8.0 removes them:
 
 | Before | After |
 | --- | --- |
 | `postgresAdapterCapabilities` from `@prisma/orm-target-postgres/adapter/adapter` | `postgresAdapterCapabilities` from `@prisma/orm-target-postgres/adapter/capabilities` |
 | The flags that `postgresAdapterCapabilities` listed | `postgres15` to `postgres18` from `@prisma/orm-postgres/contract-builder` or `@prisma/orm-postgres/config`, or the table they are built from, `postgresCapabilitiesByVersion` (one row per version) from `@prisma/orm-target-postgres/target/server-version` |
-| `renderLoweredSql(ast, contract, codecs, dataTypeLookup, capabilities)` from `@prisma/orm-target-postgres/adapter/sql-renderer` | `renderLoweredSql(ast, contract, codecs, dataTypeLookup)`: drop the last argument |
+| `renderLoweredSql(ast, contract, codecs, dataTypeLookup, capabilities)` from `@prisma/orm-target-postgres/adapter/sql-renderer` | `renderLoweredSql(ast, contract, codecs, dataTypeLookup)`: drop the last argument, which is ignored |
 | `POSTGRES_MIN_SERVER_VERSION` from `@prisma/orm-target-postgres/target/server-version` (or `@prisma/orm-postgres/target/server-version`) | `POSTGRES_MIN_SERVER_VERSION` from `@prisma/orm-target-postgres/target/server-version-range` (or `@prisma/orm-postgres/target/server-version-range`) |
 | `pgVersion` (text) on `PostgresDatabaseSchemaNode` and `PostgresDatabaseSchemaNodeInput` from `@prisma/orm-target-postgres/target/types` | `serverVersionNumber`: the server's `server_version_num` as a number, such as `150004` for 15.4, or `undefined` when it could not be read |
 

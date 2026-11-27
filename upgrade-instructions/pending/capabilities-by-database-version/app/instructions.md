@@ -40,11 +40,11 @@ changes:
         - 'pgvector\.cosine|postgis\.geometry|paradedb/bm25'
   - id: postgres-capability-exports-moved
     summary: |
-      `postgresAdapterCapabilities` moved from `@prisma/orm-target-postgres/adapter/adapter` to `@prisma/orm-target-postgres/adapter/capabilities`, and is now empty. The database's capabilities are in `postgresCapabilitiesByVersion` from `@prisma/orm-target-postgres/target/server-version`. `PostgresDatabaseSchemaNode.pgVersion` is replaced by `serverVersionNumber`.
+      `postgresAdapterCapabilities` is now empty, and `@prisma/orm-target-postgres/adapter/capabilities` is its new home. The import from `@prisma/orm-target-postgres/adapter/adapter` keeps working until Prisma 8.0 removes it. The database's capabilities are in `postgresCapabilitiesByVersion` from `@prisma/orm-target-postgres/target/server-version`. `PostgresDatabaseSchemaNode.pgVersion` is replaced by `serverVersionNumber`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs}"
       matches:
-        - '@prisma/orm-target-postgres/adapter/adapter[''"]'
+        - '\bpostgresAdapterCapabilities\b'
         - '\bpgVersion\b'
 ---
 
@@ -283,7 +283,7 @@ Emitting the contract removes them from `contract.json` and `contract.d.ts`. A l
 
 ## `postgres-capability-exports-moved`
 
-Change these imports, if the project has them:
+Change these, if the project has them. The old import of `postgresAdapterCapabilities` keeps working until Prisma 8.0 removes it:
 
 | Before | After |
 | --- | --- |

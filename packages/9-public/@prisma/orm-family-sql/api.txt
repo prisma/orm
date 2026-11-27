@@ -6399,7 +6399,7 @@
 ./runtime: function assertInteractiveTransactionsListed(contract: Contract<SqlStorage>, retiredCapabilities: CapabilitySet): void
 ./runtime: function budgets(options?: BudgetsOptions): SqlMiddleware
 ./runtime: function createAstCodecRegistry(descriptors: CodecDescriptorRegistry): ContractCodecRegistry
-./runtime: function createExecutionContext<TContract extends Contract<SqlStorage> = Contract<SqlStorage>, TTargetId extends string = string>(options: { readonly contract: TContract; readonly stack: SqlExecutionStack<TTargetId>; }): ExecutionContext<TContract>
+./runtime: function createExecutionContext<TContract extends Contract<SqlStorage> = Contract<SqlStorage>, TTargetId extends string = string>(options: { readonly contract: TContract; readonly stack: SqlExecutionStack<TTargetId>; readonly driver?: RuntimeDriverDescriptor<'sql', TTargetId, unknown, SqlRuntimeDriverInstance<TTargetId>>; }): ExecutionContext<TContract>
 ./runtime: function createSqlExecutionStack<TTargetId extends string>(options: SqlExecutionStackOptions<TTargetId> & { readonly driver: SqlExecutionStackWithDriver<TTargetId>['driver']; }): SqlExecutionStackWithDriver<TTargetId>
 ./runtime: function createSqlExecutionStack<TTargetId extends string>(options: SqlExecutionStackOptions<TTargetId>): SqlExecutionStack<TTargetId>
 ./runtime: function createToSql<TTargetId extends string>(stack: SqlExecutionStack<TTargetId>, contract: Contract<SqlStorage>): ToSqlMember['toSql']

@@ -197,6 +197,8 @@ export function renderLoweredSql(
   contract: PostgresContract,
   codecDescriptorRegistry: PostgresCodecDescriptorRegistry,
   dataTypeLookup: DataTypeLookup,
+  /** Ignored. Prisma 8.0 removes this parameter. */
+  _capabilities?: CapabilityMatrix,
 ): { readonly sql: string; readonly params: readonly LoweredParam[] } {
   const orderedRefs = collectOrderedParamRefs(ast);
   const indexMap = new Map<AnyParamRef, number>();

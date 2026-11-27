@@ -498,6 +498,13 @@ export function createExecutionContext<
 >(options: {
   readonly contract: TContract;
   readonly stack: SqlExecutionStack<TTargetId>;
+  /** Ignored. Prisma 8.0 removes this option. */
+  readonly driver?: RuntimeDriverDescriptor<
+    'sql',
+    TTargetId,
+    unknown,
+    SqlRuntimeDriverInstance<TTargetId>
+  >;
 }): ExecutionContext<TContract> {
   const { contract, stack } = options;
 
