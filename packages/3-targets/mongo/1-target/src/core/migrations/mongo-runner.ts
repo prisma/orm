@@ -470,15 +470,15 @@ function movedAsideText(name: string, migration: MigrationOfOperation): string {
     ? `db migrate --to ${migration.dirName ?? "<the name of this migration's directory>"}`
     : 'the command again';
   const part = app ? '' : ", with its part for an extension's migration";
-  return `If ${name} holds documents you need, you can keep them by moving the collection aside: stop the application's writes to it, move it to ${name}_kept, run ${command} so this migration creates ${name} with its options, and copy the documents back. Follow every step under "Moving a MongoDB collection aside" in the error reference for MIGRATION.PRECHECK_FAILED${part}, which keep the documents until the copy back is checked.`;
+  return `If ${name} holds documents you need, you can keep them by moving the collection aside: stop the application's writes to it until every step is done, move it to ${name}_kept, run ${command} so this migration creates ${name} with its options, apply to the documents in ${name}_kept the changes that the operations after the create make, and copy them back. Follow every step under "Moving a MongoDB collection aside" in the error reference for MIGRATION.PRECHECK_FAILED${part}, which keep the documents until the copy back is checked.`;
 }
 
 /**
- * What to do with a collection an earlier run of the command made: the next run writes its
- * documents again, so only those the application wrote since are the user's.
+ * Why a collection an earlier run of the command made gets the same advice as any other: that run
+ * may have moved documents into it from a collection it then removed them from.
  */
 function madeByEarlierRunText(name: string): string {
-  return ` If an earlier run of this command created ${name}, its documents came from that run, and the next run writes them again, so drop it, unless the application has written documents to it since: then keep only those documents and copy them back after the run.`;
+  return ` This holds also if an earlier run of this command created ${name}: an operation of that run may have moved documents into it from a collection it then deleted them from, and those documents are only in ${name}.`;
 }
 
 const NEXT_STOP_TEXT =
