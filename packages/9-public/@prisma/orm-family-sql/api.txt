@@ -3301,8 +3301,8 @@
 ./family/diff: interface StorageTypeVerdictInput, readonly required property contract: Contract<SqlStorage>
 ./family/diff: interface StorageTypeVerdictInput, readonly required property namespacePairs: ReadonlyArray<{ readonly actual: SqlSchemaIRNode | undefined; }>
 ./family/diff: interface VerifySqlSchemaByDiffInput
+./family/diff: interface VerifySqlSchemaByDiffInput, readonly optional property databaseCapabilitiesNotProvided?: SqlDatabaseCapabilitiesNotProvidedFn | undefined
 ./family/diff: interface VerifySqlSchemaByDiffInput, readonly required property contract: Contract<SqlStorage>
-./family/diff: interface VerifySqlSchemaByDiffInput, readonly required property databaseCapabilitiesNotProvided: SqlDatabaseCapabilitiesNotProvidedFn | undefined
 ./family/diff: interface VerifySqlSchemaByDiffInput, readonly required property diffSchema: SqlSchemaDiffFn
 ./family/diff: interface VerifySqlSchemaByDiffInput, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>
 ./family/diff: interface VerifySqlSchemaByDiffInput, readonly required property granularityOf: (nodeKind: string) => DiffSubjectGranularity
@@ -4052,8 +4052,8 @@
 ./family: interface VariantRowRewrite, readonly required property table: string
 ./family: interface VariantRowRewrite, readonly required property to: string | undefined
 ./family: interface VerifySqlSchemaByDiffInput
+./family: interface VerifySqlSchemaByDiffInput, readonly optional property databaseCapabilitiesNotProvided?: SqlDatabaseCapabilitiesNotProvidedFn | undefined
 ./family: interface VerifySqlSchemaByDiffInput, readonly required property contract: Contract<SqlStorage>
-./family: interface VerifySqlSchemaByDiffInput, readonly required property databaseCapabilitiesNotProvided: SqlDatabaseCapabilitiesNotProvidedFn | undefined
 ./family: interface VerifySqlSchemaByDiffInput, readonly required property diffSchema: SqlSchemaDiffFn
 ./family: interface VerifySqlSchemaByDiffInput, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>
 ./family: interface VerifySqlSchemaByDiffInput, readonly required property granularityOf: (nodeKind: string) => DiffSubjectGranularity

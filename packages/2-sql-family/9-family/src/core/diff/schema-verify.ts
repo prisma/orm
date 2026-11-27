@@ -271,7 +271,7 @@ export interface VerifySqlSchemaByDiffInput {
   /** The target's classifier: a diff issue node's `nodeKind` → its subject granularity. */
   readonly granularityOf: (nodeKind: string) => DiffSubjectGranularity;
   /** The target's check of the database's capabilities (`databaseCapabilitiesNotProvided` descriptor hook), when it has one. */
-  readonly databaseCapabilitiesNotProvided: SqlDatabaseCapabilitiesNotProvidedFn | undefined;
+  readonly databaseCapabilitiesNotProvided?: SqlDatabaseCapabilitiesNotProvidedFn | undefined;
 }
 
 function verdictOf(
