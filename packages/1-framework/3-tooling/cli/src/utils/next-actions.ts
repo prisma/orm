@@ -23,7 +23,6 @@ export function editFileAction(label: string): NextAction {
   return { kind: 'edit-file', label };
 }
 
-/** A migration's folder, the contract space it belongs to, and the directory the command was invoked from, which the advice's paths are relative to. */
 export interface MigrationPackagePlace {
   readonly spaceId: string;
   readonly packageDir: string;

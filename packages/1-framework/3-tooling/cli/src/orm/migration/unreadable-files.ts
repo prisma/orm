@@ -4,7 +4,6 @@ import { unreadableFiles } from '../../control-api/operations/contract-space-agg
 import { integrityViolationToCheckFailure } from '../../utils/integrity-violation-to-check-failure';
 import { runCommandAction } from '../../utils/next-actions';
 
-/** What a listing leaves out of its answer for one unreadable file, in the words the listing reports it with. */
 function leftOutText(file: ReturnType<typeof unreadableFiles>[number]): string {
   return file.kind === 'packageUnloadable'
     ? `Migration "${file.dirName}" is left out, because it could not be read: ${file.detail}`
@@ -12,7 +11,7 @@ function leftOutText(file: ReturnType<typeof unreadableFiles>[number]): string {
 }
 
 /**
- * A warning for each ref and migration a listing leaves out because its file cannot be read, so the listing never hides it. It is a warning: the command still lists everything it could read. Load the aggregate with `unreadableFiles: 'report'` to list past such a file.
+ * A warning for each ref and migration a listing leaves out because its file cannot be read, so the listing never hides it. It is a warning: the command still lists everything it could read. Load the aggregate with `onUnreadableFile: 'report'` to list past such a file.
  */
 export function unreadableFileDiagnostics(
   aggregate: ContractSpaceAggregate,

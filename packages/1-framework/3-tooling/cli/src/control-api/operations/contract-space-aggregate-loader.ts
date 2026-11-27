@@ -278,7 +278,7 @@ export interface BuildAggregateInputs<TFamilyId extends string, TTargetId extend
   /**
    * What the load does with a ref or migration whose file it could not read: refuse (the default), or keep the aggregate without the file, for a command that only lists and reports each one with {@link unreadableFiles}. A command that acts on the migrations refuses, so a file it could not read is never silently left out.
    */
-  readonly unreadableFiles?: 'refuse' | 'report';
+  readonly onUnreadableFile?: 'refuse' | 'report';
 }
 
 function declaredExtensionsFromInputs(
@@ -326,7 +326,7 @@ export async function loadContractSpaceAggregateForCli<
     appContract: inputs.appContract,
     ...ifDefined('verifySnapshotContent', inputs.verifySnapshotContent),
   });
-  if (inputs.unreadableFiles !== 'report') {
+  if (inputs.onUnreadableFile !== 'report') {
     const refusal = mapIntegrityViolations(unreadableFiles(aggregate), inputs.migrationsDir);
     if (refusal !== null) return notOk(refusal);
   }
@@ -447,7 +447,7 @@ export async function buildReadAggregate(
     readonly migrationsDir: string;
     /** Command-scoped verifier to share the verified-hash memo; defaults to one built from `config`. */
     readonly verifySnapshotContent?: SnapshotContentVerifier;
-    readonly unreadableFiles?: 'refuse' | 'report';
+    readonly onUnreadableFile?: 'refuse' | 'report';
   },
 ): Promise<
   Result<
@@ -514,7 +514,7 @@ export async function buildReadAggregate(
         'verifySnapshotContent',
         options.verifySnapshotContent ?? snapshotVerifierFor(config),
       ),
-      ...ifDefined('unreadableFiles', options.unreadableFiles),
+      ...ifDefined('onUnreadableFile', options.onUnreadableFile),
     });
     if (!loaded.ok) {
       return loaded;

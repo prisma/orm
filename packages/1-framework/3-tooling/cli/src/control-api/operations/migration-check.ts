@@ -197,7 +197,7 @@ async function checkSnapshotConsistency(
         code: 'MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH',
         where: migrationPathRelative(space.cwd, jsonPath),
         why: `Migration "${pkg.dirName}": ${error.why}`,
-        nextActions: [chooseAction('Restore migrations/snapshots/ from version control')],
+        nextActions: repairActions.filter((action) => action.kind !== 'open-url'),
       };
     }
   }
@@ -274,7 +274,7 @@ export interface EnumerateCheckSpacesInputs {
  * contract-space directory, in the aggregate's `app`-first ordering. Mirrors
  * `migration list`'s `migrationSpaceListEntriesFromAggregate`: space
  * membership matches the on-disk directories, package / ref / graph data come
- * from `aggregate.space(id)`. Load the aggregate with `unreadableFiles: 'report'`, so each migration it could not read is reported here.
+ * from `aggregate.space(id)`. Load the aggregate with `onUnreadableFile: 'report'`, so each migration it could not read is reported here.
  */
 export async function enumerateCheckSpaces(
   inputs: EnumerateCheckSpacesInputs,
