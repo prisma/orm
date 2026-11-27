@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { MongoContract, SelectedVariant } from '@internal/mongo-contract';
+import { canonicalize } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import type { Document } from '@internal/mongo-value';
 import { collectionPlanOf, collectionPlanSchemasOf } from './mongo-collection-plan';
@@ -13,6 +14,8 @@ export interface DocumentMove {
   readonly copies: readonly DocumentCopy[];
   /** Whether the destination is a time-series collection, which a `$merge` stage cannot write into. */
   readonly timeSeries: boolean;
+  /** Whether the source and the destination have different collations, so a copy that reads the source with the destination's collation and a delete that reads it with its own can select other documents. */
+  readonly collationsDiffer: boolean;
 }
 
 /** One copy of a document move: the models whose documents it writes alike, and how. */
@@ -152,15 +155,28 @@ export function documentMoveOf(
   input: DocumentMoveOrderInput,
   models: readonly MovingModel[],
 ): DocumentMove {
+  const from =
+    input.collectionRenames.find((rename) => rename.from === input.originFrom)?.to ??
+    input.originFrom;
+  const destination = collectionPlanSchemasOf(
+    input.schema,
+    input.contract,
+  ).writtenDestination.collection(input.to);
+  const source = input.schema.collection(from) ?? input.schema.collection(input.originFrom);
   return {
-    from:
-      input.collectionRenames.find((rename) => rename.from === input.originFrom)?.to ??
-      input.originFrom,
+    from,
     to: input.to,
     order: documentMoveOrder(input),
     copies: documentCopiesOf(models),
-    timeSeries:
-      collectionPlanSchemasOf(input.schema, input.contract).writtenDestination.collection(input.to)
-        ?.options?.timeseries !== undefined,
+    timeSeries: destination?.options?.timeseries !== undefined,
+    collationsDiffer:
+      collationKey(source?.options?.collation) !== collationKey(destination?.options?.collation),
   };
+}
+
+/** A collation as MongoDB compares it: the simple collation is the one a collection without one has. */
+function collationKey(collation: unknown): string {
+  return collation === undefined || canonicalize(collation) === canonicalize({ locale: 'simple' })
+    ? 'simple'
+    : canonicalize(collation);
 }

@@ -102,7 +102,12 @@ import {
   operationsThatMayHaveRun,
 } from './mongo-apply-progress';
 import { deserializeMongoOps } from './mongo-ops-serializer';
-import { outCopyRerunText, type UnionCopy, unionCopyOf } from './mongo-out-copy-reruns';
+import {
+  collationSensitiveCopyOf,
+  outCopyRerunText,
+  type UnionCopy,
+  unionCopyOf,
+} from './mongo-out-copy-reruns';
 import { byHandRenamePlacement } from './mongo-plan-text';
 import { type RewriteCollection, rewriteRefusals } from './mongo-rewrite-refusals';
 import { storedKeyFieldAt } from './mongo-stored-key-fills';
@@ -1913,6 +1918,12 @@ export class MongoMigrationRunner {
 
     for (const [operationIndex, operation] of operations.entries()) {
       progress.copyCounts = undefined;
+      const collationRefusal = await this.differentCollationsRefusal(
+        operations,
+        operationIndex,
+        ran(operationIndex),
+      );
+      if (collationRefusal) return collationRefusal;
       progress.copyCounts = await this.copyCountsBefore(operation);
       options.callbacks?.onOperationStart?.(operation);
       try {
@@ -2659,6 +2670,37 @@ export class MongoMigrationRunner {
       if (isInternalError(error)) throw error;
       return undefined;
     }
+  }
+
+  /**
+   * The refusal of the copy at `index` when its filters compare strings, its deletes follow, and
+   * its two collections have different collations: the copy and the deletes could then select
+   * other documents, and a delete would remove a document the copy did not take.
+   */
+  private async differentCollationsRefusal(
+    operations: readonly AnyMongoMigrationOperation[],
+    index: number,
+    before: Ran,
+  ): Promise<MongoMigrationRunnerResult | undefined> {
+    const copy = collationSensitiveCopyOf(operations, index);
+    if (copy === undefined || (await this.sameCollation(copy))) return undefined;
+    const { id, into, source } = copy;
+    const one = copy.filters.length === 1;
+    const filters = one
+      ? 'the filter of its $unionWith stage compares'
+      : 'a filter of its $unionWith stages compares';
+    const rewrite = rerunText(
+      `In the migration's migration.ts, write ${one ? 'the filter of the copy and of its delete' : 'the filters of the copy and of its deletes'} so that ${one ? 'it compares' : 'they compare'} no string, for example { <a field only the moving models store>: { $exists: true } }: values of other types, such as numbers and dates, compare alike under every collation. Run the file with node, then run the command again`,
+      before,
+    );
+    return runnerFailure(
+      'MIGRATION.PRECHECK_FAILED',
+      `Operation ${id} was not run: collections ${into} and ${source} have different collations, and ${filters} strings`,
+      {
+        why: `The copy's $unionWith ${one ? 'stage reads' : 'stages read'} collection ${source} with the collation of collection ${into}, and ${one ? 'the delete after it reads' : 'the deletes after it read'} collection ${source} with its own, so a filter that compares strings can select other documents in the two: a delete would remove documents the copy did not take, or leave documents it took. ${rewrite}`,
+        meta: { operationId: id },
+      },
+    );
   }
 
   /**

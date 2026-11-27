@@ -1,3 +1,4 @@
+import type { MongoCollationOptionsInput } from '@internal/mongo-contract';
 import { describe, expect, it } from 'vitest';
 import { contract, plan, refusal, renameModel, schemaCollection } from './mongo-statement-fixtures';
 
@@ -250,6 +251,53 @@ describe('MongoMigrationPlanner, a document move into a time-series collection',
     }).toEqual({
       copies: 0,
       route: `With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "Account", and those of model "User" that collection "measurements" does not already hold, into collection "measurements" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json. ${LIMITS}`,
+    });
+  });
+
+  describe('when the source and the time-series collection have different collations', () => {
+    const caseInsensitive: MongoCollationOptionsInput = { locale: 'en', strength: 2 };
+    const COLLATIONS =
+      'Collections "events" and "measurements" have different collations. The $unionWith stage reads collection "events" with the collation of collection "measurements", and the delete reads it with its own, so a filter that compares strings can select other documents in the two, and a delete would remove documents the copy did not take. So write the filter so that it compares no string, for example { <a field only those models store>: { $exists: true } }: values of other types, such as numbers and dates, compare alike under every collation. db migrate refuses the copy if its filter compares a string.';
+    const routeWith = (
+      source: MongoCollationOptionsInput | undefined,
+      target: MongoCollationOptionsInput | undefined,
+    ) =>
+      routeOf(
+        plan({
+          from: contract(
+            'from',
+            { Event: EVENT, Measurement: { collection: 'events', fields: ['_id', 'at'] } },
+            { events: source === undefined ? {} : { collation: source } },
+          ),
+          to: contract(
+            'to',
+            { Event: EVENT, Reading: { collection: 'measurements', fields: ['_id', 'at'] } },
+            {
+              events: source === undefined ? {} : { collation: source },
+              measurements: {
+                timeField: 'at',
+                ...(target === undefined ? {} : { collation: target }),
+              },
+            },
+          ),
+          schema: [schemaCollection('events', source === undefined ? {} : { collation: source })],
+          statements: [renameModel('Measurement', 'Reading')],
+        }),
+      );
+
+    it.each([
+      ['a case-insensitive time-series collection', undefined, caseInsensitive],
+      ['a case-insensitive source', caseInsensitive, undefined],
+    ])('says the filter must compare no string, with %s', (_label, source, target) => {
+      expect(routeWith(source, target)).toContain(COLLATIONS);
+    });
+
+    it.each([
+      ['no collation', undefined, undefined],
+      ['the same collation', caseInsensitive, caseInsensitive],
+      ['the simple collation on one of them', { locale: 'simple' }, undefined],
+    ])('says nothing of collations when both have %s', (_label, source, target) => {
+      expect(routeWith(source, target)).not.toContain('collation');
     });
   });
 });

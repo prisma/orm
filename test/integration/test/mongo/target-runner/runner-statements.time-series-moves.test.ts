@@ -1,6 +1,6 @@
 import { introspectSchema } from '@internal/adapter-mongo/control';
 import type { MigrationOperationPolicy } from '@internal/framework-components/control';
-import { MongoCollection } from '@internal/mongo-contract';
+import { type MongoCollationOptionsInput, MongoCollection } from '@internal/mongo-contract';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
 import { MongoMigrationPlanner } from '@internal/target-mongo/control';
 import { dataTransform, deleteDocuments, rawAggregate } from '@internal/target-mongo/migration';
@@ -226,7 +226,7 @@ describe('MongoMigrationPlanner and runner - a move into a time-series collectio
         events: await live.documents('events'),
       }).toEqual({
         advice: expect.stringContaining(
-          `${counts}, on collection events with the filter of its deleteDocuments call in the migration's migration.ts. The copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If it holds 1, and ${UNCHANGED}, the copy did not finish: delete nothing, and run the command again as it is.`,
+          `${counts}, on collection events with the filter of its deleteDocuments call in the migration's migration.ts. The copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If it holds 1, and ${UNCHANGED}, the copy most likely did not finish, but a majority count can lag behind the copy's last writes: wait a moment and count again. If it still holds 1, delete nothing, and run the command again as it is. Even then the copy may have finished, and the run then adds the documents it selects in collection events to collection measurements a second time: the query below finds them.`,
         ),
         count: 1,
         second: 'applied',
@@ -702,6 +702,124 @@ describe('MongoMigrationPlanner and runner - the copy of the time-series rename 
         readings: [],
         ...moved,
       });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
+describe('MongoMigrationRunner - a move into a time-series collection with another collation', () => {
+  const caseInsensitive: MongoCollationOptionsInput = { locale: 'en', strength: 2 };
+  const sample = { at, kind: 'sample', value: 1 };
+  const capitalSample = { at, kind: 'Sample', value: 2 };
+  const fields = ['_id', 'at', 'kind', 'value'];
+  const collations = (
+    source: MongoCollationOptionsInput | undefined,
+    target: MongoCollationOptionsInput | undefined,
+  ) => ({
+    from: contract(
+      'from',
+      { Measurement: { collection: 'events', fields } },
+      {
+        events: new MongoCollection(source === undefined ? {} : { options: { collation: source } }),
+      },
+    ),
+    to: contract(
+      'to',
+      { Reading: { collection: 'measurements', fields } },
+      {
+        events: new MongoCollection(source === undefined ? {} : { options: { collation: source } }),
+        measurements: new MongoCollection({
+          options: {
+            timeseries: { timeField: 'at' },
+            ...(target === undefined ? {} : { collation: target }),
+          },
+        }),
+      },
+    ),
+  });
+  const moveBy = (moveFilter: Record<string, unknown>) => [
+    dataTransform('move Measurement documents to measurements', {
+      run: () =>
+        rawAggregate('measurements', [
+          { $unionWith: { coll: 'events', pipeline: [{ $match: moveFilter }] } },
+          { $out: 'measurements' },
+        ]),
+    }),
+    deleteDocuments({ collection: 'events', filter: moveFilter }),
+  ];
+  const setUp = async (
+    source: MongoCollationOptionsInput | undefined,
+    target: MongoCollationOptionsInput | undefined,
+  ) => {
+    const db = live.db();
+    await db.createCollection('events', source === undefined ? {} : { collation: source });
+    await db.createCollection('measurements', {
+      timeseries: { timeField: 'at' },
+      ...(target === undefined ? {} : { collation: target }),
+    });
+    await db.collection('events').insertMany([{ ...sample }, { ...capitalSample }]);
+    const contracts = collations(source, target);
+    await live.initMarker(contracts.from);
+    return contracts;
+  };
+  const projected = async (name: string) =>
+    live
+      .db()
+      .collection(name)
+      .find({}, { projection: { _id: 0 }, sort: { value: 1 } })
+      .toArray();
+
+  it.each([
+    ['a case-insensitive source and a case-sensitive target', caseInsensitive, undefined],
+    ['a case-sensitive source and a case-insensitive target', undefined, caseInsensitive],
+  ])(
+    'refuses a copy whose filter compares strings, before it copies or deletes anything, with %s',
+    async (_label, source, target) => {
+      const { from: fromContract, to: toContract } = await setUp(source, target);
+
+      const result = await live.runOperations(
+        moveBy({ kind: 'sample' }),
+        fromContract,
+        toContract,
+        {
+          policy,
+        },
+      );
+
+      expect({
+        failure: result.ok ? 'applied' : result.failure,
+        events: await projected('events'),
+        measurements: await projected('measurements'),
+      }).toEqual({
+        failure: expect.objectContaining({
+          code: 'MIGRATION.PRECHECK_FAILED',
+          message:
+            'Operation data_transform.move Measurement documents to measurements was not run: collections measurements and events have different collations, and the filter of its $unionWith stage compares strings',
+        }),
+        events: [sample, capitalSample],
+        measurements: [],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'moves every document once with a filter that compares no strings',
+    async () => {
+      const { from: fromContract, to: toContract } = await setUp(caseInsensitive, undefined);
+
+      const result = await live.runOperations(
+        moveBy({ kind: { $exists: true } }),
+        fromContract,
+        toContract,
+        { policy },
+      );
+
+      expect({
+        result: result.ok ? 'applied' : result.failure,
+        events: await projected('events'),
+        measurements: await projected('measurements'),
+      }).toEqual({ result: 'applied', events: [], measurements: [sample, capitalSample] });
     },
     timeouts.spinUpMongoMemoryServer,
   );

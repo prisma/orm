@@ -5,7 +5,11 @@ import type {
   PlanOrigin,
   ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
-import { MongoCollection, type MongoContract } from '@internal/mongo-contract';
+import {
+  type MongoCollationOptionsInput,
+  MongoCollection,
+  type MongoContract,
+} from '@internal/mongo-contract';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
 import {
   MongoSchemaCollection,
@@ -74,6 +78,7 @@ export interface CollectionSpec {
   readonly required?: readonly string[];
   readonly control?: ControlPolicy;
   readonly timeField?: string;
+  readonly collation?: MongoCollationOptionsInput;
   /** The validator's whole `$jsonSchema`, in place of the one `required` gives. */
   readonly jsonSchema?: Record<string, unknown>;
 }
@@ -275,9 +280,16 @@ export function contract(
                         },
                       }),
                   ...(spec.control === undefined ? {} : { control: spec.control }),
-                  ...(spec.timeField === undefined
+                  ...(spec.timeField === undefined && spec.collation === undefined
                     ? {}
-                    : { options: { timeseries: { timeField: spec.timeField } } }),
+                    : {
+                        options: {
+                          ...(spec.timeField === undefined
+                            ? {}
+                            : { timeseries: { timeField: spec.timeField } }),
+                          ...(spec.collation === undefined ? {} : { collation: spec.collation }),
+                        },
+                      }),
                 }),
               ]),
             ),
@@ -307,8 +319,13 @@ export function schemaCollection(
             validationAction: 'error',
           }),
         }),
-    ...(spec.timeseries
-      ? { options: new MongoSchemaCollectionOptions({ timeseries: { timeField: 'at' } }) }
+    ...(spec.timeseries || spec.collation !== undefined
+      ? {
+          options: new MongoSchemaCollectionOptions({
+            ...(spec.timeseries ? { timeseries: { timeField: 'at' } } : {}),
+            ...(spec.collation === undefined ? {} : { collation: spec.collation }),
+          }),
+        }
       : {}),
   });
 }

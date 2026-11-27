@@ -154,6 +154,37 @@ function removalsOf(
   return found.every((removal) => removal !== -1) ? found : undefined;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+/** Whether part of a filter compares a string, which a collation changes. The operand of `$type` names a BSON type, not a value. */
+function comparesStrings(value: unknown): boolean {
+  if (typeof value === 'string') return true;
+  if (Array.isArray(value)) return value.some(comparesStrings);
+  return (
+    isPlainObject(value) &&
+    Object.entries(value).some(([key, operand]) => key !== '$type' && comparesStrings(operand))
+  );
+}
+
+/**
+ * The copy at `index` when its documents are then deleted from its source by its filters and one
+ * of them compares strings. Its `$unionWith` stages read the source with the target's collation
+ * and the deletes with the source's own, so with two collations they can select other documents.
+ */
+export function collationSensitiveCopyOf(
+  operations: readonly AnyMongoMigrationOperation[],
+  index: number,
+): UnionCopy | undefined {
+  const operation = operations[index];
+  const copy = operation === undefined ? undefined : unionCopyOf(operation);
+  if (copy === undefined || !copy.filters.some(comparesStrings)) return undefined;
+  return removalsOf(operations, index, copy) === undefined ? undefined : copy;
+}
+
 function duplicatesText(into: string): string {
   return `To find them, group collection ${into} by _id and keep each _id that appears more than once, for example with db.getCollection(${JSON.stringify(into)}).aggregate([{ $group: { _id: '$_id', n: { $sum: 1 } } }, { $match: { n: { $gt: 1 } } }]) in mongosh.`;
 }
@@ -264,7 +295,7 @@ function interruptedCopyText(
     : one
       ? `run that delete yourself, on collection ${source} with the filter of its deleteDocuments call in the migration's migration.ts`
       : `run those deletes yourself, on collection ${source}, each with the filter of its deleteDocuments call in the migration's migration.ts`;
-  return `${stopped} The error does not show whether the copy finished. ${removals}. Before the copy, collection ${into} held ${documentsText(counts.target)}, and the copy was to add ${documentsText(counts.selected)} of collection ${source}. To tell whether it finished, ${copyEndedText(into)} Then count the documents of collection ${into} that a majority of the replica set has written, which a failover cannot roll back, for example with db.getCollection(${JSON.stringify(into)}).countDocuments({}, { readConcern: { level: "majority" } }) in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${settleByHandText(copy)} If it holds ${counts.target + counts.selected}, and ${UNCHANGED}, the copy finished. ${writesStoppedText(copy, one)} Before you run the command again, ${finish}. The copy has no check, so it runs again, and it would add ${whole ? 'the documents of' : 'the documents still in'} collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If it holds ${counts.target}, and ${UNCHANGED}, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to or deleted from collection ${into}, or the command was already run again: ${settleByHandText(copy)} If the command was already run again after the copy finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
+  return `${stopped} The error does not show whether the copy finished. ${removals}. Before the copy, collection ${into} held ${documentsText(counts.target)}, and the copy was to add ${documentsText(counts.selected)} of collection ${source}. To tell whether it finished, ${copyEndedText(into)} Then count the documents of collection ${into} that a majority of the replica set has written, which a failover cannot roll back, for example with db.getCollection(${JSON.stringify(into)}).countDocuments({}, { readConcern: { level: "majority" } }) in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${settleByHandText(copy)} If it holds ${counts.target + counts.selected}, and ${UNCHANGED}, the copy finished. ${writesStoppedText(copy, one)} Before you run the command again, ${finish}. The copy has no check, so it runs again, and it would add ${whole ? 'the documents of' : 'the documents still in'} collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If it holds ${counts.target}, and ${UNCHANGED}, the copy most likely did not finish, but a majority count can lag behind the copy's last writes: wait a moment and count again. If it still holds ${counts.target}, delete nothing, and run the command again as it is. Even then the copy may have finished, and the run then adds ${whole ? 'the documents of' : 'the documents it selects in'} collection ${source} to collection ${into} a second time: the query below finds them. If it holds any other number, something else wrote to or deleted from collection ${into}, or the command was already run again: ${settleByHandText(copy)} If the command was already run again after the copy finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
 /**

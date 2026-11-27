@@ -248,11 +248,18 @@ function filterText(move: DocumentMove): string {
     : `Each copy's filter must select only the documents of its own models, apart from those of the other models that move and from ${shared}. Filter each copy by a field only its models store. ${byId}`;
 }
 
+/** Why the filters of a `$unionWith` copy and its delete must compare no string when the two collections have different collations; the runner refuses the copy otherwise. */
+function collationText({ from, to, copies }: DocumentMove): string {
+  const one = copies.length === 1;
+  return ` Collections "${from}" and "${to}" have different collations. The $unionWith ${one ? 'stage reads' : 'stages read'} collection "${from}" with the collation of collection "${to}", and the ${one ? 'delete reads' : 'deletes read'} it with its own, so a filter that compares strings can select other documents in the two, and a delete would remove documents the copy did not take. So write ${one ? 'the filter' : 'each filter'} so that it compares no string, for example { <a field only those models store>: { $exists: true } }: values of other types, such as numbers and dates, compare alike under every collation. db migrate refuses the copy if ${one ? 'its filter compares' : 'a filter compares'} a string.`;
+}
+
 function moveText(move: DocumentMove, naming: boolean, write: CopyWrite): string {
   const placement = naming
     ? `For ${movingText(move)}, ${placementClause(move)},`
     : `${capitalized(placementClause(move))},`;
-  return `${placement} ${copiesText(move, write)}\n\n${filterText(move)}${droppedText(move)}${bypassText(move)}`;
+  const collations = write === 'unionOut' && move.collationsDiffer ? collationText(move) : '';
+  return `${placement} ${copiesText(move, write)}\n\n${filterText(move)}${collations}${droppedText(move)}${bypassText(move)}`;
 }
 
 function applyText(count: number): string {

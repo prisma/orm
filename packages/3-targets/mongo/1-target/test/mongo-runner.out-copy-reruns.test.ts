@@ -434,7 +434,7 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     expect(failureFields(result.assertNotOk())).toMatchObject({
       code: 'MIGRATION.EXECUTION_FAILED',
       message: `Operation ${unionCopy.id} failed: connection 3 to 127.0.0.1:27017 closed`,
-      why: `Fix what the error names, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again. Operation ${unionCopy.id} was copying documents of collection events into collection measurements with an $out stage when the apply stopped. The error does not show whether the copy finished. Operation ${deletion.id}, which deletes them from collection events, has not run. Before the copy, collection measurements held 3 documents, and the copy was to add 2 documents of collection events. To tell whether it finished, ${COPY_ENDED} ${MAJORITY_COUNT} The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${SETTLE_BY_HAND('events')} If it holds 5, and ${UNCHANGED}, the copy finished. ${WRITES_STOPPED_EVENTS} Before you run the command again, run that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts. The copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If it holds 3, and ${UNCHANGED}, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to or deleted from collection measurements, or the command was already run again: ${SETTLE_BY_HAND('events')} If the command was already run again after the copy finished, collection measurements holds some of the moved documents two or more times, under the same _id. ${DUPLICATES} The operations that ran before the failure stay applied.`,
+      why: `Fix what the error names, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again. Operation ${unionCopy.id} was copying documents of collection events into collection measurements with an $out stage when the apply stopped. The error does not show whether the copy finished. Operation ${deletion.id}, which deletes them from collection events, has not run. Before the copy, collection measurements held 3 documents, and the copy was to add 2 documents of collection events. To tell whether it finished, ${COPY_ENDED} ${MAJORITY_COUNT} The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${SETTLE_BY_HAND('events')} If it holds 5, and ${UNCHANGED}, the copy finished. ${WRITES_STOPPED_EVENTS} Before you run the command again, run that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts. The copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If it holds 3, and ${UNCHANGED}, the copy most likely did not finish, but a majority count can lag behind the copy's last writes: wait a moment and count again. If it still holds 3, delete nothing, and run the command again as it is. Even then the copy may have finished, and the run then adds the documents it selects in collection events to collection measurements a second time: the query below finds them. If it holds any other number, something else wrote to or deleted from collection measurements, or the command was already run again: ${SETTLE_BY_HAND('events')} If the command was already run again after the copy finished, collection measurements holds some of the moved documents two or more times, under the same _id. ${DUPLICATES} The operations that ran before the failure stay applied.`,
       meta: { operationId: unionCopy.id, databaseUnchanged: false },
     });
   });
@@ -577,6 +577,79 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     expect(failureFields(result.assertNotOk()).why).toContain(
       'Before the copy, collection measurements held 3 documents, and the copy was to add 2 documents of collection events.',
     );
+  });
+
+  it('says to count again after a moment when the target holds what it held before a copy of the whole source, since the re-run may add its documents again', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([{ documents: 1 }]);
+    harness.driver.queueResponse([{ documents: 4 }]);
+    harness.driver.failAggregateWith(LOST, COPY_COUNTS.length);
+
+    const result = await execute(harness, [renameCopy, dropCollection('readings')]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      `If it holds 1, and ${UNCHANGED}, the copy most likely did not finish, but a majority count can lag behind the copy's last writes: wait a moment and count again. If it still holds 1, delete nothing, and run the command again as it is. Even then the copy may have finished, and the run then adds the documents of collection readings to collection measurements a second time: the query below finds them.`,
+    );
+  });
+
+  describe('a copy whose two collections have different collations', () => {
+    const sample = { kind: 'sample' };
+    const byKind = dataTransform('move Measurement to measurements', {
+      run: () =>
+        rawAggregate('measurements', [
+          { $unionWith: { coll: 'events', pipeline: [{ $match: sample }] } },
+          { $out: 'measurements' },
+        ]),
+    });
+    const deleteByKind = deleteDocuments({ collection: 'events', filter: sample });
+    const differentCollations = (harness: Harness) => {
+      harness.inspectionExecutor.collections = [
+        { name: 'measurements', options: { collation: { locale: 'en', strength: 2 } } },
+        { name: 'events', options: {} },
+      ];
+    };
+
+    it('refuses the copy before it runs when its filter compares strings, so the runner never advises a delete by hand that could remove documents the copy did not take', async () => {
+      const harness = makeHarness();
+      differentCollations(harness);
+      harness.driver.failUpdateManyWith(badValue);
+
+      const result = await execute(harness, [byKind, failingUpdate, deleteByKind]);
+
+      expect(failureFields(result.assertNotOk())).toEqual({
+        code: 'MIGRATION.PRECHECK_FAILED',
+        message: `Operation ${byKind.id} was not run: collections measurements and events have different collations, and the filter of its $unionWith stage compares strings`,
+        why: "The copy's $unionWith stage reads collection events with the collation of collection measurements, and the delete after it reads collection events with its own, so a filter that compares strings can select other documents in the two: a delete would remove documents the copy did not take, or leave documents it took. In the migration's migration.ts, write the filter of the copy and of its delete so that it compares no string, for example { <a field only the moving models store>: { $exists: true } }: values of other types, such as numbers and dates, compare alike under every collation. Run the file with node, then run the command again; operations that already ran are skipped. The failed apply changed nothing.",
+        meta: { operationId: byKind.id, databaseUnchanged: true },
+      });
+      expect(harness.driver.executeCalls).toEqual([]);
+    });
+
+    it('runs a copy whose filter compares no strings, and advises the delete by hand with its filter', async () => {
+      const harness = makeHarness();
+      differentCollations(harness);
+      harness.driver.failUpdateManyWith(badValue);
+
+      const result = await execute(harness, [unionCopy, failingUpdate, deletion]);
+
+      expect(failureFields(result.assertNotOk()).why).toContain(unfinished);
+    });
+
+    it('runs a copy whose filter compares strings when the collations are the same', async () => {
+      const harness = makeHarness();
+      const collation = { locale: 'en', strength: 2 };
+      harness.inspectionExecutor.collections = [
+        { name: 'measurements', options: { collation } },
+        { name: 'events', options: { collation } },
+      ];
+      harness.driver.failUpdateManyWith(badValue);
+
+      const result = await execute(harness, [byKind, failingUpdate, deleteByKind]);
+
+      expect(failureFields(result.assertNotOk()).why).toContain(
+        'finish that delete yourself, on collection events with the filter of its deleteDocuments call',
+      );
+    });
   });
 
   it('treats a write-concern error on the copy as a copy that may have finished', async () => {
