@@ -44,7 +44,7 @@ The marker was originally a singleton — one row keyed by `id smallint primary 
 - Each extension's row uses its declared space identifier (e.g. `'cipherstash'`, `'pgvector'`).
 - Space identifiers are constrained to `[a-z][a-z0-9_-]{0,63}`.
 
-Prisma 8 does not convert a marker of the singleton shape: the project keeps no code for databases an earlier pre-release wrote. A database that still has one fails when the marker is read, as `CONTRACT.MARKER_READ_FAILED`.
+Prisma 8 does not convert a marker of the singleton shape: the project keeps no code for databases an earlier pre-release wrote. A database that still has one fails when the marker is read. On PostgreSQL a command that only reads reports `CONTRACT.PRISMA_SPACE_BEHIND`, and a command that changes the database stops at the Prisma space's column check with `MIGRATION.PRECHECK_FAILED`; on the other targets the read fails as `CONTRACT.MARKER_READ_FAILED`.
 
 ### Notes
 - One row per loaded contract space, primary-keyed by `space`. The application has one row (`space = 'app'`); each loaded extension has one row; the Prisma space has one row (`space = '_prisma'`), which records the form these tables themselves are in.

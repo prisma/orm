@@ -53,7 +53,7 @@ Search the extension's code, scripts and tests for `prisma_contract`, outside `n
 
 ## `prisma-tables-api-breaks`
 
-These changes reach code that builds on the platform packages directly. Code that only uses a facade such as `@prisma/orm-postgres` is not affected.
+These changes reach code that uses the platform packages, or a facade's paths that re-export them, such as `@prisma/orm-postgres/target/contract-free`. Code that only builds and queries with a facade's client is not affected.
 
 - **`buildControlTableBootstrapQueries` and `buildSignMarkerBootstrapQueries` are removed.** Prisma's own tables are now created by the Prisma space's migration. Code that ran these statements to prepare a database calls `bringPrismaSpaceUpToDate()` on the control client instead, or `applyInstalledContractSpace` from `@prisma/orm-toolchain/migration-tools/spaces` without a client.
 - **`PostgresControlAdapter.markerLocation` is typed `string`.** It was the literal type `"prisma_contract.marker"`. Code that compared it with that literal compares with `"_prisma.marker"`, or uses the value it holds.

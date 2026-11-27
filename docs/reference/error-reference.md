@@ -2015,9 +2015,10 @@ No command offers a default: one value in every row breaks a unique field, and a
 - Each table of `prisma_contract` that a release candidate created has its columns.
 - Each table in `_prisma` has the columns this release creates.
 - `_prisma` is empty while `prisma_contract` exists: it holds no object of any kind, which is what `DROP SCHEMA` without `CASCADE` requires.
-- The role that runs the command has the privileges of the owner of `_prisma`, when it exists beside `prisma_contract`.
-- The role has the privileges of the owner of `prisma_contract`, and of the owner of each of its tables.
-- The role has the `CREATE` privilege on the database.
+- While `prisma_contract` exists, which is only until the first command of this release has moved it:
+  - the role that runs the command has the privileges of the owner of `_prisma`, when `_prisma` exists too;
+  - the role has the privileges of the owner of `prisma_contract`, and of the owner of each of its tables;
+  - the role has the `CREATE` privilege on the database.
 
 **A schema still holds objects.** On Postgres a schema drop checks that the schema holds no table, view, sequence, type or function, since it drops without `CASCADE`. When it does, the summary names them, such as `Schema "billing" still holds view billing.v_const, so it cannot be dropped.`, and the advice says to drop or move them in the database and re-run the same command with the same `--to` and statements.
 

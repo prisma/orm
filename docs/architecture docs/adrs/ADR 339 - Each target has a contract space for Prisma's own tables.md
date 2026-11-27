@@ -64,7 +64,7 @@ If the user's migration fails after the phase, Prisma's own tables stay up to da
 
 ### Commands that only read
 
-`db verify`, `migration status`, `migration log`, a dry run, and the SQL client's check on first use do not run the phase. Pointed at a PostgreSQL database that still has `prisma_contract`, each reports `CONTRACT.PRISMA_SPACE_BEHIND` and names the commands that bring the records up to date (`prisma db migrate`, `db update` or `db sign`, whichever the project uses); the client logs it as a warning, when it is given a log, and runs the query. `db verify` also reports it when the tables are in the current schema but at an older contract of the space than the installed release carries. One code covers both, because the user does the same thing in both.
+`db verify`, `migration status`, `migration log`, `db migrate --show`, a dry run, and the SQL client's check on first use do not run the phase. Pointed at a PostgreSQL database that still has `prisma_contract`, each reports `CONTRACT.PRISMA_SPACE_BEHIND` and names the commands that bring the records up to date (`prisma db migrate`, `db update` or `db sign`, whichever the project uses); the client logs it as a warning, when it is given a log, and runs the query. `db verify` also reports it when the tables are in the current schema but at an older contract of the space than the installed release carries. One code covers both, because the user does the same thing in both.
 
 ### Within a major version its migrations only add
 
@@ -121,7 +121,7 @@ PostgreSQL follows this record. SQLite, MySQL, MariaDB and MongoDB still create 
 - On PostgreSQL the tables are described in four places: the contract, the statements that create them, the columns the first migration checks, and the table definitions the adapter reads and writes through. Tests keep them in agreement. With an emitted contract a target can query its own tables through a client typed from it, which would remove the last of these; that is not done yet.
 - This is a stated exception to [ADR 212](ADR%20212%20-%20Contract%20spaces.md), which says everything needed to apply and verify a database is in the user's repository. For this one space it is in the installed target package.
 - A refused, cancelled or failed command is no longer guaranteed to change nothing: it may have brought Prisma's own tables up to date.
-- `CONTRACT.PRISMA_SPACE_BEHIND` is raised by the commands that read the database without changing it (`db verify`, `migration status`, `migration log`, `migrate show` and dry runs), and is also a finding of `db verify`, where findings exit with code 4 as the other drift findings do. Wherever it is raised as an error its payload is the same: the space and `situation`, one of `releaseCandidateSchema`, `missingRow` or `olderContract`. The SQL client's warning carries the code and the same advice, without the payload.
+- `CONTRACT.PRISMA_SPACE_BEHIND` is raised by the commands that read the database without changing it (`db verify`, `migration status`, `migration log`, `db migrate --show` and dry runs), and is also a finding of `db verify`, where findings exit with code 4 as the other drift findings do. Wherever it is raised as an error its payload is the same: the space and `situation`, one of `releaseCandidateSchema`, `missingRow` or `olderContract`. The SQL client's warning carries the code and the same advice, without the payload.
 
 ## Alternatives considered
 

@@ -38,7 +38,7 @@ So every service, deploy script and continuous-integration pipeline that changes
 
 The command renames the schema first, before its own checks. So a command that the database's change policy then refuses, such as `prisma db update` on a database whose policy permits only `db migrate`, or a command the user cancels at a prompt, has still renamed the schema. This is harmless: the rename changes only Prisma's own tables, keeps every row, and is what the next command would do anyway.
 
-Commands that only read the database do not rename anything: `prisma db verify`, `prisma migration status`, `prisma migration log` and a dry run of a command. Pointed at a database that still has `prisma_contract`, they stop with `CONTRACT.PRISMA_SPACE_BEHIND`, which says that the records Prisma keeps for itself are not up to date with the installed release of Prisma. It tells the user to run the command the project already uses to change its database: `prisma db migrate` in a project that applies migrations, `prisma db update` in one that changes its database with `db update`, or `prisma db sign` in one that only signs it. Each brings the records up to date before it does its usual work, so `prisma db migrate` also applies the pending migrations. This includes `prisma db verify --schema-only`. Run that command, then run the read again.
+Commands that only read the database do not rename anything: `prisma db verify`, `prisma migration status`, `prisma migration log`, `prisma db migrate --show` and a dry run of a command. Pointed at a database that still has `prisma_contract`, they stop with `CONTRACT.PRISMA_SPACE_BEHIND`, which says that the records Prisma keeps for itself are not up to date with the installed release of Prisma. It tells the user to run the command the project already uses to change its database: `prisma db migrate` in a project that applies migrations, `prisma db update` in one that changes its database with `db update`, or `prisma db sign` in one that only signs it. Each brings the records up to date before it does its usual work, so `prisma db migrate` also applies the pending migrations. This includes `prisma db verify --schema-only`. Run that command, then run the read again.
 
 The application's check when the client is first used does not stop queries. On such a database it logs a warning with the same code, summary and advice, and runs the query. It logs the warning only when the application gives the client a `log`; by default the client says nothing.
 
@@ -108,7 +108,7 @@ SELECT pg_describe_object(classid, objid, objsubid) FROM pg_depend
 WHERE refclassid = 'pg_namespace'::regclass AND refobjid = to_regnamespace('prisma_contract') AND deptype = 'n';
 ```
 
-If it holds anything other than Prisma's tables `marker`, `ledger` and `contract`, ask the user whether to move each such object to another schema or drop it, and do neither without their approval. Then, after a backup and with the user's approval, drop Prisma's tables and the schema without `CASCADE`:
+The list also shows `sequence prisma_contract.ledger_id_seq`, which belongs to the `ledger` table and is dropped with it. If it holds anything other than Prisma's tables `marker`, `ledger` and `contract` and that sequence, ask the user whether to move each such object to another schema or drop it, and do neither without their approval. Then, after a backup and with the user's approval, drop Prisma's tables and the schema without `CASCADE`:
 
 ```sql
 DROP TABLE IF EXISTS "prisma_contract"."marker", "prisma_contract"."ledger", "prisma_contract"."contract";

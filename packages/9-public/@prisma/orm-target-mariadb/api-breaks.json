@@ -6,7 +6,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "a7e2459d336c529b",
-    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+    "reason": "The shared SQL-family type for a marker read gained the kind `earlier-release`, which only PostgreSQL returns today (prisma/orm#31234)."
   },
   {
     "path": "./target/control",
@@ -15,6 +15,6 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "48e253ed249d248f",
-    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+    "reason": "The shared SQL-family type for a runner's error codes gained `MIGRATION.PRISMA_TABLES_MISSING`, which only PostgreSQL returns today (prisma/orm#31234)."
   }
 ]
