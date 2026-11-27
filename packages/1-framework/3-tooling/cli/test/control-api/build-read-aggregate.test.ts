@@ -213,7 +213,7 @@ describe('buildReadAggregate', () => {
 
       const result = await buildReadAggregate(makeConfig(contractPath), {
         migrationsDir,
-        unreadableFiles: 'report',
+        onUnreadableFile: 'report',
       });
 
       expect(result.ok).toBe(true);
@@ -249,7 +249,7 @@ describe('buildReadAggregate', () => {
 
       const result = await buildReadAggregate(makeConfig(contractPath), {
         migrationsDir,
-        unreadableFiles: 'report',
+        onUnreadableFile: 'report',
       });
 
       expect(

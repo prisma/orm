@@ -46,9 +46,37 @@ describe('converted factories carry typed nextActions', () => {
   it('errorContractValidationFailed on a contract snapshot advises upgrading or restoring it, not emitting it', () => {
     const error = errorContractValidationFailed('zzz must be removed', { artifact: 'snapshot' });
 
+    expect(error.fix).not.toContain('no command rewrites it');
     expect(error.nextActions?.map(({ label }) => label)).toEqual([
       'If an earlier release wrote the snapshot, follow the app upgrade instructions',
-      'Restore the snapshot from version control; no command rewrites it',
+      'If the file was edited by hand, restore it from version control',
+    ]);
+  });
+
+  it('errorContractValidationFailed on a contract snapshot a command writes again advises deleting it and running that command', () => {
+    const error = errorContractValidationFailed('zzz must be removed', {
+      artifact: 'snapshot',
+      rewrittenBy: {
+        snapshotDirectory: 'migrations/snapshots/abc',
+        command: '{bin} db migrate --advance-ref db',
+        source: 'contract.json',
+      },
+    });
+
+    expect(error.fix).toContain(
+      'Or delete migrations/snapshots/abc and run `{bin} db migrate --advance-ref db`, which writes it again from contract.json.',
+    );
+    expect(error.nextActions).toEqual([
+      expect.objectContaining({ kind: 'open-url' }),
+      {
+        kind: 'run-command',
+        label: 'Or delete migrations/snapshots/abc and write it again from contract.json',
+        command: '{bin} db migrate --advance-ref db',
+      },
+      {
+        kind: 'user-choice',
+        label: 'If the file was edited by hand, restore it from version control',
+      },
     ]);
   });
 

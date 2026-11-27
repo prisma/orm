@@ -1,4 +1,4 @@
-import { rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { asNamespaceId } from '@internal/contract/types';
 import { writeRef } from '@internal/migration-tools/refs';
 import { ok } from '@internal/utils/result';
@@ -366,6 +366,21 @@ describe('db update questions', () => {
       },
     });
     expect(mocks.dbUpdate).not.toHaveBeenCalled();
+  });
+
+  it('names the migration it could not read when it cannot suggest a migration plan', async () => {
+    mocks.readMarker.mockResolvedValueOnce({ storageHash: 'c'.repeat(64) });
+    const packageDir = join(projectDir, 'migrations', 'app', '20260101T0000_init');
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(join(packageDir, 'migration.json'), '{ not json');
+    writeFileSync(join(packageDir, 'ops.json'), '[]');
+    const run = await harness().run(['db', 'update', '--backfill', 'User.email', '--json'], {
+      cwd: projectDir,
+    });
+
+    expect(JSON.stringify(envelopeOf(run.json))).toContain(
+      `The CLI could not read the migrations: Failed to parse \\"${join(packageDir, 'migration.json')}\\"`,
+    );
   });
 
   it('refuses --convert and --backfill within a few seconds when the database never answers', async () => {

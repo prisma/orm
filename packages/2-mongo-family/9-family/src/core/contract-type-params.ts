@@ -1,12 +1,15 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import {
   type ContractFieldType,
+  type JsonValue,
   type ScalarFieldType,
   valueObjectsWithCoordinates,
 } from '@internal/contract/types';
-import type { TypeLookups } from '@internal/framework-components/codec';
+import { type TypeLookups, validateCodecTypeParams } from '@internal/framework-components/codec';
 import type { MongoContract } from '@internal/mongo-contract';
 import { codecTypeParamsProblem } from '@internal/mongo-contract/data-type';
+import { blindCast } from '@internal/utils/casts';
+import { isStructuredError } from '@internal/utils/structured-error';
 
 function scalarTypesOf(
   path: string,
@@ -21,6 +24,33 @@ function scalarTypesOf(
   return [];
 }
 
+function typeParamsProblem(
+  codecId: string,
+  typeParams: Readonly<Record<string, unknown>>,
+  lookups: TypeLookups,
+): string | undefined {
+  const descriptor = lookups.codecLookup.descriptorFor(codecId);
+  if (descriptor === undefined) return undefined;
+  const dataType = lookups.dataTypeLookup.get(descriptor.dataType);
+  if (dataType?.params !== undefined) {
+    return codecTypeParamsProblem(codecId, typeParams, lookups)?.message;
+  }
+  try {
+    validateCodecTypeParams(descriptor, {
+      codecId,
+      typeParams: blindCast<JsonValue, 'stored type parameters are JSON read from the contract'>(
+        typeParams,
+      ),
+    });
+    return undefined;
+  } catch (error) {
+    if (isStructuredError(error) && error.code === 'RUNTIME.TYPE_PARAMS_INVALID') {
+      return error.message;
+    }
+    throw error;
+  }
+}
+
 function fieldProblems(
   path: string,
   fields: Readonly<Record<string, { readonly type: ContractFieldType }>>,
@@ -29,14 +59,14 @@ function fieldProblems(
   return Object.entries(fields).flatMap(([fieldName, field]) =>
     scalarTypesOf(`${path}.fields.${fieldName}.type`, field.type).flatMap(({ path, type }) => {
       if (type.typeParams === undefined) return [];
-      const problem = codecTypeParamsProblem(type.codecId, type.typeParams, lookups);
-      return problem === undefined ? [] : [`${path}.typeParams: ${problem.message}`];
+      const problem = typeParamsProblem(type.codecId, type.typeParams, lookups);
+      return problem === undefined ? [] : [`${path}.typeParams: ${problem}`];
     }),
   );
 }
 
 /**
- * Refuses a contract whose model or value-object field gives its data type a parameter the data type does not accept, as the contract builder refuses it. A codec or data type the stack does not register is not checked.
+ * Refuses a contract whose model or value-object field gives its type a parameter it does not accept: the data type's parameter schema decides when it has one, as the contract builder does, and otherwise the codec's, so a type that takes no parameters refuses any. A codec the stack does not register is not checked.
  */
 export function assertFieldTypeParams(contract: MongoContract, lookups: TypeLookups): void {
   const problems = [

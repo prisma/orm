@@ -228,23 +228,47 @@ export function errorContractValidationFailed(
     readonly cause?: unknown;
     /** What the refusal is about, such as the columns whose defaults were refused. */
     readonly meta?: Record<string, unknown> | undefined;
-    /** Which file was refused: the emitted contract (the default), or a migration's contract snapshot, which no command writes again, so it can only be upgraded or restored. */
+    /** Which file was refused: the emitted contract (the default), or a contract snapshot in the migrations directory. */
     readonly artifact?: 'contract' | 'snapshot';
+    /** For a snapshot a command writes again once it is deleted: the snapshot's folder, that command, and what it writes the snapshot from. */
+    readonly rewrittenBy?: {
+      readonly snapshotDirectory: string;
+      readonly command: string;
+      readonly source: string;
+    };
   },
 ): CliStructuredError {
   if (options?.artifact === 'snapshot') {
+    const rewrite = options.rewrittenBy;
     return new CliStructuredError('CONTRACT.VALIDATION_FAILED', 'Contract validation failed', {
       why: reason,
-      fix: `If an earlier release wrote this snapshot, follow the app upgrade instructions of each release since, which rewrite the contract and its migration snapshots: ${APP_UPGRADE_GUIDES_URL}. Otherwise restore the snapshot from version control; no command rewrites it`,
+      fix: [
+        `If an earlier release wrote this snapshot, follow the app upgrade instructions of each release since, which rewrite the contract and its migration snapshots: ${APP_UPGRADE_GUIDES_URL}.`,
+        ...(rewrite === undefined
+          ? []
+          : [
+              `Or delete ${rewrite.snapshotDirectory} and run \`${rewrite.command}\`, which writes it again from ${rewrite.source}.`,
+            ]),
+        'If the file was edited by hand, restore it from version control.',
+      ].join(' '),
       nextActions: [
         {
           kind: 'open-url',
           label: 'If an earlier release wrote the snapshot, follow the app upgrade instructions',
           url: APP_UPGRADE_GUIDES_URL,
         },
+        ...(rewrite === undefined
+          ? []
+          : [
+              {
+                kind: 'run-command' as const,
+                label: `Or delete ${rewrite.snapshotDirectory} and write it again from ${rewrite.source}`,
+                command: rewrite.command,
+              },
+            ]),
         {
           kind: 'user-choice',
-          label: 'Restore the snapshot from version control; no command rewrites it',
+          label: 'If the file was edited by hand, restore it from version control',
         },
       ],
       docsUrl: docsUrlFor('CONTRACT.VALIDATION_FAILED'),

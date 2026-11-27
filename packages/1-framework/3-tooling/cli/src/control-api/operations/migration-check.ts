@@ -36,7 +36,6 @@ import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
-import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { basename, join, relative } from 'pathe';
 import type { CheckFailure, MigrationCheckResult } from '../../commands/json/schemas';
 import { INTEGRITY_FAILED, OK, PRECONDITION } from '../../commands/migration-check/exit-codes';
@@ -51,6 +50,7 @@ import {
 import { resolveContractPath } from '../../utils/command-helpers';
 import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { toDeclaredExtensionsFromRaw } from '../../utils/extension-pack-inputs';
+import { integrityViolationToCheckFailure } from '../../utils/integrity-violation-to-check-failure';
 import {
   findPackageByDirPath,
   looksLikePath,
@@ -61,6 +61,7 @@ import {
   chooseAction,
   migrationPackageRepairActions,
   runCommandAction,
+  snapshotRepairActions,
 } from '../../utils/next-actions';
 import { formatVersionFailure } from './caught-errors';
 import { mapContractAtError } from './contract-at-errors';
@@ -146,7 +147,19 @@ async function checkSnapshotConsistency(
     why: `Migration "${pkg.dirName}" ends at the contract snapshot ${jsonPath}, which this release of Prisma cannot read: ${reason}`,
     nextActions,
   });
-  const restoreSnapshots = chooseAction('Restore migrations/snapshots/ from version control');
+  const refNames = Object.entries(space.refs)
+    .filter(([, entry]) => entry.hash === pkg.metadata.to)
+    .map(([name]) => name);
+  const repairActions = snapshotRepairActions(
+    {
+      spaceId,
+      hash: pkg.metadata.to,
+      headHash: space.headHash,
+      migrationsDir,
+      cwd: space.cwd,
+    },
+    { refNames },
+  );
   let raw: unknown;
   try {
     raw = await readContractSnapshotJson(migrationsDir, pkg.metadata.to);
@@ -154,7 +167,10 @@ async function checkSnapshotConsistency(
     if (MigrationToolsError.is(error) && error.code === 'MIGRATION.CONTRACT_SNAPSHOT_MISSING') {
       return null;
     }
-    return unreadable(reasonOf(error), snapshotRewriteActions(snapshotDir));
+    return unreadable(
+      reasonOf(error),
+      repairActions.filter((action) => action.kind !== 'open-url'),
+    );
   }
   const record = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const storage = record['storage'] as Record<string, unknown> | undefined;
@@ -194,26 +210,18 @@ async function checkSnapshotConsistency(
       };
     }
   }
-  if (!isHeadOf(space, pkg)) return null;
+  const interpreted =
+    refNames.length > 0 ||
+    pkg.metadata.to === space.headHash ||
+    !space.packages.some((other) => other.metadata.from === pkg.metadata.to);
+  if (!interpreted) return null;
   try {
     space.deserializeContract(raw);
   } catch (error) {
     if (isInternalError(error)) throw error;
-    return unreadable(reasonOf(error), [
-      {
-        kind: 'open-url',
-        label: 'If an earlier release wrote the snapshot, follow the app upgrade instructions',
-        url: APP_UPGRADE_GUIDES_URL,
-      },
-      restoreSnapshots,
-    ]);
+    return unreadable(reasonOf(error), repairActions);
   }
   return null;
-}
-
-/** Whether no migration of the space starts where `pkg` ends: the next plan of the space starts from its snapshot, so that snapshot is read strictly, while one only a migration already written ends at is checked by its hash. */
-function isHeadOf(space: CheckSpace, pkg: OnDiskMigrationPackage): boolean {
-  return !space.packages.some((other) => other.metadata.from === pkg.metadata.to);
 }
 
 function reasonOf(error: unknown): string {
@@ -245,10 +253,17 @@ export interface CheckSpace {
    * reports `MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH` on disagreement.
    */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
-  /** The family's contract reader, through which the snapshot each head of the space's graph ends at is read: the next plan starts from it. */
+  /** The family's contract reader, through which every snapshot a later command interprets is read: each one a ref names, the space's head, and each one no migration of the space starts from. */
   readonly deserializeContract: (contractJson: unknown) => unknown;
+  /** The space's head: the emitted contract's hash for the application, the head ref's for an extension. */
+  readonly headHash: string | undefined;
   /** The migrations of this space whose `migration.json` could not be read, with why. */
   readonly unreadableMigrations: readonly { readonly dirName: string; readonly detail: string }[];
+  /** The refs of this space whose file could not be read, with why. */
+  readonly unreadableRefs: readonly Extract<
+    IntegrityViolation,
+    { readonly kind: 'refUnreadable' }
+  >[];
 }
 
 /** The inputs of {@link enumerateCheckSpaces}. */
@@ -268,7 +283,7 @@ export interface EnumerateCheckSpacesInputs {
  * contract-space directory, in the aggregate's `app`-first ordering. Mirrors
  * `migration list`'s `migrationSpaceListEntriesFromAggregate`: space
  * membership matches the on-disk directories, package / ref / graph data come
- * from `aggregate.space(id)`. Load the aggregate with `unreadableFiles: 'report'`, so each migration it could not read is reported here.
+ * from `aggregate.space(id)`. Load the aggregate with `onUnreadableFile: 'report'`, so each migration it could not read is reported here.
  */
 export async function enumerateCheckSpaces(
   inputs: EnumerateCheckSpacesInputs,
@@ -276,8 +291,12 @@ export async function enumerateCheckSpaces(
   const { aggregate, projectMigrationsDir, cwd, verifySnapshotContent, deserializeContract } =
     inputs;
   const candidateDirs = await listContractSpaceDirectories(projectMigrationsDir);
-  const unloadable = unreadableFiles(aggregate).flatMap((file) =>
+  const unreadable = unreadableFiles(aggregate);
+  const unloadable = unreadable.flatMap((file) =>
     file.kind === 'packageUnloadable' ? [file] : [],
+  );
+  const unreadableRefs = unreadable.flatMap((file) =>
+    file.kind === 'refUnreadable' ? [file] : [],
   );
   const onDiskSpaceIds = new Set(candidateDirs.filter(isValidSpaceId));
   const spaces: CheckSpace[] = [];
@@ -297,9 +316,11 @@ export async function enumerateCheckSpaces(
       cwd,
       ...ifDefined('verifySnapshotContent', verifySnapshotContent),
       deserializeContract,
+      headHash: space.headRef?.hash,
       unreadableMigrations: unloadable
         .filter((violation) => violation.spaceId === spaceId)
         .map(({ dirName, detail }) => ({ dirName, detail })),
+      unreadableRefs: unreadableRefs.filter((violation) => violation.spaceId === spaceId),
     });
   }
   return spaces;
@@ -467,6 +488,14 @@ export async function loadAggregateIntegrityViolations(
     ) {
       return mapContractAtError(error);
     }
+    if (error instanceof SyntaxError) {
+      return notOk(
+        errorContractValidationFailed(
+          `Contract at ${contractPath} is not valid JSON: ${error.message}`,
+          { where: { path: contractPath }, cause: error },
+        ),
+      );
+    }
     if (isStructuredError(error) && error.code === 'CONTRACT.VALIDATION_FAILED') {
       return notOk(
         errorContractValidationFailed(
@@ -504,6 +533,19 @@ function unreadableMigrationNamed(
         cwd: space.cwd,
       }),
     };
+  }
+  return undefined;
+}
+
+function unreadableRefNamedIn(
+  target: string,
+  spaces: readonly CheckSpace[],
+): CheckFailure | undefined {
+  for (const space of spaces) {
+    const found = space.unreadableRefs.find((violation) => violation.refName === target);
+    if (found !== undefined) {
+      return integrityViolationToCheckFailure(found, space.projectMigrationsDir, space.cwd);
+    }
   }
   return undefined;
 }
@@ -578,7 +620,8 @@ export async function checkSingleTarget(
   const scopedSpaces =
     spaceFilter !== undefined ? spaces.filter((s) => s.spaceId === spaceFilter) : spaces;
 
-  const unreadable = unreadableMigrationNamed(target, scopedSpaces);
+  const unreadable =
+    unreadableMigrationNamed(target, scopedSpaces) ?? unreadableRefNamedIn(target, scopedSpaces);
   if (unreadable !== undefined) {
     return {
       result: { ok: false, failures: [unreadable], summary: '1 integrity failure(s)' },

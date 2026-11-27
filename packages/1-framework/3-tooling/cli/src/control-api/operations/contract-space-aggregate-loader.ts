@@ -16,6 +16,7 @@ import type {
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { errorInvalidRefFile } from '@internal/migration-tools/errors';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -179,7 +180,7 @@ export function mapIntegrityViolations(
       `Contract-space contract validation failed for "${contractUnreadable.spaceId}"`,
       {
         why: contractUnreadable.detail,
-        fix: 'Re-emit the extension contract with `{bin} contract emit`, or fix the extension pack descriptor producing the invalid contract.',
+        fix: extensionHeadSnapshotFix(migrationsDir, contractUnreadable.hash),
         violations: [contractUnreadable],
       },
     );
@@ -211,7 +212,12 @@ export function mapIntegrityViolations(
   });
 }
 
-/** How a migration package whose files are wrong is put right, in one sentence; see `migrationPackageRepairActions`. */
+function extensionHeadSnapshotFix(migrationsDir: string, hash: string | undefined): string {
+  return hash === undefined
+    ? 'Run `{bin} contract emit`, which writes the head ref and the head snapshot of each extension from the installed extension.'
+    : `Delete ${relative(process.cwd(), contractSnapshotDir(migrationsDir, hash))} and run \`{bin} contract emit\`, which writes it again from the installed extension. If the file was edited by hand, restore it from version control.`;
+}
+
 function migrationPackageRepairText(
   migrationsDir: string,
   spaceId: string,
@@ -239,6 +245,17 @@ export function unreadableFiles(aggregate: ContractSpaceAggregate): readonly Unr
     );
 }
 
+/** The unreadable ref of `spaceId` that `name` names, when there is one: a command that resolves the name refuses with it, never calling the ref unknown. */
+export function unreadableRefNamed(
+  aggregate: ContractSpaceAggregate,
+  spaceId: string,
+  name: string,
+): UnreadableFile | undefined {
+  return unreadableFiles(aggregate).find(
+    (file) => file.kind === 'refUnreadable' && file.spaceId === spaceId && file.refName === name,
+  );
+}
+
 /**
  * Inputs needed to compose the aggregate loader at the CLI surface.
  *
@@ -257,7 +274,7 @@ export interface BuildAggregateInputs<TFamilyId extends string, TTargetId extend
   /**
    * What the load does with a ref or migration whose file it could not read: refuse (the default), or keep the aggregate without the file, for a command that only lists and reports each one with {@link unreadableFiles}. A command that acts on the migrations refuses, so a file it could not read is never silently left out.
    */
-  readonly unreadableFiles?: 'refuse' | 'report';
+  readonly onUnreadableFile?: 'refuse' | 'report';
 }
 
 function declaredExtensionsFromInputs(
@@ -305,7 +322,7 @@ export async function loadContractSpaceAggregateForCli<
     appContract: inputs.appContract,
     ...ifDefined('verifySnapshotContent', inputs.verifySnapshotContent),
   });
-  if (inputs.unreadableFiles !== 'report') {
+  if (inputs.onUnreadableFile !== 'report') {
     const refusal = mapIntegrityViolations(unreadableFiles(aggregate), inputs.migrationsDir);
     if (refusal !== null) return notOk(refusal);
   }
@@ -331,11 +348,7 @@ const PACKAGE_CORRUPTION_KINDS = new Set<IntegrityViolation['kind']>([
   'packageUnloadable',
 ]);
 
-/**
- * Reader-subset integrity refusal for `migration status`: package
- * corruptions only (`hashMismatch`, `providedInvariantsMismatch`,
- * `packageUnloadable`).
- */
+/** Refuses a migration package whose files are corrupt (`hashMismatch`, `providedInvariantsMismatch`, `packageUnloadable`), for a command such as `migration new` that reads the graph but not the contracts of extension spaces. */
 export function refusePackageCorruptionOnAggregate(
   aggregate: ContractSpaceAggregate,
   migrationsDir: string,
@@ -430,7 +443,7 @@ export async function buildReadAggregate(
     readonly migrationsDir: string;
     /** Command-scoped verifier to share the verified-hash memo; defaults to one built from `config`. */
     readonly verifySnapshotContent?: SnapshotContentVerifier;
-    readonly unreadableFiles?: 'refuse' | 'report';
+    readonly onUnreadableFile?: 'refuse' | 'report';
   },
 ): Promise<
   Result<
@@ -452,13 +465,21 @@ export async function buildReadAggregate(
   >
 > {
   let contractHash: string = EMPTY_CONTRACT_HASH;
+  let envelopeRefusal: string | undefined;
   try {
     const envelope = await readContractEnvelope(config);
     contractHash = envelope.storageHash;
   } catch (error) {
     const formatFailure = formatVersionFailure(error);
     if (formatFailure !== undefined) return notOk(formatFailure);
-    // Contract unreadable — marker uses EMPTY_CONTRACT_HASH
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+      envelopeRefusal =
+        error instanceof SyntaxError
+          ? `${resolveContractPath(config)} is not valid JSON: ${error.message}`
+          : error instanceof Error
+            ? error.message
+            : String(error);
+    }
   }
 
   try {
@@ -472,7 +493,7 @@ export async function buildReadAggregate(
       targetId: config.target.id,
       targetFamily: config.target.familyId,
     });
-    let contractRefusal: string | undefined;
+    let contractRefusal = envelopeRefusal;
     if (contractRawForAggregate !== null) {
       try {
         appContractForLoad = deserializeContract(contractRawForAggregate);
@@ -480,7 +501,7 @@ export async function buildReadAggregate(
         const formatFailure = formatVersionFailure(error, resolveContractPath(config));
         if (formatFailure !== undefined) return notOk(formatFailure);
         if (isInternalError(error)) throw error;
-        contractRefusal = error instanceof Error ? error.message : String(error);
+        contractRefusal = `${resolveContractPath(config)}: ${error instanceof Error ? error.message : String(error)}`;
       }
     }
 
@@ -494,7 +515,7 @@ export async function buildReadAggregate(
         'verifySnapshotContent',
         options.verifySnapshotContent ?? snapshotVerifierFor(config),
       ),
-      ...ifDefined('unreadableFiles', options.unreadableFiles),
+      ...ifDefined('onUnreadableFile', options.onUnreadableFile),
     });
     if (!loaded.ok) {
       return loaded;

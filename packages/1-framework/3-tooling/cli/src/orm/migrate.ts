@@ -657,7 +657,12 @@ export function createMigrateCommand(
                 'contract.json',
               );
             } catch (error) {
-              const mapped = mapContractAtError(error, { artifactRole: 'to' });
+              const mapped = mapContractAtError(error, {
+                artifactRole: 'to',
+                ...(refEntry.hash === appContract.storage.storageHash
+                  ? { atHeadOf: aggregate.app.spaceId }
+                  : {}),
+              });
               if (!mapped.ok) {
                 return notOk(normalizeError(mapped.failure));
               }

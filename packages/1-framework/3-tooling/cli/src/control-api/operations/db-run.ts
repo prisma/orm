@@ -97,6 +97,7 @@ import type {
   OnControlProgress,
   PerSpaceExecutionEntry,
   PlannerWarningsListener,
+  UnreadableStoredFile,
 } from '../types';
 import {
   type ChangedStorageEntity,
@@ -195,6 +196,7 @@ export type ExecuteRunOptions<
         readonly ref?: NamedRef;
         readonly permitPolicyChange: boolean;
         readonly emittedContractHash?: string;
+        readonly onUnreadableOrigin?: (unreadable: UnreadableStoredFile) => void;
       }
   );
 
@@ -304,6 +306,16 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
           ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
         })
       : undefined;
+  if (
+    options.action === 'dbUpdate' &&
+    appOrigin?.origin.kind === 'missing' &&
+    appOrigin.origin.unreadable !== undefined
+  ) {
+    options.onUnreadableOrigin?.({
+      path: join(appOrigin.origin.snapshotDirectory, 'contract.json'),
+      reason: appOrigin.origin.unreadable,
+    });
+  }
   const fromContract = appOrigin?.contract ?? null;
   const statementTexts = options.action === 'dbUpdate' ? options.statements : [];
   const resolveRenames = (

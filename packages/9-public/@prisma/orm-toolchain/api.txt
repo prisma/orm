@@ -173,9 +173,18 @@
 (not exported) interface SingleTargetInputs, readonly required property appMigrationsRelative: string
 (not exported) interface SingleTargetInputs, readonly required property cwd: string
 (not exported) interface SingleTargetInputs, readonly required property spaces: readonly CheckSpace[]
+(not exported) interface SnapshotRewrite
+(not exported) interface SnapshotRewrite, readonly required property command: string
+(not exported) interface SnapshotRewrite, readonly required property snapshotDirectory: string
+(not exported) interface SnapshotRewrite, readonly required property source: string
+(not exported) interface StoredSnapshotSource
+(not exported) interface StoredSnapshotSource, readonly required property rewrittenBy: SnapshotRewrite | undefined
 (not exported) interface TemporaryValueReport
 (not exported) interface TemporaryValueReport, readonly required property field: string
 (not exported) interface TemporaryValueReport, readonly required property value: string
+(not exported) interface UnreadableStoredFile
+(not exported) interface UnreadableStoredFile, readonly required property path: string
+(not exported) interface UnreadableStoredFile, readonly required property reason: string
 (not exported) type ChangedStorageEntity = Omit<EntityCoordinate, 'namespaceId'> & { readonly namespaceId?: string; }
 (not exported) type ConsentVerb = 'allow' | 'delete'
 (not exported) type ContractEmitDependencies = { readonly emit: typeof emit; }
@@ -312,7 +321,7 @@
 ./cli/control-api: function appliedHashesFromLedger(ledgerEntries: ReadonlyArray<{ readonly migrationHash: string; }>): ReadonlySet<string>
 ./cli/control-api: function buildContractSpaceAggregate<TFamilyId extends string, TTargetId extends string>(inputs: BuildAggregateInputs<TFamilyId, TTargetId>): Promise<Result<ContractSpaceAggregate, CliStructuredError>>
 ./cli/control-api: function buildMigrationSpaceGraphEntries(args: { readonly aggregate: ContractSpaceAggregate; readonly scopedSpaces: readonly MigrationSpaceListEntry[]; }): readonly MigrationSpaceGraphEntry[]
-./cli/control-api: function buildReadAggregate(config: PrismaConfig, options: { readonly migrationsDir: string; readonly verifySnapshotContent?: SnapshotContentVerifier; readonly unreadableFiles?: 'refuse' | 'report'; }): Promise<Result<{ readonly aggregate: ContractSpaceAggregate; readonly contractHash: string; readonly storageNameOf: (operation: MigrationPlanOperation) => string; readonly accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]; readonly markerLocation: string; readonly deserializeContract: (contractJson: unknown) => Contract; readonly contractRefusal: string | undefined; }, CliStructuredError>>
+./cli/control-api: function buildReadAggregate(config: PrismaConfig, options: { readonly migrationsDir: string; readonly verifySnapshotContent?: SnapshotContentVerifier; readonly onUnreadableFile?: 'refuse' | 'report'; }): Promise<Result<{ readonly aggregate: ContractSpaceAggregate; readonly contractHash: string; readonly storageNameOf: (operation: MigrationPlanOperation) => string; readonly accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]; readonly markerLocation: string; readonly deserializeContract: (contractJson: unknown) => Contract; readonly contractRefusal: string | undefined; }, CliStructuredError>>
 ./cli/control-api: function buildRefAdvancementFields(options: { readonly name: string; readonly refsDir: string; readonly migrationsDir: string; readonly contractIR: ContractIR; readonly mode: 'apply' | 'plan'; readonly hash: string; }): Promise<Result<RefAdvancementFields, CliStructuredError>>
 ./cli/control-api: function checkSingleTarget(target: string, inputs: SingleTargetInputs): Promise<MigrationCheckOutcome>
 ./cli/control-api: function computeRefAdvancementName(options: { readonly advanceRef?: string; readonly db?: string; }): null | string
@@ -340,10 +349,10 @@
 ./cli/control-api: function loadContractRawSafely(config: { contract?: { output?: string; }; }): Promise<null | unknown>
 ./cli/control-api: function loadContractSource(config: PrismaConfig, options?: { readonly signal?: AbortSignal; }): Promise<Result<LoadedContractSource, ContractSourceFailure>>
 ./cli/control-api: function loadContractSpaceAggregateForCli<TFamilyId extends string, TTargetId extends string>(inputs: BuildAggregateInputs<TFamilyId, TTargetId>): Promise<Result<ContractSpaceAggregate, CliStructuredError>>
-./cli/control-api: function mapContractAtError(error: unknown, options?: { readonly artifactRole?: 'from' | 'to'; }): Result<never, CliStructuredError>
+./cli/control-api: function mapContractAtError(error: unknown, options?: { readonly artifactRole?: 'from' | 'to'; readonly atHeadOf?: string; }): Result<never, CliStructuredError>
 ./cli/control-api: function mapIntegrityViolations(violations: readonly IntegrityViolation[], migrationsDir: string): CliStructuredError | null
 ./cli/control-api: function migrationSpaceListEntriesFromAggregate(aggregate: ContractSpaceAggregate, projectMigrationsDir: string): Promise<readonly MigrationSpaceListEntry[]>
-./cli/control-api: function preflightRefAdvancement(args: { readonly name: string; readonly contractJson: Record<string, unknown>; readonly contractJsonPath: string; readonly config: { readonly contract?: { readonly typesModule?: string; }; }; readonly client: Pick<ControlClient, 'renderContractDts'>; }): Promise<Result<ContractIR, CliStructuredError>>
+./cli/control-api: function preflightRefAdvancement(args: { readonly name: string; readonly contractJson: Record<string, unknown>; readonly contractJsonPath: string; readonly config: { readonly contract?: { readonly typesModule?: string; }; }; readonly client: Pick<ControlClient, 'renderContractDts'>; readonly snapshot?: StoredSnapshotSource; }): Promise<Result<ContractIR, CliStructuredError>>
 ./cli/control-api: function readMigrationRefs(refsDir: string): Promise<Result<Refs, CliStructuredError>>
 ./cli/control-api: function refuseContractSpaceIntegrity(aggregate: ContractSpaceAggregate, options: IntegrityQueryOptions, migrationsDir: string): CliStructuredError | null
 ./cli/control-api: function refuseDeclaredExtensionTargetMismatch<TFamilyId extends string, TTargetId extends string>(inputs: BuildAggregateInputs<TFamilyId, TTargetId>): CliStructuredError | null
@@ -364,7 +373,7 @@
 ./cli/control-api: interface AskedSubject extends MigrationOperationSubject
 ./cli/control-api: interface AskedSubject, readonly optional property removedNamespace?: string
 ./cli/control-api: interface AskedSubject, readonly required property text: string
-./cli/control-api: interface BuildAggregateInputs, readonly optional property unreadableFiles?: 'refuse' | 'report'
+./cli/control-api: interface BuildAggregateInputs, readonly optional property onUnreadableFile?: 'refuse' | 'report'
 ./cli/control-api: interface BuildAggregateInputs, readonly optional property verifySnapshotContent?: SnapshotContentVerifier
 ./cli/control-api: interface BuildAggregateInputs, readonly required property appContract: Contract
 ./cli/control-api: interface BuildAggregateInputs, readonly required property deserializeContract: (contractJson: unknown) => Contract
@@ -377,6 +386,7 @@
 ./cli/control-api: interface CheckSpace, readonly required property cwd: string
 ./cli/control-api: interface CheckSpace, readonly required property deserializeContract: (contractJson: unknown) => unknown
 ./cli/control-api: interface CheckSpace, readonly required property graph: MigrationGraph
+./cli/control-api: interface CheckSpace, readonly required property headHash: string | undefined
 ./cli/control-api: interface CheckSpace, readonly required property migrationsDir: string
 ./cli/control-api: interface CheckSpace, readonly required property packages: readonly OnDiskMigrationPackage[]
 ./cli/control-api: interface CheckSpace, readonly required property projectMigrationsDir: string
@@ -384,6 +394,7 @@
 ./cli/control-api: interface CheckSpace, readonly required property refsDir: string
 ./cli/control-api: interface CheckSpace, readonly required property spaceId: string
 ./cli/control-api: interface CheckSpace, readonly required property unreadableMigrations: readonly { readonly dirName: string; readonly detail: string; }[]
+./cli/control-api: interface CheckSpace, readonly required property unreadableRefs: readonly Extract<IntegrityViolation, { readonly kind: 'refUnreadable'; }>[]
 ./cli/control-api: interface CliInvocation
 ./cli/control-api: interface CliInvocation, readonly optional property rerunArgs?: readonly string[]
 ./cli/control-api: interface CliInvocation, readonly optional property statementArgs?: readonly string[]
@@ -487,6 +498,7 @@
 ./cli/control-api: interface DbUpdateOptions, readonly optional property connection?: unknown
 ./cli/control-api: interface DbUpdateOptions, readonly optional property emittedContractHash?: string
 ./cli/control-api: interface DbUpdateOptions, readonly optional property onProgress?: OnControlProgress
+./cli/control-api: interface DbUpdateOptions, readonly optional property onUnreadableOrigin?: (unreadable: UnreadableStoredFile) => void
 ./cli/control-api: interface DbUpdateOptions, readonly optional property permitPolicyChange?: boolean
 ./cli/control-api: interface DbUpdateOptions, readonly optional property ref?: NamedRef
 ./cli/control-api: interface DbUpdateOptions, readonly optional property statements?: readonly StatementText[]
@@ -568,6 +580,7 @@
 ./cli/control-api: interface ExecuteDbUpdateOptions, readonly optional property emittedContractHash?: string
 ./cli/control-api: interface ExecuteDbUpdateOptions, readonly optional property extensions?: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>
 ./cli/control-api: interface ExecuteDbUpdateOptions, readonly optional property onProgress?: OnControlProgress
+./cli/control-api: interface ExecuteDbUpdateOptions, readonly optional property onUnreadableOrigin?: (unreadable: UnreadableStoredFile) => void
 ./cli/control-api: interface ExecuteDbUpdateOptions, readonly optional property permitPolicyChange?: boolean
 ./cli/control-api: interface ExecuteDbUpdateOptions, readonly optional property ref?: NamedRef
 ./cli/control-api: interface ExecuteDbUpdateOptions, readonly optional property statements?: readonly StatementText[]
@@ -1004,7 +1017,7 @@
 ./migration-tools/aggregate: interface VerifierSuccess, readonly required property markerCheck: MarkerCheckSection
 ./migration-tools/aggregate: interface VerifierSuccess, readonly required property schemaCheck: SchemaCheckSection
 ./migration-tools/aggregate: type ContractAtResult = { readonly provenance: 'graph-node'; readonly hash: string; readonly contractJson: unknown; readonly contract: Contract; } | { readonly provenance: 'ref'; readonly hash: string; readonly contractJson: unknown; readonly contract: Contract; }
-./migration-tools/aggregate: type IntegrityViolation = { readonly kind: 'contractUnreadable'; readonly spaceId: string; readonly detail: string; } | { readonly kind: 'declaredButUnmigrated'; readonly spaceId: string; } | { readonly kind: 'disjointness'; readonly element: string; readonly claimedBy: readonly string[]; } | { readonly kind: 'duplicateMigrationHash'; readonly spaceId: string; readonly migrationHash: string; readonly dirNames: readonly string[]; } | { readonly kind: 'hashMismatch'; readonly spaceId: string; readonly dirName: string; readonly stored: string; readonly computed: string; } | { readonly kind: 'headRefMissing'; readonly spaceId: string; } | { readonly kind: 'headRefNotInGraph'; readonly spaceId: string; readonly hash: string; } | { readonly kind: 'orphanSpaceDir'; readonly spaceId: string; } | { readonly kind: 'packageUnloadable'; readonly spaceId: string; readonly dirName: string; readonly detail: string; } | { readonly kind: 'providedInvariantsMismatch'; readonly spaceId: string; readonly dirName: string; } | { readonly kind: 'refUnreadable'; readonly spaceId: string; readonly refName: string; readonly path: string; readonly detail: string; readonly policyIssues?: readonly DeclaredDatabasePoliciesIssue[]; } | { readonly kind: 'sameSourceAndTarget'; readonly spaceId: string; readonly dirName: string; readonly hash: string; } | { readonly kind: 'targetMismatch'; readonly spaceId: string; readonly expected: string; readonly actual: string; }
+./migration-tools/aggregate: type IntegrityViolation = { readonly kind: 'contractUnreadable'; readonly spaceId: string; readonly detail: string; readonly hash: string | undefined; } | { readonly kind: 'declaredButUnmigrated'; readonly spaceId: string; } | { readonly kind: 'disjointness'; readonly element: string; readonly claimedBy: readonly string[]; } | { readonly kind: 'duplicateMigrationHash'; readonly spaceId: string; readonly migrationHash: string; readonly dirNames: readonly string[]; } | { readonly kind: 'hashMismatch'; readonly spaceId: string; readonly dirName: string; readonly stored: string; readonly computed: string; } | { readonly kind: 'headRefMissing'; readonly spaceId: string; } | { readonly kind: 'headRefNotInGraph'; readonly spaceId: string; readonly hash: string; } | { readonly kind: 'orphanSpaceDir'; readonly spaceId: string; } | { readonly kind: 'packageUnloadable'; readonly spaceId: string; readonly dirName: string; readonly detail: string; } | { readonly kind: 'providedInvariantsMismatch'; readonly spaceId: string; readonly dirName: string; } | { readonly kind: 'refUnreadable'; readonly spaceId: string; readonly refName: string; readonly path: string; readonly detail: string; readonly policyIssues?: readonly DeclaredDatabasePoliciesIssue[]; } | { readonly kind: 'sameSourceAndTarget'; readonly spaceId: string; readonly dirName: string; readonly hash: string; } | { readonly kind: 'targetMismatch'; readonly spaceId: string; readonly expected: string; readonly actual: string; }
 ./migration-tools/aggregate: type MarkerCheckResult = { readonly kind: 'absent'; } | { readonly kind: 'hashMismatch'; readonly markerHash: string; readonly expected: string; } | { readonly kind: 'missingInvariants'; readonly missing: readonly string[]; } | { readonly kind: 'ok'; }
 ./migration-tools/aggregate: type PlannerError = { readonly kind: 'extensionPathUnreachable'; readonly spaceId: string; readonly target: string; } | { readonly kind: 'extensionPathUnsatisfiable'; readonly spaceId: string; readonly missingInvariants: readonly string[]; } | { readonly kind: 'planFromDiffFailed'; readonly spaceId: string; readonly conflicts: readonly MigrationPlannerConflict[]; } | { readonly kind: 'policyConflict'; readonly spaceId: string; readonly detail: string; }
 ./migration-tools/aggregate: type PlannerOutput = Result<PlannerSuccess, PlannerError>
@@ -1654,7 +1667,7 @@
 ./migration-tools: type ContractAtResult = { readonly provenance: 'graph-node'; readonly hash: string; readonly contractJson: unknown; readonly contract: Contract; } | { readonly provenance: 'ref'; readonly hash: string; readonly contractJson: unknown; readonly contract: Contract; }
 ./migration-tools: type ContractRefProvenance = { readonly kind: 'hash'; readonly input: string; } | { readonly kind: 'migration-from'; readonly dirName: string; } | { readonly kind: 'migration-to'; readonly dirName: string; } | { readonly kind: 'ref'; readonly refName: string; } | { readonly kind: 'reserved-contract'; } | { readonly kind: 'reserved-db'; } | { readonly kind: 'reserved-empty'; }
 ./migration-tools: type ExtensionSpaceApplyPathOutcome = { readonly kind: 'contractSpaceHeadRefMissing'; } | { readonly kind: 'ok'; readonly contractSpaceHeadRef: ContractSpaceHeadRef; readonly providedInvariants: readonly string[]; readonly pathOps: MigrationOps; readonly walkedMigrationDirs: readonly string[]; } | { readonly kind: 'unreachable'; readonly contractSpaceHeadRef: ContractSpaceHeadRef; } | { readonly kind: 'unsatisfiable'; readonly contractSpaceHeadRef: ContractSpaceHeadRef; readonly missing: readonly string[]; readonly structuralPath: readonly { readonly dirName: string; readonly to: string; }[]; }
-./migration-tools: type IntegrityViolation = { readonly kind: 'contractUnreadable'; readonly spaceId: string; readonly detail: string; } | { readonly kind: 'declaredButUnmigrated'; readonly spaceId: string; } | { readonly kind: 'disjointness'; readonly element: string; readonly claimedBy: readonly string[]; } | { readonly kind: 'duplicateMigrationHash'; readonly spaceId: string; readonly migrationHash: string; readonly dirNames: readonly string[]; } | { readonly kind: 'hashMismatch'; readonly spaceId: string; readonly dirName: string; readonly stored: string; readonly computed: string; } | { readonly kind: 'headRefMissing'; readonly spaceId: string; } | { readonly kind: 'headRefNotInGraph'; readonly spaceId: string; readonly hash: string; } | { readonly kind: 'orphanSpaceDir'; readonly spaceId: string; } | { readonly kind: 'packageUnloadable'; readonly spaceId: string; readonly dirName: string; readonly detail: string; } | { readonly kind: 'providedInvariantsMismatch'; readonly spaceId: string; readonly dirName: string; } | { readonly kind: 'refUnreadable'; readonly spaceId: string; readonly refName: string; readonly path: string; readonly detail: string; readonly policyIssues?: readonly DeclaredDatabasePoliciesIssue[]; } | { readonly kind: 'sameSourceAndTarget'; readonly spaceId: string; readonly dirName: string; readonly hash: string; } | { readonly kind: 'targetMismatch'; readonly spaceId: string; readonly expected: string; readonly actual: string; }
+./migration-tools: type IntegrityViolation = { readonly kind: 'contractUnreadable'; readonly spaceId: string; readonly detail: string; readonly hash: string | undefined; } | { readonly kind: 'declaredButUnmigrated'; readonly spaceId: string; } | { readonly kind: 'disjointness'; readonly element: string; readonly claimedBy: readonly string[]; } | { readonly kind: 'duplicateMigrationHash'; readonly spaceId: string; readonly migrationHash: string; readonly dirNames: readonly string[]; } | { readonly kind: 'hashMismatch'; readonly spaceId: string; readonly dirName: string; readonly stored: string; readonly computed: string; } | { readonly kind: 'headRefMissing'; readonly spaceId: string; } | { readonly kind: 'headRefNotInGraph'; readonly spaceId: string; readonly hash: string; } | { readonly kind: 'orphanSpaceDir'; readonly spaceId: string; } | { readonly kind: 'packageUnloadable'; readonly spaceId: string; readonly dirName: string; readonly detail: string; } | { readonly kind: 'providedInvariantsMismatch'; readonly spaceId: string; readonly dirName: string; } | { readonly kind: 'refUnreadable'; readonly spaceId: string; readonly refName: string; readonly path: string; readonly detail: string; readonly policyIssues?: readonly DeclaredDatabasePoliciesIssue[]; } | { readonly kind: 'sameSourceAndTarget'; readonly spaceId: string; readonly dirName: string; readonly hash: string; } | { readonly kind: 'targetMismatch'; readonly spaceId: string; readonly expected: string; readonly actual: string; }
 ./migration-tools: type MarkerCheckResult = { readonly kind: 'absent'; } | { readonly kind: 'hashMismatch'; readonly markerHash: string; readonly expected: string; } | { readonly kind: 'missingInvariants'; readonly missing: readonly string[]; } | { readonly kind: 'ok'; }
 ./migration-tools: type MigrationMetadataDocument = MigrationMetadataDocumentV1
 ./migration-tools: type MigrationOps = readonly MigrationPlanOperation[]

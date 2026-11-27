@@ -224,7 +224,15 @@ export interface DbInitOptions extends PlannerWarningsListener {
 /**
  * Options for the dbUpdate operation.
  */
+/** A stored file a run could not read and went on without, and why. */
+export interface UnreadableStoredFile {
+  readonly path: string;
+  readonly reason: string;
+}
+
 export interface DbUpdateOptions extends PlannerWarningsListener {
+  /** Called when the contract snapshot the database's marker names cannot be read: the run plans on without the contract the database is at. */
+  readonly onUnreadableOrigin?: (unreadable: UnreadableStoredFile) => void;
   /** The command line the advice of a failure repeats: its directory, `--config` and whether `--db` was given. */
   readonly invocation: CliInvocation;
   /** Contract or unvalidated JSON - validated at runtime via familyInstance.deserializeContract() */

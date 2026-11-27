@@ -1,5 +1,9 @@
+import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { mapIntegrityViolations } from '../../src/control-api/operations/contract-space-aggregate-loader';
+import { integrityViolationToCheckFailure } from '../../src/utils/integrity-violation-to-check-failure';
+
+const HEAD = 'e'.repeat(64);
 
 describe('mapIntegrityViolations', () => {
   it('emits union kinds in meta.violations for contractUnreadable', () => {
@@ -9,13 +13,49 @@ describe('mapIntegrityViolations', () => {
           kind: 'contractUnreadable',
           spaceId: 'ext',
           detail: 'invalid json',
+          hash: HEAD,
         },
       ],
       'migrations',
     );
     expect(error?.meta?.['violations']).toEqual([
-      { kind: 'contractUnreadable', spaceId: 'ext', detail: 'invalid json' },
+      { kind: 'contractUnreadable', spaceId: 'ext', detail: 'invalid json', hash: HEAD },
     ]);
+  });
+
+  it('advises writing an extension head snapshot again from the installed extension, after deleting it', () => {
+    const error = mapIntegrityViolations(
+      [{ kind: 'contractUnreadable', spaceId: 'ext', detail: 'zzz must be removed', hash: HEAD }],
+      join(process.cwd(), 'migrations'),
+    );
+    expect(error?.fix).toBe(
+      `Delete migrations/snapshots/${HEAD} and run \`{bin} contract emit\`, which writes it again from the installed extension. If the file was edited by hand, restore it from version control.`,
+    );
+  });
+
+  it('points migration check at the extension head snapshot it could not read, with the advice that writes it again', () => {
+    const failure = integrityViolationToCheckFailure(
+      { kind: 'contractUnreadable', spaceId: 'ext', detail: 'zzz must be removed', hash: HEAD },
+      '/work/migrations',
+      '/work',
+    );
+    expect(failure).toEqual({
+      space: 'ext',
+      code: 'MIGRATION.CHECK_CONTRACT_UNREADABLE',
+      where: `migrations/snapshots/${HEAD}/contract.json`,
+      why: 'The head contract snapshot of space "ext" is unreadable: zzz must be removed',
+      nextActions: [
+        {
+          kind: 'run-command',
+          label: `Delete migrations/snapshots/${HEAD} and write it again from the installed extension`,
+          command: '{bin} contract emit',
+        },
+        {
+          kind: 'user-choice',
+          label: 'If the file was edited by hand, restore it from version control',
+        },
+      ],
+    });
   });
 
   it('emits union kinds in meta.violations for structural hashMismatch', () => {

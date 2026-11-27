@@ -9,6 +9,7 @@ import {
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
+import { writeRef } from '@internal/migration-tools/refs';
 import { blindCast } from '@internal/utils/casts';
 import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { createSqlContract } from '@repo/test-utils';
@@ -177,8 +178,85 @@ describe('migration check on a file it cannot read', () => {
             label: 'If an earlier release wrote the snapshot, follow the app upgrade instructions',
             url: APP_UPGRADE_GUIDES_URL,
           },
-          { kind: 'user-choice', label: 'Restore migrations/snapshots/ from version control' },
+          {
+            kind: 'user-choice',
+            label: 'If the file was edited by hand, restore it from version control',
+          },
         ],
+      },
+    ]);
+  });
+
+  async function seedSnapshots(migrationsDir: string, hashes: readonly string[]): Promise<void> {
+    for (const hash of hashes) {
+      await writeContractSnapshot(migrationsDir, hash, {
+        contractJson: {
+          formatVersion: 1,
+          ...TEST_CONTRACT,
+          storage: { ...TEST_CONTRACT.storage, storageHash: hash },
+        },
+        contractDts: 'export type Contract = never;\n',
+      });
+    }
+  }
+
+  it('reads strictly the snapshot a ref names, though another migration starts from it, and advises moving the ref', async () => {
+    const dir = await projectDir();
+    const migrationsDir = join(dir, 'migrations');
+    await seedMigration(migrationsDir);
+    await seedMigration(migrationsDir, { dirName: '20250102T0000_next', from: HASH_A, to: HASH_B });
+    await seedSnapshots(migrationsDir, [HASH_A, HASH_B]);
+    await writeRef(join(migrationsDir, 'app', 'refs'), 'production', {
+      hash: HASH_A,
+      invariants: [],
+    });
+    await addUnknownKey(join(contractSnapshotDir(migrationsDir, HASH_A), 'contract.json'));
+
+    const run = await harness(strictFamilyConfig()).run(['migration', 'check', '--json'], {
+      cwd: dir,
+    });
+
+    expect(run.exitCode).toBe(4);
+    expect(failuresOf(run).map(({ code, nextActions }) => ({ code, nextActions }))).toEqual([
+      {
+        code: 'MIGRATION.CHECK_SNAPSHOT_UNPARSEABLE',
+        nextActions: [
+          expect.objectContaining({ kind: 'open-url' }),
+          {
+            kind: 'run-command',
+            label: 'Or point the ref "production" at a migration whose snapshot this release reads',
+            command: '{bin} migration ref set production <hash>',
+          },
+          {
+            kind: 'user-choice',
+            label: 'If the file was edited by hand, restore it from version control',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('reads strictly the snapshot a ref names in a graph that has no last migration', async () => {
+    const dir = await projectDir();
+    const migrationsDir = join(dir, 'migrations');
+    await seedMigration(migrationsDir);
+    await seedMigration(migrationsDir, { dirName: '20250102T0000_next', from: HASH_A, to: HASH_B });
+    await seedMigration(migrationsDir, { dirName: '20250103T0000_back', from: HASH_B, to: HASH_A });
+    await seedSnapshots(migrationsDir, [HASH_A, HASH_B]);
+    await writeRef(join(migrationsDir, 'app', 'refs'), 'production', {
+      hash: HASH_B,
+      invariants: [],
+    });
+    await addUnknownKey(join(contractSnapshotDir(migrationsDir, HASH_B), 'contract.json'));
+
+    const run = await harness(strictFamilyConfig()).run(['migration', 'check', '--json'], {
+      cwd: dir,
+    });
+
+    expect(failuresOf(run).map(({ code, where }) => ({ code, where }))).toEqual([
+      {
+        code: 'MIGRATION.CHECK_SNAPSHOT_UNPARSEABLE',
+        where: 'migrations/app/20250102T0000_next',
       },
     ]);
   });
@@ -243,5 +321,42 @@ describe('migration check on a file it cannot read', () => {
       },
     ]);
     expect(failures[0]?.why).toContain('zzz must be removed');
+  });
+
+  it('reports an unreadable migration.json when no contract has been emitted yet', async () => {
+    const dir = await projectDir();
+    const migrationsDir = join(dir, 'migrations');
+    const first = await seedMigration(migrationsDir);
+    await addUnknownKey(join(first, 'migration.json'));
+
+    const run = await harness(strictFamilyConfig()).run(['migration', 'check', '--json'], {
+      cwd: dir,
+    });
+
+    expect(run.exitCode).toBe(4);
+    expect(failuresOf(run).map(({ code }) => code)).toEqual(['MIGRATION.CHECK_PACKAGE_UNLOADABLE']);
+  });
+
+  it('refuses a contract.json that is not JSON, naming it, instead of passing', async () => {
+    const dir = await projectDir();
+    await seedMigration(join(dir, 'migrations'));
+    await mkdir(join(dir, 'output'), { recursive: true });
+    await writeFile(join(dir, 'output', 'contract.json'), '{ not json', 'utf-8');
+
+    const run = await harness(strictFamilyConfig()).run(['migration', 'check', '--json'], {
+      cwd: dir,
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CONTRACT.VALIDATION_FAILED',
+          why: expect.stringContaining(join(dir, 'output', 'contract.json')),
+        },
+      },
+    });
   });
 });
