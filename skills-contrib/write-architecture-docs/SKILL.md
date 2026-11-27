@@ -35,7 +35,7 @@ Architecture docs in this repo serve two audiences: team members working on the 
 
 **Lead with a grounding example.** Put a concrete, complete code snippet, JSON example, or diagram near the top of the document — right after the overview — so the reader has a visual reference to pin their understanding to as they read. Abstract explanations are much easier to follow when the reader can refer back to something tangible. Annotate the example with brief callouts that preview the key concepts ("notice that `storage: {}` means this model is embedded"). The detailed sections that follow can then elaborate on what the reader has already seen.
 
-**Articulate design principles early.** If the subsystem's design is shaped by a set of principles or invariants, state them explicitly after the grounding example and before the detailed sections. This gives the reader the reasoning framework they need to understand why specific decisions were made. Each principle should be one or two sentences of plain language, not jargon. Later sections can reference the principles by number (e.g., "see [design principle #5](#design-principles)") to connect specific decisions back to their rationale.
+**Articulate design principles early.** If the subsystem's design is shaped by a set of principles or invariants, state them explicitly after the grounding example and before the detailed sections. This gives the reader the reasoning framework they need to understand why specific decisions were made. Each principle should be one or two sentences of plain language, not jargon. Later sections can reference the principles by number (e.g., "see `[design principle #5](#design-principles)`") to connect specific decisions back to their rationale.
 
 **Narrative flow.** Guide the reader from one concept to the next. Don't list a set of problems and then separately list a set of solutions — pair each problem with its solution so the reader builds understanding incrementally.
 
@@ -46,7 +46,7 @@ Bad: "MongoDB is a database family in Prisma 8. The contract, ORM, execution pip
 
 **Inline summaries with ADR links.** When referencing an ADR, summarize the key idea in the text and link the ADR for depth. The doc should be understandable without following any links. The example below shows the link as it must appear in the subsystem doc you are writing, so its path is relative to that doc's location under `docs/architecture docs/subsystems/`.
 
-Good: "An owned model declares `owner: \"User\"` — a domain fact about aggregate membership. Its data lives within the owner's storage. See [ADR 177](../adrs/ADR%20177%20-%20Ownership%20replaces%20relation%20strategy.md)."
+Good: "An owned model declares `owner: \"User\"` — a domain fact about aggregate membership. Its data lives within the owner's storage. See `[ADR 177](../adrs/ADR%20177%20-%20Ownership%20replaces%20relation%20strategy.md)`."
 Bad: "See [ADR 177](...) for how embedding works."
 
 **References section.** Organize by durability:
