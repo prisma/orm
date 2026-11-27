@@ -297,6 +297,50 @@ withTempDir(({ createTempDir }) => {
     );
   });
 
+  describe('db update on a database a release candidate set up, whose change policy permits only migrations', () => {
+    const db = useDevDatabase();
+
+    it(
+      'renames the schema, keeps the policy, and is refused by it',
+      async () => {
+        const { ctx } = await releaseCandidateProject(db.connectionString, createTempDir);
+        const policies = {
+          change: ['migrate'],
+          dataProtection: {
+            dataLoss: 'data-loss-with-consent',
+            accessWidening: 'access-widening-with-consent',
+          },
+        };
+        await sql(
+          db.connectionString,
+          `UPDATE prisma_contract.marker SET meta = $1::jsonb WHERE space = 'app'`,
+          [JSON.stringify({ policies })],
+        );
+        swapContract(ctx, 'contract-additive');
+        expect((await runContractEmit(ctx)).exitCode, 'emit additive').toBe(0);
+
+        const update = await runDbUpdate(ctx, ['--json']);
+
+        expect(update.exitCode, 'db update').not.toBe(0);
+        expect(engineError(update)).toMatchObject({ code: 'MIGRATION.CHANGE_POLICY_FORBIDS' });
+        const appMeta = await sql(
+          db.connectionString,
+          `SELECT meta FROM _prisma.marker WHERE space = 'app'`,
+        );
+        expect({
+          schemas: await schemas(db.connectionString),
+          appMeta: appMeta.rows.map((row) => row['meta']),
+          userColumns: await userColumns(db.connectionString),
+        }).toEqual({
+          schemas: ['_prisma'],
+          appMeta: [{ policies }],
+          userColumns: ['email', 'id'],
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
   describe('db update on a database a release candidate set up', () => {
     const db = useDevDatabase();
 
