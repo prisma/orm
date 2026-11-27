@@ -2,7 +2,7 @@
 changes:
   - id: prisma-tables-move-to-prisma-schema
     summary: |
-      On PostgreSQL, Prisma's own tables (`marker`, `ledger` and `contract`) move from the schema `prisma_contract` to the schema `_prisma`. The first command that changes the database (`prisma db init`, `db update`, `db migrate` or `db sign`) renames the schema and keeps every row. Run one of them against each database once, with the new release, before the application on the new release reads it. After that, only the new release may change the database: a release candidate's command applies every migration again. The command stops without changing anything when the role that runs it may not rename the schema, when `_prisma` already holds tables beside `prisma_contract`, or when one of Prisma's tables is in a form this release does not bring up to date.
+      On PostgreSQL, Prisma's own tables (`marker`, `ledger` and `contract`) move from the schema `prisma_contract` to the schema `_prisma`. The first command that changes the database (`prisma db init`, `db update`, `db migrate` or `db sign`) renames the schema and keeps every row. Run one of them against each database once, with the new release, before the application on the new release reads it. After that, only the new release may change the database: a release candidate's command applies every migration again. The command stops without changing anything when the role that runs it does not own the schema and its tables, when `_prisma` already exists beside `prisma_contract` and is not empty or is owned by another role, or when one of Prisma's tables is in a form this release does not bring up to date.
     detection:
       glob: "**/package.json"
       matches:
@@ -46,30 +46,44 @@ The application's check when the client is first used does not stop queries. On 
 
 The command checks the following before it renames, and stops without changing anything if one of them fails.
 
-**The role that runs it does not have the privileges of the schema's owner.** PostgreSQL lets a role rename a schema only if it has the privileges of the schema's owner and the CREATE privilege on the database. Creating tables never needed this. If an administrator role created `prisma_contract` and the role that runs migrations only has grants on it, the command stops with `MIGRATION.PRECHECK_FAILED` and says that the role that runs it must have the privileges of the role that owns `prisma_contract`. This query names the owner:
+**The role that runs it does not own the schema and its tables.** PostgreSQL lets a role rename a schema only if it has the privileges of the schema's owner and the CREATE privilege on the database. Later releases of Prisma change these tables with migrations of their own, such as one that adds a column, and PostgreSQL lets a role alter a table only if it has the privileges of the table's owner. So the command checks both before it renames, though creating tables never needed either. If an administrator role created `prisma_contract` or its tables and the role that runs migrations only has grants on them, the command stops with `MIGRATION.PRECHECK_FAILED` and says that the role that runs it must have the privileges of the role that owns `prisma_contract`, or of the role that owns one of its tables. These queries name the owners:
 
 ```sql
 SELECT nspowner::regrole FROM pg_namespace WHERE nspname = 'prisma_contract';
+SELECT relname, relowner::regrole FROM pg_class WHERE relnamespace = to_regnamespace('prisma_contract');
 ```
 
-There are two fixes. Ask the user which one to use, because both need a person with the administrator role:
+Give the schema and its three tables to the role that runs migrations, then run the command as usual. This needs a person with the administrator role, so ask the user first:
 
-1. Run the command once as the role that owns `prisma_contract`. Later commands can run as the usual role again.
-2. Give the schema to the role that runs migrations, then run the command as usual:
+```sql
+ALTER SCHEMA "prisma_contract" OWNER TO <migrating role>;
+ALTER TABLE "prisma_contract"."marker" OWNER TO <migrating role>;
+ALTER TABLE "prisma_contract"."ledger" OWNER TO <migrating role>;
+ALTER TABLE "prisma_contract"."contract" OWNER TO <migrating role>;
+```
 
-   ```sql
-   ALTER SCHEMA "prisma_contract" OWNER TO <migrating role>;
-   ```
+Running the command once as the role that owns them also works, but the schema and tables then stay owned by that role, so every later release whose migrations change Prisma's tables needs that role again. Prefer giving them to the role that runs migrations.
 
-**The role that runs it does not have the CREATE privilege on the database.** The command stops with `MIGRATION.PRECHECK_FAILED` and says that the role that runs it must have the CREATE privilege on the database. This can happen even when the role owns `prisma_contract`. Ask the user whether to grant it, or to run the command once as a role that has it:
+**The role that runs it does not have the CREATE privilege on the database.** The command stops with `MIGRATION.PRECHECK_FAILED` and says that the role that runs it must have the CREATE privilege on the database. This can happen even when the role owns `prisma_contract`. Ask the user whether to grant it, or to run the command once as a role that has it. Only the rename needs it:
 
 ```sql
 GRANT CREATE ON DATABASE <database> TO <migrating role>;
 ```
 
-**`prisma_contract` exists and `_prisma` holds tables.** When `_prisma` exists but holds no tables, for example because someone created the schema by hand, the command drops it before the rename, with a plain `DROP SCHEMA "_prisma"`. PostgreSQL refuses that drop when anything else, such as a function or a type, is in the schema; the command then fails with that error and changes nothing. When `_prisma` holds tables, Prisma does not choose between the two schemas and changes nothing.
+**`prisma_contract` exists and `_prisma` exists too.** When `_prisma` is empty, for example because someone created the schema by hand or provisioning code created it ahead of the upgrade, the command drops it before the rename, with a plain `DROP SCHEMA "_prisma"`. Any grants and default privileges set on that empty `_prisma` go with it; the renamed schema keeps the grants of `prisma_contract`. So apply changes to provisioning code that name `_prisma` after the first command has run against the database, or apply them again then.
 
-Do not drop either schema before you know which holds the records. First list the tables in each:
+The command checks two things first, and stops without changing anything if either fails:
+
+- `_prisma` must be empty: it holds no object of any kind, not a table, view, sequence, function, type or anything else. When it holds anything, Prisma does not choose between the two schemas.
+- The role that runs the command must have the privileges of the role that owns `_prisma`, because dropping a schema needs them. Ask the user whether to give the empty schema to the role that runs migrations, or to drop it:
+
+  ```sql
+  ALTER SCHEMA "_prisma" OWNER TO <migrating role>;
+  -- or
+  DROP SCHEMA "_prisma";
+  ```
+
+When `_prisma` is not empty, do not drop either schema before you know which holds the records. First list the tables in each:
 
 ```sql
 SELECT table_schema, table_name FROM information_schema.tables
@@ -130,6 +144,8 @@ GRANT SELECT ON prisma_contract.marker TO app;
 GRANT USAGE ON SCHEMA _prisma TO app;
 GRANT SELECT ON _prisma.marker TO app;
 ```
+
+Apply a change like this to each database after the first command of the new release has run against it: before that, `_prisma` does not exist, and the grants on `prisma_contract` carry over in the rename anyway. Do not make provisioning code create `_prisma` ahead of the upgrade to make such a grant succeed; the command drops an empty `_prisma` before the rename, with its grants.
 
 A script that drops Prisma's tables to reset a database should drop `_prisma`. If it also runs against databases that have not been brought up to date yet, keep a second statement that drops `prisma_contract`:
 
