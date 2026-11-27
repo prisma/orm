@@ -1,13 +1,15 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import {
   type ContractFieldType,
+  type JsonValue,
   type ScalarFieldType,
   valueObjectsWithCoordinates,
 } from '@internal/contract/types';
 import { type TypeLookups, validateCodecTypeParams } from '@internal/framework-components/codec';
 import type { MongoContract } from '@internal/mongo-contract';
 import { codecTypeParamsProblem } from '@internal/mongo-contract/data-type';
-import { isInternalError } from '@internal/utils/internal-error';
+import { blindCast } from '@internal/utils/casts';
+import { isStructuredError } from '@internal/utils/structured-error';
 
 function scalarTypesOf(
   path: string,
@@ -34,11 +36,18 @@ function typeParamsProblem(
     return codecTypeParamsProblem(codecId, typeParams, lookups)?.message;
   }
   try {
-    validateCodecTypeParams(descriptor, { codecId, typeParams });
+    validateCodecTypeParams(descriptor, {
+      codecId,
+      typeParams: blindCast<JsonValue, 'stored type parameters are JSON read from the contract'>(
+        typeParams,
+      ),
+    });
     return undefined;
   } catch (error) {
-    if (!(error instanceof Error) || isInternalError(error)) throw error;
-    return error.message;
+    if (isStructuredError(error) && error.code === 'RUNTIME.TYPE_PARAMS_INVALID') {
+      return error.message;
+    }
+    throw error;
   }
 }
 
