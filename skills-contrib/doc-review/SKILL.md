@@ -1,9 +1,9 @@
 ---
 name: doc-review
 description: >-
-  Review documentation with two independent readers before it is called done: a
-  cold reader who has only the file, and a fact checker who checks every claim
-  against the repository. Use whenever you write or rewrite an ADR, a page under
+  Review documentation with independent readers before it is called done: a
+  cold reader who has only the file, a fact checker who checks every claim
+  against the repository, or both, depending on the change. Use whenever you write or rewrite an ADR, a page under
   docs/, a README, a skill or a rule, when the user asks to review, improve or
   take a fresh-eyes pass on a doc, and when you review a pull request that
   changes docs.
@@ -44,7 +44,7 @@ The reviewers only read files and search the code, so they do not load the machi
 ## The procedure
 
 1. **Write or rewrite the doc.**
-2. **Start a cold reader and a fact checker,** as separate fresh agents, in parallel. Fill in the brief below for each and hand it over as it stands. Give the cold reader nothing else: if it needs your explanation to understand the doc, that is the finding.
+2. **Start the reviewers that the table above calls for,** as separate fresh agents, in parallel when there are two. Fill in the brief below for each and hand it over as it stands. Give the cold reader nothing else: if it needs your explanation to understand the doc, that is the finding.
 3. **Fix what they find.**
    - For the cold reader's findings, change the doc. Do not explain the text to the reviewer, or argue it out of a finding: the next reader will not have you there. You may decline a finding that is only a matter of taste, and say that you did.
    - For the fact checker's findings, look at the code it cites before you change the text. A reviewer can be wrong too.
@@ -52,7 +52,7 @@ The reviewers only read files and search the code, so they do not load the machi
 4. **Go round again.** Give the next round's cold read to a new agent, because the previous one now knows what the text means, as you do. For the facts, message the same fact checker with the passages you changed; it does not need to check everything again.
 5. **Stop when neither finds anything that would keep a reader from understanding the doc or acting on it correctly.** A cold reader can always find something, so that judgement is yours. "I could not tell which of two things this sentence means" and "I would not know what to do in this case" are findings that count. "I would have used a different word" is not. A long doc usually takes two or three rounds. If your own text still draws findings that count after four rounds, its structure is wrong: rewrite it instead of patching it.
 6. **Check a decision record for what it must not contain** (the section below), yourself, since neither reviewer is asked to.
-7. **Report that both ran,** what they found, and anything you declined: in your report to whoever asked for the work, and in the pull request description.
+7. **Report which reviewers ran,** what they found, and anything you declined: in your report to whoever asked for the work, and in the pull request description.
 
 **How many agents.** Several short docs can share one cold reader and one fact checker. Give a doc its own pair when it is the main explanation of something, such as an ADR or a policy page. Thirty changed docs do not need thirty pairs: group them, and use the table above to leave out the ones that teach and claim nothing.
 
@@ -106,6 +106,8 @@ Fill in the lines at the end. "Checkout" is the folder that holds the code the d
 >
 > If an earlier version is named, read it (`git show <commit>:<path>`) and list every rule or fact that the new text dropped or changed.
 >
+> Also quote every sentence in the text you checked that you could not follow. You may be its only reviewer.
+>
 > Report a numbered list: the passage, what the code actually does with file and line, and the correction. Say plainly which claims you checked and found correct. Reply with the list only, and write no files.
 >
 > Checkout: …
@@ -119,7 +121,7 @@ A decision record is read for years, so [`adr-writing.mdc`](../../.agents/rules/
 
 ## When you are reviewing someone else's pull request
 
-A doc change is not reviewed until someone without the author's context has read it and someone has checked its facts.
+A doc change is not reviewed until it has had the review the table above calls for, from someone other than its author.
 
 - **You can be the cold reader yourself,** if you did not write the docs and have not been following the work. Read as the brief says.
 - **Check the facts** as the fact checker brief says, or hand that to an agent.

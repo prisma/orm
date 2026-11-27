@@ -202,11 +202,14 @@ This repo intentionally supports multiple agent runtimes. The hierarchy:
 |---|---|---|
 | [`AGENTS.md`](../../AGENTS.md) (symlinked to `CLAUDE.md`) | All agent runtimes | **Source of truth.** Agent-agnostic. |
 | `.cursor/environment.json` | Cursor cloud only | Committed; documented here. |
-| `.cursor/rules/`, `.cursor/commands/` | Cursor desktop | Local-only (gitignored). |
-| `.claude/skills/`, `.claude/scripts/` | Claude Code | Committed where shared, `.claude/settings.local.json` is local-only. |
-| `.agents/skills/`, `.agents/rules/` | Vendor-neutral skills/rules | Committed. |
+| `.cursor/rules/` | Cursor desktop | Local-only (gitignored); generated from `.agents/rules/`. |
+| `.cursor/commands/` | Cursor desktop | Committed. |
+| `.claude/skills/`, `.claude/rules/` | Claude Code | Local-only (gitignored); generated from `skills-contrib/` and `.agents/rules/`. |
+| `.claude/scripts/`, `.claude/settings.json` | Claude Code | Committed. `.claude/settings.local.json` is local-only. |
+| `.agents/rules/` | Rules for every agent | Committed. |
+| `.agents/skills/` | Skills for every agent | Local-only (gitignored); generated from `skills-contrib/`, which is committed. |
 
-Rule of thumb when changing agent guidance: **put it in `AGENTS.md` first.** Per-system files (`.cursor/`, `.codex/`, `.claude/`) carry only what is specific to that runtime. If you find yourself duplicating the same guidance into multiple per-system files, the duplication belongs in `AGENTS.md` and the per-system files should link to it.
+Rule of thumb when changing agent guidance: **put it in `AGENTS.md` first.** Per-system files (`.cursor/`, `.claude/`) carry only what is specific to that runtime. If you find yourself duplicating the same guidance into multiple per-system files, the duplication belongs in `AGENTS.md` and the per-system files should link to it.
 
 ## What cloud agents can't do
 

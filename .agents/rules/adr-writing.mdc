@@ -13,4 +13,4 @@ alwaysApply: false
 - Use fenced code blocks for SQL (` ```sql `) and TS (` ```ts `); avoid nested backticks inside inline code
 - Worked examples should be end-to-end and make it obvious which layer owns each step (lane, adapter, codec, driver, runtime)
 - If the decision instantiates a structural pattern recorded in [`docs/architecture docs/patterns/`](../../docs/architecture%20docs/patterns/README.md), link forward to the pattern entry from the ADR (existing ADRs are not retroactively edited)
-- **Maintain the ADR in the PR that changes the decision.** When a decision evolves, edit its ADR, and any earlier ADR it changes, in place, so that each describes the current decision; no supersession notes unless a whole ADR is void.
+- **Maintain the ADR in the PR that changes the decision.** To change a decision, follow the [ADR index](../../docs/architecture%20docs/ADR-INDEX.md): write a new ADR and update the old one in place so that it describes how things work now; mark the old one superseded only when the new ADR replaces it entirely.
