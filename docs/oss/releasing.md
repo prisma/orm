@@ -102,11 +102,12 @@ A version number is used once. If a publish fails part-way and leaves a number o
 
 From release 8.1 on, a release is one pull request.
 
-1. **Run the [`publish-npm-version`](../../skills-contrib/publish-npm-version/SKILL.md) skill.** It makes a fresh worktree from `origin/main`, runs `pnpm bump-version`, which raises the minor, from `8.0.1` to `8.1.0`, and opens a pull request in your name. Every such release is published at patch 0.
-2. **Let the skill assemble the upgrade guides and draft the release notes.** It gathers the pending upgrade fragments into the guide for application authors and the guide for extension authors, and writes `docs/releases/v<version>.md`, where `<version>` is the root version. An upgrade within Prisma 8 asks nothing of code that uses only what is Generally Available, so most releases have no fragments. The skill then writes a guide with an empty list of changes, which keeps the chain of guides unbroken.
-3. **Review the guides and the notes, and merge.** The merge publishes the release and creates the git tag and the GitHub Release, both `v<version>`. The workflow marks a GitHub Release as a pre-release only for a release candidate.
+1. **Run the [`publish-npm-version`](../../skills-contrib/publish-npm-version/SKILL.md) skill.** It makes a fresh worktree from `origin/main`, runs `pnpm bump-version`, which raises the minor, from `8.0.1` to `8.1.0`, and opens a pull request in your name. It has to be yours, and not a workflow's, because CI does not run on a pull request that a workflow opens. The packages that share the release's numbering are published at patch 0.
+2. **Let the skill assemble the upgrade guides and draft the release notes.** It gathers the pending upgrade fragments into the guide for application authors and the guide for extension authors, and writes `docs/releases/v<version>.md`, where `<version>` is the root version. When a release has no fragments, the skill still writes both guides, each with an empty list of changes. The upgrade flow that users' agents follow reads its steps from the guide folders, so every release needs one.
+3. **Review the guides and the notes, and merge.** If new upgrade fragments arrive before the merge, refresh the guides first. The merge publishes the release and creates the git tag and the GitHub Release, both `v<version>`.
+4. **If the publish fails part-way, run it again,** as [Publishing again](#publishing-again-or-under-beta) describes. A package that is already on npm at its version is left alone. Do not move to another version number.
 
-Anything on `main` can be released at any time. A fix therefore ships in the next release, which is cut early when the fix cannot wait. The scripts publish no fix to one package alone and no release from a branch other than `main`. If that stops being true of `main`, that is the moment to add such scripts.
+Anything on `main` can be released at any time. A fix therefore ships in the next release, which is cut early when the fix cannot wait. The scripts publish no fix to one package alone and no release from a branch other than `main`. If `main` can no longer be released at any time, that is the moment to add such scripts.
 
 ## Procedure: release 8.0
 
@@ -114,26 +115,27 @@ Release 8.0 is cut once. It differs from every other release in three ways:
 
 - **It is published as `8.0.1`, and no package is ever `8.0.0`.** The packages that are not finished get a version such as `8.0.1-ea.0`. With `8.0.0-ea.0` they would sort below the `8.0.0-rc.N` versions already on npm, and package managers would keep installing an old release candidate. All packages of a release share its first two numbers and its starting patch, so the finished ones are `8.0.1` too. [ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md#release-80-starts-at-patch-1) has the details.
 - **The packages stop sharing one version.** Each gets the version of its maturity level: `8.0.1` for a package that is Generally Available (GA), and `8.0.1-ea.0` for one at Early Access. [The user page](./versioning.md#maturity-levels) says what the levels mean.
-- **An update does not get a user there.** Until release 8.0, users are told to list every Prisma package at one exact version, such as `8.0.0-rc.25`, and `prisma orm init` writes them that way. An exact entry in `package.json` never moves. A user who wrote carets is worse off: an update moves the GA packages to `8.0.1` and leaves an Early Access package on its release candidate. So every user edits their entries by hand, once, and the release notes tell them what to write.
+- **An update does not get a user there.** Until release 8.0, users are told to list every Prisma package at one exact version, such as `8.0.0-rc.25`. An exact entry in `package.json` never moves. A user whose entries have a caret, which is what npm writes, is worse off: an update moves the GA packages to `8.0.1` and leaves an Early Access package on its release candidate, because `^8.0.0-rc.25` does not accept `8.0.1-ea.0`. So every user edits their entries by hand, once, and the release notes tell them what to write.
 
 Do the steps in this order.
 
 **Before the release pull request**
 
 1. **Check what will be published.** Run `node scripts/print-release-plan.ts 8.0.1`. It prints a table with one row per package: its level, its version, its npm tag, and the ranges it writes on our other packages. That table is what the release publishes. No package has had a GA version yet, so the command needs no `--ever-ga` option.
-2. **If a package's level is wrong, change it in a pull request of its own, and merge that first.** Which level a package has at release 8.0 is the maintainers' decision. The pull request changes:
+2. **Be sure of every level, because GA cannot be taken back.** A package published as GA stays GA for all of Prisma 8: the release plan refuses to lower it. The levels in `levels.ts` are the ones decided so far. If the maintainers decide that one is wrong, change it in a pull request of its own, and merge that first. Lowering a package can force others down, because a GA package may not depend on one of ours that is below GA. The pull request changes:
    - the package's entry in [`levels.ts`](../../packages/0-shared/publish-surface/src/levels.ts);
    - the level and the install commands in the package's README, which `pnpm lint:docs` checks against `levels.ts`;
    - the table under [Which packages are at which level](./versioning.md#which-packages-are-at-which-level), and "Supported databases" or "For extension authors" in the root [`README.md`](../../README.md);
-   - the expected tables in `scripts/fixtures/release-plan/8.0.1.txt` and `8.1.0.txt`, which a test compares with the command's output.
+   - the expected tables in `scripts/fixtures/release-plan/`: `root.txt`, `8.0.1.txt` and `8.1.0.txt`. A test compares each with the command's output, so paste the new output in;
+   - the levels pinned in `packages/0-shared/publish-surface/test/levels.test.ts`.
 
    Then run step 1 again.
-3. **Decide what the notes say about `@prisma/orm-extension-paradedb`.** It has version numbers of its own, and the table shows it as `0.18.0`, under `latest`. That is lower than the `8.0.0-rc.N` versions it has on npm today, so no update reaches it: its users change their entry to `^0.18.0`. If the package has been removed from this repository by then, it is not in the table and the notes say where it went.
+3. **Note what happens to `@prisma/orm-extension-paradedb`,** for the release notes of step 5. It has version numbers of its own, and the table shows it as `0.18.0`, under `latest`. That is lower than the `8.0.0-rc.N` versions it has on npm today, so no update reaches it: its users change their entry to `^0.18.0`. If the package has been removed from this repository by then, it is not in the table, and the notes say who publishes it now.
 
 **The release pull request**
 
 4. **Run the [`publish-npm-version`](../../skills-contrib/publish-npm-version/SKILL.md) skill.** Its steps 1 and 3 say what is different for release 8.0: the target version is `8.0.1`, set by hand, and `node scripts/set-version.ts 8.0.1` replaces `pnpm bump-version`, which from `8.0.0-rc.N` can only raise the release-candidate number. The rest of the skill is unchanged. It assembles both upgrade guides for the step from the last release candidate to release 8.0, drafts `docs/releases/v8.0.1.md`, and opens the pull request in your name.
-5. **Put the new `package.json` entries in the release notes, for every user.** An application lists the package for its database, the platform packages that one is built from, and its extensions. The notes say what each entry becomes:
+5. **Put the new `package.json` entries in the release notes, for every user.** An application lists the package for its database, its extensions, and the platform packages its database package is built from: `@prisma/orm-framework`, `@prisma/orm-toolchain`, a family package and a target package. [The user page](./versioning.md#what-an-application-writes) shows the full set. The notes say what each entry becomes, using each package's real level from the table of step 1; the levels in the examples below are today's:
    - with a GA database, a caret on every GA package: `"@prisma/orm-postgres": "^8.0.1"`;
    - with a database at Early Access, a tilde on every entry: `"@prisma/orm-mysql": "~8.0.1-ea.0"` for the Early Access packages and `"@prisma/orm-framework": "~8.0.1"` for the GA ones, as [the user page](./versioning.md#a-new-minor-below-ga) explains;
    - an Early Access extension in an application with a GA database gets a tilde, `"@prisma/orm-extension-supabase": "~8.0.1-ea.0"`, and the other entries keep their carets;
@@ -153,7 +155,7 @@ Do the steps in this order.
    | The README of every package under `packages/9-public/@prisma/` | The note at the top says how the package is published "until release 8.0". The five database packages also give the install rule for release candidates. |
    | The [`publish-npm-version`](../../skills-contrib/publish-npm-version/SKILL.md) and [`draft-release-notes`](../../skills-contrib/draft-release-notes/SKILL.md) skills | Their introductions describe release candidates only. Say that a release is now a minor of Prisma 8. |
 
-7. **Do a dry run, then merge.** Run the `Publish to npm` workflow by hand on the release branch with its inputs left as they are: `dist-tag` is `latest` and `dry-run` is on. It publishes nothing. In its log, the step that sets the versions lists every package with its version, and the publish step prints the tag once and names a package only when its tag differs. Compare the versions with the table from step 1; every tag in that table is `latest`. Then merge the pull request, which publishes the release. If the publish fails part-way, run it again as [Publishing again](#publishing-again-or-under-beta) describes: a package that is already on npm at its version is left alone. Release 8.0 stays `8.0.1`.
+7. **Do a dry run, then merge.** Run the `Publish to npm` workflow by hand on the release branch with its inputs left as they are: `dist-tag` is `latest` and `dry-run` is on. It publishes nothing. In its log, the step that sets the versions lists every package with its version. The publish step prints the tag once at its start, and prints a package's own tag only when it is a different one. Check that the versions are those of the table from step 1, and that no package shows a tag of its own: every tag in that table is `latest`. Then merge the pull request, which publishes the release. If the publish fails part-way, run it again as [Publishing again](#publishing-again-or-under-beta) describes: a package that is already on npm at its version is left alone. Release 8.0 stays `8.0.1`.
 
 **After the publish**
 
@@ -164,7 +166,7 @@ Do the steps in this order.
    ```
 
    The range matches every `8.0.0-rc.N` and the development builds made from them, and no other version.
-9. **In the next pull request, remove this procedure** and "Procedure: cut the next release candidate" from this page, and the "until release 8.0" half of each of this page's other sections.
+9. **In the next pull request, remove this procedure** and "Procedure: cut the next release candidate" from this page, and the "until release 8.0" half of each of this page's other sections. Remove the two sentences about release 8.0 from steps 1 and 3 of the `publish-npm-version` skill in the same pull request, because one of them links to this procedure.
 
 ## Publishing again, or under `beta`
 
