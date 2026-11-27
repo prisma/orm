@@ -1,0 +1,4 @@
+# Test fixture written by hand in the format `pnpm api:update` writes.
+.: class Client
+.: class Client, constructor(url: string)
+.: class Client, required method query(text: string): Promise<unknown>

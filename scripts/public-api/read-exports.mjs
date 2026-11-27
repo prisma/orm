@@ -40,6 +40,31 @@ function isTypeOnly(declaration) {
   return false;
 }
 
+// The symbols that are types, and those users can use as values.
+export const TYPE_FLAGS =
+  ts.SymbolFlags.Interface | ts.SymbolFlags.TypeAlias | ts.SymbolFlags.Class | ts.SymbolFlags.Enum;
+export const VALUE_FLAGS =
+  ts.SymbolFlags.Variable |
+  ts.SymbolFlags.Function |
+  ts.SymbolFlags.Class |
+  ts.SymbolFlags.Enum |
+  ts.SymbolFlags.ValueModule;
+
+// Whether a forwarded name is a type, and whether users can use it as a value: a value that is not
+// exported type-only on the way, by its own export or by an `export type *` that forwards it. A
+// value exported type-only can still be named in `typeof`.
+function kindsOf(checker, exported, forwardedTypeOnly = false) {
+  const target =
+    exported.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exported) : exported;
+  const isValue = (target.flags & VALUE_FLAGS) !== 0;
+  return {
+    type: (target.flags & TYPE_FLAGS) !== 0,
+    value: isValue && !forwardedTypeOnly && !isTypeOnlyExport(checker, exported),
+    typeOnlyValue: isValue && (forwardedTypeOnly || isTypeOnlyExport(checker, exported)),
+    target,
+  };
+}
+
 // Whether any import or export between a path and the declaration it exports is type-only.
 function isTypeOnlyExport(checker, symbol) {
   let current = symbol;
@@ -54,8 +79,9 @@ function isTypeOnlyExport(checker, symbol) {
 
 const packageNames = new Map();
 
-// The name in the package.json nearest above a file: the package that declares what is in it.
-function packageOf(fileName) {
+// The package that declares what is in a file: the name in the package.json nearest above it, and
+// that package.json's folder.
+export function packageOf(fileName) {
   for (let folder = dirname(fileName); dirname(folder) !== folder; folder = dirname(folder)) {
     if (!packageNames.has(folder)) {
       const manifest = join(folder, 'package.json');
@@ -65,7 +91,7 @@ function packageOf(fileName) {
       );
     }
     const name = packageNames.get(folder);
-    if (name !== undefined) return name;
+    if (name !== undefined) return { name, root: folder };
   }
   return undefined;
 }
@@ -80,7 +106,7 @@ function declaringPackage(checker, symbol) {
   for (let node = declaration.parent; node; node = node.parent) {
     if (ts.isModuleDeclaration(node) && ts.isStringLiteral(node.name)) return node.name.text;
   }
-  return packageOf(realpathSync(declaration.getSourceFile().fileName));
+  return packageOf(realpathSync(declaration.getSourceFile().fileName))?.name;
 }
 
 // Follows an export through imports and re-exports to the first non-relative module it passes:
@@ -252,6 +278,9 @@ function augmentationsOf(files, problems) {
           continue;
         }
         found.push({
+          module: statement.name.text,
+          name: declaration.name.text,
+          typeParameters: declaration.typeParameters?.length ?? 0,
           head: `augments ${statement.name.text} interface ${declaration.name.text}`,
           heritage: [...(declaration.heritageClauses ?? [])],
           members: [...declaration.members],
@@ -274,6 +303,7 @@ function readPath(checker, program, file, packageDir) {
     starForwards: [],
     starCovered: new Set(),
     forwardedFrom: new Map(),
+    forwardKinds: new Map(),
     augmentations: [],
     problems: [],
   };
@@ -291,8 +321,11 @@ function readPath(checker, program, file, packageDir) {
       continue;
     }
     info.starForwards.push(specifier);
-    for (const exported of checker.getExportsOfModule(module))
-      starNames.set(exported.name, exported);
+    // A name a regular star forwards stays a value, whatever type-only star also forwards it.
+    for (const exported of checker.getExportsOfModule(module)) {
+      if (statement.isTypeOnly && starNames.get(exported.name)?.typeOnly === false) continue;
+      starNames.set(exported.name, { exported, typeOnly: statement.isTypeOnly });
+    }
   }
 
   const module = checker.getSymbolAtLocation(file);
@@ -303,7 +336,9 @@ function readPath(checker, program, file, packageDir) {
     if (here === undefined) {
       if (starNames.has(name)) {
         info.starCovered.add(name);
-        info.forwardedFrom.set(name, declaringPackage(checker, starNames.get(name)));
+        const star = starNames.get(name);
+        info.forwardedFrom.set(name, declaringPackage(checker, star.exported));
+        info.forwardKinds.set(name, kindsOf(checker, star.exported, star.typeOnly));
       } else info.problems.push(`cannot tell where the export ${name} comes from`);
       continue;
     }
@@ -328,6 +363,7 @@ function readPath(checker, program, file, packageDir) {
       continue;
     }
     const forward = traceForward(checker, exported);
+    info.forwardKinds.set(name, kindsOf(checker, exported));
     if (forward === undefined) {
       info.problems.push(
         `cannot list the export ${name}: it is neither declared in this package nor forwarded from another`,
@@ -352,6 +388,96 @@ function readPath(checker, program, file, packageDir) {
   return info;
 }
 
+const resolveAlias = (checker, symbol) =>
+  symbol && symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+
+const passesItsParameters = (alias) => {
+  const parameters = alias.typeParameters ?? [];
+  const passed = alias.type.typeArguments ?? [];
+  return (
+    passed.length === parameters.length &&
+    passed.every(
+      (argument, index) =>
+        ts.isTypeReferenceNode(argument) &&
+        argument.typeArguments === undefined &&
+        ts.isIdentifier(argument.typeName) &&
+        argument.typeName.text === parameters[index].name.text,
+    )
+  );
+};
+
+// What a declaration declares itself to be another name for: `const a: typeof b`, or
+// `type A<T> = B<T>`, which is how TypeScript emits `const a = b` and how a type is renamed.
+function otherNameOf(checker, declaration) {
+  if (
+    ts.isVariableDeclaration(declaration) &&
+    declaration.type &&
+    ts.isTypeQueryNode(declaration.type)
+  ) {
+    if (declaration.type.typeArguments) return undefined;
+    return resolveAlias(checker, checker.getSymbolAtLocation(declaration.type.exprName));
+  }
+  if (
+    ts.isTypeAliasDeclaration(declaration) &&
+    ts.isTypeReferenceNode(declaration.type) &&
+    passesItsParameters(declaration)
+  ) {
+    return resolveAlias(checker, checker.getSymbolAtLocation(declaration.type.typeName));
+  }
+  return undefined;
+}
+
+// The exports, as `path\0name`, whose names mark them below GA but which name the same thing as
+// an export of the package without such a name, which is held to GA. `isExempt` is the name test.
+export function heldByAnotherName(checker, paths, isExempt) {
+  const namesOf = new Map();
+  for (const [path, info] of paths) {
+    const add = (symbol, name) =>
+      namesOf.set(symbol, [...(namesOf.get(symbol) ?? []), { path, name }]);
+    for (const group of info.groups.values()) {
+      for (const name of group.names) add(group.symbol, name);
+    }
+    for (const [name, kinds] of info.forwardKinds) add(kinds.target, name);
+  }
+  const linked = new Map();
+  const link = (from, to) => linked.set(from, [...(linked.get(from) ?? []), to]);
+  const pending = [...namesOf.keys()];
+  const seen = new Set(pending);
+  while (pending.length > 0) {
+    const symbol = pending.pop();
+    for (const declaration of symbol.declarations ?? []) {
+      const other = otherNameOf(checker, declaration);
+      if (other === undefined) continue;
+      link(symbol, other);
+      link(other, symbol);
+      if (!seen.has(other)) {
+        seen.add(other);
+        pending.push(other);
+      }
+    }
+  }
+  const reached = new Set(
+    [...namesOf]
+      .filter(([, names]) => names.some(({ name }) => !isExempt(name)))
+      .map(([symbol]) => symbol),
+  );
+  const queue = [...reached];
+  while (queue.length > 0) {
+    for (const next of linked.get(queue.pop()) ?? []) {
+      if (reached.has(next)) continue;
+      reached.add(next);
+      queue.push(next);
+    }
+  }
+  return new Set(
+    [...reached].flatMap((symbol) =>
+      (namesOf.get(symbol) ?? [])
+        .filter(({ name }) => isExempt(name))
+        .map(({ path, name }) => `${path}\0${name}`),
+    ),
+  );
+}
+
 // Returns, for each path, its export names, the package's own exported declarations grouped by
 // symbol, its forwards and its augmentations, plus the checker that resolves names in them.
 export function readExports(packageDir, entryPoints) {
@@ -371,6 +497,7 @@ export function readExports(packageDir, entryPoints) {
     );
   }
   return {
+    program,
     checker,
     paths,
     isOwn,

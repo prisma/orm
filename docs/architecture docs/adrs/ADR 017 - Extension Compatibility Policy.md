@@ -13,7 +13,7 @@
 - Define a compatibility policy for third-party lanes and alternate runtimes
 - Conformance is measured against a small set of normative contracts:
   - Data contract JSON, Unified Plan model, Plan identity and hashing, Hook API v1
-- Publish a versioning and compatibility matrix so contributors know which combinations are supported
+- Say which combinations are supported through package versions. The plan model, the hook API and the adapter interface are each published in a package, and that package's version tells a contributor what it works with ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md))
 
 ## Requirements for third-party lanes
 
@@ -91,28 +91,10 @@ To make adoption incremental, we define levels:
 
 We will certify third-party components at L0, L1, or L2.
 
-## Versioning and compatibility matrix
+## Versioning
 
-### Artifacts and contracts with semver
-
-- **Data contract JSON schema**: `contractSchema` version in file and package version in `@prisma/relational-ir`
-- **Unified Plan model**: exported TypeScript types and JSON schema
-- **Hook API**: `hooksVersion: 1` for v1, bump on breaking change
-- **Adapter SPI**: per-adapter version and capability set
-
-### Minimum compatible versions
-
-| Producer Lane | Plan model | Hook API required | Adapter SPI | Contract schema |
-|---------------|------------|-------------------|-------------|-----------------|
-| SQL DSL core | v1 | none | v1 | v3 |
-| ORM over DSL | v1 | none | v1 | v3 |
-| Raw SQL | v1 | none | n/a | v3 |
-| TypedSQL CLI | v1 | none | v1 for validation | v3 |
-
-| Runtime | Accepts Plan model | Hook API | Adapter SPI | Contract schema |
-|---------|-------------------|----------|-------------|-----------------|
-| Core runtime | v1 | v1 | v1 | v3 |
-| Alt runtime L1 | v1 | v1 | v1 | v3 |
+- **`contract.json`:** the file records the version of its own format.
+- **The plan model, the hook API and the adapter SPI** (the interface an adapter implements) are published in the platform packages and have those packages' versions. All our packages share one release number, and what is Generally Available stays compatible within a major version. A lane or a runtime written by a third party lists the platform packages it is built on as peer dependencies, at the ranges an extension uses ([ADR 330](ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md)).
 
 ### Rules
 
@@ -165,4 +147,4 @@ We will certify third-party components at L0, L1, or L2.
 
 - Adopt a formal compatibility policy for third-party lanes and alternate runtimes
 - Require honoring the Plan contract, verifying coreHash, respecting immutability, and documenting hooks
-- Publish a versioning and compatibility matrix and ship a conformance kit to enable safe ecosystem growth
+- Express compatibility through package versions, and ship a conformance kit, so that the ecosystem can grow safely

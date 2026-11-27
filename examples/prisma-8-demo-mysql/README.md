@@ -2,7 +2,7 @@
 
 A minimal demo showing how to use `@prisma/orm-mysql`, the package a MySQL application installs for its database, beside the platform packages it names as peer dependencies. It has a PSL contract with four models, a relation, an enum, the convenience date and time types and the scalar convenience types, and three committed migrations written by `prisma migration plan`.
 
-MySQL support is early, and this example grows with it. Today it shows the control plane, reads and writes: the contract emits, the committed migration applies to an empty MySQL database, `db verify` and `db sign` pass, planning again from the unchanged contract writes nothing, the ORM writes the seed rows, and the ORM and the SQL builder read them, includes among them. MariaDB has an example of its own, [`prisma-8-demo-mariadb`](../prisma-8-demo-mariadb/README.md), because the target id is part of the contract and every migration.
+`@prisma/orm-mysql` is Early Access from release 8.0 (see [maturity levels](../../docs/oss/versioning.md#maturity-levels)), and this example grows with it. Today it shows the control plane, reads and writes: the contract emits, the committed migration applies to an empty MySQL database, `db verify` and `db sign` pass, planning again from the unchanged contract writes nothing, the ORM writes the seed rows, and the ORM and the SQL builder read them, includes among them. MariaDB has an example of its own, [`prisma-8-demo-mariadb`](../prisma-8-demo-mariadb/README.md), because the target id is part of the contract and every migration.
 
 ## Reading
 

@@ -1,9 +1,16 @@
 # @prisma/orm-mongo
 
-The package a MongoDB application installs for its database. It wires the framework, the Mongo family, and the Mongo target into a single lazy client. It names the platform packages it is built on as peer dependencies, each at this package's own exact version, so the application lists them beside it, every `@prisma/orm-*` line naming the same version. `prisma orm init` writes that list, in the form the project's package manager writes a version it is given. To install them by hand, give every `@prisma/orm-*` package the same version, the release you want:
+The package a MongoDB application imports Prisma from. It wires the framework, the Mongo family, and the Mongo target into a single lazy client.
+
+> **Maturity level: Early Access.** This package is published so that you can try it. It may have known failures, and any new version may change it. At each new release you edit the Prisma lines in your `package.json` by hand, and [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#a-new-minor-below-ga) shows how. Until release 8.0 it is published as `8.0.0-rc.N`, like every Prisma 8 package, and any of those versions may contain breaking changes.
+
+This package is built from other Prisma packages, the platform packages, and your application lists them beside it in `package.json`. `prisma orm init` writes those lines for you. To add them by hand:
+
+- Until release 8.0, give every `@prisma/orm-*` package the same exact version, such as `8.0.0-rc.25`.
+- From release 8.0, use the command below. It is written for release 8.0. For a later release, such as 8.3, write `8.3.0` in place of `8.0.1`.
 
 ```sh
-pnpm add @prisma/orm-mongo@<version> @prisma/orm-framework@<version> @prisma/orm-family-mongo@<version> @prisma/orm-target-mongo@<version> @prisma/orm-toolchain@<version>
+pnpm add "@prisma/orm-mongo@~8.0.1-ea.0" "@prisma/orm-framework@~8.0.1" "@prisma/orm-family-mongo@~8.0.1-ea.0" "@prisma/orm-target-mongo@~8.0.1-ea.0" "@prisma/orm-toolchain@~8.0.1"
 pnpm add mongodb
 ```
 
@@ -15,7 +22,7 @@ pnpm add mongodb
 └── @prisma/orm-toolchain      ORM command family for the `prisma` CLI, emitter, config loader
 ```
 
-The application lists the platform packages because it must hold exactly one copy of each: the platform packages recognise a data-type value by which copy made it. A data-type value made by a second copy is refused with an error that does not name the cause, and TypeScript reports errors where the two copies' types meet. A package manager never gives a package its own copy of a peer dependency; it uses the one the application lists, and it reports a version that does not match. When the packages that disagree are ones the application lists itself, npm refuses the install, and pnpm, Yarn and Bun install and print a peer dependency warning. A successful install does not prove the versions match, so read the peer warnings it prints. Application code still imports only from `@prisma/orm-mongo` and from the extensions, never from a platform package. The decision record explains this in full: [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md).
+Keep all of these lines, on the same release. Your code imports only from `@prisma/orm-mongo` and from extensions, never from the other packages. If your package manager prints a peer dependency warning for a Prisma package, or refuses to install, the versions in these lines do not fit together: put them back on one release. [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) explains why they are listed.
 
 In a repository with several applications on different Prisma versions, npm workspaces and Bun with its hoisted linker can give one application two copies of a platform package without a warning. Keep the applications on one Prisma version, or use pnpm, Yarn, or Bun with its isolated linker.
 

@@ -2,7 +2,7 @@
 
 Use [Better Auth](https://www.better-auth.com) with Prisma 8. The adapter stores Better Auth's users, sessions, accounts and verification tokens through your application's Prisma 8 client, on Postgres or SQLite.
 
-> **This package is a release candidate, as Prisma 8 itself is.** Its versions are `8.0.0-rc.N`, in step with the Prisma 8 packages. Until `8.0.0` is released, any release may contain breaking changes, and only the latest release candidate is maintained. See [Prisma 8's release candidates](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#release-candidates).
+> **Maturity level: Generally Available.** From release 8.0, no later 8.x release breaks code that uses this package. Until release 8.0 it is published as `8.0.0-rc.N`, like every Prisma 8 package, and any of those versions may contain breaking changes. See [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#maturity-levels).
 
 ```ts
 // src/lib/auth.ts
@@ -18,13 +18,23 @@ export const auth = betterAuth({
 
 ## Install
 
-Install the adapter at the same version as your Prisma 8 database package, together with Better Auth 1.7.22 or a later 1.7 release:
+Install the adapter from the same release as your Prisma 8 packages, together with Better Auth 1.7.22 or a later 1.7 release.
+
+- **Until release 8.0,** use the same exact `8.0.0-rc.N` as your database package.
+- **From release 8.0,** the adapter is Generally Available, so its version has no level suffix, even when your database package is below GA. Write its line the way your other Prisma lines are written: with a caret beside `@prisma/orm-postgres`, which is GA, and with a tilde beside `@prisma/orm-sqlite`, which is not. With a tilde, an update cannot move the adapter to a release that your database package cannot follow.
+
+For release 8.0:
 
 ```sh
-pnpm add @prisma/orm-better-auth@<version of @prisma/orm-postgres or @prisma/orm-sqlite> better-auth@~1.7.22
+# beside @prisma/orm-postgres
+pnpm add "@prisma/orm-better-auth@^8.0.1" "better-auth@~1.7.22"
+# beside @prisma/orm-sqlite
+pnpm add "@prisma/orm-better-auth@~8.0.1" "better-auth@~1.7.22"
 ```
 
-The adapter uses the Prisma packages your database package already installs. If the versions differ, your package manager warns you, or refuses to install when it checks peer dependencies strictly. Keep them the same, or the adapter loads a second copy of Prisma's code.
+For a later release, such as 8.3, write `8.3.0` in place of `8.0.1`.
+
+The adapter uses the Prisma packages your database package already installs: `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`. If the adapter needs a later release of them than you have, your package manager warns you, or refuses to install when it checks peer dependencies strictly. So install the adapter from the same release as those packages.
 
 Better Auth must load one copy of `@better-auth/core`, the one `better-auth` itself uses. Better Auth keeps the contract check described below in that package, so a second copy never sees it.
 
@@ -271,7 +281,7 @@ Model and field names: the adapter matches Better Auth's model names to your con
 
 ## Dependencies
 
-- `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`, as peers at the same version as your database package, which already depends on all three. The adapter loads `@prisma/orm-toolchain` only while `auth generate` runs, to read `prisma.config.ts`. Reading it also needs `@prisma/cli-engine`, which your `prisma.config.ts` already imports.
+- `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`, as peer dependencies. Your database package already requires all three, at the same release. The adapter loads `@prisma/orm-toolchain` only while `auth generate` runs, to read `prisma.config.ts`. Reading it also needs `@prisma/cli-engine`, which your `prisma.config.ts` already imports.
 - `@better-auth/core` 1.7.22 or a later 1.7 release, below 1.8, as a peer.
 
 The package imports only published entrypoints, so it works outside the Prisma repository. [DEVELOPING.md](DEVELOPING.md) has notes for people who change it.

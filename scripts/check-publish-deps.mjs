@@ -36,7 +36,9 @@
 //   4. Sibling-dependency check. No published package may hold another
 //      package this repository publishes under `dependencies` or
 //      `optionalDependencies`; it names it as a peer dependency, so the
-//      application's own list is the only place a copy comes from.
+//      application's own list is the only place a copy comes from. Each
+//      such peer's range is the one the release plan gives it for the
+//      root version (`scripts/release-plan-workspace.ts`).
 //
 // Usage:
 //   node scripts/check-publish-deps.mjs           — exit 1 on any violation
@@ -52,6 +54,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { planWorkspace } from './release-plan-workspace.ts';
+
+const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const DEP_FIELDS = /** @type {const} */ ([
   'dependencies',
@@ -166,6 +171,24 @@ export function findSiblingDependencies(pkgJson, siblings) {
     }
   }
   return violations;
+}
+
+/**
+ * Every package of ours whose range in `pkgJson.peerDependencies` is not the one the release plan
+ * gives it. `ranges` is the plan's range on each package of ours this package names. Pure.
+ *
+ * @param {Record<string, unknown>} pkgJson
+ * @param {Readonly<Record<string, string>>} ranges
+ * @returns {Array<{ name: string; spec: string | undefined; planned: string }>}
+ */
+export function findPlanMismatches(pkgJson, ranges) {
+  const peers =
+    pkgJson.peerDependencies && typeof pkgJson.peerDependencies === 'object'
+      ? pkgJson.peerDependencies
+      : {};
+  return Object.entries(ranges)
+    .filter(([name, planned]) => peers[name] !== planned)
+    .map(([name, planned]) => ({ name, spec: peers[name], planned }));
 }
 
 const DECLARATION_FILE_RE = /\.d\.(?:m|c)?ts$/;
@@ -468,7 +491,17 @@ const DEFAULT_IO = {
   rm: (path) => rmSync(path, { recursive: true, force: true }),
   stdoutWrite: (s) => process.stdout.write(s),
   stderrWrite: (s) => process.stderr.write(s),
+  planRanges: workspacePlanRanges,
 };
+
+/** The release plan's ranges for one published package, for the root version in this workspace. */
+function workspacePlanRanges(name) {
+  workspacePlanRanges.plan ??= planWorkspace(
+    repoRoot,
+    JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf-8')).version,
+  );
+  return workspacePlanRanges.plan[name]?.ranges;
+}
 
 /**
  * Runs the publish-deps gate. Pure with respect to its `io` seam — the
@@ -498,6 +531,7 @@ export function runCheck({ argv = process.argv.slice(2), io = {} } = {}) {
     rm,
     stdoutWrite,
     stderrWrite,
+    planRanges,
   } = { ...DEFAULT_IO, ...io };
   const args = new Set(argv);
   const json = args.has('--json');
@@ -547,11 +581,15 @@ export function runCheck({ argv = process.argv.slice(2), io = {} } = {}) {
         shipsOwnTypes: (depName) => shipsOwnTypesFrom(dir, depName),
       });
       const siblingDependencies = findSiblingDependencies(packed, siblings);
+      const plannedRanges = planRanges(sourcePkg.name);
+      const planMismatches =
+        plannedRanges === undefined ? [] : findPlanMismatches(packed, plannedRanges);
       if (
         leaks.length > 0 ||
         pnPinViolations.length > 0 ||
         declarationDepViolations.length > 0 ||
-        siblingDependencies.length > 0
+        siblingDependencies.length > 0 ||
+        planMismatches.length > 0
       ) {
         offenders.push({
           pkg: sourcePkg.name,
@@ -560,6 +598,7 @@ export function runCheck({ argv = process.argv.slice(2), io = {} } = {}) {
           pnPinViolations,
           declarationDepViolations,
           siblingDependencies,
+          planMismatches,
         });
       }
     }
@@ -585,6 +624,11 @@ export function runCheck({ argv = process.argv.slice(2), io = {} } = {}) {
         }
         for (const v of o.declarationDepViolations) {
           stderrWrite(`    [decl]     ${v.file} names "${v.spec}" — declare "${v.needs}"\n`);
+        }
+        for (const v of o.planMismatches) {
+          stderrWrite(
+            `    [plan]     peerDependencies.${v.name} = ${v.spec ?? '(missing)'}, the plan says ${v.planned}\n`,
+          );
         }
         for (const v of o.siblingDependencies) {
           stderrWrite(`    [sibling]  ${v.field}.${v.name} = ${v.spec}\n`);

@@ -114,6 +114,14 @@ describe('check-release-notes — publish mode', () => {
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
   });
 
+  it('stops, naming it, on a version this repository does not publish', () => {
+    writePackageJson('0.12.0');
+    commitAll('release bump');
+    const result = runScript(['--mode', 'publish', '--version', '8.0.0-beta.1']);
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /8\.0\.0-beta\.1/);
+  });
+
   it('honours --version over the package.json version', () => {
     writePackageJson('0.12.0');
     writeRepoFile('docs/releases/v0.99.0.md', '# v0.99.0\n');

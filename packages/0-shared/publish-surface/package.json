@@ -34,7 +34,9 @@
     "src"
   ],
   "exports": {
+    "./levels": "./dist/levels.mjs",
     "./platform-entrypoints": "./dist/platform-entrypoints.mjs",
+    "./release-plan": "./dist/release-plan.mjs",
     "./shells": "./dist/shells.mjs",
     "./package.json": "./package.json"
   },

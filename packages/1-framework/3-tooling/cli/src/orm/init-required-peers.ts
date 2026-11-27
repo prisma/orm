@@ -1,6 +1,12 @@
 import { readFileSync, realpathSync } from 'node:fs';
 import type { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { dirname } from 'pathe';
+import {
+  exactVersionOf,
+  lineStandsFor,
+  requirementAdmits,
+  versionLines,
+} from './init-version-lines';
 import { installedManifest } from './project-modules';
 import { type PublishedPackage, REGISTRY_LOOKUP_TIMEOUT_MILLIS } from './registry-keywords';
 
@@ -19,8 +25,10 @@ export type RequiredPeerOutcome =
 
 export interface RequiredPeer {
   readonly name: string;
-  /** The version the package that names it asks for. */
-  readonly version: string;
+  /** The line init writes for it in the application's `package.json`, from the range the package that names it asks for. */
+  readonly line: string;
+  /** The range the package that names it asks for, which an installed copy has to satisfy. */
+  readonly requirement: string;
   readonly outcome: RequiredPeerOutcome;
 }
 
@@ -41,7 +49,12 @@ export interface RequiredPeers {
 }
 
 export function requiredPeerSpecifier(peer: RequiredPeer): string {
-  return `${peer.name}@${peer.version}`;
+  return `${peer.name}@${peer.line}`;
+}
+
+/** The peer at the range the package that names it asks for, for advice to add it by hand. */
+export function requirementSpecifier(peer: RequiredPeer): string {
+  return `${peer.name}@${peer.requirement}`;
 }
 
 interface ReadManifest {
@@ -167,7 +180,7 @@ export function requiredPeersForSetup(ctx: {
     try {
       resolved = await resolveRequiredPeers({
         packageName,
-        ownsFacadeLine: false,
+        facadeLine: 'report',
         installedElsewhere: ctx.installedElsewhere,
         declared: () => new Map(),
         installedVersion: () => undefined,
@@ -178,7 +191,12 @@ export function requiredPeersForSetup(ctx: {
       clearTimeout(timer);
     }
     return resolved instanceof Error
-      ? { facade: packageName, packages: [], unread: [packageName], warnings: [] }
+      ? {
+          facade: packageName,
+          packages: [],
+          unread: [packageName],
+          warnings: [],
+        }
       : resolved;
   };
 }
@@ -189,14 +207,23 @@ export function requiredPeersForSetup(ctx: {
  * peer those manifests name, whose own peers are not followed. With `install`,
  * it installs what the project does not list yet and reads again every package it installed, since
  * the version installed can name peers the copy on disk before did not. A copy installed at a
- * version other than the exact one asked for does not stand for it, so its peers are not followed;
+ * version the requirement does not admit does not stand for it, so its peers are not followed;
  * when no install replaces it, a warning says its required peers could not be worked out. A package
  * the project lists at another version is left as it is and reported.
  */
 export async function resolveRequiredPeers(ctx: {
   readonly packageName: string;
-  /** Whether init wrote the facade's line, so it may pin it to the installed version. */
-  readonly ownsFacadeLine: boolean;
+  /**
+   * What init may do with the facade's line in `package.json`:
+   *
+   * - `write`: init added the facade, so it writes the facade's line and may pin it to the
+   *   installed version.
+   * - `keep`: the project listed the facade before init ran, so its line is the user's, and each
+   *   peer is written at the range the installed facade declares.
+   * - `report`: init writes no facade line; it works out the lines an install of the facade would
+   *   write.
+   */
+  readonly facadeLine: 'write' | 'keep' | 'report';
   /** Packages init installs another way, such as the CLI's engine, which the list leaves out. */
   readonly installedElsewhere: ReadonlySet<string>;
   readonly declared: () => ReadonlyMap<string, string>;
@@ -219,7 +246,15 @@ export async function resolveRequiredPeers(ctx: {
       warnings: [],
     };
   }
-  const facadeSpecifier = `${ctx.packageName}@${facade.version}`;
+  const lines = versionLines(
+    facade.version,
+    [...facade.peers].filter(([name]) => isPrismaOrmPackage(name)).map(([, range]) => range),
+    { addsFacade: ctx.facadeLine !== 'keep' },
+  );
+  const lineOf = (name: string, range: string) =>
+    isPrismaOrmPackage(name) ? lines.ormPackage(range) : range;
+  const listedFacade = ctx.facadeLine === 'keep' ? ctx.declared().get(ctx.packageName) : undefined;
+  const facadeSpecifier = `${ctx.packageName}@${listedFacade ?? lines.facade}`;
   const wanted = new Map<string, { readonly range: string; readonly by: string }>();
   const outcomes = new Map<string, RequiredPeerOutcome>();
   const warnings: string[] = [];
@@ -227,7 +262,7 @@ export async function resolveRequiredPeers(ctx: {
   let level: { readonly name: string; readonly manifest: ReadManifest | undefined }[] = [
     { name: ctx.packageName, manifest: facade },
   ];
-  let pinFacade = ctx.ownsFacadeLine;
+  let pinFacade = ctx.facadeLine === 'write';
   const atAnotherVersion = new Map<
     string,
     { readonly installed: string; readonly range: string; readonly by: string }
@@ -235,12 +270,10 @@ export async function resolveRequiredPeers(ctx: {
   const readWanted = async (name: string) => {
     const wantedAt = wanted.get(name);
     const manifest = await ctx.read(name, wantedAt?.range);
-    const exact = wantedAt === undefined ? undefined : exactVersionOf(wantedAt.range);
     if (
       wantedAt !== undefined &&
       manifest?.version !== undefined &&
-      exact !== undefined &&
-      exactVersionOf(manifest.version) !== exact
+      requirementAdmits(wantedAt.range, manifest.version) === false
     ) {
       atAnotherVersion.set(name, { installed: manifest.version, ...wantedAt });
       return { name, manifest: undefined };
@@ -270,7 +303,7 @@ export async function resolveRequiredPeers(ctx: {
 
     const declared = ctx.declared();
     const toInstall: string[] = [];
-    if (pinFacade && declared.get(ctx.packageName) !== facade.version) {
+    if (pinFacade && declared.get(ctx.packageName) !== lines.facade) {
       toInstall.push(facadeSpecifier);
     }
     pinFacade = false;
@@ -281,32 +314,35 @@ export async function resolveRequiredPeers(ctx: {
         if (ctx.install === undefined) {
           outcomes.set(name, 'to-install');
         } else {
-          toInstall.push(`${name}@${range}`);
+          toInstall.push(`${name}@${lineOf(name, range)}`);
           outcomes.set(name, 'installed');
         }
         continue;
       }
       const installed = ctx.installedVersion(name);
       const ours = isPrismaOrmPackage(name);
+      const line = lineOf(name, range);
       if (
         (!ours && exactVersionOf(range) === undefined) ||
-        lineStandsFor(listed, range, installed)
+        lineStandsFor(listed, line, installed)
       ) {
         outcomes.set(name, 'already-listed');
         continue;
       }
       outcomes.set(name, 'left-at-another-version');
       warnings.push(
-        `package.json lists ${name} at ${listed}${installed === undefined ? '' : `, installed at ${installed}`}, but ${by} needs ${range}; init left it as it is. ${ours ? `Install ${name}@${range} so every Prisma ORM package is at one version.` : `Change the line to ${exactVersionOf(range)} and install.`}`,
+        `package.json lists ${name} at ${listed}${installed === undefined ? '' : `, installed at ${installed}`}, but ${by} needs ${line}; init left it as it is. ${ours ? `Install ${name}@${line} so every Prisma ORM package is at one version.` : `Change the line to ${exactVersionOf(line)} and install.`}`,
       );
     }
     if (ctx.install === undefined || toInstall.length === 0) break;
     const failure = await ctx.install(toInstall);
     if (failure !== undefined) return failure;
-    const reread = [...wanted.keys()].filter(
-      (name) =>
-        isPrismaOrmPackage(name) && toInstall.includes(`${name}@${wanted.get(name)?.range}`),
-    );
+    const reread = [...wanted]
+      .filter(
+        ([name, { range }]) =>
+          isPrismaOrmPackage(name) && toInstall.includes(`${name}@${lineOf(name, range)}`),
+      )
+      .map(([name]) => name);
     unread = unread.filter((name) => !reread.includes(name));
     level = await Promise.all(reread.map(readWanted));
   }
@@ -323,38 +359,13 @@ export async function resolveRequiredPeers(ctx: {
     facade: facadeSpecifier,
     packages: byName(wanted).map(([name, { range }]) => ({
       name,
-      version: range,
+      line: lineOf(name, range),
+      requirement: range,
       outcome: outcomes.get(name) ?? 'to-install',
     })),
     unread,
     warnings,
   };
-}
-
-/**
- * The version a spec names when it is one exact version, in one form (`v8.0.0` and `=8.0.0` read
- * as `8.0.0`), so a required version, a `package.json` line and an installed version compare as
- * equal when they name the same version; `undefined` for a range or any other spec.
- */
-export function exactVersionOf(spec: string): string | undefined {
-  return EXACT_VERSION_LINE.exec(spec.trim())?.[1];
-}
-
-const EXACT_VERSION_LINE = /^[v=]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/;
-
-/**
- * Whether a `package.json` line stands for `version`. An exact version is judged by its text, since
- * the next clean install follows it whatever is installed now. Any other line (a range, a dist-tag,
- * or a `workspace:`, `catalog:`, `link:`, `file:` or alias line) cannot be judged from its text
- * without resolving it, so the installed copy decides, and with nothing installed it counts as
- * standing for the version. A caret line `init` wrote for one release candidate still admits the
- * next one after an update, so it must not be judged by its text.
- */
-function lineStandsFor(line: string, version: string, installed: string | undefined): boolean {
-  const exact = exactVersionOf(line);
-  const required = exactVersionOf(version) ?? version;
-  if (exact !== undefined) return exact === required;
-  return installed === undefined || (exactVersionOf(installed) ?? installed) === required;
 }
 
 function isPrismaOrmPackage(name: string): boolean {

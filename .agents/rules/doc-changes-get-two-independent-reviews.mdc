@@ -1,0 +1,11 @@
+---
+description: A doc change that teaches or claims something is reviewed by fresh agents, for clarity and for facts, before it is done
+alwaysApply: false
+globs:
+  - "**/*.md"
+  - ".agents/rules/*.mdc"
+---
+
+An author cannot judge their own doc. They already know what every term means, so the text reads as clear to them, and nothing in the act of writing compares it with the code. Docs written this way have reached the maintainer unreadable and with wrong facts in them.
+
+So when your change adds or alters something a reader has to understand or rely on (an explanation, a rule, a statement of behaviour, a code sample, a command, a number), however short, run the [`doc-review`](../../skills-contrib/doc-review/SKILL.md) skill before you call it done. It has fresh agents read the doc cold and check its facts against the repository, and says how much review each kind of change needs. A change that teaches and claims nothing, such as a typo or a moved file, needs only `pnpm lint:doc-links`. Working files under `projects/` are exempt.

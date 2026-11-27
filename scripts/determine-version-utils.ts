@@ -3,31 +3,13 @@
 // `scripts/bump-version.ts`); this file is reserved for deterministic
 // helpers exercised under `node --test` from `pnpm test:scripts`.
 
-const NUM = '(0|[1-9]\\d*)';
-const STABLE_BASE_PATTERN = new RegExp(`^${NUM}\\.${NUM}\\.${NUM}$`);
-// The one supported RC line (docs/oss/versioning.md): `8.0.0-rc.N`,
-// counting from rc.1. Deliberately not a general X.Y.Z-rc.N shape — this
-// is a publish guard, and a base like `9.2.3-rc.1` or `8.0.0-rc.0`
-// reaching the pipeline is a mistake to fail on, not a case to support.
-// A future RC line widens this constant.
-const RC_BASE_PATTERN = /^8\.0\.0-rc\.([1-9]\d*)$/;
-
-export interface ParsedVersion {
-  major: number;
-  minor: number;
-  patch: number;
-}
-
-/**
- * Parses a semver-shaped version string into its numeric components.
- * Tolerant of pre-release suffixes (`0.7.0-foo` parses the same as
- * `0.7.0`); strict on the leading `major.minor.patch` shape — anything
- * else returns NaN-bearing components.
- */
-export function parseVersion(version: string): ParsedVersion {
-  const [major, minor, patch] = version.split('-')[0].split('.').map(Number);
-  return { major, minor, patch };
-}
+import {
+  formatVersion,
+  isPublishedReleaseCandidate,
+  type ParsedVersion,
+  parseVersion,
+  releaseOfRootVersion,
+} from '../packages/0-shared/publish-surface/src/release-plan.ts';
 
 /**
  * Given the current version, computes the next minor's zero-patch
@@ -41,20 +23,20 @@ export function computeNextMinor(current: string): string {
 
 /**
  * Computes the next release version from the current base
- * (see docs/oss/versioning.md):
+ * (see docs/oss/releasing.md):
  *
  * - `8.0.0-rc.N` -> `8.0.0-rc.N+1` — the RC line advances its counter.
  * - pre-8 stable (`0.17.0`) -> `8.0.0-rc.1` — the one-time transition
  *   onto the v8 RC line; there are no further `0.x` minors.
- * - stable `>= 8` -> next minor.
+ * - stable `>= 8` -> next minor: `8.0.1` -> `8.1.0`.
  */
 export function computeNextReleaseVersion(current: string): string {
   assertCanonicalBase(current);
-  const rcMatch = current.match(RC_BASE_PATTERN);
-  if (rcMatch) {
-    return `8.0.0-rc.${Number(rcMatch[1]) + 1}`;
+  const parsed = parseVersion(current);
+  if (parsed.level?.name === 'rc') {
+    return `8.0.0-rc.${parsed.level.counter + 1}`;
   }
-  if (parseVersion(current).major < 8) {
+  if (parsed.major < 8) {
     return '8.0.0-rc.1';
   }
   return computeNextMinor(current);
@@ -108,16 +90,25 @@ export function planDispatchPublish(
   latestDevVersion: string | undefined,
 ): VersionResult {
   if (tag === 'latest' && !isDryRun) {
-    return { version: base, tag, devVersion: composeDevVersion(base, latestDevVersion).version };
+    return {
+      version: base,
+      tag,
+      devVersion: composeDevVersion(base, latestDevVersion).version,
+    };
   }
   return { version: base, tag };
 }
 
 /**
- * Composes the `<base>-dev.N` version for a routine (non-release) push,
- * given the version currently published under the `dev` dist-tag. The
- * counter continues while the base is unchanged and resets to 1 when
- * the base moves (new minor, new rc counter, stable-to-rc transition).
+ * Composes the `<base>-dev.N` version for a routine (non-release) push, given
+ * the version the anchor package has under the `dev` dist-tag. Every package
+ * is published as `<its planned version>-dev.N` with one counter, so the
+ * counter must never repeat for a version any package still has. On the
+ * release candidates it resets when the root version moves, since every
+ * package moves with it. After them it never resets: a package with its own
+ * version keeps that version across releases, so a counter that restarted at
+ * a new minor would publish its old development versions again. A development
+ * build with a suffix the repository does not publish stops here, naming it.
  */
 export function composeDevVersion(
   baseVersion: string,
@@ -126,14 +117,12 @@ export function composeDevVersion(
   let buildNumber = 1;
 
   if (latestDevVersion) {
-    const devPattern = /^(\d+\.\d+\.\d+(?:-rc\.\d+)?)-dev\.(\d+)$/;
-    const match = latestDevVersion.match(devPattern);
-
-    if (match) {
-      const [, devBase, build] = match;
-      if (devBase === baseVersion) {
-        buildNumber = Number.parseInt(build, 10) + 1;
-      }
+    const latest = parseVersion(latestDevVersion);
+    if (
+      latest.dev !== undefined &&
+      counterLine(latest) === counterLine(parseVersion(baseVersion))
+    ) {
+      buildNumber = latest.dev + 1;
     }
   }
 
@@ -144,19 +133,49 @@ export function composeDevVersion(
 }
 
 /**
- * Asserts that a base version is canonical: either a clean release
- * (`major.minor.patch`) or a version on the supported RC line
- * (`8.0.0-rc.N`, N ≥ 1). Used to fail-fast in the publish workflow if
- * root `package.json` was edited to something other than a release
- * shape — without this guard, a malformed root would compose nonsense
- * publish versions like `0.7.0-foo-dev.1`.
+ * The run of development builds a version's counter belongs to: the whole version on the `8.0.0`
+ * release candidates, the major and minor before Prisma 8, and one run for every release after the
+ * release candidates.
+ */
+function counterLine(version: ParsedVersion): string {
+  if (isPublishedReleaseCandidate(version)) return formatVersion({ ...version, dev: undefined });
+  return version.major < 8 ? `${version.major}.${version.minor}` : 'levels';
+}
+
+/**
+ * Asserts that a base version is canonical: a clean pre-8 release
+ * (`major.minor.patch`), or a Prisma 8 root version as
+ * `releaseOfRootVersion` defines it (`8.0.0-rc.N` with N ≥ 1, `8.0.1`, then
+ * `X.Y.0`), with no development suffix. Used to fail-fast in the publish
+ * workflow if root `package.json` was edited to something other than a
+ * release shape; without this guard, a malformed root would compose
+ * nonsense publish versions like `0.7.0-foo-dev.1`.
  */
 export function assertCanonicalBase(base: string): void {
-  if (!STABLE_BASE_PATTERN.test(base) && !RC_BASE_PATTERN.test(base)) {
+  let parsed: ParsedVersion | undefined;
+  try {
+    parsed = parseVersion(base);
+  } catch {
+    parsed = undefined;
+  }
+  if (
+    parsed === undefined ||
+    parsed.dev !== undefined ||
+    (parsed.major < 8 && parsed.level !== undefined)
+  ) {
     throw new Error(
       `Base version "${base}" is not canonical. ` +
         'The root package.json `version` must be a clean release shape ("0.7.0") ' +
-        'or on the supported RC line ("8.0.0-rc.N", N >= 1); nothing else is permitted on `main`.',
+        'or a Prisma 8 root version ("8.0.0-rc.N" with N >= 1, "8.0.1", then "X.Y.0"); nothing else is permitted on `main`.',
+    );
+  }
+  if (parsed.major < 8) return;
+  try {
+    releaseOfRootVersion(base);
+  } catch (cause) {
+    throw new Error(
+      `Base version "${base}" is not canonical: ${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause },
     );
   }
 }

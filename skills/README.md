@@ -44,13 +44,13 @@ To limit a `skills add` install to one agent runtime, add `-a <agent>` (e.g. `-a
 
 ## Capability-gap honesty
 
-Prisma 8 is in early access (`0.x`). Each reference file carries a *What Prisma 8 doesn't do yet* section that names features the framework doesn't implement (model validations, lifecycle callbacks, Studio, runtime-apply migrations, `EXPLAIN`, prepared statements, `db.batch()`, multi-database routing, Next.js plugin, …) along with the workaround and a route to [`prisma-8/references/feedback.md`](./prisma-8/references/feedback.md) so the request becomes a tracked issue instead of a one-line URL.
+Prisma 8 is not finished: until release 8.0 it ships as release candidates, and from release 8.0 each package has its own [maturity level](../docs/oss/versioning.md#maturity-levels). Each reference file carries a *What Prisma 8 doesn't do yet* section that names features the framework doesn't implement (model validations, lifecycle callbacks, Studio, runtime-apply migrations, `EXPLAIN`, prepared statements, `db.batch()`, multi-database routing, Next.js plugin, …) along with the workaround and a route to [`prisma-8/references/feedback.md`](./prisma-8/references/feedback.md) so the request becomes a tracked issue instead of a one-line URL.
 
 The pattern is deliberate: it gives the agent something concrete to say when a user asks about an unbuilt feature, instead of confabulating a plausible-looking API call against something that doesn't exist.
 
 ## Versioning
 
-The skill is versioned with the rest of Prisma 8 and ships inside the tarballs, so there is no separate skill-version axis to track ([`docs/oss/versioning.md`](../docs/oss/versioning.md)). Each published copy carries `metadata.library` (the package it shipped in) and `metadata.library_version` (the version it shipped at) in its frontmatter — `metadata` is where the [Agent Skills spec](https://agentskills.io) puts keys beyond `name` and `description`; `prisma skills sync` compares that stamp against the installed package to decide whether your copy is current.
+The skill is versioned with the rest of Prisma 8 and ships inside the tarballs, so there is no separate skill-version axis to track ([`docs/oss/releasing.md`](../docs/oss/releasing.md#versions-inside-the-repository)). Each published copy carries `metadata.library` (the package it shipped in) and `metadata.library_version` (the version it shipped at) in its frontmatter — `metadata` is where the [Agent Skills spec](https://agentskills.io) puts keys beyond `name` and `description`; `prisma skills sync` compares that stamp against the installed package to decide whether your copy is current.
 
 ## Contributing / authoring
 
