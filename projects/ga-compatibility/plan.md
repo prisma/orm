@@ -31,7 +31,7 @@ Each project is sized for one to four pull requests. Its design is written when 
 
 New work joins a project only when it serves that project's purpose. Work that serves the goal and fits no project becomes a new project.
 
-Projects 2 to 7 and 13 are Must for GA, 9 and 12 are Aim, and 8, 10 and 11 are Later. Will confirmed this on 2026-11-24; it is updated as we go. Project 4 comes before project 3. There is no project 1: it was to document the whole policy on `main` ahead of the code, and each project now documents its own part.
+Projects 2 to 7, 12 and 13 are Must for GA, 9 is Aim, and 8, 10 and 11 are Later. Project 12 became Must on 2026-11-27: release 8.0 is where the promise and the maturity levels take effect, so what they mean has to be published when it ships. Will confirmed this on 2026-11-24; it is updated as we go. Project 4 comes before project 3. There is no project 1: it was to document the whole policy on `main` ahead of the code, and each project now documents its own part.
 
 "Task N" is the number a piece of work had before 2026-11-24. The reports under [research/](research/) use those numbers. The facts about the code were read on 2026-11-23 and are rechecked when a project starts.
 
@@ -47,7 +47,7 @@ As of 2026-11-27. The GA plan (`planning/plan.md` on branch `planning/prisma-8-g
 | 5. Additions that break | Not started | | A free session |
 | 6. Versions, levels, dependencies | Mostly merged | prisma/prisma-cli#405, prisma/orm#31204, #31212 and #31222 merged | A decision on publishing a fix from a branch per minor; then TML-3956 and TML-3942 |
 | 7. Prisma's own tables | Building | prisma/studio#1606 merged; nothing pushed in prisma/orm | A decision on applying Prisma's own tables in a first phase; merges after #31203 |
-| 12. Published policy | Not started | | |
+| 12. Published policy | Not started; required for GA | | A session |
 | 13. The `prisma` tool's interface | Not started; survey done | | Design discussion |
 
 Outside this stream, and blocking projects 2 and 3: capabilities by database version (GA plan, stream 6, row 10), prisma/orm#31218, a draft close to ready.
@@ -178,49 +178,6 @@ Outside this stream, and blocking projects 2 and 3: capabilities by database ver
 
 **To decide when it starts.** Nothing. The design is settled.
 
-## Projects that can follow GA
-
-### 8. Define promised behaviour in reference documentation shipped inside each package
-
-**Purpose.** A user can look up exactly which behaviour we promise not to change. The reference documentation is the specification: where it is silent, behaviour is unspecified.
-
-**What it achieves.** A reference exists for every export of a GA or Preview package and for every CLI command, config option, error code and file format. It is generated from the code or stored beside it, and ships inside each package as Markdown, so it matches the installed version.
-
-**How, where we know.** Name the reference for each kind of thing, write what is missing, generated where possible, and add a check for each kind that fails when something has no entry, as exists today for error codes. Rewrite the agent skill to refer to the reference where it restates behaviour today (task 14).
-
-### 9. Classify every change to behaviour in its pull request, and list it by class in the release notes
-
-**Purpose.** A user reads, in the release notes, every change in behaviour and why it was allowed. A change made for a package below GA never affects an application that does not use that package.
-
-**What it achieves.** The author of a change states its class and the reviewer checks it. The four classes are in section 5.2 of the spec: a fix to wrong behaviour, a change to specified behaviour, a change to unspecified detail, and a security fix. Every release lists each change to behaviour with its class.
-
-**How, where we know.**
-
-- The pull request template and the review skills ask for the class, and a check rejects a pull request without one. The release notes group changes by class, always list a new rejection of input, and mark security fixes. `SECURITY.md` states that every security fix gets a published notice. Config, CLI and builder input gain a way to warn before a later release rejects, as schema files have today (task 15).
-- Every `8.x` release keeps the "How to upgrade" section that project 6 starts. For a release within the major it says there is nothing to do beyond updating the packages, unless one of the exceptions the policy allows applies, and then it lists the step. It is generated from the same single source as the list of changes.
-- MySQL, MariaDB and SQLite share the SQL family package and the framework with PostgreSQL. Either changes for a package below GA stay out of shared packages, or tests show they do not affect a GA target (task 21).
-
-### 10. Make the changes an upgrade needs with a deterministic tool, not a guide
-
-**Purpose.** When an upgrade needs a change to a user's project, a tool makes it, with the same result on every run. A guide applied by an agent does not count.
-
-**What it achieves.** The requirement in section 10 of the spec, within a major and for the move to a new major, including carrying migrations forward. Where the correct edit depends on what the user meant, the tool finds every affected place, changes none, and reports what must be decided.
-
-**How, where we know.** The project defines what the tool is, how a change that needs one gets its part of the tool, and how the tool replaces today's per-release upgrade guides (task 9).
-
-**Also in this project.** Probably retire the system of upgrade scripts under `upgrade-instructions/` with its coverage check. It exists for releases that may break, and from `8.0.0` a release within the major may not. Updating the upgrade skills is not here: it must happen before GA, and is in project 6.
-
-### 11. Follow each maker's lifetime for supported versions of Node.js, TypeScript and databases, and test them in CI
-
-**Purpose.** A user knows which versions of Node.js, TypeScript, each database and each driver we support, and until when. We do not drop a version by our own choice within a major.
-
-**What it achieves.** For each thing Prisma runs on, the docs state which event ends our support for a version. CI tests every supported version. A declared minimum cannot rise within the major unnoticed.
-
-**How, where we know.**
-
-- State the event for Node.js, Bun, Deno, TypeScript, PostgreSQL, MongoDB, the other databases and each driver, and publish it on the supported-versions page (task 6), and revise the decision record on version support, which says "We raise floors freely".
-- CI runs against each supported version of Node.js, each database and each driver, and against the newest and the next TypeScript release. Each package declares its Node.js minimum, and a check fails when a declared minimum rises (task 20). prisma/orm#30669, open since October, declares one Node.js range on every package.
-
 ### 12. Publish one versioning and compatibility policy for Prisma's open-source products, and a page for each product that applies it
 
 **Purpose.** A user can read the promise itself, and the ORM, the `prisma` command-line tool and Composer make the same promise in the same words.
@@ -274,6 +231,49 @@ Outside this stream, and blocking projects 2 and 3: capabilities by database ver
 **A problem it must answer: updating `prisma` can lock a user out of their own project.** `prisma` keeps its own version numbers and carries a copy of `@prisma/orm-toolchain`. When it runs an ORM command it stops if that copy and the project's ORM packages are on different minors (project 6). So a user who updates `prisma` gets a toolchain newer than their application's packages and a tool that refuses to run, and they may not be able to move the ORM packages at once: an application on a database below GA stays on its release until its dependency lines are edited by hand. Manual QA in project 6 hit this with a SQLite application. Candidates: inside a project the tool runs the project's own copy of the toolchain, which the application already lists, and uses its own copy only outside a project; or there is a stated way to install the `prisma` version that carries a given ORM release. GA waits for an answer.
 
 **To decide when it starts.** Its design discussion has not been held. One question for it: project 6 puts a level in a flag's name (`--preview-foo`), while a command states its level only in its help text. Whether flags should follow commands, for one form across the tool.
+
+## Projects that can follow GA
+
+### 8. Define promised behaviour in reference documentation shipped inside each package
+
+**Purpose.** A user can look up exactly which behaviour we promise not to change. The reference documentation is the specification: where it is silent, behaviour is unspecified.
+
+**What it achieves.** A reference exists for every export of a GA or Preview package and for every CLI command, config option, error code and file format. It is generated from the code or stored beside it, and ships inside each package as Markdown, so it matches the installed version.
+
+**How, where we know.** Name the reference for each kind of thing, write what is missing, generated where possible, and add a check for each kind that fails when something has no entry, as exists today for error codes. Rewrite the agent skill to refer to the reference where it restates behaviour today (task 14).
+
+### 9. Classify every change to behaviour in its pull request, and list it by class in the release notes
+
+**Purpose.** A user reads, in the release notes, every change in behaviour and why it was allowed. A change made for a package below GA never affects an application that does not use that package.
+
+**What it achieves.** The author of a change states its class and the reviewer checks it. The four classes are in section 5.2 of the spec: a fix to wrong behaviour, a change to specified behaviour, a change to unspecified detail, and a security fix. Every release lists each change to behaviour with its class.
+
+**How, where we know.**
+
+- The pull request template and the review skills ask for the class, and a check rejects a pull request without one. The release notes group changes by class, always list a new rejection of input, and mark security fixes. `SECURITY.md` states that every security fix gets a published notice. Config, CLI and builder input gain a way to warn before a later release rejects, as schema files have today (task 15).
+- Every `8.x` release keeps the "How to upgrade" section that project 6 starts. For a release within the major it says there is nothing to do beyond updating the packages, unless one of the exceptions the policy allows applies, and then it lists the step. It is generated from the same single source as the list of changes.
+- MySQL, MariaDB and SQLite share the SQL family package and the framework with PostgreSQL. Either changes for a package below GA stay out of shared packages, or tests show they do not affect a GA target (task 21).
+
+### 10. Make the changes an upgrade needs with a deterministic tool, not a guide
+
+**Purpose.** When an upgrade needs a change to a user's project, a tool makes it, with the same result on every run. A guide applied by an agent does not count.
+
+**What it achieves.** The requirement in section 10 of the spec, within a major and for the move to a new major, including carrying migrations forward. Where the correct edit depends on what the user meant, the tool finds every affected place, changes none, and reports what must be decided.
+
+**How, where we know.** The project defines what the tool is, how a change that needs one gets its part of the tool, and how the tool replaces today's per-release upgrade guides (task 9).
+
+**Also in this project.** Probably retire the system of upgrade scripts under `upgrade-instructions/` with its coverage check. It exists for releases that may break, and from `8.0.0` a release within the major may not. Updating the upgrade skills is not here: it must happen before GA, and is in project 6.
+
+### 11. Follow each maker's lifetime for supported versions of Node.js, TypeScript and databases, and test them in CI
+
+**Purpose.** A user knows which versions of Node.js, TypeScript, each database and each driver we support, and until when. We do not drop a version by our own choice within a major.
+
+**What it achieves.** For each thing Prisma runs on, the docs state which event ends our support for a version. CI tests every supported version. A declared minimum cannot rise within the major unnoticed.
+
+**How, where we know.**
+
+- State the event for Node.js, Bun, Deno, TypeScript, PostgreSQL, MongoDB, the other databases and each driver, and publish it on the supported-versions page (task 6), and revise the decision record on version support, which says "We raise floors freely".
+- CI runs against each supported version of Node.js, each database and each driver, and against the newest and the next TypeScript release. Each package declares its Node.js minimum, and a check fails when a declared minimum rises (task 20). prisma/orm#30669, open since October, declares one Node.js range on every package.
 
 ## Moved out of this stream
 
