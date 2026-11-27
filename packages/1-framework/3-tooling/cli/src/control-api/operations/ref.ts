@@ -126,7 +126,7 @@ export async function executeRefSetCommand(
         return notOk(
           errorFileNotFound(contractJsonPath, {
             why: `Migration bundle for hash ${resolvedHash} is missing its contract snapshot at ${contractJsonPath}`,
-            fix: 'Restore migrations/snapshots/ from version control, or re-run the command that produced this migration to regenerate its snapshot.',
+            fix: readError.fix,
           }),
         );
       }

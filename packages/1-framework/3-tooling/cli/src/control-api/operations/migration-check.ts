@@ -97,6 +97,15 @@ function checkFileExists(
  * entry whose declared hash agrees but whose content recomputes to a different
  * storage hash is `MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH`.
  */
+function snapshotRewriteActions(snapshotDir: string): CheckFailure['nextActions'] {
+  return [
+    chooseAction(`Restore "${snapshotDir}" from version control`),
+    chooseAction(
+      `Or delete "${snapshotDir}" and write it again, since no command replaces a snapshot directory that exists. For an app-space migration planned to the emitted contract, emit that contract again and re-run the \`migration plan\` that wrote this migration, with its \`--from\` and no \`--to\`, then delete the new migration directory it writes, which repeats this one. For an extension space, re-run the extension's contract-space build`,
+    ),
+  ];
+}
+
 async function checkSnapshotConsistency(
   space: CheckSpace,
   pkg: OnDiskMigrationPackage,
@@ -132,12 +141,7 @@ async function checkSnapshotConsistency(
       code: 'MIGRATION.CHECK_SNAPSHOT_UNPARSEABLE',
       where: migrationPathRelative(space.cwd, pkg.dirPath),
       why: `Migration "${pkg.dirName}" has an unparseable contract snapshot at ${snapshotDir}/contract.json.`,
-      nextActions: [
-        chooseAction('Restore migrations/snapshots/ from version control'),
-        chooseAction(
-          'Or re-run the command that produced this migration to regenerate its snapshot',
-        ),
-      ],
+      nextActions: snapshotRewriteActions(snapshotDir),
     };
   }
   const record = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
@@ -149,11 +153,7 @@ async function checkSnapshotConsistency(
       code: 'MIGRATION.CHECK_SNAPSHOT_HASH_MISMATCH',
       where: migrationPathRelative(space.cwd, pkg.dirPath),
       why: `Migration "${pkg.dirName}" declares to=${pkg.metadata.to} but its contract snapshot has storageHash=${snapshotHash}`,
-      nextActions: [
-        chooseAction(
-          'Re-emit the migration package so migration.json and its contract snapshot agree',
-        ),
-      ],
+      nextActions: snapshotRewriteActions(snapshotDir),
     };
   }
   if (space.verifySnapshotContent !== undefined) {
@@ -172,12 +172,7 @@ async function checkSnapshotConsistency(
         code: 'MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH',
         where: migrationPathRelative(space.cwd, jsonPath),
         why: `Migration "${pkg.dirName}": ${error.why}`,
-        nextActions: [
-          chooseAction('Restore migrations/snapshots/ from version control'),
-          chooseAction(
-            'Or re-run the command that produced this migration to regenerate its snapshot',
-          ),
-        ],
+        nextActions: error.nextActions === undefined ? [] : [...error.nextActions],
       };
     }
   }

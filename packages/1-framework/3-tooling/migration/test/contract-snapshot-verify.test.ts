@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { computeStorageHash } from '@internal/contract/hashing';
+import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -71,6 +72,34 @@ describe('createSnapshotContentVerifier', () => {
       jsonPath: '/store/contract.json',
     });
     expect(error.meta?.['computedHash']).not.toBe(storageHash);
+  });
+
+  it('names a skipped upgrade as a cause and advises remedies that rewrite the snapshot', () => {
+    const { contractJson, storageHash } = genuineContract({ namespaces: {} });
+    const tampered = {
+      ...contractJson,
+      storage: { ...contractJson.storage, namespaces: { sneaky: { entries: {} } } },
+    };
+
+    const verifier = createSnapshotContentVerifier(storageAsGiven);
+    let thrown: unknown;
+    try {
+      verifier.assertSnapshotContentMatches(tampered, storageHash, '/store/abc/contract.json');
+    } catch (error) {
+      thrown = error;
+    }
+
+    const error = thrown as MigrationToolsError;
+    expect(error.why).toContain('upgraded from an earlier release of Prisma 8');
+    expect(error.fix).toContain(APP_UPGRADE_GUIDES_URL);
+    expect(error.fix).toContain('delete "/store/abc"');
+    expect(error.fix).toContain('no command replaces a snapshot directory that exists');
+    expect(error.fix).not.toContain('to regenerate the snapshot');
+    expect(error.nextActions).toEqual([
+      expect.objectContaining({ kind: 'open-url', url: APP_UPGRADE_GUIDES_URL }),
+      expect.objectContaining({ kind: 'user-choice', label: expect.stringContaining('Restore') }),
+      expect.objectContaining({ kind: 'user-choice', label: expect.stringContaining('Delete') }),
+    ]);
   });
 
   it('re-verifies on every assertion, so content mutated after a clean pass is caught', () => {

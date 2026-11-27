@@ -1,6 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { computeStorageHash } from '@internal/contract/hashing';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
+import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
@@ -121,13 +122,18 @@ describe('contract snapshot content verification', () => {
 
     expect(run.exitCode).toBe(4);
     const data = run.presented?.data as {
-      failures: readonly { code: string; why: string }[];
+      failures: readonly { code: string; why: string; nextActions: readonly unknown[] }[];
     };
     const failure = data.failures.find(
       (f) => f.code === 'MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH',
     );
     expect(failure).toBeDefined();
     expect(failure?.why).toContain(GENUINE_HASH);
+    expect(failure?.nextActions).toEqual([
+      expect.objectContaining({ kind: 'open-url', url: APP_UPGRADE_GUIDES_URL }),
+      expect.objectContaining({ label: expect.stringContaining('Restore') }),
+      expect.objectContaining({ label: expect.stringContaining('Delete') }),
+    ]);
   });
 
   it('check passes while the snapshot store is untampered', async () => {

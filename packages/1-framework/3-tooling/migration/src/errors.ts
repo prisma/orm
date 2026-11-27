@@ -10,6 +10,7 @@ import {
 import { ifDefined } from '@internal/utils/defined';
 import type { NextAction } from '@internal/utils/structured-error';
 import { isStructuredError } from '@internal/utils/structured-error';
+import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { basename, dirname, relative } from 'pathe';
 import type { MigrationGraph } from './graph';
 
@@ -644,18 +645,34 @@ export function errorContractSnapshotHashMismatch(
   );
 }
 
+const SNAPSHOT_REWRITE_STEPS =
+  "For an app-space migration planned to the emitted contract, emit that contract again and re-run the `migration plan` that wrote the migration ending at this hash, with its `--from` and no `--to`, then delete the new migration directory it writes, which repeats the existing migration. For an extension space, re-run the extension's contract-space build.";
+
 export function errorContractSnapshotContentMismatch(args: {
   readonly storageHash: string;
   readonly computedHash: string;
   readonly jsonPath: string;
 }): MigrationToolsError {
   const { storageHash, computedHash, jsonPath } = args;
+  const snapshotDir = dirname(jsonPath);
   return new MigrationToolsError(
     'MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH',
     'Contract snapshot content does not match its hash',
     {
-      why: `The contract snapshot at "${jsonPath}" is addressed by storage hash ${storageHash}, but its content recomputes to ${computedHash}. The file has been edited (or corrupted) since it was written.`,
-      fix: 'Restore migrations/snapshots/ from version control, or re-run the command that authored the migration referencing this hash to regenerate the snapshot.',
+      why: `The contract snapshot at "${jsonPath}" is addressed by storage hash ${storageHash}, but its content recomputes to ${computedHash}. Either the project was upgraded from an earlier release of Prisma 8 without following that release's upgrade instructions, which rewrite the snapshots, or the file has been edited or corrupted since it was written.`,
+      fix: `If you just upgraded Prisma, follow the app upgrade instructions of each release since the one you upgraded from: ${APP_UPGRADE_GUIDES_URL}. Otherwise restore "${snapshotDir}" from version control, or delete "${snapshotDir}" and write it again; no command replaces a snapshot directory that exists. ${SNAPSHOT_REWRITE_STEPS}`,
+      nextActions: [
+        {
+          kind: 'open-url',
+          label: 'If you just upgraded Prisma, follow the app upgrade instructions',
+          url: APP_UPGRADE_GUIDES_URL,
+        },
+        { kind: 'user-choice', label: `Restore "${snapshotDir}" from version control` },
+        {
+          kind: 'user-choice',
+          label: `Delete "${snapshotDir}" and write it again. ${SNAPSHOT_REWRITE_STEPS}`,
+        },
+      ],
       meta: { storageHash, computedHash, jsonPath },
     },
   );

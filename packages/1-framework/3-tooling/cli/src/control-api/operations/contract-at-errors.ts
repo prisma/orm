@@ -71,7 +71,7 @@ export function mapContractAtError(
               role === 'to'
                 ? `Target migration is missing its contract snapshot at ${expectedPath}`
                 : `Predecessor migration is missing its contract snapshot at ${expectedPath}`,
-            fix: 'Restore migrations/snapshots/ from version control, or re-run the command that produced this migration to regenerate its snapshot.',
+            fix: error.fix,
             cause: error,
           }),
         );
