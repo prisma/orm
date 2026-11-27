@@ -6408,6 +6408,7 @@
 ./runtime: function encodeParamsWithMetadata(values: readonly unknown[], metadata: readonly ParamMetadata[], ctx: SqlCodecCallContext, contractCodecs?: ContractCodecRegistry): Promise<readonly unknown[]>
 ./runtime: function extractCodecIds(contract: Contract<SqlStorage>): Set<string>
 ./runtime: function findActivitySource(target: RuntimeScope): ActivitySource | undefined
+./runtime: function interactiveTransactionsAvailable(contract: Contract<SqlStorage>, retiredCapabilities: CapabilitySet): boolean
 ./runtime: function lazyActivitySource(source: () => ActivitySource): ActivitySource
 ./runtime: function lints(options?: LintsOptions): SqlMiddleware
 ./runtime: function lowerSqlPlan<Row>(adapter: Adapter<AnyQueryAst, Contract<SqlStorage>, LoweredStatement>, contract: Contract<SqlStorage>, queryPlan: SqlQueryPlan<Row>): SqlExecutionPlan<Row>
