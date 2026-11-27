@@ -1,0 +1,17 @@
+---
+description: A doc change is done only after a cold reader and a fact checker, both separate agents, have reviewed it
+alwaysApply: false
+globs:
+  - "docs/**/*.md"
+  - "**/README.md"
+  - "skills/**/*.md"
+  - "*.md"
+---
+
+# Doc changes get two independent reviews
+
+**What happened.** An agent wrote two decision records and changed fifty other docs, read them itself, and judged them clear. The maintainer could not follow them. Readers given only the files then found the mechanism explained before the problem, terms used before they were defined, rules stated but never shown with an example, paragraphs of nine sentences, and wrong facts: an error said to appear on every query that appears only when a default value is read.
+
+**Why it happens.** An author cannot read their own text cold, because they know what every term means. And writing a doc checks nothing against the code: a name remembered from a spec is often a name that was changed while building.
+
+**So, before you call a doc change done,** run the [`doc-review`](../../skills-contrib/doc-review/SKILL.md) skill on every doc you wrote or rewrote. It gives two briefs, each for a fresh agent that has not seen your session: a cold reader, who gets only the file, and a fact checker, who checks every name, example, command, number and link against the repository. Fix what they find and send the files back until both find nothing. Say in your report that both ran. A one-line correction needs only `pnpm lint:doc-links`.

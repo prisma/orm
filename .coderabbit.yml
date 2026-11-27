@@ -8,6 +8,19 @@ reviews:
     base_branches:
       - ".*"
   path_instructions:
+    - path: "**/*.md"
+      instructions: >-
+        Review documentation as a reader who has none of the author's context, and check its facts against the
+        code in this repository. Flag: a term used before it is explained, or never explained; a mechanism
+        explained before the problem it solves; a rule that is stated but not shown with an example; a paragraph
+        of more than five sentences that would read better as a list or a table; a statement about what the code,
+        a command or a check does that the code in this pull request or in the repository contradicts; a name
+        of a package, file, function, flag or error code that does not exist; the same rule stated differently
+        in two files of the pull request; a relative link or heading anchor that does not resolve. In a
+        decision record under docs/architecture docs/adrs/, also flag a ticket number, a pull request number,
+        a project milestone, and any account of a state the system passed through, such as "before this
+        refactor" or "we used to". Do not comment on wording that is merely different from how you would
+        write it.
     - path: "**/*.{ts,tsx,mts,cts,js,mjs,cjs}"
       instructions: >-
         Decimal, bigint and 64-bit integer types exist to hold values a JavaScript number would round, so flag

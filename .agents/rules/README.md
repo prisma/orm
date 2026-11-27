@@ -124,7 +124,7 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 
 ## Architecture
 - `adr-writing.mdc` — ADR writing guidelines (clarity, flow, examples)
-- `adr-examples-must-match-code.mdc` — ADR examples should be copy/pasteable and reflect real APIs
+- `doc-changes-get-two-independent-reviews.mdc` — A doc change is done only after a cold reader and a fact checker, both separate agents, have reviewed it
 - `contract-default-values.mdc` — Validate emitted column defaults
 - `config-validation-and-normalization.mdc` — Config validation and normalization patterns using Arktype
 - `control-plane-descriptors.mdc` — Control plane descriptor pattern (Control*Descriptor types, driver requirement)
