@@ -83,7 +83,7 @@ No message needs a version the author stated: each speaks of the first version t
 
 The runtime keeps the contract's capabilities as the contract lists them. It does not merge the capabilities of its target, adapter, driver or extensions over them.
 
-The contract's capabilities that are not the database's must be provided by the connection. The check reads the driver's set, and the adapter's as well, because the adapters of the targets not yet rebuilt this way still declare their connection's capabilities; PostgreSQL's adapter declares none. The target tells the check which are the database's (`databaseCapabilities` on the SQL runtime target descriptor); signing answers for those.
+The contract's capabilities that are not the database's must be provided by the connection: the check reads the sets the client's driver and adapter declare, and PostgreSQL's adapter declares none. The PostgreSQL clients run this check. The clients of the other targets do not run it yet.
 
 - **At compile time,** creating a client from a contract whose type is known and whose connection lacks a required capability is a type error that names the capability. A helper that passes on a contract type it does not know yet compiles, and is checked at run time.
 - **When the client is created,** the same comparison runs on the values in `contract.json` and logs one warning, `CONTRACT.CAPABILITIES_NOT_PROVIDED`. It is reported as a signature that does not match is reported, and `verifyMarker: false` turns both off.

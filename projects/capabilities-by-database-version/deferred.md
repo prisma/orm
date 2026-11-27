@@ -7,7 +7,7 @@ Work this project found and did not do. Each item says what is wrong today and w
 ADR 335 decides that a contract lists the capabilities it requires, that signing checks the database, and that the client checks only its connection. These files still say an adapter reports or negotiates capabilities at connect time, or show a PostgreSQL contract or config with no `requiredCapabilities`. Each needs its body edited in place to say what is true now.
 
 - Decision records: ADR 010, 016, 105, 114, 115, 116, 117, 118, 123, 157, 202, 210, 252, 261, 313.
-- Subsystem docs: `3. Query Lanes.md`, `6. Ecosystem Extensions & Packs.md`, and the parts of `5. Adapters & Targets.md` outside "Adapter capabilities and discovery".
+- Subsystem docs: `3. Query Lanes.md`, `6. Ecosystem Extensions & Packs.md`, and the parts of `5. Adapters & Targets.md` outside "Adapter capabilities and discovery". In `5. Adapters & Targets.md` that includes the lines that say extension packs add capability flags, the glossary and startup diagram that show the adapter advertising and negotiating capabilities, and example capabilities that are in no list (`transactionalDDL`, `savepoints`).
 
 ## A contract source given no capabilities is not refused
 
