@@ -204,8 +204,11 @@ export async function startDyingConnectionsProxy(target: {
 export function throughProxy(connectionString: string, port: number): string {
   const url = new URL(connectionString);
   url.host = `127.0.0.1:${port}`;
-  for (const name of ['host', 'port', 'ssl', 'sslmode']) url.searchParams.delete(name);
+  for (const name of ['host', 'port', 'ssl', 'sslmode', 'sslnegotiation']) {
+    url.searchParams.delete(name);
+  }
   url.searchParams.set('sslmode', 'disable');
+  url.searchParams.set('sslnegotiation', 'postgres');
   return url.toString();
 }
 
