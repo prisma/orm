@@ -11,8 +11,8 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { PRISMA_TABLES_SPACE_ID } from '@internal/framework-components/control';
-import postgresTargetDescriptor from '@internal/target-postgres/control';
+import { PRISMA_TABLES_SPACE_ID } from '@prisma/orm-framework/components/control';
+import postgresTargetDescriptor from '@prisma/orm-postgres/target/control';
 import { describe, expect, it } from 'vitest';
 import { releaseCandidatePrismaTables } from '../../../../packages/3-targets/postgres/2-adapter/test/migrations/fixtures/release-candidate-prisma-tables';
 import { withTempDir } from '../utils/cli-test-helpers';
