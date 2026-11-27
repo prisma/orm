@@ -85,6 +85,10 @@ function blankComments(line, startsInComment) {
   return { text: text + line.slice(at), inComment: false };
 }
 
+function quoteDepth(line) {
+  return (BLOCKQUOTE.exec(line)?.[0].match(/>/g) ?? []).length;
+}
+
 function* proseLines(content) {
   const lines = content.split(/\r?\n/);
   let start = 0;
@@ -93,16 +97,16 @@ function* proseLines(content) {
     if (end > 0) start = end + 1;
   }
   let fence = null;
-  let fenceQuoted = false;
+  let fenceDepth = 0;
   let inList = false;
   let inIndentedCode = false;
   let previousBlank = true;
   let inComment = false;
-  let commentQuoted = false;
+  let commentDepth = 0;
   for (let i = start; i < lines.length; i++) {
     const raw = lines[i];
     const unquoted = raw.replace(BLOCKQUOTE, '');
-    if (fence !== null && fenceQuoted && !BLOCKQUOTE.test(raw)) fence = null;
+    if (fence !== null && quoteDepth(raw) < fenceDepth) fence = null;
     if (fence !== null) {
       const closing = FENCE.exec(unquoted);
       if (
@@ -115,9 +119,9 @@ function* proseLines(content) {
       }
       continue;
     }
-    if (inComment && commentQuoted && !BLOCKQUOTE.test(raw)) inComment = false;
+    if (inComment && quoteDepth(raw) < commentDepth) inComment = false;
     const uncommented = blankComments(raw, inComment);
-    if (uncommented.inComment && !inComment) commentQuoted = BLOCKQUOTE.test(raw);
+    if (uncommented.inComment && !inComment) commentDepth = quoteDepth(raw);
     inComment = uncommented.inComment;
     const line = uncommented.text;
     if (line.replace(BLOCKQUOTE, '').trim() === '') {
@@ -129,7 +133,7 @@ function* proseLines(content) {
     const opening = FENCE.exec(fenceLine);
     if (opening && !(opening[1][0] === '`' && fenceLine.slice(opening[0].length).includes('`'))) {
       fence = opening[1];
-      fenceQuoted = fenceLine !== line;
+      fenceDepth = quoteDepth(line);
       previousBlank = false;
       yield { text: '', line: i + 1 };
       continue;

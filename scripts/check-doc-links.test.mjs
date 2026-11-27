@@ -362,6 +362,24 @@ describe('collectAnchors', () => {
     deepStrictEqual([targets(content), [...collectAnchors(content)]], [['a.md'], ['after']]);
   });
 
+  it('ends a fence opened in a nested blockquote at a shallower line', () => {
+    deepStrictEqual(
+      [
+        '> > ```\n> > example\n> [broken](missing.md)',
+        '>> ```\n>> [h](h.md)\n>> ```\n>> after [b](b.md)',
+        '> ```\n> > [deeper](deeper.md)\n> ```\n[c](c.md)',
+      ].map(targets),
+      [['missing.md'], ['b.md'], ['c.md']],
+    );
+  });
+
+  it('ends a comment opened in a nested blockquote at a shallower line', () => {
+    deepStrictEqual(
+      ['> > <!-- a\n> [y](y.md)', '> <!-- a\n> > [deeper](deeper.md)\n> -->\n[z](z.md)'].map(targets),
+      [['y.md'], ['z.md']],
+    );
+  });
+
   it('reads a definition in a blockquote after a quoted blank line', () => {
     deepStrictEqual(targets('> [x][r]\n>\n> [r]: missing.md'), ['missing.md']);
   });
