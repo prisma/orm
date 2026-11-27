@@ -45,7 +45,7 @@ As of 2026-11-27. The GA plan (`planning/plan.md` on branch `planning/prisma-8-g
 | 3. Reduce exports | Design settled; session paused | None. Audit, spec and plan on a local branch | prisma/orm#31218 merging, since both change the PostgreSQL facade |
 | 4. API check in CI | Done | prisma/orm#31201 and #31217 merged | Nothing for GA. TML-3977 (compare each package with its own last release) can follow GA |
 | 5. Additions that break | Not started | | A free session |
-| 6. Versions, levels, dependencies | Mostly merged | prisma/prisma-cli#405, prisma/orm#31204, #31212 and #31222 merged | prisma/orm#31236 (the procedure for cutting release 8.0 as `8.0.1`) approved, on auto-merge. Then TML-3987, which GA waits for: the API compatibility job finds each package's last release at that package's own version, such as `8.0.1-ea.0`. Then create-prisma listing the platform packages (TML-3956) |
+| 6. Versions, levels, dependencies | Mostly merged | prisma/prisma-cli#405, prisma/orm#31204, #31212, #31222 and #31236 merged | prisma/orm#31236 (the procedure for cutting release 8.0 as `8.0.1`) merged 2026-11-28. Next TML-3987, which GA waits for: the API compatibility job finds each package's last release at that package's own version, such as `8.0.1-ea.0`. Then create-prisma listing the platform packages (TML-3956) |
 | 7. Prisma's own tables | Building | prisma/studio#1606 merged; nothing pushed in prisma/orm | A decision on applying Prisma's own tables in a first phase; merges after #31203 |
 | 12. Published policy | Not started; required for GA | | A session |
 | 13. The `prisma` tool's interface | Not started; survey done | | Design discussion |
