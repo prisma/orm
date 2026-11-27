@@ -18,7 +18,7 @@ import {
   notOk,
   ok,
 } from '@prisma/cli-engine/protocol';
-import { join } from 'pathe';
+import { dirname, join, relative } from 'pathe';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   type ResolveContractRefToSnapshotSuccess,
@@ -65,6 +65,7 @@ import type {
   MigrationCommandResult,
   RemovedNamespaceJson,
 } from '../../utils/formatters/migrations';
+import { snapshotRewriteAt } from '../../utils/next-actions';
 import { errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import {
   type CliInvocation,
@@ -523,10 +524,26 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         ) {
           return notOk(
             normalizeError(
-              errorContractValidationFailed(`Contract validation failed: ${error.message}`, {
-                where: { path: contractPath },
-                meta: contractValidationMeta(error),
-              }),
+              errorContractValidationFailed(
+                `Contract at ${snapshotContractPath} failed to deserialize: ${error.message}`,
+                {
+                  where: { path: snapshotContractPath },
+                  meta: contractValidationMeta(error),
+                  ...(destination?.source === 'snapshot'
+                    ? {
+                        artifact: 'snapshot' as const,
+                        ...(destination.hash === storageHashOf(prepared.value.contractJson)
+                          ? {
+                              rewrittenBy: snapshotRewriteAt(
+                                APP_SPACE_ID,
+                                relative(process.cwd(), dirname(snapshotContractPath)),
+                              ),
+                            }
+                          : {}),
+                      }
+                    : {}),
+                },
+              ),
             ),
           );
         }
