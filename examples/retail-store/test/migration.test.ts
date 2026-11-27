@@ -10,6 +10,13 @@ describe('migration', () => {
     expect(collections.products.indexes).toMatchObject([
       {
         keys: [
+          { field: 'brand', direction: 1 },
+          { field: 'subCategory', direction: 1 },
+        ],
+      },
+      { keys: [{ field: 'code', direction: 'hashed' }] },
+      {
+        keys: [
           { field: 'name', direction: 'text' },
           { field: 'description', direction: 'text' },
         ],
@@ -17,17 +24,10 @@ describe('migration', () => {
       },
       {
         keys: [
-          { field: 'brand', direction: 1 },
-          { field: 'subCategory', direction: 1 },
-        ],
-      },
-      {
-        keys: [
           { field: 'primaryCategory', direction: 1 },
           { field: 'articleType', direction: 1 },
         ],
       },
-      { keys: [{ field: 'code', direction: 'hashed' }] },
     ]);
 
     expect(collections.users.indexes).toMatchObject([
@@ -43,18 +43,18 @@ describe('migration', () => {
     ]);
 
     expect(collections.events.indexes).toMatchObject([
+      { keys: [{ field: 'timestamp', direction: 1 }], expireAfterSeconds: 7776000 },
       {
         keys: [
           { field: 'userId', direction: 1 },
           { field: 'timestamp', direction: -1 },
         ],
       },
-      { keys: [{ field: 'timestamp', direction: 1 }], expireAfterSeconds: 7776000 },
     ]);
 
     expect(collections.invoices.indexes).toMatchObject([
-      { keys: [{ field: 'orderId', direction: 1 }] },
       { keys: [{ field: 'issuedAt', direction: -1 }], sparse: true },
+      { keys: [{ field: 'orderId', direction: 1 }] },
     ]);
 
     expect(collections.locations.indexes).toMatchObject([
