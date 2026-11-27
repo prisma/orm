@@ -1103,7 +1103,9 @@
 ./target/contract-free: class PostgresTableSource, required method rewrite(rewriter: AstRewriter): AnyFromSource
 ./target/contract-free: const PRISMA_TABLES_MISSING_WHY = "The tables are created, or moved from the schema prisma_contract that the release candidates of Prisma 8 used, by applying the target's _prisma contract space, and nothing has applied it to this database. `prisma db init`, `prisma db update`, `prisma db migrate` and `prisma db sign` apply it before anything else; code that runs the migration runner or signs a database directly must apply it first: call bringPrismaSpaceUpToDate on the control client, or, without the control client, applyInstalledContractSpace from @prisma/orm-toolchain/migration-tools/spaces."
 ./target/contract-free: const PRISMA_TABLES_SCHEMA = "_prisma"
-./target/contract-free: const PRISMA_TABLE_NAMES: { readonly marker: "marker"; readonly ledger: "ledger"; readonly contract: "contract"; }
+./target/contract-free: const PRISMA_TABLE_NAMES: { readonly signatures: "signatures"; readonly config: "config"; readonly ledger: "ledger"; readonly contract: "contract"; }
+./target/contract-free: const RECORD_DATABASE_POLICIES_SQL: string
+./target/contract-free: const RELEASE_CANDIDATE_MARKER_TABLE = "marker"
 ./target/contract-free: const RELEASE_CANDIDATE_PRISMA_TABLES_SCHEMA = "prisma_contract"
 ./target/contract-free: const int4: (opts?: ColOpts) => ColumnDescriptor
 ./target/contract-free: const int8: (opts?: ColOpts) => ColumnDescriptor
@@ -1130,8 +1132,9 @@
 ./target/contract-free: function indexExistsAst(schema: string, indexName: string): IndexExistsCheckBuilder
 ./target/contract-free: function noNullValuesAst(options: { readonly schema: string; readonly table: string; readonly column: string; }): SelectAst
 ./target/contract-free: function pgTable<Schema extends ColumnSchema>(source: { readonly name: string; readonly schema?: string; readonly alias?: string; }, columns: Schema): TableHandle<Schema>
-./target/contract-free: function prismaTablesMissingSummary(): string
-./target/contract-free: function qualifiedPrismaTable(table: PrismaTableName, schema?: string): string
+./target/contract-free: function prismaTableLocation(table: PrismaTableName): string
+./target/contract-free: function prismaTablesMissingSummary(missing: readonly PrismaTableName[]): string
+./target/contract-free: function qualifiedPrismaTable(table: PrismaTableName | typeof RELEASE_CANDIDATE_MARKER_TABLE, schema?: string): string
 ./target/contract-free: function rlsEnabledAst(schema: string, table: string): RlsEnabledCheckBuilder
 ./target/contract-free: function rlsPolicyExistsAst(options: { readonly schema: string; readonly table: string; readonly policyName: string; }): RlsPolicyExistsCheckBuilder
 ./target/contract-free: function sequenceNameAvailableAst(options: { readonly schema: string; readonly table: string; readonly column: string; readonly sequence: string; }): SelectAst
@@ -3624,9 +3627,11 @@
 ./target: const POSTGRES_NEWEST_VERSION: 18
 ./target: const PRISMA_TABLES_MISSING_WHY = "The tables are created, or moved from the schema prisma_contract that the release candidates of Prisma 8 used, by applying the target's _prisma contract space, and nothing has applied it to this database. `prisma db init`, `prisma db update`, `prisma db migrate` and `prisma db sign` apply it before anything else; code that runs the migration runner or signs a database directly must apply it first: call bringPrismaSpaceUpToDate on the control client, or, without the control client, applyInstalledContractSpace from @prisma/orm-toolchain/migration-tools/spaces."
 ./target: const PRISMA_TABLES_SCHEMA = "_prisma"
-./target: const PRISMA_TABLE_NAMES: { readonly marker: "marker"; readonly ledger: "ledger"; readonly contract: "contract"; }
+./target: const PRISMA_TABLE_NAMES: { readonly signatures: "signatures"; readonly config: "config"; readonly ledger: "ledger"; readonly contract: "contract"; }
 ./target: const PostgresContractView: { from<TContract extends Contract<SqlStorage>>(contract: TContract): PostgresContractView<TContract>; fromJson<TContract extends Contract<SqlStorage> = Contract<SqlStorage<string>>>(json: unknown): PostgresContractView<TContract>; }
 ./target: const PostgresSchemaNodeKind: { readonly database: "postgres-database"; readonly namespace: "postgres-namespace"; readonly table: "postgres-table"; readonly policy: "postgres-policy"; readonly role: "postgres-role"; readonly nativeEnum: "postgres-native-enum"; readonly extension: "postgres-extension"; }
+./target: const RECORD_DATABASE_POLICIES_SQL: string
+./target: const RELEASE_CANDIDATE_MARKER_TABLE = "marker"
 ./target: const RELEASE_CANDIDATE_PRISMA_TABLES_SCHEMA = "prisma_contract"
 ./target: const int4: (opts?: ColOpts) => ColumnDescriptor
 ./target: const int8: (opts?: ColOpts) => ColumnDescriptor
@@ -3832,9 +3837,10 @@
 ./target: function postgresNowGeneratorControlDescriptors(): readonly MutationDefaultGeneratorDescriptor[]
 ./target: function postgresRenderCheckExpressions(input: CheckExpressionInput): readonly CheckExpressionCandidate[]
 ./target: function postgresResolveDefault(def: ColumnDefault, column: DefaultResolverColumn): ColumnDefault
-./target: function prismaTablesMissingSummary(): string
+./target: function prismaTableLocation(table: PrismaTableName): string
+./target: function prismaTablesMissingSummary(missing: readonly PrismaTableName[]): string
 ./target: function qualifiedEnumName(reported: Pick<ReportedSqlType, 'name' | 'schema'>): string
-./target: function qualifiedPrismaTable(table: PrismaTableName, schema?: string): string
+./target: function qualifiedPrismaTable(table: PrismaTableName | typeof RELEASE_CANDIDATE_MARKER_TABLE, schema?: string): string
 ./target: function qualifyName(schemaName: string, objectName: string): string
 ./target: function qualifyTableName(schema: string, table: string): string
 ./target: function quoteIdentifier(identifier: string): string
