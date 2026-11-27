@@ -57,7 +57,7 @@ A JSON document declaring pack metadata including namespace, version, supported 
 ## Runtime Integration
 
 ### Database Version
-On PostgreSQL, the author states the database version where the contract is written (`databaseVersion`). The target's table says which capabilities that version provides, and the contract lists them. Other targets' contracts take a fixed list from their adapter.
+On PostgreSQL, the target's table says which capabilities each database version provides. The facade exports a list of keys for each supported version (`postgres15` to `postgres18`) and one for the driver's connection (`postgresDriver`), and the author spreads the ones the contract requires into `requiredCapabilities`. Signing checks that the database's version provides them. Other targets' contracts take a fixed list from their adapter.
 
 ### Codec Resolution
 The deterministic process of assembling active codecs with strict precedence: app-provided → pack codecs → adapter built-ins → driver fallbacks. Resolution is cached per contract type and adapter profile.

@@ -32,7 +32,7 @@ describe('what a PostgreSQL database does not provide of what a contract require
     expect(notProvidedOn(180001)).toBeUndefined();
   });
 
-  it("is the capabilities a server's row lacks, each with the first version that provides it, and the version to state", () => {
+  it("is the capabilities a server's row lacks, each with the first version that provides it", () => {
     expect(notProvidedOn(150004)).toEqual({
       database: 'PostgreSQL',
       findings: [

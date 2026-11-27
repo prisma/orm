@@ -13,7 +13,7 @@ The pattern: declare optional or target-varying features as **namespaced capabil
 
 - A feature is target-optional (some targets implement it, others do not — `RETURNING`, `LATERAL`, `jsonAgg`).
 - A feature is target-varying (the same target supports it differently across versions — prepared statements, JSON ops, partial indexes).
-- A feature depends on the database version (on PostgreSQL, the author states the version and the target's table says what it provides; signing checks the server).
+- A feature depends on the database version (on PostgreSQL, the target's table says what each version provides, the author lists what the contract requires from the lists built from it, and signing checks the server).
 - A pack or extension surfaces a feature the framework should consume only when the pack is present (pgvector operators, PostGIS types).
 
 ## When NOT to use

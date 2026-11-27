@@ -2218,7 +2218,7 @@ export type ContractInput<
   readonly family: Family;
   readonly target: Target;
   readonly extensions?: Extensions;
-  /** The adapter the contract runs with. Its capabilities join the target's and the extensions', as `prisma contract emit` joins them. The Postgres and SQLite `defineContract` supply it. */
+  /** Capabilities the contract records beside its target's and its extensions', joined as `prisma contract emit` joins them. The PostgreSQL `defineContract` passes the author's `requiredCapabilities` here, and the SQLite one its adapter's set. */
   readonly adapter?: CapabilityContributor;
   readonly naming?: NamingConfig;
   readonly storageHash?: string;
