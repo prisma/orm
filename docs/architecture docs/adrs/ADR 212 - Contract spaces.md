@@ -209,7 +209,7 @@ Three properties hold:
 
 1. **The marker is the truth-of-record** for the live database's per-space applied state.
 2. **The set of marker rows must equal the set of loaded spaces** (`'app'` plus every entry in `extensions`), with the Prisma space's row counted as declared. Mismatches surface as verifier errors with clear remediation.
-3. **A marker never records migrations that did not apply.** On a target whose DDL is transactional, a multi-space apply runs in one outer transaction, so either every marker advances or none does. On a target whose DDL is not, a space's marker advances only after its operations ran and its schema verified.
+3. **A marker never records migrations that did not apply.** On a target whose DDL is transactional, a multi-space apply runs in one outer transaction, so either every application and extension space's marker advances or none does. The Prisma space's marker is not part of that transaction: it is brought up to date and committed before the apply starts, and stays when the apply fails ([ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)). On a target whose DDL is not, a space's marker advances only after its operations ran and its schema verified.
 
 ### Per-space planner, runner, verifier
 

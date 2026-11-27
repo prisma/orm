@@ -6,7 +6,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "48136a521f8b1c82",
-    "reason": "The control client brings the Prisma space up to date with a new required method (prisma/orm#31234)."
+    "reason": "`ControlClient` gains the required method `bringPrismaSpaceUpToDate`, so a `createClient` factory passed to `executeMigrateShowPlan` must return a client that has it (prisma/orm#31234)."
   },
   {
     "path": "./migration-tools",
