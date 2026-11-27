@@ -14,7 +14,7 @@ import { createControlStack } from '@internal/framework-components/control';
 import { materialiseMigrationPackage } from '@internal/migration-tools/io';
 import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
 import postgresFacade from '@internal/postgres/runtime';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';

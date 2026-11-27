@@ -19,7 +19,7 @@ import {
   MongoStorage,
   MongoValidator,
 } from '@internal/mongo-contract';
-import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import {
   buildSymbolTable,

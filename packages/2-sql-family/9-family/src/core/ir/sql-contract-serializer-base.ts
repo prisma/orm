@@ -14,11 +14,8 @@ import {
   hydrateNamespaceEntities,
   type Namespace,
 } from '@internal/framework-components/ir';
-import {
-  normalizeSqlDomain,
-  normalizeSqlStorage,
-} from '@internal/sql-contract/canonicalization-hooks';
 import { composeSqlEntityKinds } from '@internal/sql-contract/entity-kinds';
+import { normalizeSqlDomain, normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import {
   isMaterializedSqlNamespace,
   type SqlModelStorage,

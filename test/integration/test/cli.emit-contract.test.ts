@@ -4,7 +4,7 @@ import type { ContractSourceContext } from '@internal/cli/config-types';
 import { loadConfig, type PrismaConfig } from '@internal/config-loader';
 import type { ControlStack } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';

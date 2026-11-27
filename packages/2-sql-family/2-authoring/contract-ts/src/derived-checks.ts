@@ -2,7 +2,7 @@ import { applySpecifierDefaultControlPolicy } from '@internal/contract/apply-spe
 import { computeStorageHash } from '@internal/contract/hashing';
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { effectiveControlPolicy } from '@internal/contract/types';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import {
   checkConstraintInputFromSerialized,
   isMaterializedSqlNamespace,

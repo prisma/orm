@@ -28,7 +28,6 @@ import type {
 } from '@internal/framework-components/codec';
 import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import {
   type CheckExpressionRenderer,
   discriminatorValueSet,
@@ -36,6 +35,7 @@ import {
 import { sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
 import { validateIndexTypes } from '@internal/sql-contract/index-type-validation';
 import { type IndexTypeRegistry, indexTypeRegistryOf } from '@internal/sql-contract/index-types';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import {
   CheckConstraint,
   type SqlNamespaceInput,

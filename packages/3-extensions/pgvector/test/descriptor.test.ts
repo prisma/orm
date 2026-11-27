@@ -2,7 +2,7 @@ import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { findPathWithDecision, reconstructGraph } from '@internal/migration-tools/migration-graph';
 import { assertDescriptorSelfConsistency } from '@internal/migration-tools/spaces';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { describe, expect, it } from 'vitest';
 import searchPathInstallOps from '../migrations/20261106T1401_install_vector_on_search_path/ops.json' with {
   type: 'json',

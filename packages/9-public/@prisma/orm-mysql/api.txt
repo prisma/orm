@@ -134,7 +134,6 @@
 ./driver/runtime: export default from @prisma/orm-target-mysql/driver/runtime
 ./driver: everything from @prisma/orm-target-mysql/driver
 ./family-contract/authored-check-naming: everything from @prisma/orm-family-sql/contract/authored-check-naming
-./family-contract/canonicalization-hooks: everything from @prisma/orm-family-sql/contract/canonicalization-hooks
 ./family-contract/check-expressions: everything from @prisma/orm-family-sql/contract/check-expressions
 ./family-contract/codec-json-type: everything from @prisma/orm-family-sql/contract/codec-json-type
 ./family-contract/contract-view: everything from @prisma/orm-family-sql/contract/contract-view
@@ -148,6 +147,7 @@
 ./family-contract/index-naming: everything from @prisma/orm-family-sql/contract/index-naming
 ./family-contract/index-type-validation: everything from @prisma/orm-family-sql/contract/index-type-validation
 ./family-contract/index-types: everything from @prisma/orm-family-sql/contract/index-types
+./family-contract/normal-form: everything from @prisma/orm-family-sql/contract/normal-form
 ./family-contract/referential-action-sql: everything from @prisma/orm-family-sql/contract/referential-action-sql
 ./family-contract/resolve-storage-table: everything from @prisma/orm-family-sql/contract/resolve-storage-table
 ./family-contract/sql-expression: everything from @prisma/orm-family-sql/contract/sql-expression

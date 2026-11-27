@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { computeStorageHash } from '@internal/contract/hashing';
-import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { mongoTestStack } from '@internal/mongo-contract-psl/test';
 import { dirname, join } from 'pathe';

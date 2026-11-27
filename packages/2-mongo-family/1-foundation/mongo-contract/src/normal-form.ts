@@ -1,18 +1,37 @@
 import type { NormalizeStorage } from '@internal/contract/hashing';
-import { createStorageSort } from '@internal/contract/hashing-utils';
+import { compareCodeUnits, createStorageSort } from '@internal/contract/hashing-utils';
 import { isPlainRecord } from '@internal/contract/is-plain-record';
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
-const COLLATION_FLAGS = new Set(['caseLevel', 'numericOrdering']);
-const INDEX_FLAGS = new Set(['unique', 'sparse']);
+const FALSE_BY_DEFAULT_COLLATION_FLAGS = new Set(['caseLevel', 'numericOrdering']);
+const FALSE_BY_DEFAULT_INDEX_FLAGS = new Set(['unique', 'sparse']);
 const SUBSCHEMA_KEYWORDS = new Set(['items', 'not', 'additionalProperties', 'additionalItems']);
 const SUBSCHEMA_LIST_KEYWORDS = new Set(['oneOf', 'anyOf', 'allOf', 'items']);
 const SUBSCHEMA_MAP_KEYWORDS = new Set(['properties', 'patternProperties', 'dependencies']);
 
-const sortIndexes = createStorageSort([
-  { path: ['namespaces', '*', 'entries', 'collection', '*'], arrayKeys: ['indexes'] },
-]);
+const nameOf = (entry: unknown): string =>
+  isPlainRecord(entry) && typeof entry['name'] === 'string' ? entry['name'] : '';
+
+function withSortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withSortedKeys);
+  if (!isPlainRecord(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort(compareCodeUnits)
+      .map((key) => [key, withSortedKeys(value[key])]),
+  );
+}
+
+const contentOf = (entry: unknown): string => JSON.stringify(withSortedKeys(entry));
+
+const compareByNameThenContent = (a: unknown, b: unknown): number =>
+  compareCodeUnits(nameOf(a), nameOf(b)) || compareCodeUnits(contentOf(a), contentOf(b));
+
+const sortIndexes = createStorageSort(
+  [{ path: ['namespaces', '*', 'entries', 'collection', '*'], arrayKeys: ['indexes'] }],
+  compareByNameThenContent,
+);
 
 const isEmptyRecord = (value: unknown): boolean =>
   isPlainRecord(value) && Object.keys(value).length === 0;
@@ -57,10 +76,13 @@ function normalValueObjectField(field: JsonRecord): JsonRecord {
 }
 
 const normalCollation = (collation: JsonRecord): JsonRecord =>
-  without(collation, (key, value) => COLLATION_FLAGS.has(key) && value === false);
+  without(collation, (key, value) => FALSE_BY_DEFAULT_COLLATION_FLAGS.has(key) && value === false);
 
 function normalIndex(index: JsonRecord): JsonRecord {
-  const kept = without(index, (key, value) => INDEX_FLAGS.has(key) && value === false);
+  const kept = without(
+    index,
+    (key, value) => FALSE_BY_DEFAULT_INDEX_FLAGS.has(key) && value === false,
+  );
   return isPlainRecord(kept['collation'])
     ? { ...kept, collation: normalCollation(kept['collation']) }
     : kept;
@@ -132,7 +154,7 @@ function normalNamespace(namespace: JsonRecord): JsonRecord {
 }
 
 /**
- * The MongoDB family's normal form of `storage`. It leaves out the fields the family defines as equal to their absence, each named here: a collection's empty `indexes`, an index's `unique` and `sparse` of `false`, the collation flags `caseLevel` and `numericOrdering` of `false` (on an index and in a collection's options; `false` is their default for every locale), the empty `required` and `properties` of a validator's schema at any level, `many: false` on a value-object field, an empty `typeParams` on a value-object field's type, and a namespace's empty entity-kind slot other than `collection`. Every other value, including the collation flags `backwards` and `normalization` (whose default depends on the locale), partial filter expressions, clustered index, storage engine and change stream options, and the values of a value set, is kept as given. It then orders each collection's `indexes` by name.
+ * The MongoDB family's normal form of `storage`. It leaves out the fields the family defines as equal to their absence, each named here: a collection's empty `indexes`, an index's `unique` and `sparse` of `false`, the collation flags `caseLevel` and `numericOrdering` of `false` (on an index and in a collection's options; `false` is their default for every locale), the empty `required` and `properties` of a validator's schema at any level, `many: false` on a value-object field, an empty `typeParams` on a value-object field's type, and a namespace's empty entity-kind slot other than `collection`. Every other value, including the collation flags `backwards` and `normalization` (whose default depends on the locale), partial filter expressions, clustered index, storage engine and change stream options, and the values of a value set, is kept as given. It then orders each collection's `indexes` by name, then by content.
  */
 export const normalizeMongoStorage: NormalizeStorage = (storage) => {
   const plain: unknown = storage === undefined ? storage : JSON.parse(JSON.stringify(storage));

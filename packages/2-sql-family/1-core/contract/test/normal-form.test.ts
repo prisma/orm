@@ -3,7 +3,7 @@ import type { Contract } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
 import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';
-import { normalizeSqlDomain, normalizeSqlStorage } from '../src/canonicalization-hooks';
+import { normalizeSqlDomain, normalizeSqlStorage } from '../src/normal-form';
 
 type Table = Record<string, unknown>;
 
@@ -349,7 +349,7 @@ describe('SQL storage defaults the family leaves out', () => {
 });
 
 describe('normalizeSqlStorage ordering', () => {
-  it('orders foreign keys by name, then unnamed ones by their columns and target', () => {
+  it('orders foreign keys by name, and those without a name by their content', () => {
     const table = writtenTable(
       storageWithTable(
         tableWith({

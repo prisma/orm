@@ -1,6 +1,6 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { computeStorageHash } from '@internal/contract/hashing';
-import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import { dirname, join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 import {

@@ -1,10 +1,10 @@
 import { computeStorageHash } from '@internal/contract/hashing';
-import { normalizeMongoStorage } from './canonicalization-hooks';
 import { buildMongoNamespace } from './ir/build-mongo-namespace';
 import type { MongoCollectionInput } from './ir/mongo-collection';
 import { MongoStorage } from './ir/mongo-storage';
 import type { MongoValueObjectInput } from './ir/mongo-value-object';
 import type { MongoValueSetInput } from './ir/mongo-value-set';
+import { normalizeMongoStorage } from './normal-form';
 
 /**
  * Builds a Mongo contract's storage: the namespace `namespaceId` holding the collections, value sets and value objects, and the storage hash that `db sign` and `db verify` compare. Every Mongo contract source calls this, so they hash storage the same way.

@@ -9,7 +9,7 @@ import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import mongoFamilyPack from '@internal/family-mongo/pack';
 import { createControlStack } from '@internal/framework-components/control';
 import { type } from '@internal/mongo/contract-builder';
-import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { defineContract, field, model } from '@internal/mongo-contract-ts/contract-builder';
 import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';

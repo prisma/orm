@@ -6,7 +6,7 @@ import type { SerializeContract } from '@internal/contract/hashing';
 import type { Contract as FrameworkContract } from '@internal/contract/types';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';
 import mongoTargetPack from '@internal/target-mongo/pack';

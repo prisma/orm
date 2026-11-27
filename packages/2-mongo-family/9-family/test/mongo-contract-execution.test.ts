@@ -1,6 +1,6 @@
 import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
-import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';
 import { MongoContractSerializer } from '../src/core/ir/mongo-contract-serializer';

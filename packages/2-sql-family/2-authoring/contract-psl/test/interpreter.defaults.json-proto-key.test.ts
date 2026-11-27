@@ -1,5 +1,5 @@
 import { canonicalizeContractToObject } from '@internal/contract/hashing';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { castAs } from '@internal/utils/casts';
 import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';

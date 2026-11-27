@@ -5,7 +5,7 @@ import { createControlStack } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
 import { buildMongoNamespace, type MongoContract, MongoStorage } from '@internal/mongo-contract';
-import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { mongoFamilyDescriptor } from '../src/core/control-descriptor';

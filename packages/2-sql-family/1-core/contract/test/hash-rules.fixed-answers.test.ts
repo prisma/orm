@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { assertContractHashes } from '@internal/contract/hashing';
 import { describe, expect, it } from 'vitest';
-import { normalizeSqlStorage } from '../src/canonicalization-hooks';
+import { normalizeSqlStorage } from '../src/normal-form';
 
 const savedContract = (name: string) =>
   JSON.parse(readFileSync(new URL(`fixtures/hash-rules/${name}.json`, import.meta.url), 'utf8'));

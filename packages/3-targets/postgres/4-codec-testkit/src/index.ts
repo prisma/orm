@@ -41,8 +41,8 @@ import {
   dataTypeValuesEqual,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlBaseName, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { SqlStorage } from '@internal/sql-contract/types';
 import {
   CastExpr,

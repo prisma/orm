@@ -3,7 +3,7 @@ import type {
   ControlTargetDescriptor,
 } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { SqlIndexIR, SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';

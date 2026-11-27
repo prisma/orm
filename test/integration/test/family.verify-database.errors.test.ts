@@ -10,7 +10,7 @@ import {
   type VerifyDatabaseResult,
 } from '@internal/framework-components/control';
 import { defineContract, field, model } from '@internal/postgres/contract-builder';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { seedTestMarker } from '@internal/sql-runtime/test/utils';

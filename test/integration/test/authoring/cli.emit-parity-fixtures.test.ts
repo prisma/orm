@@ -4,7 +4,7 @@ import { enrichContract } from '@internal/cli/control-api';
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import { loadConfig } from '@internal/config-loader';
 import { createControlStack } from '@internal/framework-components/control';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { timeouts } from '@repo/test-utils';
 import { join, relative, sep } from 'pathe';

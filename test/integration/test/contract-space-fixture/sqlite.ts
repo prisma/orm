@@ -7,7 +7,7 @@ import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { SqlControlExtensionDescriptor } from '@internal/family-sql/control';
 import type { ContractSpace, MigrationPackage } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { SqlStorage } from '@internal/sql-contract/types';
 import sqliteTargetDescriptor from '@internal/target-sqlite/control';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';

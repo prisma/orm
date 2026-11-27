@@ -11,8 +11,8 @@ import type {
 } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlNameUniqueAcrossNamespacesOutput } from '@internal/sql-contract/entity-handle-lowering-hook';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';

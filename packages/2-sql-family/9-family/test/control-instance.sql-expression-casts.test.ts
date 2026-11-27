@@ -5,7 +5,7 @@ import type {
   ControlTargetDescriptor,
 } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import {
   SQL_EXPRESSION_DATA_TYPE_ID,
   sqlExpressionRegistration,

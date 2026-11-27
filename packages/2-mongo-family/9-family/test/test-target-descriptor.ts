@@ -1,5 +1,5 @@
 import type { ControlTargetDescriptor } from '@internal/framework-components/control';
-import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 
 /**
  * Minimal stub `MigratableTargetDescriptor` for tests that only need a

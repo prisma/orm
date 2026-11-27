@@ -2,9 +2,9 @@ import { computeStorageHash } from '@internal/contract/hashing';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { buildMongoStorage } from '../src/build-mongo-storage';
-import { normalizeMongoStorage } from '../src/canonicalization-hooks';
 import { MongoIndex } from '../src/ir/mongo-index';
 import { MongoStorage } from '../src/ir/mongo-storage';
+import { normalizeMongoStorage } from '../src/normal-form';
 
 const userIndex = new MongoIndex({
   name: 'email_1',
@@ -34,7 +34,7 @@ describe('buildMongoStorage', () => {
     expect(storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries).not.toHaveProperty('valueSet');
   });
 
-  it('hashes the constructed entries with the Mongo canonicalization hooks', () => {
+  it('hashes the constructed entries with the MongoDB normal form of storage', () => {
     const storage = buildMongoStorage({
       namespaceId: UNBOUND_NAMESPACE_ID,
       collections: { users: { indexes: [userIndex] } },

@@ -9,7 +9,7 @@ import type { ContractSpace, ControlStack } from '@internal/framework-components
 import { createControlStack } from '@internal/framework-components/control';
 import { flatPslModels } from '@internal/framework-components/psl-ast';
 import { printPsl } from '@internal/psl-printer';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';

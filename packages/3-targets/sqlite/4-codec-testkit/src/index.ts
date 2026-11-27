@@ -36,7 +36,7 @@ import type { JsonValue } from '@internal/contract/types';
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@internal/contract/types';
 import type { Codec, CodecRef, DataTypeValue } from '@internal/framework-components/codec';
 import { dataTypeValuesEqual, validateCodecTypeParams } from '@internal/framework-components/codec';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { SqlStorage } from '@internal/sql-contract/types';
 import {
   ColumnRef,

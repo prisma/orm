@@ -1717,8 +1717,6 @@
 ./contract-ts: type TypeScriptContractFromPathOptions = (ConfigTarget & TypeScriptContractSpecifierOptions) | (ConfigTarget & { readonly defaultControlPolicy?: never; readonly createNamespace?: never; })
 ./contract/authored-check-naming: function lowerAuthoredCheck(tableName: string, authored: AuthoredCheckInput, warnings?: AuthoringWarningSink): CheckConstraintInput
 ./contract/authored-check-naming: type AuthoredCheckInput = { readonly expression: string; readonly map: string | undefined; readonly name: string | undefined; }
-./contract/canonicalization-hooks: const normalizeSqlStorage: NormalizeStorage
-./contract/canonicalization-hooks: function normalizeSqlDomain(domain: unknown): unknown
 ./contract/check-expressions: function discriminatorValueSet(baseModelName: string, discriminatorField: string, variantValues: readonly string[]): { readonly name: string; readonly values: readonly string[]; }
 ./contract/check-expressions: function reachesAny(storage: Pick<StorageBase, 'namespaces'>, from: EntityCoordinate<'storage', 'valueObject'>, targets: ReadonlySet<string>): boolean
 ./contract/check-expressions: function referenceKey(reference: EntityCoordinate<'storage', 'valueObject'>): string
@@ -1912,6 +1910,8 @@
 ./contract/index-types: interface IndexTypeRegistry, required method has(typeLiteral: string): boolean
 ./contract/index-types: interface IndexTypeRegistry, required method register(entry: IndexTypeEntry): void
 ./contract/index-types: type IndexTypeMap = { readonly [K in string]: { readonly options: unknown; }; }
+./contract/normal-form: const normalizeSqlStorage: NormalizeStorage
+./contract/normal-form: function normalizeSqlDomain(domain: unknown): unknown
 ./contract/referential-action-sql: const REFERENTIAL_ACTION_SQL: Record<ReferentialAction, string>
 ./contract/resolve-storage-table: function resolveStorageTable(storage: SqlStorage, tableName: string, namespaceId?: string): ResolvedStorageTable | undefined
 ./contract/resolve-storage-table: interface ResolvedStorageTable

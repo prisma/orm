@@ -10,7 +10,7 @@ import { computeStorageHash } from '@internal/contract/hashing';
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { SqlControlExtensionDescriptor } from '@internal/family-sql/control';
 import type { ContractSpace } from '@internal/framework-components/control';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { SqlStorage } from '@internal/sql-contract/types';
 import postgresTargetDescriptor from '@internal/target-postgres/control';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';

@@ -1,7 +1,7 @@
 import { computeStorageHash } from '@internal/contract/hashing';
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { TEST_BOX_TABLE } from './constants';

@@ -4,7 +4,7 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import { enrichContract } from '@internal/cli/control-api';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prisma7Contract } from '@internal/sql-contract-prisma7/provider';
 import { prismaContract } from '@internal/sql-contract-psl/provider';

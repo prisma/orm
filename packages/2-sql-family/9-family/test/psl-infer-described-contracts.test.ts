@@ -13,7 +13,7 @@ import {
   makePslNamespaceEntries,
   UNSPECIFIED_PSL_NAMESPACE_ID,
 } from '@internal/framework-components/psl-ast';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { applicationDomainOf } from '@repo/test-utils';

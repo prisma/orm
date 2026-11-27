@@ -14,7 +14,7 @@ import {
   type PslSourceSettings,
 } from '@internal/framework-components/control';
 import { printPsl } from '@internal/psl-printer';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';

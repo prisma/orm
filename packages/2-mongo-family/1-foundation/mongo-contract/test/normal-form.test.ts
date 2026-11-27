@@ -3,7 +3,7 @@ import type { Contract } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
 import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';
-import { normalizeMongoDomain, normalizeMongoStorage } from '../src/canonicalization-hooks';
+import { normalizeMongoDomain, normalizeMongoStorage } from '../src/normal-form';
 
 const storageWith = (
   collection: Record<string, unknown>,
@@ -190,6 +190,13 @@ describe('MongoDB storage defaults the family leaves out', () => {
         'indexes in another order',
         storageWith({ indexes: [index({ name: 'z_idx' }), index({ name: 'a_idx' })] }),
         storageWith({ indexes: [index({ name: 'a_idx' }), index({ name: 'z_idx' })] }),
+      ],
+      [
+        'indexes with one name in another order',
+        storageWith({
+          indexes: [index({ keys: [{ field: 'name', direction: 1 }] }), index({ unique: false })],
+        }),
+        storageWith({ indexes: [index(), index({ keys: [{ field: 'name', direction: 1 }] })] }),
       ],
       [
         'an empty required in a pattern, dependency or further-items schema',

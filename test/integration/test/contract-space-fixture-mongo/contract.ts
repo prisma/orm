@@ -1,7 +1,7 @@
 import { computeStorageHash } from '@internal/contract/hashing';
 import { coreHash, profileHash } from '@internal/contract/types';
 import type { MongoContract } from '@internal/mongo-contract';
-import { normalizeMongoStorage } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import { MONGO_TEST_COLLECTION } from './constants';
 
 const TARGET = 'mongo' as const;

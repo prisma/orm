@@ -26,7 +26,7 @@ Prisma records a contract's storage, profile and execution hashes in files and d
 
 ```ts
 import { readFileSync } from 'node:fs';
-import { normalizeSqlStorage } from '@prisma/orm-family-sql/contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@prisma/orm-family-sql/contract/normal-form';
 import { assertContractHashes } from '@prisma/orm-framework/contract/hashing';
 
 const contract = JSON.parse(readFileSync(new URL('fixtures/users.json', import.meta.url), 'utf8'));

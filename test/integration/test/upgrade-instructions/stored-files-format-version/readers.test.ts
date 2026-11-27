@@ -10,7 +10,7 @@ import {
   assertDescriptorSelfConsistency,
   contractSpaceFromJson,
 } from '@internal/migration-tools/spaces';
-import { normalizeSqlStorage } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
