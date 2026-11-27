@@ -1,8 +1,21 @@
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import { expect, expectTypeOf, test } from 'vitest';
 import type postgres from '../src/exports/runtime';
-import { IsolationLevel } from '../src/exports/runtime';
+import {
+  type InteractiveTransactionsCapability,
+  IsolationLevel,
+  type PostgresClient,
+} from '../src/exports/runtime';
 import type serverless from '../src/exports/serverless';
-import { IsolationLevel as ServerlessIsolationLevel } from '../src/exports/serverless';
+import {
+  type PostgresServerlessConnection,
+  IsolationLevel as ServerlessIsolationLevel,
+} from '../src/exports/serverless';
+
+type TransactionalContract = Contract<SqlStorage> & {
+  readonly capabilities: InteractiveTransactionsCapability;
+};
 
 test('exports shared isolation constants for pooled and serverless transactions', () => {
   expect(IsolationLevel).toEqual({
@@ -16,17 +29,15 @@ test('exports shared isolation constants for pooled and serverless transactions'
     NonNullable<Parameters<typeof postgres>[0]['transactionOptions']>
   >();
   expectTypeOf<{ isolationLevel: typeof IsolationLevel.RepeatableRead }>().toExtend<
-    NonNullable<Parameters<ReturnType<typeof postgres>['transaction']>[1]>
+    NonNullable<Parameters<PostgresClient<TransactionalContract>['transaction']>[1]>
   >();
   expectTypeOf<{ isolationLevel: typeof ServerlessIsolationLevel.Serializable }>().toExtend<
     NonNullable<Parameters<typeof serverless>[0]['transactionOptions']>
   >();
   expectTypeOf<{ isolationLevel: typeof ServerlessIsolationLevel.Serializable }>().toExtend<
-    NonNullable<
-      Parameters<Awaited<ReturnType<ReturnType<typeof serverless>['connect']>>['transaction']>[1]
-    >
+    NonNullable<Parameters<PostgresServerlessConnection<TransactionalContract>['transaction']>[1]>
   >();
   expectTypeOf<{ isolationLevel: 'Serializable' }>().toExtend<
-    NonNullable<Parameters<ReturnType<typeof postgres>['transaction']>[1]>
+    NonNullable<Parameters<PostgresClient<TransactionalContract>['transaction']>[1]>
   >();
 });

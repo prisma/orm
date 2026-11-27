@@ -87,7 +87,7 @@ describe('PostgresMigrationPlanner - reconciliation planning', () => {
           },
         }),
       },
-      pgVersion: '',
+      serverVersionNumber: undefined,
       roles: [],
       existingSchemas: [],
     });
@@ -154,7 +154,7 @@ describe('PostgresMigrationPlanner - reconciliation planning', () => {
           },
         }),
       },
-      pgVersion: '',
+      serverVersionNumber: undefined,
       roles: [],
       existingSchemas: [],
     });
@@ -224,7 +224,7 @@ describe('PostgresMigrationPlanner - reconciliation planning', () => {
           },
         }),
       },
-      pgVersion: '',
+      serverVersionNumber: undefined,
       roles: [],
       existingSchemas: [],
     });

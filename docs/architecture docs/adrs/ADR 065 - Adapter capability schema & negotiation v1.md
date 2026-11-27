@@ -3,10 +3,11 @@
 ## Decision
 
 Define a versioned capability schema and a discovery flow where:
-- Adapters expose a capability map and a `profileHash` at `connect()`
+- On PostgreSQL the target declares the capabilities each database version provides and the driver those its connection provides, and a contract lists the capabilities its author writes, from the lists exported for each version and for the driver's connection ([ADR 335](ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md))
+- On MySQL, MariaDB and SQLite the adapter declares a fixed list, which emit writes into every contract; their targets and drivers declare none. MongoDB's components declare none
 - Compile profiles (target-specific lowerers, e.g. `sql/pg`) consume capabilities to choose deterministic lowering strategies
 - Lanes and plugins branch on capabilities, never on target strings
-- Plans compiled under capability profile X are recompiled when the active `profileHash` changes
+- The runtime goes by the contract's capabilities; they change only when the contract is emitted again
 
 **Adapters do not lower Plans to SQL. Lowering is the responsibility of compile profiles.**
 
@@ -15,7 +16,7 @@ Define a versioned capability schema and a discovery flow where:
 - Keep dialect logic deterministic and testable with golden SQL in compile profiles
 - Allow one runtime to execute across heterogeneous deployments by branching on declared capabilities rather than hardcoding "postgres" or "mysql"
 - Make fallbacks explicit when a feature is unavailable and avoid silent differences across environments
-- Enable reproducible builds by hashing the negotiated capability set per ADR 004
+- Enable reproducible builds by fixing the capability set in the emitted contract; ADR 004 says which hash covers it
 
 ## Capability schema
 
@@ -77,36 +78,31 @@ Capabilities are a JSON-serializable object with stable key ordering:
 - Used for reproducibility, caching, and change detection per ADR 004
 - Changes whenever capabilities or the compile profile implementation changes in a way that affects lowering
 
-## Discovery flow
+## How capabilities are checked
 
-1. **Compile-time defaults**
-   - Lanes and tools may compile offline using a reference profile shipped with the compile profile (e.g. `pg15-baseline`)
-   - This produces SQL tentatively and caches by `(planId, referenceProfileHash)`
+1. **Authoring** (PostgreSQL)
+   - The contract's author writes the list of required capabilities, from the list for a database version and the list for the driver's connection
 
-2. **Connect**
-   - `adapter.connect()` returns `{ capabilities, profileHash }`
-   - Runtime stores active capabilities and emits `onCapabilitiesNegotiated` for plugins
+2. **Signing** (PostgreSQL)
+   - Verification reads the server's version and refuses a database that does not provide what the contract requires of it
 
-3. **Before compile**
-   - If a Plan was compiled under a different `profileHash`, recompile with the active capabilities
-   - Compile profiles choose the lowest common strategy that satisfies the Plan and capabilities
-   - If a required feature is missing and no fallback exists, fail with a stable error
+3. **Client creation** (PostgreSQL)
+   - The capabilities the contract requires of the connection are compared with what the adapter and driver declare, at compile time and when the client is created
 
 4. **Execute**
-   - Adapter executes `{ sql, params }` and maps errors to runtime codes
-   - Optional lightweight probes may validate a small subset of sensitive capabilities but are not required
+   - Compile profiles lower by the contract's capabilities; if a required feature is missing, they fail with a stable error
+   - The adapter executes `{ sql, params }` and maps errors to runtime codes
 
 ## Lane and plugin usage
 
 - Lanes must not branch on target strings
-- They may query `runtime.getCapabilities()` and guard behavior with explicit keys
+- They read the contract's capabilities and guard behavior with explicit keys
 - Plugins can attach rule context using capability checks, e.g. `if (!capabilities.sql.jsonAgg) rule('no-nested-array-projection').warn(...)`
 
 ## Failure modes and defaults
 
 - **Unknown schema version**: Warn and treat unknown keys as opaque, but do not assume capabilities exist
 - **Missing critical key**: Assume the most conservative default, e.g. `ddl.transactional: false`, and allow compile profile to reject if it cannot provide a safe lowering
-- **Runtime mismatch**: If the connection rotates to a different `profileHash` mid-process, the runtime must invalidate compiled outputs and recompile
 - **Degraded capabilities**: Compile profile may choose a fallback lowering or return a deterministic error with a suggested capability requirement. The ORM client, which may run several statements for one call, chooses how to load includes from capabilities: the one-query include where the contract's `sql` group reports `jsonAgg`, `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation`, otherwise one query per relation ([ADR 164](ADR%20164%20-%20Repository%20Layer.md))
 
 ## Versioning
@@ -151,8 +147,7 @@ Capabilities are a JSON-serializable object with stable key ordering:
 
 ## Adapter responsibilities
 
-- Provide accurate capabilities at `connect()` and a stable `profileHash`
-- Update capabilities if the effective environment changes and notify runtime
+- On PostgreSQL, read the server's version during introspection, as a number, for the target's check
 - Map database errors to stable runtime error codes per ADR 027
 - Do not embed lowering logic or transform ASTs
 
@@ -183,7 +178,7 @@ Capabilities are a JSON-serializable object with stable key ordering:
 
 ### Negative
 - More upfront work to define and maintain the capability map
-- Adapters must keep capability reporting accurate across server versions and configuration
+- A target with a table of capabilities by version (PostgreSQL today) must keep it accurate
 
 ## Alternatives considered
 

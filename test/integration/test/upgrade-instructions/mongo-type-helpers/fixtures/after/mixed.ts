@@ -1,5 +1,5 @@
 import { defineContract as defineMongoContract } from '@internal/mongo/contract-builder';
-import { defineContract as defineSqlContract } from '@internal/postgres/contract-builder';
+import { defineContract as defineSqlContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 
 export const documents = defineMongoContract({}, ({ field, model, type }) => ({
   models: {
@@ -7,6 +7,6 @@ export const documents = defineMongoContract({}, ({ field, model, type }) => ({
   },
 }));
 
-export const rows = defineSqlContract({}, ({ field, model, type }) => ({
+export const rows = defineSqlContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }, ({ field, model, type }) => ({
   models: { Row: model('Row', { fields: { id: field.column(type.Int()).id(), body: field.column(type.Jsonb()) } }) },
 }));

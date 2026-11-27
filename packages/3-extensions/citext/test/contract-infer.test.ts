@@ -60,7 +60,7 @@ function inferFrom(extensions: readonly (typeof citextControl)[]) {
     roles: [],
     extensions: undefined,
     existingSchemas: ['public'],
-    pgVersion: '',
+    serverVersionNumber: undefined,
   });
   return () => sqlFamilyDescriptor.create(stack).inferPslContract(tree);
 }

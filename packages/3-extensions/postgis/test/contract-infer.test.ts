@@ -69,7 +69,7 @@ function inferFrom(
     },
     roles: [],
     existingSchemas: ['public'],
-    pgVersion: '',
+    serverVersionNumber: undefined,
   });
   return () => sqlFamilyDescriptor.create(stack).inferPslContract(tree);
 }

@@ -18,6 +18,7 @@ describe('the example contract on MySQL', () => {
           defaultInInsert: true,
           enums: true,
           foreignKeys: true,
+          interactiveTransactions: true,
           jsonAgg: true,
           jsonAggWithoutTruncation: true,
           limit: true,

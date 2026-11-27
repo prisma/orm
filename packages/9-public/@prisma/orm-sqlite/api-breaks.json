@@ -1,5 +1,32 @@
 [
   {
+    "path": "./config",
+    "export": "defineConfig",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "20b7a45161f792ee",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./control",
+    "export": "createSqliteControlClient",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "ac490dfccce2d4b9",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./runtime",
+    "export": "SqliteClient",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "3049b7077329f581",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
     "path": "./runtime",
     "export": "SqliteQueryMembers",
     "test": "type",
@@ -33,15 +60,6 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "d32beb7504441c7e",
-    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
-  },
-  {
-    "path": "./runtime",
-    "export": "SqliteClient",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3049b7077329f581",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
   }
 ]

@@ -87,6 +87,7 @@ import type {
   SyntaxNode,
 } from '@internal/psl-parser/syntax';
 import { NamespaceDeclarationAst } from '@internal/psl-parser/syntax';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import {
   type LoweredPackEntity,
   providesPslEntityPlacement,
@@ -1011,7 +1012,9 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       if (input.capabilities['sql']?.['checkConstraint'] !== true) {
         diagnostics.push({
           code: 'PSL_CHECK_UNSUPPORTED_TARGET',
-          message: `Model "${model.name}" declares "@@check", but target "${input.targetId}" does not support check constraints (the adapter does not report the "checkConstraint" capability). Remove the check or author it against a target that supports check constraints.`,
+          message: capabilityUnavailableMessage(`\`@@check\` on model "${model.name}"`, [
+            'sql.checkConstraint',
+          ]),
           ...source.at(modelAttribute.span),
         });
         continue;

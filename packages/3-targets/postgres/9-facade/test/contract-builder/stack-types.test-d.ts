@@ -1,6 +1,13 @@
 import type { ExtractCodecTypes } from '@internal/sql-contract/types';
 import { expectTypeOf, test } from 'vitest';
-import { defineContract, field, model, rel } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '../../src/exports/contract-builder';
 import postgres from '../../src/exports/runtime';
 
 const int4 = { codecId: 'pg/int4@1' } as const;
@@ -11,6 +18,7 @@ const Post = model('Post', {
 });
 
 const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     User: model('User', {
       fields: { id: field.column(int4).id(), name: field.column(text), score: field.column(int4) },
@@ -84,6 +92,7 @@ const bitwise = {
 
 test('an extension contributes aggregates, settled against the contract codecs as emission settles them', async () => {
   const withExtension = defineContract({
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     extensions: { bitwise },
     models: {
       User: model('User', {

@@ -183,7 +183,7 @@ function schemaWith(
       (name) => new PostgresRoleSchemaNode({ name, namespaceId: UNBOUND_NAMESPACE_ID }),
     ),
     existingSchemas: ['public'],
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 
@@ -192,7 +192,7 @@ const emptySchema = new PostgresDatabaseSchemaNode({
   namespaces: {},
   roles: [],
   existingSchemas: ['public'],
-  pgVersion: 'unknown',
+  serverVersionNumber: undefined,
 });
 const DB_UPDATE_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,

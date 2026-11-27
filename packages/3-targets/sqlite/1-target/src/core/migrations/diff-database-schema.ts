@@ -67,6 +67,7 @@ export function verifySqliteDatabaseSchema(
     frameworkComponents: input.frameworkComponents,
     diffSchema: diffSqliteSchema,
     granularityOf: relationalNodeGranularity,
+    databaseCapabilitiesNotProvided: undefined,
   });
 }
 

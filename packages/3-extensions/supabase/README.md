@@ -32,11 +32,11 @@ Compose the pack into your application contract via `extensions`. The pack's con
 
 ```ts
 // prisma.config.ts
-import { defineConfig } from '@internal/postgres/config';
+import { defineConfig, postgres17, postgresDriver } from '@internal/postgres/config';
 import supabasePack from '@internal/extension-supabase/pack';
 
 export default defineConfig({
-  contract: './src/contract.prisma',
+  contract: { path: './src/contract.prisma', requiredCapabilities: [...postgres17, ...postgresDriver] },
   extensions: [supabasePack],
 });
 ```
@@ -107,7 +107,7 @@ A prepared statement runs on what it is given. `ps.query(roleBound, params)` run
 
 Pass `collections` to give models custom collection classes: `supabase({ contract, url, jwksUrl, collections: { Profile: ProfileCollection } })`, where `ProfileCollection` extends `Collection<Contract, 'Profile'>` from `@prisma/orm-postgres/orm-client`. Every role-bound client's `.orm` (from `asUser`, `asAnon` and `asServiceRole`) then returns a `ProfileCollection` for `Profile`. So does `tx.orm` inside a role-bound client's `transaction(...)`. The classes do not reach the `.supabase` ORM over `auth.*` and `storage.*`.
 
-Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-family-sql/runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING` and `CONTRACT.MARKER_MISMATCH` from the client's first use of the database (its first query, connection or transaction), the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back. The runtime for `auth.*` and `storage.*` reads logs to it too. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'`; see the `mode` paragraph below. Without `log`, the runtime drops these events.
+Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-family-sql/runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING`, `CONTRACT.MARKER_MISMATCH`, `CONTRACT.MARKER_READ_FAILED` and `CONTRACT.MARKER_ROW_CORRUPT` from the client's first use of the database (its first query, connection or transaction), the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back. The runtime for `auth.*` and `storage.*` reads logs to it too. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'`; see the `mode` paragraph below. Without `log`, the runtime drops these events.
 
 `mode` is `'strict'` by default, and every `budgets()` violation throws. Pass `mode: 'permissive'` and a violation whose severity is `'warn'` goes to `log.warn` instead, and the query runs; a violation whose severity is `'error'` still throws. `budgets()` gives latency `'warn'` and the row count `'error'` by default, so a row-count limit warns only with `severities: { rowCount: 'warn' }`.
 

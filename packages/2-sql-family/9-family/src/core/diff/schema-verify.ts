@@ -17,6 +17,8 @@ import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { effectiveControlPolicy } from '@internal/contract/types';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
+  DatabaseCapabilitiesNotProvided,
+  DiffableNode,
   DiffSubjectGranularity,
   SchemaDiffIssue,
   VerifierIssueCategory,
@@ -24,30 +26,32 @@ import type {
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import {
+  databaseCapabilitiesNotProvidedIssue,
+  databaseCapabilitiesNotProvidedText,
   dispositionForCategory,
   issueOutcome,
   VERIFY_CODE_SCHEMA_FAILURE,
 } from '@internal/framework-components/control';
 import { isStorageTypeInstance, type SqlStorage } from '@internal/sql-contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
-import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { extractCodecControlHooks } from '../assembly';
 import type { SqlSchemaDiffFn } from '../migrations/schema-differ';
 import type { CodecControlHooks } from '../migrations/types';
+import {
+  DATABASE_CAPABILITIES_NODE_KIND,
+  DatabaseCapabilitiesNode,
+  type SqlDatabaseCapabilitiesNotProvidedFn,
+  VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+} from './database-capabilities-not-provided';
 import { verifierDisposition } from './verifier-disposition';
 
 // ============================================================================
 // Subject-granularity classification — nodeKind → framework-neutral granularity
 // ============================================================================
 
-function issueNode(issue: SchemaDiffIssue): SqlSchemaIRNode | undefined {
-  const node = issue.expected ?? issue.actual;
-  if (node === undefined) return undefined;
-  return blindCast<
-    SqlSchemaIRNode,
-    'every node in a SQL schema diff tree is a SqlSchemaIRNode; nodeKind is its identity'
-  >(node);
+function issueNode(issue: SchemaDiffIssue): DiffableNode | undefined {
+  return issue.expected ?? issue.actual;
 }
 
 /**
@@ -65,7 +69,9 @@ export function classifyDiffSubjectGranularity(
   granularityOf: (nodeKind: string) => DiffSubjectGranularity,
 ): DiffSubjectGranularity | undefined {
   const node = issueNode(issue);
-  return node === undefined ? undefined : granularityOf(node.nodeKind);
+  if (node === undefined) return undefined;
+  if (node.nodeKind === DATABASE_CAPABILITIES_NODE_KIND) return 'structural';
+  return granularityOf(node.nodeKind);
 }
 
 /**
@@ -82,7 +88,8 @@ export function classifyDiffEntityKind(
   entityKindOf: (nodeKind: string) => string | undefined,
 ): string | undefined {
   const node = issueNode(issue);
-  return node === undefined ? undefined : entityKindOf(node.nodeKind);
+  if (node === undefined || node.nodeKind === DATABASE_CAPABILITIES_NODE_KIND) return undefined;
+  return entityKindOf(node.nodeKind);
 }
 
 // ============================================================================
@@ -263,6 +270,25 @@ export interface VerifySqlSchemaByDiffInput {
   readonly diffSchema: SqlSchemaDiffFn;
   /** The target's classifier: a diff issue node's `nodeKind` → its subject granularity. */
   readonly granularityOf: (nodeKind: string) => DiffSubjectGranularity;
+  /** The target's check of the database's capabilities (`databaseCapabilitiesNotProvided` descriptor hook), when it has one. */
+  readonly databaseCapabilitiesNotProvided?: SqlDatabaseCapabilitiesNotProvidedFn | undefined;
+}
+
+function verdictOf(
+  failCount: number,
+  notProvided: DatabaseCapabilitiesNotProvided | undefined,
+): { readonly code?: string; readonly summary: string } {
+  if (notProvided !== undefined) {
+    return {
+      code: VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+      summary: databaseCapabilitiesNotProvidedText(notProvided),
+    };
+  }
+  if (failCount === 0) return { summary: 'Database schema satisfies contract' };
+  return {
+    code: VERIFY_CODE_SCHEMA_FAILURE,
+    summary: `Database schema does not satisfy contract (${failCount} failure${failCount === 1 ? '' : 's'})`,
+  };
 }
 
 /**
@@ -293,7 +319,24 @@ export function verifySqlSchemaByDiff(
     namespacePairs: verdictDiff.namespacePairs,
     codecHooks: extractCodecControlHooks(input.frameworkComponents),
   });
-  const failCount = diffVerdict.failures.length + storageTypeVerdict.failures.length;
+  const notProvided = input.databaseCapabilitiesNotProvided?.({
+    contract: input.contract,
+    schema: input.schema,
+  });
+  const failures = [
+    ...(notProvided === undefined
+      ? []
+      : [
+          databaseCapabilitiesNotProvidedIssue({
+            path: ['capabilities'],
+            expected: new DatabaseCapabilitiesNode(),
+            notProvided,
+          }),
+        ]),
+    ...diffVerdict.failures,
+    ...storageTypeVerdict.failures,
+  ];
+  const failCount = failures.length;
   const ok = failCount === 0;
   const profileHash =
     'profileHash' in input.contract && typeof input.contract.profileHash === 'string'
@@ -301,10 +344,7 @@ export function verifySqlSchemaByDiff(
       : undefined;
   return {
     ok,
-    ...(ok ? {} : { code: VERIFY_CODE_SCHEMA_FAILURE }),
-    summary: ok
-      ? 'Database schema satisfies contract'
-      : `Database schema does not satisfy contract (${failCount} failure${failCount === 1 ? '' : 's'})`,
+    ...verdictOf(failCount, notProvided),
     contract: {
       storageHash: input.contract.storage.storageHash,
       ...ifDefined('profileHash', profileHash),
@@ -314,7 +354,7 @@ export function verifySqlSchemaByDiff(
       actual: input.contract.target,
     },
     schema: {
-      issues: [...diffVerdict.failures, ...storageTypeVerdict.failures],
+      issues: failures,
       warnings: {
         issues: [...diffVerdict.warnings, ...storageTypeVerdict.warnings],
       },

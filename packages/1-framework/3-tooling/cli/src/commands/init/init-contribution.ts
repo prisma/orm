@@ -1,4 +1,27 @@
 import type { ContractSourceFormat } from '@internal/config/config-types';
+import type { TsExpression } from '@internal/ts-render';
+
+/**
+ * What the config's `contract:` entry points at: the starter contract `init` wrote, or the project's
+ * Prisma 7 schema. `path` is written into the config as it is: for a starter, relative to the project
+ * and starting with `./` (or absolute, when the user gave an absolute path); for a Prisma 7 schema,
+ * the path the user gave, relative to the project.
+ */
+export type ContractEntryInput =
+  | { readonly kind: 'starter'; readonly mode: ContractSourceFormat; readonly path: string }
+  | { readonly kind: 'prisma7-schema'; readonly path: string };
+
+/** The exports of the contribution's `configModule`, loaded as the project resolves it. */
+export type ConfigModuleExports = Readonly<Record<string, unknown>>;
+
+/**
+ * The config's `contract:` entry as a TypeScript expression node, as a migration's operation calls are: it renders itself and the imports it needs into `prisma.config.ts`, and builds the value that expression computes, so `init` can run the entry to check a Prisma 7 schema before it writes anything. The package that returns it may depend on another installed copy of the framework, so `init` calls these methods and never checks the node's class. The CLI re-indents the rendered text to its place in the config, so its line breaks must be layout only.
+ */
+export interface ContractEntryNode
+  extends Pick<TsExpression, 'renderTypeScript' | 'importRequirements'> {
+  /** The value the rendered expression computes in `prisma.config.ts`, from the exports of `configModule` it imports. */
+  contractValue(configModule: ConfigModuleExports): unknown;
+}
 
 export interface QuickReferenceInput {
   readonly mode: ContractSourceFormat;
@@ -86,4 +109,12 @@ export interface InitContribution {
   readonly probe?: (databaseUrl: string, signal: AbortSignal) => Promise<InitProbeResult>;
   /** The quick reference for a project that keeps its Prisma 7 schema as the contract source. */
   readonly prisma7QuickReference?: (input: Prisma7QuickReferenceInput) => string;
+  /**
+   * The config's `contract:` entry. `init` writes it into `prisma.config.ts`, and runs it to check a
+   * Prisma 7 schema before writing. A `prisma7-schema` input is passed only when `configModule`
+   * exports `prisma7Schema`, which stays the sign that the package takes a Prisma 7 schema. Without
+   * this member, the entry is the path, or a call of `prisma7Schema` from `configModule` with the
+   * path.
+   */
+  readonly contractEntry?: (input: ContractEntryInput) => ContractEntryNode;
 }

@@ -119,7 +119,7 @@ function rootOf(
     namespaces,
     roles: [],
     existingSchemas: Object.keys(namespaces),
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 
@@ -136,6 +136,7 @@ function assertVerdict(
       frameworkComponents: postgresTypeComponents,
       diffSchema: diffPostgresSchema,
       granularityOf: postgresDiffSubjectGranularity,
+      databaseCapabilitiesNotProvided: undefined,
     });
     expect({ strict, ok: result.ok }).toEqual({ strict, ok: expectedOk });
   }

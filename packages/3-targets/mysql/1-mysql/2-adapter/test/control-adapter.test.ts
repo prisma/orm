@@ -62,6 +62,7 @@ describe('MysqlControlAdapter', () => {
         jsonAgg: true,
         outerReferencesInDerivedTables: true,
         jsonAggWithoutTruncation: true,
+        interactiveTransactions: true,
       },
     });
   });

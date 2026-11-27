@@ -15,6 +15,8 @@ import {
   nativeEnum,
   now,
   pg,
+  postgres18,
+  postgresDriver,
 } from '@internal/postgres/contract-builder';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
@@ -28,6 +30,7 @@ import sqliteControl, { sqliteScalarTypeConstructors } from '@internal/target-sq
 import sqlitePack from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { describe, expect, it } from 'vitest';
+import { postgresPslContext } from '../../utils/postgres-psl-context';
 
 const int4Column = {
   codecId: 'pg/int4@1',
@@ -103,7 +106,7 @@ function typeHelperOf(type: unknown, name: string): TypeHelper {
 function interpretWithRealPacks(schema: string) {
   const bound = bindPslSchema(schema, {
     sourceId: 'real-packs-parity.prisma',
-    context: contractSourceContextFromControlStack(stack),
+    context: postgresPslContext(stack),
   });
   return withSeedDiagnostics(
     interpretPslDocumentToSqlContract({
@@ -124,6 +127,7 @@ describe('TS and PSL authoring parity with real packs', () => {
   it('lowers alias constants to the output of PSL type aliases', () => {
     const tsContract = defineContract(
       {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         extensions: { pgvector: pgvectorPack },
       },
       ({ type, field, model }) => {
@@ -166,7 +170,10 @@ model Document {
 
   it('lowers an alias constant with generators to the output of a PSL alias with attributes', () => {
     const tsContract = defineContract(
-      { extensions: { pgvector: pgvectorPack } },
+      {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+        extensions: { pgvector: pgvectorPack },
+      },
       ({ type, field, model, gen }) => {
         const UpdatedAt = field
           .column(type.TimestampString(3))
@@ -208,6 +215,7 @@ model Post {
   it('lowers inline field constructor expressions to the same output as direct TS column descriptors', () => {
     const tsContract = defineContract(
       {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
         extensions: { pgvector: pgvectorPack },
       },
       ({ type, field, model }) => ({
@@ -244,6 +252,7 @@ model Post {
     const AalLevel = nativeEnum('AalLevel', 'aal1', 'aal2', 'aal3').map('aal_level');
 
     const tsContract = defineContract({
+      requiredCapabilities: [...postgres18, ...postgresDriver],
       extensions: { pgvector: pgvectorPack },
       models: {
         Session: model('Session', {
@@ -280,6 +289,7 @@ model Post {
     const AalLevel = nativeEnum('AalLevel', 'aal1', 'aal2', 'aal3').map('aal_level');
 
     const tsContract = defineContract({
+      requiredCapabilities: [...postgres18, ...postgresDriver],
       extensions: { pgvector: pgvectorPack },
       namespaces: ['auth'],
       models: {
@@ -319,7 +329,10 @@ describe('type.* helpers and PSL type constructors', () => {
   it('give the same column for every Postgres constructor and the same arguments', () => {
     const calls = constructorCalls(postgresScalarTypes);
     const tsContract = defineContract(
-      { extensions: { pgvector: pgvectorPack } },
+      {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+        extensions: { pgvector: pgvectorPack },
+      },
       ({ type, field, model }) => ({
         models: {
           Sample: model('Sample', {
@@ -351,7 +364,10 @@ ${calls.map((call) => `  ${call.column} ${pslFieldType(call)}`).join('\n')}
 
   it('give the same column for each convenience date and time type and the same arguments', () => {
     const tsContract = defineContract(
-      { extensions: { pgvector: pgvectorPack } },
+      {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+        extensions: { pgvector: pgvectorPack },
+      },
       ({ type, field, model }) => ({
         models: {
           Sample: model('Sample', {

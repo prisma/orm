@@ -1,3 +1,4 @@
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
@@ -7,7 +8,7 @@ import type { Contract } from './fixtures/integer-representation/generated/contr
 import contractJson from './fixtures/integer-representation/generated/contract.json' with {
   type: 'json',
 };
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import { timeouts, withCollectionRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
@@ -30,10 +31,10 @@ const PAST_TWO_63 = 18446744073709551617n;
 const contract = new PostgresContractSerializer().deserializeContract<Contract>(contractJson);
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext<Contract>({
-    contract,
+    contract: withIncludeStrategy(contract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
       extensions: [],
     }),
   });

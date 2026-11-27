@@ -55,12 +55,14 @@
   "exports": {
     "./adapter": "./dist/adapter.mjs",
     "./adapter/adapter": "./dist/adapter__adapter.mjs",
+    "./adapter/capabilities": "./dist/adapter__capabilities.mjs",
     "./adapter/column-types": "./dist/adapter__column-types.mjs",
     "./adapter/control": "./dist/adapter__control.mjs",
     "./adapter/runtime": "./dist/adapter__runtime.mjs",
     "./adapter/sql-renderer": "./dist/adapter__sql-renderer.mjs",
     "./adapter/types": "./dist/adapter__types.mjs",
     "./driver": "./dist/driver.mjs",
+    "./driver/capabilities": "./dist/driver__capabilities.mjs",
     "./driver/control": "./dist/driver__control.mjs",
     "./driver/runtime": "./dist/driver__runtime.mjs",
     "./target": "./dist/target.mjs",
@@ -100,6 +102,7 @@
     "./target/runtime": "./dist/target__runtime.mjs",
     "./target/schema-ir-annotations": "./dist/target__schema-ir-annotations.mjs",
     "./target/server-version": "./dist/target__server-version.mjs",
+    "./target/server-version-range": "./dist/target__server-version-range.mjs",
     "./target/sql-utils": "./dist/target__sql-utils.mjs",
     "./target/types": "./dist/target__types.mjs",
     "./package.json": "./package.json"

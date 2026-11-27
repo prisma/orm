@@ -158,7 +158,7 @@ describe('Postgres planner, a namespace statement', () => {
       },
       roles: schema.roles,
       existingSchemas: schema.existingSchemas,
-      pgVersion: schema.pgVersion,
+      serverVersionNumber: schema.serverVersionNumber,
     });
 
     const result = createPostgresMigrationPlanner(stubLowerer).plan({

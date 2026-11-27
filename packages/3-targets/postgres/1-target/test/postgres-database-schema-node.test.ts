@@ -41,7 +41,7 @@ const baseInput: PostgresDatabaseSchemaNodeInput = {
   roles: [role],
   extensions: undefined,
   existingSchemas: ['public', 'app'],
-  pgVersion: '15.2',
+  serverVersionNumber: 150002,
 };
 
 describe('PostgresDatabaseSchemaNode', () => {
@@ -52,7 +52,7 @@ describe('PostgresDatabaseSchemaNode', () => {
 
   it('isEqualTo matches by id (roots always share the "database" id)', () => {
     const a = new PostgresDatabaseSchemaNode(baseInput);
-    const b = new PostgresDatabaseSchemaNode({ ...baseInput, pgVersion: '16.0' });
+    const b = new PostgresDatabaseSchemaNode({ ...baseInput, serverVersionNumber: 160000 });
     expect(a.isEqualTo(b)).toBe(true);
   });
 
@@ -84,14 +84,14 @@ describe('PostgresDatabaseSchemaNode', () => {
       namespaces: { public: nsPublic },
       roles: [collidingRole],
       existingSchemas: ['public'],
-      pgVersion: '15.2',
+      serverVersionNumber: 150002,
     });
     const actual = new PostgresDatabaseSchemaNode({
       extensions: undefined,
       namespaces: { public: nsPublic },
       roles: [collidingRole],
       existingSchemas: ['public'],
-      pgVersion: '15.2',
+      serverVersionNumber: 150002,
     });
     // No throw, and identical trees produce no issues.
     expect(() => diffSchemas(expected, actual)).not.toThrow();

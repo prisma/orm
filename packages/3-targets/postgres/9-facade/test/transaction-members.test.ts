@@ -52,6 +52,7 @@ vi.mock('pg', async () => {
   return { Pool, Client };
 });
 
+import { defineContract, postgres18 } from '../src/exports/contract-builder';
 import postgres, {
   type PostgresTransactionContext,
   type PostgresTransactionOptions,
@@ -370,5 +371,36 @@ describe('a transaction on a serverless connection', () => {
     await db.transaction(useEveryMember);
 
     expect(recorded.statements).toEqual(onOneConnection(everyStatementInTheTransaction));
+  });
+});
+
+describe('transaction() for a contract that does not list interactive transactions', () => {
+  const withoutInteractiveTransactions = defineContract({ requiredCapabilities: postgres18 });
+  const refusal = {
+    code: 'ORM.CAPABILITY_MISSING',
+    meta: { capability: 'sql.interactiveTransactions', method: 'transaction' },
+  };
+
+  it('is refused on the client, before it begins one', async () => {
+    const db = postgres({ contract: withoutInteractiveTransactions, url, verifyMarker: false });
+    recorded.statements.length = 0;
+
+    // @ts-expect-error the contract declares no dependency on sql.interactiveTransactions
+    await expect(db.transaction(async () => 1)).rejects.toMatchObject(refusal);
+    expect(recorded.statements).toEqual([]);
+    await db.close();
+  });
+
+  it('is refused on a serverless connection, before it begins one', async () => {
+    const serverless = postgresServerless({
+      contract: withoutInteractiveTransactions,
+      verifyMarker: false,
+    });
+    await using db = await serverless.connect({ url });
+    recorded.statements.length = 0;
+
+    // @ts-expect-error the contract declares no dependency on sql.interactiveTransactions
+    await expect(db.transaction(async () => 1)).rejects.toMatchObject(refusal);
+    expect(recorded.statements).toEqual([]);
   });
 });

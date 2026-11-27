@@ -22,6 +22,7 @@
     "@internal/ids": "workspace:8.0.0-rc.25",
     "@internal/operations": "workspace:8.0.0-rc.25",
     "@internal/sql-contract": "workspace:8.0.0-rc.25",
+    "@internal/sql-errors": "workspace:8.0.0-rc.25",
     "@internal/sql-operations": "workspace:8.0.0-rc.25",
     "@internal/sql-relational-core": "workspace:8.0.0-rc.25",
     "arktype": "^2.2.9"
