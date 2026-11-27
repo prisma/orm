@@ -270,7 +270,7 @@ describe('write graphs as they run, on a contract without returning', () => {
         error: {
           code: 'ORM.CAPABILITY_MISSING',
           message:
-            'create() with onConflict "skip" on model "User" requires contract capability "returning": without it the rows are read back by key, which finds a skipped row\'s existing match. Use createAndCount() to skip conflicting rows. A contract lists the capabilities its database and connection provide; the database package\'s documentation says how to state them.',
+            '`create()` with onConflict "skip" on model "User" is unavailable: your contract declares no dependency on `sql.returning`. Without it the rows are read back by key, which finds a skipped row\'s existing match. Use createAndCount() to skip conflicting rows. To enable it, add `sql.returning` to your contract\'s required capabilities.',
           meta: { capability: 'returning', action: 'create()' },
         },
         executions: [],
@@ -318,7 +318,7 @@ describe('write graphs as they run, on a contract without returning', () => {
       error: {
         code: 'ORM.CAPABILITY_MISSING',
         message: expect.stringContaining(
-          'create() on model "Folder" cannot find the row it inserts',
+          '`create()` on model "Folder" is unavailable: your contract declares no dependency on `sql.returning`. It cannot find the row it inserts',
         ),
       },
       executions: [],

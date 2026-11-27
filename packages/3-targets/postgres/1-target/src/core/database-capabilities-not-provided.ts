@@ -92,12 +92,7 @@ function versionFinding(
     .sort((a, b) => a.firstVersion - b.firstVersion);
   return missing.length === 0
     ? undefined
-    : {
-        kind: 'missing-capabilities',
-        databaseVersion,
-        matchingVersion: rowVersion,
-        capabilities: missing,
-      };
+    : { kind: 'missing-capabilities', databaseVersion, capabilities: missing };
 }
 
 /**

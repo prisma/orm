@@ -96,7 +96,7 @@ describe('Postgres adapter row locking', () => {
         contract: withoutLocking,
       }),
     ).toThrow(
-      "The contract does not list capability sql.forUpdate, which this locking clause needs. State a PostgreSQL version that provides it where the contract is written (defineContract, the config's contract entry, or postgresContractCapabilities), or add it to the capabilities list, and emit the contract again.",
+      "This locking clause is unavailable: your contract declares no dependency on `sql.forUpdate`. To enable it, add `sql.forUpdate` to your contract's required capabilities.",
     );
   });
 
@@ -184,7 +184,7 @@ describe('Postgres adapter row locking', () => {
         expect.objectContaining({
           name: 'StructuredError',
           code: 'RUNTIME.AST_UNSUPPORTED',
-          message: `The contract does not list capability ${capability}, which this locking clause needs. State a PostgreSQL version that provides it where the contract is written (defineContract, the config's contract entry, or postgresContractCapabilities), or add it to the capabilities list, and emit the contract again.`,
+          message: `This locking clause is unavailable: your contract declares no dependency on \`${capability}\`. To enable it, add \`${capability}\` to your contract's required capabilities.`,
           meta: { target: 'postgres', feature: 'locking-clause', capability },
         }),
       );

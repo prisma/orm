@@ -133,7 +133,7 @@ describe('the PostgreSQL runner and the database capabilities', () => {
     }).toEqual({
       code: 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED',
       message:
-        'Your contract requires database capabilities first available in PostgreSQL 17 (sql.mergeReturning), but this database runs PostgreSQL 16.4. Either upgrade the database, or remove the capabilities from your contract: state version 16, and take them out of its capabilities list if it lists them.',
+        "Your contract requires database capabilities first available in PostgreSQL 17 (sql.mergeReturning), but this database runs PostgreSQL 16.4. Either upgrade the database, or remove them from your contract's required capabilities.",
       failingSpace: 'app',
       databaseCapabilitiesNotProvided: {
         database: 'PostgreSQL',
@@ -141,7 +141,6 @@ describe('the PostgreSQL runner and the database capabilities', () => {
           {
             kind: 'missing-capabilities',
             databaseVersion: '16.4',
-            matchingVersion: 16,
             capabilities: [{ capability: 'sql.mergeReturning', firstVersion: 17 }],
           },
         ],

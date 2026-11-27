@@ -58,7 +58,7 @@ export const gen: ComposedAuthoringHelpers<
   undefined
 >['gen'] = composedHelpers.gen;
 
-// The capabilities PostgreSQL 18 provides, which `@internal/postgres`'s `defineContract({ databaseVersion: 18 })` gives the contract build.
+// The capabilities PostgreSQL 18 provides, which `@internal/postgres`'s `defineContract({ requiredCapabilities: [...postgres18] })` gives the contract build.
 const postgres18 = { capabilities: postgresCapabilitiesByVersion[18] } as const;
 
 type SqlFamily = typeof sqlFamilyPack;

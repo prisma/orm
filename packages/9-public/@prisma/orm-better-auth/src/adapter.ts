@@ -80,7 +80,7 @@ function assertClient(db: PrismaClientLike, adapterOptions: PrismaAdapterOptions
   }
   if (!listsInteractiveTransactions(contract)) {
     throw new BetterAuthError(
-      'The transaction option runs Better Auth transactions through the client’s transaction(), and this client’s contract does not list capability sql.interactiveTransactions. State a capabilities list that includes the driver’s, or turn the option off.',
+      'The transaction option is unavailable: your contract declares no dependency on `sql.interactiveTransactions`. It runs Better Auth transactions through the client’s `transaction()`; without it, turn the option off. To enable it, add `sql.interactiveTransactions` to your contract’s required capabilities.',
     );
   }
 }

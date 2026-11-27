@@ -18,7 +18,11 @@ import {
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { resolveCapabilities } from '@internal/sql-contract-ts/contract-builder';
+import {
+  type CapabilityKey,
+  capabilitiesFromKeys,
+  capabilityKeysOf,
+} from '@internal/sql-contract-ts/contract-builder';
 import type { Codec, SelectAst, SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
@@ -311,21 +315,27 @@ export function buildTestContextFromContract<TContract extends FrameworkContract
   });
 }
 
-/** The capabilities under which the database cannot run the one-query include, so includes load with one query per relation. */
-export const perRelationCapabilities = {
-  sql: { outerReferencesInDerivedTables: false, jsonAggWithoutTruncation: false },
-} as const;
+/** The capabilities without which the database cannot run the one-query include, so includes load with one query per relation. */
+export const oneQueryIncludeKeys = [
+  'sql.outerReferencesInDerivedTables',
+  'sql.jsonAggWithoutTruncation',
+] as const;
 
-// The capabilities `defineContract({ databaseVersion: 18, capabilities: [...] })` gives a contract, as `@internal/postgres` resolves them: the version's row, then the list in order, keeping the flags that are on. With `withCapabilities`, a test gives a contract one of these lists, with a type that matches it.
-const postgres18 = postgresCapabilitiesByVersion[18];
+function without<Key extends CapabilityKey, Removed extends Key>(
+  keys: readonly Key[],
+  removed: readonly Removed[],
+): readonly Exclude<Key, Removed>[] {
+  return keys.filter((key): key is Exclude<Key, Removed> => !removed.some((r) => r === key));
+}
+
+// The capabilities a contract gets from `requiredCapabilities: [...postgres18]` with some left out. With `withCapabilities`, a test gives a contract one of these, with a type that matches it.
+const postgres18 = capabilityKeysOf(postgresCapabilitiesByVersion[18]);
 export const statedCapabilities = {
-  perRelation: resolveCapabilities([postgres18, perRelationCapabilities] as const),
-  withoutReturning: resolveCapabilities([postgres18, { sql: { returning: false } }] as const),
-  perRelationWithoutReturning: resolveCapabilities([
-    postgres18,
-    perRelationCapabilities,
-    { sql: { returning: false } },
-  ] as const),
+  perRelation: capabilitiesFromKeys(without(postgres18, oneQueryIncludeKeys)),
+  withoutReturning: capabilitiesFromKeys(without(postgres18, ['sql.returning'])),
+  perRelationWithoutReturning: capabilitiesFromKeys(
+    without(postgres18, [...oneQueryIncludeKeys, 'sql.returning']),
+  ),
 };
 
 /** `contract` with the capabilities of a database that cannot run the one-query include. */

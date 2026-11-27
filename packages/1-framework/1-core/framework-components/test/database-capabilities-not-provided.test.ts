@@ -10,18 +10,17 @@ function textOf(findings: DatabaseCapabilitiesNotProvided['findings']): string {
 }
 
 describe('the text for a database that does not provide what a contract requires', () => {
-  it('names the first version that provides the missing capabilities, the version the database runs, and the version to state', () => {
+  it('names the first version that provides the missing capabilities, and the version the database runs', () => {
     expect(
       textOf([
         {
           kind: 'missing-capabilities',
           databaseVersion: '15.4',
-          matchingVersion: 15,
           capabilities: [{ capability: 'sql.mergeReturning', firstVersion: 17 }],
         },
       ]),
     ).toBe(
-      'Your contract requires database capabilities first available in PostgreSQL 17 (sql.mergeReturning), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove the capabilities from your contract: state version 15, and take them out of its capabilities list if it lists them.',
+      "Your contract requires database capabilities first available in PostgreSQL 17 (sql.mergeReturning), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove them from your contract's required capabilities.",
     );
   });
 
@@ -31,7 +30,6 @@ describe('the text for a database that does not provide what a contract requires
         {
           kind: 'missing-capabilities',
           databaseVersion: '15.4',
-          matchingVersion: 15,
           capabilities: [
             { capability: 'sql.jsonTable', firstVersion: 16 },
             { capability: 'sql.mergeReturning', firstVersion: 17 },
@@ -40,7 +38,7 @@ describe('the text for a database that does not provide what a contract requires
         },
       ]),
     ).toBe(
-      'Your contract requires database capabilities first available in PostgreSQL 16 (sql.jsonTable) and PostgreSQL 17 (sql.mergeReturning, sql.uuidv7), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove the capabilities from your contract: state version 15, and take them out of its capabilities list if it lists them.',
+      "Your contract requires database capabilities first available in PostgreSQL 16 (sql.jsonTable) and PostgreSQL 17 (sql.mergeReturning, sql.uuidv7), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove them from your contract's required capabilities.",
     );
   });
 
@@ -50,7 +48,6 @@ describe('the text for a database that does not provide what a contract requires
         {
           kind: 'missing-capabilities',
           databaseVersion: '15.4',
-          matchingVersion: 15,
           capabilities: [
             { capability: 'sql.a', firstVersion: 16 },
             { capability: 'sql.b', firstVersion: 17 },
@@ -59,7 +56,7 @@ describe('the text for a database that does not provide what a contract requires
         },
       ]),
     ).toBe(
-      'Your contract requires database capabilities first available in PostgreSQL 16 (sql.a), PostgreSQL 17 (sql.b) and PostgreSQL 18 (sql.c), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove the capabilities from your contract: state version 15, and take them out of its capabilities list if it lists them.',
+      "Your contract requires database capabilities first available in PostgreSQL 16 (sql.a), PostgreSQL 17 (sql.b) and PostgreSQL 18 (sql.c), but this database runs PostgreSQL 15.4. Either upgrade the database, or remove them from your contract's required capabilities.",
     );
   });
 

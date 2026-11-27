@@ -11,7 +11,7 @@ export interface CapabilityFirstAvailable {
 
 /**
  * One way a database does not provide what a contract requires:
- * - `missing-capabilities`: the database's version lacks capabilities a later version provides. `matchingVersion` is the version of the target's table that describes the database, which the contract can state instead.
+ * - `missing-capabilities`: the database's version lacks capabilities a later version provides.
  * - `older-than-supported`: the database is older than the oldest version the target supports.
  * - `version-not-read`: the database's version could not be read; `versionQuery` is the statement that reports it.
  */
@@ -19,7 +19,6 @@ export type DatabaseCapabilitiesNotProvidedFinding =
   | {
       readonly kind: 'missing-capabilities';
       readonly databaseVersion: DatabaseVersion;
-      readonly matchingVersion: DatabaseVersion;
       readonly capabilities: readonly CapabilityFirstAvailable[];
     }
   | {
@@ -62,7 +61,7 @@ function findingText(database: string, finding: DatabaseCapabilitiesNotProvidedF
           (group) => `${database} ${group.firstVersion} (${group.capabilities.join(', ')})`,
         ),
       );
-      return `Your contract requires database capabilities first available in ${versions}, but this database runs ${database} ${finding.databaseVersion}. Either upgrade the database, or remove the capabilities from your contract: state version ${finding.matchingVersion}, and take them out of its capabilities list if it lists them.`;
+      return `Your contract requires database capabilities first available in ${versions}, but this database runs ${database} ${finding.databaseVersion}. Either upgrade the database, or remove them from your contract's required capabilities.`;
     }
     case 'older-than-supported':
       return `This release of Prisma requires ${database} ${finding.oldestSupported} or later. This database runs ${database} ${finding.databaseVersion}. Upgrade the database to ${database} ${finding.oldestSupported} or later.`;

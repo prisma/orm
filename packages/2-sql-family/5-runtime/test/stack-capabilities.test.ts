@@ -144,7 +144,7 @@ describe('warnOfCapabilitiesNotProvided', () => {
           scope: 'stack-verification',
           missing: ['sql.interactiveTransactions'],
           message:
-            'Your contract requires capabilities that no supported version of your database provides, and neither do your adapter, driver or extensions (sql.interactiveTransactions). Either remove the capabilities from your contract, or install a component that provides them.',
+            "Your contract requires `sql.interactiveTransactions`, which this client's connection does not provide. Remove it from your contract's required capabilities, or connect with a driver that provides it.",
         },
       ],
     ]);
@@ -164,7 +164,7 @@ describe('warnOfCapabilitiesNotProvided', () => {
           scope: 'stack-verification',
           missing: ['sql.someNewThing'],
           message:
-            'Your contract requires capabilities that no supported version of your database provides, and neither do your adapter, driver or extensions (sql.someNewThing). Either remove the capabilities from your contract, or install a component that provides them.',
+            "Your contract requires `sql.someNewThing`, which this client's connection does not provide. Remove it from your contract's required capabilities, or connect with a driver that provides it.",
         },
       ],
     ]);
@@ -193,7 +193,7 @@ describe('assertInteractiveTransactionsListed', () => {
       expect.objectContaining({
         code: 'ORM.CAPABILITY_MISSING',
         message:
-          "transaction() requires capability sql.interactiveTransactions. A contract lists the capabilities its database and connection provide; the database package's documentation says how to state them.",
+          "`transaction()` is unavailable: your contract declares no dependency on `sql.interactiveTransactions`. To enable it, add `sql.interactiveTransactions` to your contract's required capabilities.",
         meta: { capability: 'sql.interactiveTransactions', method: 'transaction' },
       }),
     );

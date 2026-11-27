@@ -1,6 +1,9 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { missingCapabilityRemedy } from '@internal/sql-relational-core/ast';
+import {
+  capabilityKeysText,
+  capabilityUnavailableMessage,
+} from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
 import type { SqlExecutionStackWithDriver } from './sql-context';
 import type { RuntimeExecutionOptions } from './sql-runtime';
@@ -38,6 +41,11 @@ export function capabilitiesNotProvided(
   );
 }
 
+function notProvidedByTheConnectionMessage(missing: readonly string[]): string {
+  const [it, provides] = missing.length === 1 ? ['it', 'provides it'] : ['them', 'provides them'];
+  return `Your contract requires ${capabilityKeysText(missing)}, which this client's connection does not provide. Remove ${it} from your contract's required capabilities, or connect with a driver that ${provides}.`;
+}
+
 /**
  * Warns through `options.log`, once, when the stack does not provide a capability `contract` requires. `verifyMarker: false`, which turns off the signature warning, turns this one off too.
  */
@@ -53,7 +61,7 @@ export function warnOfCapabilitiesNotProvided(
     code: 'CONTRACT.CAPABILITIES_NOT_PROVIDED',
     scope: 'stack-verification',
     missing,
-    message: `Your contract requires capabilities that no supported version of your database provides, and neither do your adapter, driver or extensions (${missing.join(', ')}). Either remove the capabilities from your contract, or install a component that provides them.`,
+    message: notProvidedByTheConnectionMessage(missing),
   });
 }
 
@@ -135,7 +143,7 @@ export type StackProvides<
     Stack['driver']['capabilities']
   >,
   '',
-  ' is required by the contract but not provided by its database version, adapter, driver or extensions'
+  " is required by the contract but not provided by this client's connection"
 >;
 
 /** The capability a contract lists when the application runs transactions whose statements it sends one at a time. */
@@ -161,7 +169,7 @@ export function assertInteractiveTransactionsListed(contract: Contract<SqlStorag
   if (contract.capabilities['sql']?.['interactiveTransactions'] === true) return;
   throw structuredError(
     'ORM.CAPABILITY_MISSING',
-    `transaction() requires capability sql.interactiveTransactions. ${missingCapabilityRemedy()}`,
+    capabilityUnavailableMessage('`transaction()`', ['sql.interactiveTransactions']),
     { meta: { capability: 'sql.interactiveTransactions', method: 'transaction' } },
   );
 }

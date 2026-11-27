@@ -1,7 +1,4 @@
-import {
-  defaultConnectionCapabilities,
-  defineContract,
-} from '@prisma/orm-postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@prisma/orm-postgres/contract-builder';
 import postgres from '@prisma/orm-postgres/runtime';
 import { defineContract as defineSqliteContract } from '@prisma/orm-sqlite/contract-builder';
 import sqlite from '@prisma/orm-sqlite/runtime';
@@ -9,12 +6,13 @@ import { describe, expect, it } from 'vitest';
 import { prismaAdapter } from '../../src/exports/index';
 
 const url = 'postgres://localhost:5432/db';
-const [postgresAdapterCapabilities] = defaultConnectionCapabilities;
-
-// Without a list, a contract requires the adapter's and the driver's capabilities, interactive transactions among them; this list names only the adapter's.
-const withTransactions = postgres({ contract: defineContract({ databaseVersion: 18 }), url });
+// The driver provides interactive transactions; a contract that leaves its list out does not require them.
+const withTransactions = postgres({
+  contract: defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }),
+  url,
+});
 const withoutTransactions = postgres({
-  contract: defineContract({ databaseVersion: 18, capabilities: [postgresAdapterCapabilities] }),
+  contract: defineContract({ requiredCapabilities: postgres18 }),
   url,
 });
 
@@ -34,7 +32,7 @@ describe('the transaction option', () => {
       // @ts-expect-error the type already refuses it
       prismaAdapter(withoutTransactions, options),
     ).toThrow(
-      'The transaction option runs Better Auth transactions through the client’s transaction(), and this client’s contract does not list capability sql.interactiveTransactions. State a capabilities list that includes the driver’s, or turn the option off.',
+      'The transaction option is unavailable: your contract declares no dependency on `sql.interactiveTransactions`. It runs Better Auth transactions through the client’s `transaction()`; without it, turn the option off. To enable it, add `sql.interactiveTransactions` to your contract’s required capabilities.',
     );
   });
 

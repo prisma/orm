@@ -38,7 +38,7 @@ describe('collection-contract capability detection', () => {
   it('assertReturningCapability throws when returning is unavailable', () => {
     const contract = { ...getTestContract(), capabilities: {} };
     expect(() => assertReturningCapability(contract, 'create()')).toThrow(
-      /requires contract capability "returning"/,
+      /declares no dependency on `sql\.returning`/,
     );
   });
 
@@ -59,7 +59,7 @@ describe('collection-contract capability detection', () => {
   it('assertDistinctOnCapability throws ORM.CAPABILITY_MISSING when distinctOn is unavailable', () => {
     const contract = { ...getTestContract(), capabilities: {} };
     expect(() => assertDistinctOnCapability(contract, 'distinctOn')).toThrow(
-      'distinctOn() requires capability postgres.distinctOn',
+      '`distinctOn()` is unavailable: your contract declares no dependency on `postgres.distinctOn`',
     );
     expect(() => assertDistinctOnCapability(contract, 'distinctOn')).toThrow(
       expect.objectContaining({ code: 'ORM.CAPABILITY_MISSING' }),

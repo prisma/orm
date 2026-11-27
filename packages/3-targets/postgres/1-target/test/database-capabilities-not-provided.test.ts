@@ -39,7 +39,6 @@ describe('what a PostgreSQL database does not provide of what a contract require
         {
           kind: 'missing-capabilities',
           databaseVersion: '15.4',
-          matchingVersion: 15,
           capabilities: [
             { capability: 'sql.jsonTable', firstVersion: 16 },
             { capability: 'sql.mergeReturning', firstVersion: 17 },
@@ -79,7 +78,6 @@ describe('what a PostgreSQL database does not provide of what a contract require
         {
           kind: 'missing-capabilities',
           databaseVersion: '16.4',
-          matchingVersion: 16,
           capabilities: [{ capability: 'sql.mergeReturning', firstVersion: 17 }],
         },
       ],
@@ -134,7 +132,6 @@ describe('what a PostgreSQL database does not provide of what a contract require
         {
           kind: 'missing-capabilities',
           databaseVersion: '16.4',
-          matchingVersion: 15,
           capabilities: [{ capability: 'sql.mergeReturning', firstVersion: 17 }],
         },
       ],

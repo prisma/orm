@@ -11,6 +11,7 @@ import type { SqlOperationEntry } from '@internal/sql-operations';
 import {
   AndExpr,
   type AnyExpression as AstExpression,
+  capabilityUnavailableMessage,
   collectOrderedParamRefs,
   IdentifierRef,
   isAggregateProjection,
@@ -20,7 +21,6 @@ import {
   type LockConflict,
   type LockingClause,
   lockIncompatible,
-  missingCapabilityRemedy,
   OrderByItem,
   ProjectionItem,
   refuseReservedResultColumn,
@@ -423,7 +423,7 @@ export function assertCapability(
       if (!ctx.capabilities[ns]?.[key]) {
         throw structuredError(
           'ORM.CAPABILITY_MISSING',
-          `${methodName}() requires capability ${ns}.${key}. ${missingCapabilityRemedy()}`,
+          capabilityUnavailableMessage(`\`${methodName}()\``, [`${ns}.${key}`]),
           { meta: { method: methodName, capability: `${ns}.${key}` } },
         );
       }

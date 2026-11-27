@@ -8,8 +8,8 @@ import type {
 import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import {
   type CapabilityRequirement,
+  capabilityUnavailableMessage,
   missingCapability,
-  missingCapabilityRemedy,
 } from '@internal/sql-relational-core/ast';
 import { isExpression } from '@internal/sql-relational-core/expression';
 import { blindCast } from '@internal/utils/casts';
@@ -948,7 +948,7 @@ export function assertReturningCapability(contract: Contract<SqlStorage>, action
 
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${action} requires contract capability "returning". ${missingCapabilityRemedy()}`,
+    capabilityUnavailableMessage(`\`${action}\``, ['sql.returning']),
     {
       meta: { capability: 'returning', action },
     },
@@ -977,7 +977,7 @@ function requireCapability(
 
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${action} requires contract capability "${capability}". ${missingCapabilityRemedy()}`,
+    capabilityUnavailableMessage(`\`${action}\``, [`sql.${capability}`]),
     { meta: { capability, action } },
   );
 }
@@ -1006,7 +1006,7 @@ export function assertDistinctOnCapability(
 
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${methodName}() requires capability postgres.distinctOn. ${missingCapabilityRemedy()}`,
+    capabilityUnavailableMessage(`\`${methodName}()\``, ['postgres.distinctOn']),
     { meta: { capability: 'postgres.distinctOn', method: methodName } },
   );
 }
@@ -1023,7 +1023,7 @@ export function assertLockCapability(
 
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${methodName}() requires capability ${capability}. ${missingCapabilityRemedy()}`,
+    capabilityUnavailableMessage(`\`${methodName}()\``, [capability]),
     {
       meta: { capability, method: methodName },
     },

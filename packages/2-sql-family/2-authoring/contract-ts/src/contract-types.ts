@@ -144,7 +144,7 @@ type DefinitionAdapter<Definition> = Definition extends { readonly adapter?: inf
   ? Present<Adapter>
   : never;
 
-// The enabled capabilities of the target, then its adapter, then the extensions, each replacing the flags it sets, as `prisma contract emit`, the build and the execution context merge them. A disabled capability is left out, as in an emitted contract.
+// The enabled capabilities of the target, then its adapter, then the extensions, each replacing the flags it sets, as `prisma contract emit` and the build merge them. A disabled capability is left out, as in an emitted contract.
 type DerivedCapabilities<Definition> = EnabledCapabilities<
   OverrideCapabilities<
     OverrideCapabilities<
