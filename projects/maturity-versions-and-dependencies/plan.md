@@ -19,8 +19,9 @@ Slices 1 to 4 are in the order of what cannot be changed after release `8.0`; sl
 | 4, [TML-3938](https://linear.app/prisma-company/issue/TML-3938) | The public docs: what an application installs, the levels, and each package's level | prisma/web | 1 for the install instructions, 2 for the levels | the install instructions with the release that ships slice 1; the levels with release `8.0` |
 | 5 | Every release's notes have a "How to upgrade" section | prisma/orm | nothing | the next release candidate after slice 1 |
 | 6, [TML-3956](https://linear.app/prisma-company/issue/TML-3956) | Apps that create-prisma generates list the platform packages | prisma/create-prisma | the first release of prisma/orm that contains slice 1 | create-prisma's move to that release |
+| 7, [TML-3987](https://linear.app/prisma-company/issue/TML-3987) | The API compatibility job compares each package at its own version at the last release, and a release publishes the versions it committed | prisma/orm | 2 | `8.0.1` |
 
-Status: slice 1 merged in prisma/orm#31204, and slice 2 in prisma/orm#31212. Slice 4 is no longer part of this project (decided on 2026-11-27): the maturity levels on prisma.io belong to the compatibility stream's project for the public versioning policy, and what an application installs belongs to the GA plan's docs stream. A hand-over lists what each must say and its source on `main`. Slice 5 is dropped (decided on 2026-11-27): after release `8.0` an upgrade within Prisma 8 needs no changes for anything that is GA, so per-release upgrade instructions matter only for the release candidates, and no more work goes into them. The release notes already say, for each breaking change, what the reader must do. Slice 3 is one documentation pull request, in review. Slice 4's draft can be written while slice 3 is built. Slice 5 is independent of the others and starts after slice 1's pull request.
+Status: slice 1 merged in prisma/orm#31204, and slice 2 in prisma/orm#31212. Slice 4 is no longer part of this project (decided on 2026-11-27): the maturity levels on prisma.io belong to the compatibility stream's project for the public versioning policy, and what an application installs belongs to the GA plan's docs stream. A hand-over lists what each must say and its source on `main`. Slice 5 is dropped (decided on 2026-11-27): after release `8.0` an upgrade within Prisma 8 needs no changes for anything that is GA, so per-release upgrade instructions matter only for the release candidates, and no more work goes into them. The release notes already say, for each breaking change, what the reader must do. Slice 3 merged in prisma/orm#31236. Slice 7 was added on 2026-11-28 and is in review: without it the `API compatibility` job would look for every package at the root version after release 8.0, find no `8.0.1` of an Early Access package, and fail on every pull request. Slice 6 waits for the first release candidate that contains slice 1; `8.0.0-rc.25` does not.
 
 ### 6. Apps that create-prisma generates list the platform packages
 
@@ -143,19 +144,17 @@ The bullets below are the plan as first written. Where they describe a fix to on
 
 **The check:** each page's install lines are run against packages packed from the release, under npm, pnpm, Yarn and Bun, before the pull request is merged.
 
-## Proposed split: the command-line tool's rules as their own project
+## The command-line tool's rules: moved to the stream's project 13
 
-The design's section 4 is the size of a project and is better run as one:
+The design's section 4 planned a check: the `prisma` tool compares the toolchain it carries with the ORM packages installed in a project, and stops when they are on different minors. It is not built, and it is no longer needed (decided on 2026-11-28). Inside a project, `prisma` runs the project's own copy of the toolchain, which the application lists beside the library, and the peer ranges from slice 1 keep the two on one release. So there is nothing to compare. Outside a project, for example for `orm init`, there is no project to compare with.
 
-- **In prisma/orm:** the tool compares the major and minor of the toolchain it carries with the library installed in the project and stops when they differ. What crosses from the project's config file into the tool is accepted by its shape. Today some values are recognised by which copy of the framework made them: a literal default value carries a private field, and a release candidate once failed on exactly this. The docs currently tell users the tool and the application must share one copy. Finding every such value and changing how it is recognised is an investigation of its own.
-- **In prisma/prisma-cli:** the `prisma` package keeps its own version numbers; it brings together several tools. When it runs an ORM command it compares the toolchain it carries with the ORM packages installed in the project, and stops when they are on different minors. Still to design there: what a user does when an update of `prisma` brings a toolchain from a newer ORM release than their application can move to. It reports newer versions within the ranges the user has written.
+What is left belongs to the compatibility stream's project 13, on the `prisma` tool's interface: how `prisma` decides it is inside a project, and what it does when the project's toolchain is missing or too old for it to load.
+
 - **`init`'s `prisma` line.** `init` leaves the `prisma` line as the package manager writes it. `prisma` keeps its own version numbers (decided by the operator on 2026-11-27), so no range on it can follow the ORM's release.
-
-It is required for GA. Once packages have their own patch numbers, the tool and the library will often be different copies. It builds on slice 2 of this project.
 
 ## Other repositories
 
-- **prisma/prisma-cli:** the framework line before slice 1, and the proposed project above.
+- **prisma/prisma-cli:** the framework line before slice 1. The rest of the tool's work is in the stream's project 13.
 - **prisma/composer:** the framework line before slice 1. Composer can move from exact versions to ranges after release `8.0`; a ticket records it, and it is not part of this project.
 - **prisma/web:** the install instructions with slice 1, and slice 4.
 - **prisma/create-prisma:** slice 6.
