@@ -161,10 +161,10 @@ describe('checkFile', () => {
     ]);
   });
 
-  it('skips a GitHub link pinned to a tag or a commit', () => {
+  it('skips a GitHub link pinned to a tag, a commit or another branch', () => {
     const files = {
       'docs/index.md':
-        '[a](https://github.com/prisma/orm/blob/v1.0.0/gone.md) [b](https://github.com/prisma/orm/blob/abc123/gone.md)',
+        '[a](https://github.com/prisma/orm/blob/v1.0.0/gone.md) [b](https://github.com/prisma/orm/blob/abc123/gone.md) [c](https://github.com/prisma/orm/blob/main-v7/gone.md)',
     };
     deepStrictEqual(check(files), []);
   });
@@ -253,6 +253,26 @@ describe('extractLinks', () => {
     ]);
   });
 
+  it('reads a line that looks like a definition inside a paragraph as text', () => {
+    deepStrictEqual(targets('The fields are:\n[name]: the user name'), []);
+  });
+
+  it('reads a reference definition inside a blockquote', () => {
+    deepStrictEqual(extractLinks('> [r]: missing.md'), [{ target: 'missing.md', line: 1 }]);
+  });
+
+  it('does not join link text across blocks', () => {
+    deepStrictEqual(
+      [
+        '- [first\n- second](a.md)',
+        '## [Heading\ntext](b.md)',
+        '[before\n```\ncode\n```\nafter](c.md)',
+        'Text\n\n    code [x\n\nnext](d.md)',
+      ].flatMap(targets),
+      [],
+    );
+  });
+
   it('reads reference definitions and not footnotes', () => {
     deepStrictEqual(extractLinks('[a][g]\n\n[g]: <a b.md>\n[^1]: A footnote.'), [
       { target: 'a b.md', line: 3 },
@@ -282,6 +302,13 @@ describe('collectAnchors', () => {
 
   it('skips a number a literal heading already uses', () => {
     deepStrictEqual([...collectAnchors('## a\n\n## a\n\n## a-1')], ['a', 'a-1', 'a-1-1']);
+  });
+
+  it('keeps counting past a number a literal heading already uses', () => {
+    deepStrictEqual(
+      [...collectAnchors('## a\n\n## a-1\n\n## a\n\n## a')],
+      ['a', 'a-1', 'a-2', 'a-3'],
+    );
   });
 
   it('ignores headings inside a code fence', () => {
@@ -327,17 +354,14 @@ describe('slugify', () => {
 });
 
 describe('isExcluded', () => {
-  it('excludes historical records, project folders and templates', () => {
+  it('excludes project folders and templates', () => {
     deepStrictEqual(
       [
-        'docs/releases/v1.md',
-        'CHANGELOG.md',
-        'upgrade-instructions/releases/a-to-b/sources/x/app/instructions.md',
         'projects/foo/spec.md',
         'packages/3-targets/postgres/9-facade/src/init/init-readme.md',
         'skills-contrib/product-direction/assets/vision.md',
       ].map(isExcluded),
-      [true, true, true, true, true, true],
+      [true, true, true],
     );
   });
 
@@ -348,8 +372,11 @@ describe('isExcluded', () => {
         'docs/README.md',
         'skills/prisma-8/upgrading/app/SKILL.md',
         'skills/prisma-8/upgrading/app/upgrades/a-to-b/instructions.md',
+        'docs/releases/v1.md',
+        'CHANGELOG.md',
+        'upgrade-instructions/releases/a-to-b/sources/x/app/instructions.md',
       ].map(isExcluded),
-      [false, false, false, false],
+      [false, false, false, false, false, false, false],
     );
   });
 });

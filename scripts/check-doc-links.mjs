@@ -9,8 +9,6 @@
  * files count before they are staged and gitignored files never count.
  *
  * Files not scanned (links pointing into them are still checked):
- * - docs/releases/**, CHANGELOG.md: published release notes, a historical record.
- * - upgrade-instructions/releases/**: archived originals of shipped upgrade guides, kept unchanged.
  * - projects/<project>/**: transient project files, deleted when the project closes.
  * - src/init/ folders under packages/: templates `init` writes into a new project; links resolve there.
  * - skills-contrib/<skill>/assets/**: templates a skill copies into another repository.
@@ -22,7 +20,9 @@
  *
  * Known differences from GitHub's renderer: a code span that wraps lines is not recognised, an
  * html comment that spans a blank line is read as text, a list item's own indented code block is
- * read as text, and `id` attributes on elements other than `<a>` are not anchors.
+ * read as text, links inside a `<pre>` block are read, an unquoted `href=x` is not read, an
+ * `href=` inside another attribute's value is read, and `id` attributes on elements other than
+ * `<a>` are not anchors.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -31,9 +31,6 @@ import { dirname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const EXCLUDED_PATTERNS = [
-  /^docs\/releases\//,
-  /^CHANGELOG\.md$/,
-  /^upgrade-instructions\/releases\//,
   /^projects\/[^/]+\//,
   /^packages\/.*\/src\/init\//,
   /^skills-contrib\/[^/]+\/assets\//,
@@ -47,7 +44,9 @@ const BLOCKQUOTE = /^ {0,3}(>\s?)+/;
 const DEFINITION = /^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\n]*)>|(\S+))/;
 const HTML_LINK = /<(?:a|img|source)\b[^>]*?\s(?:href|src)\s*=\s*["']([^"']*)["']/gi;
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
-const GITHUB_MAIN = /^https:\/\/github\.com\/prisma\/orm\/(?:blob|tree)\/main(\/[^?#]*)?(.*)$/;
+const GITHUB_MAIN =
+  /^https:\/\/github\.com\/prisma\/orm\/(?:blob|tree)\/main(?=$|[/?#])(\/[^?#]*)?(.*)$/;
+const ATX_HEADING = /^ {0,3}#{1,6}(\s|$)/;
 const EXPLICIT_ANCHOR = /<a\s[^>]*?\b(?:id|name)\s*=\s*["']([^"']+)["']/gi;
 const LINE_ANCHOR = /^L\d+(C\d+)?(-L\d+(C\d+)?)?$/;
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -94,6 +93,7 @@ function* proseLines(content) {
     if (opening) {
       fence = opening[1];
       previousBlank = false;
+      yield { text: '', line: i + 1 };
       continue;
     }
     if (LIST_ITEM.test(line)) inList = true;
@@ -101,7 +101,7 @@ function* proseLines(content) {
     const indentedCode = !inList && INDENTED.test(line) && (previousBlank || inIndentedCode);
     inIndentedCode = indentedCode;
     previousBlank = false;
-    if (!indentedCode) yield { text: line, line: i + 1 };
+    yield { text: indentedCode ? '' : line, line: i + 1 };
   }
 }
 
@@ -192,11 +192,15 @@ export function extractLinks(content) {
     paragraph = [];
   };
   for (const entry of proseLines(content)) {
-    const definition = DEFINITION.exec(entry.text);
-    if (entry.text === '' || definition) flush();
-    if (definition) links.push({ target: definition[1] ?? definition[2], line: entry.line });
-    else if (entry.text !== '')
-      paragraph.push({ text: blankCodeSpans(entry.text), line: entry.line });
+    const definition =
+      paragraph.length === 0 && DEFINITION.exec(entry.text.replace(BLOCKQUOTE, ''));
+    if (definition) {
+      links.push({ target: definition[1] ?? definition[2], line: entry.line });
+      continue;
+    }
+    if (entry.text === '' || LIST_ITEM.test(entry.text) || ATX_HEADING.test(entry.text)) flush();
+    if (entry.text !== '') paragraph.push({ text: blankCodeSpans(entry.text), line: entry.line });
+    if (ATX_HEADING.test(entry.text)) flush();
   }
   flush();
   return links;
