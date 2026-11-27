@@ -40,8 +40,13 @@ const copy = dataTransform('move Measurement documents to measurements', {
 });
 const deletion = deleteDocuments({ collection: 'events', filter });
 const UNCHANGED = 'nothing wrote to or deleted from either collection since the apply stopped';
+/** What the next run does with the source: readings is copied whole and dropped, events only by the copy's filter. */
+const RERUN_COPIES = (source: string) =>
+  source === 'readings'
+    ? 'The next run copies every document of collection readings into collection measurements again, then drops collection readings, so before you run it, leave in collection readings only the documents that collection measurements does not hold yet.'
+    : `The next run copies every document of collection ${source} that the copy selects into collection measurements again, then deletes them from collection ${source}, so before you run it, leave in collection ${source} only the documents that collection measurements does not hold yet.`;
 const SETTLE_BY_HAND = (source: string) =>
-  `delete nothing from either collection, and do not run the command again, until you have compared collections measurements and ${source} by hand and settled which documents each should keep: only you can tell which of their documents are which.`;
+  `delete nothing from either collection, and do not run the command again, until you have compared collections measurements and ${source} by hand and settled which documents each should keep: only you can tell which of their documents are which. ${RERUN_COPIES(source)}`;
 const UNSURE = (source: string) =>
   `If you cannot be sure that ${UNCHANGED}, ${SETTLE_BY_HAND(source)} Otherwise`;
 const WRITES_STOPPED =
@@ -203,7 +208,7 @@ describe('MongoMigrationPlanner and runner - a move into a time-series collectio
     }
   }
 
-  const counts = `Before the copy, collection measurements held 1 document, and the copy was to add 2 documents of collection events. To tell whether it finished, count the documents of collection measurements, for example with db.getCollection("measurements").countDocuments() in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${SETTLE_BY_HAND('events')} If it holds 3, and ${UNCHANGED}, the copy finished. ${WRITES_STOPPED} Before you run the command again, run that delete yourself`;
+  const counts = `Before the copy, collection measurements held 1 document, and the copy was to add 2 documents of collection events. To tell whether it finished, first check that it is no longer running: MongoDB keeps running an aggregate that ends in $out after the connection that sent it drops. In mongosh, db.getSiblingDB("admin").aggregate([{ $currentOp: { allUsers: true } }, { $match: { "command.aggregate": "measurements" } }]) lists the copy while it runs. Wait until it lists nothing, or end the copy with db.killOp(<the opid it lists>). Then count the documents of collection measurements, for example with db.getCollection("measurements").countDocuments() in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${SETTLE_BY_HAND('events')} If it holds 3, and ${UNCHANGED}, the copy finished. ${WRITES_STOPPED} Before you run the command again, run that delete yourself`;
 
   it(
     'says to delete nothing when the copy stopped before its $out committed, though the target already holds an _id of the source',
@@ -298,6 +303,93 @@ describe('MongoMigrationPlanner and runner - a move into a time-series collectio
         events: [{ name: 'launch' }],
       });
       expect(await live.documents('measurements')).toHaveLength(3);
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
+describe('MongoMigrationPlanner and runner - a move into a time-series collection whose connection drops while the copy still runs', () => {
+  const slowCopy = dataTransform('move Measurement documents to measurements', {
+    run: () =>
+      rawAggregate('measurements', [
+        {
+          $unionWith: {
+            coll: 'events',
+            pipeline: [
+              { $match: filter },
+              {
+                $addFields: {
+                  slow: {
+                    $function: {
+                      body: 'function() { sleep(400); return 1; }',
+                      args: [],
+                      lang: 'js',
+                    },
+                  },
+                },
+              },
+              { $unset: 'slow' },
+            ],
+          },
+        },
+        { $out: 'measurements' },
+      ]),
+  });
+  /** The copies on collection measurements that the server is running, as the advice's $currentOp lists them. */
+  const runningCopies = async (): Promise<readonly unknown[]> => {
+    const reply = await live
+      .db()
+      .admin()
+      .command({
+        aggregate: 1,
+        pipeline: [
+          { $currentOp: { allUsers: true } },
+          { $match: { 'command.aggregate': 'measurements' } },
+        ],
+        cursor: {},
+      });
+    return reply['cursor'].firstBatch;
+  };
+
+  it(
+    'says to check that the copy is no longer running before counting, since MongoDB finishes the $out after the connection drops',
+    async () => {
+      const { before, after } = await routeAround();
+      const proxy = await outInterruptingClient(live.uri(), 'whileRunning');
+      const first = await live
+        .runOperations([...before, slowCopy, deletion, ...after], from, to, {
+          policy,
+          client: proxy.client,
+        })
+        .finally(() => proxy.close());
+      const running = await runningCopies();
+      const countWhileRunning = await live.db().collection('measurements').countDocuments();
+      while ((await runningCopies()).length > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      const countOnceEnded = await live.db().collection('measurements').countDocuments();
+      await live.db().collection('events').deleteMany(filter);
+      const second = await live.runOperations([...before, slowCopy, deletion, ...after], from, to, {
+        policy,
+      });
+
+      expect({
+        advice: first.ok ? undefined : first.failure.why,
+        running: running.length,
+        countWhileRunning,
+        countOnceEnded,
+        second: second.ok ? 'applied' : second.failure,
+        ...(await state()),
+      }).toEqual({
+        advice: expect.stringContaining(
+          'Before the copy, collection measurements held 0 documents, and the copy was to add 2 documents of collection events. To tell whether it finished, first check that it is no longer running: MongoDB keeps running an aggregate that ends in $out after the connection that sent it drops. In mongosh, db.getSiblingDB("admin").aggregate([{ $currentOp: { allUsers: true } }, { $match: { "command.aggregate": "measurements" } }]) lists the copy while it runs. Wait until it lists nothing, or end the copy with db.killOp(<the opid it lists>). Then count',
+        ),
+        running: 1,
+        countWhileRunning: 0,
+        countOnceEnded: 2,
+        second: 'applied',
+        ...moved,
+      });
     },
     timeouts.spinUpMongoMemoryServer,
   );

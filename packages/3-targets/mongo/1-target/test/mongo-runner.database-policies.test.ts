@@ -459,6 +459,40 @@ describe('MongoMigrationRunner database policies', () => {
     });
   });
 
+  it("guards the application space's marker with the policies in force, and leaves an extension space's marker unguarded", async () => {
+    const appStore = new MarkerStore(markerAt('start', { policies: MIGRATE_ONLY }));
+    const extensionStore = new MarkerStore(markerAt('start', {}));
+    const runWith = (store: MarkerStore, spaceId?: string) =>
+      makeRunner(store).execute({
+        plan: {
+          ...makePlan([createCollection('items')], 'start'),
+          ...ifDefined('spaceId', spaceId),
+        },
+        migrationEdges: [edge('start', DEST, '002_items')],
+        destinationContract: makeContract(),
+        policy: ALL_POLICY,
+        frameworkComponents: [],
+        strictVerification: false,
+        executionChecks: { prechecks: false, postchecks: false, idempotencyChecks: false },
+        policiesInForce: DEFAULT_DATABASE_POLICIES,
+      });
+
+    const app = await runWith(appStore);
+    const extension = await runWith(extensionStore, 'audit');
+
+    expect({
+      app: app.ok ? 'applied' : app.failure.meta?.['reason'],
+      appHash: appStore.marker?.storageHash,
+      extension: extension.ok ? 'applied' : extension.failure,
+      extensionHash: extensionStore.marker?.storageHash,
+    }).toEqual({
+      app: 'databasePolicies',
+      appHash: 'start',
+      extension: 'applied',
+      extensionHash: DEST,
+    });
+  });
+
   it("gives an extension space's refusal the ways the database's policies permit, as the application space's", async () => {
     const store = new MarkerStore(markerAt('start', { policies: MIGRATE_ONLY }));
     const inspection = new StubInspectionExecutor();
@@ -483,7 +517,7 @@ describe('MongoMigrationRunner database policies', () => {
     const failure = result.assertNotOk();
     expect(failure).toMatchObject({
       code: 'MIGRATION.PRECHECK_FAILED',
-      why: expect.stringContaining('rename it in mongosh'),
+      why: expect.stringContaining('moving the collection aside'),
     });
     expect(failure.why).not.toContain('db sign');
   });

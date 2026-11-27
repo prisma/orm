@@ -199,9 +199,7 @@ export interface MongoMigrationRunnerExecuteOptions
   readonly migrationEdges: readonly AggregateMigrationEdgeRef[];
   /** Whether an earlier space of the same apply already changed the database. */
   readonly databaseChangedBefore?: boolean;
-  /** The policies the run checked; the application space's marker is written only while its policies read as these. */
-  readonly checkedPolicies?: DatabasePolicies;
-  /** The policies the run checked, given to every space, so that a refusal offers only the ways they permit. */
+  /** The database's policies, which the run checked. A refusal offers only the ways they permit, and the application space's marker is written only while its policies read as these. */
   readonly policiesInForce?: DatabasePolicies;
 }
 
@@ -462,11 +460,37 @@ function createTargetExistsRefusal(
 /**
  * The way past a create with no after-check that keeps the documents of a collection the user
  * needs: move the collection aside, let the run create it, then copy the documents back. It needs
- * only the command the user is running and work by hand, so every change policy permits it.
+ * only `db migrate` and work by hand, so every change policy permits it. The steps are too many for
+ * a message, so it names the route and points to the error reference, which holds them. `--to`
+ * names an application contract, so an extension's migration is run with the command as it is.
  */
-function movedAsideText(name: string): string {
-  const aside = `${name}_kept`;
-  return `If ${name} holds documents you need, rename it in mongosh, for example with db.getCollection(${JSON.stringify(name)}).renameCollection(${JSON.stringify(aside)}), and run the command again: the create makes collection ${name} with this migration's options, and the rest of the migration runs. Then copy the documents back, for example with db.getCollection(${JSON.stringify(aside)}).aggregate([{ $merge: { into: ${JSON.stringify(name)} } }]), and drop collection ${aside}. The documents you copy back must satisfy any validator collection ${name} has after the run. If an operation of this migration after the create changes documents of collection ${name}, it ran while the collection was empty, so make the same change to the documents you copy back.`;
+function movedAsideText(name: string, migration: MigrationOfOperation): string {
+  const run =
+    migration.space === APP_SPACE_ID
+      ? `run db migrate --to ${migration.dirName ?? "<the name of this migration's directory>"}`
+      : 'run the command again';
+  const part =
+    migration.space === APP_SPACE_ID ? '' : ", with its part for an extension's migration";
+  return `If ${name} holds documents you need, you can keep them by moving the collection aside: stop the application's writes to it, move it to ${name}_kept, ${run} so this migration creates ${name} with its options, and copy the documents back. Follow every step under "Moving a MongoDB collection aside" in the error reference for MIGRATION.PRECHECK_FAILED${part}, which keep the documents until the copy back is checked.`;
+}
+
+/** The space of the migration an operation belongs to, and its directory name when the run knows it. */
+interface MigrationOfOperation {
+  readonly space: string;
+  readonly dirName: string | undefined;
+}
+
+/** The directory name of the migration whose operations hold the one at `operationIndex`; `undefined` for an edge with none, as `db update` makes. */
+function dirNameOf(
+  edges: readonly AggregateMigrationEdgeRef[],
+  operationIndex: number,
+): string | undefined {
+  let end = 0;
+  for (const edge of edges) {
+    end += edge.operationCount;
+    if (operationIndex < end) return edge.dirName === '' ? undefined : edge.dirName;
+  }
+  return undefined;
 }
 
 /**
@@ -489,16 +513,21 @@ function uncheckedCreateTargetExistsRefusal(
   failed: MongoMigrationCheck,
   before: Ran,
   policies: DatabasePolicies | undefined,
+  migration: MigrationOfOperation,
 ): MongoMigrationRunnerResult | undefined {
   const create = failedCreateOf(op, failed);
   if (create === undefined || op.postcheck.length > 0) return undefined;
   const name = create.collection;
   const skipped = `the creation is then skipped if ${name} has ${createOptionsText(create)}`;
+  const emittedAgain =
+    migration.space === APP_SPACE_ID
+      ? `If no other database has applied this migration, run its migration.ts with node, which writes its ops.json again with the after-check and changes the migration's hash, then run the command again${before.skips ? `: ${skipped}.` : ` with postchecks and idempotency checks on, since only they skip it: ${skipped}.`}`
+      : "This migration belongs to an extension: its operations come from the extension's package, not from a migration.ts in this project, so its ops.json cannot be written again here.";
   return runnerFailure(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: collection ${name} already exists, and this migration's create has no after-check that lets a run skip it`,
     {
-      why: `This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection ${name}. If no other database has applied this migration, run its migration.ts with node, which writes its ops.json again with the after-check and changes the migration's hash, then run the command again${before.skips ? `: ${skipped}.` : ` with postchecks and idempotency checks on, since only they skip it: ${skipped}.`} ${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} ${movedAsideText(name)}${signedByHandText(policies)}`,
+      why: `This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection ${name}. ${emittedAgain} ${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} ${movedAsideText(name, migration)}${signedByHandText(policies)}`,
       meta: { operationId: op.id },
     },
   );
@@ -1853,6 +1882,7 @@ export class MongoMigrationRunner {
                 failing,
                 ran(operationIndex),
                 options.policiesInForce,
+                { space, dirName: dirNameOf(options.migrationEdges, operationIndex) },
               ) ??
               (await this.documentsFailingValidatorRefusal(
                 operation,
@@ -1989,7 +2019,7 @@ export class MongoMigrationRunner {
             invariants: incomingInvariants,
             ...ifDefined('databasePolicies', options.databasePolicies),
           },
-          options.checkedPolicies,
+          space === APP_SPACE_ID ? options.policiesInForce : undefined,
         );
         if (swapFailure !== undefined) return notOk(swapFailure);
       } else {

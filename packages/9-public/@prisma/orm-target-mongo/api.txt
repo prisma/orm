@@ -401,7 +401,6 @@
 ./target/control: interface CollModMeta, readonly optional property operationClass?: MigrationOperationClass
 ./target/control: interface MongoMigrationRunnerExecuteOptions extends Pick<MigrationRunnerPerSpaceOptions, 'databasePolicies'>
 ./target/control: interface MongoMigrationRunnerExecuteOptions, readonly optional property callbacks?: { onOperationStart?(op: MigrationPlanOperation): void; onOperationComplete?(op: MigrationPlanOperation): void; }
-./target/control: interface MongoMigrationRunnerExecuteOptions, readonly optional property checkedPolicies?: DatabasePolicies
 ./target/control: interface MongoMigrationRunnerExecuteOptions, readonly optional property context?: OperationContext
 ./target/control: interface MongoMigrationRunnerExecuteOptions, readonly optional property databaseChangedBefore?: boolean
 ./target/control: interface MongoMigrationRunnerExecuteOptions, readonly optional property executionChecks?: MigrationRunnerExecutionChecks
@@ -687,7 +686,6 @@
 ./target: interface CollModMeta, readonly optional property operationClass?: MigrationOperationClass
 ./target: interface MongoMigrationRunnerExecuteOptions extends Pick<MigrationRunnerPerSpaceOptions, 'databasePolicies'>
 ./target: interface MongoMigrationRunnerExecuteOptions, readonly optional property callbacks?: { onOperationStart?(op: MigrationPlanOperation): void; onOperationComplete?(op: MigrationPlanOperation): void; }
-./target: interface MongoMigrationRunnerExecuteOptions, readonly optional property checkedPolicies?: DatabasePolicies
 ./target: interface MongoMigrationRunnerExecuteOptions, readonly optional property context?: OperationContext
 ./target: interface MongoMigrationRunnerExecuteOptions, readonly optional property databaseChangedBefore?: boolean
 ./target: interface MongoMigrationRunnerExecuteOptions, readonly optional property executionChecks?: MigrationRunnerExecutionChecks

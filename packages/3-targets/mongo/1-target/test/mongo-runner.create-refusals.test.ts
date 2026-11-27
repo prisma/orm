@@ -1,4 +1,5 @@
 import { DEFAULT_DATABASE_POLICIES } from '@internal/framework-components/control';
+import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
 import { createCollection } from '../src/core/migrations/migration-factories';
 import {
@@ -13,18 +14,32 @@ import {
 
 const FIRST_TWO_WAYS =
   "This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection orders. If no other database has applied this migration, run its migration.ts with node, which writes its ops.json again with the after-check and changes the migration's hash, then run the command again: the creation is then skipped if orders has the options the createCollection call of this migration's migration.ts sets, and no validator, since that call sets none. If orders holds nothing you need, drop it, then run the command again; operations that already ran are skipped.";
-const MOVED_ASIDE =
-  'If orders holds documents you need, rename it in mongosh, for example with db.getCollection("orders").renameCollection("orders_kept"), and run the command again: the create makes collection orders with this migration\'s options, and the rest of the migration runs. Then copy the documents back, for example with db.getCollection("orders_kept").aggregate([{ $merge: { into: "orders" } }]), and drop collection orders_kept. The documents you copy back must satisfy any validator collection orders has after the run. If an operation of this migration after the create changes documents of collection orders, it ran while the collection was empty, so make the same change to the documents you copy back.';
+const EXTENSION_FIRST_TWO_WAYS =
+  "This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection orders. This migration belongs to an extension: its operations come from the extension's package, not from a migration.ts in this project, so its ops.json cannot be written again here. If orders holds nothing you need, drop it, then run the command again; operations that already ran are skipped.";
+const SECTION =
+  'Follow every step under "Moving a MongoDB collection aside" in the error reference for MIGRATION.PRECHECK_FAILED, which keep the documents until the copy back is checked.';
+const MOVED_ASIDE = (to: string) =>
+  `If orders holds documents you need, you can keep them by moving the collection aside: stop the application's writes to it, move it to orders_kept, run db migrate --to ${to} so this migration creates orders with its options, and copy the documents back. ${SECTION}`;
+const EXTENSION_MOVED_ASIDE = `If orders holds documents you need, you can keep them by moving the collection aside: stop the application's writes to it, move it to orders_kept, run the command again so this migration creates orders with its options, and copy the documents back. Follow every step under "Moving a MongoDB collection aside" in the error reference for MIGRATION.PRECHECK_FAILED, with its part for an extension's migration, which keep the documents until the copy back is checked.`;
+const UNNAMED = "<the name of this migration's directory>";
 const SIGNED_BY_HAND =
   "Or, without moving the documents, leave the migration as it is, apply the operations of this migration that did not run by hand, then run db sign with the name of this migration's directory. db sign checks the collections, their validators and their indexes against the contract this migration leads to, not the documents, so first check yourself that the documents are as the operations you applied leave them. It then records the database at that contract, so the next run starts after this migration. migration status then shows the database as up to date, but does not mark this migration as applied, since no run of it is recorded.";
 
-async function executeUnderChange(change: readonly ('migrate' | 'reconcile')[]) {
+async function executeUnderChange(change: readonly ('migrate' | 'reconcile')[], spaceId?: string) {
   const harness = makeHarness();
   harness.inspectionExecutor.collections = [{ name: 'orders' }];
-  const plan = makePlan([{ ...createCollection('orders'), postcheck: [] }]);
+  const plan = {
+    ...makePlan([{ ...createCollection('orders'), postcheck: [] }]),
+    ...ifDefined('spaceId', spaceId),
+  };
+  const [edge] = synthEdges(plan);
+  if (edge === undefined) throw new Error('synthEdges made no edge');
   return harness.runner.execute({
     plan,
-    migrationEdges: synthEdges(plan),
+    migrationEdges: [
+      { ...edge, dirName: '20261101T0000_empty', operationCount: 0 },
+      { ...edge, dirName: '20261127T0000_orders', operationCount: 1 },
+    ],
     destinationContract: makeContract('dest'),
     policy: ALL_POLICY,
     frameworkComponents: [],
@@ -75,7 +90,7 @@ describe('MongoMigrationRunner, a create whose collection already exists', () =>
       code: 'MIGRATION.PRECHECK_FAILED',
       message:
         "Operation collection.orders.create stopped: collection orders already exists, and this migration's create has no after-check that lets a run skip it",
-      why: `${FIRST_TWO_WAYS} ${MOVED_ASIDE} ${SIGNED_BY_HAND} The failed apply changed nothing.`,
+      why: `${FIRST_TWO_WAYS} ${MOVED_ASIDE(UNNAMED)} ${SIGNED_BY_HAND} The failed apply changed nothing.`,
       meta: { operationId: 'collection.orders.create', databaseUnchanged: true },
     });
   });
@@ -84,7 +99,7 @@ describe('MongoMigrationRunner, a create whose collection already exists', () =>
     const result = await executeUnderChange(['migrate', 'reconcile']);
 
     expect(failureFields(result.assertNotOk()).why).toBe(
-      `${FIRST_TWO_WAYS} ${MOVED_ASIDE} ${SIGNED_BY_HAND} The failed apply changed nothing.`,
+      `${FIRST_TWO_WAYS} ${MOVED_ASIDE('20261127T0000_orders')} ${SIGNED_BY_HAND} The failed apply changed nothing.`,
     );
   });
 
@@ -92,7 +107,17 @@ describe('MongoMigrationRunner, a create whose collection already exists', () =>
     const result = await executeUnderChange(['migrate']);
 
     const { why } = failureFields(result.assertNotOk());
-    expect(why).toBe(`${FIRST_TWO_WAYS} ${MOVED_ASIDE} The failed apply changed nothing.`);
+    expect(why).toBe(
+      `${FIRST_TWO_WAYS} ${MOVED_ASIDE('20261127T0000_orders')} The failed apply changed nothing.`,
+    );
     expect(why).not.toMatch(/db sign|permit-policy-change|reconcile|policy/);
+  });
+
+  it("leaves out writing ops.json again for an extension's migration, whose operations come from its package, and does not name --to", async () => {
+    const result = await executeUnderChange(['migrate'], 'audit');
+
+    expect(failureFields(result.assertNotOk()).why).toBe(
+      `${EXTENSION_FIRST_TWO_WAYS} ${EXTENSION_MOVED_ASIDE} The failed apply changed nothing.`,
+    );
   });
 });

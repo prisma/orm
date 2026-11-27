@@ -2,7 +2,8 @@
  * Journey (MongoDB): a migration emitted before a create had an after-check stops at a collection
  * that already exists, and both routes that keep its documents are followed to the end: applying
  * the operations that did not run by hand and signing with `db sign`, and, on a database whose
- * change policy permits only migrations, moving the collection aside so the migration runs.
+ * change policy permits only migrations, the steps of "Moving a MongoDB collection aside" in the
+ * error reference.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -48,8 +49,17 @@ model Note {
 }
 `;
 
-const noteAndItemsPsl = `${notePsl}
-${itemsPsl.replace('// use prisma-8\n', '')}`;
+/** Notes, and items whose title is unique and stored under `key`. */
+function noteAndUniqueItemsPsl(key: string): string {
+  return `${notePsl}
+model Item {
+  id    ObjectId @id @map("_id")
+  title String   @unique @map("${key}")
+
+  @@map("items")
+}
+`;
+}
 
 interface Operation {
   readonly id: string;
@@ -129,7 +139,7 @@ describe('Journey (MongoDB): a create with no after-check finds its collection',
     await expectSettled(journey, 'L1.03');
   });
 
-  it('L2: on a database whose change policy permits only migrations, the collection is moved aside, db migrate runs the migration, and the documents are copied back', async () => {
+  it('L2: on a database whose change policy permits only migrations, the collection is moved aside, db migrate --to runs only this migration, a copy back the unique index stops keeps the documents, and the next db migrate renames the field of the copied documents', async () => {
     const journey = project('l2_migrate_only');
     const { ctx, db } = journey;
     await useSchema(journey, notePsl, 'L2.01');
@@ -154,22 +164,57 @@ describe('Journey (MongoDB): a create with no after-check finds its collection',
       '--json',
     ]);
     expect(recorded.exitCode, `L2.03: ${recorded.stderr}`).toBe(0);
-    await useSchema(journey, noteAndItemsPsl, 'L2.04');
+    await useSchema(journey, noteAndUniqueItemsPsl('t'), 'L2.04');
     const second = await runMigrationPlan(ctx, ['--name', 'items', '--json']);
     expect(second.exitCode, `L2.05: ${second.stderr}`).toBe(0);
-    withoutCreateAfterCheck(join(ctx.testDir, 'migrations/app', latestMigrationDirName(ctx)));
+    const itemsMigration = latestMigrationDirName(ctx);
+    withoutCreateAfterCheck(join(ctx.testDir, 'migrations/app', itemsMigration));
+    await useSchema(journey, noteAndUniqueItemsPsl('name'), 'L2.06');
+    const third = await runMigrationPlan(ctx, [
+      '--name',
+      'rename_title',
+      '--from',
+      itemsMigration,
+      '--json',
+    ]);
+    expect(third.exitCode, `L2.07: ${third.stderr}`).toBe(0);
     await db.createCollection('items');
-    await db.collection('items').insertOne({ t: 'keep' });
+    await db.collection('items').insertMany([{ t: 'keep' }, { t: 'keep' }]);
 
     const stopped = await runMigrate(ctx, ['--json']);
     const advice = engineError(stopped)?.why;
     await db.collection('items').rename('items_kept');
-    const migrated = await runMigrate(ctx, ['--json']);
+    const migratedTo = await runMigrate(ctx, ['--to', itemsMigration, '--json']);
+    const duplicates = await db
+      .collection('items_kept')
+      .aggregate([{ $group: { _id: '$t', n: { $sum: 1 } } }, { $match: { n: { $gt: 1 } } }])
+      .toArray();
+    const stoppedCopy = await db
+      .collection('items_kept')
+      .aggregate([{ $merge: { into: 'items', whenMatched: 'fail' } }])
+      .toArray()
+      .then(
+        () => 'copied',
+        (error: { codeName?: string }) => error.codeName,
+      );
+    const afterStoppedCopy = {
+      items: await db.collection('items').countDocuments(),
+      kept: await db.collection('items_kept').countDocuments(),
+    };
+    const copiedIds = (await db.collection('items').find().toArray()).map(({ _id }) => _id);
     await db
       .collection('items_kept')
-      .aggregate([{ $merge: { into: 'items' } }])
+      .updateOne({ _id: { $nin: copiedIds } }, { $set: { t: 'keep 2' } });
+    await db
+      .collection('items_kept')
+      .aggregate([{ $merge: { into: 'items', whenMatched: 'keepExisting' } }])
       .toArray();
+    const afterCopy = {
+      items: await db.collection('items').countDocuments(),
+      kept: await db.collection('items_kept').countDocuments(),
+    };
     await db.collection('items_kept').drop();
+    const migrated = await runMigrate(ctx, ['--json']);
     const status = parseJsonOutput<{
       readonly summary: string;
       readonly spaces: readonly { readonly migrations: readonly { readonly status: unknown }[] }[];
@@ -179,6 +224,11 @@ describe('Journey (MongoDB): a create with no after-check finds its collection',
     expect({
       stopped: stopped.exitCode,
       advice,
+      migratedTo: migratedTo.exitCode,
+      duplicates,
+      stoppedCopy,
+      afterStoppedCopy,
+      afterCopy,
       migrated: migrated.exitCode,
       status: {
         summary: status.summary,
@@ -189,17 +239,22 @@ describe('Journey (MongoDB): a create with no after-check finds its collection',
         .map(({ name }) => name)
         .filter((collection) => !collection.startsWith('_prisma'))
         .sort(),
-      items: await documents(db, 'items'),
+      items: (await documents(db, 'items')).map(({ name }) => name).sort(),
     }).toEqual({
       stopped: 2,
       advice: expect.stringContaining(
-        'If items holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If items holds documents you need, rename it in mongosh, for example with db.getCollection("items").renameCollection("items_kept"), and run the command again: the create makes collection items with this migration\'s options, and the rest of the migration runs. Then copy the documents back, for example with db.getCollection("items_kept").aggregate([{ $merge: { into: "items" } }]), and drop collection items_kept. The documents you copy back must satisfy any validator collection items has after the run. If an operation of this migration after the create changes documents of collection items, it ran while the collection was empty, so make the same change to the documents you copy back.',
+        `If items holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If items holds documents you need, you can keep them by moving the collection aside: stop the application's writes to it, move it to items_kept, run db migrate --to ${itemsMigration} so this migration creates items with its options, and copy the documents back. Follow every step under "Moving a MongoDB collection aside" in the error reference for MIGRATION.PRECHECK_FAILED, which keep the documents until the copy back is checked.`,
       ),
+      migratedTo: 0,
+      duplicates: [{ _id: 'keep', n: 2 }],
+      stoppedCopy: 'DuplicateKey',
+      afterStoppedCopy: { items: 1, kept: 2 },
+      afterCopy: { items: 2, kept: 2 },
       migrated: 0,
-      status: { summary: 'Up to date', marks: ['applied', 'applied'] },
+      status: { summary: 'Up to date', marks: ['applied', 'applied', 'applied'] },
       verified: 0,
       collections: ['items', 'notes'],
-      items: [{ t: 'keep' }],
+      items: ['keep', 'keep 2'],
     });
     expect(advice).not.toMatch(/db sign|permit-policy-change|reconcile|policy/);
   });

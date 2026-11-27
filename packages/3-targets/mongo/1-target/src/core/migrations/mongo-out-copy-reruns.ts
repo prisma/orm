@@ -142,10 +142,21 @@ function documentsText(count: number): string {
 
 /**
  * What to do when the user cannot tell which documents of `copy`'s two collections are which: no
- * comparison of documents can prove that one was copied, so the user settles it by hand.
+ * comparison of documents can prove that one was copied, so the user settles it by hand, and the
+ * text says what the re-run then does with the source.
  */
 function settleByHandText(copy: UnionCopy): string {
-  return `delete nothing from either collection, and do not run the command again, until you have compared collections ${copy.into} and ${copy.source} by hand and settled which documents each should keep: only you can tell which of their documents are which.`;
+  const { into, source } = copy;
+  const rerun =
+    copy.filters.length === 0
+      ? `The next run copies every document of collection ${source} into collection ${into} again, then drops collection ${source}`
+      : `The next run copies every document of collection ${source} that the copy selects into collection ${into} again, then deletes them from collection ${source}`;
+  return `delete nothing from either collection, and do not run the command again, until you have compared collections ${into} and ${source} by hand and settled which documents each should keep: only you can tell which of their documents are which. ${rerun}, so before you run it, leave in collection ${source} only the documents that collection ${into} does not hold yet.`;
+}
+
+/** How to tell that a copy whose connection dropped has ended: MongoDB keeps running an aggregate that writes with `$out` after its client goes. */
+function copyEndedText(into: string): string {
+  return `first check that it is no longer running: MongoDB keeps running an aggregate that ends in $out after the connection that sent it drops. In mongosh, db.getSiblingDB("admin").aggregate([{ $currentOp: { allUsers: true } }, { $match: { "command.aggregate": ${JSON.stringify(into)} } }]) lists the copy while it runs. Wait until it lists nothing, or end the copy with db.killOp(<the opid it lists>). Then count`;
 }
 
 const UNCHANGED = 'nothing wrote to or deleted from either collection since the apply stopped';
@@ -214,7 +225,7 @@ function interruptedCopyText(
     : one
       ? `run that delete yourself, on collection ${source} with the filter of its deleteDocuments call in the migration's migration.ts`
       : `run those deletes yourself, on collection ${source}, each with the filter of its deleteDocuments call in the migration's migration.ts`;
-  return `${stopped} The error does not show whether the copy finished. ${removals}. Before the copy, collection ${into} held ${documentsText(counts.target)}, and the copy was to add ${documentsText(counts.selected)} of collection ${source}. To tell whether it finished, count the documents of collection ${into}, for example with db.getCollection(${JSON.stringify(into)}).countDocuments() in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${settleByHandText(copy)} If it holds ${counts.target + counts.selected}, and ${UNCHANGED}, the copy finished. ${writesStoppedText(copy, one)} Before you run the command again, ${finish}. The copy has no check, so it runs again, and it would add ${whole ? 'the documents of' : 'the documents still in'} collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If it holds ${counts.target}, and ${UNCHANGED}, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to or deleted from collection ${into}, or the command was already run again: ${settleByHandText(copy)} If the command was already run again after the copy finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
+  return `${stopped} The error does not show whether the copy finished. ${removals}. Before the copy, collection ${into} held ${documentsText(counts.target)}, and the copy was to add ${documentsText(counts.selected)} of collection ${source}. To tell whether it finished, ${copyEndedText(into)} the documents of collection ${into}, for example with db.getCollection(${JSON.stringify(into)}).countDocuments() in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${settleByHandText(copy)} If it holds ${counts.target + counts.selected}, and ${UNCHANGED}, the copy finished. ${writesStoppedText(copy, one)} Before you run the command again, ${finish}. The copy has no check, so it runs again, and it would add ${whole ? 'the documents of' : 'the documents still in'} collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If it holds ${counts.target}, and ${UNCHANGED}, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to or deleted from collection ${into}, or the command was already run again: ${settleByHandText(copy)} If the command was already run again after the copy finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
 /**

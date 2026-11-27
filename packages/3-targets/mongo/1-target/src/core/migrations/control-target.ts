@@ -9,7 +9,6 @@ import type {
   MongoRunnerDependencies,
 } from '@internal/family-mongo/control-adapter';
 import {
-  APP_SPACE_ID,
   type MigrationRunner,
   type MigrationRunnerPerSpaceSuccessValue,
   type MigrationRunnerResult,
@@ -143,9 +142,6 @@ export const mongoTargetDescriptor: MongoControlTargetDescriptor<MongoTargetCont
               scopeVerifyResult,
               databaseChangedBefore: changedDatabase,
               ...ifDefined('policiesInForce', expectedDatabasePolicies),
-              ...(space === APP_SPACE_ID
-                ? ifDefined('checkedPolicies', expectedDatabasePolicies)
-                : {}),
             });
             if (!result.ok) {
               return notOk(withFailingSpace(result.failure, space));
