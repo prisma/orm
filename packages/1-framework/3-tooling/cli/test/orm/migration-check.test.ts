@@ -9,7 +9,7 @@ import { blindCast } from '@internal/utils/casts';
 import type { PresentedResult } from '@prisma/cli-engine';
 import type { Diagnostic } from '@prisma/cli-engine/protocol';
 import { createSqlContract } from '@repo/test-utils';
-import { join, relative } from 'pathe';
+import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { MigrationCheckResult } from '../../src/commands/json/schemas';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
