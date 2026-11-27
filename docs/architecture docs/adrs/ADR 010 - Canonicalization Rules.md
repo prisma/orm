@@ -63,13 +63,16 @@ This project adopts a pragmatic subset inspired by RFC 8785 with additional doma
 
 ### Optional and default fields
 
-- Omit fields that are equal to their canonical defaults
-- **Canonical defaults**:
-  - `nullable` is always explicit (never omitted) — see ADR 172
-  - `generated: false` omitted
-  - Empty arrays and empty objects omitted unless required for schema readability (tables and models must be present, even if empty)
-  - Capability flags omitted when false and recorded only when true
-  - Derived names injected by the emitter per ADR 009 must be present with `generated: true`
+The framework's canonicalizer leaves out nothing. It sorts keys and encodes what it is given; it does not know what any field means, so it never decides that a `false`, an empty array or an empty object is a default.
+
+Each family owns the normal form of its own content, and gives it to the framework through one function (`normalizeStorage`) that the framework applies both when it writes `storage` and when it hashes it. A value is therefore in the hash input exactly when it is in the written section.
+
+- A family leaves out a field only where the family itself defines the absent field and the value to mean the same, and it names each such field. For example, the SQL family leaves out a column's `many: false` and a foreign key's `onDelete: "noAction"`; the MongoDB family leaves out an index's `unique: false`.
+- Nothing is left out because of the shape of its value. Data a family does not own is kept exactly as given: a type's parameters, an index's options, a MongoDB partial filter expression, a generator's parameters, the members of a value set, and every field of an entry an extension pack defines.
+- `nullable` is always written — see ADR 172.
+- A capability flag that is off is left out by the code that builds the capability list.
+
+An earlier rule had the framework drop every `false`, `[]` and `{}` unless a path was on an exception list. It dropped values that were not defaults: `{ "fastupdate": false }` in an index's options was written as `{}`, a MongoDB partial filter `{ "isAdmin": false }` was written as a filter that matches every document, and two types whose parameters differed only by such a value had one storage hash.
 
 ### Identifiers and names
 

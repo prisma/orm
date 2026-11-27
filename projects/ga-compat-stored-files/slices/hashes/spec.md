@@ -14,7 +14,7 @@ One pull request. Part of the project in [../../spec.md](../../spec.md), section
 
 ## What it must not do
 
-- Change any rule of canonicalization other than the envelope above. Dropping defaults, the family's `shouldPreserveEmpty` and `sortStorage`, and the removal of namespace `kind` stay as they are.
+- Change any rule of canonicalization other than the envelope above. The removal of namespace `kind` stays as it is. Which values are left out is changed by the slice in [../family-owned-normal-form/spec.md](../family-owned-normal-form/spec.md).
 - Change the migration hash rules. A migration hash changes only because the `from` and `to` hashes it covers change.
 - Hash the file as written. Every hash is computed from the contract after reading.
 - Add a framework concept beyond the helper. The hashes already exist; the helper is a test of them.

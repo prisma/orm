@@ -35,7 +35,7 @@ In every family the profile hash covers the contract's capability list, its `cap
 
 A hash is computed from the contract as it is in memory after reading, never from the file as written. Where a hash is checked against a stored contract, such as a snapshot or the contract an extension package ships, the file is first read into a contract and the hash computed from that. The file's `formatVersion` ([ADR 331](ADR%20331%20-%20Stored%20files%20carry%20a%20format%20version%2C%20and%20a%20reader%20refuses%20one%20it%20does%20not%20know.md)) is therefore not an input, and the same contract written in two format versions has the same hashes.
 
-The section is canonicalized by the rules [ADR 010](ADR%20010%20-%20Canonicalization%20Rules.md) states: defaults are left out, keys are sorted, and the family or target decides which empty values are kept and how storage entries are ordered. A namespace's `kind` is left out of the storage hash.
+The framework sorts the keys of the input and encodes it; it leaves out no value. Before that, the family puts `storage` into its normal form with one function, which leaves out only the fields the family names as its own defaults and orders the storage entries ([ADR 010](ADR%20010%20-%20Canonicalization%20Rules.md)). The same function is applied when the section is written, so the hash input and the written section are one form. A value the family does not own, such as a type's parameters or an index's options, is hashed exactly as given, so two contracts that differ in one have different hashes. A namespace's `kind` is left out of the storage hash.
 
 ### The rules do not change within a major
 
@@ -72,6 +72,8 @@ Each database is first brought to the newest contract with the release it is on,
 The database's ledger keeps the migration hashes it recorded, and every migration hash changes with the hashes it covers. After the move, `migration status` therefore marks no earlier migration as applied. Nothing is applied or refused because of the ledger, so nothing else is affected.
 
 ## Alternatives considered
+
+- **Have the framework leave out every `false`, empty array and empty object, with a list of paths where they are kept.** This was the rule before. Rejected: the framework cannot know which of those values are defaults, the list of exceptions grew with each one found, and where it was incomplete two different contracts shared a hash and the written contract lost what its author wrote.
 
 - **Hash the file as written, by the rules of its format version.** Rejected: it changes the hash as soon as a later format version lays out `storage` differently.
 - **Record which version of the hashing rules produced a hash, and support several.** Rejected: a project would hold hashes computed in two ways, and every comparison would have to convert one into the other. Git's plan for a new hash function lists mixing objects hashed two ways in one repository as a non-goal.

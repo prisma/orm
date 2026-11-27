@@ -56,7 +56,7 @@ The Arktype `ForeignKeySchema` gains optional `onDelete` and `onUpdate` fields w
 
 ### 4. Canonicalization
 
-`omitDefaults` already handles `undefined` fields by omitting them. When `onDelete` or `onUpdate` is `undefined`, they are not serialized, producing the same canonical output and hash as a FK without referential actions. Explicit values are included in the canonical output.
+When `onDelete` or `onUpdate` is `undefined`, or is `noAction`, which the SQL family names as its default, it is not serialized, producing the same canonical output and hash as a FK without referential actions. Explicit values are included in the canonical output.
 
 ### 5. DDL emission (Postgres planner)
 
