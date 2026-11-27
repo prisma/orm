@@ -393,19 +393,6 @@ function canonicalizeExpectedOptions(
 }
 
 /**
- * Returns a copy of `live` containing only the keys that `expected` defines.
- * Used for option families whose individual sub-fields are server-extended
- * with platform defaults (collation, timeseries, clusteredIndex), so the
- * verifier should compare only what the contract actually authored.
- *
- * When `expected` is `undefined` — i.e. the contract authored nothing for
- * this whole option family but the live IR has it — we return `live`
- * unchanged so the verifier still sees the entire live block and can
- * surface it as drift. (Returning `undefined` here would silently strip a
- * server-attached collation/timeseries/clusteredIndex that the contract
- * never asked for, hiding real drift.)
- */
-/**
  * Whether a collection with collation `live` compares strings as one with `expected` does, by the
  * verifier's rule: the `simple` collation is the same as none, and of a collation MongoDB reports
  * only the fields `expected` gives are compared, since MongoDB fills in the rest.
@@ -420,6 +407,19 @@ export function collationsMatch(
   return canonicalize(stripCollationFields(reported, given)) === canonicalize(given);
 }
 
+/**
+ * Returns a copy of `live` containing only the keys that `expected` defines.
+ * Used for option families whose individual sub-fields are server-extended
+ * with platform defaults (collation, timeseries, clusteredIndex), so the
+ * verifier should compare only what the contract actually authored.
+ *
+ * When `expected` is `undefined` — i.e. the contract authored nothing for
+ * this whole option family but the live IR has it — we return `live`
+ * unchanged so the verifier still sees the entire live block and can
+ * surface it as drift. (Returning `undefined` here would silently strip a
+ * server-attached collation/timeseries/clusteredIndex that the contract
+ * never asked for, hiding real drift.)
+ */
 function stripCollationFields(
   live: CollationOptions,
   expected: CollationOptions | undefined,
