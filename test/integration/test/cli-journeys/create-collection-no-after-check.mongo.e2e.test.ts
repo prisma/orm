@@ -278,7 +278,7 @@ describe('Journey (MongoDB): a create with no after-check finds its collection',
     }).toEqual({
       stopped: 2,
       advice: expect.stringContaining(
-        `If items holds nothing you need, drop it, then run the command that stopped again, as you ran it; operations that already ran are skipped. This holds also if an earlier run of this command created items: an operation of that run may have moved documents into it from a collection it then deleted them from, and those documents are only in items. If items holds documents you need, you can keep them by moving the collection aside: stop the application's writes to it until every step is done, move it to items_kept, run db migrate --to ${itemsMigration} so this migration creates items with its options, apply to the documents in items_kept the changes that the operations after the create make, and copy them back. Follow every step under "Moving a MongoDB collection aside" in the error reference for MIGRATION.PRECHECK_FAILED, which keep the documents until the copy back is checked.`,
+        `Drop items only if it holds nothing you need, even when an earlier run of this command created it: an operation of that run may have moved documents into it from a collection it then deleted them from, and those documents are only in items. After you drop it, run the command that stopped again, as you ran it; operations that already ran are skipped. If items holds documents you need, you can keep them by moving the collection aside: stop the application's writes to it until every step is done, move it to items_kept, run db migrate --to ${itemsMigration} so this migration creates items with its options, apply to the documents in items_kept the changes that the operations after the create make, and copy them back. Follow every step under "Moving a MongoDB collection aside" in the error reference for MIGRATION.PRECHECK_FAILED, which keep the documents until the copy back is checked.`,
       ),
       migratedTo: 0,
       duplicates: [{ _id: 'keep', n: 2 }],
@@ -387,7 +387,7 @@ describe('Journey (MongoDB): a create with no after-check finds its collection',
       orders: ['a', 'a2', 'b'],
     });
     expect(advice).toContain(
-      'This holds also if an earlier run of this command created orders: an operation of that run may have moved documents into it from a collection it then deleted them from, and those documents are only in orders.',
+      'Drop orders only if it holds nothing you need, even when an earlier run of this command created it: an operation of that run may have moved documents into it from a collection it then deleted them from, and those documents are only in orders.',
     );
     expect(advice).not.toMatch(/writes them again|so drop it/);
   });

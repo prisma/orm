@@ -474,11 +474,11 @@ function movedAsideText(name: string, migration: MigrationOfOperation): string {
 }
 
 /**
- * Why a collection an earlier run of the command made gets the same advice as any other: that run
- * may have moved documents into it from a collection it then removed them from.
+ * The drop route, which holds for a collection an earlier run of the command made as for any
+ * other: that run may have moved documents into it from a collection it then removed them from.
  */
-function madeByEarlierRunText(name: string): string {
-  return ` This holds also if an earlier run of this command created ${name}: an operation of that run may have moved documents into it from a collection it then deleted them from, and those documents are only in ${name}.`;
+function droppedText(name: string, before: Ran): string {
+  return `Drop ${name} only if it holds nothing you need, even when an earlier run of this command created it: an operation of that run may have moved documents into it from a collection it then deleted them from, and those documents are only in ${name}. ${rerunText('After you drop it, run the command that stopped again, as you ran it', before)}`;
 }
 
 const NEXT_STOP_TEXT =
@@ -549,7 +549,7 @@ function uncheckedCreateTargetExistsRefusal(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: collection ${name} already exists, and this migration's create has no after-check that lets a run skip it`,
     {
-      why: `This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection ${name}. ${emittedAgain} ${rerunText(`If ${name} holds nothing you need, drop it, then run the command that stopped again, as you ran it`, before)}${madeByEarlierRunText(name)} ${movedAsideText(name, migration)}${signedByHandText(policies)}${NEXT_STOP_TEXT}`,
+      why: `This migration's ops.json was written before a creation had an after-check, so the runner cannot tell whether an earlier run of this migration made collection ${name}. ${emittedAgain} ${droppedText(name, before)} ${movedAsideText(name, migration)}${signedByHandText(policies)}${NEXT_STOP_TEXT}`,
       meta: { operationId: op.id },
     },
   );
