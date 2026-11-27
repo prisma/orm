@@ -311,7 +311,7 @@
 ./cli/control-api: function appliedHashesFromLedger(ledgerEntries: ReadonlyArray<{ readonly migrationHash: string; }>): ReadonlySet<string>
 ./cli/control-api: function buildContractSpaceAggregate<TFamilyId extends string, TTargetId extends string>(inputs: BuildAggregateInputs<TFamilyId, TTargetId>): Promise<Result<ContractSpaceAggregate, CliStructuredError>>
 ./cli/control-api: function buildMigrationSpaceGraphEntries(args: { readonly aggregate: ContractSpaceAggregate; readonly scopedSpaces: readonly MigrationSpaceListEntry[]; }): readonly MigrationSpaceGraphEntry[]
-./cli/control-api: function buildReadAggregate(config: PrismaConfig, options: { readonly migrationsDir: string; readonly verifySnapshotContent?: SnapshotContentVerifier; readonly tolerateUnreadableRefs?: boolean; }): Promise<Result<{ readonly aggregate: ContractSpaceAggregate; readonly contractHash: string; readonly storageNameOf: (operation: MigrationPlanOperation) => string; readonly accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]; readonly markerLocation: string; }, CliStructuredError>>
+./cli/control-api: function buildReadAggregate(config: PrismaConfig, options: { readonly migrationsDir: string; readonly verifySnapshotContent?: SnapshotContentVerifier; readonly tolerateUnreadableRefs?: boolean; }): Promise<Result<{ readonly aggregate: ContractSpaceAggregate; readonly contractHash: string; readonly storageNameOf: (operation: MigrationPlanOperation) => string; readonly accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]; readonly markerLocation: string; readonly deserializeContract: (contractJson: unknown) => Contract; readonly contractRefusal: string | undefined; }, CliStructuredError>>
 ./cli/control-api: function buildRefAdvancementFields(options: { readonly name: string; readonly refsDir: string; readonly migrationsDir: string; readonly contractIR: ContractIR; readonly mode: 'apply' | 'plan'; readonly hash: string; }): Promise<Result<RefAdvancementFields, CliStructuredError>>
 ./cli/control-api: function checkSingleTarget(target: string, inputs: SingleTargetInputs): Promise<MigrationCheckOutcome>
 ./cli/control-api: function computeRefAdvancementName(options: { readonly advanceRef?: string; readonly db?: string; }): null | string
@@ -319,7 +319,7 @@
 ./cli/control-api: function deriveStatusEdgeAnnotations(input: DeriveStatusEdgeAnnotationsInput): ReadonlyMap<string, MigrationEdgeAnnotation>
 ./cli/control-api: function disposeEmitQueue(outputJsonPath: string): void
 ./cli/control-api: function enrichContract(ir: Contract, components: ReadonlyArray<TargetBoundComponentDescriptor<string, string>>): Contract
-./cli/control-api: function enumerateCheckSpaces(aggregate: ContractSpaceAggregate, projectMigrationsDir: string, cwd: string, verifySnapshotContent?: SnapshotContentVerifier): Promise<readonly CheckSpace[]>
+./cli/control-api: function enumerateCheckSpaces(aggregate: ContractSpaceAggregate, projectMigrationsDir: string, cwd: string, verifySnapshotContent?: SnapshotContentVerifier, deserializeContract?: (contractJson: unknown) => unknown): Promise<readonly CheckSpace[]>
 ./cli/control-api: function errorFromCaught(error: unknown, why: (message: string) => string, options?: { readonly connection?: string | undefined; }): CliStructuredError
 ./cli/control-api: function executeContractEmit(options: ContractEmitOptions, dependencies?: ContractEmitDependencies): Promise<ContractEmitResult>
 ./cli/control-api: function executeDbInit<TFamilyId extends string, TTargetId extends string>(options: ExecuteDbInitOptions<TFamilyId, TTargetId>): Promise<DbInitResult>
@@ -372,6 +372,8 @@
 ./cli/control-api: interface BuildAggregateInputs, readonly required property targetId: TTargetId
 ./cli/control-api: interface BuildAggregateInputs<TFamilyId extends string, TTargetId extends string>
 ./cli/control-api: interface CheckSpace
+./cli/control-api: interface CheckSpace, readonly optional property deserializeContract?: (contractJson: unknown) => unknown
+./cli/control-api: interface CheckSpace, readonly optional property unreadableMigrations?: readonly { readonly dirName: string; readonly detail: string; }[]
 ./cli/control-api: interface CheckSpace, readonly optional property verifySnapshotContent?: SnapshotContentVerifier
 ./cli/control-api: interface CheckSpace, readonly required property cwd: string
 ./cli/control-api: interface CheckSpace, readonly required property graph: MigrationGraph

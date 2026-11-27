@@ -211,9 +211,9 @@ export interface CheckSpace {
    */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
   /** The family's contract reader; when present, each snapshot a migration ends at is read through it. */
-  readonly deserializeContract: ((contractJson: unknown) => unknown) | undefined;
-  /** The migrations of this space whose `migration.json` could not be read, with why. */
-  readonly unreadableMigrations: readonly { readonly dirName: string; readonly detail: string }[];
+  readonly deserializeContract?: (contractJson: unknown) => unknown;
+  /** The migrations of this space whose `migration.json` could not be read, with why; none when absent. */
+  readonly unreadableMigrations?: readonly { readonly dirName: string; readonly detail: string }[];
 }
 
 /**
@@ -252,7 +252,7 @@ export async function enumerateCheckSpaces(
       projectMigrationsDir,
       cwd,
       ...ifDefined('verifySnapshotContent', verifySnapshotContent),
-      deserializeContract,
+      ...ifDefined('deserializeContract', deserializeContract),
       unreadableMigrations: unloadable
         .filter((violation) => violation.spaceId === spaceId)
         .map(({ dirName, detail }) => ({ dirName, detail })),
@@ -339,7 +339,7 @@ async function checkSpace(space: CheckSpace): Promise<readonly CheckFailure[]> {
   const snapshotFailures = await Promise.all(
     space.packages.map((pkg) => checkSnapshotConsistency(space, pkg, space.projectMigrationsDir)),
   );
-  const graphReadInFull = space.unreadableMigrations.length === 0;
+  const graphReadInFull = (space.unreadableMigrations ?? []).length === 0;
   return [
     ...checkManifestFilesPresent(space),
     ...snapshotFailures.filter((f): f is CheckFailure => f !== null),
@@ -446,7 +446,9 @@ function unreadableMigrationNamed(
 ): CheckFailure | undefined {
   const dirName = basename(target.replace(/[\\/]+$/, ''));
   for (const space of spaces) {
-    const found = space.unreadableMigrations.find((migration) => migration.dirName === dirName);
+    const found = (space.unreadableMigrations ?? []).find(
+      (migration) => migration.dirName === dirName,
+    );
     if (found === undefined) continue;
     const dirPath = join(space.migrationsDir, found.dirName);
     return {
