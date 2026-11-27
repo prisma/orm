@@ -15,14 +15,11 @@ import type { Block, Presentations, TreeNode } from '@prisma/cli-engine';
 import { positional } from '@prisma/cli-engine';
 import type { CliStructuredError, Result } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
-import { basename, relative } from 'pathe';
+import { relative } from 'pathe';
 import type { MigrationShowResult, ShowMigration } from '../../commands/json/schemas';
 import { createControlClient } from '../../control-api/client';
 import { errorFromCaught, formatVersionFailure } from '../../control-api/operations/caught-errors';
-import {
-  loadContractSpaceAggregateForCli,
-  mapIntegrityViolations,
-} from '../../control-api/operations/contract-space-aggregate-loader';
+import { loadContractSpaceAggregateForCli } from '../../control-api/operations/contract-space-aggregate-loader';
 import { resolveMigrationRef } from '../../control-api/operations/ref-resolution';
 import {
   errorConfigValidation,
@@ -43,7 +40,6 @@ import { dataLine, fieldLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { appMigrationsDirFor, contractPathFor, displayPath, migrationsDirFor } from './paths';
-import { unreadableMigrations } from './unreadable-migrations';
 
 /** One node per operation, the destructive ones carrying the warning glyph. */
 function operationNodes(migration: ShowMigration): readonly TreeNode[] {
@@ -303,19 +299,6 @@ export const migrationShowCommand = defineOrmCommand({
       return notOk(normalizeError(loaded.failure));
     }
     const aggregate = loaded.value;
-
-    const unreadable = unreadableMigrations(aggregate).find(
-      (migration) =>
-        migration.spaceId === APP_SPACE_ID &&
-        migration.dirName === basename(target.replace(/[\\/]+$/, '')),
-    );
-    if (unreadable !== undefined) {
-      const refusal = mapIntegrityViolations(
-        [{ kind: 'packageUnloadable', ...unreadable }],
-        migrationsDir,
-      );
-      if (refusal !== null) return notOk(normalizeError(refusal));
-    }
 
     const resolved = resolvePackage({
       target,

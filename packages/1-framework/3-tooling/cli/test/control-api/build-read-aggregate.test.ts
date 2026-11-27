@@ -201,7 +201,7 @@ describe('buildReadAggregate', () => {
       });
     });
 
-    it('loads with the refused ref left out when the caller reports every problem itself', async () => {
+    it('loads with the refused ref left out when the command reports each unreadable file', async () => {
       await writeContractFile(contractPath, CONTRACT_HASH);
       await writeAppMigration(migrationsDir);
       await writeRefFile(join(migrationsDir, 'app', 'refs', 'db.json'), {
@@ -213,12 +213,48 @@ describe('buildReadAggregate', () => {
 
       const result = await buildReadAggregate(makeConfig(contractPath), {
         migrationsDir,
-        tolerateUnreadableRefs: true,
+        unreadableFiles: 'report',
       });
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.aggregate.app.refs).toEqual({});
+    });
+  });
+
+  describe('a migration whose migration.json it cannot read', () => {
+    async function writeUnreadableMigration(): Promise<string> {
+      await writeContractFile(contractPath, CONTRACT_HASH);
+      await writeAppMigration(migrationsDir);
+      const dir = join(migrationsDir, 'app', '20260102T0000_broken');
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, 'migration.json'), '{ not json');
+      await writeFile(join(dir, 'ops.json'), '[]');
+      return dir;
+    }
+
+    it('refuses the load by default, naming the migration', async () => {
+      await writeUnreadableMigration();
+
+      const result = await buildReadAggregate(makeConfig(contractPath), { migrationsDir });
+
+      expect(result.ok ? undefined : result.failure.code).toBe(
+        'MIGRATION.CONTRACT_SPACE_VIOLATION',
+      );
+      expect(result.ok ? undefined : result.failure.why).toContain('20260102T0000_broken');
+    });
+
+    it('loads without it when the command reports each unreadable file', async () => {
+      await writeUnreadableMigration();
+
+      const result = await buildReadAggregate(makeConfig(contractPath), {
+        migrationsDir,
+        unreadableFiles: 'report',
+      });
+
+      expect(
+        result.ok ? result.value.aggregate.app.packages.map((p) => p.dirName) : undefined,
+      ).toEqual(['20260101T0000_init']);
     });
   });
 });

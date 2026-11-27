@@ -20,6 +20,24 @@ export interface StatusFinding {
   readonly diagnostic: Diagnostic;
 }
 
+/** A ref or migration `migration status` leaves out because its file cannot be read; see `unreadableFileDiagnostics`. */
+export function unreadableFileFinding(diagnostic: Diagnostic): StatusFinding {
+  return {
+    document: {
+      code:
+        diagnostic.code === 'MIGRATION.CHECK_REF_UNREADABLE'
+          ? 'MIGRATION.CHECK_REF_UNREADABLE'
+          : 'MIGRATION.CHECK_PACKAGE_UNLOADABLE',
+      severity: 'warn',
+      message: diagnostic.summary,
+      hints: (diagnostic.nextActions ?? []).map((action) =>
+        action.kind === 'run-command' ? `${action.label}: ${action.command}` : action.label,
+      ),
+    },
+    diagnostic,
+  };
+}
+
 const EMIT_CONTRACT = runCommandAction('Regenerate the contract', '{bin} contract emit');
 
 export function contractUnreadableFinding(reason: string): StatusFinding {
