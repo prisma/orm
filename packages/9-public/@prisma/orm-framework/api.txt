@@ -4380,7 +4380,7 @@
 ./errors/control: function errorMigrationCliUnknownFlag(options: { readonly flag: string; readonly knownFlags: readonly string[]; }): CliStructuredError
 ./errors/control: function errorMigrationPlanningFailed(options: { readonly conflicts: readonly CliErrorConflict[]; readonly why?: string; }): CliStructuredError & { readonly why: string; }
 ./errors/control: function errorOutputFormatMutex(): CliStructuredError
-./errors/control: function errorPrismaSpaceBehind(options: { readonly why: string; readonly meta: Record<string, unknown>; }): CliStructuredError
+./errors/control: function errorPrismaSpaceBehind(options: { readonly why: string; readonly meta: { readonly spaceId: string; readonly situation: 'missingRow' | 'olderContract' | 'releaseCandidateSchema'; }; }): CliStructuredError
 ./errors/control: function errorQueryRunnerFactoryRequired(options?: { readonly why?: string; }): CliStructuredError
 ./errors/control: function errorTargetMigrationNotSupported(options?: { readonly why?: string; }): CliStructuredError
 ./errors/control: function errorUnexpected(message: string, options?: { readonly why?: string; readonly fix?: string; readonly meta?: Record<string, unknown>; readonly cause?: unknown; }): CliStructuredError
@@ -4472,7 +4472,7 @@
 ./errors: function errorMigrationPlanningFailed(options: { readonly conflicts: readonly CliErrorConflict[]; readonly why?: string; }): CliStructuredError & { readonly why: string; }
 ./errors: function errorMigrationTargetMismatch(options: { readonly migrationTargetId: string; readonly configTargetId: string; }): CliStructuredError
 ./errors: function errorOutputFormatMutex(): CliStructuredError
-./errors: function errorPrismaSpaceBehind(options: { readonly why: string; readonly meta: Record<string, unknown>; }): CliStructuredError
+./errors: function errorPrismaSpaceBehind(options: { readonly why: string; readonly meta: { readonly spaceId: string; readonly situation: 'missingRow' | 'olderContract' | 'releaseCandidateSchema'; }; }): CliStructuredError
 ./errors: function errorQueryRunnerFactoryRequired(options?: { readonly why?: string; }): CliStructuredError
 ./errors: function errorRuntime(code: `${string}.${string}`, summary: string, options?: { readonly why?: string; readonly fix?: string; readonly diagnostics?: readonly Diagnostic[]; readonly meta?: Record<string, unknown>; readonly cause?: unknown; }): CliStructuredError
 ./errors: function errorTargetMigrationNotSupported(options?: { readonly why?: string; }): CliStructuredError
