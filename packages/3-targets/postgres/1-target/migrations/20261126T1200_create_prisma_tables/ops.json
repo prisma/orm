@@ -1,7 +1,7 @@
 [
   {
     "id": "_prisma.check-release-candidate-columns.marker",
-    "label": "Checked the columns of table prisma_contract.marker",
+    "label": "Check the columns of table \"prisma_contract\".\"marker\"",
     "operationClass": "additive",
     "target": {
       "id": "postgres",
@@ -63,7 +63,7 @@
   },
   {
     "id": "_prisma.check-release-candidate-columns.ledger",
-    "label": "Checked the columns of table prisma_contract.ledger",
+    "label": "Check the columns of table \"prisma_contract\".\"ledger\"",
     "operationClass": "additive",
     "target": {
       "id": "postgres",
@@ -130,7 +130,7 @@
   },
   {
     "id": "_prisma.check-release-candidate-columns.contract",
-    "label": "Checked the columns of table prisma_contract.contract",
+    "label": "Check the columns of table \"prisma_contract\".\"contract\"",
     "operationClass": "additive",
     "target": {
       "id": "postgres",
@@ -162,21 +162,41 @@
   },
   {
     "id": "_prisma.rename-release-candidate-schema",
-    "label": "Renamed schema prisma_contract to _prisma",
+    "label": "Rename schema \"prisma_contract\" to \"_prisma\"",
     "operationClass": "widening",
     "target": {
       "id": "postgres"
     },
     "precheck": [
       {
-        "description": "Schema \"_prisma\" must hold no tables or other relations while schema \"prisma_contract\" exists. This release keeps Prisma's own tables in \"_prisma\", and \"prisma_contract\" holds the tables a release candidate of Prisma 8 created, so Prisma does not choose between them. Follow the upgrade instructions before dropping either schema.",
-        "sql": "SELECT to_regnamespace($1) IS NULL\n  OR NOT EXISTS (SELECT 1 FROM pg_class WHERE relnamespace = to_regnamespace($1)) AS \"result\"",
+        "description": "Schema \"_prisma\" must be empty while schema \"prisma_contract\" exists. This release keeps Prisma's own tables in \"_prisma\", and \"prisma_contract\" holds the tables a release candidate of Prisma 8 created, so Prisma drops an empty \"_prisma\" and renames \"prisma_contract\" to it, and does not choose between them when \"_prisma\" holds anything. Follow the upgrade instructions before dropping either schema.",
+        "sql": "SELECT to_regnamespace($1) IS NULL OR NOT EXISTS (\n  SELECT 1 FROM pg_depend\n  WHERE refclassid = 'pg_namespace'::regclass AND refobjid = to_regnamespace($1) AND deptype = 'n'\n) AS \"result\"",
         "params": ["_prisma"]
       },
       {
-        "description": "The role that runs this command must have the privileges of the role that owns schema \"prisma_contract\", because renaming a schema needs them. Find the owner with SELECT nspowner::regrole FROM pg_namespace WHERE nspname = 'prisma_contract'. Then run the command once as that role, or give the schema to the migrating role with ALTER SCHEMA \"prisma_contract\" OWNER TO <migrating role>.",
-        "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user)\n  OR pg_has_role(current_user, nspowner, 'USAGE') AS \"result\"\nFROM pg_namespace WHERE nspname = $1",
+        "description": "The role that runs this command must have the privileges of the role that owns schema \"_prisma\", because Prisma drops the empty \"_prisma\" before it renames schema \"prisma_contract\" to \"_prisma\", and dropping a schema needs them. Give the empty schema to the migrating role with ALTER SCHEMA \"_prisma\" OWNER TO <migrating role>, or drop it with DROP SCHEMA \"_prisma\".",
+        "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) OR NOT EXISTS (\n  SELECT 1 FROM pg_namespace\n  WHERE nspname = $1 AND NOT pg_has_role(current_user, nspowner, 'USAGE')\n) AS \"result\"",
+        "params": ["_prisma"]
+      },
+      {
+        "description": "The role that runs this command must have the privileges of the role that owns schema \"prisma_contract\", because renaming a schema needs them. Find the owners of the schema and its tables with SELECT nspowner::regrole FROM pg_namespace WHERE nspname = 'prisma_contract' and SELECT relname, relowner::regrole FROM pg_class WHERE relnamespace = to_regnamespace('prisma_contract'). Give the schema and its tables to the migrating role with ALTER SCHEMA \"prisma_contract\" OWNER TO <migrating role>, then ALTER TABLE \"prisma_contract\".\"marker\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"ledger\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"contract\" OWNER TO <migrating role>.",
+        "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) OR NOT EXISTS (\n  SELECT 1 FROM pg_namespace\n  WHERE nspname = $1 AND NOT pg_has_role(current_user, nspowner, 'USAGE')\n) AS \"result\"",
         "params": ["prisma_contract"]
+      },
+      {
+        "description": "The role that runs this command must have the privileges of the role that owns table \"prisma_contract\".\"marker\", because later migrations of Prisma's own tables alter them, and altering a table needs those privileges. Give the schema and its tables to the migrating role with ALTER SCHEMA \"prisma_contract\" OWNER TO <migrating role>, then ALTER TABLE \"prisma_contract\".\"marker\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"ledger\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"contract\" OWNER TO <migrating role>.",
+        "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) OR NOT EXISTS (\n  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2 AND NOT pg_has_role(current_user, c.relowner, 'USAGE')\n) AS \"result\"",
+        "params": ["prisma_contract", "marker"]
+      },
+      {
+        "description": "The role that runs this command must have the privileges of the role that owns table \"prisma_contract\".\"ledger\", because later migrations of Prisma's own tables alter them, and altering a table needs those privileges. Give the schema and its tables to the migrating role with ALTER SCHEMA \"prisma_contract\" OWNER TO <migrating role>, then ALTER TABLE \"prisma_contract\".\"marker\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"ledger\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"contract\" OWNER TO <migrating role>.",
+        "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) OR NOT EXISTS (\n  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2 AND NOT pg_has_role(current_user, c.relowner, 'USAGE')\n) AS \"result\"",
+        "params": ["prisma_contract", "ledger"]
+      },
+      {
+        "description": "The role that runs this command must have the privileges of the role that owns table \"prisma_contract\".\"contract\", because later migrations of Prisma's own tables alter them, and altering a table needs those privileges. Give the schema and its tables to the migrating role with ALTER SCHEMA \"prisma_contract\" OWNER TO <migrating role>, then ALTER TABLE \"prisma_contract\".\"marker\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"ledger\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"contract\" OWNER TO <migrating role>.",
+        "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) OR NOT EXISTS (\n  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2 AND NOT pg_has_role(current_user, c.relowner, 'USAGE')\n) AS \"result\"",
+        "params": ["prisma_contract", "contract"]
       },
       {
         "description": "The role that runs this command must have the CREATE privilege on the database, because renaming schema \"prisma_contract\" needs it. Grant it with GRANT CREATE ON DATABASE <database> TO <migrating role>, or run the command once as a role that has it.",
@@ -204,7 +224,7 @@
   },
   {
     "id": "_prisma.create-schema",
-    "label": "Created schema _prisma",
+    "label": "Create schema \"_prisma\"",
     "operationClass": "additive",
     "target": {
       "id": "postgres"
@@ -226,7 +246,7 @@
   },
   {
     "id": "_prisma.create-table.marker",
-    "label": "Created table _prisma.marker",
+    "label": "Create table \"_prisma\".\"marker\"",
     "operationClass": "additive",
     "target": {
       "id": "postgres",
@@ -253,7 +273,7 @@
   },
   {
     "id": "_prisma.create-table.ledger",
-    "label": "Created table _prisma.ledger",
+    "label": "Create table \"_prisma\".\"ledger\"",
     "operationClass": "additive",
     "target": {
       "id": "postgres",
@@ -280,7 +300,7 @@
   },
   {
     "id": "_prisma.create-table.contract",
-    "label": "Created table _prisma.contract",
+    "label": "Create table \"_prisma\".\"contract\"",
     "operationClass": "additive",
     "target": {
       "id": "postgres",
@@ -307,7 +327,7 @@
   },
   {
     "id": "_prisma.check-columns.marker",
-    "label": "Checked the columns of table _prisma.marker",
+    "label": "Check the columns of table \"_prisma\".\"marker\"",
     "operationClass": "additive",
     "target": {
       "id": "postgres",
@@ -369,7 +389,7 @@
   },
   {
     "id": "_prisma.check-columns.ledger",
-    "label": "Checked the columns of table _prisma.ledger",
+    "label": "Check the columns of table \"_prisma\".\"ledger\"",
     "operationClass": "additive",
     "target": {
       "id": "postgres",
@@ -436,7 +456,7 @@
   },
   {
     "id": "_prisma.check-columns.contract",
-    "label": "Checked the columns of table _prisma.contract",
+    "label": "Check the columns of table \"_prisma\".\"contract\"",
     "operationClass": "additive",
     "target": {
       "id": "postgres",

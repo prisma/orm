@@ -19,9 +19,6 @@ function qualified(table: TableName, schema: string = SCHEMA): string {
   return `"${schema}"."${table}"`;
 }
 
-function displayed(table: TableName, schema: string = SCHEMA): string {
-  return `${schema}.${table}`;
-}
 interface ExpectedColumn {
   readonly name: string;
   readonly type: string;
@@ -102,8 +99,11 @@ const tables: ReadonlyArray<{
 
 const schemaExists = 'SELECT to_regnamespace($1) IS NOT NULL AS "result"';
 const schemaAbsent = 'SELECT to_regnamespace($1) IS NULL AS "result"';
-const schemaAbsentOrHoldsNoRelation = `SELECT to_regnamespace($1) IS NULL
-  OR NOT EXISTS (SELECT 1 FROM pg_class WHERE relnamespace = to_regnamespace($1)) AS "result"`;
+/** `DROP SCHEMA` without `CASCADE` refuses exactly when an object depends normally on the schema, which every object in it does. */
+const schemaAbsentOrEmpty = `SELECT to_regnamespace($1) IS NULL OR NOT EXISTS (
+  SELECT 1 FROM pg_depend
+  WHERE refclassid = 'pg_namespace'::regclass AND refobjid = to_regnamespace($1) AND deptype = 'n'
+) AS "result"`;
 const tableExists = 'SELECT to_regclass($1) IS NOT NULL AS "result"';
 /** Reads only the catalogues, which need no privilege on the schema, so a role that cannot use the schema still gets this check's answer. */
 const absentOrColumnHasForm = `WITH "table" AS (
@@ -115,12 +115,25 @@ SELECT NOT EXISTS (SELECT 1 FROM "table") OR EXISTS (
   WHERE a.attname = $3 AND NOT a.attisdropped
     AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5
 ) AS "result"`;
-/** `ALTER SCHEMA … RENAME` needs the privileges of the schema's owner and CREATE on the database; a superuser has both. */
-const hasOwnerPrivileges = `SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user)
-  OR pg_has_role(current_user, nspowner, 'USAGE') AS "result"
-FROM pg_namespace WHERE nspname = $1`;
-const mayCreateInDatabase = `SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user)
+/** `ALTER SCHEMA … RENAME` and `DROP SCHEMA` need the privileges of the schema's owner, and `ALTER TABLE` those of the table's owner; a superuser has them. A schema or table that does not exist passes. */
+const isSuperuser = '(SELECT rolsuper FROM pg_roles WHERE rolname = current_user)';
+const absentOrHasSchemaOwnerPrivileges = `SELECT ${isSuperuser} OR NOT EXISTS (
+  SELECT 1 FROM pg_namespace
+  WHERE nspname = $1 AND NOT pg_has_role(current_user, nspowner, 'USAGE')
+) AS "result"`;
+const absentOrHasTableOwnerPrivileges = `SELECT ${isSuperuser} OR NOT EXISTS (
+  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = $1 AND c.relname = $2 AND NOT pg_has_role(current_user, c.relowner, 'USAGE')
+) AS "result"`;
+const mayCreateInDatabase = `SELECT ${isSuperuser}
   OR has_database_privilege(current_database(), 'CREATE') AS "result"`;
+
+const giveToMigratingRole = `Give the schema and its tables to the migrating role with ALTER SCHEMA "${RELEASE_CANDIDATE_SCHEMA}" OWNER TO <migrating role>, then ${tables
+  .map(
+    (table) =>
+      `ALTER TABLE ${qualified(table.name, RELEASE_CANDIDATE_SCHEMA)} OWNER TO <migrating role>`,
+  )
+  .join(', ')}.`;
 
 function nullability(column: ExpectedColumn): string {
   return column.notNull ? 'NOT NULL' : 'nullable';
@@ -135,7 +148,7 @@ function checkColumns(
 ) {
   return rawSql({
     id,
-    label: `Checked the columns of table ${displayed(table.name, schema)}`,
+    label: `Check the columns of table ${qualified(table.name, schema)}`,
     operationClass: 'additive',
     target: { id: 'postgres', details: { schema, objectType: 'table', name: table.name } },
     precheck: table.columns.map((column) => ({
@@ -169,20 +182,30 @@ export default class M extends Migration {
       ),
       rawSql({
         id: '_prisma.rename-release-candidate-schema',
-        label: `Renamed schema ${RELEASE_CANDIDATE_SCHEMA} to ${SCHEMA}`,
+        label: `Rename schema "${RELEASE_CANDIDATE_SCHEMA}" to "${SCHEMA}"`,
         operationClass: 'widening',
         target: { id: 'postgres' },
         precheck: [
           {
-            description: `Schema "${SCHEMA}" must hold no tables or other relations while schema "${RELEASE_CANDIDATE_SCHEMA}" exists. This release keeps Prisma's own tables in "${SCHEMA}", and "${RELEASE_CANDIDATE_SCHEMA}" holds the tables a release candidate of Prisma 8 created, so Prisma does not choose between them. Follow the upgrade instructions before dropping either schema.`,
-            sql: schemaAbsentOrHoldsNoRelation,
+            description: `Schema "${SCHEMA}" must be empty while schema "${RELEASE_CANDIDATE_SCHEMA}" exists. This release keeps Prisma's own tables in "${SCHEMA}", and "${RELEASE_CANDIDATE_SCHEMA}" holds the tables a release candidate of Prisma 8 created, so Prisma drops an empty "${SCHEMA}" and renames "${RELEASE_CANDIDATE_SCHEMA}" to it, and does not choose between them when "${SCHEMA}" holds anything. Follow the upgrade instructions before dropping either schema.`,
+            sql: schemaAbsentOrEmpty,
             params: [SCHEMA],
           },
           {
-            description: `The role that runs this command must have the privileges of the role that owns schema "${RELEASE_CANDIDATE_SCHEMA}", because renaming a schema needs them. Find the owner with SELECT nspowner::regrole FROM pg_namespace WHERE nspname = '${RELEASE_CANDIDATE_SCHEMA}'. Then run the command once as that role, or give the schema to the migrating role with ALTER SCHEMA "${RELEASE_CANDIDATE_SCHEMA}" OWNER TO <migrating role>.`,
-            sql: hasOwnerPrivileges,
+            description: `The role that runs this command must have the privileges of the role that owns schema "${SCHEMA}", because Prisma drops the empty "${SCHEMA}" before it renames schema "${RELEASE_CANDIDATE_SCHEMA}" to "${SCHEMA}", and dropping a schema needs them. Give the empty schema to the migrating role with ALTER SCHEMA "${SCHEMA}" OWNER TO <migrating role>, or drop it with DROP SCHEMA "${SCHEMA}".`,
+            sql: absentOrHasSchemaOwnerPrivileges,
+            params: [SCHEMA],
+          },
+          {
+            description: `The role that runs this command must have the privileges of the role that owns schema "${RELEASE_CANDIDATE_SCHEMA}", because renaming a schema needs them. Find the owners of the schema and its tables with SELECT nspowner::regrole FROM pg_namespace WHERE nspname = '${RELEASE_CANDIDATE_SCHEMA}' and SELECT relname, relowner::regrole FROM pg_class WHERE relnamespace = to_regnamespace('${RELEASE_CANDIDATE_SCHEMA}'). ${giveToMigratingRole}`,
+            sql: absentOrHasSchemaOwnerPrivileges,
             params: [RELEASE_CANDIDATE_SCHEMA],
           },
+          ...tables.map((table) => ({
+            description: `The role that runs this command must have the privileges of the role that owns table ${qualified(table.name, RELEASE_CANDIDATE_SCHEMA)}, because later migrations of Prisma's own tables alter them, and altering a table needs those privileges. ${giveToMigratingRole}`,
+            sql: absentOrHasTableOwnerPrivileges,
+            params: [RELEASE_CANDIDATE_SCHEMA, table.name],
+          })),
           {
             description: `The role that runs this command must have the CREATE privilege on the database, because renaming schema "${RELEASE_CANDIDATE_SCHEMA}" needs it. Grant it with GRANT CREATE ON DATABASE <database> TO <migrating role>, or run the command once as a role that has it.`,
             sql: mayCreateInDatabase,
@@ -209,7 +232,7 @@ export default class M extends Migration {
       }),
       rawSql({
         id: '_prisma.create-schema',
-        label: `Created schema ${SCHEMA}`,
+        label: `Create schema "${SCHEMA}"`,
         operationClass: 'additive',
         target: { id: 'postgres' },
         precheck: [],
@@ -230,7 +253,7 @@ export default class M extends Migration {
       ...tables.map((table) =>
         rawSql({
           id: `_prisma.create-table.${table.name}`,
-          label: `Created table ${displayed(table.name)}`,
+          label: `Create table ${qualified(table.name)}`,
           operationClass: 'additive',
           target: {
             id: 'postgres',

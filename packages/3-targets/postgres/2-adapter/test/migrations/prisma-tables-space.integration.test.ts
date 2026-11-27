@@ -172,7 +172,7 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     await driver.query('create table _prisma.kept (id int)');
 
     expect(await failureMessage()).toContain(
-      'Schema "_prisma" must hold no tables or other relations while schema "prisma_contract" exists.',
+      'Schema "_prisma" must be empty while schema "prisma_contract" exists.',
     );
     expect({ schemas: await schemas(), tables: await tablesIn('_prisma') }).toEqual({
       schemas: ['_prisma', 'prisma_contract'],
@@ -198,17 +198,110 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     });
   });
 
-  it('leaves both schemas when _prisma holds no relation but another object, which the database refuses to drop', {
+  it('stops at the check that _prisma is empty, and changes nothing, when _prisma holds only a function', {
     timeout: testTimeout,
   }, async () => {
     await createReleaseCandidateTables();
     await driver.query('create schema _prisma');
     await driver.query("create function _prisma.kept() returns int language sql as 'select 1'");
 
-    const result = await apply();
+    expect(await failureMessage()).toContain(
+      'Schema "_prisma" must be empty while schema "prisma_contract" exists.',
+    );
+    const functions = await driver.query<{ name: string }>(
+      "select proname as name from pg_proc where pronamespace = '_prisma'::regnamespace",
+    );
+    expect({ schemas: await schemas(), functions: functions.rows }).toEqual({
+      schemas: ['_prisma', 'prisma_contract'],
+      functions: [{ name: 'kept' }],
+    });
+  });
 
-    expect(result.ok ? result.value : result.failure.meta.databaseUnchanged).toBe(true);
+  async function giveReleaseCandidateTablesTo(role: string): Promise<void> {
+    await driver.query(`alter schema prisma_contract owner to ${role}`);
+    for (const table of ['marker', 'ledger', 'contract']) {
+      await driver.query(`alter table prisma_contract.${table} owner to ${role}`);
+    }
+  }
+
+  async function failureMessageAs(role: string): Promise<string> {
+    await driver.query(`set role ${role}`);
+    try {
+      return await failureMessage();
+    } finally {
+      await driver.query('reset role');
+    }
+  }
+
+  it('stops, saying what it needs, when an empty _prisma beside the schema of a release candidate is owned by another role', {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await giveReleaseCandidateTablesTo('prisma_migrator');
+    await driver.query('create schema _prisma authorization prisma_rc_owner');
+
+    const message = await failureMessageAs('prisma_migrator');
+
+    expect(message).toContain(
+      'The role that runs this command must have the privileges of the role that owns schema "_prisma"',
+    );
+    expect(message).toContain('ALTER SCHEMA "_prisma" OWNER TO <migrating role>');
     expect(await schemas()).toEqual(['_prisma', 'prisma_contract']);
+  });
+
+  /** The development server records every DDL statement in its own schema, so a role that is not a superuser needs access to it to change the schema at all. */
+  async function allowDevelopmentServerLog(verb: 'grant' | 'revoke', preposition: 'to' | 'from') {
+    await driver.query(`${verb} usage on schema _prisma_dev_wal ${preposition} prisma_migrator`);
+    await driver.query(
+      `${verb} all on all tables in schema _prisma_dev_wal ${preposition} prisma_migrator`,
+    );
+    await driver.query(
+      `${verb} all on all sequences in schema _prisma_dev_wal ${preposition} prisma_migrator`,
+    );
+  }
+
+  it('drops an empty _prisma the role owns beside the schema of a release candidate, then renames, when the role owns the old schema and its tables', {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await giveReleaseCandidateTablesTo('prisma_migrator');
+    await driver.query('create schema _prisma authorization prisma_migrator');
+    const { rows } = await driver.query<{ name: string }>('select current_database() as name');
+    const database = `"${rows[0]?.name}"`;
+    await driver.query(`grant create on database ${database} to prisma_migrator`);
+    await allowDevelopmentServerLog('grant', 'to');
+
+    await driver.query('set role prisma_migrator');
+    let result: Awaited<ReturnType<typeof apply>>;
+    try {
+      result = await apply();
+    } finally {
+      await driver.query('reset role');
+      await driver.query(`revoke create on database ${database} from prisma_migrator`);
+      await allowDevelopmentServerLog('revoke', 'from');
+    }
+
+    expect(result.ok ? result.value.outcome : result.failure).toBe('applied');
+    expect({ schemas: await schemas(), tables: await tablesIn('_prisma') }).toEqual({
+      schemas: ['_prisma'],
+      tables: ['contract', 'ledger', 'marker'],
+    });
+  });
+
+  it("stops, saying what it needs, when the role owns the release candidate's schema but not a table in it", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await giveReleaseCandidateTablesTo('prisma_migrator');
+    await driver.query('alter table prisma_contract.ledger owner to prisma_rc_owner');
+
+    const message = await failureMessageAs('prisma_migrator');
+
+    expect(message).toContain(
+      'The role that runs this command must have the privileges of the role that owns table "prisma_contract"."ledger"',
+    );
+    expect(message).toContain('ALTER TABLE "prisma_contract"."ledger" OWNER TO <migrating role>');
+    expect(await schemas()).toEqual(['prisma_contract']);
   });
 
   it('touches nothing on a second call', { timeout: testTimeout }, async () => {
@@ -347,6 +440,8 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     expect(message).toContain(
       'The role that runs this command must have the privileges of the role that owns schema "prisma_contract"',
     );
+    expect(message).toContain('ALTER SCHEMA "prisma_contract" OWNER TO <migrating role>');
+    expect(message).toContain('ALTER TABLE "prisma_contract"."contract" OWNER TO <migrating role>');
     expect(message).not.toContain('CREATE privilege');
     expect(await schemas()).toEqual(['prisma_contract']);
   });
@@ -355,7 +450,7 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     timeout: testTimeout,
   }, async () => {
     await createReleaseCandidateTables();
-    await driver.query('alter schema prisma_contract owner to prisma_migrator');
+    await giveReleaseCandidateTablesTo('prisma_migrator');
     const { rows } = await driver.query<{ name: string }>('select current_database() as name');
     const database = `"${rows[0]?.name}"`;
     await driver.query(`revoke create on database ${database} from public`);

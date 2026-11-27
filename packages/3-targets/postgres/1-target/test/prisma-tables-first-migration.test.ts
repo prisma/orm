@@ -60,6 +60,45 @@ describe("the first migration of the Postgres target's _prisma space", () => {
     expect(produced).toEqual(ops);
   });
 
+  it("labels its operations in the planner's imperative form", () => {
+    expect(ops.map((op) => op.label)).toEqual([
+      'Check the columns of table "prisma_contract"."marker"',
+      'Check the columns of table "prisma_contract"."ledger"',
+      'Check the columns of table "prisma_contract"."contract"',
+      'Rename schema "prisma_contract" to "_prisma"',
+      'Create schema "_prisma"',
+      'Create table "_prisma"."marker"',
+      'Create table "_prisma"."ledger"',
+      'Create table "_prisma"."contract"',
+      'Check the columns of table "_prisma"."marker"',
+      'Check the columns of table "_prisma"."ledger"',
+      'Check the columns of table "_prisma"."contract"',
+    ]);
+  });
+
+  it('gives, where the role may not act as the owner of the old schema or a table in it, the statements that make the migrating role own the schema and every table', () => {
+    const rename = ops.find((op) => op.id === '_prisma.rename-release-candidate-schema');
+    const ownership = (rename?.precheck ?? [])
+      .map((check) => check.description)
+      .filter(
+        (description) =>
+          description.includes('owns schema "prisma_contract"') ||
+          description.includes('owns table'),
+      );
+    const statements = [
+      'ALTER SCHEMA "prisma_contract" OWNER TO <migrating role>',
+      'ALTER TABLE "prisma_contract"."marker" OWNER TO <migrating role>',
+      'ALTER TABLE "prisma_contract"."ledger" OWNER TO <migrating role>',
+      'ALTER TABLE "prisma_contract"."contract" OWNER TO <migrating role>',
+    ];
+    expect({
+      checks: ownership.length,
+      missing: ownership.flatMap((description) =>
+        statements.filter((statement) => !description.includes(statement)),
+      ),
+    }).toEqual({ checks: 4, missing: [] });
+  });
+
   it('ends at the contract its snapshot holds', () => {
     expect(endContract.storage.storageHash).toBe(metadata.to);
   });
