@@ -66,17 +66,24 @@ export interface SnapshotPlace {
 /**
  * The command that writes a snapshot again once its folder is deleted, when there is one. Every command writes a snapshot only where none exists, and only at a space's head: `db migrate` writes the application's from `contract.json` when it moves a ref there, and `contract emit` writes an extension's from the installed extension.
  */
-export function snapshotRewrite(
-  place: SnapshotPlace,
-):
-  | { readonly snapshotDirectory: string; readonly command: string; readonly source: string }
-  | undefined {
+export function snapshotRewrite(place: SnapshotPlace): SnapshotRewrite | undefined {
   if (place.hash !== place.headHash) return undefined;
-  const snapshotDirectory = relative(
-    place.cwd,
-    contractSnapshotDir(place.migrationsDir, place.hash),
+  return snapshotRewriteAt(
+    place.spaceId,
+    relative(place.cwd, contractSnapshotDir(place.migrationsDir, place.hash)),
   );
-  return place.spaceId === APP_SPACE_ID
+}
+
+/** A snapshot's folder, the command that writes it again once the folder is deleted, and what that command writes it from. */
+export interface SnapshotRewrite {
+  readonly snapshotDirectory: string;
+  readonly command: string;
+  readonly source: string;
+}
+
+/** How the snapshot at the head of a space, in `snapshotDirectory`, is written again once deleted. */
+export function snapshotRewriteAt(spaceId: string, snapshotDirectory: string): SnapshotRewrite {
+  return spaceId === APP_SPACE_ID
     ? { snapshotDirectory, command: '{bin} db migrate --advance-ref db', source: 'contract.json' }
     : { snapshotDirectory, command: '{bin} contract emit', source: 'the installed extension' };
 }

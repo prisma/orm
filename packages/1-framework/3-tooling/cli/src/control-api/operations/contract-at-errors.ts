@@ -1,5 +1,6 @@
 import { MigrationToolsError } from '@internal/migration-tools/errors';
 import { notOk, type Result } from '@internal/utils/result';
+import { dirname, relative } from 'pathe';
 import {
   CliStructuredError,
   errorContractValidationFailed,
@@ -8,11 +9,25 @@ import {
   errorUnexpected,
 } from '../../utils/cli-errors';
 import { contractValidationMeta } from '../../utils/contract-validation-meta';
+import { snapshotRewriteAt } from '../../utils/next-actions';
 
 export function mapContractAtError(
   error: unknown,
-  options?: { readonly artifactRole?: 'from' | 'to' },
+  options?: {
+    readonly artifactRole?: 'from' | 'to';
+    /** The space whose head the snapshot is at, when it is: a command writes that snapshot again once it is deleted. */
+    readonly atHeadOf?: string;
+  },
 ): Result<never, CliStructuredError> {
+  const rewrittenBy = (filePath: string) =>
+    options?.atHeadOf === undefined || filePath === 'unknown'
+      ? {}
+      : {
+          rewrittenBy: snapshotRewriteAt(
+            options.atHeadOf,
+            relative(process.cwd(), dirname(filePath)),
+          ),
+        };
   if (MigrationToolsError.is(error)) {
     switch (error.code) {
       case 'MIGRATION.REF_NOT_RESOLVABLE': {
@@ -38,6 +53,7 @@ export function mapContractAtError(
               cause: error,
               meta: contractValidationMeta(error),
               artifact: 'snapshot',
+              ...rewrittenBy(filePath),
             },
           ),
         );
@@ -53,7 +69,12 @@ export function mapContractAtError(
             role === 'to'
               ? `Target contract at ${filePath} failed to deserialize: ${message}`
               : `Predecessor contract at ${filePath} failed to deserialize: ${message}`,
-            { where: { path: filePath }, cause: error, artifact: 'snapshot' },
+            {
+              where: { path: filePath },
+              cause: error,
+              artifact: 'snapshot',
+              ...rewrittenBy(filePath),
+            },
           ),
         );
       }

@@ -501,6 +501,59 @@ describe('resolveFromForPlan', () => {
     }
   });
 
+  it('advises upgrading or restoring a predecessor snapshot that is not valid JSON, never emitting the contract', async () => {
+    const snapshotPath = `/project/migrations/snapshots/${HASH_A}/contract.json`;
+    const space = makeSpace(
+      [makePkg(E, HASH_A, '001_init'), makePkg(HASH_A, HASH_B, '002_next')],
+      {},
+      vi.fn().mockRejectedValue(
+        new MigrationToolsError('MIGRATION.INVALID_JSON', 'Invalid JSON', {
+          why: `Failed to parse ${snapshotPath}`,
+          fix: 'Fix the JSON.',
+          meta: { filePath: snapshotPath, parseError: 'Unexpected token' },
+        }),
+      ),
+    );
+    const result = await resolveFromForPlan(baseInput({ space, optionsFrom: HASH_A }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.why).toBe(
+        `Predecessor contract at ${snapshotPath} failed to deserialize: Unexpected token`,
+      );
+      expect(result.failure.fix).toContain('follow the app upgrade instructions');
+      expect(result.failure.fix).not.toContain('contract emit');
+      expect(result.failure.fix).not.toContain('db migrate');
+    }
+  });
+
+  it('advises deleting a predecessor snapshot at the emitted contract and writing it again with db migrate', async () => {
+    const snapshotPath = `/project/migrations/snapshots/${HASH_A}/contract.json`;
+    const space = makeSpace(
+      [makePkg(E, HASH_A, '001_init')],
+      { db: { hash: HASH_A, invariants: [] } },
+      vi.fn().mockRejectedValue(
+        new MigrationToolsError(
+          'MIGRATION.CONTRACT_DESERIALIZATION_FAILED',
+          'Contract failed to deserialize',
+          {
+            why: 'zzz must be removed',
+            fix: 'Re-emit.',
+            meta: { filePath: snapshotPath, message: 'zzz must be removed' },
+          },
+        ),
+      ),
+    );
+    const result = await resolveFromForPlan(baseInput({ space }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.fix).toContain(
+        `/snapshots/${HASH_A} and run \`{bin} db migrate --advance-ref db\`, which writes it again from contract.json.`,
+      );
+    }
+  });
+
   it('surfaces INVALID_REF_FILE when the ref pointer file is malformed', async () => {
     const space = makeSpace(
       [],

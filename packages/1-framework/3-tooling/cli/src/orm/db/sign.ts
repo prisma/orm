@@ -16,6 +16,7 @@ import type { Block, Presentations, Span, Text, TreeNode } from '@prisma/cli-eng
 import { flag, positional } from '@prisma/cli-engine';
 import type { Diagnostic } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
+import { dirname, relative } from 'pathe';
 import { createControlClient } from '../../control-api/client';
 import { formatVersionFailure } from '../../control-api/operations/caught-errors';
 import { resolveContractRefToSnapshot } from '../../control-api/operations/contract-snapshot-resolution';
@@ -37,6 +38,7 @@ import {
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { contractValidationMeta } from '../../utils/contract-validation-meta';
+import { snapshotRewriteAt } from '../../utils/next-actions';
 import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
 import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
@@ -404,6 +406,7 @@ function hydrateContract(
   config: PrismaConfig,
   json: unknown,
   path: string,
+  snapshot: { readonly atHead: boolean } | undefined,
 ): Result<Contract, CliStructuredError> {
   try {
     return okResult(config.family.create(createControlStack(config)).deserializeContract(json));
@@ -413,7 +416,23 @@ function hydrateContract(
     return notOkResult(
       errorContractValidationFailed(
         `Contract at ${path} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,
-        { where: { path }, meta: contractValidationMeta(error) },
+        {
+          where: { path },
+          meta: contractValidationMeta(error),
+          ...(snapshot === undefined
+            ? {}
+            : {
+                artifact: 'snapshot' as const,
+                ...(snapshot.atHead
+                  ? {
+                      rewrittenBy: snapshotRewriteAt(
+                        APP_SPACE_ID,
+                        relative(process.cwd(), dirname(path)),
+                      ),
+                    }
+                  : {}),
+              }),
+        },
       ),
     );
   }
@@ -584,6 +603,9 @@ export function createDbSignCommand(
           ctx.config,
           resolvedRef.value.contractJson,
           resolvedRef.value.contractJsonPath,
+          resolvedRef.value.source === 'snapshot'
+            ? { atHead: resolvedRef.value.hash === emitted.value.contract.storage.storageHash }
+            : undefined,
         );
         if (!hydrated.ok) {
           return notOk(normalizeError(hydrated.failure));
