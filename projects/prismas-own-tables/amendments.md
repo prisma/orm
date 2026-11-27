@@ -85,3 +85,13 @@ The design says the space's row records the hash of its contract and that within
 - **The general shape of `applyInstalledContractSpace`** stays: it takes the space id and descriptor and contains nothing PostgreSQL- or `_prisma`-specific, so a second target uses it unchanged.
 - **Two commands starting together** are tested with a fake runner only. A test against a real database would need two processes racing for a lock and could not fail reliably; the retry is a pure function of the runner's typed failure, which the unit test covers.
 - **Further framework changes beyond section 1,** all agreed in this round: `errorPrismaSpaceBehind` and the export of the upgrade instructions' address in the core errors package; the exports for classifying the row and `errorInstalledSpaceUnreachable` with its `reason`; the listener the four client methods take for the one line of output; and those methods returning the phase's failure in their existing result shape.
+
+## 10. Found by manual QA and the third round
+
+- **A release candidate's tool against an upgraded database** replays every migration from the beginning. It is a consequence of renaming the schema, which no later release can prevent. The upgrade instructions say first that every service and pipeline that changes the database moves to `8.0.0` together.
+- **The advice when the records are behind** names `db migrate`, `db update` and `db sign`, because a project that only uses `db update` has no migrations for `db migrate` to apply.
+- **What the phase did** is listed from the ledger the runner already writes: the labels of operations that ran, not those skipped or check-only. No framework type gained a field.
+- **The two permission conditions of a rename** are separate checks with their own advice. An empty `_prisma` beside `prisma_contract` is dropped, without `CASCADE`, and the rename goes ahead.
+- **One payload for `CONTRACT.PRISMA_SPACE_BEHIND`:** the space and `situation`. The extra fields of earlier rounds are gone.
+- **Message strings exported from published entry points** stay: the build has no way to keep one subpath of a published package unpublished without dropping an existing export, and a published package's imports from another must be published. A per-subpath "not published" setting in the build tooling would fix it; it is not part of this project.
+- **A user's own `_prisma.marker` of another shape** stops a command that changes the database with the first migration's column check. A command that only reads gets the database's own error.

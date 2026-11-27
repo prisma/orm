@@ -14,7 +14,7 @@ pnpm add @prisma/orm-postgres@latest
 prisma db migrate
 ```
 
-Before `db migrate` reads anything, it brings Prisma's own tables to the form the installed release expects. On a database created by a release candidate that means renaming the schema `prisma_contract` to `_prisma`. On a new database it means creating the tables. On a database already up to date it means reading one row. The user writes nothing and is asked nothing, and these tables are not listed among the user's own migrations. When the step changed something, the command says so in one line.
+Before `db migrate` reads anything, it brings Prisma's own tables to the form the installed release expects. On a database created by a release candidate that means renaming the schema `prisma_contract` to `_prisma`. On a new database it means creating the tables. On a database already up to date it means reading one row. The user writes nothing and is asked nothing, and these tables are not listed among the user's own migrations. When the step changed something, the command says so and lists what it did, such as `Renamed schema prisma_contract to _prisma`.
 
 The tables are a contract space, named `_prisma`, that the target package carries: a contract and migrations in the same form an application's or an extension's have. This record calls it the Prisma space.
 
@@ -64,7 +64,7 @@ If the user's migration fails after the phase, Prisma's own tables stay up to da
 
 ### Commands that only read
 
-`db verify`, `migration status`, `migration log`, a dry run, and the SQL client's check on first use do not run the phase. Pointed at a PostgreSQL database that still has `prisma_contract`, each reports `CONTRACT.PRISMA_SPACE_BEHIND` and names `prisma db migrate`; the client logs it as a warning and runs the query. `db verify` also reports it when the tables are in the current schema but at an older contract of the space than the installed release carries. One code covers both, because the user does the same thing in both.
+`db verify`, `migration status`, `migration log`, a dry run, and the SQL client's check on first use do not run the phase. Pointed at a PostgreSQL database that still has `prisma_contract`, each reports `CONTRACT.PRISMA_SPACE_BEHIND` and names the commands that bring the records up to date (`prisma db migrate`, `db update` or `db sign`, whichever the project uses); the client logs it as a warning, when it is given a log, and runs the query. `db verify` also reports it when the tables are in the current schema but at an older contract of the space than the installed release carries. One code covers both, because the user does the same thing in both.
 
 ### Within a major version its migrations only add
 
@@ -91,11 +91,13 @@ On PostgreSQL the first migration:
 2. Renames the schema `prisma_contract` to `_prisma` ([ADR 338](ADR%20338%20-%20Names%20Prisma%20puts%20in%20a%20database%20or%20a%20query%20begin%20with%20_prisma.md)). `ALTER SCHEMA … RENAME` changes only the catalogue, so it is instant at any size.
 3. Creates the schema and each table that is missing, and checks the result.
 
-Two more cases stop it without changing anything. PostgreSQL lets only a role with the privileges of a schema's owner, and `CREATE` on the database, rename a schema, so a migrating role that has only grants on `prisma_contract` is told how to find the owner and give the migrating role ownership. And a database that has both schemas is not guessed at.
+Two more cases stop it without changing anything. PostgreSQL lets only a role with the privileges of a schema's owner, and `CREATE` on the database, rename a schema; each condition is checked on its own and its message gives the statement that grants it. And a database that has both schemas, where `_prisma` holds anything, is not guessed at. An empty `_prisma` beside `prisma_contract` is dropped, with a statement the database refuses if the schema is not empty, and the rename goes ahead.
+
+A user's own `_prisma.marker` that lacks the columns Prisma reads is treated as no row, so the first migration's checks run and stop the command with a message that names the table. A command that only reads gets the database's own error in that case.
 
 The text of a failed check is part of the migration's hash, so it carries no address. The command-line error around it gives the address of the upgrade instructions.
 
-A consequence: a release candidate's command-line tool or application, pointed at a database that `8.0.0` has brought up to date, finds no marker. The application warns and runs ([ADR 333](ADR%20333%20-%20The%20runtime%27s%20marker%20check%20only%20warns.md)). A release candidate's command-line tool must not be used against such a database: it would create a new, empty `prisma_contract`, which later releases ignore.
+A consequence: a release candidate's command-line tool or application, pointed at a database that `8.0.0` has brought up to date, finds no marker. The application warns and runs ([ADR 333](ADR%20333%20-%20The%20runtime%27s%20marker%20check%20only%20warns.md)). A release candidate's command-line tool must not be used against such a database. It does not see the records, creates a new, empty `prisma_contract`, which later releases ignore, and applies every migration again from the beginning: steps whose result already holds are skipped, but a data migration or raw SQL without such a check runs again. So every service and pipeline that changes a database moves to `8.0.0` together. Nothing in a later release can stop an earlier one doing this; the upgrade instructions say it first.
 
 ### Two commands at once
 
@@ -115,7 +117,7 @@ PostgreSQL follows this record. SQLite, MySQL, MariaDB and MongoDB still create 
 - On PostgreSQL the tables are described in four places: the contract, the statements that create them, the columns the first migration checks, and the table definitions the adapter reads and writes through. Tests keep them in agreement. With an emitted contract a target can query its own tables through a client typed from it, which would remove the last of these; that is not done yet.
 - This is a stated exception to [ADR 212](ADR%20212%20-%20Contract%20spaces.md), which says everything needed to apply and verify a database is in the user's repository. For this one space it is in the installed target package.
 - A refused, cancelled or failed command is no longer guaranteed to change nothing: it may have brought Prisma's own tables up to date.
-- `CONTRACT.PRISMA_SPACE_BEHIND` is raised by every command that only reads, and is also a finding of `db verify`, where findings exit with code 4 as the other drift findings do. Its payload says which of the three situations it is: a release candidate's schema, a missing row for the space, or a row at an older contract of the space.
+- `CONTRACT.PRISMA_SPACE_BEHIND` is raised by every command that only reads, and is also a finding of `db verify`, where findings exit with code 4 as the other drift findings do. Its payload is the same wherever it is raised: the space and `situation`, one of `releaseCandidateSchema`, `missingRow` or `olderContract`.
 
 ## Alternatives considered
 
