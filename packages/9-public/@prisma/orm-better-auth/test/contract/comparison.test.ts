@@ -2,6 +2,8 @@ import type { BetterAuthOptions } from '@better-auth/core';
 import { getAuthTables } from '@better-auth/core/db';
 import { describe, expect, it } from 'vitest';
 import { compareContract } from '../../src/contract/compare';
+import { targetSupportFor } from '../../src/target-support';
+import { shippedTargetSupports } from '../../src/targets/shipped';
 import { useContractFixture } from '../helpers/contract-fixture';
 import { type TargetName, targets } from '../helpers/databases';
 import { compare, problemsOf, pslForConfiguration } from '../helpers/printed-psl';
@@ -78,6 +80,7 @@ describe.each(targets)('the comparison on %s', (target) => {
             betterAuthOptions,
             namespace: undefined,
             usePlural: false,
+            support: targetSupportFor(contract, shippedTargetSupports),
           }),
         );
 

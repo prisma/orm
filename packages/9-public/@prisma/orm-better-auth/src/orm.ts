@@ -1,24 +1,11 @@
-import type { and } from '@prisma/orm-family-sql/orm-client';
+import type { Condition } from '@prisma/orm-family-sql/orm-client';
 import { blindCast } from '@prisma/orm-framework/utils/casts';
-
-/** A filter the ORM client's `and`, `or` and `where` accept. */
-export type Condition = Parameters<typeof and>[number];
+import type { TextFunctions } from './target-support';
 
 export type Row = Record<string, unknown>;
 
-/** A raw SQL expression built with `fns.raw`, before its codec is named. */
-export interface RawExpression {
-  returns(codecId: string): unknown;
-}
-
-export interface WhereFunctions {
-  raw(strings: TemplateStringsArray, ...values: unknown[]): RawExpression;
-  eq(left: unknown, right: unknown): unknown;
-  ne(left: unknown, right: unknown): unknown;
-}
-
 export interface WhereTools {
-  readonly fns: WhereFunctions;
+  readonly fns: TextFunctions;
 }
 
 /** The model accessor a `where` or `orderBy` callback receives. Its properties are the model's fields. */
