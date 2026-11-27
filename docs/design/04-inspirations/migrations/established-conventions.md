@@ -128,7 +128,7 @@ Linear systems treat **VCS merge conflicts** as the team's serialization mechani
 
 ### Fit to our model
 
-We're a **cyclic graph**. Per the [Migration System subsystem doc](../../docs/architecture%20docs/subsystems/7.%20Migration%20System.md): *"The graph tolerates cycles (e.g. rollback migrations like C1→C2→C1) — the pathfinder uses BFS with visited-node tracking to select the shortest path."*
+We're a **cyclic graph**. Per the [Migration System subsystem doc](../../../architecture%20docs/subsystems/7.%20Migration%20System.md): *"The graph tolerates cycles (e.g. rollback migrations like C1→C2→C1) — the pathfinder uses BFS with visited-node tracking to select the shortest path."*
 
 This is a real divergence from every surveyed system. The vocabulary cost: "rollback" doesn't unrow the ledger; instead, the user applies a *forward* migration whose `to` happens to equal a prior state. Most users will arrive at this surface with "rollback" already meaning "undo the last forward step" (Rails / Liquibase) or "delete the row" (Django / Prisma). We owe a clear explanation that **our model has no `down` migration concept** — rollback is forward-applied to a destination of the user's choice.
 
