@@ -15,7 +15,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "81c677c9323a6992",
-    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218). The Supabase contract's storage and profile hash literals also take the values this release's hash rules give the same contract (ADR 332)."
   },
   {
     "path": "./runtime",
@@ -24,7 +24,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "913f5d0c24b08e6d",
-    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218). The Supabase contract's storage and profile hash literals also take the values this release's hash rules give the same contract (ADR 332)."
   },
   {
     "path": "./runtime",
@@ -42,7 +42,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "05bcb076bb9d1760",
-    "reason": "The Supabase contract's capabilities are the ones it requires; the `postgres` flags this release retired, such as `jsonAgg`, are gone (prisma/orm#31218)."
+    "reason": "The Supabase contract's capabilities are the ones it requires; the `postgres` flags this release retired, such as `jsonAgg`, are gone (prisma/orm#31218). The Supabase contract's storage and profile hash literals also take the values this release's hash rules give the same contract (ADR 332)."
   },
   {
     "path": "./runtime",

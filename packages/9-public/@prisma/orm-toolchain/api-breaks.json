@@ -23,8 +23,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "0ef56d92f9260821",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+    "fingerprint": "2becef59cebca356",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. `db sign` also takes `force`, which signs even when the database's change policy permits only migrations, and its success result gains `changePolicy`, the change policy the database records."
   },
   {
     "path": "./cli/control-api",
@@ -69,7 +69,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "8515e857c8975b0c",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). `db sign` also takes `force`, which signs even when the database's change policy permits only migrations."
   },
   {
     "path": "./cli/control-api",
@@ -78,7 +78,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "ab3f837736275032",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). `db sign`'s success result also gains `changePolicy`, the change policy the database records."
   },
   {
     "path": "./cli/control-api",
@@ -113,7 +113,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "e5a5873bdf3a6e47",
+    "fingerprint": "17c9ce177b3ab5bf",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
@@ -149,7 +149,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "fdc390e1968c155e",
+    "fingerprint": "4898a9a8dadc47f7",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
@@ -186,7 +186,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "36776d35a5b3c8b5",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). `db sign` also takes `force`, which signs even when the database's change policy permits only migrations, and its success result gains `changePolicy`, the change policy the database records."
   },
   {
     "path": "./cli/control-api",
@@ -212,7 +212,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "23bcfe2409aea3d5",
+    "fingerprint": "6e3a7a95711abcc6",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
@@ -221,7 +221,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "24ef9ef18dc56b87",
+    "fingerprint": "42d24595b532851b",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
@@ -230,7 +230,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3dfc83f0d9078534",
+    "fingerprint": "70dfe87c48039997",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
@@ -303,7 +303,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "484168b13f272d34",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). `db sign`'s success result also gains `changePolicy`, the change policy the database records."
   },
   {
     "path": "./cli/control-api/testing",
@@ -311,8 +311,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "9baff858a5777bfe",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+    "fingerprint": "fbbdbaae441da9f9",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. `db sign` also takes `force`, which signs even when the database's change policy permits only migrations, and its success result gains `changePolicy`, the change policy the database records."
   },
   {
     "path": "./cli/control-api/testing",
@@ -320,7 +320,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "744fab934f649814",
+    "fingerprint": "f54c89d29603a30b",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. `db sign`'s success result also gains `changePolicy`, the change policy the database records, so the fixture's result must give it."
   },
   {
@@ -330,7 +330,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "a973e1c100b48c35",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). `db sign`'s success result also gains `changePolicy`, the change policy the database records."
   },
   {
     "path": "./cli/migration-cli",

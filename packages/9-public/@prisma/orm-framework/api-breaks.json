@@ -51,7 +51,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "eea1681330bf07aa",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A target's contract serializer also supplies the required `normalizeStorage`, the family's normal form of storage, which the framework applies when it writes and when it hashes (ADR 010, ADR 332)."
   },
   {
     "path": "./components",
@@ -339,7 +339,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "eea1681330bf07aa",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A target's contract serializer also supplies the required `normalizeStorage`, the family's normal form of storage, which the framework applies when it writes and when it hashes (ADR 010, ADR 332)."
   },
   {
     "path": "./components/control",
