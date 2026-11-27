@@ -11,16 +11,37 @@ import { type } from 'arktype';
 import { marksOfMigration } from './required-column';
 import type { SqlMigrationPlanOperationStep } from './types';
 
+const EnumValueJson = type({
+  '+': 'reject',
+  'namespaceId?': 'string',
+  enum: 'string',
+  member: 'string',
+});
+
+const CodecRefJson = type({ '+': 'reject', codecId: 'string', 'typeParams?': 'unknown' });
+
 /** What a step's `meta.rowsHoldingValue` holds in an `ops.json`; a codec's `typeParams` stay open. */
 export const RowsHoldingValueJson = type({
   '+': 'reject',
-  enumValue: { '+': 'reject', 'namespaceId?': 'string', enum: 'string', member: 'string' },
+  enumValue: EnumValueJson,
   value: 'string | number',
-  'codecRef?': { '+': 'reject', codecId: 'string', 'typeParams?': 'unknown' },
+  'codecRef?': CodecRefJson,
   table: 'string',
   column: 'string',
   storedValue: 'string | number',
   'path?': 'string',
+});
+
+/**
+ * The mark 8.0.0-rc.21 and rc.22 wrote, before it named its column and stored value. Those
+ * releases took the table and column from the operation's target details and the stored value from
+ * the check's first parameter.
+ */
+export const EarlierRowsHoldingValueJson = type({
+  '+': 'reject',
+  enumValue: EnumValueJson,
+  value: 'string | number',
+  'codecRef?': CodecRefJson,
 });
 
 const RowsHoldingValueMeta = type({ rowsHoldingValue: RowsHoldingValueJson });

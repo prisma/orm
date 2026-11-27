@@ -124,7 +124,7 @@ export interface SqlControlTargetDescriptor<
   readonly accessChangesOf: (
     operations: readonly MigrationPlanOperation[],
   ) => readonly MigrationAccessChange[];
-  /** Reads the operations of an `ops.json` in this target's format, refusing a key the format does not define; every reader of SQL operations goes through it. */
+  /** Reads the operations of an `ops.json` in this target's format, refusing a key the format does not define. The runner, the statement preview and the checks of a recorded path read through it; the commands that only list migrations do not. */
   readonly readOperations: SqlOperationsReader<TTargetDetails>;
   createPlanner(adapter: SqlControlAdapter<TTargetId>): SqlMigrationPlanner<TTargetDetails>;
   createRunner(family: SqlControlFamilyInstance): SqlMigrationRunner<TTargetDetails>;

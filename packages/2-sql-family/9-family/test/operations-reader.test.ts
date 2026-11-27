@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { createSqlOperationsReader } from '../src/core/migrations/operations-reader';
 
 const readOperations = createSqlOperationsReader({
-  targetDetails: type({ '+': 'reject', objectType: "'table' | 'column'", name: 'string' }),
+  targetDetails: type({
+    '+': 'reject',
+    objectType: "'table' | 'column'",
+    name: 'string',
+    'table?': 'string',
+  }),
   stepMeta: type({ 'targetOnly?': { '+': 'reject', schema: 'string' } }),
 });
 
@@ -160,5 +165,70 @@ describe('createSqlOperationsReader', () => {
   it('reads an operation an in-memory planner built with keys it left undefined', () => {
     const op = { ...operation(), summary: undefined, invariantId: undefined };
     expect(readOperations([op])).toEqual([op]);
+  });
+
+  it('tells the user how to fix each cause of a refusal', () => {
+    let thrown: unknown;
+    try {
+      readOperations([withKey([])]);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(Reflect.get(thrown as object, 'fix')).toBe(
+      "If the migration's migration.ts builds this operation, change it so the operation holds only the fields the format defines, and emit the migration again. If ops.json was edited by hand, restore it from version control. Otherwise Prisma wrote an operation it cannot read, which is a bug in Prisma: please report it with the operation.",
+    );
+  });
+
+  describe('the removed-value mark that 8.0.0-rc.21 and rc.22 wrote', () => {
+    const earlierMark = {
+      enumValue: { namespaceId: 'public', enum: 'Mood', member: 'sad' },
+      value: 'sad',
+      codecRef: { codecId: 'pg/text@1' },
+    };
+
+    function earlierRemoval(details: Record<string, unknown>): Record<string, unknown> {
+      return {
+        id: 'removeStoredValue.user.mood.sad',
+        label: 'Remove value "sad" from column "mood" of "user"',
+        operationClass: 'destructive',
+        target: { id: 'postgres', details },
+        precheck: [
+          {
+            description: 'ensure column "mood" of "user" takes NULL, or no row holds "sad" in it',
+            sql: 'SELECT true AS result',
+            params: ['sad', 'user', 'mood'],
+            meta: { rowsHoldingValue: earlierMark },
+          },
+        ],
+        execute: [],
+        postcheck: [],
+      };
+    }
+
+    it('is read as the mark this release writes, placed where those releases counted the rows', () => {
+      const [read] = readOperations([
+        earlierRemoval({ objectType: 'column', name: 'mood', table: 'user' }),
+      ]);
+      expect(read?.precheck[0]?.meta).toEqual({
+        rowsHoldingValue: { ...earlierMark, table: 'user', column: 'mood', storedValue: 'sad' },
+      });
+    });
+
+    it('is dropped when the operation does not say where the value is stored, as those releases ignored it', () => {
+      const [read] = readOperations([earlierRemoval({ objectType: 'column', name: 'mood' })]);
+      expect(read?.precheck[0]?.meta).toEqual({});
+    });
+
+    it('refuses a key that mark does not define', () => {
+      const op = earlierRemoval({ objectType: 'column', name: 'mood', table: 'user' });
+      Reflect.set(
+        Reflect.get((op['precheck'] as object[])[0] as object, 'meta') as object,
+        'rowsHoldingValue',
+        { ...earlierMark, unexpected: true },
+      );
+      expect(reasonOf(() => readOperations([op]))).toContain(
+        'precheck[0].meta.rowsHoldingValue.unexpected',
+      );
+    });
   });
 });

@@ -63,6 +63,25 @@ describe('sql family instance accessChangesOf', () => {
     expect(received).toEqual([]);
   });
 
+  it('names the stored object from the operation as the reader returns it', () => {
+    const stack = makeStack();
+    const target = {
+      ...stack.target,
+      readOperations: (operations: readonly unknown[]) =>
+        operations.map(() => ({
+          ...DISABLE,
+          target: { id: 'postgres', details: { objectType: 'table', name: 'post' } },
+        })),
+    };
+    const instance = createSqlFamilyInstance({ ...stack, target });
+
+    const stored = {
+      ...DISABLE,
+      target: { id: 'postgres', details: { schema: 'main', objectType: 'table', name: 'post' } },
+    };
+    expect(instance.storageNameOf(stored)).toBe('post');
+  });
+
   it('raises CONTRACT.PACK_CONTRIBUTION_INVALID when the target descriptor has no accessChangesOf', () => {
     const stack = makeStack();
     const target = {

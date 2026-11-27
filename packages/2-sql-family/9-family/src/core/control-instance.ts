@@ -1092,8 +1092,8 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     },
 
     storageNameOf(operation: MigrationPlanOperation): string {
-      readOperations([operation]);
-      return storageNameOfOperation(operation);
+      const [read = operation] = readOperations([operation]);
+      return storageNameOfOperation(read);
     },
 
     accessChangesOf(

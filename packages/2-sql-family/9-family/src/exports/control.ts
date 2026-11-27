@@ -78,9 +78,9 @@ export {
   unknownCallNames,
 } from '../core/migrations/operation-subjects';
 export type {
-  SqlOperationsFormat,
+  SqlOperationsLocation,
   SqlOperationsReader,
-  SqlOperationsSource,
+  SqlTargetOperationsFormat,
 } from '../core/migrations/operations-reader';
 export { createSqlOperationsReader } from '../core/migrations/operations-reader';
 export {

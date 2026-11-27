@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { RemoveStoredValueCall } from '../../src/core/migrations/op-factory-call';
 import { readPostgresOperations } from '../../src/core/migrations/read-operations';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../../..');
@@ -86,7 +87,71 @@ describe('readPostgresOperations', () => {
     expect(refused).toEqual([]);
   });
 
-  it('reads what the Postgres planner writes', () => {
+  it('reads the removed-value mark that 8.0.0-rc.21 and rc.22 wrote, as the mark this release writes', () => {
+    const enumValue = { namespaceId: 'public', enum: 'Status', member: 'ARCHIVED' };
+    const removal = (meta: Record<string, unknown>) => ({
+      id: 'removeStoredValue.task.state.ARCHIVED',
+      label: 'Remove value "ARCHIVED" from column "state" of "task"',
+      operationClass: 'destructive',
+      target: {
+        id: 'postgres',
+        details: { schema: 'public', objectType: 'column', name: 'state', table: 'task' },
+      },
+      precheck: [
+        {
+          description:
+            'ensure column "state" of "task" takes NULL, or no row holds "ARCHIVED" in it',
+          sql: 'SELECT true AS result',
+          params: ['ARCHIVED', 'task', 'state'],
+          meta,
+        },
+      ],
+      execute: [],
+      postcheck: [],
+    });
+    const codecRef = { codecId: 'pg/text@1' };
+    expect(
+      readPostgresOperations([
+        removal({ rowsHoldingValue: { enumValue, value: 'ARCHIVED', codecRef } }),
+      ]),
+    ).toEqual([
+      removal({
+        rowsHoldingValue: {
+          enumValue,
+          value: 'ARCHIVED',
+          codecRef,
+          table: 'task',
+          column: 'state',
+          storedValue: 'ARCHIVED',
+        },
+      }),
+    ]);
+  });
+
+  it('reads what the Postgres planner writes for a removed enum value, through JSON', async () => {
+    const calls = [
+      new RemoveStoredValueCall('app', 'task', 'state', 'ARCHIVED', false, undefined, {
+        enum: 'Status',
+        member: 'ARCHIVED',
+      }),
+      new RemoveStoredValueCall(
+        'app',
+        'issue',
+        'doc',
+        'OPEN',
+        false,
+        undefined,
+        { enum: 'Status', member: 'OPEN' },
+        '$.status',
+      ),
+    ];
+    const written = JSON.parse(JSON.stringify(await Promise.all(calls.map((c) => c.toOp()))));
+    expect(written[0].precheck[0].meta.rowsHoldingValue).toBeDefined();
+    expect(written[1].precheck[0].meta.rowsHoldingValue.path).toBe('$.status');
+    expect(readPostgresOperations(written)).toEqual(written);
+  });
+
+  it('reads the recording of what the Postgres planner wrote in 8.0.0-rc.18', () => {
     const golden = JSON.parse(
       readFileSync(
         join(
