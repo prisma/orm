@@ -31,6 +31,8 @@ Six slices, one pull request each, in this order. PostgreSQL comes first because
 
 **Builds on** slice 1's phase, which is what makes moving the policies safe: the tables are in their new form before any command reads a policy.
 
+**Must ship in the same release as slice 1, and before `8.0.0`.** Every release finds the Prisma space's own row in the marker table before it knows which form the tables are in, so the table that holds that row, and its columns, cannot change after a release has written the row. If slice 1 ships first in a release candidate, slice 2's reader must also find the row where slice 1 left it.
+
 ## Slice 3. Rename the concept from "marker" to "signature"
 
 **Outcome.** `verifySignature`, `db verify --signature-only`, `CONTRACT.SIGNATURE_MISSING` and the other nine codes, the error fields, the `signature` object in `--json` output, every message, the glossary, the reference docs, the upgrade instructions with a step that rewrites user code, and the shipped skill. The types extension authors import are renamed with them. In prose the term is "contract signature".
