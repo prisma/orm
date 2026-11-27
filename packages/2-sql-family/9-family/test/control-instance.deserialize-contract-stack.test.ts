@@ -1,4 +1,8 @@
-import type { ContractModel, ContractValueObject } from '@internal/contract/types';
+import {
+  type ContractModel,
+  type ContractValueObject,
+  UNBOUND_DOMAIN_NAMESPACE_ID,
+} from '@internal/contract/types';
 import {
   type AnyCodecDescriptor,
   type CodecLookupWithDescriptors,
@@ -48,8 +52,16 @@ const numeric = sqlDataType('t/numeric', {
   ],
 });
 
+const varcharParams = type({ '+': 'reject', length: 'number' });
+const varchar = sqlDataType('t/varchar', {
+  read: (json) => json,
+  params: varcharParams,
+  texts: [{ text: 'varchar({length})', written: true }],
+});
+
 const codecDataTypes: Readonly<Record<string, AnyCodecDescriptor['dataType']>> = {
   't/int4@1': int4.id,
+  't/varchar@1': varchar.id,
   't/jsonb@1': jsonb.id,
   't/text@1': text.id,
   't/numeric@1': numeric.id,
@@ -66,8 +78,8 @@ const codecLookup: CodecLookupWithDescriptors = {
       codecId,
       dataType,
       traits: [],
-      paramsSchema: undefined,
-      isParameterized: false,
+      paramsSchema: codecId === 't/varchar@1' ? varcharParams : undefined,
+      isParameterized: codecId === 't/varchar@1',
       factory: () => () => {
         throw new Error('not used');
       },
@@ -92,7 +104,7 @@ function familyInstance(valueObjectStorageType: string | undefined) {
     codecLookup,
     dataTypes: {
       entries: {},
-      lookup: createDataTypeLookup([int4, jsonb, text, numeric, sqlRawDataType]),
+      lookup: createDataTypeLookup([int4, jsonb, text, numeric, varchar, sqlRawDataType]),
       dataTypeOfCodec: (codecId: string) => codecDataTypes[codecId],
     },
     declaredDataTypes: [],
@@ -180,6 +192,105 @@ describe('deserializeContract checks each column against the stack', () => {
     expect(() => familyInstance('Jsonb').deserializeContract(contract)).toThrow(
       'storage.types.Code: codec t/text@1 represents t/text, not t/int4',
     );
+  });
+
+  describe('type parameters, which the parameter schema of the codec checks', () => {
+    const named = (typeParams: Record<string, unknown>) =>
+      contractWith({
+        user: table({
+          id: col('t/int4', 't/int4@1'),
+          name: { ...col('t/varchar', 't/varchar@1'), typeParams } as never,
+        }),
+      });
+    const refusal = `Invalid typeParams for codec 't/varchar@1': zzz must be removed`;
+
+    it('are accepted on a column when the codec defines each of them', () => {
+      expect(() =>
+        familyInstance('Jsonb').deserializeContract(named({ length: 20 })),
+      ).not.toThrow();
+    });
+
+    it('are refused on a column when one is a key the codec does not define, naming the column', () => {
+      expect(() =>
+        familyInstance('Jsonb').deserializeContract(named({ length: 20, zzz: 1 })),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.VALIDATION_FAILED',
+          message: `${columnsPath}.name.typeParams: ${refusal}`,
+        }),
+      );
+    });
+
+    it('are refused on a storage type when one is a key the codec does not define', () => {
+      const contract = contractWith(
+        { user: table({ id: col('t/int4', 't/int4@1') }) },
+        {
+          types: {
+            Name: {
+              kind: 'codec-instance',
+              codecId: 't/varchar@1',
+              dataType: 't/varchar',
+              typeParams: { length: 20, zzz: 1 },
+            },
+          },
+        },
+      );
+      expect(() => familyInstance('Jsonb').deserializeContract(contract)).toThrow(
+        `storage.types.Name.typeParams: ${refusal}`,
+      );
+    });
+
+    it('are refused on a model field when one is a key the codec does not define', () => {
+      const contract = contractWith(
+        { user: table({ id: col('t/int4', 't/int4@1'), name: col('t/varchar', 't/varchar@1') }) },
+        {
+          models: {
+            User: blindCast<ContractModel, 'test model literal with a parameterized field'>({
+              ...model('user', { id: { column: 'id' }, name: { column: 'name' } }),
+              fields: {
+                id: { nullable: false, type: { kind: 'scalar', codecId: 't/int4@1' } },
+                name: {
+                  nullable: false,
+                  type: {
+                    kind: 'scalar',
+                    codecId: 't/varchar@1',
+                    typeParams: { length: 20, zzz: 1 },
+                  },
+                },
+              },
+            }),
+          },
+        },
+      );
+      expect(() => familyInstance('Jsonb').deserializeContract(contract)).toThrow(
+        `domain.namespaces.${UNBOUND_DOMAIN_NAMESPACE_ID}.models.User.fields.name.type.typeParams: ${refusal}`,
+      );
+    });
+
+    it('are refused on a value-object field when one is a key the codec does not define', () => {
+      const contract = contractWith(
+        { user: table({ id: col('t/int4', 't/int4@1') }) },
+        {
+          valueObjects: {
+            Address: {
+              fields: {
+                street: {
+                  nullable: false,
+                  type: {
+                    kind: 'scalar',
+                    codecId: 't/varchar@1',
+                    typeParams: { length: 20, zzz: 1 },
+                  },
+                },
+              },
+            },
+          },
+        },
+      );
+      expect(() => familyInstance('Jsonb').deserializeContract(contract)).toThrow(
+        `storage.namespaces.${UNBOUND_NAMESPACE_ID}.entries.valueObject.Address.fields.street.type.typeParams: ${refusal}`,
+      );
+    });
   });
 
   describe('a literal default', () => {

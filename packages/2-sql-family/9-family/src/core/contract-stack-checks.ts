@@ -1,5 +1,9 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
-import type { Contract } from '@internal/contract/types';
+import {
+  type Contract,
+  type JsonValue,
+  valueObjectsWithCoordinates,
+} from '@internal/contract/types';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import {
   type CodecLookupWithDescriptors,
@@ -7,6 +11,7 @@ import {
   type DataTypeLookup,
   type DataTypeParams,
   dataTypeParams,
+  validateCodecTypeParams,
 } from '@internal/framework-components/codec';
 import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -65,6 +70,97 @@ function dataTypeProblems(
     const represented = codecLookup.descriptorFor(codecId)?.dataType;
     if (represented === undefined || represented === dataType) return [];
     return [`${path}: codec ${codecId} represents ${represented}, not ${dataType}`];
+  });
+}
+
+/** A place in a contract that names a codec and may give it type parameters, with its path. */
+interface ParameterizedPlace {
+  readonly path: string;
+  readonly codecId: string;
+  readonly typeParams: unknown;
+}
+
+function scalarTypesOf(path: string, type: unknown): readonly ParameterizedPlace[] {
+  if (type === null || typeof type !== 'object') return [];
+  const kind: unknown = Reflect.get(type, 'kind');
+  if (kind === 'union') {
+    const members: unknown = Reflect.get(type, 'members');
+    return Array.isArray(members)
+      ? members.flatMap((member, index) => scalarTypesOf(`${path}.members[${index}]`, member))
+      : [];
+  }
+  const codecId: unknown = Reflect.get(type, 'codecId');
+  if (kind !== 'scalar' || typeof codecId !== 'string') return [];
+  return [{ path, codecId, typeParams: Reflect.get(type, 'typeParams') }];
+}
+
+function fieldTypesOf(
+  path: string,
+  fields: Readonly<Record<string, { readonly type: unknown }>>,
+): readonly ParameterizedPlace[] {
+  return Object.entries(fields).flatMap(([fieldName, field]) =>
+    scalarTypesOf(`${path}.fields.${fieldName}.type`, field.type),
+  );
+}
+
+function parameterizedPlaces(contract: Contract<SqlStorage>): readonly ParameterizedPlace[] {
+  const storage = contract.storage;
+  return [
+    ...tablesOf(storage).flatMap(({ path, table }) =>
+      Object.entries(table.columns).map(([columnName, column]) => ({
+        path: `${path}.columns.${columnName}`,
+        codecId: column.codecId,
+        typeParams: column.typeParams,
+      })),
+    ),
+    ...Object.entries(storage.types ?? {}).flatMap(([typeName, entry]) =>
+      isStorageTypeInstance(entry)
+        ? [
+            {
+              path: `storage.types.${typeName}`,
+              codecId: entry.codecId,
+              typeParams: entry.typeParams,
+            },
+          ]
+        : [],
+    ),
+    ...Object.entries(contract.domain.namespaces).flatMap(([namespaceId, namespace]) =>
+      Object.entries(namespace.models).flatMap(([modelName, model]) =>
+        fieldTypesOf(`domain.namespaces.${namespaceId}.models.${modelName}`, model.fields),
+      ),
+    ),
+    ...valueObjectsWithCoordinates(storage).flatMap(({ coordinate, valueObject }) =>
+      fieldTypesOf(
+        `storage.namespaces.${coordinate.namespaceId}.entries.valueObject.${coordinate.entityName}`,
+        valueObject.fields,
+      ),
+    ),
+  ];
+}
+
+/** Each place whose type parameters its codec's parameter schema refuses, as the runtime refuses them when it builds the codec. A codec the stack does not register, or one without a parameter schema, is not checked here. */
+function typeParamsProblems(
+  contract: Contract<SqlStorage>,
+  codecLookup: CodecLookupWithDescriptors,
+): readonly string[] {
+  return parameterizedPlaces(contract).flatMap(({ path, codecId, typeParams }) => {
+    if (typeParams === undefined) return [];
+    const descriptor = codecLookup.descriptorFor(codecId);
+    if (descriptor?.paramsSchema === undefined) return [];
+    try {
+      validateCodecTypeParams(descriptor, {
+        codecId,
+        typeParams: blindCast<JsonValue, 'stored type parameters are JSON read from the contract'>(
+          typeParams,
+        ),
+      });
+      return [];
+    } catch (error) {
+      if (isStructuredError(error) && error.code === 'RUNTIME.TYPE_PARAMS_INVALID') {
+        return [`${path}.typeParams: ${error.message}`];
+      }
+      throw error;
+    }
   });
 }
 
@@ -204,7 +300,7 @@ function valueObjectProblems(
 }
 
 /**
- * Checks a deserialized contract against the stack that loads it: each column's codec represents the data type the column names, each value-object column uses the codec of the stack's value-object storage type, and each literal default is a value of its column's type under the column's parameters.
+ * Checks a deserialized contract against the stack that loads it: each column's codec represents the data type the column names, the codec's parameter schema accepts each type parameter a column, storage type, model field or value-object field gives it, each value-object column uses the codec of the stack's value-object storage type, and each literal default is a value of its column's type under the column's parameters.
  */
 export function assertContractMatchesStack(
   contract: Contract<SqlStorage>,
@@ -213,6 +309,7 @@ export function assertContractMatchesStack(
   const defaults = refusedDefaults(contract.storage, stack.dataTypes.lookup);
   const problems = [
     ...dataTypeProblems(contract.storage, stack.codecLookup),
+    ...typeParamsProblems(contract, stack.codecLookup),
     ...valueObjectProblems(contract, stack.authoringContributions),
     ...defaults.map(({ text }) => text),
   ];

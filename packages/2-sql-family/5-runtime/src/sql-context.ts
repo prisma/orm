@@ -1,4 +1,4 @@
-import type { Contract } from '@internal/contract/types';
+import type { Contract, ContractFieldType, ScalarFieldType } from '@internal/contract/types';
 import type {
   AnyCodecDescriptor,
   CodecDescriptor,
@@ -227,7 +227,9 @@ export function assertExecutionStackContractRequirements(
 function validateTypeParams(
   typeParams: Record<string, unknown>,
   descriptor: RuntimeParameterizedCodecDescriptor,
-  context: { tableName: string; columnName: string },
+  context:
+    | { readonly tableName: string; readonly columnName: string }
+    | { readonly model: string; readonly field: string },
 ): Record<string, unknown> {
   const result = descriptor.paramsSchema['~standard'].validate(typeParams);
   if (result instanceof Promise) {
@@ -241,7 +243,7 @@ function validateTypeParams(
     const messages = result.issues.map((issue) => issue.message).join('; ');
     throw runtimeError(
       'RUNTIME.TYPE_PARAMS_INVALID',
-      `Invalid typeParams for column '${context.tableName}.${context.columnName}' (codecId: ${descriptor.codecId}): ${messages}`,
+      `Invalid typeParams for ${'model' in context ? `field '${context.model}.${context.field}'` : `column '${context.tableName}.${context.columnName}'`} (codecId: ${descriptor.codecId}): ${messages}`,
       { ...context, codecId: descriptor.codecId, typeParams },
     );
   }
@@ -298,6 +300,31 @@ function collectAggregateDescriptorContributions(
   contributors: ReadonlyArray<ComponentMetadata>,
 ): ReadonlyArray<unknown> {
   return contributors.flatMap((contributor) => contributor.types?.aggregateDescriptors ?? []);
+}
+
+function scalarTypesOf(type: ContractFieldType): readonly ScalarFieldType[] {
+  if (type.kind === 'scalar') return [type];
+  if (type.kind === 'union') return type.members.flatMap((member) => scalarTypesOf(member));
+  return [];
+}
+
+/** The type parameters of each model field, which reach only the types the client exposes, are checked against the codec's parameter schema as a column's are. */
+function validateFieldTypeParams(
+  contract: Contract<SqlStorage>,
+  codecDescriptors: Map<string, RuntimeParameterizedCodecDescriptor>,
+): void {
+  for (const namespace of Object.values(contract.domain.namespaces)) {
+    for (const [model, { fields }] of Object.entries(namespace.models)) {
+      for (const [field, { type }] of Object.entries(fields)) {
+        for (const scalar of scalarTypesOf(type)) {
+          const descriptor = codecDescriptors.get(scalar.codecId);
+          if (scalar.typeParams && descriptor) {
+            validateTypeParams(scalar.typeParams, descriptor, { model, field });
+          }
+        }
+      }
+    }
+  }
 }
 
 function validateColumnTypeParams(
@@ -538,6 +565,7 @@ export function createExecutionContext<
 
   if (parameterizedCodecDescriptors.size > 0) {
     validateColumnTypeParams(contract.storage, parameterizedCodecDescriptors);
+    validateFieldTypeParams(contract, parameterizedCodecDescriptors);
   }
 
   const contractCodecs = buildContractCodecRegistry(contract, codecDescriptors);
