@@ -248,6 +248,8 @@ const RawFindOneAndUpdateJson = type({
   filter: 'Record<string, unknown>',
   update: 'Record<string, unknown> | Record<string, unknown>[]',
   upsert: 'boolean',
+  'sort?': 'Record<string, 1 | -1>',
+  'returnDocument?': "'before' | 'after'",
 });
 
 const RawFindOneAndDeleteJson = type({
@@ -255,6 +257,7 @@ const RawFindOneAndDeleteJson = type({
   kind: '"rawFindOneAndDelete"',
   collection: 'string',
   filter: 'Record<string, unknown>',
+  'sort?': 'Record<string, 1 | -1>',
 });
 
 const TypedAggregateJson = type({
@@ -264,8 +267,8 @@ const TypedAggregateJson = type({
   pipeline: 'Record<string, unknown>[]',
 });
 
+/** Entries no reader acts on stay open, such as the `paramDescriptors` a hand-written plan carries. */
 const PlanMetaJson = type({
-  '+': 'reject',
   target: 'string',
   storageHash: 'string',
   lane: 'string',
@@ -279,6 +282,8 @@ const QueryPlanJson = type({
   collection: 'string',
   command: 'Record<string, unknown>',
   meta: PlanMetaJson,
+  /** Written by the query builder for a pipeline on a model; no migration reader acts on it. */
+  'resultShape?': 'Record<string, unknown>',
 });
 
 const MatchStageJson = type({
@@ -303,6 +308,15 @@ const ProjectStageJson = type({
   '+': 'reject',
   kind: '"project"',
   projection: 'Record<string, 0 | 1>',
+});
+
+const MergeStageJson = type({
+  '+': 'reject',
+  kind: '"merge"',
+  into: type('string').or({ '+': 'reject', db: 'string', coll: 'string' }),
+  'on?': 'string | string[]',
+  'whenMatched?': 'string | Record<string, unknown>[]',
+  'whenNotMatched?': 'string',
 });
 
 const AddFieldsStageJson = type({
@@ -605,24 +619,18 @@ export function deserializePipelineStage(json: unknown): MongoPipelineStage {
       return new MongoLookupStage(opts);
     }
     case 'merge': {
-      const whenMatched = recordValue(json, 'whenMatched', 'merge stage');
+      const data = validate(MergeStageJson, json, 'merge stage');
+      const { whenMatched } = data;
       const opts: {
         into: string | { db: string; coll: string };
         on?: string | ReadonlyArray<string>;
         whenMatched?: string | ReadonlyArray<MongoUpdatePipelineStage>;
         whenNotMatched?: string;
       } = {
-        into: blindCast<
-          string | { db: string; coll: string },
-          'merge stage into is validated by MongoDB-compatible serialized operation authors'
-        >(recordValue(json, 'into', 'merge stage')),
+        into: data.into,
+        ...ifDefined('on', data.on),
+        ...ifDefined('whenNotMatched', data.whenNotMatched),
       };
-      const on = recordValue(json, 'on', 'merge stage');
-      if (on !== undefined)
-        opts.on = blindCast<
-          string | string[],
-          'merge stage on is either a field name or field-name array'
-        >(on);
       if (whenMatched !== undefined) {
         opts.whenMatched =
           typeof whenMatched === 'string'
@@ -630,19 +638,8 @@ export function deserializePipelineStage(json: unknown): MongoPipelineStage {
             : blindCast<
                 MongoUpdatePipelineStage[],
                 'merge stage whenMatched non-string branch is an update pipeline array'
-              >(
-                blindCast<
-                  unknown[],
-                  'merge stage whenMatched non-string branch is a serialized stage array'
-                >(whenMatched).map(deserializePipelineStage),
-              );
+              >(whenMatched.map(deserializePipelineStage));
       }
-      const whenNotMatched = recordValue(json, 'whenNotMatched', 'merge stage');
-      if (whenNotMatched !== undefined)
-        opts.whenNotMatched = blindCast<
-          string,
-          'merge stage whenNotMatched is a Mongo merge action token'
-        >(whenNotMatched);
       return new MongoMergeStage(opts);
     }
     default:
@@ -696,11 +693,18 @@ export function deserializeDmlCommand(json: unknown): AnyMongoCommand {
     }
     case 'rawFindOneAndUpdate': {
       const data = validate(RawFindOneAndUpdateJson, json, 'rawFindOneAndUpdate command');
-      return new RawFindOneAndUpdateCommand(data.collection, data.filter, data.update, data.upsert);
+      return new RawFindOneAndUpdateCommand(
+        data.collection,
+        data.filter,
+        data.update,
+        data.upsert,
+        data.sort,
+        data.returnDocument,
+      );
     }
     case 'rawFindOneAndDelete': {
       const data = validate(RawFindOneAndDeleteJson, json, 'rawFindOneAndDelete command');
-      return new RawFindOneAndDeleteCommand(data.collection, data.filter);
+      return new RawFindOneAndDeleteCommand(data.collection, data.filter, data.sort);
     }
     case 'aggregate': {
       const data = validate(TypedAggregateJson, json, 'aggregate command');

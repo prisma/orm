@@ -48,6 +48,11 @@ function isRawCommand(value: unknown): boolean {
   );
 }
 
+/** A query plan's `meta` stays open: no reader acts on entries beyond the ones it declares. */
+function isQueryPlan(value: object): boolean {
+  return 'command' in value && 'collection' in value;
+}
+
 function objectPaths(
   value: unknown,
   path: readonly (string | number)[] = [],
@@ -60,7 +65,8 @@ function objectPaths(
     [...path],
     ...Object.entries(value).flatMap(([key, entry]) =>
       mongoDocumentKeys.has(key) ||
-      ((key === 'filter' || key === 'pipeline') && isRawCommand(value))
+      ((key === 'filter' || key === 'pipeline') && isRawCommand(value)) ||
+      (key === 'meta' && isQueryPlan(value))
         ? []
         : objectPaths(entry, [...path, key]),
     ),
