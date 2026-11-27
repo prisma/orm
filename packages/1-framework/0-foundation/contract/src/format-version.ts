@@ -13,7 +13,7 @@ import { isPlainRecord } from './is-plain-record';
 /** The kinds of file Prisma writes into a repository and reads back, each of which says which version of its format it is in. */
 export type StoredFileKind = 'contract' | 'migration' | 'ref';
 
-/** The format versions that `contract.json` (and each contract snapshot) can declare and that this release reads, oldest first. */
+/** The values `contract.json` (and each contract snapshot) can give in `formatVersion`, oldest first. This release also reads version 0, which a release candidate wrote and which has no `formatVersion`, so this is not every version it reads. */
 export const CONTRACT_FORMAT_VERSIONS = [1] as const;
 
 export type ContractFormatVersion = (typeof CONTRACT_FORMAT_VERSIONS)[number];
@@ -77,9 +77,9 @@ const FORMAT_VERSION_ERROR_CODES: ReadonlySet<string> = new Set(
 const FACTS = Symbol('formatVersionErrorFacts');
 
 /**
- * The format version of a stored file's parsed JSON, read before anything else in it. Throws `*.FORMAT_VERSION_NEWER` for a version higher than any in `knownVersions`, and `*.FORMAT_VERSION_MISSING` for a file with no format version, with the old `schemaVersion` field, or with a value that is not a positive integer. Nothing else in the file is looked at.
+ * The format version of a stored file's parsed JSON, read before anything else in it. Throws `*.FORMAT_VERSION_NEWER` for a version higher than any in `knownVersions`, and `*.FORMAT_VERSION_MISSING` for a file with no format version, with the old `schemaVersion` field, or with a value that is not a positive integer. Nothing else in the file is looked at, and the document is not converted: a caller that reads more than the version must read the document in the version this returns.
  *
- * Version 0 is a file a release candidate wrote, which has no `formatVersion`: a contract with `"schemaVersion": "1"`, or a `migration.json` or ref file without either field. It is returned only when `knownVersions` has 0.
+ * Version 0 is a file a release candidate wrote, which has no `formatVersion`: a contract with `"schemaVersion": "1"`, or a `migration.json` or ref file without either field. It is returned only when `knownVersions` has 0. Prisma's own readers read version 0 until `8.0.0`, so a caller that passes `CONTRACT_FORMAT_VERSIONS` refuses a contract that Prisma reads.
  */
 export function readFormatVersion<TVersion extends number>(
   document: unknown,
