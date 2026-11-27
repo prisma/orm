@@ -39,6 +39,7 @@ function elementNumber(element: JsonValue): number {
 }
 
 export const pgvectorVectorParams = arktype({
+  '+': 'reject',
   'length?': `number.integer >= 1 & number.integer <= ${VECTOR_MAX_DIM}` as const,
 });
 
