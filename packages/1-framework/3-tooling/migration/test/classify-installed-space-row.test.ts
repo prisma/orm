@@ -91,6 +91,26 @@ describe('classifyInstalledSpaceRow', () => {
       }),
     ).toEqual({ kind: 'unreachable', reason: 'laterMajor', markerHash: 'hash-next-major' });
   });
+
+  it('is unreachable when the row records the head and an invariant the installed migrations never provide', () => {
+    expect(
+      classifyInstalledSpaceRow({
+        contractSpace: installed,
+        row: row('hash-2', ['_prisma:major-8', '_prisma:major-9']),
+        ledger: [],
+      }),
+    ).toEqual({ kind: 'unreachable', reason: 'laterMajor', markerHash: 'hash-2' });
+  });
+
+  it('is unreachable when the row records an earlier known contract and an invariant the installed migrations never provide', () => {
+    expect(
+      classifyInstalledSpaceRow({
+        contractSpace: installed,
+        row: row('hash-1', ['_prisma:major-8', '_prisma:major-9']),
+        ledger: [],
+      }),
+    ).toEqual({ kind: 'unreachable', reason: 'laterMajor', markerHash: 'hash-1' });
+  });
 });
 
 describe('classificationNeedsLedger', () => {
@@ -100,6 +120,10 @@ describe('classificationNeedsLedger', () => {
       head: classificationNeedsLedger(installed, row('hash-2')),
       behind: classificationNeedsLedger(installed, row('hash-1')),
       unknown: classificationNeedsLedger(installed, row('hash-later')),
-    }).toEqual({ none: false, head: false, behind: false, unknown: true });
+      laterMajor: classificationNeedsLedger(
+        installed,
+        row('hash-later', ['_prisma:major-8', '_prisma:major-9']),
+      ),
+    }).toEqual({ none: false, head: false, behind: false, unknown: true, laterMajor: false });
   });
 });

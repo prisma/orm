@@ -5,10 +5,10 @@ import { reconstructGraph } from './migration-graph';
 /**
  * Where a database's row of a contract space that an installed package carries stands against that space.
  *
- * - `atHead`: the row records the space's head and every invariant the head requires.
+ * - `atHead`: the row records the space's head and every invariant the head requires, and no invariant the installed migrations never provide.
  * - `behind`: there is no row, or the row records a contract the installed migrations lead on from; applying them brings it to the head.
  * - `ahead`: the row records a contract the installed migrations never reach, every invariant on it is one they provide, and the space's ledger shows the database passed through the head. A later release of the same major version brought it further, and within a major version the space's migrations only add, so this release can use it as it is.
- * - `unreachable`: this release cannot use the database. `laterMajor`: the row carries an invariant the installed migrations never provide, which only a release of a later major version writes. `unknownContract`: the row records a contract the installed migrations never reach and the ledger never recorded the head.
+ * - `unreachable`: this release cannot use the database. `laterMajor`: the row carries an invariant the installed migrations never provide, which only a release of a later major version writes; this holds whatever contract the row records. `unknownContract`: the row records a contract the installed migrations never reach and the ledger never recorded the head.
  */
 export type InstalledSpacePosition =
   | { readonly kind: 'atHead' }
@@ -42,13 +42,24 @@ function reachedByInstalledMigrations(
   return reconstructGraph(contractSpace.migrations).nodes.has(row.storageHash);
 }
 
-/** Whether {@link classifyInstalledSpaceRow} needs the space's ledger for this row: only a row at a contract the installed migrations never reach does. */
+function recordsUnknownInvariant(
+  contractSpace: ContractSpace,
+  row: ContractMarkerRecordLike,
+): boolean {
+  const providedInvariants = new Set(
+    contractSpace.migrations.flatMap((pkg) => pkg.metadata.providedInvariants),
+  );
+  return row.invariants.some((invariant) => !providedInvariants.has(invariant));
+}
+
+/** Whether {@link classifyInstalledSpaceRow} needs the space's ledger for this row: only a row at a contract the installed migrations never reach, with no invariant they do not provide, does. */
 export function classificationNeedsLedger(
   contractSpace: ContractSpace,
   row: ContractMarkerRecordLike | null,
 ): boolean {
   return (
     row !== null &&
+    !recordsUnknownInvariant(contractSpace, row) &&
     !recordsHead(contractSpace, row) &&
     !reachedByInstalledMigrations(contractSpace, row)
   );
@@ -59,15 +70,11 @@ export function classifyInstalledSpaceRow(
 ): InstalledSpacePosition {
   const { contractSpace, row, ledger } = inputs;
   if (row === null) return { kind: 'behind' };
-  if (recordsHead(contractSpace, row)) return { kind: 'atHead' };
-  if (reachedByInstalledMigrations(contractSpace, row)) return { kind: 'behind' };
-
-  const providedInvariants = new Set(
-    contractSpace.migrations.flatMap((pkg) => pkg.metadata.providedInvariants),
-  );
-  if (!row.invariants.every((invariant) => providedInvariants.has(invariant))) {
+  if (recordsUnknownInvariant(contractSpace, row)) {
     return { kind: 'unreachable', reason: 'laterMajor', markerHash: row.storageHash };
   }
+  if (recordsHead(contractSpace, row)) return { kind: 'atHead' };
+  if (reachedByInstalledMigrations(contractSpace, row)) return { kind: 'behind' };
   if (ledger.some((entry) => entry.to === contractSpace.headRef.hash)) return { kind: 'ahead' };
   return { kind: 'unreachable', reason: 'unknownContract', markerHash: row.storageHash };
 }
