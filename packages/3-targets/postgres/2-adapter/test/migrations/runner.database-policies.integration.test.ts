@@ -139,14 +139,25 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
   }
 
   async function recordedPolicies(): Promise<unknown> {
-    return (await familyInstance.readMarker({ driver, space: APP_SPACE_ID }))?.meta['policies'];
+    const result = await driver.query<{ policies: unknown }>('select policies from _prisma.config');
+    return result.rows[0]?.policies;
+  }
+
+  async function signedAt(): Promise<string | undefined> {
+    const result = await driver.query<{ signed_at: string }>(
+      'select signed_at::text as signed_at from _prisma.signatures where space = $1',
+      [APP_SPACE_ID],
+    );
+    return result.rows[0]?.signed_at;
   }
 
   async function ledgerLength(): Promise<number> {
     return (await familyInstance.readLedger({ driver, space: APP_SPACE_ID })).length;
   }
 
-  it('records the policies with the marker of a first run', { timeout: testTimeout }, async () => {
+  it('records the policies in _prisma.config on a first run', {
+    timeout: testTimeout,
+  }, async () => {
     await applyContract(MIGRATE_ONLY);
 
     expect(await recordedPolicies()).toEqual(MIGRATE_ONLY);
@@ -161,27 +172,29 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
 
     result.assertOk();
     const marker = await familyInstance.readMarker({ driver, space: APP_SPACE_ID });
-    expect({ invariants: marker?.invariants, policies: marker?.meta['policies'] }).toEqual({
+    expect({ invariants: marker?.invariants, policies: await recordedPolicies() }).toEqual({
       invariants: ['inv-a'],
       policies: MIGRATE_ONLY,
     });
   });
 
-  it('writes the marker and no ledger entry for a run with no migrations', {
+  it('records the policies, and writes no signature and no ledger entry, for a run with no migrations', {
     timeout: testTimeout,
   }, async () => {
     await applyContract();
     const ledgerBefore = await ledgerLength();
+    const signedBefore = await signedAt();
 
     const result = await run([
       { plan: selfEdgePlan(), migrationEdges: [], databasePolicies: MIGRATE_ONLY },
     ]);
 
     result.assertOk();
-    expect({ policies: await recordedPolicies(), ledger: await ledgerLength() }).toEqual({
-      policies: MIGRATE_ONLY,
-      ledger: ledgerBefore,
-    });
+    expect({
+      policies: await recordedPolicies(),
+      ledger: await ledgerLength(),
+      signedAt: await signedAt(),
+    }).toEqual({ policies: MIGRATE_ONLY, ledger: ledgerBefore, signedAt: signedBefore });
   });
 
   it('leaves the policies unchanged when a later space of the same run fails', {
@@ -223,6 +236,7 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
   }, async () => {
     await applyContract();
     const ledgerBefore = await ledgerLength();
+    const signedBefore = await signedAt();
     const inSync = createMigrationPlan<PostgresPlanTargetDetails>({
       targetId: 'postgres',
       spaceId: APP_SPACE_ID,
@@ -237,10 +251,11 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
     ]);
 
     result.assertOk();
-    expect({ policies: await recordedPolicies(), ledger: await ledgerLength() }).toEqual({
-      policies: MIGRATE_ONLY,
-      ledger: ledgerBefore,
-    });
+    expect({
+      policies: await recordedPolicies(),
+      ledger: await ledgerLength(),
+      signedAt: await signedAt(),
+    }).toEqual({ policies: MIGRATE_ONLY, ledger: ledgerBefore, signedAt: signedBefore });
   });
 
   it('fails as a concurrent change, before the first space runs an operation, when the policies moved after the caller checked them', {
@@ -291,18 +306,15 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
     expect({
       started,
       invariants: marker?.invariants,
-      policies: marker?.meta['policies'],
+      policies: await recordedPolicies(),
     }).toEqual({ started: [], invariants: [], policies: MIGRATE_ONLY });
   });
 
-  it('reports policies it cannot read under the lock as a corrupt marker, keeping the marker', {
+  it('reports policies in _prisma.config it cannot read under the lock as corrupt, keeping them', {
     timeout: testTimeout,
   }, async () => {
-    await applyContract();
-    await driver.query(
-      `UPDATE _prisma.marker SET meta = '{"policies": "strict"}'::jsonb WHERE space = $1`,
-      [APP_SPACE_ID],
-    );
+    await applyContract(MIGRATE_ONLY);
+    await driver.query(`UPDATE _prisma.config SET policies = '"strict"'::jsonb`);
 
     await expect(
       run([{ plan: selfEdgePlan(), migrationEdges: [] }], {

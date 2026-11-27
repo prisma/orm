@@ -1,46 +1,33 @@
-import {
-  DATABASE_POLICIES_META_KEY,
-  type DatabasePolicies,
-  storedDatabasePolicies,
-} from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import {
   type AnyQueryAst,
-  ColumnRef,
   type LoweredStatement,
-  ParamRef,
   RawExpr,
 } from '@internal/sql-relational-core/ast';
+import { PG_TIMESTAMPTZ_STRING_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import {
-  PG_JSONB_CODEC_ID,
-  PG_TIMESTAMPTZ_STRING_CODEC_ID,
-} from '@internal/target-postgres/codec-ids';
-import {
-  int4,
   int8,
   jsonb,
   PRISMA_TABLE_NAMES,
   PRISMA_TABLES_SCHEMA,
   type PrismaTableName,
   pgTable,
+  type RELEASE_CANDIDATE_MARKER_TABLE,
   text,
   textArray,
   timestamptz,
 } from '@internal/target-postgres/contract-free';
 import { encodeControlQueryParams } from './control-codecs';
 
-export const marker = pgTable(
-  { name: PRISMA_TABLE_NAMES.marker, schema: PRISMA_TABLES_SCHEMA },
+/** One row per contract space: the hashes of the contract it was signed with, its invariants, and when it was signed. */
+export const signatures = pgTable(
+  { name: PRISMA_TABLE_NAMES.signatures, schema: PRISMA_TABLES_SCHEMA },
   {
     space: text(),
     core_hash: text(),
     profile_hash: text(),
-    contract_json: jsonb({ nullable: true }),
-    canonical_version: int4({ nullable: true }),
-    updated_at: timestamptz(),
-    app_tag: text({ nullable: true }),
-    meta: jsonb(),
     invariants: textArray(),
+    signed_at: timestamptz(),
   },
 );
 
@@ -111,23 +98,6 @@ export const NOW = new RawExpr({
   returns: { codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID, nullable: false },
 });
 
-/**
- * The marker's `meta` with `policies` set to `policies`, merged in the statement so the other
- * keys are kept as the row holds them when it is written.
- */
-export function metaRecordingPolicies(policies: DatabasePolicies): RawExpr {
-  return new RawExpr({
-    parts: [
-      'jsonb_set(coalesce(',
-      ColumnRef.of('marker', 'meta'),
-      `, '{}'::jsonb), '{${DATABASE_POLICIES_META_KEY}}', `,
-      ParamRef.of(storedDatabasePolicies(policies), { codec: { codecId: PG_JSONB_CODEC_ID } }),
-      ')',
-    ],
-    returns: { codecId: PG_JSONB_CODEC_ID, nullable: false },
-  });
-}
-
 type Lower = (query: AnyQueryAst) => LoweredStatement;
 
 type MarkerDriver = {
@@ -163,7 +133,7 @@ export type PostgresMarkerWriteDriver = SqlControlDriverInstance<'postgres'>;
 export async function prismaTableExists(
   lower: Lower,
   driver: MarkerDriver,
-  table: PrismaTableName,
+  table: PrismaTableName | typeof RELEASE_CANDIDATE_MARKER_TABLE,
   schema: string = PRISMA_TABLES_SCHEMA,
 ): Promise<boolean> {
   const probe = infoSchemaTables

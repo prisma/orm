@@ -294,7 +294,7 @@ describe('migration apply runner independence from the contract snapshot store -
       expect(result2.value.perSpaceResults[0]?.value).toMatchObject({ operationsExecuted: 1 });
 
       const markerRow = await driver.query<{ core_hash: string }>(
-        'select core_hash from _prisma.marker where space = $1',
+        'select core_hash from _prisma.signatures where space = $1',
         ['app'],
       );
       expect(markerRow.rows[0]?.core_hash).toBe(STORAGE_HASH_C2);

@@ -28,7 +28,9 @@ const MIGRATE_ONLY: DatabasePolicies = {
   },
 };
 
-describe('PostgresControlAdapter marker/ledger writes (end-to-end)', { concurrent: false }, () => {
+describe('PostgresControlAdapter signature, policies and ledger writes (end-to-end)', {
+  concurrent: false,
+}, () => {
   let database: Awaited<ReturnType<typeof createTestDatabase>>;
   let driver: PostgresControlDriver | undefined;
 
@@ -149,17 +151,29 @@ describe('PostgresControlAdapter marker/ledger writes (end-to-end)', { concurren
     expect(marker!.storageHash).toBe('core');
   });
 
-  it('initMarker records databasePolicies in meta.policies', { timeout: testTimeout }, async () => {
+  async function recordedPolicies(): Promise<readonly unknown[]> {
+    const result = await driver!.query<{ policies: unknown }>(
+      'select policies from _prisma.config',
+    );
+    return result.rows.map((row) => row.policies);
+  }
+
+  it('initMarker records databasePolicies as the one row of _prisma.config, not on the signature', {
+    timeout: testTimeout,
+  }, async () => {
     await adapter.initMarker(driver!, 'app', {
       storageHash: 'core',
       profileHash: 'prof',
       databasePolicies: MIGRATE_ONLY,
     });
 
-    expect((await adapter.readMarker(driver!, 'app'))!.meta).toEqual({ policies: MIGRATE_ONLY });
+    expect({
+      config: await recordedPolicies(),
+      signatureMeta: (await adapter.readMarker(driver!, 'app'))!.meta,
+    }).toEqual({ config: [MIGRATE_ONLY], signatureMeta: {} });
   });
 
-  it('re-stamping and advancing without databasePolicies leave meta as it was', {
+  it('re-stamping and advancing without databasePolicies leave the recorded policies as they were', {
     timeout: testTimeout,
   }, async () => {
     await adapter.initMarker(driver!, 'app', {
@@ -174,14 +188,13 @@ describe('PostgresControlAdapter marker/ledger writes (end-to-end)', { concurren
       invariants: ['inv-a'],
     });
 
-    const marker = await adapter.readMarker(driver!, 'app');
-    expect({ storageHash: marker!.storageHash, meta: marker!.meta }).toEqual({
-      storageHash: 'core3',
-      meta: { policies: MIGRATE_ONLY },
-    });
+    expect({
+      storageHash: (await adapter.readMarker(driver!, 'app'))!.storageHash,
+      config: await recordedPolicies(),
+    }).toEqual({ storageHash: 'core3', config: [MIGRATE_ONLY] });
   });
 
-  it('updateMarker replaces the recorded policies when given new ones', {
+  it('updateMarker replaces the recorded policies when given new ones, keeping one row', {
     timeout: testTimeout,
   }, async () => {
     await adapter.initMarker(driver!, 'app', {
@@ -196,29 +209,34 @@ describe('PostgresControlAdapter marker/ledger writes (end-to-end)', { concurren
       databasePolicies: DEFAULT_DATABASE_POLICIES,
     });
 
-    expect((await adapter.readMarker(driver!, 'app'))!.meta).toEqual({
-      policies: DEFAULT_DATABASE_POLICIES,
-    });
+    expect(await recordedPolicies()).toEqual([DEFAULT_DATABASE_POLICIES]);
   });
 
-  it('updateMarker sets meta.policies in the statement and keeps the other meta keys', {
+  it('updateMarker records no policies when the signature has moved under it', {
     timeout: testTimeout,
   }, async () => {
     await adapter.initMarker(driver!, 'app', { storageHash: 'core', profileHash: 'prof' });
-    await driver!.query(
-      `update _prisma.marker set meta = '{"note": "kept"}'::jsonb where space = 'app'`,
-    );
 
-    await adapter.updateMarker(driver!, 'app', 'core', {
+    const matched = await adapter.updateMarker(driver!, 'app', 'stale', {
       storageHash: 'next',
       profileHash: 'prof',
       databasePolicies: MIGRATE_ONLY,
     });
 
-    expect((await adapter.readMarker(driver!, 'app'))!.meta).toEqual({
-      note: 'kept',
-      policies: MIGRATE_ONLY,
+    expect({ matched, config: await recordedPolicies() }).toEqual({ matched: false, config: [] });
+  });
+
+  it('_prisma.config refuses a second row', { timeout: testTimeout }, async () => {
+    await adapter.initMarker(driver!, 'app', {
+      storageHash: 'core',
+      profileHash: 'prof',
+      databasePolicies: MIGRATE_ONLY,
     });
+
+    await expect(
+      driver!.query(`insert into _prisma.config (id, policies) values (false, '{}'::jsonb)`),
+    ).rejects.toThrow(/config_single_row/);
+    expect(await recordedPolicies()).toEqual([MIGRATE_ONLY]);
   });
 
   it('writeLedgerEntry appends a readable ledger row', { timeout: testTimeout }, async () => {

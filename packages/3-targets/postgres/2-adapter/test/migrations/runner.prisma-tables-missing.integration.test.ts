@@ -6,6 +6,7 @@ import {
   contract,
   createDriver,
   createMigrationPlan,
+  createPrismaTables,
   createTestDatabase,
   familyInstance,
   frameworkComponents,
@@ -99,11 +100,24 @@ describe("PostgresMigrationRunner on a database without Prisma's own tables", {
       ran: await ranTableExists(),
     }).toEqual({
       code: 'MIGRATION.PRISMA_TABLES_MISSING',
-      message: expect.stringContaining('_prisma.marker'),
+      message:
+        "Prisma's own tables are missing from this database: _prisma.signatures, _prisma.config, _prisma.ledger and _prisma.contract do not exist.",
       why: expect.stringContaining(
         'call bringPrismaSpaceUpToDate on the control client, or, without the control client, applyInstalledContractSpace from @prisma/orm-toolchain/migration-tools/spaces',
       ),
       failingSpace: APP_SPACE_ID,
+      ran: false,
+    });
+  });
+
+  it('names only the tables that are missing', { timeout: testTimeout }, async () => {
+    await createPrismaTables(driver);
+    await driver.query('drop table _prisma.config');
+
+    const result = await runAppPlan();
+
+    expect({ message: result.assertNotOk().message, ran: await ranTableExists() }).toEqual({
+      message: "Prisma's own tables are missing from this database: _prisma.config does not exist.",
       ran: false,
     });
   });

@@ -202,8 +202,6 @@ export interface SeedMarkerInput {
   readonly space?: string;
   readonly storageHash: string;
   readonly profileHash: string;
-  readonly contractJson?: unknown;
-  readonly canonicalVersion?: number;
   readonly invariants?: readonly string[];
 }
 
@@ -215,17 +213,9 @@ export interface SeedMarkerInput {
  */
 export async function seedTestMarker(client: TestSqlClient, input: SeedMarkerInput): Promise<void> {
   await client.query(
-    `insert into _prisma.marker
-       (space, core_hash, profile_hash, contract_json, canonical_version, invariants, updated_at)
-     values ($1, $2, $3, $4::jsonb, $5, $6::text[], now())`,
-    [
-      input.space ?? APP_SPACE_ID,
-      input.storageHash,
-      input.profileHash,
-      input.contractJson === undefined ? null : JSON.stringify(input.contractJson),
-      input.canonicalVersion ?? null,
-      input.invariants ?? [],
-    ],
+    `insert into _prisma.signatures (space, core_hash, profile_hash, invariants)
+     values ($1, $2, $3, $4::text[])`,
+    [input.space ?? APP_SPACE_ID, input.storageHash, input.profileHash, input.invariants ?? []],
   );
 }
 
@@ -240,8 +230,6 @@ export async function writeTestContractMarker(
   await seedTestMarker(client, {
     storageHash: contract.storage.storageHash,
     profileHash: contract.profileHash,
-    contractJson: contract,
-    canonicalVersion: 1,
   });
 }
 

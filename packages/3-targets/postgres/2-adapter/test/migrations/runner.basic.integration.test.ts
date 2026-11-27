@@ -97,7 +97,7 @@ describe('PostgresMigrationRunner - Basic Execution', { concurrent: false }, () 
       const markerRow = await driver!.query<{
         core_hash: string;
         profile_hash: string;
-      }>('select core_hash, profile_hash from _prisma.marker where space = $1', ['app']);
+      }>('select core_hash, profile_hash from _prisma.signatures where space = $1', ['app']);
       expect(markerRow.rows[0]).toMatchObject({
         core_hash: contract.storage.storageHash,
         profile_hash: contract.profileHash,
@@ -179,7 +179,7 @@ describe('PostgresMigrationRunner - Basic Execution', { concurrent: false }, () 
       }
 
       const markerCount = await driver!.query<{ count: string }>(
-        'select count(*)::text as count from _prisma.marker where space = $1',
+        'select count(*)::text as count from _prisma.signatures where space = $1',
         ['app'],
       );
       expect(markerCount.rows[0]?.count).toBe('1');

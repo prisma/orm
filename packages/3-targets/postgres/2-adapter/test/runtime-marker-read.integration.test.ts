@@ -13,7 +13,7 @@ describe('runtime readMarker through the Postgres runtime driver', () => {
     }
   }, timeouts.spinUpPpgDev);
 
-  async function connectWithMarker(canonicalVersion: number | null) {
+  async function connectWithSignature() {
     const database = await createDevDatabase();
     const driver = postgresRuntimeDriverDescriptor.create();
     cleanups.push(async () => {
@@ -29,27 +29,29 @@ describe('runtime readMarker through the Postgres runtime driver', () => {
       await controlDriver.close();
     }
     await driver.execute({
-      sql: `insert into _prisma.marker
-         (space, core_hash, profile_hash, contract_json, canonical_version, invariants, updated_at)
-       values ('app', 'core', 'profile', null, $1, '{inv-1}'::text[], now())`,
-      params: [canonicalVersion],
+      sql: `insert into _prisma.signatures (space, core_hash, profile_hash, invariants, signed_at)
+       values ('app', 'core', 'profile', '{inv-1}'::text[], '2026-11-01T00:00:00Z')`,
     });
     return driver;
   }
 
-  it.each([1, null])(
-    'reads canonical_version %s as the stored value',
-    async (canonicalVersion) => {
-      const driver = await connectWithMarker(canonicalVersion);
+  it(
+    "reads the application space's row of _prisma.signatures",
+    async () => {
+      const driver = await connectWithSignature();
 
       const result = await createPostgresAdapter().profile.readMarker(driver);
 
-      expect(result).toMatchObject({
+      expect(result).toEqual({
         kind: 'present',
         record: {
           storageHash: 'core',
           profileHash: 'profile',
-          canonicalVersion,
+          contractJson: null,
+          canonicalVersion: null,
+          updatedAt: new Date('2026-11-01T00:00:00Z'),
+          appTag: null,
+          meta: {},
           invariants: ['inv-1'],
         },
       });

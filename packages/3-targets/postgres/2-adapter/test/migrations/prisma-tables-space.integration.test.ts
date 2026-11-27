@@ -21,6 +21,14 @@ const contractSpace = postgresTargetDescriptor.contractSpace!;
 const headHash = contractSpace.headRef.hash;
 const [firstMigration] = contractSpace.migrations;
 
+const migrateOnly = {
+  change: ['migrate'],
+  dataProtection: {
+    dataLoss: 'data-loss-forbidden',
+    accessWidening: 'access-widening-with-consent',
+  },
+};
+
 describe("applying the Postgres target's _prisma contract space", { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createTestDatabase>>;
   let driver: PostgresControlDriver;
@@ -68,11 +76,16 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     return result.rows.map((row) => row.name);
   }
 
-  async function markers() {
+  async function signatures() {
     const result = await driver.query<{ space: string; core_hash: string; invariants: string }>(
-      'select space, core_hash, invariants::text as invariants from _prisma.marker order by space',
+      'select space, core_hash, invariants::text as invariants from _prisma.signatures order by space',
     );
     return result.rows;
+  }
+
+  async function recordedPolicies(): Promise<readonly unknown[]> {
+    const result = await driver.query<{ policies: unknown }>('select policies from _prisma.config');
+    return result.rows.map((row) => row.policies);
   }
 
   async function ledger() {
@@ -97,12 +110,12 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     expect({
       schemas: await schemas(),
       tables: await tablesIn('_prisma'),
-      markers: await markers(),
+      signatures: await signatures(),
       ledger: await ledger(),
     }).toEqual({
       schemas: ['_prisma'],
-      tables: ['contract', 'ledger', 'marker'],
-      markers: [{ space: '_prisma', core_hash: headHash, invariants: '{}' }],
+      tables: ['config', 'contract', 'ledger', 'signatures'],
+      signatures: [{ space: '_prisma', core_hash: headHash, invariants: '{}' }],
       ledger: [{ space: '_prisma', migration_name: firstMigration?.dirName }],
     });
   });
@@ -118,12 +131,12 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     expect({
       schemas: await schemas(),
       tables: await tablesIn('_prisma'),
-      markers: await markers(),
+      signatures: await signatures(),
       ledger: await ledger(),
     }).toEqual({
       schemas: ['_prisma'],
-      tables: ['contract', 'ledger', 'marker'],
-      markers: [
+      tables: ['config', 'contract', 'ledger', 'signatures'],
+      signatures: [
         { space: '_prisma', core_hash: headHash, invariants: '{}' },
         { space: 'app', core_hash: 'app-hash', invariants: '{app:invariant}' },
       ],
@@ -132,6 +145,83 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
         { space: '_prisma', migration_name: firstMigration?.dirName },
       ],
     });
+  });
+
+  it("moves a release candidate's rows into signatures and its application's policies into config, and drops the marker", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query(
+      `update prisma_contract.marker set meta = $1::jsonb, updated_at = '2026-10-01T00:00:00Z' where space = 'app'`,
+      [JSON.stringify({ policies: migrateOnly, kept: 'elsewhere' })],
+    );
+    await driver.query(
+      `insert into prisma_contract.marker (space, core_hash, profile_hash, invariants, meta, updated_at)
+       values ('pgvector', 'ext-hash', 'ext-profile', '{ext:invariant}', '{"policies": {"change": ["reconcile"]}}', '2026-10-02T00:00:00Z')`,
+    );
+
+    const result = await apply();
+
+    const signed = await driver.query<{ space: string; profile_hash: string; signed_at: string }>(
+      `select space, profile_hash, to_char(signed_at at time zone 'UTC', 'YYYY-MM-DD') as signed_at
+       from _prisma.signatures where space <> '_prisma' order by space`,
+    );
+    expect(result.ok && result.value.outcome).toBe('applied');
+    expect({
+      tables: await tablesIn('_prisma'),
+      signatures: await signatures(),
+      signed: signed.rows,
+      policies: await recordedPolicies(),
+    }).toEqual({
+      tables: ['config', 'contract', 'ledger', 'signatures'],
+      signatures: [
+        { space: '_prisma', core_hash: headHash, invariants: '{}' },
+        { space: 'app', core_hash: 'app-hash', invariants: '{app:invariant}' },
+        { space: 'pgvector', core_hash: 'ext-hash', invariants: '{ext:invariant}' },
+      ],
+      signed: [
+        { space: 'app', profile_hash: 'app-profile', signed_at: '2026-10-01' },
+        { space: 'pgvector', profile_hash: 'ext-profile', signed_at: '2026-10-02' },
+      ],
+      policies: [migrateOnly],
+    });
+  });
+
+  it("records no policies when the release candidate's application row records none", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+
+    await apply();
+
+    expect({ tables: await tablesIn('_prisma'), policies: await recordedPolicies() }).toEqual({
+      tables: ['config', 'contract', 'ledger', 'signatures'],
+      policies: [],
+    });
+  });
+
+  it("changes nothing on a second call after moving a release candidate's rows", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query(`update prisma_contract.marker set meta = $1::jsonb where space = 'app'`, [
+      JSON.stringify({ policies: migrateOnly }),
+    ]);
+    await apply();
+    const before = {
+      signatures: await signatures(),
+      ledger: await ledger(),
+      policies: await recordedPolicies(),
+    };
+
+    const result = await apply();
+
+    expect(result.ok && result.value).toEqual({ outcome: 'atHead', operationsExecuted: 0 });
+    expect({
+      signatures: await signatures(),
+      ledger: await ledger(),
+      policies: await recordedPolicies(),
+    }).toEqual(before);
   });
 
   it('stops, names the table and changes nothing when a table lacks an expected column', {
@@ -189,9 +279,9 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     const result = await apply();
 
     expect(result.ok && result.value.outcome).toBe('applied');
-    expect({ schemas: await schemas(), markers: await markers() }).toEqual({
+    expect({ schemas: await schemas(), signatures: await signatures() }).toEqual({
       schemas: ['_prisma'],
-      markers: [
+      signatures: [
         { space: '_prisma', core_hash: headHash, invariants: '{}' },
         { space: 'app', core_hash: 'app-hash', invariants: '{app:invariant}' },
       ],
@@ -284,7 +374,7 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     expect(result.ok ? result.value.outcome : result.failure).toBe('applied');
     expect({ schemas: await schemas(), tables: await tablesIn('_prisma') }).toEqual({
       schemas: ['_prisma'],
-      tables: ['contract', 'ledger', 'marker'],
+      tables: ['config', 'contract', 'ledger', 'signatures'],
     });
   });
 
@@ -351,9 +441,9 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     const result = await apply();
 
     expect(result.ok && result.value.outcome).toBe('applied');
-    expect({ tables: await tablesIn('_prisma'), markers: await markers() }).toEqual({
-      tables: ['contract', 'ledger', 'marker'],
-      markers: [
+    expect({ tables: await tablesIn('_prisma'), signatures: await signatures() }).toEqual({
+      tables: ['config', 'contract', 'ledger', 'signatures'],
+      signatures: [
         { space: '_prisma', core_hash: headHash, invariants: '{}' },
         { space: 'app', core_hash: 'app-hash', invariants: '{app:invariant}' },
       ],
@@ -477,7 +567,7 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
   }, async () => {
     await apply();
     await driver.query(
-      "update _prisma.marker set core_hash = 'later-release' where space = '_prisma'",
+      "update _prisma.signatures set core_hash = 'later-release' where space = '_prisma'",
     );
     await driver.query(
       `insert into _prisma.ledger (space, migration_name, migration_hash, origin_core_hash, destination_core_hash, operations)

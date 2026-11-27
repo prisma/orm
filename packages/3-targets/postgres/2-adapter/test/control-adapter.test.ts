@@ -58,12 +58,12 @@ function createMockDriver(
 }
 
 describe('PostgresControlAdapter', () => {
-  it('names its marker table', () => {
+  it('names its signatures table', () => {
     const adapter = createTestPostgresControlAdapter(
       createPostgresBuiltinCodecLookup(),
       createPostgresBuiltinDataTypeLookup(),
     );
-    expect(adapter.markerLocation).toBe('_prisma.marker');
+    expect(adapter.markerLocation).toBe('_prisma.signatures');
   });
 
   describe('introspect', () => {
@@ -1981,14 +1981,10 @@ describe('PostgresControlAdapter', () => {
   });
 
   describe('readMarker', () => {
-    const validMarkerRow = {
+    const validSignatureRow = {
       core_hash: 'abc',
       profile_hash: 'def',
-      contract_json: null,
-      canonical_version: null,
-      updated_at: new Date('2024-01-01T00:00:00Z'),
-      app_tag: null,
-      meta: {},
+      signed_at: new Date('2024-01-01T00:00:00Z'),
       invariants: [] as const,
     };
 
@@ -2013,7 +2009,7 @@ describe('PostgresControlAdapter', () => {
           match: includes('"information_schema"."tables"'),
           rows: [{ table_schema: '_prisma' }],
         },
-        { match: includes('"_prisma"."marker"'), rows: [] },
+        { match: includes('"_prisma"."signatures"'), rows: [] },
       ]);
       await expect(adapter.readMarker(driver, 'app')).resolves.toBeNull();
     });
@@ -2029,8 +2025,8 @@ describe('PostgresControlAdapter', () => {
           rows: [{ table_schema: '_prisma' }],
         },
         {
-          match: includes('"_prisma"."marker"'),
-          rows: [{ ...validMarkerRow, invariants: ['inv-1', 'inv-2'] }],
+          match: includes('"_prisma"."signatures"'),
+          rows: [{ ...validSignatureRow, invariants: ['inv-1', 'inv-2'] }],
         },
       ]);
 
@@ -2049,7 +2045,7 @@ describe('PostgresControlAdapter', () => {
       });
     });
 
-    it('reads canonical_version integer text as a number', async () => {
+    it('reads when the row was signed as the record of when it was written, and records no meta', async () => {
       const adapter = createTestPostgresControlAdapter(
         createPostgresBuiltinCodecLookup(),
         createPostgresBuiltinDataTypeLookup(),
@@ -2060,39 +2056,20 @@ describe('PostgresControlAdapter', () => {
           rows: [{ table_schema: '_prisma' }],
         },
         {
-          match: includes('"_prisma"."marker"'),
-          rows: [{ ...validMarkerRow, canonical_version: '7', invariants: '{}' }],
+          match: includes('"_prisma"."signatures"'),
+          rows: [{ ...validSignatureRow, invariants: '{inv-a}' }],
         },
       ]);
 
-      await expect(adapter.readMarker(driver, 'app')).resolves.toMatchObject({
-        canonicalVersion: 7,
-      });
-    });
-
-    it('rejects canonical_version text that is not an integer as a corrupt marker row', async () => {
-      const adapter = createTestPostgresControlAdapter(
-        createPostgresBuiltinCodecLookup(),
-        createPostgresBuiltinDataTypeLookup(),
-      );
-      const driver = createMockDriver([
-        {
-          match: includes('"information_schema"."tables"'),
-          rows: [{ table_schema: '_prisma' }],
-        },
-        {
-          match: includes('"_prisma"."marker"'),
-          rows: [{ ...validMarkerRow, canonical_version: '1.5', invariants: '{}' }],
-        },
-      ]);
-
-      await expect(adapter.readMarker(driver, 'app')).rejects.toSatisfy((err: unknown) => {
-        expect(CliStructuredError.is(err)).toBe(true);
-        expect((err as CliStructuredError).toEnvelope()).toMatchObject({
-          code: 'CONTRACT.MARKER_ROW_CORRUPT',
-          why: 'Invalid contract marker row: expected integer text, got "1.5"',
-        });
-        return true;
+      await expect(adapter.readMarker(driver, 'app')).resolves.toEqual({
+        storageHash: 'abc',
+        profileHash: 'def',
+        contractJson: null,
+        canonicalVersion: null,
+        updatedAt: new Date('2024-01-01T00:00:00Z'),
+        appTag: null,
+        meta: {},
+        invariants: ['inv-a'],
       });
     });
 
@@ -2107,8 +2084,8 @@ describe('PostgresControlAdapter', () => {
           rows: [{ table_schema: '_prisma' }],
         },
         {
-          match: includes('"_prisma"."marker"'),
-          rows: [{ ...validMarkerRow, invariants: null }],
+          match: includes('"_prisma"."signatures"'),
+          rows: [{ ...validSignatureRow, invariants: null }],
         },
       ]);
 
@@ -2122,7 +2099,7 @@ describe('PostgresControlAdapter', () => {
           meta: { space: 'app' },
         });
         expect(envelope.why).toContain('expected raw text for a Postgres array, got object');
-        expect(JSON.stringify(envelope)).toContain('_prisma.marker');
+        expect(JSON.stringify(envelope)).toContain('_prisma.signatures');
         expect(structured.cause).toBeInstanceOf(TypeError);
         expect((structured.cause as Error).message).toContain(
           'expected raw text for a Postgres array, got object',
@@ -2166,17 +2143,13 @@ describe('PostgresControlAdapter', () => {
       const driver = createMockDriver([
         { match: includes('"information_schema"."tables"'), rows: [{ '?column?': 1 }] },
         {
-          match: includes('"_prisma"."marker"'),
+          match: includes('"_prisma"."signatures"'),
           rows: [
             {
               space: 'app',
               core_hash: 'abc',
               profile_hash: 'def',
-              contract_json: null,
-              canonical_version: null,
-              updated_at: new Date('2024-01-01T00:00:00Z'),
-              app_tag: null,
-              meta: {},
+              signed_at: new Date('2024-01-01T00:00:00Z'),
               invariants: '{inv-a,inv-b}',
             },
           ],
@@ -2195,17 +2168,13 @@ describe('PostgresControlAdapter', () => {
       const driver = createMockDriver([
         { match: includes('"information_schema"."tables"'), rows: [{ '?column?': 1 }] },
         {
-          match: includes('"_prisma"."marker"'),
+          match: includes('"_prisma"."signatures"'),
           rows: [
             {
               space: 'app',
               core_hash: 'abc',
               profile_hash: 'def',
-              contract_json: null,
-              canonical_version: null,
-              updated_at: new Date('2024-01-01T00:00:00Z'),
-              app_tag: null,
-              meta: {},
+              signed_at: new Date('2024-01-01T00:00:00Z'),
               invariants: '{not-an-array',
             },
           ],

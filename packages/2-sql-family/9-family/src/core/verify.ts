@@ -53,7 +53,7 @@ function parseContractJson(value: unknown): JsonValue | null {
 }
 
 /**
- * Wire shape of a marker row (`_prisma.marker` on PostgreSQL) as it comes out of a SQL
+ * Wire shape of a marker row (`_prisma.signatures` on PostgreSQL) as it comes out of a SQL
  * driver. Snake-cased to match the on-disk column names. Shared by every
  * SQL target's `readMarker` so each runner doesn't redeclare it inline.
  */

@@ -1,3 +1,7 @@
+import {
+  type DatabasePolicies,
+  storedDatabasePolicies,
+} from '@internal/framework-components/control';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
@@ -22,13 +26,21 @@ function createCapturingDriver(rows: Record<string, unknown>[] = []) {
   };
 }
 
-describe('PostgresControlAdapter marker/ledger write lowering', () => {
+const migrateOnly: DatabasePolicies = {
+  change: ['migrate'],
+  dataProtection: {
+    dataLoss: 'data-loss-forbidden',
+    accessWidening: 'access-widening-with-consent',
+  },
+};
+
+describe('PostgresControlAdapter signature, policies and ledger write lowering', () => {
   const adapter = createTestPostgresControlAdapter(
     createPostgresBuiltinCodecLookup(),
     createPostgresBuiltinDataTypeLookup(),
   );
 
-  it('insertMarker lowers to a plain insert with DB-side updated_at', async () => {
+  it('insertMarker lowers to a plain insert into signatures with DB-side signed_at', async () => {
     const driver = createCapturingDriver([{ table_schema: '_prisma' }]);
     await adapter.insertMarker(driver, 'app', {
       storageHash: 'core',
@@ -36,18 +48,16 @@ describe('PostgresControlAdapter marker/ledger write lowering', () => {
     });
 
     const { sql, params } = driver.calls.find((call) => call.sql.startsWith('INSERT'))!;
-    expect(sql).toContain(
-      'INSERT INTO "_prisma"."marker" ("space", "core_hash", "profile_hash", ' +
-        '"contract_json", "canonical_version", "updated_at", "app_tag", "meta", "invariants")',
+    expect(sql).toBe(
+      'INSERT INTO "_prisma"."signatures" ("space", "core_hash", "profile_hash", "invariants", "signed_at") ' +
+        'VALUES ($1, $2, $3, $4::text[], now())',
     );
-    expect(sql).toContain('VALUES ($1, $2, $3, $4::jsonb, $5, now(), $6, $7::jsonb, $8::text[])');
-    expect(sql).not.toContain('ON CONFLICT');
     expect(params[0]).toBe('app');
     expect(params[1]).toBe('core');
     expect(params[2]).toBe('prof');
   });
 
-  it('initMarker lowers to an upsert keyed on space with DB-side updated_at', async () => {
+  it('initMarker lowers to an upsert of signatures keyed on space with DB-side signed_at, and writes no policies when given none', async () => {
     const driver = createCapturingDriver();
     await adapter.initMarker(driver, 'app', {
       storageHash: 'core',
@@ -55,20 +65,35 @@ describe('PostgresControlAdapter marker/ledger write lowering', () => {
       invariants: ['inv-a', 'inv-b'],
     });
 
+    expect(driver.calls).toHaveLength(1);
     const { sql, params } = driver.calls[0]!;
-    expect(sql).toContain(
-      'INSERT INTO "_prisma"."marker" ("space", "core_hash", "profile_hash", ' +
-        '"contract_json", "canonical_version", "updated_at", "app_tag", "meta", "invariants")',
+    expect(sql).toBe(
+      'INSERT INTO "_prisma"."signatures" ("space", "core_hash", "profile_hash", "invariants", "signed_at") ' +
+        'VALUES ($1, $2, $3, $4::text[], now()) ' +
+        'ON CONFLICT ("space") DO UPDATE SET "core_hash" = excluded."core_hash", ' +
+        '"profile_hash" = excluded."profile_hash", "signed_at" = now(), "invariants" = excluded."invariants"',
     );
-    expect(sql).toContain('VALUES ($1, $2, $3, $4::jsonb, $5, now(), $6, $7::jsonb, $8::text[])');
-    expect(sql).toContain('ON CONFLICT ("space") DO UPDATE SET');
-    expect(sql).toContain('"core_hash" = excluded."core_hash"');
-    expect(sql).toContain('"updated_at" = now()');
-    expect(sql).toContain('"invariants" = excluded."invariants"');
-    expect(params[0]).toBe('app');
-    expect(params[1]).toBe('core');
-    expect(params[2]).toBe('prof');
-    expect(params[7]).toEqual(['inv-a', 'inv-b']);
+    expect(params).toEqual(['app', 'core', 'prof', ['inv-a', 'inv-b']]);
+  });
+
+  it('initMarker records the policies it is given as the one row of config, after the signature', async () => {
+    const driver = createCapturingDriver();
+    await adapter.initMarker(driver, 'app', {
+      storageHash: 'core',
+      profileHash: 'prof',
+      databasePolicies: migrateOnly,
+    });
+
+    expect(driver.calls.map((call) => call.sql.split(' ', 3).join(' '))).toEqual([
+      'INSERT INTO "_prisma"."signatures"',
+      'INSERT INTO "_prisma"."config"',
+    ]);
+    expect(driver.calls[1]).toEqual({
+      sql:
+        'INSERT INTO "_prisma"."config" ("policies") VALUES ($1::jsonb)\n' +
+        'ON CONFLICT ("id") DO UPDATE SET "policies" = EXCLUDED."policies"',
+      params: [JSON.stringify(storedDatabasePolicies(migrateOnly))],
+    });
   });
 
   it('updateMarker reads the current invariants and writes the deduped union (no overwrite)', async () => {
@@ -85,9 +110,9 @@ describe('PostgresControlAdapter marker/ledger write lowering', () => {
 
     const update = driver.calls.at(-1)!;
     expect(update.sql).toBe(
-      'UPDATE "_prisma"."marker" SET "core_hash" = $1, "profile_hash" = $2, ' +
-        '"updated_at" = now(), "invariants" = $3::text[] ' +
-        'WHERE ("marker"."space" = $4 AND "marker"."core_hash" = $5) RETURNING "marker"."space"',
+      'UPDATE "_prisma"."signatures" SET "core_hash" = $1, "profile_hash" = $2, ' +
+        '"signed_at" = now(), "invariants" = $3::text[] ' +
+        'WHERE ("signatures"."space" = $4 AND "signatures"."core_hash" = $5) RETURNING "signatures"."space"',
     );
     // union({a,b}, {b,c}) deduped + sorted — not the incoming set verbatim.
     expect(update.params).toEqual(['to', 'prof', ['inv-a', 'inv-b', 'inv-c'], 'app', 'from']);
@@ -103,12 +128,31 @@ describe('PostgresControlAdapter marker/ledger write lowering', () => {
 
     const { sql, params } = driver.calls[0]!;
     expect(sql).toBe(
-      'UPDATE "_prisma"."marker" SET "core_hash" = $1, "profile_hash" = $2, ' +
-        '"updated_at" = now() ' +
-        'WHERE ("marker"."space" = $3 AND "marker"."core_hash" = $4) RETURNING "marker"."space"',
+      'UPDATE "_prisma"."signatures" SET "core_hash" = $1, "profile_hash" = $2, ' +
+        '"signed_at" = now() ' +
+        'WHERE ("signatures"."space" = $3 AND "signatures"."core_hash" = $4) RETURNING "signatures"."space"',
     );
     expect(params).toEqual(['to', 'prof', 'app', 'from']);
     expect(matched).toBe(false);
+  });
+
+  it('updateMarker records the policies it is given only once the signature has moved', async () => {
+    const policies = migrateOnly;
+    const moved = createCapturingDriver([{ space: 'app' }]);
+    const unmoved = createCapturingDriver([]);
+    const destination = { storageHash: 'to', profileHash: 'prof', databasePolicies: policies };
+
+    expect({
+      moved: await adapter.updateMarker(moved, 'app', 'from', destination),
+      unmoved: await adapter.updateMarker(unmoved, 'app', 'from', destination),
+      movedWrites: moved.calls.map((call) => call.sql.split(' ', 3).join(' ')),
+      unmovedWrites: unmoved.calls.map((call) => call.sql.split(' ', 3).join(' ')),
+    }).toEqual({
+      moved: true,
+      unmoved: false,
+      movedWrites: ['UPDATE "_prisma"."signatures" SET', 'INSERT INTO "_prisma"."config"'],
+      unmovedWrites: ['UPDATE "_prisma"."signatures" SET'],
+    });
   });
 
   it('writeLedgerEntry lowers to a single plain INSERT when no snapshot is given', async () => {
