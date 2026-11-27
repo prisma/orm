@@ -406,7 +406,7 @@
 ./target/control: interface MongoMigrationRunnerFailure extends MigrationRunnerFailure
 ./target/control: interface MongoMigrationRunnerFailure, readonly required property code: MongoMigrationRunnerErrorCode
 ./target/control: interface MongoOperationsLocation
-./target/control: interface MongoOperationsLocation, readonly optional property migrations?: readonly { readonly dirName: string; readonly operationCount: number; }[]
+./target/control: interface MongoOperationsLocation, readonly optional property migrations?: readonly Pick<MigrationRunnerPerSpaceOptions['migrationEdges'][number], 'dirName' | 'operationCount'>[]
 ./target/control: interface MongoOperationsLocation, readonly optional property space?: string
 ./target/control: interface RenderMigrationMeta
 ./target/control: interface RenderMigrationMeta, readonly required property from: null | string
@@ -694,7 +694,7 @@
 ./target: interface MongoMigrationRunnerFailure extends MigrationRunnerFailure
 ./target: interface MongoMigrationRunnerFailure, readonly required property code: MongoMigrationRunnerErrorCode
 ./target: interface MongoOperationsLocation
-./target: interface MongoOperationsLocation, readonly optional property migrations?: readonly { readonly dirName: string; readonly operationCount: number; }[]
+./target: interface MongoOperationsLocation, readonly optional property migrations?: readonly Pick<MigrationRunnerPerSpaceOptions['migrationEdges'][number], 'dirName' | 'operationCount'>[]
 ./target: interface MongoOperationsLocation, readonly optional property space?: string
 ./target: interface MongoRuntimeTargetInstance extends RuntimeTargetInstance<'mongo', 'mongo'>
 ./target: interface ParameterizedOutputTypesForTypeParams extends ParameterizedOutputTypesFunction

@@ -3107,7 +3107,7 @@
 ./family/control: interface SqlMigrationRunnerFailure, readonly required property code: SqlMigrationRunnerErrorCode
 ./family/control: interface SqlMigrationRunnerSuccessValue extends MigrationRunnerPerSpaceSuccessValue
 ./family/control: interface SqlOperationsLocation
-./family/control: interface SqlOperationsLocation, readonly optional property migrations?: readonly { readonly dirName: string; readonly operationCount: number; }[]
+./family/control: interface SqlOperationsLocation, readonly optional property migrations?: readonly Pick<MigrationRunnerPerSpaceOptions['migrationEdges'][number], 'dirName' | 'operationCount'>[]
 ./family/control: interface SqlOperationsLocation, readonly optional property space?: string
 ./family/control: interface SqlPlanTargetDetails
 ./family/control: interface SqlPlanTargetDetails, readonly optional property schema?: string
@@ -3919,7 +3919,7 @@
 ./family: interface SqlMigrationRunnerFailure, readonly required property code: SqlMigrationRunnerErrorCode
 ./family: interface SqlMigrationRunnerSuccessValue extends MigrationRunnerPerSpaceSuccessValue
 ./family: interface SqlOperationsLocation
-./family: interface SqlOperationsLocation, readonly optional property migrations?: readonly { readonly dirName: string; readonly operationCount: number; }[]
+./family: interface SqlOperationsLocation, readonly optional property migrations?: readonly Pick<MigrationRunnerPerSpaceOptions['migrationEdges'][number], 'dirName' | 'operationCount'>[]
 ./family: interface SqlOperationsLocation, readonly optional property space?: string
 ./family: interface SqlPlanTargetDetails
 ./family: interface SqlPlanTargetDetails, readonly optional property schema?: string

@@ -131,8 +131,17 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "6ff832e7a965926f",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). It also takes the option `tolerateUnreadableRefs`, which loads the migrations with an unreadable ref file left for the caller to report, as `migration check` does; without it, a ref file that is refused now fails the load (prisma/orm#31200)."
+    "fingerprint": "a223704e7c05ee3f",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). It also takes the option `unreadableFiles`: by default a ref or migration file it cannot read fails the load, and `'report'` keeps the aggregate without it for a command that lists and reports each such file, as `migration list`, `graph`, `status` and `check` do (prisma/orm#31200)."
+  },
+  {
+    "path": "./cli/control-api",
+    "export": "checkSingleTarget",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "a24519d864ad5e7f",
+    "reason": "`migration check` now reads, through the family's contract reader, the snapshot each head of a space's graph ends at, and reports each migration it could not read, so a check space carries the family's reader and the unreadable migrations, both required (prisma/orm#31200)."
   },
   {
     "path": "./cli/control-api",
@@ -142,6 +151,15 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "a0bf5bba692b4e40",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./cli/control-api",
+    "export": "enumerateCheckSpaces",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "d4efbb4dc6e2bff9",
+    "reason": "It takes one options object, in which the family's contract reader is required, so a caller cannot get a check that leaves the snapshots unread by leaving out an argument (prisma/orm#31200)."
   },
   {
     "path": "./cli/control-api",
@@ -268,6 +286,15 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "cb55547e875233fe",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./cli/control-api",
+    "export": "runMigrationCheck",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "1618fd101ad8165e",
+    "reason": "`migration check` now reads, through the family's contract reader, the snapshot each head of a space's graph ends at, and reports each migration it could not read, so a check space carries the family's reader and the unreadable migrations, both required (prisma/orm#31200)."
   },
   {
     "path": "./cli/control-api/testing",
