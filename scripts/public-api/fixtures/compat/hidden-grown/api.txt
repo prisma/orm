@@ -1,0 +1,5 @@
+# Test fixture written by hand in the format `pnpm api:update` writes.
+(not exported) interface Options
+(not exported) interface Options, readonly required property a: string
+(not exported) interface Options, readonly required property b: string
+.: function configure(options: Options, mode: "x"): void

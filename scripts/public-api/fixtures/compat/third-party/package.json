@@ -1,0 +1,16 @@
+{
+  "name": "fixture-third-party",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.mjs"
+  },
+  "peerDependencies": {
+    "fixture-peer": "*"
+  },
+  "peerDependenciesMeta": {
+    "fixture-peer": {
+      "optional": true
+    }
+  }
+}
