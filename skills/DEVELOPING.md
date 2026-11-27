@@ -127,7 +127,7 @@ These are well-trodden but worth listing in one place:
 ## Authoring workflow
 
 1. Read [`README.md`](./README.md) for the user-facing scope of the skills.
-2. Read the [`skill-specialist` persona](https://github.com/prisma/ignite/blob/main/skills/.curated/drive-agent-personas/personas/skill-specialist.md) in the Ignite persona library — it's the canonical lens for skill work.
+2. Read the `skill-specialist` persona in the Ignite persona library — it's the canonical lens for skill work.
 3. Read [`skills/prisma-8/references/migration-review.md`](./prisma-8/references/migration-review.md) for the worked example of concepts-over-procedures.
 4. Draft the reference file, **verifying each tool-surface claim against the framework source as you write it** (see *Verify the tool surface as you author* above for the ripgrep commands). The shape:
    - A routing-table row in `SKILL.md` as the matcher (CLI flags, error codes, feature names — all verified).

@@ -6,7 +6,7 @@ Loaded by `drive-check-health` and (via it) `drive-deliver-workflow`. Holds pris
 
 ## Drift-signal thresholds
 
-Threshold values for the canonical drift signals (calibrate as the team gathers data). These are *signals that trigger a recheck*, not validity criteria — the validity test is INVEST at each altitude (see [`docs/drive/principles/sizing.md`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/sizing.md)).
+Threshold values for the canonical drift signals (calibrate as the team gathers data). These are *signals that trigger a recheck*, not validity criteria — the validity test is INVEST at each altitude (see `docs/drive/principles/sizing.md`).
 
 - **Dispatch failed dispatch-INVEST in flight**: had to be halted or split mid-execution because the outcome turned out fuzzier than the brief named, or scope expanded beyond the brief's `In` list.
 - **Slice coherence broke down in flight**: reviewer flagged that the PR spans concerns they can't hold in one sitting; OR the dispatch sequence drifted across unrelated outcomes.

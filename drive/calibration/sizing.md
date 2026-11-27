@@ -1,6 +1,6 @@
 # Sizing calibration — INVEST rubric for this codebase
 
-This file is this team's calibration of the [`sizing principle`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/sizing.md). Read the principle doc first; this file specialises it to the patterns, packages, and gates that recur in this codebase.
+This file is this team's calibration of the `sizing principle`. Read the principle doc first; this file specialises it to the patterns, packages, and gates that recur in this codebase.
 
 The principle: size units by **logical coherence**, not by logistical footprint (file count, LoC, time-box). The check is **INVEST**, applied at dispatch / slice / project altitudes.
 
@@ -121,6 +121,6 @@ These are pattern-level signals for which slices can run in parallel within a pr
 
 ## See also
 
-- [`docs/drive/principles/sizing.md`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/sizing.md) — the principle this file calibrates.
-- [`docs/drive/principles/decomposition-and-cost.md`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/decomposition-and-cost.md) — why model tier follows dispatch shape.
-- [`docs/drive/principles/brief-discipline.md`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/brief-discipline.md) — where the dispatch-INVEST checklist lands in writing (the brief's `Task`, `Completed when`, and `Halt conditions`).
+- `docs/drive/principles/sizing.md` — the principle this file calibrates.
+- `docs/drive/principles/decomposition-and-cost.md` — why model tier follows dispatch shape.
+- `docs/drive/principles/brief-discipline.md` — where the dispatch-INVEST checklist lands in writing (the brief's `Task`, `Completed when`, and `Halt conditions`).
