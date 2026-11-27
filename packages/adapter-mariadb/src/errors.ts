@@ -36,6 +36,22 @@ export function mapDriverError(error: DriverError): MappedError {
       }
     }
 
+    case 3819: {
+      const index = error.sqlMessage?.split("'").at(1)
+      return {
+        kind: 'CheckConstraintViolation',
+        constraint: index !== undefined ? { index } : undefined,
+      }
+    }
+
+    case 4025: {
+      const index = error.sqlMessage?.split('`').at(1)
+      return {
+        kind: 'CheckConstraintViolation',
+        constraint: index !== undefined ? { index } : undefined,
+      }
+    }
+
     case 1263: {
       const index = error.sqlMessage?.split(' ').pop()?.split("'").at(1)
       return {

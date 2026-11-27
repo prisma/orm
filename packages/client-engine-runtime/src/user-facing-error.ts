@@ -149,6 +149,8 @@ function getErrorCode(err: DriverAdapterError): string | undefined {
       return 'P2000'
     case 'UniqueConstraintViolation':
       return 'P2002'
+    case 'CheckConstraintViolation':
+      return 'P2004'
     case 'ForeignKeyConstraintViolation':
     case 'RestrictViolation':
       return 'P2003'
@@ -223,6 +225,8 @@ function renderErrorMessage(err: DriverAdapterError): string | undefined {
     }
     case 'UniqueConstraintViolation':
       return `Unique constraint failed on the ${renderConstraint(err.cause.constraint)}`
+    case 'CheckConstraintViolation':
+      return `Check constraint failed on the ${renderConstraint(err.cause.constraint)}`
     case 'ForeignKeyConstraintViolation':
     case 'RestrictViolation':
       return `Foreign key constraint violated on the ${renderConstraint(err.cause.constraint)}`

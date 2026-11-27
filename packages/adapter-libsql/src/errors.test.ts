@@ -41,4 +41,14 @@ describe('LibSQL error handling', () => {
       originalMessage: "UNIQUE constraint failed: index 'users_email_idx'",
     })
   })
+
+  test('check constraint violation reports the constraint name', () => {
+    const message = 'SQLITE_CONSTRAINT: CHECK constraint failed: t_sum_check'
+    expect(convertDriverError({ code: 'SQLITE_CONSTRAINT', message, rawCode: 275 })).toEqual({
+      kind: 'CheckConstraintViolation',
+      constraint: { index: 't_sum_check' },
+      originalCode: '275',
+      originalMessage: message,
+    })
+  })
 })

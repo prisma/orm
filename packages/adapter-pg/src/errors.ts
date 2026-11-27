@@ -147,6 +147,11 @@ function mapDriverError(error: DatabaseError): MappedError {
         constraint,
       }
     }
+    case '23514':
+      return {
+        kind: 'CheckConstraintViolation',
+        constraint: error.constraint ? { index: error.constraint } : undefined,
+      }
     case '3D000':
       return {
         kind: 'DatabaseDoesNotExist',

@@ -43,6 +43,13 @@ export function mapDriverError(error: LibsqlError): MappedError {
         constraint: fields !== undefined ? { fields } : undefined,
       }
     }
+    case 275: {
+      const index = error.message.split('CHECK constraint failed: ').at(1)
+      return {
+        kind: 'CheckConstraintViolation',
+        constraint: index !== undefined ? { index } : undefined,
+      }
+    }
     case 787:
     case 1811:
       return {

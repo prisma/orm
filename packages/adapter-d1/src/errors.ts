@@ -41,10 +41,16 @@ export function mapDriverError(error: DriverError): DriverAdapterErrorObject {
       kind: 'NullConstraintViolation',
       constraint: fields !== undefined ? { fields } : undefined,
     }
-  } else if (stripped.startsWith('FOREIGN KEY constraint failed') || stripped.startsWith('CHECK constraint failed')) {
+  } else if (stripped.startsWith('FOREIGN KEY constraint failed')) {
     return {
       kind: 'ForeignKeyConstraintViolation',
       constraint: { foreignKey: {} },
+    }
+  } else if (stripped.startsWith('CHECK constraint failed')) {
+    const index = stripped.split(': ').at(1)
+    return {
+      kind: 'CheckConstraintViolation',
+      constraint: index !== undefined ? { index } : undefined,
     }
   } else if (stripped.startsWith('no such table')) {
     return {

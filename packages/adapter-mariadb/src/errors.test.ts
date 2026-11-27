@@ -55,4 +55,24 @@ describe('MariaDB adapter error handling', () => {
     // important: we want `cause` to be truly absent/undefined to keep payload minimal/stable
     expect((mapped as any).cause).toBeUndefined()
   })
+
+  test('MySQL check constraint violation (3819) reports the constraint name', () => {
+    const err = { errno: 3819, sqlMessage: "Check constraint 't_sum_check' is violated.", sqlState: 'HY000' }
+    expect(convertDriverError(err)).toEqual({
+      kind: 'CheckConstraintViolation',
+      constraint: { index: 't_sum_check' },
+      originalCode: '3819',
+      originalMessage: err.sqlMessage,
+    })
+  })
+
+  test('MariaDB check constraint violation (4025) reports the constraint name', () => {
+    const err = { errno: 4025, sqlMessage: 'CONSTRAINT `t_sum_check` failed for `db`.`t`', sqlState: '23000' }
+    expect(convertDriverError(err)).toEqual({
+      kind: 'CheckConstraintViolation',
+      constraint: { index: 't_sum_check' },
+      originalCode: '4025',
+      originalMessage: err.sqlMessage,
+    })
+  })
 })

@@ -42,6 +42,13 @@ function mapDriverError(error: DriverError): DriverAdapterErrorObject {
         constraint: fields !== undefined ? { fields } : undefined,
       }
     }
+    case 'SQLITE_CONSTRAINT_CHECK': {
+      const index = error.message.split('CHECK constraint failed: ').at(1)
+      return {
+        kind: 'CheckConstraintViolation',
+        constraint: index !== undefined ? { index } : undefined,
+      }
+    }
     case 'SQLITE_CONSTRAINT_FOREIGNKEY':
     case 'SQLITE_CONSTRAINT_TRIGGER':
       return {
