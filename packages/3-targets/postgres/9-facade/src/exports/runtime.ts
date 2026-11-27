@@ -20,7 +20,6 @@ export { default } from '../runtime/postgres';
 export {
   buildPostgresQueryMembers as ea_buildPostgresQueryMembers,
   type PostgresQueryMembers,
-  type PostgresQueryMembersOptions as Ea_PostgresQueryMembersOptions,
   type PostgresTransactionCallback,
   type PostgresTransactionContext,
 } from '../runtime/postgres-members';
